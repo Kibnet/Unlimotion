@@ -9,7 +9,7 @@ using Splat;
 namespace Unlimotion.ViewModel
 {
     [AddINotifyPropertyChangedInterface]
-    public class TaskItemViewModel:ReactiveObject
+    public class TaskItemViewModel
     {
         private TaskItemViewModel(TaskItem model, bool needInit = true)
         {
@@ -20,20 +20,41 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) && (BlockedByTasks.All(m => m.IsCompleted != false));
+
         private void Init()
         {
-            BlockedByTasks.CollectionChanged += (sender, args) => this.RaisePropertyChanged(nameof(IsCanBeComplited));
-            ContainsTasks.CollectionChanged += (sender, args) => this.RaisePropertyChanged(nameof(IsCanBeComplited));
+            IsCanBeComplited = GetCanBeCompleted();
+            var taskRepository = Locator.Current.GetService<TaskRepository>();
+
+            BlockedByTasks.CollectionChanged += (sender, args) => IsCanBeComplited = GetCanBeCompleted();
+            ContainsTasks.CollectionChanged += (sender, args) => IsCanBeComplited = GetCanBeCompleted();
+
+            this.WhenAnyValue(m => m.IsCompleted).Subscribe(b =>
+            {
+                foreach (var task in BlocksTasks)
+                {
+                    task.Update();
+                }
+                foreach (var task in ParentsTasks)
+                {
+                    task.Update();
+                }
+            });
+
             if (Model.BlocksTasks.Any() || Model.ContainsTasks.Any())
             {
-                var taskRepository = Locator.Current.GetService<TaskRepository>();
-
                 FillTaskViewModelCollection(taskRepository.GetById(Model.ContainsTasks), ContainsTasks);
                 FillTaskViewModelCollection(taskRepository.GetById(Model.BlocksTasks), BlocksTasks);
-
-                FillTaskViewModelCollection(taskRepository.GetParentsById(Model.Id), ParentsTasks);
-                FillTaskViewModelCollection(taskRepository.GetBlockedById(Model.Id), BlockedByTasks);
             }
+
+            FillTaskViewModelCollection(taskRepository.GetParentsById(Model.Id), ParentsTasks);
+            FillTaskViewModelCollection(taskRepository.GetBlockedById(Model.Id), BlockedByTasks);
+        }
+
+        private void Update()
+        {
+            IsCanBeComplited = GetCanBeCompleted();
         }
 
         private static void FillTaskViewModelCollection(IEnumerable<TaskItem> sourceTaskIds, ObservableCollection<TaskItemViewModel> destinationVMs)
@@ -66,8 +87,9 @@ namespace Unlimotion.ViewModel
         public string Id => Model.Id;
         public string Title { get => Model.Title; set => Model.Title = value; }
         public string Description { get => Model.Description; set => Model.Description = value; }
-        public bool IsCanBeComplited => (!ContainsTasks.Any()) && (!BlockedByTasks.Any());
-        
+        public bool IsCanBeComplited { get; private set; }
+
+
         public bool? IsCompleted { get => Model.IsCompleted; set => Model.IsCompleted = value; }
         public DateTimeOffset CreatedDateTime => Model.CreatedDateTime;
         public DateTimeOffset? UnlockedDateTime => Model.UnlockedDateTime;
@@ -78,7 +100,7 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<TaskItemViewModel> BlocksTasks { get; set; } = new();
         public ObservableCollection<TaskItemViewModel> BlockedByTasks { get; set; } = new();
     }
-    
+
     public class TaskItem
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
