@@ -29,8 +29,43 @@
             </TreeView>
         </Grid>
         <!--Редактор задачи-->
-        <Grid Grid.Column="1" Grid.Row="1" Background="Blue">
-            
+        <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
+            <Border BorderBrush="Black" BorderThickness="1,0,0,0">
+                <StackPanel>
+                    <Label>Parents Tasks:</Label>
+                    <TreeView Items="{Binding ParentsTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding ParentsTasks}">
+                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                    <Label>Blocked By Tasks:</Label>
+                    <TreeView Items="{Binding BlockedByTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding BlockedByTasks}">
+                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                    <Label>Contains Tasks:</Label>
+                    <TreeView Items="{Binding ContainsTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding ContainsTasks}">
+                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                    <Label>Blocks Tasks:</Label>
+                    <TreeView Items="{Binding BlocksTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding BlocksTasks}">
+                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
     
