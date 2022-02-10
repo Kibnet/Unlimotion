@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
@@ -36,7 +37,17 @@ namespace Unlimotion.ViewModel
 
         public string BreadScrumbs
         {
-            get { return "BreadScrumbs"; }
+            get
+            {
+                var nodes = new List<string>();
+                var current = CurrentItem;
+                while (current != null)
+                {
+                    nodes.Insert(0, current.Title);
+                    current = current.ParentsTasks.FirstOrDefault();
+                }
+                return String.Join('/', nodes);
+            }
         }
 
         public ObservableCollection<TaskItemViewModel> CurrentItems { get; set; }
