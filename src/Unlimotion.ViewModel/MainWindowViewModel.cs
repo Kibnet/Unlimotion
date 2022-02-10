@@ -17,11 +17,12 @@ namespace Unlimotion.ViewModel
             Locator.CurrentMutable.RegisterConstant(taskRepository);
             taskRepository.Init(new[]
             {
-                new TaskItem { Title = "Task 1", Id = "1", ContainsTasks = new List<string>{ "1.1","1.2" }},
+                new TaskItem { Title = "Task 1", Id = "1", ContainsTasks = new List<string>{ "1.1","1.2","3" }},
                 new TaskItem { Title = "Task 1.1", Id = "1.1", BlocksTasks = new List<string>{"1.2" }},
                 new TaskItem { Title = "Task 1.2", Id = "1.2"},
-                new TaskItem { Title = "Task 2", Id = "2", ContainsTasks = new List<string>{ "2.1" } },
-                new TaskItem { Title = "Task 2.1", Id = "2.1" }
+                new TaskItem { Title = "Task 2", Id = "2", ContainsTasks = new List<string>{ "2.1", "3" } },
+                new TaskItem { Title = "Task 2.1", Id = "2.1" },
+                new TaskItem { Title = "Task 3", Id = "3" }
             });
 
 
