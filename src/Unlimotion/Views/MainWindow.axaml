@@ -50,7 +50,10 @@
                     <Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
                     <Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
                     <Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
+                    <StackPanel Orientation="Horizontal">
                     <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
+                        <Button Content="Archive" Command="{Binding ArchiveCommand}"/>
+                    </StackPanel>
                     <Label>Parents Tasks:</Label>
                     <TreeView Items="{Binding ParentsTasks}">
                         <TreeView.ItemTemplate>

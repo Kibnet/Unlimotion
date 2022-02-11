@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows.Input;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
@@ -64,7 +65,20 @@ namespace Unlimotion.ViewModel
             Update();
             BlockedByTasks.CollectionChanged += (sender, args) => Update();
             ContainsTasks.CollectionChanged += (sender, args) => Update();
+            ArchiveCommand = ReactiveCommand.Create(() =>
+            {
+                if (IsCompleted == null)
+                {
+                    IsCompleted = false;
+                }
+                else if (IsCompleted == false)
+                {
+                    IsCompleted = null;
+                }
+            }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
         }
+
+        public ICommand ArchiveCommand { get; set; }
 
         private void Update()
         {
