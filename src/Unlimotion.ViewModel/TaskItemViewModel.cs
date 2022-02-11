@@ -37,6 +37,20 @@ namespace Unlimotion.ViewModel
             FillTaskViewModelCollection(taskRepository.GetBlockedById(Model.Id), BlockedByTasks);
             this.WhenAnyValue(m => m.IsCompleted).Subscribe(b =>
             {
+                if (b == true && CompletedDateTime == null)
+                {
+                    CompletedDateTime = DateTimeOffset.UtcNow;
+                    ArchiveDateTime = null;
+                }
+                if (b == false)
+                {
+                    ArchiveDateTime = null;
+                    CompletedDateTime = null;
+                }
+                if (b == null && ArchiveDateTime == null)
+                {
+                    ArchiveDateTime = DateTimeOffset.UtcNow;
+                }
                 foreach (var task in BlocksTasks)
                 {
                     task.Update();
@@ -55,6 +69,14 @@ namespace Unlimotion.ViewModel
         private void Update()
         {
             IsCanBeComplited = GetCanBeCompleted();
+            if (IsCanBeComplited && UnlockedDateTime == null)
+            {
+                UnlockedDateTime = DateTimeOffset.UtcNow;
+            }
+            if (!IsCanBeComplited && UnlockedDateTime != null)
+            {
+                UnlockedDateTime = null;
+            }
         }
 
         private static void FillTaskViewModelCollection(IEnumerable<TaskItem> sourceTaskIds, ObservableCollection<TaskItemViewModel> destinationVMs)
@@ -91,10 +113,30 @@ namespace Unlimotion.ViewModel
 
 
         public bool? IsCompleted { get => Model.IsCompleted; set => Model.IsCompleted = value; }
-        public DateTimeOffset CreatedDateTime => Model.CreatedDateTime;
-        public DateTimeOffset? UnlockedDateTime => Model.UnlockedDateTime;
-        public DateTimeOffset? CompletedDateTime => Model.CompletedDateTime;
-        public DateTimeOffset? ArchiveDateTime => Model.ArchiveDateTime;
+        public DateTimeOffset CreatedDateTime
+        {
+            get => Model.CreatedDateTime;
+            set => Model.CreatedDateTime = value;
+        }
+
+        public DateTimeOffset? UnlockedDateTime
+        {
+            get => Model.UnlockedDateTime;
+            set => Model.UnlockedDateTime = value;
+        }
+
+        public DateTimeOffset? CompletedDateTime
+        {
+            get => Model.CompletedDateTime;
+            set => Model.CompletedDateTime = value;
+        }
+
+        public DateTimeOffset? ArchiveDateTime
+        {
+            get => Model.ArchiveDateTime;
+            set => Model.ArchiveDateTime = value;
+        }
+
         public ObservableCollection<TaskItemViewModel> ContainsTasks { get; set; } = new();
         public ObservableCollection<TaskItemViewModel> ParentsTasks { get; set; } = new();
         public ObservableCollection<TaskItemViewModel> BlocksTasks { get; set; } = new();

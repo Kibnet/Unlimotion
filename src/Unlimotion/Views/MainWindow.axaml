@@ -32,6 +32,16 @@
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
             <Border BorderBrush="Black" BorderThickness="1,0,0,0">
                 <StackPanel>
+                    <Grid ColumnDefinitions="Auto, *">
+                        <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>
+                        <TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title"/>
+                    </Grid>
+                    <Label>Description:</Label>
+                    <TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
+                    <Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
+                    <Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
+                    <Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
+                    <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
                     <Label>Parents Tasks:</Label>
                     <TreeView Items="{Binding ParentsTasks}">
                         <TreeView.ItemTemplate>
