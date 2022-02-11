@@ -12,6 +12,15 @@
         <viewModel:MainWindowViewModel/>
     </Design.DataContext>
 
+    <Window.DataTemplates>
+        <DataTemplate DataType="viewModel:TaskItemViewModel">
+            <Grid ColumnDefinitions="Auto, *">
+                <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" />
+                <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
+    </Window.DataTemplates>
+
     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
         <!--Адрес-->
         <Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10">
@@ -23,7 +32,7 @@
             <TreeView Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate ItemsSource="{Binding ContainsTasks}">
-                        <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                        <ContentControl Content="{Binding .}"/> 
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
@@ -46,7 +55,7 @@
                     <TreeView Items="{Binding ParentsTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding ParentsTasks}">
-                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                                <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -54,7 +63,7 @@
                     <TreeView Items="{Binding BlockedByTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding BlockedByTasks}">
-                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                                <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -62,7 +71,7 @@
                     <TreeView Items="{Binding ContainsTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding ContainsTasks}">
-                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                                <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -70,7 +79,7 @@
                     <TreeView Items="{Binding BlocksTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding BlocksTasks}">
-                                <CheckBox IsChecked="{Binding IsCompleted}" IsEnabled="{Binding IsCanBeComplited}" Content="{Binding Title}"/>
+                                <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
