@@ -22,27 +22,61 @@ namespace Unlimotion.ViewModel
                 {
                     foreach (var subTask in taskItem.ContainsTasks)
                     {
-                        if (!parentsById.TryGetValue(subTask, out var hashSet))
-                        {
-                            hashSet = new HashSet<string>();
-                            parentsById[subTask] = hashSet;
-                        }
-
-                        hashSet.Add(taskItem.Id);
+                        AddParent(subTask, taskItem.Id);
                     }
                 }
                 if (taskItem.BlocksTasks.Any())
                 {
                     foreach (var blocksTask in taskItem.BlocksTasks)
                     {
-                        if (!blockedById.TryGetValue(blocksTask, out var hashSet))
-                        {
-                            hashSet = new HashSet<string>();
-                            blockedById[blocksTask] = hashSet;
-                        }
-
-                        hashSet.Add(taskItem.Id);
+                        AddBlockedBy(blocksTask, taskItem);
                     }
+                }
+            }
+        }
+
+        public void AddBlockedBy(string blocksTask, TaskItem taskItem)
+        {
+            if (!blockedById.TryGetValue(blocksTask, out var hashSet))
+            {
+                hashSet = new HashSet<string>();
+                blockedById[blocksTask] = hashSet;
+            }
+
+            hashSet.Add(taskItem.Id);
+        }
+
+        public void RemoveBlockedBy(string subTask, string taskItemId)
+        {
+            if (blockedById.TryGetValue(subTask, out var hashSet))
+            {
+                hashSet.Remove(taskItemId);
+                if (hashSet.Count == 0)
+                {
+                    blockedById.Remove(subTask);
+                }
+            }
+        }
+
+        public void AddParent(string subTask, string taskItemId)
+        {
+            if (!parentsById.TryGetValue(subTask, out var hashSet))
+            {
+                hashSet = new HashSet<string>();
+                parentsById[subTask] = hashSet;
+            }
+
+            hashSet.Add(taskItemId);
+        }
+
+        public void RemoveParent(string subTask, string taskItemId)
+        {
+            if (parentsById.TryGetValue(subTask, out var hashSet))
+            {
+                hashSet.Remove(taskItemId);
+                if (hashSet.Count==0)
+                {
+                    parentsById.Remove(subTask);
                 }
             }
         }
