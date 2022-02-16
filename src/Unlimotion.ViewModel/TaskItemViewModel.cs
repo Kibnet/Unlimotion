@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Windows.Input;
+using System.Xml.Serialization;
+using DynamicData;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
@@ -25,7 +28,7 @@ namespace Unlimotion.ViewModel
 
         private void Init()
         {
-            
+
             var taskRepository = Locator.Current.GetService<TaskRepository>();
 
             if (Model.BlocksTasks.Any() || Model.ContainsTasks.Any())
@@ -64,7 +67,45 @@ namespace Unlimotion.ViewModel
 
             Update();
             BlockedByTasks.CollectionChanged += (sender, args) => Update();
-            ContainsTasks.CollectionChanged += (sender, args) => Update();
+            ContainsTasks.CollectionChanged += (sender, args) =>
+            {
+                switch (args.Action)
+                {
+                    case NotifyCollectionChangedAction.Add:
+                        {
+                            var items = args.NewItems.GetEnumerable().Cast<TaskItemViewModel>().ToList();
+                            var ids = items.Select(t => t.Id);
+                            Model.ContainsTasks.InsertRange(args.NewStartingIndex, ids);
+                            foreach (var item in items)
+                            {
+                                TaskItem taskItem = Model;
+                                taskRepository.AddParent(item.Id, taskItem.Id);
+                                item.ParentsTasks.Add(this);
+                            }
+                        }
+                        break;
+                    case NotifyCollectionChangedAction.Move:
+                        break;
+                    case NotifyCollectionChangedAction.Remove:
+                        {
+                            var items = args.OldItems.GetEnumerable().Cast<TaskItemViewModel>().ToList();
+                            var ids = items.Select(t => t.Id);
+                            Model.ContainsTasks.Remove(ids);
+                            foreach (var item in items)
+                            {
+                                TaskItem taskItemId = Model;
+                                taskRepository.RemoveParent(item.Id, taskItemId.Id);
+                                item.ParentsTasks.Remove(this);
+                            }
+                        }
+                        break;
+                    case NotifyCollectionChangedAction.Replace:
+                        break;
+                    case NotifyCollectionChangedAction.Reset:
+                        break;
+                }
+                Update();
+            };
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 if (IsCompleted == null)
@@ -155,5 +196,48 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<TaskItemViewModel> ParentsTasks { get; set; } = new();
         public ObservableCollection<TaskItemViewModel> BlocksTasks { get; set; } = new();
         public ObservableCollection<TaskItemViewModel> BlockedByTasks { get; set; } = new();
+
+        public void CopyInto(TaskItemViewModel destination)
+        {
+            destination.ContainsTasks.Add(this);
+        }
+
+        public void MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void BlockBy(TaskItemViewModel blocker)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IEnumerable<TaskItemViewModel> GetAllParents()
+        {
+            var hashSet = new HashSet<string>();
+            var queue = new Queue<TaskItemViewModel>();
+            foreach (var task in ParentsTasks)
+            {
+                queue.Enqueue(task);
+            }
+
+            while (queue.TryDequeue(out var parent))
+            {
+                if (hashSet.Contains(parent.Id))
+                {
+                    continue;
+                }
+
+                hashSet.Add(parent.Id);
+                yield return parent;
+                if (parent.ParentsTasks.Count>0)
+                {
+                    foreach (var task in parent.ParentsTasks)
+                    {
+                        queue.Enqueue(task);
+                    }
+                }
+            }
+        }
     }
 }
