@@ -44,9 +44,10 @@ namespace Unlimotion.ViewModel
                 while (current != null)
                 {
                     nodes.Insert(0, current.Title);
+                    //TODO Сделать вывод всех альтернативных веток родителей
                     current = current.ParentsTasks.FirstOrDefault();
                 }
-                return String.Join('/', nodes);
+                return String.Join(" / ", nodes);
             }
         }
 

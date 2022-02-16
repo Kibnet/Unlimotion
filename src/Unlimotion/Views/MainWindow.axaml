@@ -23,8 +23,8 @@
 
     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
         <!--Адрес-->
-        <Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10">
-            <TextBlock Text="{Binding BreadScrumbs}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+        <Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10" Height="30">
+            <TextBlock Text="{Binding BreadScrumbs}" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center"/>
         </Grid>
 
         <!--Панель навигации-->
@@ -40,10 +40,10 @@
         <!--Редактор задачи-->
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
             <Border BorderBrush="Black" BorderThickness="1,0,0,0">
-                <StackPanel>
+                <StackPanel Margin="10,0">
                     <Grid ColumnDefinitions="Auto, *">
                         <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>
-                        <TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title"/>
+                        <TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
                     </Grid>
                     <Label>Description:</Label>
                     <TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
