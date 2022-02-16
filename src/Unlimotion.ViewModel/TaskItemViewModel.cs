@@ -204,7 +204,8 @@ namespace Unlimotion.ViewModel
 
         public void MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
         {
-            throw new NotImplementedException();
+            destination.ContainsTasks.Add(this);
+            source?.ContainsTasks?.Remove(this);
         }
 
         public void BlockBy(TaskItemViewModel blocker)
