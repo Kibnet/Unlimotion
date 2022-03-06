@@ -2,6 +2,10 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.ReactiveUI;
 using System;
+using System.Diagnostics;
+using Newtonsoft.Json.Linq;
+using Splat;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion
 {
@@ -17,8 +21,15 @@ namespace Unlimotion
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
             => AppBuilder.Configure<App>()
+                .AfterSetup(AfterSetup)
                 .UsePlatformDetect()
                 .LogToTrace()
                 .UseReactiveUI();
+
+        private static void AfterSetup(AppBuilder obj)
+        {
+            var storage = new FileTaskStorage("Tasks");
+            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(storage);
+        }
     }
 }

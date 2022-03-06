@@ -1,13 +1,50 @@
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Timers;
 
 namespace Unlimotion.ViewModel
 {
     public class TaskRepository
     {
-        public TaskRepository()
-        {
+        private readonly ITaskStorage _taskStorage;
+        private ConcurrentBag<TaskItem> _saveBag;
+        private Timer _saveTimer;
 
+        public TaskRepository(ITaskStorage taskStorage)
+        {
+            _saveBag = new ConcurrentBag<TaskItem>();
+            _saveTimer = new Timer();
+            _saveTimer.Interval = TimeSpan.FromSeconds(1).TotalMilliseconds;
+            _saveTimer.Elapsed += SaveTimerOnElapsed;
+            _taskStorage = taskStorage;
+        }
+
+        private void SaveTimerOnElapsed(object sender, ElapsedEventArgs e)
+        {
+            var hashSet = new HashSet<TaskItem>();
+            while (_saveBag.TryTake(out var task))
+            {
+                hashSet.Add(task);
+            }
+
+            foreach (var task in hashSet)
+            {
+                _taskStorage.SaveTask(task);
+            }
+        }
+
+        public void SaveTask(TaskItem item)
+        {
+            _saveBag.Add(item);
+        }
+
+        public void Init() => Init(_taskStorage.GetAllTasks());
+
+        ~TaskRepository()
+        {
+            _saveTimer.Stop();
         }
 
         public void Init(IEnumerable<TaskItem> items)
@@ -33,8 +70,9 @@ namespace Unlimotion.ViewModel
                     }
                 }
             }
+            _saveTimer.Start();
         }
-
+        
         public void AddBlockedBy(string blocksTask, TaskItem taskItem)
         {
             if (!blockedById.TryGetValue(blocksTask, out var hashSet))

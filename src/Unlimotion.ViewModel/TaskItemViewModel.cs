@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Linq;
+using System.Reactive;
 using System.Windows.Input;
 using System.Xml.Serialization;
 using DynamicData;
@@ -26,10 +28,17 @@ namespace Unlimotion.ViewModel
 
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) && (BlockedByTasks.All(m => m.IsCompleted != false));
 
+        private ICommand SaveItemCommand;
+
         private void Init()
         {
 
             var taskRepository = Locator.Current.GetService<TaskRepository>();
+
+            SaveItemCommand = ReactiveCommand.Create(() =>
+            {
+                taskRepository.SaveTask(Model);
+            });
 
             if (Model.BlocksTasks.Any() || Model.ContainsTasks.Any())
             {
@@ -66,7 +75,11 @@ namespace Unlimotion.ViewModel
             });
 
             Update();
-            BlockedByTasks.CollectionChanged += (sender, args) => Update();
+            BlockedByTasks.CollectionChanged += (sender, args) =>
+            {
+                Update();
+                taskRepository.SaveTask(Model);
+            };
             ContainsTasks.CollectionChanged += (sender, args) =>
             {
                 switch (args.Action)
@@ -104,7 +117,9 @@ namespace Unlimotion.ViewModel
                     case NotifyCollectionChangedAction.Reset:
                         break;
                 }
+
                 Update();
+                taskRepository.SaveTask(Model);
             };
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
@@ -117,6 +132,10 @@ namespace Unlimotion.ViewModel
                     IsCompleted = null;
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
+
+
+            this.WhenAnyValue(m => m.Title)
+                .Subscribe((_) => SaveItemCommand.Execute(null));
         }
 
         public ICommand ArchiveCommand { get; set; }
