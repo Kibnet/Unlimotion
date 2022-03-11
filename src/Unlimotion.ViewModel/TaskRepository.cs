@@ -31,7 +31,7 @@ namespace Unlimotion.ViewModel
 
             foreach (var task in hashSet)
             {
-                _taskStorage.SaveTask(task);
+                _taskStorage.Save(task);
             }
         }
 
@@ -40,7 +40,7 @@ namespace Unlimotion.ViewModel
             _saveBag.Add(item);
         }
 
-        public void Init() => Init(_taskStorage.GetAllTasks());
+        public void Init() => Init(_taskStorage.GetAll());
 
         ~TaskRepository()
         {

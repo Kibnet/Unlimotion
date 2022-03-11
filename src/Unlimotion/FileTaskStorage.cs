@@ -15,7 +15,7 @@ namespace Unlimotion
             Path = path;
         }
 
-        public IEnumerable<TaskItem> GetAllTasks()
+        public IEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
             if (!directoryInfo.Exists)
@@ -63,11 +63,11 @@ namespace Unlimotion
             };
             foreach (var item in list)
             {
-                SaveTask(item);
+                Save(item);
             }
         }
 
-        public bool SaveTask(TaskItem item)
+        public bool Save(TaskItem item)
         {
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));

@@ -9,9 +9,9 @@ namespace Unlimotion.ViewModel
 {
     public interface ITaskStorage
     {
-        IEnumerable<TaskItem> GetAllTasks();
+        IEnumerable<TaskItem> GetAll();
 
-        bool SaveTask(TaskItem item);
+        bool Save(TaskItem item);
     }
 
     [AddINotifyPropertyChangedInterface]
