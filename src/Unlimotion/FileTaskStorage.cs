@@ -84,5 +84,20 @@ namespace Unlimotion
                 return false;
             }
         }
+
+        public bool Remove(string itemId)
+        {
+            var directoryInfo = new DirectoryInfo(Path);
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
+            try
+            {
+                fileInfo.Delete();
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
     }
 }

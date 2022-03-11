@@ -35,6 +35,24 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        public void Remove(string itemId)
+        {
+            _taskStorage.Remove(itemId);
+            if (blockedById.TryGetValue(itemId, out var hashSet))
+            {
+                blockedById.Remove(itemId);
+                foreach (var blockedId in hashSet)
+                {
+                    var task = GetById(blockedId);
+                    if (task != null)
+                    {
+                        task.BlocksTasks.Remove(itemId);
+                        Save(task);
+                    }
+                }
+            }
+        }
+
         public void Save(TaskItem item)
         {
             _saveBag.Add(item);

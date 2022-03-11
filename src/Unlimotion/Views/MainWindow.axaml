@@ -21,6 +21,10 @@
         </DataTemplate>
     </Window.DataTemplates>
 
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Shift+Delete" Command="{Binding RemoveCommand}"/>
+    </Window.KeyBindings>
+
     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
         <!--Адрес-->
         <Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10" Height="30">
@@ -29,7 +33,7 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
-            <TreeView Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single">
+            <TreeView Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="AlwaysSelected">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate  ItemsSource="{Binding SubTasks}">
                         <ContentControl Content="{Binding TaskItem}"/> 
