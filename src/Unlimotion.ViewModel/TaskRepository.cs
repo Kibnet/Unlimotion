@@ -35,7 +35,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public void SaveTask(TaskItem item)
+        public void Save(TaskItem item)
         {
             _saveBag.Add(item);
         }

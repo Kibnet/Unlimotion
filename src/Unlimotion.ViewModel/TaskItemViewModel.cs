@@ -32,12 +32,11 @@ namespace Unlimotion.ViewModel
 
         private void Init()
         {
-
             var taskRepository = Locator.Current.GetService<TaskRepository>();
 
             SaveItemCommand = ReactiveCommand.Create(() =>
             {
-                taskRepository.SaveTask(Model);
+                taskRepository.Save(Model);
             });
 
             if (Model.BlocksTasks.Any() || Model.ContainsTasks.Any())
@@ -78,7 +77,7 @@ namespace Unlimotion.ViewModel
             BlockedByTasks.CollectionChanged += (sender, args) =>
             {
                 Update();
-                taskRepository.SaveTask(Model);
+                taskRepository.Save(Model);
             };
             ContainsTasks.CollectionChanged += (sender, args) =>
             {
@@ -119,7 +118,7 @@ namespace Unlimotion.ViewModel
                 }
 
                 Update();
-                taskRepository.SaveTask(Model);
+                taskRepository.Save(Model);
             };
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
@@ -134,7 +133,12 @@ namespace Unlimotion.ViewModel
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
 
-            this.WhenAnyValue(m => m.Title)
+            this.WhenAnyValue(m => m.Title, 
+                    m => m.IsCompleted, 
+                    m => m.Description, 
+                    m => m.ArchiveDateTime,
+                    m => m.UnlockedDateTime
+                    )
                 .Subscribe((_) => SaveItemCommand.Execute(null));
         }
 
