@@ -31,15 +31,15 @@
         <Grid Grid.Column="0" Grid.Row="1">
             <TreeView Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single">
                 <TreeView.ItemTemplate>
-                    <TreeDataTemplate  ItemsSource="{Binding ContainsTasks}">
-                        <ContentControl Content="{Binding .}"/> 
+                    <TreeDataTemplate  ItemsSource="{Binding SubTasks}">
+                        <ContentControl Content="{Binding TaskItem}"/> 
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
         </Grid>
         <!--Редактор задачи-->
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
-            <Border BorderBrush="Black" BorderThickness="1,0,0,0">
+            <Border BorderBrush="Black" BorderThickness="1,0,0,0" DataContext="{Binding TaskItem}">
                 <StackPanel Margin="10,0">
                     <Grid ColumnDefinitions="Auto, *">
                         <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>

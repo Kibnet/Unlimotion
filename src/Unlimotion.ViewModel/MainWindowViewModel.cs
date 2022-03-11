@@ -26,10 +26,12 @@ namespace Unlimotion.ViewModel
             Locator.CurrentMutable.RegisterConstant(taskRepository);
             taskRepository.Init();
             
-            CurrentItems = new ObservableCollection<TaskItemViewModel>();
+            CurrentItems = new ObservableCollection<TaskWrapperViewModel>();
             foreach (var root in taskRepository.GetRoots())
             {
-                CurrentItems.Add(TaskItemViewModel.GetViewModel(root));
+                var vm = TaskItemViewModel.GetViewModel(root);
+                var wrapper = new TaskWrapperViewModel(null, vm);
+                CurrentItems.Add(wrapper);
             }
         }
 
@@ -41,16 +43,16 @@ namespace Unlimotion.ViewModel
                 var current = CurrentItem;
                 while (current != null)
                 {
-                    nodes.Insert(0, current.Title);
+                    nodes.Insert(0, current.TaskItem.Title);
                     //TODO Сделать вывод всех альтернативных веток родителей
-                    current = current.ParentsTasks.FirstOrDefault();
+                    current = current.Parent;
                 }
                 return String.Join(" / ", nodes);
             }
         }
 
-        public ObservableCollection<TaskItemViewModel> CurrentItems { get; set; }
+        public ObservableCollection<TaskWrapperViewModel> CurrentItems { get; set; }
 
-        public TaskItemViewModel CurrentItem { get; set; }
+        public TaskWrapperViewModel CurrentItem { get; set; }
     }
 }
