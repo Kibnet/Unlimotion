@@ -30,6 +30,8 @@ namespace Unlimotion.ViewModel
 
         private ICommand SaveItemCommand;
 
+        private bool _isInited;
+
         private void Init()
         {
             var taskRepository = Locator.Current.GetService<TaskRepository>();
@@ -139,7 +141,11 @@ namespace Unlimotion.ViewModel
                     m => m.ArchiveDateTime,
                     m => m.UnlockedDateTime
                     )
-                .Subscribe((_) => SaveItemCommand.Execute(null));
+                .Subscribe((_) =>
+                {
+                    if (_isInited) SaveItemCommand.Execute(null);
+                });
+            _isInited = true;
         }
 
         public ICommand ArchiveCommand { get; set; }

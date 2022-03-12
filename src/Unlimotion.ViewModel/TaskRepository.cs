@@ -37,6 +37,7 @@ namespace Unlimotion.ViewModel
 
         public void Remove(string itemId)
         {
+            taskById.Remove(itemId);
             _taskStorage.Remove(itemId);
             if (blockedById.TryGetValue(itemId, out var hashSet))
             {

@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Input;
+using DynamicData;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
@@ -46,7 +48,22 @@ namespace Unlimotion.ViewModel
                 {
                     taskRepository.Remove(current.TaskItem.Id);
                     CurrentItems.Remove(current);
+                    foreach (var subTask in current.SubTasks)
+                    {
+                        if (CurrentItems.All(m => m.TaskItem != subTask.TaskItem))
+                        {
+                            subTask.Parent = null;
+                            subTask.TaskItem.ParentsTasks.Remove(current.TaskItem);
+                            CurrentItems.Add(subTask);
+                        }
+                    }
                 }
+                else
+                {
+                    CurrentItems.Remove(current);
+                }
+
+                CurrentItem = null;
             },
             this.WhenAny(m => m.CurrentItem, m => m.Value != null));
         }
