@@ -2,7 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Timers;
+using DynamicData;
 
 namespace Unlimotion.ViewModel
 {
@@ -11,6 +13,9 @@ namespace Unlimotion.ViewModel
         private readonly ITaskStorage _taskStorage;
         private ConcurrentBag<TaskItem> _saveBag;
         private Timer _saveTimer;
+        public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+        IObservable<Func<TaskItemViewModel, bool>> rootFilter;
+        private Dictionary<string, HashSet<string>> blockedById { get; set; }
 
         public TaskRepository(ITaskStorage taskStorage)
         {
@@ -37,7 +42,7 @@ namespace Unlimotion.ViewModel
 
         public void Remove(string itemId)
         {
-            taskById.Remove(itemId);
+            Tasks.Remove(itemId);
             _taskStorage.Remove(itemId);
             if (blockedById.TryGetValue(itemId, out var hashSet))
             {
@@ -47,8 +52,8 @@ namespace Unlimotion.ViewModel
                     var task = GetById(blockedId);
                     if (task != null)
                     {
-                        task.BlocksTasks.Remove(itemId);
-                        Save(task);
+                        task.Blocks.Remove(itemId);
+                        Save(task.Model);
                     }
                 }
             }
@@ -68,19 +73,13 @@ namespace Unlimotion.ViewModel
 
         public void Init(IEnumerable<TaskItem> items)
         {
-            taskById = new();
-            parentsById = new();
+            Tasks = new(item => item.Id);
             blockedById = new();
             foreach (var taskItem in items)
             {
-                taskById[taskItem.Id] = taskItem;
-                if (taskItem.ContainsTasks.Any())
-                {
-                    foreach (var subTask in taskItem.ContainsTasks)
-                    {
-                        AddParent(subTask, taskItem.Id);
-                    }
-                }
+                var vm = new TaskItemViewModel(taskItem);
+                Tasks.AddOrUpdate(vm);
+
                 if (taskItem.BlocksTasks.Any())
                 {
                     foreach (var blocksTask in taskItem.BlocksTasks)
@@ -89,6 +88,26 @@ namespace Unlimotion.ViewModel
                     }
                 }
             }
+
+            rootFilter = Tasks.Connect()
+                .AutoRefreshOnObservable(m => m.ContainsTasks.ToObservable())
+                .AutoRefreshOnObservable(t => t.Contains.ToObservable())
+                .TransformMany(item =>
+                {
+                    var many = item.Contains.Select(id => (item, id));
+                    return many;
+                }, s => s)
+                
+                .Group(tuple => tuple.id)
+                .Transform(g => (g.Key, g.Cache.Items.Select(t => t.item).ToHashSet()))
+                .ToCollection()
+                .Select(items =>
+                {
+                    bool Predicate(TaskItemViewModel task) => items.All(t => t.Key != task.Id);
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+		
+
             _saveTimer.Start();
         }
         
@@ -114,87 +133,19 @@ namespace Unlimotion.ViewModel
                 }
             }
         }
-
-        public void AddParent(string subTask, string taskItemId)
+        
+        public TaskItemViewModel GetById(string id)
         {
-            if (!parentsById.TryGetValue(subTask, out var hashSet))
-            {
-                hashSet = new HashSet<string>();
-                parentsById[subTask] = hashSet;
-            }
-
-            hashSet.Add(taskItemId);
+            var item = Tasks.Lookup(id);
+            return item.Value;
         }
-
-        public void RemoveParent(string subTask, string taskItemId)
+        
+        public IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots()
         {
-            if (parentsById.TryGetValue(subTask, out var hashSet))
-            {
-                hashSet.Remove(taskItemId);
-                if (hashSet.Count==0)
-                {
-                    parentsById.Remove(subTask);
-                }
-            }
-        }
-
-        public TaskItem GetById(string id)
-        {
-            if (taskById.TryGetValue(id, out var item))
-            {
-                return item;
-            }
-
-            return null;
-        }
-
-        public IEnumerable<TaskItem> GetById(IEnumerable<string> ids)
-        {
-            if (ids == null)
-            {
-                yield break;
-            }
-
-            foreach (var id in ids)
-            {
-                yield return GetById(id);
-            }
-        }
-
-        public IEnumerable<TaskItem> GetRoots()
-        {
-            return GetById(taskById.Where(pair => !parentsById.ContainsKey(pair.Key)).Select(pair => pair.Key));
-        }
-
-        public IEnumerable<TaskItem> GetUnblocks()
-        {
-            return GetById(taskById.Where(pair => !blockedById.ContainsKey(pair.Key)).Select(pair => pair.Key));
-        }
-
-        private Dictionary<string, TaskItem> taskById { get; set; }
-        private Dictionary<string, HashSet<string>> parentsById { get; set; }
-        private Dictionary<string, HashSet<string>> blockedById { get; set; }
-
-        public IEnumerable<TaskItem> GetParentsById(string id)
-        {
-            if (parentsById.TryGetValue(id, out var itemsSet))
-            {
-                foreach (var item in GetById(itemsSet))
-                {
-                    yield return item;
-                }
-            }
-        }
-
-        public IEnumerable<TaskItem> GetBlockedById(string id)
-        {
-            if (blockedById.TryGetValue(id, out var itemsSet))
-            {
-                foreach (var item in GetById(itemsSet))
-                {
-                    yield return item;
-                }
-            }
+            IObservable<IChangeSet<TaskItemViewModel, string>> roots;
+            roots = Tasks.Connect()
+                .Filter(rootFilter);
+            return roots;
         }
     }
 }

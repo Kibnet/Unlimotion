@@ -19,9 +19,10 @@ namespace Unlimotion.ViewModel
     }
 
     [AddINotifyPropertyChangedInterface]
-    public class MainWindowViewModel
+    public class MainWindowViewModel:DisposableList
     {
         private ITaskStorage TaskStorage;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
 
         public MainWindowViewModel()
         {
@@ -29,40 +30,25 @@ namespace Unlimotion.ViewModel
             var taskRepository = new TaskRepository(TaskStorage);
             Locator.CurrentMutable.RegisterConstant(taskRepository);
             taskRepository.Init();
-            
-            CurrentItems = new ObservableCollection<TaskWrapperViewModel>();
-            foreach (var root in taskRepository.GetRoots())
-            {
-                var vm = TaskItemViewModel.GetViewModel(root);
-                var wrapper = new TaskWrapperViewModel(null, vm);
-                CurrentItems.Add(wrapper);
-            }
 
+            taskRepository.GetRoots().Transform(item =>
+                {
+                    var wrapper = new TaskWrapperViewModel(null, item);
+                    return wrapper;
+                }).Bind(out _currentItems)
+                .Subscribe()
+                .AddToDispose(this);
+            
             RemoveCommand = ReactiveCommand.Create(() =>
             {
                 var current = CurrentItem;
                 //Удаление ссылки из родителя
-                current?.Parent?.TaskItem.ContainsTasks.Remove(current.TaskItem);
+                current?.Parent?.TaskItem.Contains.Remove(current.TaskItem.Id);
                 //Если родителей не осталось, удаляется сама задача
                 if (current.TaskItem.ParentsTasks.Count == 0)
                 {
                     taskRepository.Remove(current.TaskItem.Id);
-                    CurrentItems.Remove(current);
-                    foreach (var subTask in current.SubTasks)
-                    {
-                        if (CurrentItems.All(m => m.TaskItem != subTask.TaskItem))
-                        {
-                            subTask.Parent = null;
-                            subTask.TaskItem.ParentsTasks.Remove(current.TaskItem);
-                            CurrentItems.Add(subTask);
-                        }
-                    }
                 }
-                else
-                {
-                    CurrentItems.Remove(current);
-                }
-
                 CurrentItem = null;
             },
             this.WhenAny(m => m.CurrentItem, m => m.Value != null));
@@ -84,7 +70,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public ObservableCollection<TaskWrapperViewModel> CurrentItems { get; set; }
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
 
         public TaskWrapperViewModel CurrentItem { get; set; }
 

@@ -31,12 +31,6 @@ namespace Unlimotion.Views
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
 
-        public class DragArgs
-        {
-            public object Drag { get; set; }
-            public object Parent { get; set; }
-        }
-
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var dragData = new DataObject();
@@ -46,14 +40,8 @@ namespace Unlimotion.Views
             {
                 return;
             }
-
-            var parentControl = control.FindAncestorOfType<TreeViewItem>()?.FindAncestorOfType<TreeViewItem>();
-
-            var dragArgs = new DragArgs
-            {
-                Drag = dc, Parent = parentControl?.DataContext
-            };
-            dragData.Set(CustomFormat, dragArgs);
+            
+            dragData.Set(CustomFormat, dc);
 
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
@@ -65,11 +53,10 @@ namespace Unlimotion.Views
                 if (e.KeyModifiers == KeyModifiers.Shift)
                 {
                     var dc = (e.Source as IControl)?.Parent?.DataContext;
-                    var task = dc as TaskItemViewModel;
-                    var data = e.Data.Get(CustomFormat) as DragArgs;
-                    if (data?.Drag is TaskItemViewModel subItem)
+                    var task = dc as TaskWrapperViewModel;
+                    if (e.Data.Get(CustomFormat) is TaskWrapperViewModel subItem)
                     {
-                        if (task == subItem || task.GetAllParents().Any(m => m.Id == subItem.Id))
+                        if (task == subItem || task.TaskItem.GetAllParents().Any(m => m.Id == subItem.TaskItem.Id))
                         {
                             e.DragEffects = DragDropEffects.None;
                             return;
@@ -92,11 +79,10 @@ namespace Unlimotion.Views
                 else
                 {
                     var dc = (e.Source as IControl)?.Parent?.DataContext;
-                    var task = dc as TaskItemViewModel;
-                    var data = e.Data.Get(CustomFormat) as DragArgs;
-                    if (data?.Drag is TaskItemViewModel subItem)
+                    var task = dc as TaskWrapperViewModel;
+                    if (e.Data.Get(CustomFormat) is TaskWrapperViewModel subItem)
                     {
-                        if (task == subItem || task.GetAllParents().Any(m => m.Id == subItem.Id))
+                        if (task == subItem || task.TaskItem.GetAllParents().Any(m => m.Id == subItem.TaskItem.Id))
                         {
                             e.DragEffects = DragDropEffects.None;
                             return;
@@ -122,12 +108,11 @@ namespace Unlimotion.Views
                 if (e.KeyModifiers == KeyModifiers.Shift)
                 {
                     var control = (e.Source as IControl)?.Parent;
-                    var task = control?.DataContext as TaskItemViewModel;
-                    var data = e.Data.Get(CustomFormat) as DragArgs;
-                    if (data?.Drag is TaskItemViewModel subItem)
+                    var task = control?.DataContext as TaskWrapperViewModel;
+                    if (e.Data.Get(CustomFormat) is TaskWrapperViewModel subItem)
                     {
                         e.DragEffects &= DragDropEffects.Move;
-                        subItem?.MoveInto(task, data?.Parent as TaskItemViewModel);
+                        subItem?.TaskItem.MoveInto(task.TaskItem, subItem.Parent?.TaskItem);
                     }
                     else
                     {
@@ -146,12 +131,11 @@ namespace Unlimotion.Views
                 else
                 {
                     var dc = (e.Source as IControl)?.Parent?.DataContext;
-                    var task = dc as TaskItemViewModel;
-                    var data = e.Data.Get(CustomFormat) as DragArgs;
-                    if (data?.Drag is TaskItemViewModel subItem)
+                    var task = dc as TaskWrapperViewModel;
+                    if (e.Data.Get(CustomFormat) is TaskWrapperViewModel subItem)
                     {
                         e.DragEffects &= DragDropEffects.Copy;
-                        subItem?.CopyInto(task);
+                        subItem?.TaskItem.CopyInto(task.TaskItem);
                     }
                     else
                     {

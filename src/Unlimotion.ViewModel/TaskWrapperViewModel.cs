@@ -7,7 +7,7 @@ using PropertyChanged;
 namespace Unlimotion.ViewModel;
 
 [AddINotifyPropertyChangedInterface]
-public class TaskWrapperViewModel
+public class TaskWrapperViewModel: DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
 
@@ -19,7 +19,8 @@ public class TaskWrapperViewModel
             .ToObservableChangeSet()
             .Transform(model => new TaskWrapperViewModel(this, model))
             .Bind(out _subTasks)
-            .Subscribe();
+            .Subscribe()
+            .AddToDispose(this);
     }
 
     public TaskItemViewModel TaskItem { get; set; }
