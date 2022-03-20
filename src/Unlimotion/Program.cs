@@ -1,9 +1,6 @@
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.ReactiveUI;
 using System;
-using System.Diagnostics;
-using Newtonsoft.Json.Linq;
 using Splat;
 using Unlimotion.ViewModel;
 

@@ -349,12 +349,16 @@ namespace Unlimotion.ViewModel
         public void CopyInto(TaskItemViewModel destination)
         {
             destination.Contains.Add(Id);
+            destination.SaveItemCommand.Execute(null);
         }
 
         public void MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
         {
             destination.Contains.Add(Id);
             source?.Contains?.Remove(Id);
+
+            destination.SaveItemCommand.Execute(null);
+            source.SaveItemCommand.Execute(null);
         }
 
         public void BlockBy(TaskItemViewModel blocker)
