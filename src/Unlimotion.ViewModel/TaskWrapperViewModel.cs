@@ -23,6 +23,11 @@ public class TaskWrapperViewModel: DisposableList
             .AddToDispose(this);
     }
 
+    public void Remove()
+    {
+        TaskItem.RemoveFunc.Invoke(Parent?.TaskItem);
+    }
+
     public TaskItemViewModel TaskItem { get; set; }
     public TaskWrapperViewModel Parent { get; set; }
 

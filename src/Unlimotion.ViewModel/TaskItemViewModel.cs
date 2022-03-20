@@ -1,29 +1,23 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Linq;
-using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
-using Splat;
 
 namespace Unlimotion.ViewModel
 {
     [AddINotifyPropertyChangedInterface]
     public class TaskItemViewModel: DisposableList
     {
-        public TaskItemViewModel(TaskItem model, bool needInit = true)
+        public TaskItemViewModel(TaskItem model, ITaskRepository taskRepository)
         {
             Model = model;
-            if (needInit)
-            {
-                Init();
-            }
+            Init(taskRepository);
         }
 
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) && (BlockedByTasks.All(m => m.IsCompleted != false));
@@ -38,10 +32,8 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
 
-        private void Init()
+        private void Init(ITaskRepository taskRepository)
         {
-            var taskRepository = Locator.Current.GetService<TaskRepository>();
-
             SaveItemCommand = ReactiveCommand.Create(() =>
             {
                 taskRepository.Save(Model);
@@ -60,7 +52,6 @@ namespace Unlimotion.ViewModel
             taskRepository.Tasks.Connect()
                 .Filter(containsFilter)
                 .Bind(out _containsTasks)
-                .DisposeMany()
                 .Subscribe()
                 .AddToDispose(this);
 
@@ -116,7 +107,6 @@ namespace Unlimotion.ViewModel
             taskRepository.Tasks.Connect()
                 .Filter(parentsFilter)
                 .Bind(out _parentsTasks)
-                .DisposeMany()
                 .Subscribe()
                 .AddToDispose(this);
             
@@ -132,7 +122,6 @@ namespace Unlimotion.ViewModel
             taskRepository.Tasks.Connect()
                 .Filter(blocksFilter)
                 .Bind(out _blocksTasks)
-                .DisposeMany()
                 .Subscribe()
                 .AddToDispose(this);
 
@@ -189,7 +178,6 @@ namespace Unlimotion.ViewModel
             taskRepository.Tasks.Connect()
                 .Filter(blockedByFilter)
                 .Bind(out _blockedByTasks)
-                .DisposeMany()
                 .Subscribe()
                 .AddToDispose(this);
 
@@ -257,49 +245,7 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(this);
-
             
-            //ContainsTasks.CollectionChanged += (sender, args) =>
-            //{
-            //    switch (args.Action)
-            //    {
-            //        case NotifyCollectionChangedAction.Add:
-            //            {
-            //                var items = args.NewItems.GetEnumerable().Cast<TaskItemViewModel>().ToList();
-            //                var ids = items.Select(t => t.Id);
-            //                Model.ContainsTasks.AddRange(ids);
-            //                foreach (var item in items)
-            //                {
-            //                    TaskItem taskItem = Model;
-            //                    taskRepository.AddParent(item.Id, taskItem.Id);
-            //                    item.ParentsTasks.Add(this);
-            //                }
-            //            }
-            //            break;
-            //        case NotifyCollectionChangedAction.Move:
-            //            break;
-            //        case NotifyCollectionChangedAction.Remove:
-            //            {
-            //                var items = args.OldItems.GetEnumerable().Cast<TaskItemViewModel>().ToList();
-            //                var ids = items.Select(t => t.Id);
-            //                Model.ContainsTasks.Remove(ids);
-            //                foreach (var item in items)
-            //                {
-            //                    TaskItem taskItemId = Model;
-            //                    taskRepository.RemoveParent(item.Id, taskItemId.Id);
-            //                    item.ParentsTasks.Remove(this);
-            //                }
-            //            }
-            //            break;
-            //        case NotifyCollectionChangedAction.Replace:
-            //            break;
-            //        case NotifyCollectionChangedAction.Reset:
-            //            break;
-            //    }
-
-            //    Update();
-            //    taskRepository.Save(Model);
-            //};
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 if (IsCompleted == null)
@@ -312,6 +258,23 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
+            RemoveFunc = parent =>
+            {
+                //Удаление ссылки из родителя
+                parent?.Contains.Remove(Id);
+                //Если родителей не осталось, удаляется сама задача
+                if (Parents.Count == 0)
+                {
+                    taskRepository.Remove(Id);
+
+                    foreach (var containsTask in ContainsTasks.ToList())
+                    {
+                        containsTask.Parents.Remove(Id);
+                    }
+                    return true;
+                }
+                return false;
+            };
 
             this.WhenAnyValue(m => m.Title, 
                     m => m.IsCompleted, 
@@ -327,7 +290,8 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; }
-        
+        public Func<TaskItemViewModel,bool> RemoveFunc { get; set; }
+
         public TaskItem Model
         {
             get =>

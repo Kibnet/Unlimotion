@@ -8,7 +8,15 @@ using DynamicData;
 
 namespace Unlimotion.ViewModel
 {
-    public class TaskRepository
+    public interface ITaskRepository
+    {
+        SourceCache<TaskItemViewModel, string> Tasks { get; }
+        void Remove(string itemId);
+        void Save(TaskItem item);
+        IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
+    }
+
+    public class TaskRepository : ITaskRepository
     {
         private readonly ITaskStorage _taskStorage;
         private ConcurrentBag<TaskItem> _saveBag;
@@ -24,6 +32,7 @@ namespace Unlimotion.ViewModel
             _saveTimer.Interval = TimeSpan.FromSeconds(1).TotalMilliseconds;
             _saveTimer.Elapsed += SaveTimerOnElapsed;
             _taskStorage = taskStorage;
+            Init();
         }
 
         private void SaveTimerOnElapsed(object sender, ElapsedEventArgs e)
@@ -64,20 +73,20 @@ namespace Unlimotion.ViewModel
             _saveBag.Add(item);
         }
 
-        public void Init() => Init(_taskStorage.GetAll());
+        private void Init() => Init(_taskStorage.GetAll());
 
         ~TaskRepository()
         {
             _saveTimer.Stop();
         }
 
-        public void Init(IEnumerable<TaskItem> items)
+        private void Init(IEnumerable<TaskItem> items)
         {
             Tasks = new(item => item.Id);
             blockedById = new();
             foreach (var taskItem in items)
             {
-                var vm = new TaskItemViewModel(taskItem);
+                var vm = new TaskItemViewModel(taskItem, this);
                 Tasks.AddOrUpdate(vm);
 
                 if (taskItem.BlocksTasks.Any())

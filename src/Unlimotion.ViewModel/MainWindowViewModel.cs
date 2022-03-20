@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
+using System.Reactive.Linq;
 using System.Windows.Input;
 using DynamicData;
 using PropertyChanged;
@@ -26,10 +26,7 @@ namespace Unlimotion.ViewModel
 
         public MainWindowViewModel()
         {
-            TaskStorage = Locator.Current.GetService<ITaskStorage>();
-            var taskRepository = new TaskRepository(TaskStorage);
-            Locator.CurrentMutable.RegisterConstant(taskRepository);
-            taskRepository.Init();
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
 
             taskRepository.GetRoots().Transform(item =>
                 {
@@ -41,14 +38,7 @@ namespace Unlimotion.ViewModel
             
             RemoveCommand = ReactiveCommand.Create(() =>
             {
-                var current = CurrentItem;
-                //Удаление ссылки из родителя
-                current?.Parent?.TaskItem.Contains.Remove(current.TaskItem.Id);
-                //Если родителей не осталось, удаляется сама задача
-                if (current.TaskItem.ParentsTasks.Count == 0)
-                {
-                    taskRepository.Remove(current.TaskItem.Id);
-                }
+                CurrentItem?.Remove();
                 CurrentItem = null;
             },
             this.WhenAny(m => m.CurrentItem, m => m.Value != null));

@@ -28,8 +28,10 @@ namespace Unlimotion
 
         private static void AfterSetup(AppBuilder obj)
         {
-            var storage = new FileTaskStorage("Tasks");
-            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(storage);
+            var taskStorage = new FileTaskStorage("Tasks");
+            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            var taskRepository = new TaskRepository(taskStorage);
+            Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
         }
     }
 }
