@@ -23,6 +23,8 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Shift+Delete" Command="{Binding RemoveCommand}"/>
+        <KeyBinding Gesture="Enter" Command="{Binding CreateSibling}"/>
+        <KeyBinding Gesture="Tab" Command="{Binding CreateInner}"/>
     </Window.KeyBindings>
 
     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">

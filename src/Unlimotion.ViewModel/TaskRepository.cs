@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Timers;
 using DynamicData;
+using DynamicData.Binding;
 
 namespace Unlimotion.ViewModel
 {
@@ -99,8 +100,7 @@ namespace Unlimotion.ViewModel
             }
 
             rootFilter = Tasks.Connect()
-                .AutoRefreshOnObservable(m => m.ContainsTasks.ToObservable())
-                .AutoRefreshOnObservable(t => t.Contains.ToObservable())
+                .AutoRefreshOnObservable(t => t.Contains.ToObservableChangeSet())
                 .TransformMany(item =>
                 {
                     var many = item.Contains.Select(id => (item, id));

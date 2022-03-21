@@ -22,7 +22,7 @@ namespace Unlimotion.ViewModel
 
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) && (BlockedByTasks.All(m => m.IsCompleted != false));
 
-        private ICommand SaveItemCommand;
+        public ICommand SaveItemCommand;
 
         private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
@@ -124,7 +124,6 @@ namespace Unlimotion.ViewModel
                 .Bind(out _blocksTasks)
                 .Subscribe()
                 .AddToDispose(this);
-
 
             //Subscribe for set BlockedBy for Blocks
             BlocksTasks.ToObservableChangeSet()
@@ -276,6 +275,7 @@ namespace Unlimotion.ViewModel
                 return false;
             };
 
+            //Subscribe to Save when property changed
             this.WhenAnyValue(m => m.Title, 
                     m => m.IsCompleted, 
                     m => m.Description, 
@@ -358,7 +358,7 @@ namespace Unlimotion.ViewModel
             source?.Contains?.Remove(Id);
 
             destination.SaveItemCommand.Execute(null);
-            source.SaveItemCommand.Execute(null);
+            source?.SaveItemCommand.Execute(null);
         }
 
         public void BlockBy(TaskItemViewModel blocker)
