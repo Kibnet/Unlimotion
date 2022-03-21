@@ -23,8 +23,8 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Shift+Delete" Command="{Binding RemoveCommand}"/>
-        <KeyBinding Gesture="Enter" Command="{Binding CreateSibling}"/>
-        <KeyBinding Gesture="Tab" Command="{Binding CreateInner}"/>
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
+        <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
     </Window.KeyBindings>
 
     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
@@ -35,7 +35,7 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
-            <TreeView Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="AlwaysSelected">
+            <TreeView AutoScrollToSelectedItem="True" Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="AlwaysSelected">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate  ItemsSource="{Binding SubTasks}">
                         <ContentControl Content="{Binding TaskItem}"  PointerPressed="InputElement_OnPointerPressed"/> 
