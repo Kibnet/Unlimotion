@@ -32,7 +32,7 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item);
+                    var wrapper = new TaskWrapperViewModel(null, item, m => m.ContainsTasks.ToObservableChangeSet());
                     return wrapper;
                 }).Bind(out _currentItems)
                 .Subscribe()

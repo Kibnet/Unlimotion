@@ -12,13 +12,13 @@ public class TaskWrapperViewModel : DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
 
-    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task)
+    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, Func<TaskItemViewModel,IObservable<IChangeSet<TaskItemViewModel>>> childSelector)
     {
         TaskItem = task;
         Parent = parent;
-        task.ContainsTasks
-            .ToObservableChangeSet()
-            .Transform(model => new TaskWrapperViewModel(this, model))
+        var tasks = childSelector.Invoke(task);
+        tasks
+            .Transform(model => new TaskWrapperViewModel(this, model, childSelector))
             .Bind(out _subTasks)
             .Subscribe()
             .AddToDispose(this);
