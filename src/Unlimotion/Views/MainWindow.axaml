@@ -46,13 +46,13 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
-			<TreeView AutoScrollToSelectedItem="True"
+            <TreeView AutoScrollToSelectedItem="True"
                       Items="{Binding CurrentItems}"
                       SelectedItem="{Binding CurrentItem}"
                       SelectionMode="Single"
                       Name="CurrentTree">
                 <TreeView.ItemTemplate>
-					<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                    <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                         <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
@@ -77,13 +77,13 @@
                     </StackPanel>
 
                     <Label>Parents Tasks:</Label>
-					<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
+                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                 <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
-					</TreeView>
+                    </TreeView>
 
                     <Label>Blocked By Tasks:</Label>
                     <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
