@@ -20,10 +20,20 @@
                 <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
+        <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+            <Grid>
+                <ContentControl Content="{Binding TaskItem}"/>
+                <Button Background="#00000000"
+                        Content="x"
+                        BorderThickness="0"
+                        HorizontalAlignment="Right"
+                        Command="{Binding RemoveCommand}"/>
+            </Grid>
+        </TreeDataTemplate>
     </Window.DataTemplates>
 
     <Window.KeyBindings>
-        <KeyBinding Gesture="Shift+Delete" Command="{Binding RemoveCommand}"/>
+        <KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentItem.RemoveCommand}"/>
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
     </Window.KeyBindings>
@@ -37,11 +47,6 @@
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
             <TreeView AutoScrollToSelectedItem="True" Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single" x:Name="CurrentTree">
-                <TreeView.ItemTemplate>
-                    <TreeDataTemplate  ItemsSource="{Binding SubTasks}">
-                        <ContentControl Content="{Binding TaskItem}"  PointerPressed="InputElement_OnPointerPressed"/> 
-                    </TreeDataTemplate>
-                </TreeView.ItemTemplate>
             </TreeView>
         </Grid>
         <!--Редактор задачи-->
@@ -75,30 +80,25 @@
                             <TreeDataTemplate ItemsSource="{Binding BlockedByTasks}">
                                 <Grid>
                                     <ContentControl Content="{Binding .}"/>
-                                    <Button Background="#00000000" 
-                                            Content="X" 
+                                    <Button Background="#00000000"
+                                            Content="X"
                                             BorderThickness="0"
                                             HorizontalAlignment="Right"
-                                            Command="{Binding UnblockMeCommand}" 
+                                            Command="{Binding UnblockMeCommand}"
                                             CommandParameter="{Binding #MainWindow.DataContext.CurrentItem.TaskItem}"/>
                                 </Grid>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
                     <Label>Contains Tasks:</Label>
-                    <TreeView Items="{Binding ContainsTasks}">
-                        <TreeView.ItemTemplate>
-                            <TreeDataTemplate ItemsSource="{Binding ContainsTasks}">
-                                <ContentControl Content="{Binding .}"/>
-                            </TreeDataTemplate>
-                        </TreeView.ItemTemplate>
+                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentContainsItem.SubTasks}">
                     </TreeView>
                     <Label>Blocks Tasks:</Label>
                     <TreeView Items="{Binding BlocksTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding BlocksTasks}">
-								<Grid>
-									<ContentControl Content="{Binding .}"/>
+                                <Grid>
+                                    <ContentControl Content="{Binding .}"/>
                                     <Button Background="#00000000"
                                             Content="X"
                                             BorderThickness="0"
@@ -113,6 +113,6 @@
             </Border>
         </Grid>
     </Grid>
-    
+
 
 </Window>

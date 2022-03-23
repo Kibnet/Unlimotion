@@ -1,9 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
 using PropertyChanged;
+using ReactiveUI;
 
 namespace Unlimotion.ViewModel;
 
@@ -12,22 +14,23 @@ public class TaskWrapperViewModel : DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
 
-    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, Func<TaskItemViewModel,IObservable<IChangeSet<TaskItemViewModel>>> childSelector)
+    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, Func<TaskItemViewModel,IObservable<IChangeSet<TaskItemViewModel>>> childSelector, Action<TaskWrapperViewModel> removeAction)
     {
         TaskItem = task;
         Parent = parent;
+        RemoveCommand = ReactiveCommand.Create(() =>
+        {
+            removeAction.Invoke(this);
+        });
         var tasks = childSelector.Invoke(task);
         tasks
-            .Transform(model => new TaskWrapperViewModel(this, model, childSelector))
+            .Transform(model => new TaskWrapperViewModel(this, model, childSelector, removeAction))
             .Bind(out _subTasks)
             .Subscribe()
             .AddToDispose(this);
     }
 
-    public void Remove()
-    {
-        TaskItem.RemoveFunc.Invoke(Parent?.TaskItem);
-    }
+    public ICommand RemoveCommand { get; }
 
     public bool CanMoveInto(TaskWrapperViewModel destination)
     {

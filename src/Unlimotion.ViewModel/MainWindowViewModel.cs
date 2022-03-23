@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -22,32 +23,42 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
-
         public MainWindowViewModel()
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
 
+            //Bind Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item, m => m.ContainsTasks.ToObservableChangeSet());
+                    var wrapper = new TaskWrapperViewModel(null, item, 
+                        m => m.ContainsTasks.ToObservableChangeSet(),
+                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
                     return wrapper;
                 }).Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);
 
-            RemoveCommand = ReactiveCommand.Create(() =>
+            //Bind Current Item Contains
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(item =>
                 {
-                    CurrentItem?.Remove();
-                    CurrentItem = null;
-                },
-                this.WhenAny(m => m.CurrentItem, m => m.Value != null));
-
+                    if (item != null)
+                    {
+                        CurrentContainsItem = new TaskWrapperViewModel(null, item.TaskItem,
+                            m => m.ContainsTasks.ToObservableChangeSet(),
+                            m => m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id));}
+                    else
+                    {
+                        CurrentContainsItem = null;
+                    }
+                })
+                .AddToDispose(this);
+            
             CreateSibling = ReactiveCommand.Create(() =>
                 {
-                    if (CurrentItem!=null && string.IsNullOrWhiteSpace(CurrentItem?.TaskItem.Title))
+                    if (CurrentItem != null && string.IsNullOrWhiteSpace(CurrentItem?.TaskItem.Title))
                         return;
                     var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                     task.SaveItemCommand.Execute(null);
@@ -104,11 +115,13 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
+
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
 
         public TaskWrapperViewModel CurrentItem { get; set; }
 
-        public ICommand RemoveCommand { get; set; }
+        public TaskWrapperViewModel CurrentContainsItem { get; set; }
 
         public ICommand CreateSibling { get; set; }
 
