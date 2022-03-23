@@ -35,7 +35,7 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
-            <TreeView AutoScrollToSelectedItem="True" Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="AlwaysSelected">
+            <TreeView AutoScrollToSelectedItem="True" Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single" x:Name="CurrentTree">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate  ItemsSource="{Binding SubTasks}">
                         <ContentControl Content="{Binding TaskItem}"  PointerPressed="InputElement_OnPointerPressed"/> 
