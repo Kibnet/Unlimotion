@@ -20,7 +20,7 @@
                 <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
-        <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+        <DataTemplate DataType="viewModel:TaskWrapperViewModel">
             <Grid>
                 <ContentControl Content="{Binding TaskItem}"/>
                 <Button Background="#00000000"
@@ -29,7 +29,7 @@
                         HorizontalAlignment="Right"
                         Command="{Binding RemoveCommand}"/>
             </Grid>
-        </TreeDataTemplate>
+        </DataTemplate>
     </Window.DataTemplates>
 
     <Window.KeyBindings>
@@ -46,7 +46,16 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
-            <TreeView AutoScrollToSelectedItem="True" Items="{Binding CurrentItems}" SelectedItem="{Binding CurrentItem}" SelectionMode="Single" x:Name="CurrentTree">
+			<TreeView AutoScrollToSelectedItem="True"
+                      Items="{Binding CurrentItems}"
+                      SelectedItem="{Binding CurrentItem}"
+                      SelectionMode="Single"
+                      Name="CurrentTree">
+                <TreeView.ItemTemplate>
+					<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                        <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
             </TreeView>
         </Grid>
         <!--Редактор задачи-->
@@ -66,49 +75,43 @@
                         <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
                         <Button Content="Archive" Command="{Binding ArchiveCommand}"/>
                     </StackPanel>
+
                     <Label>Parents Tasks:</Label>
-                    <TreeView Items="{Binding ParentsTasks}">
+					<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
                         <TreeView.ItemTemplate>
-                            <TreeDataTemplate ItemsSource="{Binding ParentsTasks}">
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+					</TreeView>
+
+                    <Label>Blocked By Tasks:</Label>
+                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                 <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
-                    <Label>Blocked By Tasks:</Label>
-                    <TreeView Items="{Binding BlockedByTasks}">
-                        <TreeView.ItemTemplate>
-                            <TreeDataTemplate ItemsSource="{Binding BlockedByTasks}">
-                                <Grid>
-                                    <ContentControl Content="{Binding .}"/>
-                                    <Button Background="#00000000"
-                                            Content="X"
-                                            BorderThickness="0"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding UnblockMeCommand}"
-                                            CommandParameter="{Binding #MainWindow.DataContext.CurrentItem.TaskItem}"/>
-                                </Grid>
-                            </TreeDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
+
                     <Label>Contains Tasks:</Label>
-                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentContainsItem.SubTasks}">
-                    </TreeView>
-                    <Label>Blocks Tasks:</Label>
-                    <TreeView Items="{Binding BlocksTasks}">
+                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
                         <TreeView.ItemTemplate>
-                            <TreeDataTemplate ItemsSource="{Binding BlocksTasks}">
-                                <Grid>
-                                    <ContentControl Content="{Binding .}"/>
-                                    <Button Background="#00000000"
-                                            Content="X"
-                                            BorderThickness="0"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding UnblockCommand}"
-                                            CommandParameter="{Binding #MainWindow.DataContext.CurrentItem.TaskItem}"/>
-                                </Grid>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}"/>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
+
+                    <Label>Blocks Tasks:</Label>
+                    <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                    
                 </StackPanel>
             </Border>
         </Grid>

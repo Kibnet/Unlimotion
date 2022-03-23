@@ -12,14 +12,6 @@ using Splat;
 
 namespace Unlimotion.ViewModel
 {
-    public interface ITaskStorage
-    {
-        IEnumerable<TaskItem> GetAll();
-
-        bool Save(TaskItem item);
-        bool Remove(string itemId);
-    }
-
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
@@ -46,16 +38,83 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        CurrentContainsItem = new TaskWrapperViewModel(null, item.TaskItem,
+                        CurrentItemContains = new TaskWrapperViewModel(null, item.TaskItem,
                             m => m.ContainsTasks.ToObservableChangeSet(),
-                            m => m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id));}
+                            m =>
+                            {
+                                m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
+                                m.Parent.TaskItem.SaveItemCommand.Execute(null);
+                            });}
                     else
                     {
-                        CurrentContainsItem = null;
+                        CurrentItemContains = null;
                     }
                 })
                 .AddToDispose(this);
-            
+
+            //Bind Current Item Parents
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(item =>
+                {
+                    if (item != null)
+                    {
+                        CurrentItemParents = new TaskWrapperViewModel(null, item.TaskItem,
+                            m => m.ParentsTasks.ToObservableChangeSet(),
+                            m =>
+                            {
+                                m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
+                                m.TaskItem.SaveItemCommand.Execute(null);
+                            });
+                    }
+                    else
+                    {
+                        CurrentItemParents = null;
+                    }
+                })
+                .AddToDispose(this);
+
+            //Bind Current Item Blocks
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(item =>
+                {
+                    if (item != null)
+                    {
+                        CurrentItemBlocks = new TaskWrapperViewModel(null, item.TaskItem,
+                            m => m.BlocksTasks.ToObservableChangeSet(),
+                            m =>
+                            {
+                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.SaveItemCommand.Execute(null);
+                            });
+                    }
+                    else
+                    {
+                        CurrentItemBlocks = null;
+                    }
+                })
+                .AddToDispose(this);
+
+            //Bind Current Item BlockedBy
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(item =>
+                {
+                    if (item != null)
+                    {
+                        CurrentItemBlockedBy = new TaskWrapperViewModel(null, item.TaskItem,
+                            m => m.BlockedByTasks.ToObservableChangeSet(),
+                            m =>
+                            {
+                                m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.SaveItemCommand.Execute(null);
+                            });
+                    }
+                    else
+                    {
+                        CurrentItemBlockedBy = null;
+                    }
+                })
+                .AddToDispose(this);
+
             CreateSibling = ReactiveCommand.Create(() =>
                 {
                     if (CurrentItem != null && string.IsNullOrWhiteSpace(CurrentItem?.TaskItem.Title))
@@ -121,7 +180,10 @@ namespace Unlimotion.ViewModel
 
         public TaskWrapperViewModel CurrentItem { get; set; }
 
-        public TaskWrapperViewModel CurrentContainsItem { get; set; }
+        public TaskWrapperViewModel CurrentItemContains { get; private set; }
+        public TaskWrapperViewModel CurrentItemParents { get; private set; }
+        public TaskWrapperViewModel CurrentItemBlocks { get; private set; }
+        public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; }
 
         public ICommand CreateSibling { get; set; }
 

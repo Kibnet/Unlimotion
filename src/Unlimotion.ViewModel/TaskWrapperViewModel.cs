@@ -13,6 +13,8 @@ namespace Unlimotion.ViewModel;
 public class TaskWrapperViewModel : DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
+    private readonly Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> _childSelector;
+    private readonly Action<TaskWrapperViewModel> _removeAction;
 
     public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, Func<TaskItemViewModel,IObservable<IChangeSet<TaskItemViewModel>>> childSelector, Action<TaskWrapperViewModel> removeAction)
     {
@@ -22,12 +24,8 @@ public class TaskWrapperViewModel : DisposableList
         {
             removeAction.Invoke(this);
         });
-        var tasks = childSelector.Invoke(task);
-        tasks
-            .Transform(model => new TaskWrapperViewModel(this, model, childSelector, removeAction))
-            .Bind(out _subTasks)
-            .Subscribe()
-            .AddToDispose(this);
+        _childSelector = childSelector;
+        _removeAction = removeAction;
     }
 
     public ICommand RemoveCommand { get; }
@@ -45,7 +43,20 @@ public class TaskWrapperViewModel : DisposableList
 
     public ReadOnlyObservableCollection<TaskWrapperViewModel> SubTasks
     {
-        get => _subTasks;
+        get
+        {
+            if (_subTasks == null)
+            {
+                var tasks = _childSelector.Invoke(TaskItem);
+                tasks
+                    .Transform(model => new TaskWrapperViewModel(this, model, _childSelector, _removeAction))
+                    .Bind(out _subTasks)
+                    .Subscribe()
+                    .AddToDispose(this);
+            }
+
+            return _subTasks;
+        }
         set => _subTasks = value;
     }
 }
