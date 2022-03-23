@@ -147,10 +147,12 @@ namespace Unlimotion.Views
                 else if (e.KeyModifiers == KeyModifiers.Control)
                 {
                     e.DragEffects &= DragDropEffects.Link;
+                    task?.TaskItem.BlockBy(subItem.TaskItem);
                 }
                 else if (e.KeyModifiers == KeyModifiers.Alt)
                 {
                     e.DragEffects &= DragDropEffects.Link;
+                    subItem?.TaskItem.BlockBy(task.TaskItem);
                 }
                 else
                 {

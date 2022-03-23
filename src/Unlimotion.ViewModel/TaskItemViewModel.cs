@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Windows.Input;
 using DynamicData;
@@ -275,6 +276,20 @@ namespace Unlimotion.ViewModel
                 return false;
             };
 
+            UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                m =>
+                {
+                    this.Blocks.Remove(m.Id);
+                    return Unit.Default;
+                });
+
+            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                m =>
+                {
+                    m.Blocks.Remove(Id);
+                    return Unit.Default;
+                });
+
             //Subscribe to Save when property changed
             this.WhenAnyValue(m => m.Title, 
                     m => m.IsCompleted, 
@@ -346,6 +361,9 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<string> Blocks { get; set; } = new();
         public ObservableCollection<string> BlockedBy { get; set; } = new();
 
+        public ICommand UnblockCommand { get; set; }
+        public ICommand UnblockMeCommand { get; set; }
+
         public void CopyInto(TaskItemViewModel destination)
         {
             destination.Contains.Add(Id);
@@ -364,6 +382,7 @@ namespace Unlimotion.ViewModel
         public void BlockBy(TaskItemViewModel blocker)
         {
             blocker.Blocks.Add(Id);
+            blocker.SaveItemCommand.Execute(null);
         }
 
         public IEnumerable<TaskItemViewModel> GetAllParents()

@@ -6,6 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
+        Name="MainWindow"
         Title="Unlimotion">
 
     <Design.DataContext>
@@ -72,7 +73,15 @@
                     <TreeView Items="{Binding BlockedByTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding BlockedByTasks}">
-                                <ContentControl Content="{Binding .}"/>
+                                <Grid>
+                                    <ContentControl Content="{Binding .}"/>
+                                    <Button Background="#00000000" 
+                                            Content="X" 
+                                            BorderThickness="0"
+                                            HorizontalAlignment="Right"
+                                            Command="{Binding UnblockMeCommand}" 
+                                            CommandParameter="{Binding #MainWindow.DataContext.CurrentItem.TaskItem}"/>
+                                </Grid>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -88,7 +97,15 @@
                     <TreeView Items="{Binding BlocksTasks}">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding BlocksTasks}">
-                                <ContentControl Content="{Binding .}"/>
+								<Grid>
+									<ContentControl Content="{Binding .}"/>
+                                    <Button Background="#00000000"
+                                            Content="X"
+                                            BorderThickness="0"
+                                            HorizontalAlignment="Right"
+                                            Command="{Binding UnblockCommand}"
+                                            CommandParameter="{Binding #MainWindow.DataContext.CurrentItem.TaskItem}"/>
+                                </Grid>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
