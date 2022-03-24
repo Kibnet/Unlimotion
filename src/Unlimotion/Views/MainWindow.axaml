@@ -48,17 +48,17 @@
         <Grid Grid.Column="0" Grid.Row="1">
             <TabControl TabStripPlacement="Top">
                 <TabItem Header="All Tasks">
-            <TreeView AutoScrollToSelectedItem="True"
-                      Items="{Binding CurrentItems}"
-                      SelectedItem="{Binding CurrentItem}"
-                      SelectionMode="Single"
-                      Name="CurrentTree">
-                <TreeView.ItemTemplate>
-                    <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                        <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
-                    </TreeDataTemplate>
-                </TreeView.ItemTemplate>
-            </TreeView>
+                    <TreeView AutoScrollToSelectedItem="True"
+                              Items="{Binding CurrentItems}"
+                              SelectedItem="{Binding CurrentItem}"
+                              SelectionMode="Single"
+                              Name="CurrentTree">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
                 </TabItem>
                 <TabItem Header="Unlocked" >
                     <TreeView AutoScrollToSelectedItem="True"
@@ -72,6 +72,20 @@
                         </TreeView.ItemTemplate>
                     </TreeView>
                 </TabItem>
+
+                <TabItem Header="Completed" >
+                    <TreeView AutoScrollToSelectedItem="True"
+                              Items="{Binding CompletedItems}"
+                              SelectedItem="{Binding CurrentItem}"
+                              SelectionMode="Single">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </TabItem>
+            </TabControl>
         </Grid>
         <!--Редактор задачи-->
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">

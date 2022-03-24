@@ -35,7 +35,7 @@ namespace Unlimotion.ViewModel
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted,(c, d) => c.Value&& (d.Value==false)))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime,(c, d, u) => c.Value&& (d.Value==false)))
                 .Filter(m => m.IsCanBeComplited && (m.IsCompleted == false))
                 .Transform(item =>
                 {
@@ -43,7 +43,26 @@ namespace Unlimotion.ViewModel
                         m => m.ContainsTasks.ToObservableChangeSet(),
                         m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
                     return wrapper;
-                }).Bind(out _unlockedItems)
+                })
+                .SortBy(m => m.TaskItem.UnlockedDateTime)
+                .Bind(out _unlockedItems)
+                .Subscribe()
+                .AddToDispose(this);
+
+            //Bind Completed
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted,(c) => c.Value == true))
+                .Filter(m => m.IsCompleted == true)
+                .Transform(item =>
+                {
+                    var wrapper = new TaskWrapperViewModel(null, item,
+                        m => m.ContainsTasks.ToObservableChangeSet(),
+                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
+                    return wrapper;
+                })
+                .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
+                .Bind(out _completedItems)
                 .Subscribe()
                 .AddToDispose(this);
 
@@ -189,11 +208,14 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
-
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
+        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
+
+        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems => _unlockedItems;
+
+        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems => _completedItems;
 
         public TaskWrapperViewModel CurrentItem { get; set; }
 
