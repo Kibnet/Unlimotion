@@ -385,6 +385,22 @@ namespace Unlimotion.ViewModel
             blocker.SaveItemCommand.Execute(null);
         }
 
+        public IEnumerable<TaskItemViewModel> GetFirstParentsPath()
+        {
+            var stack = new Stack<TaskItemViewModel>();
+            var curent = this;
+            while (curent.ParentsTasks.Any())
+            {
+                curent = curent.ParentsTasks.First();
+                stack.Push(curent);
+            }
+
+            while (stack.TryPop(out var result))
+            {
+                yield return result;
+            }
+        }
+
         public IEnumerable<TaskItemViewModel> GetAllParents()
         {
             var hashSet = new HashSet<string>();

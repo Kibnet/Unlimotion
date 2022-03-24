@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -24,18 +25,18 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item, 
+                    var wrapper = new TaskWrapperViewModel(null, item,
                         m => m.ContainsTasks.ToObservableChangeSet(),
                         m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
                     return wrapper;
                 }).Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);
-
+            
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime,(c, d, u) => c.Value&& (d.Value==false)))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Filter(m => m.IsCanBeComplited && (m.IsCompleted == false))
                 .Transform(item =>
                 {
@@ -52,7 +53,7 @@ namespace Unlimotion.ViewModel
             //Bind Completed
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted,(c) => c.Value == true))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
                 .Transform(item =>
                 {
@@ -78,7 +79,8 @@ namespace Unlimotion.ViewModel
                             {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
                                 m.Parent.TaskItem.SaveItemCommand.Execute(null);
-                            });}
+                            });
+                    }
                     else
                     {
                         CurrentItemContains = null;
@@ -164,7 +166,7 @@ namespace Unlimotion.ViewModel
 
                     if (CurrentItem?.Parent == null)
                     {
-                        var taskWrapper = CurrentItems.First(m => m.TaskItem == task);
+                        var taskWrapper = CurrentItems.FirstOrDefault(m => m.TaskItem == task);
                         CurrentItem = taskWrapper;
                     }
                     else
@@ -191,6 +193,83 @@ namespace Unlimotion.ViewModel
                     CurrentItem = taskWrapper;
                 },
                 this.WhenAny(m => m.CurrentItem, m => true));
+
+            this.WhenAnyValue(m => m.CurrentItem).Subscribe(m =>
+            {
+                if (_currentItemUpdating > 0) return;
+                Interlocked.Increment(ref _currentItemUpdating);
+                if (CurrentUnlockedItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentUnlockedItem = null;
+                    else
+                        CurrentUnlockedItem = UnlockedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                }
+                if (CurrentCompletedItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentCompletedItem = null;
+                    else
+                        CurrentCompletedItem = CompletedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                }
+                Interlocked.Decrement(ref _currentItemUpdating);
+            });
+
+            this.WhenAnyValue(m => m.CurrentUnlockedItem).Subscribe(m =>
+            {
+                if (_currentItemUpdating > 0) return;
+                Interlocked.Increment(ref _currentItemUpdating);
+                if (CurrentItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentItem = null;
+                    else
+                    {
+                        CurrentItem = FindTaskWrapperViewModel(m);
+                    }
+                }
+                if (CurrentCompletedItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentCompletedItem = null;
+                    else
+                        CurrentCompletedItem = CompletedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                }
+                Interlocked.Decrement(ref _currentItemUpdating);
+            });
+
+            this.WhenAnyValue(m => m.CurrentCompletedItem).Subscribe(m =>
+            {
+                if (_currentItemUpdating > 0) return;
+                Interlocked.Increment(ref _currentItemUpdating);
+                if (CurrentUnlockedItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentUnlockedItem = null;
+                    else
+                        CurrentUnlockedItem = UnlockedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                }
+                if (CurrentItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentItem = null;
+                    else
+                        CurrentItem = FindTaskWrapperViewModel(m);
+                }
+                Interlocked.Decrement(ref _currentItemUpdating);
+            });
+        }
+
+        private TaskWrapperViewModel FindTaskWrapperViewModel(TaskWrapperViewModel taskItemViewModel)
+        {
+            var selected = CurrentItems;
+            foreach (var parent in taskItemViewModel.TaskItem.GetFirstParentsPath())
+            {
+                selected = selected.FirstOrDefault(p => p.TaskItem == parent).SubTasks;
+            }
+
+            var finded = selected.FirstOrDefault(p => p.TaskItem == taskItemViewModel.TaskItem);
+            return finded;
         }
 
         public string BreadScrumbs
@@ -218,6 +297,8 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems => _completedItems;
 
         public TaskWrapperViewModel CurrentItem { get; set; }
+        public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
+        public TaskWrapperViewModel CurrentCompletedItem { get; set; }
 
         public TaskWrapperViewModel CurrentItemContains { get; private set; }
         public TaskWrapperViewModel CurrentItemParents { get; private set; }
@@ -227,5 +308,7 @@ namespace Unlimotion.ViewModel
         public ICommand CreateSibling { get; set; }
 
         public ICommand CreateInner { get; set; }
+
+        private int _currentItemUpdating;
     }
 }

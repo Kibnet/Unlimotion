@@ -63,7 +63,7 @@
                 <TabItem Header="Unlocked" >
                     <TreeView AutoScrollToSelectedItem="True"
                               Items="{Binding UnlockedItems}"
-                              SelectedItem="{Binding CurrentItem}"
+                              SelectedItem="{Binding CurrentUnlockedItem}"
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -76,7 +76,7 @@
                 <TabItem Header="Completed" >
                     <TreeView AutoScrollToSelectedItem="True"
                               Items="{Binding CompletedItems}"
-                              SelectedItem="{Binding CurrentItem}"
+                              SelectedItem="{Binding CurrentCompletedItem}"
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
