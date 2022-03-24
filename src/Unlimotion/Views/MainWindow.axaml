@@ -46,6 +46,8 @@
 
         <!--Панель навигации-->
         <Grid Grid.Column="0" Grid.Row="1">
+            <TabControl TabStripPlacement="Top">
+                <TabItem Header="All Tasks">
             <TreeView AutoScrollToSelectedItem="True"
                       Items="{Binding CurrentItems}"
                       SelectedItem="{Binding CurrentItem}"
@@ -57,6 +59,19 @@
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
+                </TabItem>
+                <TabItem Header="Unlocked" >
+                    <TreeView AutoScrollToSelectedItem="True"
+                              Items="{Binding UnlockedItems}"
+                              SelectedItem="{Binding CurrentItem}"
+                              SelectionMode="Single">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <ContentControl Content="{Binding .}"/>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </TabItem>
         </Grid>
         <!--Редактор задачи-->
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">

@@ -32,6 +32,21 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(this);
 
+            //Bind Unlocked
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted,(c, d) => c.Value&& (d.Value==false)))
+                .Filter(m => m.IsCanBeComplited && (m.IsCompleted == false))
+                .Transform(item =>
+                {
+                    var wrapper = new TaskWrapperViewModel(null, item,
+                        m => m.ContainsTasks.ToObservableChangeSet(),
+                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
+                    return wrapper;
+                }).Bind(out _unlockedItems)
+                .Subscribe()
+                .AddToDispose(this);
+
             //Bind Current Item Contains
             this.WhenAnyValue(m => m.CurrentItem)
                 .Subscribe(item =>
@@ -176,7 +191,9 @@ namespace Unlimotion.ViewModel
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
 
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems => _unlockedItems;
 
         public TaskWrapperViewModel CurrentItem { get; set; }
 
