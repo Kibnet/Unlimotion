@@ -175,8 +175,8 @@ namespace Unlimotion.Views
 
         public void Expand(TaskWrapperViewModel task)
         {
-            var treeView = this.GetControl<TreeView>("CurrentTree");
-           
+            var treeView = this.Get<TreeView>("CurrentTree");
+            
             var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
             if (treeItem != null)
             {

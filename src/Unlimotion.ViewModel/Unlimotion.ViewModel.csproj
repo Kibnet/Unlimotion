@@ -7,7 +7,7 @@
 
 	<ItemGroup>
         <PackageReference Include="PropertyChanged.Fody" Version="3.4.0" />
-        <PackageReference Include="ReactiveUI" Version="17.1.6" />
+        <PackageReference Include="ReactiveUI" Version="17.1.50" />
         <PackageReference Include="WritableJsonConfiguration" Version="3.1.9" />
     </ItemGroup>
 
