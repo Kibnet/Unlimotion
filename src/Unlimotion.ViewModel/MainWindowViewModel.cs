@@ -28,7 +28,8 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -36,7 +37,7 @@ namespace Unlimotion.ViewModel
                 .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);
-            
+
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
@@ -47,7 +48,8 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -67,7 +69,8 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -84,7 +87,7 @@ namespace Unlimotion.ViewModel
                     if (item != null)
                     {
                         var actions = new TaskWrapperActions()
-                            {
+                        {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = m => {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
@@ -108,7 +111,7 @@ namespace Unlimotion.ViewModel
                     if (item != null)
                     {
                         var actions = new TaskWrapperActions()
-                            {
+                        {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
                             RemoveAction = m => {
                                 m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
@@ -132,7 +135,7 @@ namespace Unlimotion.ViewModel
                     if (item != null)
                     {
                         var actions = new TaskWrapperActions()
-                            {
+                        {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
                             RemoveAction = m => {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
@@ -156,7 +159,7 @@ namespace Unlimotion.ViewModel
                     if (item != null)
                     {
                         var actions = new TaskWrapperActions()
-                            {
+                        {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m => {
                                 m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
@@ -294,21 +297,8 @@ namespace Unlimotion.ViewModel
             return finded;
         }
 
-        public string BreadScrumbs
-        {
-            get
-            {
-                var nodes = new List<string>();
-                var current = CurrentItem;
-                while (current != null)
-                {
-                    nodes.Insert(0, current.TaskItem.Title);
-                    current = current.Parent;
-                }
-                return String.Join(" / ", nodes);
-            }
-        }
-
+        public string BreadScrumbs => CurrentItem?.BreadScrumbs;
+        
         private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
@@ -13,6 +14,35 @@ public class TaskWrapperActions
 {
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
+    public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
+}
+
+public static class BredScrumbsAlgorithms
+{
+    public static string WrapperParent(TaskWrapperViewModel current)
+    {
+        var nodes = new List<string>();
+        while (current != null)
+        {
+            nodes.Insert(0, current.TaskItem.Title);
+            current = current.Parent;
+        }
+
+        return String.Join(" / ", nodes);
+    }
+
+    public static string FirstTaskParent(TaskWrapperViewModel current)
+    {
+        var nodes = new List<string>();
+        var task = current.TaskItem;
+        while (task != null)
+        {
+            nodes.Insert(0, current.TaskItem.Title);
+            task = task.ParentsTasks.FirstOrDefault();
+        }
+
+        return String.Join(" / ", nodes);
+    }
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -44,6 +74,8 @@ public class TaskWrapperViewModel : DisposableList
 
     public TaskItemViewModel TaskItem { get; set; }
     public TaskWrapperViewModel Parent { get; set; }
+
+    public string BreadScrumbs => _actions.GetBreadScrumbs?.Invoke(this);
 
     public ReadOnlyObservableCollection<TaskWrapperViewModel> SubTasks
     {
