@@ -202,6 +202,16 @@ namespace Unlimotion.ViewModel
                 },
                 this.WhenAny(m => m.CurrentItem, m => true));// || !string.IsNullOrWhiteSpace(m.TaskItem.Title)));
 
+            CreateBlockedSibling = ReactiveCommand.Create(() =>
+            {
+                var parent = CurrentItem;
+                if (CurrentItem != null)
+                {
+                    CreateSibling.Execute(null);
+                    parent.TaskItem.Blocks.Add(CurrentItem.TaskItem.Id);
+                }
+            });
+
             CreateInner = ReactiveCommand.Create(() =>
                 {
                     if (CurrentItem == null)
@@ -318,6 +328,8 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; }
 
         public ICommand CreateSibling { get; set; }
+
+        public ICommand CreateBlockedSibling { get; set; }
 
         public ICommand CreateInner { get; set; }
 
