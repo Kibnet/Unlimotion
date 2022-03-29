@@ -67,7 +67,18 @@
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                <ContentControl Content="{Binding .}"/>
+								<Grid>
+                                    <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+                                        <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+                                        <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+                                        <Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <Button Background="#00000000"
+                                            Content="x"
+                                            BorderThickness="0"
+                                            HorizontalAlignment="Right"
+                                            Command="{Binding RemoveCommand}"/>
+                                </Grid>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -79,8 +90,19 @@
                               SelectedItem="{Binding CurrentCompletedItem}"
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
-                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                <ContentControl Content="{Binding .}"/>
+							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                <Grid>
+                                    <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+                                        <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+                                        <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+                                        <Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <Button Background="#00000000"
+                                            Content="x"
+                                            BorderThickness="0"
+                                            HorizontalAlignment="Right"
+                                            Command="{Binding RemoveCommand}"/>
+                                </Grid>
                             </TreeDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
