@@ -25,11 +25,15 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item,
-                        m => m.ContainsTasks.ToObservableChangeSet(),
-                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
-                }).Bind(out _currentItems)
+                })
+                .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);
             
@@ -40,9 +44,12 @@ namespace Unlimotion.ViewModel
                 .Filter(m => m.IsCanBeComplited && (m.IsCompleted == false))
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item,
-                        m => m.ContainsTasks.ToObservableChangeSet(),
-                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
                 .SortBy(m => m.TaskItem.UnlockedDateTime)
@@ -57,9 +64,12 @@ namespace Unlimotion.ViewModel
                 .Filter(m => m.IsCompleted == true)
                 .Transform(item =>
                 {
-                    var wrapper = new TaskWrapperViewModel(null, item,
-                        m => m.ContainsTasks.ToObservableChangeSet(),
-                        m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem));
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem)
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
                 .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
@@ -73,13 +83,16 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        CurrentItemContains = new TaskWrapperViewModel(null, item.TaskItem,
-                            m => m.ContainsTasks.ToObservableChangeSet(),
-                            m =>
+                        var actions = new TaskWrapperActions()
                             {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = m => {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
                                 m.Parent.TaskItem.SaveItemCommand.Execute(null);
-                            });
+                            }
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        CurrentItemContains = wrapper;
                     }
                     else
                     {
@@ -94,13 +107,16 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        CurrentItemParents = new TaskWrapperViewModel(null, item.TaskItem,
-                            m => m.ParentsTasks.ToObservableChangeSet(),
-                            m =>
+                        var actions = new TaskWrapperActions()
                             {
+                            ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
+                            RemoveAction = m => {
                                 m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            });
+                            }
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        CurrentItemParents = wrapper;
                     }
                     else
                     {
@@ -115,13 +131,16 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        CurrentItemBlocks = new TaskWrapperViewModel(null, item.TaskItem,
-                            m => m.BlocksTasks.ToObservableChangeSet(),
-                            m =>
+                        var actions = new TaskWrapperActions()
                             {
+                            ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
+                            RemoveAction = m => {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            });
+                            }
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        CurrentItemBlocks = wrapper;
                     }
                     else
                     {
@@ -136,13 +155,16 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        CurrentItemBlockedBy = new TaskWrapperViewModel(null, item.TaskItem,
-                            m => m.BlockedByTasks.ToObservableChangeSet(),
-                            m =>
+                        var actions = new TaskWrapperActions()
                             {
+                            ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
+                            RemoveAction = m => {
                                 m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            });
+                            }
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        CurrentItemBlockedBy = wrapper;
                     }
                     else
                     {

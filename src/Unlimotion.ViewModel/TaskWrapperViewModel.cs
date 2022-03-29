@@ -9,23 +9,27 @@ using ReactiveUI;
 
 namespace Unlimotion.ViewModel;
 
+public class TaskWrapperActions
+{
+    public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
+    public Action<TaskWrapperViewModel> RemoveAction;
+}
+
 [AddINotifyPropertyChangedInterface]
 public class TaskWrapperViewModel : DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
-    private readonly Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> _childSelector;
-    private readonly Action<TaskWrapperViewModel> _removeAction;
+    private readonly TaskWrapperActions _actions;
 
-    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, Func<TaskItemViewModel,IObservable<IChangeSet<TaskItemViewModel>>> childSelector, Action<TaskWrapperViewModel> removeAction)
+    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, TaskWrapperActions actions)
     {
         TaskItem = task;
         Parent = parent;
+        _actions = actions;
         RemoveCommand = ReactiveCommand.Create(() =>
         {
-            removeAction.Invoke(this);
+            _actions.RemoveAction.Invoke(this);
         });
-        _childSelector = childSelector;
-        _removeAction = removeAction;
     }
 
     public ICommand RemoveCommand { get; }
@@ -47,9 +51,9 @@ public class TaskWrapperViewModel : DisposableList
         {
             if (_subTasks == null)
             {
-                var tasks = _childSelector.Invoke(TaskItem);
+                var tasks = _actions.ChildSelector.Invoke(TaskItem);
                 tasks
-                    .Transform(model => new TaskWrapperViewModel(this, model, _childSelector, _removeAction))
+                    .Transform(model => new TaskWrapperViewModel(this, model, _actions))
                     .Bind(out _subTasks)
                     .Subscribe()
                     .AddToDispose(this);
