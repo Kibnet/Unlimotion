@@ -261,6 +261,13 @@ namespace Unlimotion.ViewModel
 
             RemoveFunc = parent =>
             {
+                if (parent == null)
+                {
+                    foreach (var model in ParentsTasks.ToList())
+                    {
+                        model.Contains.Remove(Id);
+                    }
+                }
                 //Удаление ссылки из родителя
                 parent?.Contains.Remove(Id);
                 //Если родителей не осталось, удаляется сама задача
@@ -272,8 +279,10 @@ namespace Unlimotion.ViewModel
                     {
                         containsTask.Parents.Remove(Id);
                     }
+
                     return true;
                 }
+
                 return false;
             };
 
@@ -307,6 +316,8 @@ namespace Unlimotion.ViewModel
 
         public ICommand ArchiveCommand { get; set; }
         public Func<TaskItemViewModel,bool> RemoveFunc { get; set; }
+
+        public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId)? Parents.Count == 1: Parents.Count == 0);
 
         public TaskItem Model
         {

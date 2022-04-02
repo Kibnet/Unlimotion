@@ -19,6 +19,7 @@ namespace Unlimotion.ViewModel
         public MainWindowViewModel()
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
 
             //Bind Roots
             taskRepository.GetRoots()
@@ -28,7 +29,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -48,7 +49,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -69,7 +70,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = m => m.TaskItem.RemoveFunc.Invoke(m.Parent?.TaskItem),
+                        RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -295,6 +296,20 @@ namespace Unlimotion.ViewModel
             });
         }
 
+        private void RemoveTask(TaskWrapperViewModel task)
+        {
+            if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
+            {
+                this.ManagerWrapper.Ask("Remove task",
+                    $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
+                    () => task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem));
+            }
+            else
+            {
+                task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem);
+            }
+        }
+
         private TaskWrapperViewModel FindTaskWrapperViewModel(TaskWrapperViewModel taskItemViewModel)
         {
             var selected = CurrentItems;
@@ -306,6 +321,8 @@ namespace Unlimotion.ViewModel
             var finded = selected.FirstOrDefault(p => p.TaskItem == taskItemViewModel.TaskItem);
             return finded;
         }
+
+        public INotificationManagerWrapper ManagerWrapper { get; }
 
         public string BreadScrumbs => CurrentItem?.BreadScrumbs;
         
@@ -334,5 +351,10 @@ namespace Unlimotion.ViewModel
         public ICommand CreateInner { get; set; }
 
         private int _currentItemUpdating;
+    }
+
+    public interface INotificationManagerWrapper
+    {
+        void Ask(string header, string message, Action yesAction, Action noAction = null);
     }
 }

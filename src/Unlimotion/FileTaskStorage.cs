@@ -60,6 +60,7 @@ namespace Unlimotion
                 new TaskItem { Title = "Task 2.1", Id = "2.1" },
                 new TaskItem { Title = "Task 3", Id = "3", ContainsTasks = new List<string> { "3.1" } },
                 new TaskItem { Title = "Task 3.1", Id = "3.1" },
+                new TaskItem { Title = "Task 4", Id = "4" },
             };
             foreach (var item in list)
             {
