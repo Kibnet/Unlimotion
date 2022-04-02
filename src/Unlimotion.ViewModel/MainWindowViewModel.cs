@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
@@ -20,10 +19,14 @@ namespace Unlimotion.ViewModel
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
+            CurrentSortDefinition = SortDefinitions.First();
+
+            var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
 
             //Bind Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -31,11 +34,13 @@ namespace Unlimotion.ViewModel
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
+                        SortComparer = sortObservable
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .Sort(Comparers.Default)
+                .Sort(sortObservable)
+                .TreatMovesAsRemoveAdd()
                 .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);
@@ -94,7 +99,8 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m => {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
                                 m.Parent.TaskItem.SaveItemCommand.Execute(null);
-                            }
+                            },
+                            SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
                         CurrentItemContains = wrapper;
@@ -118,7 +124,8 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m => {
                                 m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            }
+                            },
+                            SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
                         CurrentItemParents = wrapper;
@@ -142,7 +149,8 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m => {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            }
+                            },
+                            SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
                         CurrentItemBlocks = wrapper;
@@ -166,7 +174,8 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m => {
                                 m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
-                            }
+                            },
+                            SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
                         CurrentItemBlockedBy = wrapper;
@@ -352,10 +361,8 @@ namespace Unlimotion.ViewModel
         public ICommand CreateInner { get; set; }
 
         private int _currentItemUpdating;
-    }
 
-    public interface INotificationManagerWrapper
-    {
-        void Ask(string header, string message, Action yesAction, Action noAction = null);
+        public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
+        public SortDefinition CurrentSortDefinition { get; set; }
     }
 }
