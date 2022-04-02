@@ -87,6 +87,27 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(this);
 
+            //Bind Archived
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
+                .Filter(m => m.IsCompleted == null)
+                .Transform(item =>
+                {
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = RemoveTask,
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
+                    return wrapper;
+                })
+                .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
+                .Bind(out _archivedItems)
+                .Subscribe()
+                .AddToDispose(this);
+
             //Bind Current Item Contains
             this.WhenAnyValue(m => m.CurrentItem)
                 .Subscribe(item =>
@@ -258,6 +279,13 @@ namespace Unlimotion.ViewModel
                     else
                         CurrentCompletedItem = CompletedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
                 }
+                if (CurrentArchivedItem?.TaskItem != m?.TaskItem)
+                {
+                    if (m == null)
+                        CurrentArchivedItem = null;
+                    else
+                        CurrentArchivedItem = ArchivedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                }
                 Interlocked.Decrement(ref _currentItemUpdating);
             });
 
@@ -274,13 +302,6 @@ namespace Unlimotion.ViewModel
                         CurrentItem = FindTaskWrapperViewModel(m);
                     }
                 }
-                if (CurrentCompletedItem?.TaskItem != m?.TaskItem)
-                {
-                    if (m == null)
-                        CurrentCompletedItem = null;
-                    else
-                        CurrentCompletedItem = CompletedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
-                }
                 Interlocked.Decrement(ref _currentItemUpdating);
             });
 
@@ -288,13 +309,20 @@ namespace Unlimotion.ViewModel
             {
                 if (_currentItemUpdating > 0) return;
                 Interlocked.Increment(ref _currentItemUpdating);
-                if (CurrentUnlockedItem?.TaskItem != m?.TaskItem)
+                if (CurrentItem?.TaskItem != m?.TaskItem)
                 {
                     if (m == null)
-                        CurrentUnlockedItem = null;
+                        CurrentItem = null;
                     else
-                        CurrentUnlockedItem = UnlockedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
+                        CurrentItem = FindTaskWrapperViewModel(m);
                 }
+                Interlocked.Decrement(ref _currentItemUpdating);
+            });
+            
+            this.WhenAnyValue(m => m.CurrentArchivedItem).Subscribe(m =>
+            {
+                if (_currentItemUpdating > 0) return;
+                Interlocked.Increment(ref _currentItemUpdating);
                 if (CurrentItem?.TaskItem != m?.TaskItem)
                 {
                     if (m == null)
@@ -345,9 +373,13 @@ namespace Unlimotion.ViewModel
         private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems => _completedItems;
 
+        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems => _archivedItems;
+
         public TaskWrapperViewModel CurrentItem { get; set; }
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
         public TaskWrapperViewModel CurrentCompletedItem { get; set; }
+        public TaskWrapperViewModel CurrentArchivedItem { get; set; }
 
         public TaskWrapperViewModel CurrentItemContains { get; private set; }
         public TaskWrapperViewModel CurrentItemParents { get; private set; }
