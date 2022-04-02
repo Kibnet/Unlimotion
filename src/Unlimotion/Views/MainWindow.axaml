@@ -17,7 +17,7 @@
         <DataTemplate DataType="viewModel:TaskItemViewModel">
             <Grid ColumnDefinitions="Auto, *" DragDrop.AllowDrop="True">
                 <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" />
-                <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
+                <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}"  />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -68,7 +68,7 @@
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-								<Grid>
+                                <Grid>
                                     <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
                                         <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
                                         <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
@@ -91,7 +91,7 @@
                               SelectedItem="{Binding CurrentCompletedItem}"
                               SelectionMode="Single">
                         <TreeView.ItemTemplate>
-							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                 <Grid>
                                     <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
                                         <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
@@ -113,59 +113,59 @@
         <!--Редактор задачи-->
         <Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
             <Border BorderBrush="Black" BorderThickness="1,0,0,0" DataContext="{Binding TaskItem}">
-				<ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-					<StackPanel>
-						<Grid ColumnDefinitions="Auto, *">
-							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>
-							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
-						</Grid>
-						<Label>Description:</Label>
-						<TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
-						<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
-						<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
-						<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
-						<StackPanel Orientation="Horizontal">
-							<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
-							<Button Content="Archive" Command="{Binding ArchiveCommand}"/>
-						</StackPanel>
+                <ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Grid ColumnDefinitions="Auto, *">
+                            <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>
+                            <TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
+                        </Grid>
+                        <Label>Description:</Label>
+                        <TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
+                        <Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
+                        <Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
+                        <Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
+                            <Button Content="Archive" Command="{Binding ArchiveCommand}"/>
+                        </StackPanel>
 
-						<Label>Parents Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
-							<TreeView.ItemTemplate>
-								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
-								</TreeDataTemplate>
-							</TreeView.ItemTemplate>
-						</TreeView>
+                        <Label>Parents Tasks:</Label>
+                        <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                    <ContentControl Content="{Binding .}"/>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
 
-						<Label>Blocked By Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
-							<TreeView.ItemTemplate>
-								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
-								</TreeDataTemplate>
-							</TreeView.ItemTemplate>
-						</TreeView>
+                        <Label>Blocked By Tasks:</Label>
+                        <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                    <ContentControl Content="{Binding .}"/>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
 
-						<Label>Contains Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
-							<TreeView.ItemTemplate>
-								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
-								</TreeDataTemplate>
-							</TreeView.ItemTemplate>
-						</TreeView>
+                        <Label>Contains Tasks:</Label>
+                        <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                    <ContentControl Content="{Binding .}"/>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
 
-						<Label>Blocks Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
-							<TreeView.ItemTemplate>
-								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
-								</TreeDataTemplate>
-							</TreeView.ItemTemplate>
-						</TreeView>
+                        <Label>Blocks Tasks:</Label>
+                        <TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                    <ContentControl Content="{Binding .}"/>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
 
-					</StackPanel>
+                    </StackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>

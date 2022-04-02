@@ -8,5 +8,8 @@
 
     <Application.Styles>
         <FluentTheme Mode="Dark"/>
+        <Style Selector="Label[IsEnabled=false]">
+            <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
+        </Style>
     </Application.Styles>
 </Application>
