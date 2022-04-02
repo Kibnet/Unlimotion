@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.ReactiveUI;
 using System;
+using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
+using WritableJsonConfiguration;
 
 namespace Unlimotion
 {
@@ -31,6 +33,8 @@ namespace Unlimotion
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
             var notificationManager = new NotificationManagerWrapperWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
+            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
         }
     }
 }

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
+using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
@@ -19,7 +20,19 @@ namespace Unlimotion.ViewModel
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
-            CurrentSortDefinition = SortDefinitions.First();
+
+            _configuration = Splat.Locator.Current.GetService<IConfiguration>();
+            ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool>();
+            ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool>();
+            var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
+            CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
+
+            this.WhenAnyValue(m => m.ShowCompleted)
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b));
+            this.WhenAnyValue(m => m.ShowArchived)
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b));
+            this.WhenAnyValue(m => m.CurrentSortDefinition)
+                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name));
 
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
 
@@ -409,6 +422,8 @@ namespace Unlimotion.ViewModel
         public ICommand CreateInner { get; set; }
 
         private int _currentItemUpdating;
+
+        private IConfiguration _configuration;
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
         public SortDefinition CurrentSortDefinition { get; set; }
