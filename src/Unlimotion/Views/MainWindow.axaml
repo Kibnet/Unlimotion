@@ -151,7 +151,9 @@
 						<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
 						<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
 						<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
-						<StackPanel Orientation="Horizontal">
+						<DatePicker Header="Planned Begin DateTime" SelectedDate="{Binding PlannedBeginDateTime}"/>
+						<DatePicker Header="Planned End DateTime" SelectedDate="{Binding PlannedEndDateTime}"/>
+                        <StackPanel Orientation="Horizontal">
 							<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
 							<Button Content="Archive" Command="{Binding ArchiveCommand}"/>
 						</StackPanel>

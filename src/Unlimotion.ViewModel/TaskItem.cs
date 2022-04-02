@@ -13,6 +13,8 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
+        public DateTimeOffset? PlannedBeginDateTime { get; set; }
+        public DateTimeOffset? PlannedEndDateTime { get; set; }
         public List<string> ContainsTasks { get; set; } = new();
         public List<string> BlocksTasks { get; set; } = new();
     }

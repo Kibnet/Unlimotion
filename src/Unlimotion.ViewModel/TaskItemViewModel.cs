@@ -313,7 +313,9 @@ namespace Unlimotion.ViewModel
                     m => m.IsCompleted,
                     m => m.Description,
                     m => m.ArchiveDateTime,
-                    m => m.UnlockedDateTime
+                    m => m.UnlockedDateTime,
+                    m => m.PlannedBeginDateTime,
+                    m => m.PlannedEndDateTime
                 )
                 .Subscribe((_) =>
                 {
@@ -340,6 +342,8 @@ namespace Unlimotion.ViewModel
                     UnlockedDateTime = UnlockedDateTime,
                     CompletedDateTime = CompletedDateTime,
                     ArchiveDateTime = ArchiveDateTime,
+                    PlannedBeginDateTime = PlannedBeginDateTime,
+                    PlannedEndDateTime = PlannedEndDateTime,
                     BlocksTasks = Blocks.ToList(),
                     ContainsTasks = Contains.ToList(),
                 };
@@ -353,6 +357,8 @@ namespace Unlimotion.ViewModel
                 UnlockedDateTime = value.UnlockedDateTime;
                 CompletedDateTime = value.CompletedDateTime;
                 ArchiveDateTime = value.ArchiveDateTime;
+                PlannedBeginDateTime = value.PlannedBeginDateTime;
+                PlannedEndDateTime = value.PlannedEndDateTime;
                 Blocks.AddRange(value.BlocksTasks);
                 Contains.AddRange(value.ContainsTasks);
             }
@@ -367,6 +373,8 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
+        public DateTimeOffset? PlannedBeginDateTime { get; set; }
+        public DateTimeOffset? PlannedEndDateTime { get; set; }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
