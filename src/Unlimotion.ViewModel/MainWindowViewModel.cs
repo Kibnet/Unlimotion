@@ -35,6 +35,7 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
+                .Sort(Comparers.Default)
                 .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(this);

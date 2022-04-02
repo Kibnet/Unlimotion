@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -15,6 +16,7 @@ public class TaskWrapperActions
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
+    public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
 
 public static class BredScrumbsAlgorithms
@@ -43,6 +45,13 @@ public static class BredScrumbsAlgorithms
 
         return String.Join(" / ", nodes);
     }
+}
+
+public static class Comparers
+{
+    public static IObservable<IComparer<TaskWrapperViewModel>> Default = Observable.Return(
+        new SortExpressionComparer<TaskWrapperViewModel>()
+            { new SortExpression<TaskWrapperViewModel>(m => m.TaskItem.CreatedDateTime) });
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -86,6 +95,7 @@ public class TaskWrapperViewModel : DisposableList
                 var tasks = _actions.ChildSelector.Invoke(TaskItem);
                 tasks
                     .Transform(model => new TaskWrapperViewModel(this, model, _actions))
+                    .Sort(_actions.SortComparer)
                     .Bind(out _subTasks)
                     .Subscribe()
                     .AddToDispose(this);
