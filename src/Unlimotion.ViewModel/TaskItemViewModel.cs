@@ -14,7 +14,7 @@ using ReactiveUI;
 namespace Unlimotion.ViewModel
 {
     [AddINotifyPropertyChangedInterface]
-    public class TaskItemViewModel: DisposableList
+    public class TaskItemViewModel : DisposableList
     {
         public TaskItemViewModel(TaskItem model, ITaskRepository taskRepository)
         {
@@ -22,7 +22,8 @@ namespace Unlimotion.ViewModel
             Init(taskRepository);
         }
 
-        private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) && (BlockedByTasks.All(m => m.IsCompleted != false));
+        private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
+                                            (BlockedByTasks.All(m => m.IsCompleted != false));
 
         public ICommand SaveItemCommand;
 
@@ -41,7 +42,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Save(Model);
             });
 
-            
+
             //Subscribe ContainsTasks
             var containsFilter = Contains.ToObservableChangeSet()
                 .ToCollection()
@@ -73,6 +74,7 @@ namespace Unlimotion.ViewModel
                                 {
                                     model.Parents.Add(Id);
                                 }
+
                                 break;
                             case ListChangeReason.Replace:
                                 break;
@@ -84,6 +86,7 @@ namespace Unlimotion.ViewModel
                                 {
                                     model.Parents.Remove(Id);
                                 }
+
                                 break;
                             case ListChangeReason.Refresh:
                                 break;
@@ -111,7 +114,7 @@ namespace Unlimotion.ViewModel
                 .Bind(out _parentsTasks)
                 .Subscribe()
                 .AddToDispose(this);
-            
+
             //Subscribe BlocksTasks
             var blocksFilter = Blocks.ToObservableChangeSet()
                 .ToCollection()
@@ -143,6 +146,7 @@ namespace Unlimotion.ViewModel
                                 {
                                     model.BlockedBy.Add(Id);
                                 }
+
                                 break;
                             case ListChangeReason.Replace:
                                 break;
@@ -154,6 +158,7 @@ namespace Unlimotion.ViewModel
                                 {
                                     model.BlockedBy.Remove(Id);
                                 }
+
                                 break;
                             case ListChangeReason.Refresh:
                                 break;
@@ -190,11 +195,13 @@ namespace Unlimotion.ViewModel
                     CompletedDateTime = DateTimeOffset.UtcNow;
                     ArchiveDateTime = null;
                 }
+
                 if (b == false)
                 {
                     ArchiveDateTime = null;
                     CompletedDateTime = null;
                 }
+
                 if (b == null && ArchiveDateTime == null)
                 {
                     ArchiveDateTime = DateTimeOffset.UtcNow;
@@ -235,18 +242,19 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.NotHaveUncompletedContains, m => m.NotHaveUncompletedBlockedBy)
                 .Subscribe(tuple =>
                 {
-                    IsCanBeComplited = tuple.Item1&&tuple.Item2;
+                    IsCanBeComplited = tuple.Item1 && tuple.Item2;
                     if (IsCanBeComplited && UnlockedDateTime == null)
                     {
                         UnlockedDateTime = DateTimeOffset.UtcNow;
                     }
+
                     if (!IsCanBeComplited && UnlockedDateTime != null)
                     {
                         UnlockedDateTime = null;
                     }
                 })
                 .AddToDispose(this);
-            
+
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 if (IsCompleted == null)
@@ -301,12 +309,12 @@ namespace Unlimotion.ViewModel
                 });
 
             //Subscribe to Save when property changed
-            this.WhenAnyValue(m => m.Title, 
-                    m => m.IsCompleted, 
-                    m => m.Description, 
+            this.WhenAnyValue(m => m.Title,
+                    m => m.IsCompleted,
+                    m => m.Description,
                     m => m.ArchiveDateTime,
                     m => m.UnlockedDateTime
-                    )
+                )
                 .Subscribe((_) =>
                 {
                     if (_isInited) SaveItemCommand.Execute(null);
@@ -315,7 +323,7 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; }
-        public Func<TaskItemViewModel,bool> RemoveFunc { get; set; }
+        public Func<TaskItemViewModel, bool> RemoveFunc { get; set; }
 
         public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId)? Parents.Count == 1: Parents.Count == 0);
 
