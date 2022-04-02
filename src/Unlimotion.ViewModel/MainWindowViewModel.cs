@@ -23,10 +23,21 @@ namespace Unlimotion.ViewModel
 
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
 
+            var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
+                .Select(filters =>
+                {
+                    bool Predicate(TaskItemViewModel task) =>
+                        task.IsCompleted == false ||
+                        ((task.IsCompleted == true) && filters.Item1) ||
+                        ((task.IsCompleted == null) && filters.Item2);
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
             //Bind Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .Filter(taskFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -34,7 +45,8 @@ namespace Unlimotion.ViewModel
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
-                        SortComparer = sortObservable
+                        SortComparer = sortObservable,
+                        Filter = taskFilter,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -117,7 +129,8 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = m => {
+                            RemoveAction = m =>
+                            {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
                                 m.Parent.TaskItem.SaveItemCommand.Execute(null);
                             },
@@ -142,7 +155,8 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = m => {
+                            RemoveAction = m =>
+                            {
                                 m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
                                 m.TaskItem.SaveItemCommand.Execute(null);
                             },
@@ -167,7 +181,8 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = m => {
+                            RemoveAction = m =>
+                            {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
                             },
@@ -192,7 +207,8 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
-                            RemoveAction = m => {
+                            RemoveAction = m =>
+                            {
                                 m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.SaveItemCommand.Execute(null);
                             },
@@ -318,7 +334,7 @@ namespace Unlimotion.ViewModel
                 }
                 Interlocked.Decrement(ref _currentItemUpdating);
             });
-            
+
             this.WhenAnyValue(m => m.CurrentArchivedItem).Subscribe(m =>
             {
                 if (_currentItemUpdating > 0) return;
@@ -363,7 +379,7 @@ namespace Unlimotion.ViewModel
         public INotificationManagerWrapper ManagerWrapper { get; }
 
         public string BreadScrumbs => CurrentItem?.BreadScrumbs;
-        
+
         private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
 
@@ -396,5 +412,9 @@ namespace Unlimotion.ViewModel
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
         public SortDefinition CurrentSortDefinition { get; set; }
+
+        public bool ShowCompleted { get; set; }
+
+        public bool ShowArchived { get; set; }
     }
 }

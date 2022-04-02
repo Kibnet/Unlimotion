@@ -16,6 +16,7 @@ public class TaskWrapperActions
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
+    public IObservable<Func<TaskItemViewModel, bool>> Filter = Filters.Default;
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
 
@@ -52,6 +53,12 @@ public static class Comparers
     public static IObservable<IComparer<TaskWrapperViewModel>> Default = Observable.Return(
         new SortExpressionComparer<TaskWrapperViewModel>()
             { new SortExpression<TaskWrapperViewModel>(m => m.TaskItem.CreatedDateTime) });
+}
+
+public static class Filters
+{
+    public static IObservable<Func<TaskItemViewModel, bool>> Default =
+        Observable.Return<Func<TaskItemViewModel, bool>>(m => true);
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -94,6 +101,7 @@ public class TaskWrapperViewModel : DisposableList
             {
                 var tasks = _actions.ChildSelector.Invoke(TaskItem);
                 tasks
+                    .Filter(_actions.Filter)
                     .Transform(model => new TaskWrapperViewModel(this, model, _actions))
                     .Sort(_actions.SortComparer)
                     .Bind(out _subTasks)
