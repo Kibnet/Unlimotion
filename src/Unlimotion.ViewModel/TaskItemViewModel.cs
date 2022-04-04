@@ -438,6 +438,8 @@ namespace Unlimotion.ViewModel
                 {
                     list.Add(task.Emoji);
                 }
+
+                list.Reverse();
                 return string.Join("", list);
             }
         }
