@@ -18,7 +18,7 @@
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
 			<Grid ColumnDefinitions="Auto, *" DragDrop.AllowDrop="True">
 				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" />
-				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}"  />
+				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsCanBeComplited="{Binding !IsCanBeComplited}"  />
 			</Grid>
 		</DataTemplate>
 		<DataTemplate DataType="viewModel:TaskWrapperViewModel">
