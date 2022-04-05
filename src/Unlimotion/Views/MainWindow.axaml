@@ -52,11 +52,11 @@
 				<TabItem Header="All Tasks">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-                            <ComboBox Items="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}"/>
+							<ComboBox Items="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}"/>
 							<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
 							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
-                        </WrapPanel>
-                        <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
+						</WrapPanel>
+						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  Items="{Binding CurrentItems}"
 								  SelectedItem="{Binding CurrentItem}"
 								  SelectionMode="Single"
@@ -70,27 +70,33 @@
 					</Grid>
 				</TabItem>
 				<TabItem Header="Unlocked" >
-					<TreeView AutoScrollToSelectedItem="True"
-                              Items="{Binding UnlockedItems}"
-                              SelectedItem="{Binding CurrentUnlockedItem}"
-                              SelectionMode="Single">
-						<TreeView.ItemTemplate>
-							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-								<Grid>
-									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
-										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
-										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+					<Grid RowDefinitions="Auto,*">
+						<WrapPanel Orientation="Horizontal">
+							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
+						</WrapPanel>
+
+						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
+                                  Items="{Binding UnlockedItems}"
+                                  SelectedItem="{Binding CurrentUnlockedItem}"
+                                  SelectionMode="Single">
+							<TreeView.ItemTemplate>
+								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+									<Grid>
+										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+										</Grid>
+										<Button Background="#00000000"
+												Content="x"
+												BorderThickness="0"
+												HorizontalAlignment="Right"
+												Command="{Binding RemoveCommand}"/>
 									</Grid>
-									<Button Background="#00000000"
-                                            Content="x"
-                                            BorderThickness="0"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding RemoveCommand}"/>
-								</Grid>
-							</TreeDataTemplate>
-						</TreeView.ItemTemplate>
-					</TreeView>
+								</TreeDataTemplate>
+							</TreeView.ItemTemplate>
+						</TreeView>
+					</Grid>
 				</TabItem>
 
 				<TabItem Header="Completed" >
@@ -116,29 +122,29 @@
 						</TreeView.ItemTemplate>
 					</TreeView>
 				</TabItem>
-                <TabItem Header="Archived" >
-                    <TreeView AutoScrollToSelectedItem="True"
+				<TabItem Header="Archived" >
+					<TreeView AutoScrollToSelectedItem="True"
                               Items="{Binding ArchivedItems}"
                               SelectedItem="{Binding CurrentArchivedItem}"
                               SelectionMode="Single">
-                        <TreeView.ItemTemplate>
-                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                <Grid>
-                                    <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
-                                        <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
-                                        <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                        <Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
-                                    </Grid>
-                                    <Button Background="#00000000"
+						<TreeView.ItemTemplate>
+							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+								<Grid>
+									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+									</Grid>
+									<Button Background="#00000000"
                                             Content="x"
                                             BorderThickness="0"
                                             HorizontalAlignment="Right"
                                             Command="{Binding RemoveCommand}"/>
-                                </Grid>
-                            </TreeDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
-                </TabItem>
+								</Grid>
+							</TreeDataTemplate>
+						</TreeView.ItemTemplate>
+					</TreeView>
+				</TabItem>
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
@@ -157,7 +163,7 @@
 						<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
 						<DatePicker Header="Planned Begin DateTime" SelectedDate="{Binding PlannedBeginDateTime}"/>
 						<DatePicker Header="Planned End DateTime" SelectedDate="{Binding PlannedEndDateTime}"/>
-                        <StackPanel Orientation="Horizontal">
+						<StackPanel Orientation="Horizontal">
 							<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
 							<Button Content="Archive" Command="{Binding ArchiveCommand}"/>
 						</StackPanel>

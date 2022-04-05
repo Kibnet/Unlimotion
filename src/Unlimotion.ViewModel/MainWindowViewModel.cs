@@ -24,6 +24,7 @@ namespace Unlimotion.ViewModel
             _configuration = Splat.Locator.Current.GetService<IConfiguration>();
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool>();
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool>();
+            ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool>();
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
 
@@ -31,11 +32,15 @@ namespace Unlimotion.ViewModel
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b));
             this.WhenAnyValue(m => m.ShowArchived)
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b));
+            this.WhenAnyValue(m => m.ShowPlanned)
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowPlanned").Set(b));
             this.WhenAnyValue(m => m.CurrentSortDefinition)
                 .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name));
 
+            //Set sort definition
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
 
+            //Set All Tasks Filter
             var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
                 .Select(filters =>
                 {
@@ -70,11 +75,29 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(this);
 
+            //Set Unlocked Filter
+            var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task) =>
+                        task.IsCanBeComplited && (task.IsCompleted == false) &&
+                        (filter == null || 
+                         (filter == true && 
+                          (task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now)
+                          ) ||
+                         (filter == false &&
+                          (task.PlannedBeginDateTime == null)
+                         )
+                         )
+                        ;
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
-                .Filter(m => m.IsCanBeComplited && (m.IsCompleted == false))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
+                .Filter(unlockedFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -431,5 +454,7 @@ namespace Unlimotion.ViewModel
         public bool ShowCompleted { get; set; }
 
         public bool ShowArchived { get; set; }
+
+        public bool? ShowPlanned { get; set; }
     }
 }
