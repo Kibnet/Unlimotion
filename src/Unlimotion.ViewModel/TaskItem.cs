@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reactive;
 
 namespace Unlimotion.ViewModel
 {
@@ -15,6 +16,7 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? ArchiveDateTime { get; set; }
         public DateTimeOffset? PlannedBeginDateTime { get; set; }
         public DateTimeOffset? PlannedEndDateTime { get; set; }
+        public TimeSpan? PlannedDuration { get; set; }
         public List<string> ContainsTasks { get; set; } = new();
         public List<string> BlocksTasks { get; set; } = new();
     }

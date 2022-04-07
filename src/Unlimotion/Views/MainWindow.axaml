@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
+        xmlns:unlimotion="clr-namespace:Unlimotion"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
@@ -13,6 +14,9 @@
 	<Design.DataContext>
 		<viewModel:MainWindowViewModel/>
 	</Design.DataContext>
+	<Window.Resources>
+		<unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
+    </Window.Resources>
 
 	<Window.DataTemplates>
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
@@ -163,6 +167,9 @@
 						<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
 						<DatePicker Header="Planned Begin DateTime" SelectedDate="{Binding PlannedBeginDateTime}"/>
 						<DatePicker Header="Planned End DateTime" SelectedDate="{Binding PlannedEndDateTime}"/>
+						<Label>Planned Duration:</Label>
+						<TextBox Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
+                                 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"/>
 						<StackPanel Orientation="Horizontal">
 							<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
 							<Button Content="Archive" Command="{Binding ArchiveCommand}"/>

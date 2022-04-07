@@ -321,6 +321,12 @@ namespace Unlimotion.ViewModel
                 {
                     if (_isInited) SaveItemCommand.Execute(null);
                 });
+            this.WhenAnyValue(m => m.PlannedDuration
+                )
+                .Subscribe((_) =>
+                {
+                    if (_isInited) SaveItemCommand.Execute(null);
+                });
             _isInited = true;
         }
 
@@ -344,6 +350,7 @@ namespace Unlimotion.ViewModel
                     ArchiveDateTime = ArchiveDateTime,
                     PlannedBeginDateTime = PlannedBeginDateTime,
                     PlannedEndDateTime = PlannedEndDateTime,
+                    PlannedDuration = PlannedDuration,
                     BlocksTasks = Blocks.ToList(),
                     ContainsTasks = Contains.ToList(),
                 };
@@ -359,6 +366,7 @@ namespace Unlimotion.ViewModel
                 ArchiveDateTime = value.ArchiveDateTime;
                 PlannedBeginDateTime = value.PlannedBeginDateTime;
                 PlannedEndDateTime = value.PlannedEndDateTime;
+                PlannedDuration = value.PlannedDuration;
                 Blocks.AddRange(value.BlocksTasks);
                 Contains.AddRange(value.ContainsTasks);
             }
@@ -375,6 +383,7 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? ArchiveDateTime { get; set; }
         public DateTimeOffset? PlannedBeginDateTime { get; set; }
         public DateTimeOffset? PlannedEndDateTime { get; set; }
+        public TimeSpan? PlannedDuration { get; set; }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
