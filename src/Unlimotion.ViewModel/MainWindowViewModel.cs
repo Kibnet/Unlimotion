@@ -405,10 +405,10 @@ namespace Unlimotion.ViewModel
             var selected = CurrentItems;
             foreach (var parent in taskItemViewModel.TaskItem.GetFirstParentsPath())
             {
-                selected = selected.FirstOrDefault(p => p.TaskItem == parent).SubTasks;
+                selected = selected?.FirstOrDefault(p => p.TaskItem == parent)?.SubTasks;
             }
 
-            var finded = selected.FirstOrDefault(p => p.TaskItem == taskItemViewModel.TaskItem);
+            var finded = selected?.FirstOrDefault(p => p.TaskItem == taskItemViewModel.TaskItem);
             return finded;
         }
 
