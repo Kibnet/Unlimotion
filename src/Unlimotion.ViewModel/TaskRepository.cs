@@ -15,6 +15,7 @@ namespace Unlimotion.ViewModel
         void Remove(string itemId);
         void Save(TaskItem item);
         IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
+        TaskItemViewModel Clone(TaskItem clone, TaskItemViewModel destination);
     }
 
     public class TaskRepository : ITaskRepository
@@ -155,6 +156,16 @@ namespace Unlimotion.ViewModel
             roots = Tasks.Connect()
                 .Filter(rootFilter);
             return roots;
+        }
+
+        public TaskItemViewModel Clone(TaskItem clone, TaskItemViewModel destination)
+        {
+            var task = new TaskItemViewModel(clone, this);
+            task.SaveItemCommand.Execute(null);
+            destination.Contains.Add(clone.Id);
+            destination.SaveItemCommand.Execute(null);
+            this.Tasks.AddOrUpdate(task);
+            return task;
         }
     }
 }

@@ -294,6 +294,19 @@ namespace Unlimotion.ViewModel
                 return false;
             };
 
+            CloneFunc = destination =>
+            {
+                var clone = new TaskItem
+                {
+                    BlocksTasks = Model.BlocksTasks.ToList(),
+                    ContainsTasks = Model.ContainsTasks.ToList(),
+                    Description = Model.Description,
+                    Title = Model.Title,
+                    PlannedDuration = Model.PlannedDuration
+                };
+                return taskRepository.Clone(clone, destination);
+            };
+
             UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
                 m =>
                 {
@@ -332,6 +345,7 @@ namespace Unlimotion.ViewModel
 
         public ICommand ArchiveCommand { get; set; }
         public Func<TaskItemViewModel, bool> RemoveFunc { get; set; }
+        public Func<TaskItemViewModel, TaskItemViewModel> CloneFunc { get; set; }
 
         public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId)? Parents.Count == 1: Parents.Count == 0);
 
@@ -416,6 +430,11 @@ namespace Unlimotion.ViewModel
             source?.SaveItemCommand.Execute(null);
         }
 
+        public TaskItemViewModel CloneInto(TaskItemViewModel destination)
+        {
+            return CloneFunc.Invoke(destination);
+        }
+        
         public void BlockBy(TaskItemViewModel blocker)
         {
             blocker.Blocks.Add(Id);

@@ -14,4 +14,5 @@ In "All Task" view you may do drag&drop actions:
 - **No key** - Create link the dragged task to the dropped as subtask
 - **Shift** - Move the dragged task to the dropped as subtask
 - **Ctrl** - Make the dragged task blocks the dropped task
+- **Ctrl+Shift** - Clone the dragged task to the dropped as subtask
 - **Alt** - Make the dragged task blocked by the dropped task

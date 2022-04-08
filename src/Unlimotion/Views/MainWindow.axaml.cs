@@ -82,7 +82,12 @@ namespace Unlimotion.Views
                     e.DragEffects = DragDropEffects.None;
                     return;
                 }
-                if (e.KeyModifiers == KeyModifiers.Shift)
+
+                if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+                {
+                    e.DragEffects &= DragDropEffects.Copy;
+                }
+                else if (e.KeyModifiers == KeyModifiers.Shift)
                 {
                     if (subItem.CanMoveInto(task))
                     {
@@ -131,7 +136,12 @@ namespace Unlimotion.Views
                     e.DragEffects = DragDropEffects.None;
                     return;
                 }
-                if (e.KeyModifiers == KeyModifiers.Shift)
+                if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+                {
+                    e.DragEffects &= DragDropEffects.Copy;
+                    subItem?.TaskItem.CloneInto(task.TaskItem);
+                }
+                else if (e.KeyModifiers == KeyModifiers.Shift)
                 {
                     if (subItem.CanMoveInto(task))
                     {
