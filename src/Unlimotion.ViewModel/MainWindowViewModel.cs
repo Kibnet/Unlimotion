@@ -81,8 +81,8 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task) =>
                         task.IsCanBeComplited && (task.IsCompleted == false) &&
-                        (filter == null || 
-                         (filter == true && 
+                        (filter == null ||
+                         (filter == true &&
                           (task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now)
                           ) ||
                          (filter == false &&
@@ -313,77 +313,62 @@ namespace Unlimotion.ViewModel
                 },
                 this.WhenAny(m => m.CurrentItem, m => true));
 
-            this.WhenAnyValue(m => m.CurrentItem).Subscribe(m =>
-            {
-                if (_currentItemUpdating > 0) return;
-                Interlocked.Increment(ref _currentItemUpdating);
-                if (CurrentUnlockedItem?.TaskItem != m?.TaskItem)
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(m =>
                 {
-                    if (m == null)
-                        CurrentUnlockedItem = null;
-                    else
-                        CurrentUnlockedItem = UnlockedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
-                }
-                if (CurrentCompletedItem?.TaskItem != m?.TaskItem)
-                {
-                    if (m == null)
-                        CurrentCompletedItem = null;
-                    else
-                        CurrentCompletedItem = CompletedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
-                }
-                if (CurrentArchivedItem?.TaskItem != m?.TaskItem)
-                {
-                    if (m == null)
-                        CurrentArchivedItem = null;
-                    else
-                        CurrentArchivedItem = ArchivedItems.FirstOrDefault(u => u.TaskItem == m.TaskItem);
-                }
-                Interlocked.Decrement(ref _currentItemUpdating);
-            });
+                    if(m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(this); ;
 
-            this.WhenAnyValue(m => m.CurrentUnlockedItem).Subscribe(m =>
-            {
-                if (_currentItemUpdating > 0) return;
-                Interlocked.Increment(ref _currentItemUpdating);
-                if (CurrentItem?.TaskItem != m?.TaskItem)
+            this.WhenAnyValue(m => m.CurrentUnlockedItem)
+                .Subscribe(m =>
                 {
-                    if (m == null)
-                        CurrentItem = null;
-                    else
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(this); ;
+
+            this.WhenAnyValue(m => m.CurrentCompletedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(this); ;
+
+            this.WhenAnyValue(m => m.CurrentArchivedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(this); ;
+
+            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
+                .Subscribe((a) =>
+                {
+                    if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
                     {
-                        CurrentItem = FindTaskWrapperViewModel(m);
+                        if (AllTasksMode)
+                        {
+                            CurrentItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentItems);
+                        }
+                        else if (UnlockedMode)
+                        {
+                            CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
+                        }
+                        else if (CompletedMode)
+                        {
+                            CurrentCompletedItem = FindTaskWrapperViewModel(CurrentTaskItem, CompletedItems);
+                        }
+                        else if (ArchivedMode)
+                        {
+                            CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
+                        }
                     }
-                }
-                Interlocked.Decrement(ref _currentItemUpdating);
-            });
-
-            this.WhenAnyValue(m => m.CurrentCompletedItem).Subscribe(m =>
-            {
-                if (_currentItemUpdating > 0) return;
-                Interlocked.Increment(ref _currentItemUpdating);
-                if (CurrentItem?.TaskItem != m?.TaskItem)
-                {
-                    if (m == null)
-                        CurrentItem = null;
-                    else
-                        CurrentItem = FindTaskWrapperViewModel(m);
-                }
-                Interlocked.Decrement(ref _currentItemUpdating);
-            });
-
-            this.WhenAnyValue(m => m.CurrentArchivedItem).Subscribe(m =>
-            {
-                if (_currentItemUpdating > 0) return;
-                Interlocked.Increment(ref _currentItemUpdating);
-                if (CurrentItem?.TaskItem != m?.TaskItem)
-                {
-                    if (m == null)
-                        CurrentItem = null;
-                    else
-                        CurrentItem = FindTaskWrapperViewModel(m);
-                }
-                Interlocked.Decrement(ref _currentItemUpdating);
-            });
+                })
+                .AddToDispose(this); ;
         }
 
         private void RemoveTask(TaskWrapperViewModel task)
@@ -400,17 +385,34 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private TaskWrapperViewModel FindTaskWrapperViewModel(TaskWrapperViewModel taskItemViewModel)
+        public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
         {
-            var selected = CurrentItems;
-            foreach (var parent in taskItemViewModel.TaskItem.GetFirstParentsPath())
+            if (taskItemViewModel == null)
+            {
+                return null;
+            }
+
+            //Прямой поиск по коллекции
+            var finded =source.FirstOrDefault(t => t.TaskItem == taskItemViewModel);
+            if (finded!=null)
+            {
+                return finded;
+            }
+
+            //Поиск по родителям
+            var selected = source;
+            foreach (var parent in taskItemViewModel.GetFirstParentsPath())
             {
                 selected = selected?.FirstOrDefault(p => p.TaskItem == parent)?.SubTasks;
             }
 
-            var finded = selected?.FirstOrDefault(p => p.TaskItem == taskItemViewModel.TaskItem);
+            finded = selected?.FirstOrDefault(p => p.TaskItem == taskItemViewModel);
             return finded;
         }
+        public bool AllTasksMode { get; set; }
+        public bool UnlockedMode { get; set; }
+        public bool CompletedMode { get; set; }
+        public bool ArchivedMode { get; set; }
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
@@ -428,6 +430,7 @@ namespace Unlimotion.ViewModel
         private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems => _archivedItems;
 
+        public TaskItemViewModel CurrentTaskItem { get; set; }
         public TaskWrapperViewModel CurrentItem { get; set; }
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
         public TaskWrapperViewModel CurrentCompletedItem { get; set; }
@@ -443,8 +446,6 @@ namespace Unlimotion.ViewModel
         public ICommand CreateBlockedSibling { get; set; }
 
         public ICommand CreateInner { get; set; }
-
-        private int _currentItemUpdating;
 
         private IConfiguration _configuration;
 

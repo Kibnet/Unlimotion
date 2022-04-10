@@ -53,7 +53,7 @@
 		<!--Панель навигации-->
 		<Grid Grid.Column="0" Grid.Row="1">
 			<TabControl TabStripPlacement="Top">
-				<TabItem Header="All Tasks">
+				<TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}"/>
@@ -73,7 +73,7 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
-				<TabItem Header="Unlocked" >
+				<TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
@@ -103,7 +103,7 @@
 					</Grid>
 				</TabItem>
 
-				<TabItem Header="Completed" >
+				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
 					<TreeView AutoScrollToSelectedItem="True"
                               Items="{Binding CompletedItems}"
                               SelectedItem="{Binding CurrentCompletedItem}"
@@ -126,7 +126,7 @@
 						</TreeView.ItemTemplate>
 					</TreeView>
 				</TabItem>
-				<TabItem Header="Archived" >
+				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
 					<TreeView AutoScrollToSelectedItem="True"
                               Items="{Binding ArchivedItems}"
                               SelectedItem="{Binding CurrentArchivedItem}"
@@ -152,8 +152,8 @@
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
-		<Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentItem}">
-			<Border BorderBrush="Black" BorderThickness="1,0,0,0" DataContext="{Binding TaskItem}">
+		<Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentTaskItem}">
+			<Border BorderBrush="Black" BorderThickness="1,0,0,0" >
 				<ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
 					<StackPanel>
 						<Grid ColumnDefinitions="Auto, *">
