@@ -378,8 +378,8 @@ namespace Unlimotion.ViewModel
                 UnlockedDateTime = value.UnlockedDateTime;
                 CompletedDateTime = value.CompletedDateTime;
                 ArchiveDateTime = value.ArchiveDateTime;
-                PlannedBeginDateTime = value.PlannedBeginDateTime;
-                PlannedEndDateTime = value.PlannedEndDateTime;
+                PlannedBeginDateTime = value.PlannedBeginDateTime?.LocalDateTime;
+                PlannedEndDateTime = value.PlannedEndDateTime?.LocalDateTime;
                 PlannedDuration = value.PlannedDuration;
                 Blocks.AddRange(value.BlocksTasks);
                 Contains.AddRange(value.ContainsTasks);
@@ -395,8 +395,8 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
-        public DateTimeOffset? PlannedBeginDateTime { get; set; }
-        public DateTimeOffset? PlannedEndDateTime { get; set; }
+        public DateTime? PlannedBeginDateTime { get; set; }
+        public DateTime? PlannedEndDateTime { get; set; }
         public TimeSpan? PlannedDuration { get; set; }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
