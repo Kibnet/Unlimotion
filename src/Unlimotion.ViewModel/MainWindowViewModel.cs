@@ -22,9 +22,9 @@ namespace Unlimotion.ViewModel
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
 
             _configuration = Splat.Locator.Current.GetService<IConfiguration>();
-            ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool>();
-            ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool>();
-            ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool>();
+            ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
+            ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
+            ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool?>() == true;
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
 
