@@ -238,17 +238,17 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
 
-            //Set IsCanBeComplited
+            //Set IsCanBeCompleted
             this.WhenAnyValue(m => m.NotHaveUncompletedContains, m => m.NotHaveUncompletedBlockedBy)
                 .Subscribe(tuple =>
                 {
-                    IsCanBeComplited = tuple.Item1 && tuple.Item2;
-                    if (IsCanBeComplited && UnlockedDateTime == null)
+                    IsCanBeCompleted = tuple.Item1 && tuple.Item2;
+                    if (IsCanBeCompleted && UnlockedDateTime == null)
                     {
                         UnlockedDateTime = DateTimeOffset.UtcNow;
                     }
 
-                    if (!IsCanBeComplited && UnlockedDateTime != null)
+                    if (!IsCanBeCompleted && UnlockedDateTime != null)
                     {
                         UnlockedDateTime = null;
                     }
@@ -389,7 +389,7 @@ namespace Unlimotion.ViewModel
         public string Id { get; private set; }
         public string Title { get; set; }
         public string Description { get; set; }
-        public bool IsCanBeComplited { get; private set; }
+        public bool IsCanBeCompleted { get; private set; }
         public bool? IsCompleted { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }

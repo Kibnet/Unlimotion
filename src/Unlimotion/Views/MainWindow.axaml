@@ -21,8 +21,8 @@
 	<Window.DataTemplates>
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
 			<Grid ColumnDefinitions="Auto, *" DragDrop.AllowDrop="True">
-				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" />
-				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsCanBeComplited="{Binding !IsCanBeComplited}"  />
+				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
 			</Grid>
 		</DataTemplate>
 		<DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -87,7 +87,7 @@
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<Grid>
 										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
-											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
@@ -112,7 +112,7 @@
 							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 								<Grid>
 									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
-										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 									</Grid>
@@ -135,7 +135,7 @@
 							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 								<Grid>
 									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
-										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeComplited}" />
+										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 									</Grid>
@@ -157,7 +157,7 @@
 				<ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
 					<StackPanel>
 						<Grid ColumnDefinitions="Auto, *">
-							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeComplited}" ></CheckBox>
+							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
 						</Grid>
 						<Label>Description:</Label>

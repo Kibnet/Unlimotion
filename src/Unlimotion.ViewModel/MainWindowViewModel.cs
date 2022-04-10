@@ -54,7 +54,7 @@ namespace Unlimotion.ViewModel
             //Bind Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Filter(taskFilter)
                 .Transform(item =>
                 {
@@ -80,7 +80,7 @@ namespace Unlimotion.ViewModel
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task) =>
-                        task.IsCanBeComplited && (task.IsCompleted == false) &&
+                        task.IsCanBeCompleted && (task.IsCompleted == false) &&
                         (filter == null ||
                          (filter == true &&
                           (task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now)
@@ -96,7 +96,7 @@ namespace Unlimotion.ViewModel
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeComplited, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
                 .Filter(unlockedFilter)
                 .Transform(item =>
                 {

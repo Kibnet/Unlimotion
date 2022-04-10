@@ -109,18 +109,18 @@ public class SortDefinition
         };
         yield return new SortDefinition
         {
-            Name = "IsCanBeComplited Ascending",
+            Name = "IsCanBeCompleted Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.IsCanBeComplited, SortDirection.Ascending)
+                new(w => w.TaskItem.IsCanBeCompleted, SortDirection.Ascending)
             }
         };
         yield return new SortDefinition
         {
-            Name = "IsCanBeComplited Descending",
+            Name = "IsCanBeCompleted Descending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.IsCanBeComplited, SortDirection.Descending)
+                new(w => w.TaskItem.IsCanBeCompleted, SortDirection.Descending)
             }
         };
     }
