@@ -1,12 +1,17 @@
+﻿using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.ReactiveUI;
-using System;
+using ReactiveUI;
+using System.Reactive;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Logging;
 using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
 
-namespace Unlimotion
+namespace Unlimotion.Desktop
 {
     class Program
     {
@@ -22,7 +27,12 @@ namespace Unlimotion
             => AppBuilder.Configure<App>()
                 .AfterSetup(AfterSetup)
                 .UsePlatformDetect()
+#if DEBUG
+                .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
+#else
                 .LogToTrace()
+#endif
+
                 .UseReactiveUI();
 
         private static void AfterSetup(AppBuilder obj)
@@ -35,6 +45,18 @@ namespace Unlimotion
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+
+#if DEBUG
+            (obj.Instance as App).OnLoaded += (sender, args) =>
+            {
+                if (obj.Instance.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.MainWindow?.AttachDevTools();
+                    desktop.Windows.FirstOrDefault()?.AttachDevTools();
+                }
+            };
+            
+#endif
         }
     }
 }

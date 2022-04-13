@@ -1,13 +1,23 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31829.152
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32319.34
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion", "Unlimotion\Unlimotion.csproj", "{7F213DC0-4CB1-477D-A526-70A95AE3E622}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.ViewModel", "Unlimotion.ViewModel\Unlimotion.ViewModel.csproj", "{B1E96338-B8BF-4ED9-AAB3-64C40F362F41}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.Test", "Unlimotion.Test\Unlimotion.Test.csproj", "{8C2EB230-1A2E-4187-AEA0-F68116431D49}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Test", "Unlimotion.Test\Unlimotion.Test.csproj", "{8C2EB230-1A2E-4187-AEA0-F68116431D49}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Android", "Unlimotion.Android\Unlimotion.Android.csproj", "{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Desktop", "Unlimotion.Desktop\Unlimotion.Desktop.csproj", "{8743C24C-576C-48D4-BE3F-CEB269889AE9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution", "Solution", "{4BD8DA85-B821-4032-98CA-F82B4DE4532C}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+		nuget.config = nuget.config
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +37,16 @@ Global
 		{8C2EB230-1A2E-4187-AEA0-F68116431D49}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8C2EB230-1A2E-4187-AEA0-F68116431D49}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8C2EB230-1A2E-4187-AEA0-F68116431D49}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DF9C0E7-E1B1-4BF3-ACA8-9CE6A7554DCD}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{8743C24C-576C-48D4-BE3F-CEB269889AE9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8743C24C-576C-48D4-BE3F-CEB269889AE9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8743C24C-576C-48D4-BE3F-CEB269889AE9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8743C24C-576C-48D4-BE3F-CEB269889AE9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

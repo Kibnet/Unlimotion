@@ -5,13 +5,12 @@ using System.Reactive;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using Avalonia.ReactiveUI;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
 {
-    public partial class MainControl : ReactiveUserControl<MainWindowViewModel>
+    public partial class MainControl : UserControl
     {
         public MainControl()
         {
