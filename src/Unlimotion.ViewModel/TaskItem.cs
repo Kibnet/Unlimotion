@@ -19,5 +19,6 @@ namespace Unlimotion.ViewModel
         public TimeSpan? PlannedDuration { get; set; }
         public List<string> ContainsTasks { get; set; } = new();
         public List<string> BlocksTasks { get; set; } = new();
+        public RepeaterPattern Repeater { get; set; }
     }
 }

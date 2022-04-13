@@ -9,11 +9,12 @@
         x:Class="Unlimotion.Views.MainControl"
         Name="MainWindow">
 
-    <Design.DataContext>
-        <viewModel:MainWindowViewModel/>
-    </Design.DataContext>
+	<Design.DataContext>
+		<viewModel:MainWindowViewModel/>
+	</Design.DataContext>
 	<UserControl.Resources>
 		<unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
+		<unlimotion:EqualConverter x:Key="EqualConverter"/>
 	</UserControl.Resources>
 
 	<UserControl.DataTemplates>
@@ -59,10 +60,10 @@
 							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding CurrentItems}"
-								  SelectedItem="{Binding CurrentItem}"
-								  SelectionMode="Single"
-								  Name="CurrentTree">
+                                  Items="{Binding CurrentItems}"
+                                  SelectedItem="{Binding CurrentItem}"
+                                  SelectionMode="Single"
+                                  Name="CurrentTree">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
@@ -90,10 +91,10 @@
 											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-												Content="x"
-												BorderThickness="0"
-												HorizontalAlignment="Right"
-												Command="{Binding RemoveCommand}"/>
+                                                Content="x"
+                                                BorderThickness="0"
+                                                HorizontalAlignment="Right"
+                                                Command="{Binding RemoveCommand}"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
@@ -167,6 +168,26 @@
 						<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}" IsTodayHighlighted="True"/>
 						<Label Content="Planned End DateTime"/>
 						<CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}" IsTodayHighlighted="True" />
+						<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
+							<ComboBox.ItemTemplate>
+								<DataTemplate DataType="viewModel:RepeaterPatternViewModel">
+									<Label Content="{Binding Title}"/>
+								</DataTemplate>
+							</ComboBox.ItemTemplate>
+						</ComboBox>
+						<ContentControl DataContext="{Binding Repeater}">
+							<WrapPanel>
+								<ComboBox Items="{Binding RepeaterTypes}" SelectedItem="{Binding Type}"/>
+								<NumericUpDown Value="{Binding Period}"/>
+								<ToggleButton IsChecked="{Binding Monday}" Content="Monday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Tuesday}" Content="Tuesday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Wednesday}" Content="Wednesday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Thursday}" Content="Thursday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Friday}" Content="Friday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Saturday}" Content="Saturday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<ToggleButton IsChecked="{Binding Sunday}" Content="Sunday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+							</WrapPanel>
+						</ContentControl>
 						<Label>Planned Duration:</Label>
 						<TextBox Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
                                  ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"/>

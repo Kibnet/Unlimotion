@@ -168,7 +168,6 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
                                 m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
-                                m.Parent.TaskItem.SaveItemCommand.Execute(null);
                             },
                             SortComparer = sortObservable
                         };
@@ -194,7 +193,6 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
                                 m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
-                                m.TaskItem.SaveItemCommand.Execute(null);
                             },
                             SortComparer = sortObservable
                         };
@@ -220,7 +218,6 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
-                                m.TaskItem.SaveItemCommand.Execute(null);
                             },
                             SortComparer = sortObservable
                         };
@@ -246,7 +243,6 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
                                 m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
-                                m.TaskItem.SaveItemCommand.Execute(null);
                             },
                             SortComparer = sortObservable
                         };
@@ -269,7 +265,6 @@ namespace Unlimotion.ViewModel
                     if (CurrentItem?.Parent != null)
                     {
                         CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        CurrentItem.Parent.TaskItem.SaveItemCommand.Execute(null);
                     }
                     taskRepository.Tasks.AddOrUpdate(task);
 
@@ -305,7 +300,6 @@ namespace Unlimotion.ViewModel
                     var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                     task.SaveItemCommand.Execute(null);
                     CurrentItem.TaskItem.Contains.Add(task.Id);
-                    CurrentItem.TaskItem.SaveItemCommand.Execute(null);
                     taskRepository.Tasks.AddOrUpdate(task);
 
                     var taskWrapper = CurrentItem.SubTasks.First(m => m.TaskItem == task);
@@ -316,7 +310,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentItem)
                 .Subscribe(m =>
                 {
-                    if(m != null || CurrentTaskItem == null)
+                    if (m != null || CurrentTaskItem == null)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(this); ;
@@ -393,8 +387,8 @@ namespace Unlimotion.ViewModel
             }
 
             //Прямой поиск по коллекции
-            var finded =source.FirstOrDefault(t => t.TaskItem == taskItemViewModel);
-            if (finded!=null)
+            var finded = source.FirstOrDefault(t => t.TaskItem == taskItemViewModel);
+            if (finded != null)
             {
                 return finded;
             }

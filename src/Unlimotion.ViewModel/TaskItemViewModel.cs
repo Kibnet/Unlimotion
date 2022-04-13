@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -194,6 +195,25 @@ namespace Unlimotion.ViewModel
                 {
                     CompletedDateTime = DateTimeOffset.UtcNow;
                     ArchiveDateTime = null;
+                    if (Repeater != null && Repeater.Type != RepeaterType.None && PlannedBeginDateTime.HasValue)
+                    {
+                        var clone = new TaskItem
+                        {
+                            BlocksTasks = Model.BlocksTasks.ToList(),
+                            ContainsTasks = Model.ContainsTasks.ToList(),
+                            Description = Model.Description,
+                            Title = Model.Title,
+                            PlannedDuration = Model.PlannedDuration,
+                            Repeater = Model.Repeater,
+                        };
+                        clone.PlannedBeginDateTime = Repeater.GetNextOccurrence(PlannedBeginDateTime.Value);
+                        if (PlannedEndDateTime.HasValue)
+                        {
+                            clone.PlannedEndDateTime =
+                                clone.PlannedBeginDateTime.Value.Add(PlannedEndDateTime.Value - PlannedBeginDateTime.Value);
+                        }
+                        var cloned = taskRepository.Clone(clone, ParentsTasks.ToArray());
+                    }
                 }
 
                 if (b == false)
@@ -302,7 +322,8 @@ namespace Unlimotion.ViewModel
                     ContainsTasks = Model.ContainsTasks.ToList(),
                     Description = Model.Description,
                     Title = Model.Title,
-                    PlannedDuration = Model.PlannedDuration
+                    PlannedDuration = Model.PlannedDuration,
+                    Repeater = Model.Repeater,
                 };
                 return taskRepository.Clone(clone, destination);
             };
@@ -322,32 +343,80 @@ namespace Unlimotion.ViewModel
                 });
 
             //Subscribe to Save when property changed
-            this.WhenAnyValue(m => m.Title,
-                    m => m.IsCompleted,
-                    m => m.Description,
-                    m => m.ArchiveDateTime,
-                    m => m.UnlockedDateTime,
-                    m => m.PlannedBeginDateTime,
-                    m => m.PlannedEndDateTime
-                )
-                .Subscribe((_) =>
+            if (this is INotifyPropertyChanged inpc)
+            {
+                inpc.PropertyChanged += SaveOnPropertyChanged;
+            }
+
+            Contains.ToObservableChangeSet()
+                .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute(null);
-                });
-            this.WhenAnyValue(m => m.PlannedDuration
-                )
-                .Subscribe((_) =>
+                })
+                .AddToDispose(this);
+
+            Blocks.ToObservableChangeSet()
+                .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute(null);
-                });
+                })
+                .AddToDispose(this);
+
+            this.WhenAnyValue(t => t.Repeater)
+                .Subscribe(r =>
+                {
+                    if (r is INotifyPropertyChanged repeater)
+                    {
+                        repeater.PropertyChanged += SaveOnRepeaterPropertyChanged;
+                    }
+                })
+                .AddToDispose(this);
+
             _isInited = true;
+        }
+
+        private void SaveOnRepeaterPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            switch (e.PropertyName)
+            {
+                //case nameof(Repeater.Type)://TODO из интерфейса прилетает изменение при переключении
+                case nameof(Repeater.AfterComplete):
+                case nameof(Repeater.Period):
+                case nameof(Repeater.Monday):
+                case nameof(Repeater.Tuesday):
+                case nameof(Repeater.Wednesday):
+                case nameof(Repeater.Thursday):
+                case nameof(Repeater.Friday):
+                case nameof(Repeater.Saturday):
+                case nameof(Repeater.Sunday):
+                    if (_isInited) SaveItemCommand.Execute(null);
+                    break;
+            }
+        }
+
+        private void SaveOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(Title):
+                case nameof(IsCompleted):
+                case nameof(Description):
+                case nameof(ArchiveDateTime):
+                case nameof(UnlockedDateTime):
+                case nameof(PlannedBeginDateTime):
+                case nameof(PlannedEndDateTime):
+                case nameof(PlannedDuration):
+                case nameof(Repeater):
+                    if (_isInited) SaveItemCommand.Execute(null);
+                    break;
+            }
         }
 
         public ICommand ArchiveCommand { get; set; }
         public Func<TaskItemViewModel, bool> RemoveFunc { get; set; }
         public Func<TaskItemViewModel, TaskItemViewModel> CloneFunc { get; set; }
 
-        public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId)? Parents.Count == 1: Parents.Count == 0);
+        public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId) ? Parents.Count == 1 : Parents.Count == 0);
 
         public TaskItem Model
         {
@@ -367,6 +436,7 @@ namespace Unlimotion.ViewModel
                     PlannedDuration = PlannedDuration,
                     BlocksTasks = Blocks.ToList(),
                     ContainsTasks = Contains.ToList(),
+                    Repeater = Repeater?.Model
                 };
             set
             {
@@ -383,6 +453,15 @@ namespace Unlimotion.ViewModel
                 PlannedDuration = value.PlannedDuration;
                 Blocks.AddRange(value.BlocksTasks);
                 Contains.AddRange(value.ContainsTasks);
+                if (value.Repeater != null)
+                {
+                    Repeater = new RepeaterPatternViewModel();
+                    Repeater.Model = value.Repeater;
+                }
+                else
+                {
+                    Repeater = null;
+                }
             }
         }
 
@@ -418,27 +497,22 @@ namespace Unlimotion.ViewModel
         public void CopyInto(TaskItemViewModel destination)
         {
             destination.Contains.Add(Id);
-            destination.SaveItemCommand.Execute(null);
         }
 
         public void MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
         {
             destination.Contains.Add(Id);
             source?.Contains?.Remove(Id);
-
-            destination.SaveItemCommand.Execute(null);
-            source?.SaveItemCommand.Execute(null);
         }
 
         public TaskItemViewModel CloneInto(TaskItemViewModel destination)
         {
             return CloneFunc.Invoke(destination);
         }
-        
+
         public void BlockBy(TaskItemViewModel blocker)
         {
             blocker.Blocks.Add(Id);
-            blocker.SaveItemCommand.Execute(null);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()
@@ -504,5 +578,17 @@ namespace Unlimotion.ViewModel
                 }
             }
         }
+
+        public RepeaterPatternViewModel Repeater { get; set; }
+
+        public List<RepeaterPatternViewModel> Repeaters => new()
+        {
+            new RepeaterPatternViewModel { Type = RepeaterType.None },
+            new RepeaterPatternViewModel { Type = RepeaterType.Daily },
+            new RepeaterPatternViewModel { Type = RepeaterType.Weekly, WorkDays = true },
+            new RepeaterPatternViewModel { Type = RepeaterType.Weekly },
+            new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
+            new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
+        };
     }
 }
