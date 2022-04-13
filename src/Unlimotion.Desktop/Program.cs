@@ -37,14 +37,15 @@ namespace Unlimotion.Desktop
 
         private static void AfterSetup(AppBuilder obj)
         {
-            var taskStorage = new FileTaskStorage("Tasks");
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
+            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            var storagePath = configuration.GetSection("TaskStorage:Path").Get<string>();
+            var taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
             var taskRepository = new TaskRepository(taskStorage);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
             var notificationManager = new NotificationManagerWrapperWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
-            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
 
 #if DEBUG
             (obj.Instance as App).OnLoaded += (sender, args) =>
@@ -55,7 +56,7 @@ namespace Unlimotion.Desktop
                     desktop.Windows.FirstOrDefault()?.AttachDevTools();
                 }
             };
-            
+
 #endif
         }
     }
