@@ -29,7 +29,10 @@ namespace Unlimotion.Views
                     var subscription = innerCommand.Subscribe(unit =>
                     {
                         var toExpand = vm.CurrentItem;
-                        Expand(toExpand);
+                        if (toExpand!= null)
+                        {
+                            Expand(toExpand);
+                        }
                     });
                     disposables.Add(subscription);
                 }
@@ -178,12 +181,13 @@ namespace Unlimotion.Views
 
         public void Expand(TaskWrapperViewModel task)
         {
+            if (task == null) return;
             var treeView = this.Get<TreeView>("CurrentTree");
-            
             var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
-            if (treeItem != null)
+            if (treeItem == null) return;
+            if (treeItem.ContainerControl is TreeViewItem item)
             {
-                treeView.ExpandSubTree(treeItem.ContainerControl as TreeViewItem);
+                treeView.ExpandSubTree(item);
             }
         }
     }
