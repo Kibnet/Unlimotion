@@ -157,7 +157,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             //Bind Current Item Contains
-            this.WhenAnyValue(m => m.CurrentItem)
+            this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
                     if (item != null)
@@ -171,7 +171,7 @@ namespace Unlimotion.ViewModel
                             },
                             SortComparer = sortObservable
                         };
-                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
                         CurrentItemContains = wrapper;
                     }
                     else
@@ -182,7 +182,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             //Bind Current Item Parents
-            this.WhenAnyValue(m => m.CurrentItem)
+            this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
                     if (item != null)
@@ -196,7 +196,7 @@ namespace Unlimotion.ViewModel
                             },
                             SortComparer = sortObservable
                         };
-                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
                         CurrentItemParents = wrapper;
                     }
                     else
@@ -207,7 +207,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             //Bind Current Item Blocks
-            this.WhenAnyValue(m => m.CurrentItem)
+            this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
                     if (item != null)
@@ -221,7 +221,7 @@ namespace Unlimotion.ViewModel
                             },
                             SortComparer = sortObservable
                         };
-                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
                         CurrentItemBlocks = wrapper;
                     }
                     else
@@ -232,7 +232,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             //Bind Current Item BlockedBy
-            this.WhenAnyValue(m => m.CurrentItem)
+            this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
                     if (item != null)
@@ -246,7 +246,7 @@ namespace Unlimotion.ViewModel
                             },
                             SortComparer = sortObservable
                         };
-                        var wrapper = new TaskWrapperViewModel(null, item.TaskItem, actions);
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
                         CurrentItemBlockedBy = wrapper;
                     }
                     else
@@ -293,17 +293,16 @@ namespace Unlimotion.ViewModel
 
             CreateInner = ReactiveCommand.Create(() =>
                 {
-                    if (CurrentItem == null)
+                    if (CurrentTaskItem == null)
                         return;
-                    if (string.IsNullOrWhiteSpace(CurrentItem?.TaskItem.Title))
+                    if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                         return;
                     var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                     task.SaveItemCommand.Execute(null);
-                    CurrentItem.TaskItem.Contains.Add(task.Id);
+                    CurrentTaskItem.Contains.Add(task.Id);
                     taskRepository.Tasks.AddOrUpdate(task);
-
-                    var taskWrapper = CurrentItem.SubTasks.First(m => m.TaskItem == task);
-                    CurrentItem = taskWrapper;
+                    
+                    CurrentTaskItem = task;
                 },
                 this.WhenAny(m => m.CurrentItem, m => true));
 
