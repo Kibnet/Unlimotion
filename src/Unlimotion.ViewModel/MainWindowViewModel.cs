@@ -257,55 +257,49 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             CreateSibling = ReactiveCommand.Create(() =>
+            {
+                if (CurrentTaskItem == null || string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                    return;
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                task.SaveItemCommand.Execute(null);
+                if (CurrentItem?.Parent != null)
                 {
-                    if (CurrentItem != null && string.IsNullOrWhiteSpace(CurrentItem?.TaskItem.Title))
-                        return;
-                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    task.SaveItemCommand.Execute(null);
-                    if (CurrentItem?.Parent != null)
-                    {
-                        CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                    }
-                    taskRepository.Tasks.AddOrUpdate(task);
+                    CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                }
+                else if (CurrentTaskItem.ParentsTasks.Count>0)
+                {
+                    CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                }
+                taskRepository.Tasks.AddOrUpdate(task);
 
-                    if (CurrentItem?.Parent == null)
-                    {
-                        var taskWrapper = CurrentItems.FirstOrDefault(m => m.TaskItem == task);
-                        CurrentItem = taskWrapper;
-                    }
-                    else
-                    {
-                        var taskWrapper = CurrentItem.Parent.SubTasks.First(m => m.TaskItem == task);
-                        CurrentItem = taskWrapper;
-                    }
-                },
-                this.WhenAny(m => m.CurrentItem, m => true));// || !string.IsNullOrWhiteSpace(m.TaskItem.Title)));
+                CurrentTaskItem = task;
+            });
 
             CreateBlockedSibling = ReactiveCommand.Create(() =>
             {
-                var parent = CurrentItem;
-                if (CurrentItem != null)
+                var parent = CurrentTaskItem;
+                if (CurrentTaskItem != null)
                 {
                     CreateSibling.Execute(null);
-                    parent.TaskItem.Blocks.Add(CurrentItem.TaskItem.Id);
+                    parent.Blocks.Add(CurrentTaskItem.Id);
                 }
             });
 
             CreateInner = ReactiveCommand.Create(() =>
-                {
-                    if (CurrentTaskItem == null)
-                        return;
-                    if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                        return;
-                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    task.SaveItemCommand.Execute(null);
-                    CurrentTaskItem.Contains.Add(task.Id);
-                    taskRepository.Tasks.AddOrUpdate(task);
-                    
-                    CurrentTaskItem = task;
-                },
-                this.WhenAny(m => m.CurrentItem, m => true));
+            {
+                if (CurrentTaskItem == null)
+                    return;
+                if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                    return;
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                task.SaveItemCommand.Execute(null);
+                CurrentTaskItem.Contains.Add(task.Id);
+                taskRepository.Tasks.AddOrUpdate(task);
 
+                CurrentTaskItem = task;
+            });
+
+            //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentItem)
                 .Subscribe(m =>
                 {
