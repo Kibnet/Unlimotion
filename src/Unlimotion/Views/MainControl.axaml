@@ -159,7 +159,7 @@
 							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
 						</Grid>
-						<Label>Description:</Label>
+                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance"/>
 						<TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
 						<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
 						<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
