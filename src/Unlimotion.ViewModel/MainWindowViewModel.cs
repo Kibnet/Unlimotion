@@ -273,6 +273,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks.AddOrUpdate(task);
 
                 CurrentTaskItem = task;
+                SelectCurrentTask();
             });
 
             CreateBlockedSibling = ReactiveCommand.Create(() =>
@@ -297,6 +298,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks.AddOrUpdate(task);
 
                 CurrentTaskItem = task;
+                SelectCurrentTask();
             });
 
             //Select CurrentTaskItem from all tabs
@@ -333,29 +335,31 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this); ;
 
             this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
-                .Subscribe((a) =>
-                {
-                    if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
-                    {
-                        if (AllTasksMode)
-                        {
-                            CurrentItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentItems);
-                        }
-                        else if (UnlockedMode)
-                        {
-                            CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
-                        }
-                        else if (CompletedMode)
-                        {
-                            CurrentCompletedItem = FindTaskWrapperViewModel(CurrentTaskItem, CompletedItems);
-                        }
-                        else if (ArchivedMode)
-                        {
-                            CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
-                        }
-                    }
-                })
+                .Subscribe((a) => { SelectCurrentTask(); })
                 .AddToDispose(this); ;
+        }
+
+        private void SelectCurrentTask()
+        {
+            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
+            {
+                if (AllTasksMode)
+                {
+                    CurrentItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentItems);
+                }
+                else if (UnlockedMode)
+                {
+                    CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
+                }
+                else if (CompletedMode)
+                {
+                    CurrentCompletedItem = FindTaskWrapperViewModel(CurrentTaskItem, CompletedItems);
+                }
+                else if (ArchivedMode)
+                {
+                    CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
+                }
+            }
         }
 
         private void RemoveTask(TaskWrapperViewModel task)
