@@ -16,4 +16,16 @@ public static class ControlExtensions
         }
         return default;
     }
+
+    public static T FindParent<T>(this IControl control)
+    {
+        foreach (var descendant in control.GetVisualAncestors())
+        {
+            if (descendant is T parent)
+            {
+                return parent;
+            }
+        }
+        return default;
+    }
 }
