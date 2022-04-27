@@ -22,6 +22,7 @@ namespace Unlimotion.ViewModel
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
 
             _configuration = Splat.Locator.Current.GetService<IConfiguration>();
+            Settings = new SettingsViewModel(_configuration);
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool?>() == true;
@@ -404,6 +405,7 @@ namespace Unlimotion.ViewModel
         public bool UnlockedMode { get; set; }
         public bool CompletedMode { get; set; }
         public bool ArchivedMode { get; set; }
+        public bool SettingsMode { get; set; }
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
@@ -448,5 +450,7 @@ namespace Unlimotion.ViewModel
         public bool ShowArchived { get; set; }
 
         public bool? ShowPlanned { get; set; }
+
+        public SettingsViewModel Settings { get; set; }
     }
 }

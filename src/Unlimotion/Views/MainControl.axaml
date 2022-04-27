@@ -5,6 +5,7 @@
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
         xmlns:unlimotion="clr-namespace:Unlimotion"
+        xmlns:views="clr-namespace:Unlimotion.Views"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainControl"
         Name="MainWindow">
@@ -148,6 +149,9 @@
 						</TreeView.ItemTemplate>
 					</TreeView>
 				</TabItem>
+				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
+					<views:SettingsControl DataContext="{Binding Settings}"/>
+                </TabItem>
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
