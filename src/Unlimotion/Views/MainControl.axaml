@@ -77,6 +77,13 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
+							<ComboBox Items="{Binding EmojiFilters}">
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ComboBox>
 						</WrapPanel>
 
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
@@ -104,7 +111,17 @@
 				</TabItem>
 
 				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
-					<TreeView AutoScrollToSelectedItem="True"
+					<Grid RowDefinitions="Auto,*">
+						<WrapPanel Orientation="Horizontal">
+							<ComboBox Items="{Binding EmojiFilters}">
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ComboBox>
+						</WrapPanel>
+						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                               Items="{Binding CompletedItems}"
                               SelectedItem="{Binding CurrentCompletedItem}"
                               SelectionMode="Single">
@@ -125,9 +142,20 @@
 							</TreeDataTemplate>
 						</TreeView.ItemTemplate>
 					</TreeView>
+					</Grid>
 				</TabItem>
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
-					<TreeView AutoScrollToSelectedItem="True"
+					<Grid RowDefinitions="Auto,*">
+						<WrapPanel Orientation="Horizontal">
+							<ComboBox Items="{Binding EmojiFilters}">
+								<ItemsControl.ItemTemplate>
+									<DataTemplate>
+										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
+									</DataTemplate>
+								</ItemsControl.ItemTemplate>
+							</ComboBox>
+						</WrapPanel>
+						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                               Items="{Binding ArchivedItems}"
                               SelectedItem="{Binding CurrentArchivedItem}"
                               SelectionMode="Single">
@@ -148,6 +176,7 @@
 							</TreeDataTemplate>
 						</TreeView.ItemTemplate>
 					</TreeView>
+					</Grid>
 				</TabItem>
 				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
 					<views:SettingsControl DataContext="{Binding Settings}"/>

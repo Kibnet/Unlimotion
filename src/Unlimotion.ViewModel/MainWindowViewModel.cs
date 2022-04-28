@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
@@ -76,6 +77,24 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(this);
 
+
+            //Bind Emodji
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .DistinctValues(m => m.Emoji)
+                .Transform(m =>
+                {
+                    if (m == "")
+                    {
+                        return AllEmojiFilter;
+                    }
+                    return new EmojiFilter() { Emoji = m, ShowTasks = true };
+                })
+                .Bind(out _emojiFilters)
+                .Subscribe()
+                .AddToDispose(this);
+
             //Set Unlocked Filter
             var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
                 .Select(filter =>
@@ -92,6 +111,30 @@ namespace Unlimotion.ViewModel
                          )
                         ;
                     return (Func<TaskItemViewModel, bool>)Predicate;
+                });            
+            
+            var emojiFilter = _emojiFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.All(e => e.ShowTasks == false))
+                        {
+                            return true;
+                        }
+                        foreach (var item in filter.Where(e => e.ShowTasks))
+                        {
+                            if (task.GetAllEmoji.Contains(item.Emoji))
+                                    return true;
+                        }
+
+                        return false;
+                    }
+
+                    ;
+                    return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
             //Bind Unlocked
@@ -99,6 +142,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
                 .Filter(unlockedFilter)
+                .Filter(emojiFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -120,6 +164,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
+                .Filter(emojiFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -141,6 +186,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
+                .Filter(emojiFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -309,7 +355,7 @@ namespace Unlimotion.ViewModel
                     if (m != null || CurrentTaskItem == null)
                         CurrentTaskItem = m?.TaskItem;
                 })
-                .AddToDispose(this); ;
+                .AddToDispose(this);
 
             this.WhenAnyValue(m => m.CurrentUnlockedItem)
                 .Subscribe(m =>
@@ -317,7 +363,7 @@ namespace Unlimotion.ViewModel
                     if (m != null || CurrentTaskItem == null)
                         CurrentTaskItem = m?.TaskItem;
                 })
-                .AddToDispose(this); ;
+                .AddToDispose(this);
 
             this.WhenAnyValue(m => m.CurrentCompletedItem)
                 .Subscribe(m =>
@@ -325,7 +371,7 @@ namespace Unlimotion.ViewModel
                     if (m != null || CurrentTaskItem == null)
                         CurrentTaskItem = m?.TaskItem;
                 })
-                .AddToDispose(this); ;
+                .AddToDispose(this);
 
             this.WhenAnyValue(m => m.CurrentArchivedItem)
                 .Subscribe(m =>
@@ -333,11 +379,21 @@ namespace Unlimotion.ViewModel
                     if (m != null || CurrentTaskItem == null)
                         CurrentTaskItem = m?.TaskItem;
                 })
-                .AddToDispose(this); ;
+                .AddToDispose(this);
 
             this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
                 .Subscribe((a) => { SelectCurrentTask(); })
-                .AddToDispose(this); ;
+                .AddToDispose(this);
+
+            AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
+                .Subscribe(b =>
+                {
+                    foreach (var filter in EmojiFilters)
+                    {
+                        filter.ShowTasks = b;
+                    }
+                })
+                .AddToDispose(this);
         }
 
         private void SelectCurrentTask()
@@ -452,5 +508,17 @@ namespace Unlimotion.ViewModel
         public bool? ShowPlanned { get; set; }
 
         public SettingsViewModel Settings { get; set; }
+
+        private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
+        public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters => _emojiFilters;
+
+        public EmojiFilter AllEmojiFilter { get; } = new EmojiFilter() { Emoji = "All", ShowTasks = true };
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class EmojiFilter
+    {
+        public string Emoji { get; set; }
+        public bool ShowTasks { get; set; }
     }
 }
