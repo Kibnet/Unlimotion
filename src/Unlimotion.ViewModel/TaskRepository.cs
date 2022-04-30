@@ -118,6 +118,7 @@ namespace Unlimotion.ViewModel
                 });
 		
 
+            _saveBag.Clear();
             _saveTimer.Start();
         }
         
