@@ -219,6 +219,7 @@
 								<ToggleButton IsChecked="{Binding Friday}" Content="Friday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
 								<ToggleButton IsChecked="{Binding Saturday}" Content="Saturday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
 								<ToggleButton IsChecked="{Binding Sunday}" Content="Sunday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
+								<CheckBox IsChecked="{Binding AfterComplete}" Content="After Complete"/>
 							</WrapPanel>
 						</ContentControl>
 						<Label>Planned Duration:</Label>
