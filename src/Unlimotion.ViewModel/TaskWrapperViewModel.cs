@@ -36,11 +36,16 @@ public static class BredScrumbsAlgorithms
 
     public static string FirstTaskParent(TaskWrapperViewModel current)
     {
+        return FirstTaskParent(current.TaskItem);
+    }
+
+    public static string FirstTaskParent(TaskItemViewModel current)
+    {
         var nodes = new List<string>();
-        var task = current.TaskItem;
+        var task = current;
         while (task != null)
         {
-            nodes.Insert(0, current.TaskItem.Title);
+            nodes.Insert(0, task.Title);
             task = task.ParentsTasks.FirstOrDefault();
         }
 

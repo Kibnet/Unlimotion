@@ -465,7 +465,7 @@ namespace Unlimotion.ViewModel
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
-        public string BreadScrumbs => CurrentItem?.BreadScrumbs;
+        public string BreadScrumbs => AllTasksMode ? CurrentItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
         private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
