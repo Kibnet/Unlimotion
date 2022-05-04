@@ -3,7 +3,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-        xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
         xmlns:unlimotion="clr-namespace:Unlimotion"
         xmlns:views="clr-namespace:Unlimotion.Views"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -46,8 +45,8 @@
 
 	<Grid ColumnDefinitions="*,*" RowDefinitions="Auto,*">
 		<!--Адрес-->
-		<Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10" Height="30">
-			<TextBlock Text="{Binding BreadScrumbs}" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+		<Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10" Height="30" DragDrop.AllowDrop="True" DataContext="{Binding CurrentTaskItem}">
+			<TextBlock Text="{Binding $parent.Parent.DataContext.BreadScrumbs}" PointerPressed="BreadScrumbs_OnPointerPressed" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center"/>
 		</Grid>
 
 		<!--Панель навигации-->
@@ -92,8 +91,8 @@
                                   SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<Grid>
-										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+									<Grid >
+										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
@@ -128,7 +127,7 @@
 						<TreeView.ItemTemplate>
 							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 								<Grid>
-									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
@@ -162,7 +161,7 @@
 						<TreeView.ItemTemplate>
 							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 								<Grid>
-									<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True">
+										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
@@ -234,7 +233,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -243,7 +242,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -252,7 +251,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -261,7 +260,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>

@@ -71,8 +71,17 @@ namespace Unlimotion.Views
             if (e.Data.Contains(CustomFormat))
             {
                 var control = e.Source as IControl;
-                var task = control?.FindParentDataContext<TaskWrapperViewModel>();
-                var subItem = e.Data.Get(CustomFormat) as TaskWrapperViewModel;
+                var task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem;
+                if (task == null)
+                {
+                    task = control?.FindParentDataContext<TaskItemViewModel>();
+                }
+                var subItem = e.Data.Get(CustomFormat) switch
+                {
+                    TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
+                    TaskItemViewModel taskItemViewModel => taskItemViewModel,
+                    _ => null
+                };
                 if (subItem == null)
                 {
                     e.DragEffects = DragDropEffects.None;
@@ -125,8 +134,14 @@ namespace Unlimotion.Views
             if (e.Data.Contains(CustomFormat))
             {
                 var control = e.Source as IControl;
-                var task = control?.FindParentDataContext<TaskWrapperViewModel>();
-                var subItem = e.Data.Get(CustomFormat) as TaskWrapperViewModel;
+                var task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem;
+                var sub = e.Data.Get(CustomFormat);
+                var subItem = sub switch
+                {
+                    TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
+                    TaskItemViewModel taskItemViewModel => taskItemViewModel,
+                    _ => null
+                };
                 if (subItem == null)
                 {
                     e.DragEffects = DragDropEffects.None;
@@ -135,14 +150,33 @@ namespace Unlimotion.Views
                 if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
                 {
                     e.DragEffects &= DragDropEffects.Copy;
-                    subItem?.TaskItem.CloneInto(task.TaskItem);
+                    subItem.CloneInto(task);
                 }
                 else if (e.KeyModifiers == KeyModifiers.Shift)
                 {
                     if (subItem.CanMoveInto(task))
                     {
+                        TaskItemViewModel parent = null;
+                        var breakFlag = false;
+                        if (subItem.Parents.Count<=1)
+                        {
+                            parent = subItem.ParentsTasks.FirstOrDefault();
+                        }
+                        else if (sub is TaskWrapperViewModel parentWrapper)
+                        {
+                            parent = parentWrapper.Parent.TaskItem;
+                        }
+                        else
+                        {
+                            e.DragEffects &= DragDropEffects.None;
+                            breakFlag = true;
+                        }
+
+                        if (!breakFlag)
+                    {
                         e.DragEffects &= DragDropEffects.Move;
-                        subItem?.TaskItem.MoveInto(task.TaskItem, subItem.Parent?.TaskItem);
+                            subItem.MoveInto(task, parent);
+                        }
                     }
                     else
                     {
@@ -153,19 +187,19 @@ namespace Unlimotion.Views
                 else if (e.KeyModifiers == KeyModifiers.Control)
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    task?.TaskItem.BlockBy(subItem.TaskItem);
+                    task.BlockBy(subItem);
                 }
                 else if (e.KeyModifiers == KeyModifiers.Alt)
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    subItem?.TaskItem.BlockBy(task.TaskItem);
+                    subItem.BlockBy(task);
                 }
                 else
                 {
                     if (subItem.CanMoveInto(task))
                     {
                         e.DragEffects &= DragDropEffects.Copy;
-                        subItem?.TaskItem.CopyInto(task.TaskItem);
+                        subItem.CopyInto(task);
                     }
                     else
                     {
@@ -189,6 +223,20 @@ namespace Unlimotion.Views
             {
                 treeView.ExpandSubTree(item);
             }
+        }
+
+        private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            var dragData = new DataObject();
+            var dc = (this.DataContext as MainWindowViewModel)?.CurrentTaskItem;
+            if (dc == null)
+            {
+                return;
+            }
+
+            dragData.Set(CustomFormat, dc);
+
+            var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
     }
 }

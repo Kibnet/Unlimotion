@@ -85,14 +85,6 @@ public class TaskWrapperViewModel : DisposableList
 
     public ICommand RemoveCommand { get; }
 
-    public bool CanMoveInto(TaskWrapperViewModel destination)
-    {
-        return destination != null &&
-               destination.TaskItem != this.TaskItem &&
-               destination.TaskItem.GetAllParents().All(m => m.Id != this.TaskItem.Id) &&
-               !destination.TaskItem.Contains.Contains(this.TaskItem.Id);
-    }
-
     public TaskItemViewModel TaskItem { get; set; }
     public TaskWrapperViewModel Parent { get; set; }
 
