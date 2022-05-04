@@ -148,7 +148,7 @@ namespace Unlimotion.ViewModel
         public TaskItemViewModel GetById(string id)
         {
             var item = Tasks.Lookup(id);
-            return item.Value;
+            return item.HasValue ? item.Value : null;
         }
         
         public IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots()
