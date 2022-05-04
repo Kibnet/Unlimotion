@@ -269,12 +269,6 @@
 				</ScrollViewer>
 			</Border>
 		</Grid>
-		<Border Grid.ColumnSpan="2" Grid.Row="0" Grid.RowSpan="2" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-			<Border.Styles>
-				<StyleInclude Source="avares://Notification.Avalonia/Themes/Generic.xaml" />
-			</Border.Styles>
-			<controls:NotificationMessageContainer Manager="{Binding ManagerWrapper.Manager}"></controls:NotificationMessageContainer>
-		</Border>
 	</Grid>
 
 
