@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -78,18 +76,20 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
 
-            //Bind Emodji
+            //Bind Emoji
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
-                .DistinctValues(m => m.Emoji)
+                .Group(m => m.Emoji)
                 .Transform(m =>
                 {
-                    if (m == "")
+                    if (m.Key == "")
                     {
                         return AllEmojiFilter;
                     }
-                    return new EmojiFilter() { Emoji = m, ShowTasks = true };
+
+                    var first = m.Cache.Items.First();
+                    return new EmojiFilter() { Emoji = first.Emoji, Title = first.Title, ShowTasks = true };
                 })
                 .Bind(out _emojiFilters)
                 .Subscribe()
@@ -512,12 +512,13 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters => _emojiFilters;
 
-        public EmojiFilter AllEmojiFilter { get; } = new EmojiFilter() { Emoji = "All", ShowTasks = true };
+        public EmojiFilter AllEmojiFilter { get; } = new EmojiFilter() { Emoji = "", Title = "All", ShowTasks = true };
     }
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
     {
+        public string Title { get; set; }
         public string Emoji { get; set; }
         public bool ShowTasks { get; set; }
     }

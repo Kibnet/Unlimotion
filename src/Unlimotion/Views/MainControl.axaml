@@ -34,6 +34,12 @@
                         Command="{Binding RemoveCommand}"/>
 			</Grid>
 		</DataTemplate>
+        <DataTemplate DataType="viewModel:EmojiFilter">
+			<Grid ColumnDefinitions="Auto, Auto" >
+											<CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
+											<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
+										</Grid>
+        </DataTemplate>
 	</UserControl.DataTemplates>
 
 	<UserControl.KeyBindings>
@@ -76,13 +82,7 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
-							<ComboBox Items="{Binding EmojiFilters}">
-								<ItemsControl.ItemTemplate>
-									<DataTemplate>
-										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
-									</DataTemplate>
-								</ItemsControl.ItemTemplate>
-							</ComboBox>
+							<ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
@@ -112,13 +112,7 @@
 				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<ComboBox Items="{Binding EmojiFilters}">
-								<ItemsControl.ItemTemplate>
-									<DataTemplate>
-										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
-									</DataTemplate>
-								</ItemsControl.ItemTemplate>
-							</ComboBox>
+                            <ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                               Items="{Binding CompletedItems}"
@@ -146,13 +140,7 @@
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<ComboBox Items="{Binding EmojiFilters}">
-								<ItemsControl.ItemTemplate>
-									<DataTemplate>
-										<CheckBox Content="{Binding Emoji}" IsChecked="{Binding ShowTasks}"/>
-									</DataTemplate>
-								</ItemsControl.ItemTemplate>
-							</ComboBox>
+                            <ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                               Items="{Binding ArchivedItems}"
