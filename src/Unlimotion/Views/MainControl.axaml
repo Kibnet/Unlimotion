@@ -221,7 +221,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -230,7 +230,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -239,7 +239,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -248,7 +248,7 @@
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>

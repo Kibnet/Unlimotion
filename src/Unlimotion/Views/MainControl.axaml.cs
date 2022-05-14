@@ -238,5 +238,19 @@ namespace Unlimotion.Views
 
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
+
+        private void Task_OnDoubleTapped(object? sender, TappedEventArgs e)
+        {
+            var vm = DataContext as MainWindowViewModel;
+            if (vm != null)
+            {
+                var control = sender as IControl;
+                var wrapper = control?.DataContext as TaskWrapperViewModel;
+                if (wrapper!=null)
+                {
+                    vm.CurrentTaskItem = wrapper.TaskItem;
+                }
+            }
+        }
     }
 }
