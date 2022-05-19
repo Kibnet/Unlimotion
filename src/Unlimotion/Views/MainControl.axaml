@@ -76,7 +76,7 @@
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
-					</Grid>
+                    </Grid>
 				</TabItem>
 				<TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
@@ -115,26 +115,26 @@
                             <ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                              Items="{Binding CompletedItems}"
-                              SelectedItem="{Binding CurrentCompletedItem}"
-                              SelectionMode="Single">
-						<TreeView.ItemTemplate>
-							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-								<Grid>
+                                  Items="{Binding CompletedItems}"
+                                  SelectedItem="{Binding CurrentCompletedItem}"
+                                  SelectionMode="Single">
+							<TreeView.ItemTemplate>
+								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+									<Grid>
 										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
-										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
-									</Grid>
-									<Button Background="#00000000"
+											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
+											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+										</Grid>
+										<Button Background="#00000000"
 												Content="❌"
-                                            BorderThickness="0"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding RemoveCommand}"/>
-								</Grid>
-							</TreeDataTemplate>
-						</TreeView.ItemTemplate>
-					</TreeView>
+												BorderThickness="0"
+												HorizontalAlignment="Right"
+												Command="{Binding RemoveCommand}"/>
+									</Grid>
+								</TreeDataTemplate>
+							</TreeView.ItemTemplate>
+						</TreeView>
 					</Grid>
 				</TabItem>
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
@@ -143,31 +143,31 @@
                             <ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                              Items="{Binding ArchivedItems}"
-                              SelectedItem="{Binding CurrentArchivedItem}"
-                              SelectionMode="Single">
-						<TreeView.ItemTemplate>
-							<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-								<Grid>
+                                  Items="{Binding ArchivedItems}"
+                                  SelectedItem="{Binding CurrentArchivedItem}"
+                                  SelectionMode="Single">
+							<TreeView.ItemTemplate>
+								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+									<Grid>
 										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
-										<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-										<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
-									</Grid>
-									<Button Background="#00000000"
+											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
+											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+										</Grid>
+										<Button Background="#00000000"
 												Content="❌"
-                                            BorderThickness="0"
-                                            HorizontalAlignment="Right"
-                                            Command="{Binding RemoveCommand}"/>
-								</Grid>
-							</TreeDataTemplate>
-						</TreeView.ItemTemplate>
-					</TreeView>
+												BorderThickness="0"
+												HorizontalAlignment="Right"
+												Command="{Binding RemoveCommand}"/>
+									</Grid>
+								</TreeDataTemplate>
+							</TreeView.ItemTemplate>
+						</TreeView>
 					</Grid>
 				</TabItem>
 				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
 					<views:SettingsControl DataContext="{Binding Settings}"/>
-                </TabItem>
+				</TabItem>
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
@@ -179,7 +179,10 @@
 							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
 						</Grid>
-                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance"/>
+						<Grid ColumnDefinitions="Auto, *">
+							<NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance"/>
+							<TextBox Grid.Column="1" Text="{Binding Id, Mode=OneTime}" IsReadOnly="True"/>
+						</Grid>
 						<TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
 						<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
 						<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
@@ -262,7 +265,7 @@
 				</ScrollViewer>
 			</Border>
 		</Grid>
-	</Grid>
+    </Grid>
 
 
 </UserControl>
