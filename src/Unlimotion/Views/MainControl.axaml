@@ -28,7 +28,7 @@
 			<Grid>
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
-                        Content="x"
+                        Content="❌"
                         BorderThickness="0"
                         HorizontalAlignment="Right"
                         Command="{Binding RemoveCommand}"/>
@@ -98,7 +98,7 @@
 											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-                                                Content="x"
+                                                Content="❌"
                                                 BorderThickness="0"
                                                 HorizontalAlignment="Right"
                                                 Command="{Binding RemoveCommand}"/>
@@ -127,7 +127,7 @@
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 									</Grid>
 									<Button Background="#00000000"
-                                            Content="x"
+												Content="❌"
                                             BorderThickness="0"
                                             HorizontalAlignment="Right"
                                             Command="{Binding RemoveCommand}"/>
@@ -155,7 +155,7 @@
 										<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 									</Grid>
 									<Button Background="#00000000"
-                                            Content="x"
+												Content="❌"
                                             BorderThickness="0"
                                             HorizontalAlignment="Right"
                                             Command="{Binding RemoveCommand}"/>
