@@ -243,6 +243,11 @@
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
+                        <WrapPanel>
+                            <Button Command="{Binding #MainWindow.DataContext.CreateSibling}">➕Sibling</Button>
+                            <Button Command="{Binding #MainWindow.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
+                            <Button Command="{Binding #MainWindow.DataContext.CreateInner}">➕Inner</Button>
+                        </WrapPanel>
 
 						<Label>Blocks Tasks:</Label>
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
