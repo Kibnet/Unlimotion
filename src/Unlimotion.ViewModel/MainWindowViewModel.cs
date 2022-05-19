@@ -111,8 +111,8 @@ namespace Unlimotion.ViewModel
                          )
                         ;
                     return (Func<TaskItemViewModel, bool>)Predicate;
-                });            
-            
+                });
+
             var emojiFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
@@ -127,7 +127,7 @@ namespace Unlimotion.ViewModel
                         foreach (var item in filter.Where(e => e.ShowTasks))
                         {
                             if (task.GetAllEmoji.Contains(item.Emoji) || task.Title.Contains(item.Emoji))
-                                    return true;
+                                return true;
                         }
 
                         return false;
@@ -135,10 +135,27 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
+            var timer = Observable.Timer(DateTimeOffset.Now.Date, TimeSpan.FromMinutes(1));
+            var timerFilter = timer.ToObservableChangeSet()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (ShowPlanned == true)
+                        {
+                            return task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now;
+                        }
+                        return true;
+                    }
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
+
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
+                .Filter(timerFilter)
                 .Filter(unlockedFilter)
                 .Filter(emojiFilter)
                 .Transform(item =>
@@ -311,7 +328,7 @@ namespace Unlimotion.ViewModel
                 {
                     CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
                 }
-                else if (CurrentTaskItem.ParentsTasks.Count>0)
+                else if (CurrentTaskItem.ParentsTasks.Count > 0)
                 {
                     CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
                 }
@@ -393,7 +410,7 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
         }
-        
+
         private void SelectCurrentTask()
         {
             if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
