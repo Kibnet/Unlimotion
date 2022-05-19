@@ -307,7 +307,7 @@ namespace Unlimotion.ViewModel
                     return;
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 task.SaveItemCommand.Execute(null);
-                if (CurrentItem?.Parent != null)
+                if (AllTasksMode && CurrentItem?.Parent != null)
                 {
                     CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
                 }
@@ -393,7 +393,7 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
         }
-
+        
         private void SelectCurrentTask()
         {
             if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
