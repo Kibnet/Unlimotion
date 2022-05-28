@@ -173,8 +173,8 @@
 		<!--Редактор задачи-->
 		<Grid Grid.Column="1" Grid.Row="1" DataContext="{Binding CurrentTaskItem}">
 			<Border BorderBrush="Black" BorderThickness="1,0,0,0" >
-				<ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-					<StackPanel>
+				<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+					<StackPanel Margin="10">
 
 						<WrapPanel>
 							<Button Command="{Binding #MainWindow.DataContext.CreateSibling}">➕Sibling</Button>
