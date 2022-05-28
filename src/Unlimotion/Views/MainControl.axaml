@@ -197,6 +197,7 @@
 						<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}" IsTodayHighlighted="True"/>
 						<Label Content="Planned End DateTime"/>
 						<CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}" IsTodayHighlighted="True" />
+						<Label Content="Repeater Templates"/>
 						<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
 							<ComboBox.ItemTemplate>
 								<DataTemplate DataType="viewModel:RepeaterPatternViewModel">
@@ -204,6 +205,7 @@
 								</DataTemplate>
 							</ComboBox.ItemTemplate>
 						</ComboBox>
+						<Label Content="Repeater"/>
 						<ContentControl DataContext="{Binding Repeater}">
 							<WrapPanel>
 								<ComboBox Items="{Binding RepeaterTypes}" SelectedItem="{Binding Type}"/>
