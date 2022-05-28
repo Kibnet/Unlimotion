@@ -175,6 +175,12 @@
 			<Border BorderBrush="Black" BorderThickness="1,0,0,0" >
 				<ScrollViewer Margin="10,0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
 					<StackPanel>
+
+						<WrapPanel>
+							<Button Command="{Binding #MainWindow.DataContext.CreateSibling}">➕Sibling</Button>
+							<Button Command="{Binding #MainWindow.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
+							<Button Command="{Binding #MainWindow.DataContext.CreateInner}">➕Inner</Button>
+						</WrapPanel>
 						<Grid ColumnDefinitions="Auto, *">
 							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
@@ -246,11 +252,6 @@
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
-                        <WrapPanel>
-                            <Button Command="{Binding #MainWindow.DataContext.CreateSibling}">➕Sibling</Button>
-                            <Button Command="{Binding #MainWindow.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
-                            <Button Command="{Binding #MainWindow.DataContext.CreateInner}">➕Inner</Button>
-                        </WrapPanel>
 
 						<Label>Blocks Tasks:</Label>
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
