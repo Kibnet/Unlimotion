@@ -19,7 +19,7 @@
 
 	<UserControl.DataTemplates>
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
-			<Grid ColumnDefinitions="Auto, *" DragDrop.AllowDrop="True">
+			<Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
 				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
 				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
 			</Grid>
