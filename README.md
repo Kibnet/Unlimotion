@@ -10,7 +10,7 @@
 4. Storing your data on your device
 
 ## Launching the application
-1. Download and install the [.NET 6.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/6.0) for your operating system
+1. Download and install the [.NET 6.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
 2. Download the latest version of the program's source code as a [zip-archive](https://github.com/Kibnet/Unlimotion/archive/refs/heads/main.zip) and **unpack** it to any folder on your computer.
 If you know the git version control system, instead of downloading the archive, clone this [git-repository](https://github.com/Kibnet/Unlimotion.git)
 to your computer in any folder using your favorite git-client (for example [Fork](https://git-fork.com/)).
@@ -51,9 +51,9 @@ stateDiagram-v2
 ### Tasks links
 Each task can have links to other tasks of 4 types:
 1. **Parents Tasks** - parent tasks that contain this task within themselves as an integral part necessary for execution.
-2. **Contains Tasks** - child tasks that are part or steps of this task and arise during the decomposition process.
-3. **Blocked By Tasks** - blocking tasks that must be completed to unlock the current one.
-4. **Blocks Tasks** - blocked tasks that cannot be unblocked while this task is not completed.
+2. **Containing Tasks** - child tasks that are part or steps of this task and arise during the decomposition process.
+3. **Blocking By Tasks** - blocking tasks that must be completed to unlock the current one.
+4. **Blocked Tasks** - blocked tasks that cannot be unblocked while this task is not completed.
 
 ### Hierarchy of tasks
 All tasks have their place in the general tree hierarchy. The very first level is called the root level, it contains tasks that have no links to parent tasks.
@@ -99,7 +99,7 @@ The list of archived tasks in the reverse order of archiving - the last ones fro
 
 ### Settings
 Settings window - allows you to change the parameters that affect the operation of the program.
-- **TaskStorage Path** - Path to the directory with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
+- **TaskStorage Path** - Path to the directory(folder) with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
 If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.
 
 ![Settings](media/Settings.jpg)
