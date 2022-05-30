@@ -31,17 +31,21 @@ Any task can be in only one of the four states:
 Acceptable transitions are described by the diagram:
 ```mermaid
 stateDiagram-v2
-    [*] --> Not completed: Creation
-    Not completed --> [*]: Deleting
-    Not completed --> Completed
-    Not completed --> Archieved
-    Not completed --> In progress
-    In progress --> Not completed
-    In progress --> Completed
-    Completed --> Not completed
-    Completed--> [*]: Deleting
-    Archieved --> Not completed
-    Archieved --> [*]: Deleting
+    uncomplited: Not completed
+    inprogress: In progress
+    archieved: Archieved
+    completed: Completed
+    [*] --> uncomplited: Creation
+    uncomplited --> [*]: Deleting
+    completed--> [*]: Deleting
+    archieved --> [*]: Deleting
+    uncomplited --> completed
+    uncomplited --> archieved
+    uncomplited --> inprogress
+    inprogress --> uncomplited
+    inprogress --> completed
+    completed --> uncomplited
+    archieved --> uncomplited
 ```
 
 ### Tasks links

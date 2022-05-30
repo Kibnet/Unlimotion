@@ -31,17 +31,21 @@
 Допустимые переходы описаны диаграммой:
 ```mermaid
 stateDiagram-v2
-    [*] --> Не выполнена: Создание
-    Не выполнена --> [*]: Удаление
-    Не выполнена --> Выполнена
-    Не выполнена --> Архивирована
-    Не выполнена --> Выполняется
-    Выполняется --> Не выполнена
-    Выполняется --> Выполнена
-    Выполнена --> Не выполнена
-    Выполнена --> [*]: Удаление
-    Архивирована --> Не выполнена
-    Архивирована --> [*]: Удаление
+    uncomplited: Не выполнена
+    inprogress: Выполняется
+    archieved: Архивирована
+    completed: Выполнена
+    [*] --> uncomplited: Создание
+    uncomplited --> [*]: Удаление
+    completed--> [*]: Удаление
+    archieved --> [*]: Удаление
+    uncomplited --> completed
+    uncomplited --> archieved
+    uncomplited --> inprogress
+    inprogress --> uncomplited
+    inprogress --> completed
+    completed --> uncomplited
+    archieved --> uncomplited
 ```
 
 ### Связи задач
