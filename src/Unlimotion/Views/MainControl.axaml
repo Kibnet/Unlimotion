@@ -237,7 +237,7 @@
 							</TreeView.ItemTemplate>
 						</TreeView>
 
-						<Label>Blocked By Tasks:</Label>
+						<Label>Blocking Tasks:</Label>
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -246,7 +246,7 @@
 							</TreeView.ItemTemplate>
 						</TreeView>
 
-						<Label>Contains Tasks:</Label>
+						<Label>Containing Tasks:</Label>
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -255,7 +255,7 @@
 							</TreeView.ItemTemplate>
 						</TreeView>
 
-						<Label>Blocks Tasks:</Label>
+						<Label>Blocked Tasks:</Label>
 						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
