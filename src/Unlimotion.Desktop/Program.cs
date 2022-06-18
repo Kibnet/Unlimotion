@@ -44,7 +44,7 @@ namespace Unlimotion.Desktop
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
             var taskRepository = new TaskRepository(taskStorage);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
-            var notificationManager = new NotificationManagerWrapperWrapper();
+            var notificationManager = new MessageBoxManagerWrapperWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
 
 #if DEBUG
