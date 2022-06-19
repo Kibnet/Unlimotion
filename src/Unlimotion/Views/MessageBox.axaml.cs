@@ -6,8 +6,10 @@ using Avalonia.Media;
 
 namespace Unlimotion.Views;
 
-public class MessageBox : Window
+public class MessageBox : UserControl
 {
+    public delegate void CloseHandler();
+
     public MessageBox()
     {
         InitializeComponent();
@@ -15,6 +17,7 @@ public class MessageBox : Window
 
     public Action YesAction { get; set; }
     public Action NoAction { get; set; }
+    public event CloseHandler Notify;
 
     private void InitializeComponent()
     {
@@ -24,48 +27,62 @@ public class MessageBox : Window
     private void ButtonYesClick(object sender, RoutedEventArgs e)
     {
         YesAction();
-        Close();
+
+        IsVisible = false;
+        Notify();
     }
 
     private void ButtonCancelClick(object sender, RoutedEventArgs e)
     {
         if (NoAction != null)
             NoAction();
-        Close();
+
+        IsVisible = false;
+        Notify();
     }
 }
 
 public class MessageBoxBuilder
 {
-    private readonly MessageBox _window = new();
+    public MessageBoxBuilder(MessageBox userControl)
+    {
+        UserControl = userControl;
+    }
+
+    private MessageBox UserControl { get; }
 
     public MessageBoxBuilder SetBackgroundBrush(IBrush brush)
     {
-        _window.Background = brush;
+        UserControl.Background = brush;
         return this;
     }
+
     public MessageBoxBuilder SetHeader(string header)
     {
-        _window.Find<TextBlock>("Header")!.Text = header;
+        UserControl.Find<TextBlock>("Header")!.Text = header;
         return this;
     }
+
     public MessageBoxBuilder SetMessage(string msg)
     {
-        _window.Find<TextBlock>("Message")!.Text = msg;
+        UserControl.Find<TextBlock>("Message")!.Text = msg;
         return this;
     }
+
     public MessageBoxBuilder SetYesAction(Action action)
     {
-        _window.YesAction = action;
+        UserControl.YesAction = action;
         return this;
     }
+
     public MessageBoxBuilder SetNoAction(Action action)
     {
-        _window.NoAction = action;
+        UserControl.NoAction = action;
         return this;
     }
-    public MessageBox Build()
+
+    public void Build()
     {
-        return _window;
+        UserControl.IsVisible = true;
     }
 }

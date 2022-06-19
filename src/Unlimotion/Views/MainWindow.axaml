@@ -13,5 +13,8 @@
 	<Design.DataContext>
 		<viewModel:MainWindowViewModel/>
 	</Design.DataContext>
-	<views:MainControl/>
+	<Panel>
+		<views:MainControl/>
+		<views:MessageBox Name="DeletionConfirm"/>
+	</Panel>
 </Window>

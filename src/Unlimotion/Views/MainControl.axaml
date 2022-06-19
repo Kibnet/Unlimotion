@@ -31,7 +31,7 @@
                         Content="❌"
                         BorderThickness="0"
                         HorizontalAlignment="Right"
-                        Command="{Binding RemoveCommand}"/>
+                        Click="ShowDeletionConfirm"/>
 			</Grid>
 		</DataTemplate>
         <DataTemplate DataType="viewModel:EmojiFilter">
@@ -43,7 +43,7 @@
 	</UserControl.DataTemplates>
 
 	<UserControl.KeyBindings>
-		<KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentItem.RemoveCommand}"/>
+		<KeyBinding Gesture="Shift+Delete" Command="{Binding #MainWindow.ShowDeletionConfirmByKey}"/>
 		<KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
 		<KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
 		<KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
@@ -101,7 +101,7 @@
                                                 Content="❌"
                                                 BorderThickness="0"
                                                 HorizontalAlignment="Right"
-                                                Command="{Binding RemoveCommand}"/>
+                                                Click="ShowDeletionConfirm"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
@@ -130,7 +130,7 @@
 												Content="❌"
 												BorderThickness="0"
 												HorizontalAlignment="Right"
-												Command="{Binding RemoveCommand}"/>
+												Click="ShowDeletionConfirm"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
@@ -158,7 +158,7 @@
 												Content="❌"
 												BorderThickness="0"
 												HorizontalAlignment="Right"
-												Command="{Binding RemoveCommand}"/>
+												Click="ShowDeletionConfirm"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>

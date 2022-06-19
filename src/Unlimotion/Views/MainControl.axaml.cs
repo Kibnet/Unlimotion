@@ -4,7 +4,9 @@ using System.Linq;
 using System.Reactive;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 
@@ -250,6 +252,41 @@ namespace Unlimotion.Views
                 {
                     vm.CurrentTaskItem = wrapper.TaskItem;
                 }
+            }
+        }
+        
+        private void ShowDeletionConfirmByKey(KeyEventArgs e)
+        {
+            var task = (DataContext as MainWindowViewModel)?.CurrentItem;
+            ShowDeletionConfirmBase(task!);
+        }
+
+        private void ShowDeletionConfirm(object sender, RoutedEventArgs e)
+        {
+            var control = e.Source as IControl;
+            var task = control?.FindParentDataContext<TaskWrapperViewModel>();
+            ShowDeletionConfirmBase(task!);
+        }
+        
+        private void ShowDeletionConfirmBase(TaskWrapperViewModel task)
+        {
+            if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
+            {
+                IsEnabled = false;
+                
+                var msgBox = Parent!.FindControl<MessageBox>("DeletionConfirm");
+                msgBox!.Notify += () => IsEnabled = true;
+                
+                new MessageBoxBuilder(msgBox)
+                    .SetHeader("Remove task")
+                    .SetMessage($"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?")
+                    .SetBackgroundBrush(Brushes.Blue)
+                    .SetYesAction(() => task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
+                    .Build();
+            }
+            else
+            {
+                task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem);
             }
         }
     }

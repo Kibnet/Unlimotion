@@ -1,29 +1,27 @@
-<Window xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
         x:Class="Unlimotion.Views.MessageBox"
-        Title="Deletion"
-        TransparencyLevelHint="AcrylicBlur"
-        ExtendClientAreaToDecorationsHint="True"
         Width = "300"
         Height = "200"
         Padding="20"
-        Background="Blue">
+        Background="Blue"
+        IsVisible="False">
         <Panel>
                 <TextBlock Name="Header" Margin="0, 20" HorizontalAlignment="Center" TextWrapping="Wrap" FontSize="20" Text="Warning"/>
                 <TextBlock Name="Message" Margin="0, 50" HorizontalAlignment="Center" TextWrapping="WrapWithOverflow" FontSize="16" Text="Delete the task?"/>
                 <Button Width="50"
-                                Margin="0, 100, 0, 0"
-                                Background="White"
-                                Foreground="Black"
-                                HorizontalAlignment="Left"
-                                FontSize="16"
-                                VerticalAlignment="Top"
-                                HorizontalContentAlignment="Center"
-                                Click="ButtonYesClick"
-                                Content="Yes">
+                        Margin="0, 100, 0, 0"
+                        Background="White"
+                        Foreground="Black"
+                        HorizontalAlignment="Left"
+                        FontSize="16"
+                        VerticalAlignment="Top"
+                        HorizontalContentAlignment="Center"
+                        Click="ButtonYesClick"
+                        Content="Yes">
                         <Button.Styles>
                                 <Style Selector="Button:pointerover /template/ ContentPresenter">
                                         <Setter Property="Background" Value="Gray"></Setter>
@@ -47,4 +45,4 @@
                         </Button.Styles>
                 </Button>
         </Panel>
-</Window>
+</UserControl>
