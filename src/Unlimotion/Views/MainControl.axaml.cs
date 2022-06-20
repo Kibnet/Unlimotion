@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reactive;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using ReactiveUI;
 using Unlimotion.ViewModel;
@@ -239,7 +240,7 @@ namespace Unlimotion.Views
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
-        private void Task_OnDoubleTapped(object? sender, TappedEventArgs e)
+        private void Task_OnDoubleTapped(object? sender, RoutedEventArgs e)
         {
             var vm = DataContext as MainWindowViewModel;
             if (vm != null)
