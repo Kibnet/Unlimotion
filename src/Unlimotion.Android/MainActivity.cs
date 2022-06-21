@@ -27,7 +27,7 @@ namespace Unlimotion.Android
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
             var taskRepository = new TaskRepository(taskStorage);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
-            var notificationManager = new NotificationManagerWrapperWrapper();
+            var notificationManager = new MessageBoxManagerWrapperWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
             var settingsPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "Settings.json");
             if (!File.Exists(settingsPath))
