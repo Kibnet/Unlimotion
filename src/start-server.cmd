@@ -1,0 +1,1 @@
+dotnet run -p Unlimotion.Server\Unlimotion.Server.csproj
