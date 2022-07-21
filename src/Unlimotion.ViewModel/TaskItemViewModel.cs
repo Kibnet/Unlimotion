@@ -408,6 +408,7 @@ namespace Unlimotion.ViewModel
                 case nameof(PlannedDuration):
                 case nameof(Repeater):
                 case nameof(Importance):
+                case nameof(Wanted):
                     if (_isInited) SaveItemCommand.Execute(null);
                     break;
             }
@@ -439,6 +440,7 @@ namespace Unlimotion.ViewModel
                     ContainsTasks = Contains.ToList(),
                     Repeater = Repeater?.Model,
                     Importance = Importance,
+                    Wanted = Wanted,
                 };
             set
             {
@@ -454,6 +456,7 @@ namespace Unlimotion.ViewModel
                 PlannedEndDateTime = value.PlannedEndDateTime?.LocalDateTime;
                 PlannedDuration = value.PlannedDuration;
                 Importance = value.Importance;
+                Wanted = value.Wanted;
                 Blocks.AddRange(value.BlocksTasks);
                 Contains.AddRange(value.ContainsTasks);
                 if (value.Repeater != null)
@@ -481,6 +484,7 @@ namespace Unlimotion.ViewModel
         public DateTime? PlannedEndDateTime { get; set; }
         public TimeSpan? PlannedDuration { get; set; }
         public int Importance { get; set; }
+        public bool Wanted { get; set; }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
