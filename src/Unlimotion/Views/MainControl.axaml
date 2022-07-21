@@ -82,7 +82,8 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
-							<ComboBox Items="{Binding EmojiFilters}"/>
+                            <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
+                            <ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
@@ -185,9 +186,10 @@
 							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
 						</Grid>
-						<Grid ColumnDefinitions="Auto, *">
-							<NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance"/>
-							<TextBox Grid.Column="1" Text="{Binding Id, Mode=OneTime}" IsReadOnly="True"/>
+						<Grid ColumnDefinitions="Auto, Auto, *">
+                            <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
+                            <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Grid.Column="1"/>
+							<TextBox Grid.Column="2" Text="{Binding Id, Mode=OneTime}" IsReadOnly="True"/>
 						</Grid>
 						<TextBox Text="{Binding Description}" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
 						<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>

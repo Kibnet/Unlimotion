@@ -24,6 +24,7 @@ namespace Unlimotion.ViewModel
             Settings = new SettingsViewModel(_configuration);
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
+            ShowWanted = _configuration.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
             ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool?>() == true;
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
@@ -32,6 +33,8 @@ namespace Unlimotion.ViewModel
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b));
             this.WhenAnyValue(m => m.ShowArchived)
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b));
+            this.WhenAnyValue(m => m.ShowWanted)
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowWanted").Set(b));
             this.WhenAnyValue(m => m.ShowPlanned)
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowPlanned").Set(b));
             this.WhenAnyValue(m => m.CurrentSortDefinition)
@@ -99,17 +102,41 @@ namespace Unlimotion.ViewModel
             var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
                 .Select(filter =>
                 {
-                    bool Predicate(TaskItemViewModel task) =>
-                        task.IsCanBeCompleted && (task.IsCompleted == false) &&
-                        (filter == null ||
-                         (filter == true &&
-                          (task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now)
-                          ) ||
-                         (filter == false &&
-                          (task.PlannedBeginDateTime == null)
-                         )
-                         )
-                        ;
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (!task.IsCanBeCompleted || (task.IsCompleted != false)) return false;
+                        if (filter == null) return true;
+                        if (filter == true)
+                        {
+                            return task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now;
+                        }
+                        else
+                        {
+                            return task.PlannedBeginDateTime == null;
+                        }
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
+            var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (!filter.HasValue)
+                        {
+                            return true;
+                        }
+
+                        if (filter.Value)
+                        {
+                            return task.Wanted;
+                        }
+
+                        return !task.Wanted;
+                    }
+
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
@@ -126,9 +153,9 @@ namespace Unlimotion.ViewModel
                         }
                         foreach (var item in filter.Where(e => e.ShowTasks))
                         {
-                            if (item?.Emoji==null) continue;
+                            if (item?.Emoji == null) continue;
 
-                            if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title??"").Contains(item.Emoji))
+                            if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title ?? "").Contains(item.Emoji))
                                 return true;
                         }
 
@@ -160,6 +187,7 @@ namespace Unlimotion.ViewModel
                 .Filter(timerFilter)
                 .Filter(unlockedFilter)
                 .Filter(emojiFilter)
+                .Filter(wantedFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -521,6 +549,8 @@ namespace Unlimotion.ViewModel
         public bool ShowCompleted { get; set; }
 
         public bool ShowArchived { get; set; }
+
+        public bool? ShowWanted { get; set; }
 
         public bool? ShowPlanned { get; set; }
 

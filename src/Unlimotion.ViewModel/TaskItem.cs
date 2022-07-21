@@ -21,5 +21,6 @@ namespace Unlimotion.ViewModel
         public List<string> BlocksTasks { get; set; } = new();
         public RepeaterPattern Repeater { get; set; }
         public int Importance { get; set; }
+        public bool Wanted { get; set; }
     }
 }
