@@ -1,18 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
-    </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="AutoMapper" Version="10.1.1" />
-        <PackageReference Include="RavenDB.Client" Version="5.3.102" />
-        <PackageReference Include="ServiceStack.Server" Version="5.13.2" />
-    </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="AutoMapper" Version="10.1.1" />
+		<PackageReference Include="RavenDB.Client" Version="5.3.102" />
+		<PackageReference Include="ServiceStack.Server" Version="5.13.2" />
+	</ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\Unlimotion.Server.Domain\Unlimotion.Server.Domain.csproj" />
-        <ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
-    </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.Server.Domain\Unlimotion.Server.Domain.csproj" />
+		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
+	</ItemGroup>
 
 </Project>

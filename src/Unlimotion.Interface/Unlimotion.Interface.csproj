@@ -1,11 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
-    </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="SignalR.EasyUse.Interface" Version="0.2.1" />
-    </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="SignalR.EasyUse.Interface" Version="0.2.1" />
+	</ItemGroup>
 
 </Project>

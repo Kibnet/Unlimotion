@@ -5,7 +5,7 @@ using Unlimotion.Server.Domain;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds;
 using Unlimotion.Server.ServiceModel.Molds.Attachment;
-using Unlimotion.Server.ServiceModel.Molds.Chats;
+using Unlimotion.Server.ServiceModel.Molds.Tasks;
 
 namespace Unlimotion.Server
 {
@@ -25,16 +25,18 @@ namespace Unlimotion.Server
 
         private static void ConfigureModelMapping(MapperConfigurationExpression cfg)
         {
-            cfg.CreateMap<Chat, ChatMold>();
-            cfg.CreateMap<ChatMember, ChatMemberMold>();
+            cfg.CreateMap<RepeaterPattern, RepeaterPatternMold>();
+            cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>().ReverseMap();
+            cfg.CreateMap<RepeaterType, RepeaterTypeMold>();
+            cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>().ReverseMap();
             cfg.CreateMap<Attachment, AttachmentMold>();
             cfg.CreateMap<Attachment, AttachmentHubMold>();
-
-
-            cfg.CreateMap<Message, MessageMold>()
-                .ForMember(m => m.UserNickName, e => e.Ignore())
-                .ForMember(m => m.Attachments, e => e.Ignore())
-                .ForMember(m => m.QuotedMessage, e => e.Ignore());
+            
+            cfg.CreateMap<TaskItem, TaskItemMold>();
+            cfg.CreateMap<TaskItem, ReceiveTaskItem>();
+            cfg.CreateMap<TaskItemHubMold, TaskItem>()
+                .ForMember(m => m.UserId, e => e.Ignore())
+                .ForMember(m => m.CreatedDateTime, e => e.Ignore());
 
             cfg.CreateMap<User, UserProfileMold>();
             cfg.CreateMap<User, MyUserProfileMold>()
@@ -44,10 +46,6 @@ namespace Unlimotion.Server
                 .ForMember(m => m.Id, e => e.Ignore())
                 .ForMember(m => m.RegisteredTime, e => e.Ignore())
                 .ForMember(m => m.Login, e => e.Ignore());
-
-            cfg.CreateMap<Settings, UserChatSettings>();
-            cfg.CreateMap<SetSettings, Settings>()
-                .ForMember(m => m.Id, e => e.Ignore());
         }
     }
 }

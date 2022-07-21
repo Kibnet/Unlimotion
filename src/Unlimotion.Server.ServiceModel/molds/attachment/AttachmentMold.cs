@@ -3,6 +3,7 @@ using System;
 
 namespace Unlimotion.Server.ServiceModel.Molds.Attachment
 {
+    [Description("Файл")]
     public class AttachmentMold
     {
         [Description("Идентификатор файла")]

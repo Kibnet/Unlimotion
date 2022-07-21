@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Reflection;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +10,6 @@ using Raven.Client.Documents.Session;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Embedded;
-using Unlimotion.Server.Domain;
 
 namespace Unlimotion.Server
 {
@@ -48,18 +42,7 @@ namespace Unlimotion.Server
                 var configuration = serviceProvider.GetRequiredService<IConfiguration>();
                 var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
                 var serverOptions = configuration.GetSection("RavenDb:ServerOptions").Get<ServerOptions>();
-
-                //Ищем подходящую версию DotNet для запуска процесса RavenDB
-                try
-                {
-                    serverOptions.FrameworkVersion = serviceProvider.GetRequiredService<DotNetVersionHelper>()
-                        .GetNearestDotNetVersion(serverOptions.FrameworkVersion);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-
+                
                 //Получаем путь запуска приложения, так как RavenDB в Embeddeed режиме запускается через командную строку
                 //Следовательно при упаковке в единый файл, данные будут лежать в папке Temp
                 //Чтобы этого избежать используем исправления ниже
@@ -99,20 +82,6 @@ namespace Unlimotion.Server
                 if (databaseRecord.Revisions == null)
                 {
                     documentStore.ConfigureRevisions();
-                }
-                var session = documentStore.OpenSession();
-                var haveAnyChat = session.Query<Chat>().Any();
-                if (!haveAnyChat)
-                {
-                    var firstChat = new Chat()
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        ChatName = "SkillBoxChat",
-                        ChatType = ChatType.Public,
-                        OwnerId = ""
-                    };
-                    session.Store(firstChat);
-                    session.SaveChanges();
                 }
 
                 return documentStore;

@@ -13,49 +13,6 @@ namespace Unlimotion.Server.ServiceInterface
     public class SettingsService : Service
     {
         public IAsyncDocumentSession RavenSession { get; set; }
-        public IMapper Mapper { get; set; }
-
-        [Authenticate]
-        public async Task<UserChatSettings> Get(GetMySettings request)
-        {
-            var session = Request.ThrowIfUnauthorized();
-
-            var settingsId = session?.UserAuthId + "/settings";
-
-            var typeMessage = await RavenSession.Query<Settings>().FirstOrDefaultAsync(x => x.Id == settingsId);
-
-            if (typeMessage != null)
-            {
-                var settings = Mapper.Map<UserChatSettings>(typeMessage);
-                return settings;
-            }
-            else
-            {
-                var settings = new Settings {SendingMessageByEnterKey = true, Id = settingsId };
-
-                await RavenSession.StoreAsync(settings);
-                await RavenSession.SaveChangesAsync();
-
-                var settingsTypeMessage = Mapper.Map<UserChatSettings>(settings);
-                return settingsTypeMessage;
-            }
-        }
-
-        [Authenticate]
-        public async Task<UserChatSettings> Post(SetSettings request)
-        {
-            var session = Request.ThrowIfUnauthorized();
-            var settingsId = session?.UserAuthId + "/settings";
-
-            var settings = Mapper.Map<Settings>(request);
-            settings.Id = settingsId;
-
-            await RavenSession.StoreAsync(settings);
-            await RavenSession.SaveChangesAsync();
-
-            var mapped = Mapper.Map<UserChatSettings>(settings);
-            return mapped;
-        }
 
         [Authenticate]
         public async Task<LoginHistory> Get(GetLoginAudit request)

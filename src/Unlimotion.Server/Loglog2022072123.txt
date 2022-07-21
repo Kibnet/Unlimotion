@@ -1,0 +1,58 @@
+2022-07-21 23:46:02.527 +00:00 [INF] Start RavenDB
+2022-07-21 23:46:09.314 +00:00 [INF] Starting up web host
+2022-07-21 23:47:57.396 +00:00 [INF] Start RavenDB
+2022-07-21 23:48:05.156 +00:00 [INF] Starting up web host
+2022-07-21 23:48:06.629 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/metadata - -
+2022-07-21 23:48:06.762 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/metadata - - - 200 - text/html;+charset=utf-8 138.7642ms
+2022-07-21 23:48:06.987 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/favicon.ico - -
+2022-07-21 23:48:06.998 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/favicon.ico - - - 404 0 - 10.3944ms
+2022-07-21 23:48:15.164 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/ - -
+2022-07-21 23:48:15.228 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/ - - - 200 4468 text/html;+charset=utf-8 64.3672ms
+2022-07-21 23:48:15.297 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/css/typography.css - -
+2022-07-21 23:48:15.298 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/css/reset.css - -
+2022-07-21 23:48:15.302 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/css/screen.css - -
+2022-07-21 23:48:15.304 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/object-assign-pollyfill.js - -
+2022-07-21 23:48:15.304 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery-1.8.0.min.js - -
+2022-07-21 23:48:15.307 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.wiggle.min.js - -
+2022-07-21 23:48:15.307 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.slideto.min.js - -
+2022-07-21 23:48:15.357 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/css/reset.css - - - 200 773 text/css 58.5689ms
+2022-07-21 23:48:15.359 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.ba-bbq.min.js - -
+2022-07-21 23:48:15.377 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/css/screen.css - - - 200 43644 text/css 74.3424ms
+2022-07-21 23:48:15.377 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.ba-bbq.min.js - - - 200 3518 text/javascript 17.7693ms
+2022-07-21 23:48:15.377 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/css/typography.css - - - 200 0 text/css 79.5595ms
+2022-07-21 23:48:15.379 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/handlebars-4.0.5.js - -
+2022-07-21 23:48:15.384 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/lodash.min.js - -
+2022-07-21 23:48:15.386 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.slideto.min.js - - - 200 365 text/javascript 79.5330ms
+2022-07-21 23:48:15.430 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/backbone-min.js - -
+2022-07-21 23:48:15.430 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/swagger-ui.js - -
+2022-07-21 23:48:15.431 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/object-assign-pollyfill.js - - - 200 349 text/javascript 126.8254ms
+2022-07-21 23:48:15.431 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery.wiggle.min.js - - - 200 536 text/javascript 123.7981ms
+2022-07-21 23:48:15.433 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/highlight.9.1.0.pack.js - -
+2022-07-21 23:48:15.434 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/highlight.9.1.0.pack_extended.js - -
+2022-07-21 23:48:15.481 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/jsoneditor.min.js - -
+2022-07-21 23:48:15.481 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/marked.js - -
+2022-07-21 23:48:15.482 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/lib/swagger-oauth.js - -
+2022-07-21 23:48:15.504 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/jquery-1.8.0.min.js - - - 200 92034 text/javascript 199.5894ms
+2022-07-21 23:48:15.504 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/lodash.min.js - - - 200 51895 text/javascript 120.1105ms
+2022-07-21 23:48:15.504 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/backbone-min.js - - - 200 19371 text/javascript 74.2261ms
+2022-07-21 23:48:15.505 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/highlight.9.1.0.pack_extended.js - - - 200 310 text/javascript 70.7641ms
+2022-07-21 23:48:15.506 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/highlight.9.1.0.pack.js - - - 200 10962 text/javascript 72.9890ms
+2022-07-21 23:48:15.522 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/jsoneditor.min.js - - - 200 129839 text/javascript 41.2649ms
+2022-07-21 23:48:15.522 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/handlebars-4.0.5.js - - - 200 71506 text/javascript 143.4791ms
+2022-07-21 23:48:15.529 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/swagger-oauth.js - - - 200 7042 text/javascript 46.7229ms
+2022-07-21 23:48:15.531 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/lib/marked.js - - - 200 15724 text/javascript 49.7367ms
+2022-07-21 23:48:15.592 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/images/logo_small.png - -
+2022-07-21 23:48:15.606 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/images/logo_small.png - - - 200 2912 image/png 14.2662ms
+2022-07-21 23:48:15.617 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/css/print.css - -
+2022-07-21 23:48:15.620 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/css/print.css - - - 200 41666 text/css 2.7866ms
+2022-07-21 23:48:15.804 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/swagger-ui.js - - - 200 2729821 text/javascript 373.2695ms
+2022-07-21 23:48:15.882 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/openapi - -
+2022-07-21 23:48:15.931 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/images/favicon-32x32.png - -
+2022-07-21 23:48:15.937 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/images/favicon-32x32.png - - - 200 1141 image/png 6.7851ms
+2022-07-21 23:48:16.159 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/openapi - - - 200 - application/json;+charset=utf-8 276.9566ms
+2022-07-21 23:48:22.527 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/images/explorer_icons.png - -
+2022-07-21 23:48:22.533 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/images/explorer_icons.png - - - 200 5115 image/png 5.2857ms
+2022-07-21 23:48:24.657 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/swagger-ui/images/throbber.gif - -
+2022-07-21 23:48:24.659 +00:00 [INF] Request starting HTTP/2 GET https://localhost:49157/tasks - -
+2022-07-21 23:48:24.665 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/swagger-ui/images/throbber.gif - - - 200 9257 image/gif 8.2015ms
+2022-07-21 23:48:24.700 +00:00 [INF] Request finished HTTP/2 GET https://localhost:49157/tasks - - - 401 - - 41.2332ms

@@ -45,66 +45,39 @@ namespace Unlimotion.Server.Hubs
             }
         }
 
-        public async Task SendMessage(HubMessage hubMessage)
-        {
-            var messageItem = new Message
-            {
-                UserId = Context.Items["uid"] as string,
-                Text = hubMessage.Message.Trim(),
-                PostTime = DateTimeOffset.UtcNow,
-                ChatId = hubMessage.ChatId,
-                Attachments = hubMessage.Attachments?.Select(s => s.Id).ToList(),
-                IdQuotedMessage = hubMessage.IdQuotedMessage
-            };
-
-            await _ravenSession.StoreAsync(messageItem);
-            await _ravenSession.SaveChangesAsync();
-
-            var quotedReceiveMessage = await GetQuotedReceiveMessage(hubMessage.IdQuotedMessage);
-
-            await Clients.Group(_loginedGroup).SendAsync(new ReceiveMessage
-            {
-                Id = messageItem.Id,
-                UserLogin = Context.Items["login"] as string,
-                UserNickname = Context.Items["nickname"] as string,
-                Text = hubMessage.Message,
-                PostTime = messageItem.PostTime,
-                ChatId = hubMessage.ChatId,
-                UserId = messageItem.UserId,
-                Attachments = hubMessage.Attachments,
-                QuotedMessage= quotedReceiveMessage
-            });
-
-            var logMessage = hubMessage.IdQuotedMessage.IsNullOrEmpty() ? $"User {Context.Items["nickname"]}({Context.Items["login"]}) send message in main chat" :
-                                                                              $"User {Context.Items["nickname"]}({Context.Items["login"]}) responded to the message in main chat";
-            Log.Information(logMessage);
-        }
-        
-        public async Task UpdateMessage(HubEditedMessage hubEditedMessage)
+        public async Task SaveTask(TaskItemHubMold hubTask)
         {
             try
             {
-                var mes = await _ravenSession.LoadAsync<Message>(hubEditedMessage.Id);
-
-                if (mes.UserId == Context.Items["uid"]?.ToString() && 
-                	(mes.Text.Trim()!=hubEditedMessage.Message.Trim() 
-                	|| mes.IdQuotedMessage!= hubEditedMessage.IdQuotedMessage))
+                string uid = Context.Items["uid"].ToString();
+                var task = await _ravenSession.LoadAsync<TaskItem>(hubTask.Id);
+                if (task == null)
                 {
-                    mes.Text = hubEditedMessage.Message.Trim();
-                    mes.LastEditTime = DateTimeOffset.Now;
-                    mes.IdQuotedMessage = hubEditedMessage.IdQuotedMessage;
+                    var taskItem = Mapper.Map<TaskItem>(hubTask);
+                    taskItem.CreatedDateTime = DateTimeOffset.UtcNow;
+                    taskItem.UserId = uid;
+
+                    await _ravenSession.StoreAsync(taskItem);
                     await _ravenSession.SaveChangesAsync();
 
-                    var quotedReceiveMessage = await GetQuotedReceiveMessage(hubEditedMessage.IdQuotedMessage);
-                   
-                    await Clients.Group(_loginedGroup).SendAsync(new ReceiveEditedMessage()
-                    {
-                        Id = hubEditedMessage.Id,
-                        Text = mes.Text,
-                        LastEditTime = mes.LastEditTime.Value,
-                        QuotedMessage= quotedReceiveMessage
-                    });
-                    Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) edited message in main chat");
+                    var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
+
+                    await Clients.Users(uid).SendAsync(receiveTask);
+
+                    var logMessage = $"User {Context.Items["nickname"]}({Context.Items["login"]}) save task {taskItem.Id}";
+                    Log.Information(logMessage);
+                }
+                else if (task.UserId == uid)
+                {
+                    var taskItem = Mapper.Map(hubTask, task);
+                    
+                    await _ravenSession.SaveChangesAsync();
+
+                    var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
+
+                    await Clients.Group(_loginedGroup).SendAsync(receiveTask);
+                    
+                    Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) update task {taskItem.Id}");
                 }
             }
             catch (Exception e)
@@ -113,29 +86,22 @@ namespace Unlimotion.Server.Hubs
                 throw;
             }
         }
+        
         /// <summary>
-        /// Удаление сообщений (для пользователя)
+        /// Удаление задач (для пользователя)
         /// </summary>
-        /// <param name="idDeleteMessages"></param>
+        /// <param name="idTasks"></param>
         /// <returns></returns>
-        public async Task DeleteMessagesForMe(List<string> idDeleteMessages)
+        public async Task DeleteTasks(List<string> idTasks)
         {
             try
             {
                 string uid = Context.Items["uid"].ToString();
-                var messages = await _ravenSession.LoadAsync<Message>(idDeleteMessages);
-                var listMessages = messages.Values.ToList();
+                var tasks = await _ravenSession.LoadAsync<TaskItem>(idTasks);
+                var listMessages = tasks.Values.Where(item => item.UserId == uid).ToList();
                 foreach (var item in listMessages)
                 {
-                    if (item.HideForUsers == null)
-                    {
-                        item.HideForUsers = new List<string>();
-                    }
-
-                    if (uid != null && !item.HideForUsers.Contains(uid))
-                    {
-                        item.HideForUsers.Add(uid);
-                    }
+                    _ravenSession.Delete(item);
                 }
                 await _ravenSession.SaveChangesAsync();
             }
@@ -144,26 +110,6 @@ namespace Unlimotion.Server.Hubs
 
             }
 
-        }
-        /// <summary>
-        /// Очистка чата (для пользователя)
-        /// </summary>
-        /// <param name="messagesHistoryDateBegin">дата/время после которого загружаются сообщения</param>
-        /// <returns></returns>
-        public async Task CleanChatForMe(string chatId)
-        {
-            try
-            {
-                Chat chat= await _ravenSession.LoadAsync<Chat>(chatId);
-                string userId = Context.Items["uid"]?.ToString();
-                ChatMember chatMember = chat.Members.FirstOrDefault(e => e.UserId == userId);
-                chatMember.MessagesHistoryDateBegin = DateTimeOffset.UtcNow;
-                await _ravenSession.StoreAsync(chat);
-                await _ravenSession.SaveChangesAsync();
-            }
-            catch
-            {
-            }
         }
 
         public async Task Login(string token, string operatingSystem, string ipAddress, string nameVersionClient)
@@ -251,58 +197,6 @@ namespace Unlimotion.Server.Hubs
             {
                 Log.Warning($"Bad token from connection {Context.ConnectionId}");
             }
-        }
-        /// <summary>
-        /// Получает список вложений
-        /// </summary>
-        /// <param name="message"></param>
-        /// <returns></returns>
-        private async Task<List<AttachmentHubMold>> GetAttachments(Message message)
-        {
-            var Attachments = new List<AttachmentHubMold>();
-            if (message.Attachments != null)
-            {
-                var attach = await _ravenSession.LoadAsync<Attachment>(message.Attachments);
-
-                foreach (var id in message.Attachments)
-                {
-                    if (attach.TryGetValue(id, out var attachment))
-                    {
-                        Attachments.Add(Mapper.Map<AttachmentHubMold>(attachment));
-                    }
-                }
-            }
-            return Attachments;
-        }
-        /// <summary>
-        /// Получает ReceiveMessage из баззы данных по ID
-        /// </summary>
-        /// <param name="IdQuotedMessage"></param>
-        /// <returns></returns>
-        private async Task<ReceiveMessage> GetQuotedReceiveMessage(string IdQuotedMessage)
-        {
-            ReceiveMessage quotedReceiveMessage;
-
-           
-
-            if (!IdQuotedMessage.IsNullOrEmpty())
-            {
-                var quotedMessage = await _ravenSession.LoadAsync<Message>(IdQuotedMessage);
-                var user = await _ravenSession.LoadAsync<User>(quotedMessage.UserId);
-                quotedReceiveMessage = new ReceiveMessage()
-                {
-                    Id = quotedMessage.Id,
-                    UserLogin = user.Login,
-                    UserNickname = user.DisplayName,
-                    Text = quotedMessage.Text,
-                    PostTime = quotedMessage.PostTime,
-                    ChatId = quotedMessage.ChatId,
-                    UserId = quotedMessage.UserId,
-                    Attachments = await GetAttachments(quotedMessage),
-                };
-            }
-            else quotedReceiveMessage = null;
-            return quotedReceiveMessage;
         }
     }
 }
