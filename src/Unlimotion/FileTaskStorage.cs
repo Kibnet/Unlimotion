@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Unlimotion.ViewModel;
 
@@ -68,7 +69,7 @@ namespace Unlimotion
             }
         }
 
-        public bool Save(TaskItem item)
+        public async Task<bool> Save(TaskItem item)
         {
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
@@ -86,7 +87,7 @@ namespace Unlimotion
             }
         }
 
-        public bool Remove(string itemId)
+        public async Task<bool> Remove(string itemId)
         {
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
@@ -99,6 +100,11 @@ namespace Unlimotion
             {
                 return false;
             }
+        }
+
+        public async Task Connect()
+        {
+            
         }
     }
 }

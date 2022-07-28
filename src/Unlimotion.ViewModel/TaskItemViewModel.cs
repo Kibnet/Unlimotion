@@ -38,9 +38,9 @@ namespace Unlimotion.ViewModel
 
         private void Init(ITaskRepository taskRepository)
         {
-            SaveItemCommand = ReactiveCommand.Create(() =>
+            SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                taskRepository.Save(Model);
+                await taskRepository.Save(Model);
             });
 
 

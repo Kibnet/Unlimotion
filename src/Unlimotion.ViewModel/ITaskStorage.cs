@@ -1,11 +1,12 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Unlimotion.ViewModel;
 
 public interface ITaskStorage
 {
     IEnumerable<TaskItem> GetAll();
-
-    bool Save(TaskItem item);
-    bool Remove(string itemId);
+    Task<bool> Save(TaskItem item);
+    Task<bool> Remove(string itemId);
+    Task Connect();
 }
