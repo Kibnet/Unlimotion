@@ -71,6 +71,8 @@ namespace Unlimotion
 
         public async Task<bool> Save(TaskItem item)
         {
+            item.Id ??= Guid.NewGuid().ToString();
+
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
             try
