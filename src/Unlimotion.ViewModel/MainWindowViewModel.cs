@@ -350,17 +350,20 @@ namespace Unlimotion.ViewModel
 
             CreateSibling = ReactiveCommand.Create(() =>
             {
-                if (CurrentTaskItem == null || string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 task.SaveItemCommand.Execute(null);
-                if (AllTasksMode && CurrentItem?.Parent != null)
+                if (CurrentTaskItem!=null)
                 {
-                    CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                }
-                else if (CurrentTaskItem.ParentsTasks.Count > 0)
-                {
-                    CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                    if (AllTasksMode && CurrentItem?.Parent != null)
+                    {
+                        CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                    }
+                    else if (CurrentTaskItem.ParentsTasks.Count > 0)
+                    {
+                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                    }
                 }
                 taskRepository.Tasks.AddOrUpdate(task);
 
