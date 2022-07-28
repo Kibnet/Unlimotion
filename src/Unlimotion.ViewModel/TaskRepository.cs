@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using System.Timers;
 using DynamicData;
 using DynamicData.Binding;
 
@@ -23,35 +21,15 @@ namespace Unlimotion.ViewModel
     public class TaskRepository : ITaskRepository
     {
         private readonly ITaskStorage _taskStorage;
-        private ConcurrentBag<TaskItem> _saveBag;
-        private Timer _saveTimer;
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
         IObservable<Func<TaskItemViewModel, bool>> rootFilter;
         private Dictionary<string, HashSet<string>> blockedById { get; set; }
 
         public TaskRepository(ITaskStorage taskStorage)
         {
-            _saveBag = new ConcurrentBag<TaskItem>();
-            _saveTimer = new Timer();
-            _saveTimer.Interval = TimeSpan.FromSeconds(1).TotalMilliseconds;
-            _saveTimer.Elapsed += SaveTimerOnElapsed;
             _taskStorage = taskStorage;
         }
-
-        private void SaveTimerOnElapsed(object sender, ElapsedEventArgs e)
-        {
-            var hashSet = new HashSet<TaskItem>();
-            while (_saveBag.TryTake(out var task))
-            {
-                hashSet.Add(task);
-            }
-
-            foreach (var task in hashSet)
-            {
-                _taskStorage.Save(task);
-            }
-        }
-
+		
         public async Task Remove(string itemId)
         {
             Tasks.Remove(itemId);
@@ -74,16 +52,10 @@ namespace Unlimotion.ViewModel
         public async Task Save(TaskItem item)
         {
             await _taskStorage.Save(item);
-            //_saveBag.Add(item);
         }
 
         public void Init() => Init(_taskStorage.GetAll());
-
-        ~TaskRepository()
-        {
-            _saveTimer.Stop();
-        }
-
+        
         private void Init(IEnumerable<TaskItem> items)
         {
             Tasks = new(item => item.Id);
@@ -117,11 +89,7 @@ namespace Unlimotion.ViewModel
 					bool Predicate(TaskItemViewModel task) => items.Count == 0 || items.All(t => t != task.Id);
 					return (Func<TaskItemViewModel, bool>)Predicate;
 				});
-		
-
-			_saveBag.Clear();
-			_saveTimer.Start();
-		}
+        }
 		
 		public void AddBlockedBy(string blocksTask, TaskItem taskItem)
 		{

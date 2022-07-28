@@ -40,7 +40,9 @@ namespace Unlimotion.ViewModel
         {
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                await taskRepository.Save(Model);
+                var model = Model;
+                await taskRepository.Save(model);
+                Id = model.Id;
             });
 
 
