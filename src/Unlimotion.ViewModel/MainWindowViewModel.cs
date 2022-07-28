@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -15,30 +17,148 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
+        private DisposableList connectionDisposableList = new DisposableListRealization();
+
         public MainWindowViewModel()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            connectionDisposableList.AddToDispose(this);
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
-
-            _configuration = Splat.Locator.Current.GetService<IConfiguration>();
+            _configuration = Locator.Current.GetService<IConfiguration>();
             Settings = new SettingsViewModel(_configuration);
+            Locator.CurrentMutable.RegisterConstant(Settings);
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowWanted = _configuration.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
             ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool?>() == true;
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
-
+            
             this.WhenAnyValue(m => m.ShowCompleted)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b));
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b))
+                .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowArchived)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b));
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b))
+                .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowWanted)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowWanted").Set(b));
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowWanted").Set(b))
+                .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowPlanned)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowPlanned").Set(b));
+                .Subscribe(b => _configuration.GetSection("AllTasks:ShowPlanned").Set(b))
+                .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
-                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name));
+                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
+                .AddToDispose(this);
+
+            var conn = ReactiveCommand.CreateFromTask(Connect)
+                .AddToDisposeAndReturn(this);
+            Settings.ConnectCommand = conn;
+
+            conn.Execute().Subscribe(unit =>
+            {
+                CreateSibling = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                        return;
+                    var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                    var save = task.SaveItemCommand as ReactiveCommand<Unit,Unit>;
+                    await save.Execute();
+                    if (CurrentTaskItem != null)
+                    {
+                        if (AllTasksMode && CurrentItem?.Parent != null)
+                        {
+                            CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                        }
+                        else if (CurrentTaskItem?.ParentsTasks.Count > 0)
+                        {
+                            CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                        }
+                    }
+                    taskRepository.Tasks.AddOrUpdate(task);
+
+                    CurrentTaskItem = task;
+                    SelectCurrentTask();
+                }).AddToDisposeAndReturn(this);
+
+                CreateBlockedSibling = ReactiveCommand.Create(() =>
+                {
+                    var parent = CurrentTaskItem;
+                    if (CurrentTaskItem != null)
+                    {
+                        CreateSibling.Execute(null);
+                        parent.Blocks.Add(CurrentTaskItem.Id);
+                    }
+                }).AddToDisposeAndReturn(this);
+
+                CreateInner = ReactiveCommand.Create(() =>
+                {
+                    if (CurrentTaskItem == null)
+                        return;
+                    if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                        return;
+                    var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                    task.SaveItemCommand.Execute(null);
+                    CurrentTaskItem.Contains.Add(task.Id);
+                    taskRepository.Tasks.AddOrUpdate(task);
+
+                    CurrentTaskItem = task;
+                    SelectCurrentTask();
+                }).AddToDisposeAndReturn(this);
+
+                //Select CurrentTaskItem from all tabs
+                this.WhenAnyValue(m => m.CurrentItem)
+                    .Subscribe(m =>
+                    {
+                        if (m != null || CurrentTaskItem == null)
+                            CurrentTaskItem = m?.TaskItem;
+                    })
+                    .AddToDispose(this);
+
+                this.WhenAnyValue(m => m.CurrentUnlockedItem)
+                    .Subscribe(m =>
+                    {
+                        if (m != null || CurrentTaskItem == null)
+                            CurrentTaskItem = m?.TaskItem;
+                    })
+                    .AddToDispose(this);
+
+                this.WhenAnyValue(m => m.CurrentCompletedItem)
+                    .Subscribe(m =>
+                    {
+                        if (m != null || CurrentTaskItem == null)
+                            CurrentTaskItem = m?.TaskItem;
+                    })
+                    .AddToDispose(this);
+
+                this.WhenAnyValue(m => m.CurrentArchivedItem)
+                    .Subscribe(m =>
+                    {
+                        if (m != null || CurrentTaskItem == null)
+                            CurrentTaskItem = m?.TaskItem;
+                    })
+                    .AddToDispose(this);
+
+                this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
+                    .Subscribe((a) => { SelectCurrentTask(); })
+                    .AddToDispose(this);
+
+                AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
+                    .Subscribe(b =>
+                    {
+                        foreach (var filter in EmojiFilters)
+                        {
+                            filter.ShowTasks = b;
+                        }
+                    })
+                    .AddToDispose(this);
+            });
+        }
+
+        private async Task Connect()
+        {
+            connectionDisposableList.Dispose();
+            connectionDisposableList.Disposables.Clear();
 
             //Set sort definition
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
@@ -53,6 +173,12 @@ namespace Unlimotion.ViewModel
                         ((task.IsCompleted == null) && filters.Item2);
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+
+            var taskStorage = Locator.Current.GetService<ITaskStorage>();
+            await taskStorage.Connect();
+
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            taskRepository.Init();
 
             //Bind Roots
             taskRepository.GetRoots()
@@ -76,7 +202,7 @@ namespace Unlimotion.ViewModel
                 .TreatMovesAsRemoveAdd()
                 .Bind(out _currentItems)
                 .Subscribe()
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
 
             //Bind Emoji
@@ -96,7 +222,7 @@ namespace Unlimotion.ViewModel
                 })
                 .Bind(out _emojiFilters)
                 .Subscribe()
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Set Unlocked Filter
             var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
@@ -202,7 +328,7 @@ namespace Unlimotion.ViewModel
                 .SortBy(m => m.TaskItem.UnlockedDateTime)
                 .Bind(out _unlockedItems)
                 .Subscribe()
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Completed
             taskRepository.Tasks
@@ -224,7 +350,7 @@ namespace Unlimotion.ViewModel
                 .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
                 .Bind(out _completedItems)
                 .Subscribe()
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Archived
             taskRepository.Tasks
@@ -246,7 +372,7 @@ namespace Unlimotion.ViewModel
                 .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
                 .Bind(out _archivedItems)
                 .Subscribe()
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Current Item Contains
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -271,7 +397,7 @@ namespace Unlimotion.ViewModel
                         CurrentItemContains = null;
                     }
                 })
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Current Item Parents
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -296,7 +422,7 @@ namespace Unlimotion.ViewModel
                         CurrentItemParents = null;
                     }
                 })
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Current Item Blocks
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -321,7 +447,7 @@ namespace Unlimotion.ViewModel
                         CurrentItemBlocks = null;
                     }
                 })
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             //Bind Current Item BlockedBy
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -344,101 +470,6 @@ namespace Unlimotion.ViewModel
                     else
                     {
                         CurrentItemBlockedBy = null;
-                    }
-                })
-                .AddToDispose(this);
-
-            CreateSibling = ReactiveCommand.Create(() =>
-            {
-                if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                    return;
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                task.SaveItemCommand.Execute(null);
-                if (CurrentTaskItem!=null)
-                {
-                    if (AllTasksMode && CurrentItem?.Parent != null)
-                    {
-                        CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                    }
-                    else if (CurrentTaskItem.ParentsTasks.Count > 0)
-                    {
-                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
-                    }
-                }
-                taskRepository.Tasks.AddOrUpdate(task);
-
-                CurrentTaskItem = task;
-                SelectCurrentTask();
-            });
-
-            CreateBlockedSibling = ReactiveCommand.Create(() =>
-            {
-                var parent = CurrentTaskItem;
-                if (CurrentTaskItem != null)
-                {
-                    CreateSibling.Execute(null);
-                    parent.Blocks.Add(CurrentTaskItem.Id);
-                }
-            });
-
-            CreateInner = ReactiveCommand.Create(() =>
-            {
-                if (CurrentTaskItem == null)
-                    return;
-                if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                    return;
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                task.SaveItemCommand.Execute(null);
-                CurrentTaskItem.Contains.Add(task.Id);
-                taskRepository.Tasks.AddOrUpdate(task);
-
-                CurrentTaskItem = task;
-                SelectCurrentTask();
-            });
-
-            //Select CurrentTaskItem from all tabs
-            this.WhenAnyValue(m => m.CurrentItem)
-                .Subscribe(m =>
-                {
-                    if (m != null || CurrentTaskItem == null)
-                        CurrentTaskItem = m?.TaskItem;
-                })
-                .AddToDispose(this);
-
-            this.WhenAnyValue(m => m.CurrentUnlockedItem)
-                .Subscribe(m =>
-                {
-                    if (m != null || CurrentTaskItem == null)
-                        CurrentTaskItem = m?.TaskItem;
-                })
-                .AddToDispose(this);
-
-            this.WhenAnyValue(m => m.CurrentCompletedItem)
-                .Subscribe(m =>
-                {
-                    if (m != null || CurrentTaskItem == null)
-                        CurrentTaskItem = m?.TaskItem;
-                })
-                .AddToDispose(this);
-
-            this.WhenAnyValue(m => m.CurrentArchivedItem)
-                .Subscribe(m =>
-                {
-                    if (m != null || CurrentTaskItem == null)
-                        CurrentTaskItem = m?.TaskItem;
-                })
-                .AddToDispose(this);
-
-            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
-                .Subscribe((a) => { SelectCurrentTask(); })
-                .AddToDispose(this);
-
-            AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
-                .Subscribe(b =>
-                {
-                    foreach (var filter in EmojiFilters)
-                    {
-                        filter.ShowTasks = b;
                     }
                 })
                 .AddToDispose(this);
@@ -515,16 +546,16 @@ namespace Unlimotion.ViewModel
 
         public string BreadScrumbs => AllTasksMode ? CurrentItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
-        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
 
-        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems => _unlockedItems;
 
-        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems => _completedItems;
 
-        private readonly ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems => _archivedItems;
 
         public TaskItemViewModel CurrentTaskItem { get; set; }
