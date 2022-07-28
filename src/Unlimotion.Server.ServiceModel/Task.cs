@@ -27,7 +27,7 @@ namespace Unlimotion.Server.ServiceModel
     [Api("Task")]
     [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
     [Route("/tasks/bulk", "POST", Summary = "Массовая загрузка списка задач", Notes = "Массовая загрузка списка задач")]
-    public class BulkInsertTasks : IReturn
+    public class BulkInsertTasks : IReturnVoid
     {
         [ApiMember(IsRequired = true, Description = "Список задач")]
         public List<TaskItemMold> Tasks { get; set; }
