@@ -63,7 +63,7 @@ public static class Comparers
 public static class Filters
 {
     public static IObservable<Func<TaskItemViewModel, bool>> Default =
-        Observable.Return<Func<TaskItemViewModel, bool>>(m => true);
+        Observable.Return<Func<TaskItemViewModel, bool>>(m => m!=null);
 }
 
 [AddINotifyPropertyChangedInterface]
