@@ -22,3 +22,8 @@ public abstract class DisposableList : IDisposable
         }
     }
 }
+
+public class DisposableListRealization : DisposableList
+{
+
+}

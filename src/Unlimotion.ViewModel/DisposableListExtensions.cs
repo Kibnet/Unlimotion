@@ -8,4 +8,10 @@ public static class DisposableListExtensions
     {
         list.Disposables.Add(disposable);
     }
+
+    public static T AddToDisposeAndReturn<T>(this T disposable, DisposableList list) where T:IDisposable
+    {
+        list.Disposables.Add(disposable);
+        return disposable;
+    }
 }
