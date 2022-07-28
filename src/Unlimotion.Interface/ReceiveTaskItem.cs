@@ -4,6 +4,12 @@ using System.Collections.Generic;
 
 namespace Unlimotion.Interface
 {
+    public class DeleteTaskItem : IClientMethod
+    {
+        public string Id { get; set; }
+        public string UserId { get; set; }
+    }
+
     public class ReceiveTaskItem : IClientMethod
     {
         public string Id { get; set; }

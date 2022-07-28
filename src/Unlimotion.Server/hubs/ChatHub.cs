@@ -75,8 +75,8 @@ namespace Unlimotion.Server.Hubs
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
 
-                    await Clients.Group(_loginedGroup).SendAsync(receiveTask);
-                    
+                    await Clients.Users(uid).SendAsync(receiveTask);
+
                     Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) update task {taskItem.Id}");
                 }
             }
@@ -97,13 +97,28 @@ namespace Unlimotion.Server.Hubs
             try
             {
                 string uid = Context.Items["uid"].ToString();
+
+                //Получение своих задач для удаления
                 var tasks = await _ravenSession.LoadAsync<TaskItem>(idTasks);
                 var listMessages = tasks.Values.Where(item => item.UserId == uid).ToList();
+
+                //Удаление из БД
                 foreach (var item in listMessages)
                 {
                     _ravenSession.Delete(item);
                 }
                 await _ravenSession.SaveChangesAsync();
+
+                //Отправка сообщения об удалении задачи
+                foreach (var item in listMessages)
+                {
+                    var deleteTask = new DeleteTaskItem
+                    {
+                        Id = item.Id,
+                        UserId = uid
+                    };
+                    await Clients.Users(uid).SendAsync(deleteTask);
+                }
             }
             catch
             {
