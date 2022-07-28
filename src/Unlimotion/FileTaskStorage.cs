@@ -79,7 +79,7 @@ namespace Unlimotion
             {
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item);
-                writer.Write(json);
+                await writer.WriteAsync(json);
 
                 return true;
             }
