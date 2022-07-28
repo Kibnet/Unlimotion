@@ -178,6 +178,8 @@ namespace Unlimotion.Server.ServiceInterface
             body["session"] = sessionId;
 
             token.AccessToken = JwtAuthProvider.CreateEncryptedJweToken(body, jwtProvider.PublicKey.Value);
+            token.ExpireTime = DateTimeOffset.Now.Add(accExpSpan);
+
 
             var defaultRefreshExpire = jwtProvider.ExpireRefreshTokensIn;
             var refExpSpan = (customRefreshExpire ?? defaultRefreshExpire) >= defaultRefreshExpire

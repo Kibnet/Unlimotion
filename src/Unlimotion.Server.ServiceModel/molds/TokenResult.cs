@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System;
+using System.ComponentModel;
 
 namespace Unlimotion.Server.ServiceModel.Molds
 {
@@ -7,7 +8,10 @@ namespace Unlimotion.Server.ServiceModel.Molds
     {
         [Description("Токен для авторизованных запросов")]
         public string AccessToken { get; set; }
+
         [Description("Токен для обновления токенов")]
         public string RefreshToken { get; set; }
+
+        public DateTimeOffset ExpireTime { get; set; }
     }
 }
