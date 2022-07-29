@@ -45,7 +45,7 @@ namespace Unlimotion.Server.Hubs
             }
         }
 
-        public async Task SaveTask(TaskItemHubMold hubTask)
+        public async Task<string> SaveTask(TaskItemHubMold hubTask)
         {
             try
             {
@@ -66,6 +66,8 @@ namespace Unlimotion.Server.Hubs
 
                     var logMessage = $"User {Context.Items["nickname"]}({Context.Items["login"]}) save task {taskItem.Id}";
                     Log.Information(logMessage);
+
+                    return taskItem.Id;
                 }
                 else if (task.UserId == uid)
                 {
@@ -78,7 +80,11 @@ namespace Unlimotion.Server.Hubs
                     await Clients.Users(uid).SendAsync(receiveTask);
 
                     Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) update task {taskItem.Id}");
+
+                    return task.Id;
                 }
+
+                return null;
             }
             catch (Exception e)
             {

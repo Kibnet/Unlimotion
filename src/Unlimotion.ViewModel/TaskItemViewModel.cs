@@ -26,7 +26,7 @@ namespace Unlimotion.ViewModel
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
                                             (BlockedByTasks.All(m => m.IsCompleted != false));
 
-        public ICommand SaveItemCommand;
+        public ReactiveCommand<Unit,Unit> SaveItemCommand;
 
         private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
@@ -353,14 +353,14 @@ namespace Unlimotion.ViewModel
             Contains.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                 })
                 .AddToDispose(this);
 
             Blocks.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                 })
                 .AddToDispose(this);
 
@@ -391,7 +391,7 @@ namespace Unlimotion.ViewModel
                 case nameof(Repeater.Friday):
                 case nameof(Repeater.Saturday):
                 case nameof(Repeater.Sunday):
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                     break;
             }
         }
@@ -411,7 +411,7 @@ namespace Unlimotion.ViewModel
                 case nameof(Repeater):
                 case nameof(Importance):
                 case nameof(Wanted):
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                     break;
             }
         }

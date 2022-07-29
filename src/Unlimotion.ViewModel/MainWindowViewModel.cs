@@ -61,8 +61,7 @@ namespace Unlimotion.ViewModel
                         return;
                     var taskRepository = Locator.Current.GetService<ITaskRepository>();
                     var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    var save = task.SaveItemCommand as ReactiveCommand<Unit,Unit>;
-                    await save.Execute();
+                    await task.SaveItemCommand.Execute();
                     if (CurrentTaskItem != null)
                     {
                         if (AllTasksMode && CurrentItem?.Parent != null)
@@ -98,7 +97,7 @@ namespace Unlimotion.ViewModel
                         return;
                     var taskRepository = Locator.Current.GetService<ITaskRepository>();
                     var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    task.SaveItemCommand.Execute(null);
+                    await task.SaveItemCommand.Execute();
                     CurrentTaskItem.Contains.Add(task.Id);
                     taskRepository.Tasks.AddOrUpdate(task);
 

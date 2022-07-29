@@ -131,7 +131,7 @@ namespace Unlimotion.ViewModel
 		public TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations)
 		{
 			var task = new TaskItemViewModel(clone, this);
-			task.SaveItemCommand.Execute(null);
+			task.SaveItemCommand.Execute();
 			foreach (var destination in destinations)
 			{
 				destination.Contains.Add(clone.Id);
