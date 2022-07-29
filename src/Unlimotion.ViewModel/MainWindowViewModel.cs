@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -77,9 +78,9 @@ namespace Unlimotion.ViewModel
 
                     CurrentTaskItem = task;
                     SelectCurrentTask();
-                }).AddToDisposeAndReturn(this);
+                }).AddToDisposeAndReturn(connectionDisposableList);
 
-                CreateBlockedSibling = ReactiveCommand.Create(() =>
+                CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var parent = CurrentTaskItem;
                     if (CurrentTaskItem != null)
@@ -87,9 +88,9 @@ namespace Unlimotion.ViewModel
                         CreateSibling.Execute(null);
                         parent.Blocks.Add(CurrentTaskItem.Id);
                     }
-                }).AddToDisposeAndReturn(this);
+                }).AddToDisposeAndReturn(connectionDisposableList);
 
-                CreateInner = ReactiveCommand.Create(() =>
+                CreateInner = ReactiveCommand.CreateFromTask(async () =>
                 {
                     if (CurrentTaskItem == null)
                         return;
@@ -103,7 +104,7 @@ namespace Unlimotion.ViewModel
 
                     CurrentTaskItem = task;
                     SelectCurrentTask();
-                }).AddToDisposeAndReturn(this);
+                }).AddToDisposeAndReturn(connectionDisposableList);
 
                 //Select CurrentTaskItem from all tabs
                 this.WhenAnyValue(m => m.CurrentItem)
@@ -112,7 +113,7 @@ namespace Unlimotion.ViewModel
                         if (m != null || CurrentTaskItem == null)
                             CurrentTaskItem = m?.TaskItem;
                     })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
 
                 this.WhenAnyValue(m => m.CurrentUnlockedItem)
                     .Subscribe(m =>
@@ -120,7 +121,7 @@ namespace Unlimotion.ViewModel
                         if (m != null || CurrentTaskItem == null)
                             CurrentTaskItem = m?.TaskItem;
                     })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
 
                 this.WhenAnyValue(m => m.CurrentCompletedItem)
                     .Subscribe(m =>
@@ -128,7 +129,7 @@ namespace Unlimotion.ViewModel
                         if (m != null || CurrentTaskItem == null)
                             CurrentTaskItem = m?.TaskItem;
                     })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
 
                 this.WhenAnyValue(m => m.CurrentArchivedItem)
                     .Subscribe(m =>
@@ -136,11 +137,11 @@ namespace Unlimotion.ViewModel
                         if (m != null || CurrentTaskItem == null)
                             CurrentTaskItem = m?.TaskItem;
                     })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
 
                 this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
                     .Subscribe((a) => { SelectCurrentTask(); })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
 
                 AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
                     .Subscribe(b =>
@@ -150,7 +151,7 @@ namespace Unlimotion.ViewModel
                             filter.ShowTasks = b;
                         }
                     })
-                    .AddToDispose(this);
+                    .AddToDispose(connectionDisposableList);
             });
         }
 
@@ -202,7 +203,8 @@ namespace Unlimotion.ViewModel
                 .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
-
+            
+            CurrentItems = _currentItems;
 
             //Bind Emoji
             taskRepository.Tasks
@@ -329,6 +331,8 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
+            UnlockedItems = _unlockedItems;
+
             //Bind Completed
             taskRepository.Tasks
                 .Connect()
@@ -351,6 +355,8 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
+            CompletedItems = _completedItems;
+
             //Bind Archived
             taskRepository.Tasks
                 .Connect()
@@ -372,6 +378,8 @@ namespace Unlimotion.ViewModel
                 .Bind(out _archivedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
+
+            ArchivedItems = _archivedItems;
 
             //Bind Current Item Contains
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -471,7 +479,7 @@ namespace Unlimotion.ViewModel
                         CurrentItemBlockedBy = null;
                     }
                 })
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
         }
 
         private void SelectCurrentTask()
@@ -546,16 +554,16 @@ namespace Unlimotion.ViewModel
         public string BreadScrumbs => AllTasksMode ? CurrentItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems => _currentItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems => _unlockedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems => _completedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems => _archivedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems { get; set; }
 
         public TaskItemViewModel CurrentTaskItem { get; set; }
         public TaskWrapperViewModel CurrentItem { get; set; }

@@ -48,7 +48,7 @@ public class ServerTaskStorage : ITaskStorage
         }
         mapper = Locator.Current.GetService<IMapper>();
     }
-    
+
     ClientSettings settings;
     IConfiguration? configuration;
     IMapper? mapper;
@@ -82,7 +82,7 @@ public class ServerTaskStorage : ITaskStorage
         try
         {
             //TODO очистить данные
-            
+
             IsSignedIn = false;
             IsConnected = false;
             serviceClient.BearerToken = null;
@@ -121,7 +121,7 @@ public class ServerTaskStorage : ITaskStorage
                 .Build();
 
             _hub = _connection.CreateHub<IChatHub>();
-            
+
             serviceClient.BearerToken = settings.AccessToken;
 
             _connection.Subscribe<LogOn>(async data =>
@@ -130,10 +130,10 @@ public class ServerTaskStorage : ITaskStorage
                 switch (error)
                 {
                     case LogOn.LogOnStatus.ErrorUserNotFound: //Пользователь не найден
-                    {
-                        await RegisterUser();
-                        return;
-                    }
+                        {
+                            await RegisterUser();
+                            return;
+                        }
                     case LogOn.LogOnStatus.ErrorExpiredToken: //Срок действия токена истек
                         {
                             await RefreshToken(settings, configuration);
@@ -266,7 +266,7 @@ public class ServerTaskStorage : ITaskStorage
                 try
                 {
                     var tokens = serviceClient.Post(new AuthViaPassword
-                        { Login = login, Password = password });
+                    { Login = login, Password = password });
 
                     settings.AccessToken = tokens.AccessToken;
                     settings.RefreshToken = tokens.RefreshToken;
@@ -400,29 +400,62 @@ public class ServerTaskStorage : ITaskStorage
 
     public IEnumerable<TaskItem> GetAll()
     {
-        var tasks = serviceClient.GetAsync(new GetAllTasks()).Result;
-        foreach (var task in tasks.Tasks)
+        TaskItemPage? tasks = null;
+        try
         {
-            var mapped = mapper.Map<TaskItem>(task);
-            yield return mapped;
+            tasks = serviceClient.GetAsync(new GetAllTasks()).Result;
+        }
+        catch (Exception e)
+        {
+            //TODO пробросить ошибку пользователю
+        }
+
+        if (tasks?.Tasks != null)
+        {
+            foreach (var task in tasks.Tasks)
+            {
+                var mapped = mapper.Map<TaskItem>(task);
+                yield return mapped;
+            }
         }
     }
 
     public async Task<bool> Save(TaskItem item)
     {
-        var hubTask = mapper.Map<TaskItemHubMold>(item);
-        await _hub.SaveTask(hubTask);
+        try
+        {
+            var hubTask = mapper.Map<TaskItemHubMold>(item);
+            item.Id = await _hub.SaveTask(hubTask);
+        }
+        catch (Exception e)
+        {
+            //TODO пробросить ошибку пользователю
+        }
         return true;
     }
 
     public async Task<bool> Remove(string itemId)
     {
-        await _hub.DeleteTasks(new List<string> { itemId });
+        try
+        {
+            await _hub.DeleteTasks(new List<string> { itemId });
+        }
+        catch (Exception e)
+        {
+            //TODO пробросить ошибку пользователю
+        }
         return true;
     }
 
     public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
     {
-        await serviceClient.PostAsync(new BulkInsertTasks { Tasks = taskItems.Select(i => mapper.Map<TaskItemMold>(i)).ToList() });
+        try
+        {
+            await serviceClient.PostAsync(new BulkInsertTasks { Tasks = taskItems.Select(i => mapper.Map<TaskItemMold>(i)).ToList() });
+        }
+        catch (Exception e)
+        {
+            //TODO пробросить ошибку пользователю
+        }
     }
 }
