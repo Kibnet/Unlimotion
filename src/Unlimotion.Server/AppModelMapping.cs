@@ -25,14 +25,14 @@ namespace Unlimotion.Server
 
         private static void ConfigureModelMapping(MapperConfigurationExpression cfg)
         {
-            cfg.CreateMap<RepeaterPattern, RepeaterPatternMold>();
+            cfg.CreateMap<RepeaterPattern, RepeaterPatternMold>().ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>().ReverseMap();
-            cfg.CreateMap<RepeaterType, RepeaterTypeMold>();
+            cfg.CreateMap<RepeaterType, RepeaterTypeMold>().ReverseMap();
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>().ReverseMap();
             cfg.CreateMap<Attachment, AttachmentMold>();
             cfg.CreateMap<Attachment, AttachmentHubMold>();
             
-            cfg.CreateMap<TaskItem, TaskItemMold>();
+            cfg.CreateMap<TaskItem, TaskItemMold>().ReverseMap();
             cfg.CreateMap<TaskItem, ReceiveTaskItem>();
             cfg.CreateMap<TaskItemHubMold, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())

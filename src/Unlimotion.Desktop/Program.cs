@@ -69,7 +69,13 @@ namespace Unlimotion.Desktop
                 settingsViewModel.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
                     var storage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
-                    //storage.
+                    if (storage == null)
+                    {
+                        return;
+                    }
+                    var storagePath = configuration.GetSection("TaskStorage:Path").Get<string>();
+                    var taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
+                    await storage.BulkInsert(taskStorage.GetAll());
                 });
             };
 
