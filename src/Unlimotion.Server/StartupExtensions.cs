@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -111,6 +112,7 @@ namespace Unlimotion.Server
                 {
                     Disabled = false,
                     PurgeOnDelete = false,
+                    MinimumRevisionAgeToKeep = TimeSpan.FromDays(7),
                 }
             }));
         }
