@@ -225,6 +225,8 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
+            EmojiFilters = _emojiFilters;
+
             //Set Unlocked Filter
             var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
                 .Select(filter =>
@@ -598,7 +600,7 @@ namespace Unlimotion.ViewModel
         public SettingsViewModel Settings { get; set; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
-        public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters => _emojiFilters;
+        public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
         public EmojiFilter AllEmojiFilter { get; } = new EmojiFilter() { Emoji = "", Title = "All", ShowTasks = true };
     }
