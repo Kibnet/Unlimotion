@@ -10,6 +10,7 @@ services:
       - './Logs:/app/Logs'
     environment:
       - 'ASPNETCORE_URLS=https://+:5005;http://+:5004'
+      - RAVEN_Security_UnsecuredAccessAllowed=PublicNetwork
     ports:
       - '5004:5004'
       - '5005:5005'
