@@ -2,37 +2,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
-using ReactiveUI;
 using ServiceStack;
 using SignalR.EasyUse.Client;
 using Splat;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
-using Unlimotion.Server.ServiceModel.Molds;
-using Unlimotion.Server.ServiceModel.Molds.Attachment;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion;
-
-
-public class ClientSettings
-{
-    public string AccessToken { get; set; }
-
-    public string RefreshToken { get; set; }
-
-    public DateTimeOffset ExpireTime { get; set; }
-
-    public string UserId { get; set; }
-
-    public string Login { get; set; }
-}
 
 public class ServerTaskStorage : ITaskStorage
 {
@@ -41,7 +25,7 @@ public class ServerTaskStorage : ITaskStorage
         Url = url;
         serviceClient = new JsonServiceClient(Url);
         configuration = Locator.Current.GetService<IConfiguration>();
-        settings = configuration.GetSection("ClientSettings").Get<ClientSettings>();
+        settings = configuration.Get<ClientSettings>("ClientSettings");
         if (settings == null)
         {
             settings = new ClientSettings();
@@ -97,7 +81,7 @@ public class ServerTaskStorage : ITaskStorage
 
             settings.AccessToken = null;
             settings.RefreshToken = null;
-            configuration.GetSection("ClientSettings").Set(settings);
+            configuration.Set("ClientSettings", settings);
 
             //WindowStates(WindowState.SignOut);
             OnSignOut?.Invoke(this, EventArgs.Empty);
@@ -261,17 +245,16 @@ public class ServerTaskStorage : ITaskStorage
 
             if (settings.AccessToken.IsNullOrEmpty())
             {
-                var login = configuration.GetSection("TaskStorage:Login").Get<string>();
-                var password = configuration.GetSection("TaskStorage:Password").Get<string>();
+                    var storageSettings = configuration.Get<TaskStorageSettings>();
                 try
                 {
                     var tokens = serviceClient.Post(new AuthViaPassword
-                    { Login = login, Password = password });
+                            { Login = storageSettings.Login, Password = storageSettings.Password });
 
                     settings.AccessToken = tokens.AccessToken;
                     settings.RefreshToken = tokens.RefreshToken;
-                    settings.Login = login;
-                    configuration.GetSection("ClientSettings").Set(settings);
+                        settings.Login = storageSettings.Login;
+                        configuration.Set("ClientSettings", settings);
                 }
                 catch (Exception e)
                 {
@@ -302,8 +285,9 @@ public class ServerTaskStorage : ITaskStorage
         var request = new RegisterNewUser();
         try
         {
-            var login = configuration.GetSection("TaskStorage:Login").Get<string>();
-            var password = configuration.GetSection("TaskStorage:Password").Get<string>();
+            var storageSettings = configuration.Get<TaskStorageSettings>();
+            var login = storageSettings.Login;
+            var password = storageSettings.Password;
             if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
             {
                 //TODO показать ошибку пользователю
@@ -321,7 +305,7 @@ public class ServerTaskStorage : ITaskStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.Login = login;
-            configuration.GetSection("ClientSettings").Set(settings);
+            configuration.Set("ClientSettings",settings);
             await Connect();
         }
         catch (Exception e)
@@ -345,7 +329,7 @@ public class ServerTaskStorage : ITaskStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.ExpireTime = tokenResult.ExpireTime;
-            configuration.GetSection("ClientSettings").Set(configuration);
+            configuration.Set("ClientSettings", configuration);
             await Login();
             IsSignedIn = true;
         }

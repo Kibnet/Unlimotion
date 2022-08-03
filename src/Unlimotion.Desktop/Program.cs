@@ -3,7 +3,6 @@ using System.Linq;
 using Avalonia;
 using Avalonia.ReactiveUI;
 using ReactiveUI;
-using System.Reactive;
 using AutoMapper;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
@@ -43,7 +42,7 @@ namespace Unlimotion.Desktop
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
 
-            var isServerMode = configuration.GetSection("TaskStorage:IsServerMode").Get<bool>();
+            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage").IsServerMode;
             RegisterStorage(isServerMode, configuration);
 
             var notificationManager = new NotificationManagerWrapperWrapper();
@@ -73,7 +72,7 @@ namespace Unlimotion.Desktop
                     {
                         return;
                     }
-                    var storagePath = configuration.GetSection("TaskStorage:Path").Get<string>();
+                    var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage").Path;
                     var taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
                     await storage.BulkInsert(taskStorage.GetAll());
                 });
@@ -84,15 +83,16 @@ namespace Unlimotion.Desktop
 
         private static void RegisterStorage(bool isServerMode, IConfigurationRoot configuration)
         {
+            var settings = configuration.Get<TaskStorageSettings>("TaskStorage");
             ITaskStorage taskStorage;
             if (isServerMode)
             {
-                var url = configuration.GetSection("TaskStorage:URL").Get<string>();
-                taskStorage = new ServerTaskStorage(url);
+                var url = settings.URL;
+                taskStorage = new ServerTaskStorage(settings.URL);
             }
             else
             {
-                var storagePath = configuration.GetSection("TaskStorage:Path").Get<string>();
+                var storagePath = settings.Path;
                 taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
             }
 
