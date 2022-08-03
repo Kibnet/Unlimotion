@@ -24,6 +24,8 @@ public class ServerTaskStorage : ITaskStorage
     {
         Url = url;
         serviceClient = new JsonServiceClient(Url);
+        ServicePointManager.ServerCertificateValidationCallback +=
+            (sender, cert, chain, sslPolicyErrors) => true;
         configuration = Locator.Current.GetService<IConfiguration>();
         settings = configuration.Get<ClientSettings>("ClientSettings");
         if (settings == null)
@@ -101,7 +103,17 @@ public class ServerTaskStorage : ITaskStorage
         try
         {
             _connection = new HubConnectionBuilder()
-                .WithUrl(Url + "/ChatHub")
+                .WithUrl(Url + "/ChatHub", (opts) =>
+                    {
+                        opts.HttpMessageHandlerFactory = (message) =>
+                        {
+                            if (message is HttpClientHandler clientHandler)
+                                // always verify the SSL certificate
+                                clientHandler.ServerCertificateCustomValidationCallback +=
+                                    (sender, certificate, chain, sslPolicyErrors) => { return true; };
+                            return message;
+                        };
+                    })
                 .Build();
 
             _hub = _connection.CreateHub<IChatHub>();
