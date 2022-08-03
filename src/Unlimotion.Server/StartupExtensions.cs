@@ -11,6 +11,7 @@ using Raven.Client.Documents.Session;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Raven.Embedded;
+using Serilog;
 
 namespace Unlimotion.Server
 {
@@ -49,9 +50,13 @@ namespace Unlimotion.Server
                 //Чтобы этого избежать используем исправления ниже
                 var path = environment.ContentRootPath;
                 //Исправляем путь к базе
-                serverOptions.DataDirectory = Path.Combine(path, serverOptions.DataDirectory);
+                serverOptions.DataDirectory = Path.Combine(path, serverOptions.DataDirectory.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
                 //Исправляем путь к логам
-                serverOptions.LogsPath = Path.Combine(path, serverOptions.LogsPath);
+                serverOptions.LogsPath = Path.Combine(path, serverOptions.LogsPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+
+                Log.Information($"RavenDB URL: {serverOptions.ServerUrl}");
+                Log.Information($"RavenDB Data Directory: {serverOptions.DataDirectory}");
+                Log.Information($"RavenDB Logs Directory: {serverOptions.LogsPath}");
 
                 return serverOptions;
             });
