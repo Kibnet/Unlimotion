@@ -9,7 +9,7 @@ namespace Unlimotion.Server.Domain
         public string UserId { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
-        public bool? IsCompleted { get; set; } = false;
+        public bool? IsCompleted { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
