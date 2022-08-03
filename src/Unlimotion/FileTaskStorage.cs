@@ -104,9 +104,13 @@ namespace Unlimotion
             }
         }
 
-        public async Task Connect()
+        public async Task<bool> Connect()
         {
-            
+            return true;
+        }
+
+        public async Task Disconnect()
+        {
         }
     }
 }

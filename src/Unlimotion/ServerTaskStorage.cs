@@ -42,33 +42,41 @@ public class ServerTaskStorage : ITaskStorage
     public event EventHandler OnSignOut;
     public event EventHandler OnSignIn;
 
+    //TODO Проверить что не создаёт проблем при закрытии
+    public bool IsActive = true;
+
     private Func<Exception, Task> connectionOnClosed()
     {
         return async (error) =>
         {
-            await Task.Delay(new Random().Next(0, 5) * 1000);
-            try
+            while (IsActive)
             {
-                await _connection.StartAsync();
-            }
-            catch (Exception e)
-            {
-                //TODO показывать ошибку пользователю
-                //IsShowingLoginPage = true;
-                //User.ErrorMessageLoginPage.IsError = true;
-                //User.ErrorMessageLoginPage.GetErrorMessage(e.ToStatusCode().ToString());
-                //RegisterUser.ErrorMessageRegisterPage.IsError = true;
-                //RegisterUser.ErrorMessageRegisterPage.GetErrorMessage(e.ToStatusCode().ToString());
+                await Task.Delay(new Random().Next(0, 5) * 1000);
+                try
+                {
+                    bool connected = await Connect();
+                    if (connected)
+                        return;
+                }
+                catch (Exception e)
+                {
+                    //TODO показывать ошибку пользователю
+                    //IsShowingLoginPage = true;
+                    //User.ErrorMessageLoginPage.IsError = true;
+                    //User.ErrorMessageLoginPage.GetErrorMessage(e.ToStatusCode().ToString());
+                    //RegisterUser.ErrorMessageRegisterPage.IsError = true;
+                    //RegisterUser.ErrorMessageRegisterPage.GetErrorMessage(e.ToStatusCode().ToString());
+                }
             }
         };
     }
 
-    public async void SignOut()
+    public async Task SignOut()
     {
         try
         {
             //TODO очистить данные
-
+            IsActive = false;
             IsSignedIn = false;
             IsConnected = false;
             serviceClient.BearerToken = null;
@@ -97,8 +105,12 @@ public class ServerTaskStorage : ITaskStorage
         }
     }
 
+    public async Task Disconnect()
+    {
+        await SignOut();
+    }
 
-    public async Task Connect()
+    public async Task<bool> Connect()
     {
         try
         {
@@ -250,37 +262,42 @@ public class ServerTaskStorage : ITaskStorage
             _connection.Closed += connectionOnClosed();
             await _connection.StartAsync();
 
-            if (!settings.RefreshToken.IsNullOrEmpty() && settings.ExpireTime < DateTimeOffset.Now)
+            if (_connection.State == HubConnectionState.Connected)
             {
-                await RefreshToken(settings, configuration);
-            }
-
-            if (settings.AccessToken.IsNullOrEmpty())
-            {
-                    var storageSettings = configuration.Get<TaskStorageSettings>();
-                try
+                if (!settings.RefreshToken.IsNullOrEmpty() && settings.ExpireTime < DateTimeOffset.Now)
                 {
-                    var tokens = serviceClient.Post(new AuthViaPassword
-                            { Login = storageSettings.Login, Password = storageSettings.Password });
+                    await RefreshToken(settings, configuration);
+                }
 
-                    settings.AccessToken = tokens.AccessToken;
-                    settings.RefreshToken = tokens.RefreshToken;
+                if (settings.AccessToken.IsNullOrEmpty())
+                {
+                    var storageSettings = configuration.Get<TaskStorageSettings>();
+                    try
+                    {
+                        var tokens = serviceClient.Post(new AuthViaPassword
+                        { Login = storageSettings.Login, Password = storageSettings.Password });
+
+                        settings.AccessToken = tokens.AccessToken;
+                        settings.RefreshToken = tokens.RefreshToken;
                         settings.Login = storageSettings.Login;
                         configuration.Set("ClientSettings", settings);
+                    }
+                    catch (Exception e)
+                    {
+                        await RegisterUser();
+                        return _connection.State == HubConnectionState.Connected;
+                    }
                 }
-                catch (Exception e)
-                {
-                    await RegisterUser();
-                    return;
-                }
+
+                await Login();
+                //IsShowingLoginPage = false;
+                //IsShowingRegisterPage = false;
+                //User.ErrorMessageLoginPage.ResetDisplayErrorMessage();
+                IsConnected = _connection.State == HubConnectionState.Connected;
+                //User.Password = "";
             }
 
-            await Login();
-            //IsShowingLoginPage = false;
-            //IsShowingRegisterPage = false;
-            //User.ErrorMessageLoginPage.ResetDisplayErrorMessage();
-            IsConnected = _connection.State == HubConnectionState.Connected;
-            //User.Password = "";
+            return _connection.State == HubConnectionState.Connected;
         }
         catch (Exception e)
         {
@@ -288,6 +305,7 @@ public class ServerTaskStorage : ITaskStorage
             //User.ErrorMessageLoginPage.GetErrorMessage(e.ToStatusCode().ToString());
             //User.ErrorMessageLoginPage.IsError = true;
             //IsShowingLoginPage = _connection.State != HubConnectionState.Connected;
+            return false;
         }
     }
 
@@ -317,7 +335,7 @@ public class ServerTaskStorage : ITaskStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.Login = login;
-            configuration.Set("ClientSettings",settings);
+            configuration.Set("ClientSettings", settings);
             await Connect();
         }
         catch (Exception e)
@@ -349,7 +367,7 @@ public class ServerTaskStorage : ITaskStorage
         {
             //TODO вывести ошибку пользователю
             //User.ErrorMessageLoginPage.GetErrorMessage("419");
-            SignOut();
+            await SignOut();
         }
     }
 
@@ -418,29 +436,41 @@ public class ServerTaskStorage : ITaskStorage
 
     public async Task<bool> Save(TaskItem item)
     {
-        try
+        while (IsActive)
         {
-            var hubTask = mapper.Map<TaskItemHubMold>(item);
-            item.Id = await _hub.SaveTask(hubTask);
+            try
+            {
+                var hubTask = mapper.Map<TaskItemHubMold>(item);
+                item.Id = await _hub.SaveTask(hubTask);
+                return true;
+            }
+            catch (Exception e)
+            {
+                await Task.Delay(new Random().Next(0, 5) * 100);
+                //TODO пробросить ошибку пользователю
+            }
         }
-        catch (Exception e)
-        {
-            //TODO пробросить ошибку пользователю
-        }
-        return true;
+
+        return false;
     }
 
     public async Task<bool> Remove(string itemId)
     {
-        try
+        while (IsActive)
         {
-            await _hub.DeleteTasks(new List<string> { itemId });
+            try
+            {
+                await _hub.DeleteTasks(new List<string> { itemId });
+                return true;
+            }
+            catch (Exception e)
+            {
+                await Task.Delay(new Random().Next(0, 5) * 100);
+                //TODO пробросить ошибку пользователю
+            }
         }
-        catch (Exception e)
-        {
-            //TODO пробросить ошибку пользователю
-        }
-        return true;
+
+        return false;
     }
 
     public async Task BulkInsert(IEnumerable<TaskItem> taskItems)

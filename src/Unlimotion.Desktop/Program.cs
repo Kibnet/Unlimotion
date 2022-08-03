@@ -84,6 +84,12 @@ namespace Unlimotion.Desktop
         private static void RegisterStorage(bool isServerMode, IConfigurationRoot configuration)
         {
             var settings = configuration.Get<TaskStorageSettings>("TaskStorage");
+            var prevStorage = Locator.Current.GetService<ITaskStorage>();
+            if (prevStorage!= null)
+            {
+                prevStorage.Disconnect().Wait();
+            }
+
             ITaskStorage taskStorage;
             if (isServerMode)
             {

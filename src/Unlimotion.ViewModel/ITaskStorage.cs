@@ -8,5 +8,6 @@ public interface ITaskStorage
     IEnumerable<TaskItem> GetAll();
     Task<bool> Save(TaskItem item);
     Task<bool> Remove(string itemId);
-    Task Connect();
+    Task<bool> Connect();
+    Task Disconnect();
 }
