@@ -13,6 +13,8 @@
         <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
         <Button Content="Connect" Command="{Binding ConnectCommand}"/>
         <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
+        <Button Content="Backup" Command="{Binding BackupCommand}"/>
+        <Button Content="Resave" Command="{Binding ResaveCommand}"/>
         <Label Content="Server Storage URL"/>
         <TextBox Text="{Binding ServerStorageUrl}"></TextBox>
         <Label Content="Server Login"/>

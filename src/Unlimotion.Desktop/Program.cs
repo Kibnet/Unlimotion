@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.ReactiveUI;
 using ReactiveUI;
@@ -67,14 +68,48 @@ namespace Unlimotion.Desktop
                     });
                 settingsViewModel.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
                 {
-                    var storage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
-                    if (storage == null)
+                    var serverTaskStorage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
+                    if (serverTaskStorage == null)
                     {
                         return;
                     }
                     var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage").Path;
-                    var taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
-                    await storage.BulkInsert(taskStorage.GetAll());
+                    var fileTaskStorage = new FileTaskStorage(storagePath ?? "Tasks");
+                    await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
+                });
+                settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    var serverTaskStorage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
+                    if (serverTaskStorage == null)
+                    {
+                        return;
+                    }
+                    var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage").Path;
+                    var fileTaskStorage = new FileTaskStorage(storagePath ?? "Tasks");
+                    var tasks = serverTaskStorage.GetAll();
+                    foreach (var task in tasks)
+                    {
+                        task.Id = task.Id.Replace("TaskItem/", "");
+                        if (task.BlocksTasks != null)
+                        {
+                            task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
+                        }
+                        if (task.ContainsTasks != null)
+                        {
+                            task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
+                        }
+                        await fileTaskStorage.Save(task);
+                    }
+                });
+                settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage").Path;
+                    var fileTaskStorage = new FileTaskStorage(storagePath ?? "Tasks");
+                    var tasks = fileTaskStorage.GetAll();
+                    foreach (var task in tasks)
+                    {
+                        await fileTaskStorage.Save(task);
+                    }
                 });
             };
 
@@ -87,7 +122,7 @@ namespace Unlimotion.Desktop
             var prevStorage = Locator.Current.GetService<ITaskStorage>();
             if (prevStorage!= null)
             {
-                prevStorage.Disconnect().Wait();
+                prevStorage.Disconnect();
             }
 
             ITaskStorage taskStorage;

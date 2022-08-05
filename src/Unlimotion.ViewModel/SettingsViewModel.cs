@@ -50,4 +50,6 @@ public class SettingsViewModel
 
     public ICommand ConnectCommand { get; set; }
     public ICommand MigrateCommand { get; set; }
+    public ICommand BackupCommand { get; set; }
+    public ICommand ResaveCommand { get; set; }
 }
