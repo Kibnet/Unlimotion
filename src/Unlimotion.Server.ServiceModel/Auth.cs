@@ -25,7 +25,6 @@ namespace Unlimotion.Server.ServiceModel
     }
 
     [Api("Auth")]
-    [Authenticate]
     [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
     [ApiResponse(HttpStatusCode.Unauthorized, "Пользователь не авторизован", ResponseType = typeof(void))]
     [ApiResponse(HttpStatusCode.NotFound, "Пользователь не найден", ResponseType = typeof(void))]
@@ -38,7 +37,6 @@ namespace Unlimotion.Server.ServiceModel
     }
 
     [Api("Auth")]
-    [Authenticate]
     [ApiResponse(HttpStatusCode.Unauthorized, "Токен неверный или сессия закрыта", ResponseType = typeof(void))]
     [ApiResponse(HttpStatusCode.NotFound, "Пользователь не найдены", ResponseType = typeof(void))]
     [ApiResponse(HttpStatusCode.ServiceUnavailable, "Сервис авторизации недоступен", ResponseType = typeof(void))]
@@ -54,7 +52,6 @@ namespace Unlimotion.Server.ServiceModel
     }
     
     [Api("Auth")]
-    [Authenticate]
     [ApiResponse(HttpStatusCode.Unauthorized, "Токен неверный или сессия закрыта", ResponseType = typeof(void))]
     [ApiResponse(HttpStatusCode.NotFound, "Пользователь не найден", ResponseType = typeof(void))]
     [Route("/me", "GET", Summary = "Получить сведения своего профиля", Notes = "Возвращаются актуальные сведения из базы данных")]

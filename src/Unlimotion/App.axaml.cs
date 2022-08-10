@@ -7,14 +7,19 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+#if LIVE
 using Live.Avalonia;
+#endif
 using ReactiveUI;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
 namespace Unlimotion
 {
-    public class App : Application, ILiveView
+    public class App : Application
+#if LIVE
+        ,ILiveView
+#endif
     {
         public override void Initialize()
         {
