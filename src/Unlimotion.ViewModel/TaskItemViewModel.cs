@@ -347,7 +347,16 @@ namespace Unlimotion.ViewModel
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
             {
-                inpc.PropertyChanged += SaveOnPropertyChanged;
+
+                Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
+                    .Throttle(TimeSpan.FromSeconds(2))
+                    .Subscribe(x =>
+                    {
+                        var args = x.EventArgs as PropertyChangedEventArgs;
+                        SaveOnPropertyChanged(x.Sender, args);
+                    }
+                    )
+                    .AddToDispose(this);
             }
 
             Contains.ToObservableChangeSet()
@@ -369,7 +378,15 @@ namespace Unlimotion.ViewModel
                 {
                     if (r is INotifyPropertyChanged repeater)
                     {
-                        repeater.PropertyChanged += SaveOnRepeaterPropertyChanged;
+                        Observable.FromEventPattern(repeater, nameof(INotifyPropertyChanged.PropertyChanged))
+                            .Throttle(TimeSpan.FromSeconds(2))
+                            .Subscribe(x =>
+                            {
+                                var args = x.EventArgs as PropertyChangedEventArgs;
+                                SaveOnRepeaterPropertyChanged(x.Sender, args);
+                            }
+                            )
+                            .AddToDispose(this);
                     }
                 })
                 .AddToDispose(this);
