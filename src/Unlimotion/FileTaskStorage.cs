@@ -114,7 +114,7 @@ namespace Unlimotion
 
         public async Task<bool> Connect()
         {
-            return true;
+            return await Task.FromResult(true);
         }
 
         public async Task Disconnect()
