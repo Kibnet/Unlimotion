@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:views="clr-namespace:Unlimotion.Views"
+        xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainWindow"
         Icon="/Assets/Unlimotion.ico"
@@ -13,5 +14,13 @@
 	<Design.DataContext>
 		<viewModel:MainWindowViewModel/>
 	</Design.DataContext>
-	<views:MainControl/>
+	<Panel>
+		<views:MainControl Name="MainControl"/>
+		<Border VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+			<Border.Styles>
+				<StyleInclude Source="/Notification/Themes/Custom.axaml" />
+			</Border.Styles>
+			<controls:NotificationMessageContainer Name="Notification" Manager="{Binding ManagerWrapper.Manager}"></controls:NotificationMessageContainer>
+		</Border>
+	</Panel>
 </Window>
