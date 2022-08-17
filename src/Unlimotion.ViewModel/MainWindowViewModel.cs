@@ -54,105 +54,109 @@ namespace Unlimotion.ViewModel
                 .AddToDisposeAndReturn(this);
             Settings.ConnectCommand = conn;
 
-            conn.Execute().Subscribe(unit =>
+            conn.Execute().Subscribe(RegisterCommands);
+        }
+
+        private void RegisterCommands(Unit unit)
+        {
+            CreateSibling = ReactiveCommand.CreateFromTask(async () =>
             {
-                CreateSibling = ReactiveCommand.CreateFromTask(async () =>
+                if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                    return;
+                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                await task.SaveItemCommand.Execute();
+                if (CurrentTaskItem != null)
                 {
-                    if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                        return;
-                    var taskRepository = Locator.Current.GetService<ITaskRepository>();
-                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    await task.SaveItemCommand.Execute();
-                    if (CurrentTaskItem != null)
+                    if (AllTasksMode && CurrentItem?.Parent != null)
                     {
-                        if (AllTasksMode && CurrentItem?.Parent != null)
-                        {
-                            CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        }
-                        else if (CurrentTaskItem?.ParentsTasks.Count > 0)
-                        {
-                            CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
-                        }
+                        CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
                     }
-                    taskRepository.Tasks.AddOrUpdate(task);
-
-                    CurrentTaskItem = task;
-                    SelectCurrentTask();
-                }).AddToDisposeAndReturn(connectionDisposableList);
-
-                CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
-                {
-                    var parent = CurrentTaskItem;
-                    if (CurrentTaskItem != null)
+                    else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
-                        CreateSibling.Execute(null);
-                        parent.Blocks.Add(CurrentTaskItem.Id);
+                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
                     }
-                }).AddToDisposeAndReturn(connectionDisposableList);
+                }
 
-                CreateInner = ReactiveCommand.CreateFromTask(async () =>
+                taskRepository.Tasks.AddOrUpdate(task);
+
+                CurrentTaskItem = task;
+                SelectCurrentTask();
+            }).AddToDisposeAndReturn(connectionDisposableList);
+
+            CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var parent = CurrentTaskItem;
+                if (CurrentTaskItem != null)
                 {
-                    if (CurrentTaskItem == null)
-                        return;
-                    if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                        return;
-                    var taskRepository = Locator.Current.GetService<ITaskRepository>();
-                    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                    await task.SaveItemCommand.Execute();
-                    CurrentTaskItem.Contains.Add(task.Id);
-                    taskRepository.Tasks.AddOrUpdate(task);
+                    CreateSibling.Execute(null);
+                    parent.Blocks.Add(CurrentTaskItem.Id);
+                }
+            }).AddToDisposeAndReturn(connectionDisposableList);
 
-                    CurrentTaskItem = task;
-                    SelectCurrentTask();
-                }).AddToDisposeAndReturn(connectionDisposableList);
+            CreateInner = ReactiveCommand.CreateFromTask(async () =>
+            {
+                if (CurrentTaskItem == null)
+                    return;
+                if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+                    return;
+                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                await task.SaveItemCommand.Execute();
+                CurrentTaskItem.Contains.Add(task.Id);
+                taskRepository.Tasks.AddOrUpdate(task);
 
-                //Select CurrentTaskItem from all tabs
-                this.WhenAnyValue(m => m.CurrentItem)
-                    .Subscribe(m =>
+                CurrentTaskItem = task;
+                SelectCurrentTask();
+            }).AddToDisposeAndReturn(connectionDisposableList);
+
+            //Select CurrentTaskItem from all tabs
+            this.WhenAnyValue(m => m.CurrentItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.CurrentUnlockedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.CurrentCompletedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.CurrentArchivedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
+                .Subscribe((a) => { SelectCurrentTask(); })
+                .AddToDispose(connectionDisposableList);
+
+            AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
+                .Subscribe(b =>
+                {
+                    foreach (var filter in EmojiFilters)
                     {
-                        if (m != null || CurrentTaskItem == null)
-                            CurrentTaskItem = m?.TaskItem;
-                    })
-                    .AddToDispose(connectionDisposableList);
-
-                this.WhenAnyValue(m => m.CurrentUnlockedItem)
-                    .Subscribe(m =>
-                    {
-                        if (m != null || CurrentTaskItem == null)
-                            CurrentTaskItem = m?.TaskItem;
-                    })
-                    .AddToDispose(connectionDisposableList);
-
-                this.WhenAnyValue(m => m.CurrentCompletedItem)
-                    .Subscribe(m =>
-                    {
-                        if (m != null || CurrentTaskItem == null)
-                            CurrentTaskItem = m?.TaskItem;
-                    })
-                    .AddToDispose(connectionDisposableList);
-
-                this.WhenAnyValue(m => m.CurrentArchivedItem)
-                    .Subscribe(m =>
-                    {
-                        if (m != null || CurrentTaskItem == null)
-                            CurrentTaskItem = m?.TaskItem;
-                    })
-                    .AddToDispose(connectionDisposableList);
-
-                this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
-                    .Subscribe((a) => { SelectCurrentTask(); })
-                    .AddToDispose(connectionDisposableList);
-
-                AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
-                    .Subscribe(b =>
-                    {
-                        foreach (var filter in EmojiFilters)
-                        {
-                            filter.ShowTasks = b;
-                        }
-                    })
-                    .AddToDispose(connectionDisposableList);
-            });
+                        filter.ShowTasks = b;
+                    }
+                })
+                .AddToDispose(connectionDisposableList);
+            ;
         }
 
         private async Task Connect()
