@@ -271,7 +271,7 @@ public class ServerTaskStorage : ITaskStorage
 
                 if (settings.AccessToken.IsNullOrEmpty())
                 {
-                    var storageSettings = configuration.Get<TaskStorageSettings>();
+                    var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
                     try
                     {
                         var tokens = serviceClient.Post(new AuthViaPassword
@@ -280,6 +280,7 @@ public class ServerTaskStorage : ITaskStorage
                         settings.AccessToken = tokens.AccessToken;
                         settings.RefreshToken = tokens.RefreshToken;
                         settings.Login = storageSettings.Login;
+                        serviceClient.BearerToken = tokens.AccessToken;
                         configuration.Set("ClientSettings", settings);
                     }
                     catch (Exception e)
@@ -315,7 +316,7 @@ public class ServerTaskStorage : ITaskStorage
         var request = new RegisterNewUser();
         try
         {
-            var storageSettings = configuration.Get<TaskStorageSettings>();
+            var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
             var login = storageSettings.Login;
             var password = storageSettings.Password;
             if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
@@ -359,6 +360,7 @@ public class ServerTaskStorage : ITaskStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.ExpireTime = tokenResult.ExpireTime;
+            serviceClient.BearerToken = settings.AccessToken;
             configuration.Set("ClientSettings", configuration);
             await Login();
             IsSignedIn = true;
