@@ -54,6 +54,8 @@ namespace Unlimotion
                 }
 
                 RxApp.DefaultExceptionHandler = Observer.Create<Exception>(Console.WriteLine);
+
+                TaskStorages.SetSettingsCommands();
             }
             else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
             {

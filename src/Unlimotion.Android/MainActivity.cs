@@ -53,12 +53,5 @@ namespace Unlimotion.Android
 
             return base.CustomizeAppBuilder(builder);
         }
-
-        protected override void OnStart()
-        {
-            TaskStorages.SetSettingsCommands();
-            
-            base.OnStart();
-        }        
     }
 }

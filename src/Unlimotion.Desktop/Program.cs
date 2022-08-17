@@ -63,7 +63,6 @@ namespace Unlimotion.Desktop
                     desktop.Windows.FirstOrDefault()?.AttachDevTools();
                 }
 #endif
-                TaskStorages.SetSettingsCommands();
             };
         }
     }
