@@ -453,3 +453,5 @@ $RECYCLE.BIN/
 !.vscode/launch.json
 !.vscode/extensions.json
 src/Unlimotion/Tasks
+src/Unlimotion.Server/RavenDB
+src/RavenDB

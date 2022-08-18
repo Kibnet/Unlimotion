@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion
@@ -68,15 +71,23 @@ namespace Unlimotion
             }
         }
 
-        public bool Save(TaskItem item)
+        public async Task<bool> Save(TaskItem item)
         {
+            item.Id ??= Guid.NewGuid().ToString();
+
             var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id)); 
+            var converter = new IsoDateTimeConverter()
+            {
+                DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
+                Culture = CultureInfo.InvariantCulture,
+                DateTimeStyles = DateTimeStyles.None
+            };
             try
             {
                 using var writer = fileInfo.CreateText();
-                var json = JsonConvert.SerializeObject(item);
-                writer.Write(json);
+                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
+                await writer.WriteAsync(json);
 
                 return true;
             }
@@ -86,7 +97,7 @@ namespace Unlimotion
             }
         }
 
-        public bool Remove(string itemId)
+        public async Task<bool> Remove(string itemId)
         {
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
@@ -99,6 +110,15 @@ namespace Unlimotion
             {
                 return false;
             }
+        }
+
+        public async Task<bool> Connect()
+        {
+            return await Task.FromResult(true);
+        }
+
+        public async Task Disconnect()
+        {
         }
     }
 }

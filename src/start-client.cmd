@@ -1,0 +1,1 @@
+dotnet run -p Unlimotion.Desktop\Unlimotion.Desktop.csproj

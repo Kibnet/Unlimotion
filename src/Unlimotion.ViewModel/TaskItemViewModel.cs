@@ -26,7 +26,7 @@ namespace Unlimotion.ViewModel
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
                                             (BlockedByTasks.All(m => m.IsCompleted != false));
 
-        public ICommand SaveItemCommand;
+        public ReactiveCommand<Unit,Unit> SaveItemCommand;
 
         private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
@@ -38,9 +38,11 @@ namespace Unlimotion.ViewModel
 
         private void Init(ITaskRepository taskRepository)
         {
-            SaveItemCommand = ReactiveCommand.Create(() =>
+            SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                taskRepository.Save(Model);
+                var model = Model;
+                await taskRepository.Save(model);
+                Id = model.Id;
             });
 
 
@@ -345,20 +347,29 @@ namespace Unlimotion.ViewModel
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
             {
-                inpc.PropertyChanged += SaveOnPropertyChanged;
+
+                Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
+                    .Throttle(TimeSpan.FromSeconds(2))
+                    .Subscribe(x =>
+                    {
+                        var args = x.EventArgs as PropertyChangedEventArgs;
+                        SaveOnPropertyChanged(x.Sender, args);
+                    }
+                    )
+                    .AddToDispose(this);
             }
 
             Contains.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                 })
                 .AddToDispose(this);
 
             Blocks.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                 })
                 .AddToDispose(this);
 
@@ -367,7 +378,15 @@ namespace Unlimotion.ViewModel
                 {
                     if (r is INotifyPropertyChanged repeater)
                     {
-                        repeater.PropertyChanged += SaveOnRepeaterPropertyChanged;
+                        Observable.FromEventPattern(repeater, nameof(INotifyPropertyChanged.PropertyChanged))
+                            .Throttle(TimeSpan.FromSeconds(2))
+                            .Subscribe(x =>
+                            {
+                                var args = x.EventArgs as PropertyChangedEventArgs;
+                                SaveOnRepeaterPropertyChanged(x.Sender, args);
+                            }
+                            )
+                            .AddToDispose(this);
                     }
                 })
                 .AddToDispose(this);
@@ -389,7 +408,7 @@ namespace Unlimotion.ViewModel
                 case nameof(Repeater.Friday):
                 case nameof(Repeater.Saturday):
                 case nameof(Repeater.Sunday):
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                     break;
             }
         }
@@ -409,7 +428,7 @@ namespace Unlimotion.ViewModel
                 case nameof(Repeater):
                 case nameof(Importance):
                 case nameof(Wanted):
-                    if (_isInited) SaveItemCommand.Execute(null);
+                    if (_isInited) SaveItemCommand.Execute();
                     break;
             }
         }

@@ -1,0 +1,18 @@
+version: '3.4'
+services:
+  unlimotion.server:
+    image: '${DOCKER_REGISTRY-}unlimotionserver'
+    build:
+      context: .
+      dockerfile: Unlimotion.Server/Dockerfile
+    volumes:
+      - './RavenDB:/app/RavenDB'
+      - './Logs:/app/Logs'
+    environment:
+      - 'ASPNETCORE_URLS=https://+:5005;http://+:5004'
+      - RAVEN_Security_UnsecuredAccessAllowed=PublicNetwork
+    ports:
+      - '5004:5004'
+      - '5005:5005'
+      - '5006:5006'
+    restart: unless-stopped

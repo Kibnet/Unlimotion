@@ -7,9 +7,21 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Unlimotion.Views.SettingsControl">
 <Grid>
-    <WrapPanel>
+    <StackPanel>
         <Label Content="TaskStorage Path"/>
         <TextBox Text="{Binding TaskStoragePath}"></TextBox>
-    </WrapPanel>
+        <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
+        <Button Content="Connect" Command="{Binding ConnectCommand}"/>
+        <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
+        <Button Content="Backup" Command="{Binding BackupCommand}"/>
+        <Button Content="Resave" Command="{Binding ResaveCommand}"/>
+        <Label Content="Server Storage URL"/>
+        <TextBox Text="{Binding ServerStorageUrl}"></TextBox>
+        <Label Content="Server Login"/>
+        <TextBox Text="{Binding Login}"></TextBox>
+        <Label Content="Server Password"/>
+        <TextBox PasswordChar="*" Text="{Binding Password}"/>
+
+	</StackPanel>
 </Grid>
 </UserControl>

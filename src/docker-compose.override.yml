@@ -1,0 +1,15 @@
+version: '3.4'
+services:
+  unlimotion.server:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - 'ASPNETCORE_URLS=https://+:5005;http://+:5004'
+    ports:
+      - '5004:5004'
+      - '5005:5005'
+      - '5006:5006'
+    volumes:
+      - '${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro'
+      - '${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro'
+      - './RavenDB:/app/RavenDB'
+      - './Logs:/app/Logs'

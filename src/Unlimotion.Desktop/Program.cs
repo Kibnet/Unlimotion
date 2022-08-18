@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.ReactiveUI;
 using ReactiveUI;
-using System.Reactive;
+using AutoMapper;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Microsoft.Extensions.Configuration;
@@ -19,12 +20,28 @@ namespace Unlimotion.Desktop
         // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
         // yet and stuff might break.
         [STAThread]
-        public static void Main(string[] args) => BuildAvaloniaApp()
+        public static void Main(string[] args)
+        {
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
+            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            var mapper = AppModelMapping.ConfigureMapping();
+            Locator.CurrentMutable.Register<IMapper>(() => mapper);
+
+            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage").IsServerMode;
+
+            TaskStorages.DefaultStoragePath = "Tasks";
+            TaskStorages.RegisterStorage(isServerMode, configuration);
+
+            var notificationManager = new NotificationManagerWrapperWrapper();
+            Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+
+            BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
+        }
 
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
-            => AppBuilder.Configure<App>()
+            => AppBuilder.Configure<App>()            
                 .AfterSetup(AfterSetup)
                 .UsePlatformDetect()
 #if DEBUG
@@ -36,28 +53,17 @@ namespace Unlimotion.Desktop
                 .UseReactiveUI();
 
         private static void AfterSetup(AppBuilder obj)
-        {
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
-            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
-            var storagePath = configuration.GetSection("TaskStorage:Path").Get<string>();
-            var taskStorage = new FileTaskStorage(storagePath ?? "Tasks");
-            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            var taskRepository = new TaskRepository(taskStorage);
-            Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
-            var notificationManager = new NotificationManagerWrapperWrapper();
-            Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
-
-#if DEBUG
+        {            
             (obj.Instance as App).OnLoaded += (sender, args) =>
             {
+#if DEBUG
                 if (obj.Instance.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 {
                     desktop.MainWindow?.AttachDevTools();
                     desktop.Windows.FirstOrDefault()?.AttachDevTools();
                 }
-            };
-
 #endif
+            };
         }
     }
 }
