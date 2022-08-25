@@ -7,7 +7,6 @@
 	</Application.DataTemplates>
 
 	<Application.Styles>
-		<FluentTheme Mode="Dark"/>
 		<Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
 		</Style>
@@ -62,4 +61,24 @@
 		</Style>
 
 	</Application.Styles>
+	<TrayIcon.Icons>
+		<TrayIcons>
+			<TrayIcon Icon="/Assets/Unlimotion.ico" Command="{Binding ShowWindowCommand}" ToolTipText="Unlimotion">
+				<TrayIcon.Menu>
+					<NativeMenu>
+						<!--<NativeMenuItem Header="Settings">
+							<NativeMenu>
+								<NativeMenuItem Header="Option 1" ToggleType="Radio" IsChecked="True" Command="{Binding ToggleCommand}" />
+								<NativeMenuItem Header="Option 2" ToggleType="Radio" IsChecked="True" Command="{Binding ToggleCommand}" />
+								<NativeMenuItemSeparator />
+								<NativeMenuItem Header="Option 3" ToggleType="CheckBox" IsChecked="True" Command="{Binding ToggleCommand}" />
+								<NativeMenuItem Icon="/Assets/Unlimotion.ico" Header="Restore Defaults" Command="{Binding ToggleCommand}" />
+							</NativeMenu>
+						</NativeMenuItem>-->
+						<NativeMenuItem Header="Exit" Command="{Binding ExitCommand}" />
+					</NativeMenu>
+				</TrayIcon.Menu>
+			</TrayIcon>
+		</TrayIcons>
+	</TrayIcon.Icons>
 </Application>

@@ -7,6 +7,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 #if LIVE
 using Live.Avalonia;
 #endif
@@ -21,8 +24,51 @@ namespace Unlimotion
         ,ILiveView
 #endif
     {
+        public static readonly StyleInclude DataGridFluent = new StyleInclude(new Uri("avares://ControlCatalog/Styles"))
+        {
+            Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
+        };
+
+        public static FluentTheme Fluent = new FluentTheme(new Uri("avares://ControlCatalog/Styles"));
+
+        public static Styles DefaultLight = new Styles
+        {
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/AccentColors.xaml")
+            },
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/Base.xaml")
+            },
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/BaseLight.xaml")
+            }
+        };
+
+        public static Styles DefaultDark = new Styles
+        {
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/AccentColors.xaml")
+            },
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/Base.xaml")
+            },
+            new StyleInclude(new Uri("resm:Styles?assembly=ControlCatalog"))
+            {
+                Source = new Uri("avares://Avalonia.Themes.Fluent/Accents/BaseDark.xaml")
+            }
+        };
+
         public override void Initialize()
         {
+            App.Fluent.Mode = FluentThemeMode.Dark;
+            Styles.Insert(0, Fluent);
+            
+            //Styles.Insert(1, DataGridFluent);
             AvaloniaXamlLoader.Load(this);
         }
 
@@ -66,13 +112,11 @@ namespace Unlimotion
             }
 
             base.OnFrameworkInitializationCompleted();
-            OnLoaded?.Invoke(this, EventArgs.Empty);
         }
 
-        public object CreateView(Window window)
+        public App()
         {
-            window.DataContext ??= new MainWindowViewModel();
-            return new MainControl();
+            DataContext = new ApplicationViewModel();
         }
 
         private static bool IsProduction()

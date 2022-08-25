@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <AvaloniaVersion>0.10.18</AvaloniaVersion>
-    <AvaloniaAndroidVersion>0.10.999-cibuild0022248-beta</AvaloniaAndroidVersion>
+    <AvaloniaVersion>11.0.999-cibuild0023388-beta</AvaloniaVersion>
+    <AvaloniaAndroidVersion>11.0.999-cibuild0023388-beta</AvaloniaAndroidVersion>
   </PropertyGroup>
 </Project>

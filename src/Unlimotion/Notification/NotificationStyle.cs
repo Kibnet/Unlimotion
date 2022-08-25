@@ -24,7 +24,7 @@ public class NotificationStyle : AvaloniaObject, IStyle, IResourceProvider
     {
         _controlsStyles = new StyleInclude(baseUri)
         {
-            Source = new Uri("avares://Notification.Avalonia/Themes/Generic.xaml")
+            Source = new Uri("avares://Unlimotion/Notification/Themes/Custom.axaml")
         };
     }
 
@@ -88,7 +88,9 @@ public class NotificationStyle : AvaloniaObject, IStyle, IResourceProvider
 
     void IResourceProvider.AddOwner(IResourceHost owner) => (Loaded as IResourceProvider)?.AddOwner(owner);
     void IResourceProvider.RemoveOwner(IResourceHost owner) => (Loaded as IResourceProvider)?.RemoveOwner(owner);
-    IReadOnlyList<IStyle> IStyle.Children => _loaded?.Children ?? Array.Empty<IStyle>();
+    
 
-    public SelectorMatchResult TryAttach(IStyleable target, IStyleHost? host) => Loaded.TryAttach(target, host);
+    IReadOnlyList<IStyle> IStyle.Children => _loaded?.Children ?? Array.Empty<IStyle>();
+    
+    public SelectorMatchResult TryAttach(IStyleable target, object? host) => Loaded.TryAttach(target, host);
 }
