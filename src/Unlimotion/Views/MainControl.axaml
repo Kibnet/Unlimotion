@@ -28,7 +28,7 @@
 			<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
-						Content="❌"
+						Content="Х"
 						BorderThickness="0"
 						HorizontalAlignment="Right"
 						Command="{Binding RemoveCommand}"/>
@@ -163,7 +163,7 @@
 											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-												Content="❌"
+												Content="Х"
 												BorderThickness="0"
 												HorizontalAlignment="Right"
 												Command="{Binding RemoveCommand}"/>

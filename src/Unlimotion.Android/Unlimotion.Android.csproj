@@ -10,8 +10,6 @@
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
 		<MSBuildEnableWorkloadResolver>true</MSBuildEnableWorkloadResolver>
-		<!--<RunAOTCompilation>true</RunAOTCompilation>
-	<AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>-->
 	</PropertyGroup>
 	<ItemGroup>
 		<AndroidResource Include="Icon.png">
@@ -19,16 +17,20 @@
 		</AndroidResource>
 	</ItemGroup>
 
-	<PropertyGroup Condition="'$(Configuration)'=='Release' and '$(TF_BUILD)' == ''">
-		<RunAOTCompilation>False</RunAOTCompilation>
-		<EnableLLVM>True</EnableLLVM>
-		<EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
-	</PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release' and '$(TF_BUILD)' == ''">
+    <DebugSymbols>True</DebugSymbols>
+    <RunAOTCompilation>False</RunAOTCompilation>
+    <EnableLLVM>True</EnableLLVM>
+  </PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<EmbedAssembliesIntoApk>False</EmbedAssembliesIntoApk>
-		<RunAOTCompilation>False</RunAOTCompilation>
-	</PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <EmbedAssembliesIntoApk>False</EmbedAssembliesIntoApk>
+    <RunAOTCompilation>False</RunAOTCompilation>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
+  </PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Xamarin.AndroidX.AppCompat" Version="1.5.1" />
@@ -37,6 +39,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
+	  <ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
 </Project>
