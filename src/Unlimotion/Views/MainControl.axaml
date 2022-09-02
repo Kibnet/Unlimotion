@@ -5,9 +5,10 @@
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:unlimotion="clr-namespace:Unlimotion"
         xmlns:views="clr-namespace:Unlimotion.Views"
+        xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainControl"
-        Name="MainWindow">
+        Name="MainControl">
 
 	<Design.DataContext>
 		<viewModel:MainWindowViewModel/>
@@ -270,7 +271,7 @@
 				</ScrollViewer>
 			</Border>
 		</Grid>
-    </Grid>
+	 </Grid>
 
 
 </UserControl>
