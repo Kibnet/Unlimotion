@@ -22,7 +22,7 @@ namespace Unlimotion.Desktop
         [STAThread]
         public static void Main(string[] args)
         {
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("appsettings.json");
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
