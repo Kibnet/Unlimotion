@@ -27,7 +27,7 @@ namespace Unlimotion.Desktop
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
 
-            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage").IsServerMode;
+            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
 
             TaskStorages.DefaultStoragePath = "Tasks";
             TaskStorages.RegisterStorage(isServerMode, configuration);
