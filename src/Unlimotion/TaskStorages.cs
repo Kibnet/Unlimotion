@@ -79,11 +79,11 @@ namespace Unlimotion
             ITaskStorage taskStorage;
             if (isServerMode)
             {
-                taskStorage = new ServerTaskStorage(settings.URL);
+                taskStorage = new ServerTaskStorage(settings?.URL);
             }
             else
             {
-                taskStorage = CreateFileTaskStorage(settings.Path);
+                taskStorage = CreateFileTaskStorage(settings?.Path);
             }
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
