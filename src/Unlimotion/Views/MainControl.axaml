@@ -1,14 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-        xmlns:unlimotion="clr-namespace:Unlimotion"
-        xmlns:views="clr-namespace:Unlimotion.Views"
-        xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="Unlimotion.Views.MainControl"
-        Name="MainControl">
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+		xmlns:unlimotion="clr-namespace:Unlimotion"
+		xmlns:views="clr-namespace:Unlimotion.Views"
+		xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
+		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+		x:Class="Unlimotion.Views.MainControl"
+		Name="MainControl">
 
 	<Design.DataContext>
 		<viewModel:MainWindowViewModel/>
@@ -29,18 +29,18 @@
 			<Grid>
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
-                        Content="❌"
-                        BorderThickness="0"
-                        HorizontalAlignment="Right"
-                        Command="{Binding RemoveCommand}"/>
+						Content="❌"
+						BorderThickness="0"
+						HorizontalAlignment="Right"
+						Command="{Binding RemoveCommand}"/>
 			</Grid>
 		</DataTemplate>
-        <DataTemplate DataType="viewModel:EmojiFilter">
+		<DataTemplate DataType="viewModel:EmojiFilter">
 			<Grid ColumnDefinitions="Auto, Auto" >
 											<CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
 											<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
 										</Grid>
-        </DataTemplate>
+		</DataTemplate>
 	</UserControl.DataTemplates>
 
 	<UserControl.KeyBindings>
@@ -67,30 +67,30 @@
 							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                  Items="{Binding CurrentItems}"
-                                  SelectedItem="{Binding CurrentItem}"
-                                  SelectionMode="Single"
-                                  Name="CurrentTree">
+								  Items="{Binding CurrentItems}"
+								  SelectedItem="{Binding CurrentItem}"
+								  SelectionMode="Single"
+								  Name="CurrentTree">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
-                    </Grid>
+					</Grid>
 				</TabItem>
 				<TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
-                            <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
-                            <ComboBox Items="{Binding EmojiFilters}"/>
+							<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
+							<ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                  Items="{Binding UnlockedItems}"
-                                  SelectedItem="{Binding CurrentUnlockedItem}"
-                                  SelectionMode="Single">
+								  Items="{Binding UnlockedItems}"
+								  SelectedItem="{Binding CurrentUnlockedItem}"
+								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<Grid >
@@ -100,10 +100,10 @@
 											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-                                                Content="❌"
-                                                BorderThickness="0"
-                                                HorizontalAlignment="Right"
-                                                Command="{Binding RemoveCommand}"/>
+												Content="❌"
+												BorderThickness="0"
+												HorizontalAlignment="Right"
+												Command="{Binding RemoveCommand}"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
@@ -114,12 +114,12 @@
 				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-                            <ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                  Items="{Binding CompletedItems}"
-                                  SelectedItem="{Binding CurrentCompletedItem}"
-                                  SelectionMode="Single">
+								  Items="{Binding CompletedItems}"
+								  SelectedItem="{Binding CurrentCompletedItem}"
+								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<Grid>
@@ -142,12 +142,12 @@
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-                            <ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                  Items="{Binding ArchivedItems}"
-                                  SelectedItem="{Binding CurrentArchivedItem}"
-                                  SelectionMode="Single">
+								  Items="{Binding ArchivedItems}"
+								  SelectedItem="{Binding CurrentArchivedItem}"
+								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<Grid>
@@ -179,17 +179,17 @@
 					<StackPanel Margin="10">
 
 						<WrapPanel>
-							<Button Command="{Binding #MainWindow.DataContext.CreateSibling}">➕Sibling</Button>
-							<Button Command="{Binding #MainWindow.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
-							<Button Command="{Binding #MainWindow.DataContext.CreateInner}">➕Inner</Button>
+							<Button Command="{Binding #MainControl.DataContext.CreateSibling}">➕Sibling</Button>
+							<Button Command="{Binding #MainControl.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
+							<Button Command="{Binding #MainControl.DataContext.CreateInner}">➕Inner</Button>
 						</WrapPanel>
 						<Grid ColumnDefinitions="Auto, *">
 							<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
 							<TextBox Grid.Column="1" TextWrapping="Wrap" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
 						</Grid>
 						<Grid ColumnDefinitions="Auto, Auto, *">
-                            <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
-                            <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Grid.Column="1"/>
+							<CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
+							<NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Grid.Column="1"/>
 							<TextBox Grid.Column="2" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>
 						</Grid>
 						<TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
@@ -225,14 +225,14 @@
 						</ContentControl>
 						<Label>Planned Duration:</Label>
 						<TextBox Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
-                                 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"/>
+								 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"/>
 						<StackPanel Orientation="Horizontal">
 							<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
 							<Button Content="Archive" Command="{Binding ArchiveCommand}"/>
 						</StackPanel>
 
 						<Label>Parents Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemParents.SubTasks}">
+						<TreeView Items="{Binding #MainControl.DataContext.CurrentItemParents.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -241,7 +241,7 @@
 						</TreeView>
 
 						<Label>Blocking Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlockedBy.SubTasks}">
+						<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlockedBy.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -250,7 +250,7 @@
 						</TreeView>
 
 						<Label>Containing Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemContains.SubTasks}">
+						<TreeView Items="{Binding #MainControl.DataContext.CurrentItemContains.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -259,7 +259,7 @@
 						</TreeView>
 
 						<Label>Blocked Tasks:</Label>
-						<TreeView Items="{Binding #MainWindow.DataContext.CurrentItemBlocks.SubTasks}">
+						<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlocks.SubTasks}">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
