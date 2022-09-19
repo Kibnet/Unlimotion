@@ -134,7 +134,7 @@ namespace Unlimotion.ViewModel
 			task.SaveItemCommand.Execute();
 			foreach (var destination in destinations)
 			{
-				destination.Contains.Add(clone.Id);
+				destination.Contains.Add(task.Id);
 			}
 			this.Tasks.AddOrUpdate(task);
 			return task;
