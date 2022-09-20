@@ -286,7 +286,7 @@ namespace Unlimotion.ViewModel
                         }
                         foreach (var item in filter.Where(e => e.ShowTasks))
                         {
-                            if (item?.Emoji == null) continue;
+                            if (string.IsNullOrEmpty(item?.Emoji)) continue;
 
                             if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title ?? "").Contains(item.Emoji))
                                 return true;
