@@ -4,6 +4,9 @@ using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.VisualTree;
 
 namespace Unlimotion
 {
@@ -63,6 +66,38 @@ namespace Unlimotion
                 foreach (var task in tasks)
                 {
                     await fileTaskStorage.Save(task);
+                }
+            });
+            settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
+            {
+                var dialog = new OpenFolderDialog(){Title = "Task Storage Path"};
+                var lifetime = App.Current.ApplicationLifetime;
+
+                Window window = null;
+                switch (lifetime)
+                {
+                    case null:
+                        break;
+                    case IClassicDesktopStyleApplicationLifetime classicDesktopStyleApplicationLifetime:
+                        window = classicDesktopStyleApplicationLifetime.MainWindow;
+                        break;
+                    case IControlledApplicationLifetime controlledApplicationLifetime:
+                        //TODO Непонятно, как тут найти окно
+                        break;
+                    case ISingleViewApplicationLifetime singleViewApplicationLifetime:
+                        window = singleViewApplicationLifetime.MainView.GetVisualRoot() as Window;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(lifetime));
+                }
+                if (window != null)
+                {
+                    var path = await dialog.ShowAsync(window);
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        settingsViewModel.TaskStoragePath = path;
+                        //TODO сделать относительный путь
+                    }
                 }
             });
         }

@@ -52,4 +52,5 @@ public class SettingsViewModel
     public ICommand MigrateCommand { get; set; }
     public ICommand BackupCommand { get; set; }
     public ICommand ResaveCommand { get; set; }
+    public ICommand BrowseTaskStoragePathCommand { get; set; }
 }
