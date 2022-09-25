@@ -6,22 +6,28 @@
              xmlns:unlimotion="clr-namespace:Unlimotion"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Unlimotion.Views.SettingsControl">
-<Grid>
-    <StackPanel>
-        <Label Content="TaskStorage Path"/>
-        <TextBox Text="{Binding TaskStoragePath}"></TextBox>
-        <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
-        <Button Content="Connect" Command="{Binding ConnectCommand}"/>
-        <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
-        <Button Content="Backup" Command="{Binding BackupCommand}"/>
-        <Button Content="Resave" Command="{Binding ResaveCommand}"/>
-        <Label Content="Server Storage URL"/>
-        <TextBox Text="{Binding ServerStorageUrl}"></TextBox>
-        <Label Content="Server Login"/>
-        <TextBox Text="{Binding Login}"></TextBox>
-        <Label Content="Server Password"/>
-        <TextBox PasswordChar="*" Text="{Binding Password}"/>
-
-	</StackPanel>
-</Grid>
+	<Grid>
+		<ScrollViewer>
+			<StackPanel>
+				<Label Content="TaskStorage Path"/>
+				<Grid ColumnDefinitions="*,Auto">
+					<TextBox Text="{Binding TaskStoragePath}"></TextBox>
+					<Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseTaskStoragePathCommand}"/>
+				</Grid>
+				<CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
+				<WrapPanel>
+                    <Button Content="Connect" Command="{Binding ConnectCommand}"/>
+                    <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
+                    <Button Content="Backup" Command="{Binding BackupCommand}"/>
+                    <Button Content="Resave" Command="{Binding ResaveCommand}"/>
+				</WrapPanel>
+                <Label Content="Server Storage URL"/>
+				<TextBox Text="{Binding ServerStorageUrl}"></TextBox>
+				<Label Content="Server Login"/>
+				<TextBox Text="{Binding Login}"></TextBox>
+				<Label Content="Server Password"/>
+				<TextBox PasswordChar="*" Text="{Binding Password}"/>
+			</StackPanel>
+		</ScrollViewer>
+	</Grid>
 </UserControl>
