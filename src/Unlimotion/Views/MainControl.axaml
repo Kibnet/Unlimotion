@@ -41,6 +41,9 @@
 											<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
 										</Grid>
 		</DataTemplate>
+		<DataTemplate DataType="viewModel:UnlockedTimeFilter">
+			<CheckBox Content="{Binding Title}" IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
+		</DataTemplate>
 	</UserControl.DataTemplates>
 
 	<UserControl.KeyBindings>
@@ -82,8 +85,8 @@
 				<TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<CheckBox Content="Only Planned" IsChecked="{Binding ShowPlanned}" IsThreeState="True" Margin="10,0,0,0"/>
 							<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
+							<ComboBox Items="{Binding UnlockedTimeFilters}" Margin="10 0"/>
 							<ComboBox Items="{Binding EmojiFilters}"/>
 						</WrapPanel>
 
