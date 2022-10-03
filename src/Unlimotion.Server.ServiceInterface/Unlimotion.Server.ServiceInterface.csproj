@@ -6,7 +6,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AutoMapper" Version="11.0.1" />
+		<PackageReference Include="AutoMapper" Version="12.0.0" />
 		<PackageReference Include="RavenDB.Client" Version="5.4.2" />
 		<PackageReference Include="ServiceStack.Server" Version="6.3.0" />
 	</ItemGroup>
