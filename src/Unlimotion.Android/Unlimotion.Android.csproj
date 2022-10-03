@@ -31,7 +31,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Xamarin.AndroidX.AppCompat" Version="1.5.0" />
+		<PackageReference Include="Xamarin.AndroidX.AppCompat" Version="1.5.1" />
 		<PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel" Version="2.5.1" />
 		<PackageReference Include="Avalonia.Android" Version="$(AvaloniaAndroidVersion)" />
 	</ItemGroup>
