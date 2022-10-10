@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -30,7 +29,6 @@ namespace Unlimotion.ViewModel
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowWanted = _configuration.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
-            ShowPlanned = _configuration.GetSection("AllTasks:ShowPlanned").Get<bool?>() == true;
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
             
@@ -42,9 +40,6 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowWanted)
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowWanted").Set(b))
-                .AddToDispose(this);
-            this.WhenAnyValue(m => m.ShowPlanned)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowPlanned").Set(b))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
                 .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
@@ -223,34 +218,13 @@ namespace Unlimotion.ViewModel
                     }
 
                     var first = m.Cache.Items.First();
-                    return new EmojiFilter() { Emoji = first.Emoji, Title = first.Title, ShowTasks = true };
+                    return new EmojiFilter { Emoji = first.Emoji, Title = first.Title, ShowTasks = true };
                 })
                 .Bind(out _emojiFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
             EmojiFilters = _emojiFilters;
-
-            //Set Unlocked Filter
-            var unlockedFilter = this.WhenAnyValue(m => m.ShowPlanned)
-                .Select(filter =>
-                {
-                    bool Predicate(TaskItemViewModel task)
-                    {
-                        if (!task.IsCanBeCompleted || (task.IsCompleted != false)) return false;
-                        if (filter == null) return true;
-                        if (filter == true)
-                        {
-                            return task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now;
-                        }
-                        else
-                        {
-                            return task.PlannedBeginDateTime == null;
-                        }
-                    }
-
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
 
             var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
                 .Select(filter =>
@@ -296,18 +270,17 @@ namespace Unlimotion.ViewModel
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-
-            var timer = Observable.Timer(DateTimeOffset.Now.Date, TimeSpan.FromMinutes(1));
-            var timerFilter = timer.ToObservableChangeSet()
+            
+            var unlockedTimeFilter = UnlockedTimeFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (ShowPlanned == true)
-                        {
-                            return task.PlannedBeginDateTime != null && task.PlannedBeginDateTime < DateTimeOffset.Now;
-                        }
-                        return true;
+                        return UnlockedTimeFilter.IsUnlocked(task) && 
+                               (filter.All(e => e.ShowTasks == false) || 
+                               filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
@@ -316,9 +289,8 @@ namespace Unlimotion.ViewModel
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime))
-                .Filter(timerFilter)
-                .Filter(unlockedFilter)
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime, m => m.Wanted))
+                .Filter(unlockedTimeFilter)
                 .Filter(emojiFilter)
                 .Filter(wantedFilter)
                 .Transform(item =>
@@ -599,14 +571,14 @@ namespace Unlimotion.ViewModel
 
         public bool? ShowWanted { get; set; }
 
-        public bool? ShowPlanned { get; set; }
-
         public SettingsViewModel Settings { get; set; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
-        public EmojiFilter AllEmojiFilter { get; } = new EmojiFilter() { Emoji = "", Title = "All", ShowTasks = true };
+        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true };
+
+        public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
     }
 
     [AddINotifyPropertyChangedInterface]
