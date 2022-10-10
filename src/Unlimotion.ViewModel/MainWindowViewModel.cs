@@ -278,8 +278,9 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return filter.All(e => e.ShowTasks == false) || 
-                               filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task));
+                        return UnlockedTimeFilter.IsUnlocked(task) && 
+                               (filter.All(e => e.ShowTasks == false) || 
+                               filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
@@ -288,7 +289,7 @@ namespace Unlimotion.ViewModel
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime, m => m.ArchiveDateTime))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime, m => m.Wanted))
                 .Filter(unlockedTimeFilter)
                 .Filter(emojiFilter)
                 .Filter(wantedFilter)

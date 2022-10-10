@@ -18,37 +18,40 @@ namespace Unlimotion.ViewModel
             {
                 new()
                 {
-                    Title = "All Planned",
-                    Predicate = e => MustBeCompleted(e) && (e.PlannedBeginDateTime != null || e.PlannedEndDateTime != null)
-                },
-                new()
-                {
-                    Title = "Urgent",
-                    Predicate = e => MustBeCompleted(e) && DateTime.Now.Date == e.PlannedEndDateTime?.Date
+                    Title = "Unplanned",
+                    Predicate = e => e.PlannedBeginDateTime == null && e.PlannedEndDateTime == null
                 },
                 new()
                 {
                     Title = "Overdue",
-                    Predicate = e => MustBeCompleted(e) && DateTime.Now.Date > e.PlannedEndDateTime?.Date
+                    Predicate = e => e.PlannedEndDateTime != null && DateTime.Now.Date > e.PlannedEndDateTime?.Date
                 },
                 new()
                 {
-                    Title = "Current",
-                    Predicate = e => MustBeCompleted(e) && 
-                                     (e.PlannedBeginDateTime == null && e.PlannedEndDateTime != null && e.PlannedEndDateTime?.Date >= DateTime.Now.Date) || 
-                                     (e.PlannedEndDateTime == null && e.PlannedBeginDateTime != null && e.PlannedBeginDateTime?.Date <= DateTime.Now.Date) ||
-                                     (e.PlannedBeginDateTime?.Date <= DateTime.Now.Date && DateTime.Now.Date <= e.PlannedEndDateTime?.Date)
+                    Title = "Urgent",
+                    Predicate = e => e.PlannedEndDateTime != null && DateTime.Now.Date == e.PlannedEndDateTime?.Date
+                },
+                new()
+                {
+                    Title = "Today",
+                    Predicate = e => e.PlannedBeginDateTime != null && DateTime.Now.Date == e.PlannedBeginDateTime?.Date
+                },
+                new()
+                {
+                    Title = "Maybe",
+                    Predicate = e => (e.PlannedBeginDateTime == null && e.PlannedEndDateTime != null && DateTime.Now.Date < e.PlannedEndDateTime?.Date) || 
+                                     (e.PlannedBeginDateTime != null && e.PlannedEndDateTime == null && e.PlannedBeginDateTime?.Date < DateTime.Now.Date) ||
+                                     (e.PlannedBeginDateTime != null && e.PlannedEndDateTime != null && e.PlannedBeginDateTime?.Date < DateTime.Now.Date && DateTime.Now.Date < e.PlannedEndDateTime?.Date)
                 },
                 new()
                 {
                     Title = "Future",
-                    Predicate = e => MustBeCompleted(e) && e.PlannedBeginDateTime?.Date > DateTime.Now.Date
+                    Predicate = e => e.PlannedBeginDateTime != null && e.PlannedBeginDateTime?.Date > DateTime.Now.Date
                 }
             });
         }
 
-        private static readonly Predicate<TaskItemViewModel> MustBeCompleted = e => e.IsCanBeCompleted && 
-                                                                                    e.IsCompleted == false && 
-                                                                                    e.ArchiveDateTime == null;
+        public static readonly Predicate<TaskItemViewModel> IsUnlocked = e => e.IsCanBeCompleted && 
+                                                                                    e.IsCompleted == false;
     }
 }
