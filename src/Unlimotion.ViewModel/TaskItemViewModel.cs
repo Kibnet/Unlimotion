@@ -11,6 +11,7 @@ using DynamicData;
 using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
+using Splat;
 
 namespace Unlimotion.ViewModel
 {
@@ -286,6 +287,20 @@ namespace Unlimotion.ViewModel
                 else if (IsCompleted == false)
                 {
                     IsCompleted = null;
+                    if (ContainsTasks.Any(m => m.IsCompleted == false))
+                    {
+                        var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
+                        var tasks = ContainsTasks.Where(m => m.IsCompleted == false).ToList();
+                        notificationManager.Ask("Archive contained tasks",
+                            $"Are you sure you want to archive the {tasks.Count} contatined tasks from \"{this.Model.Title}\"?",
+                            () =>
+                            {
+                                foreach (var task in tasks)
+                                {
+                                    task.IsCompleted = null;
+                                }
+                            });
+                    }
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
