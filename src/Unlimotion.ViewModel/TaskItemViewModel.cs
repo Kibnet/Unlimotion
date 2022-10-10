@@ -593,6 +593,8 @@ namespace Unlimotion.ViewModel
 
         public string Emoji => Regex.Match(Title??"", EmojiPattern).Value;
 
+        public string OnlyTextTitle => Regex.Replace(Title??"", EmojiPattern, "");
+
         public IEnumerable<TaskItemViewModel> GetAllParents()
         {
             var hashSet = new HashSet<string>();

@@ -123,5 +123,37 @@ public class SortDefinition
                 new(w => w.TaskItem.IsCanBeCompleted, SortDirection.Descending)
             }
         };
+        yield return new SortDefinition
+        {
+            Name = "Title Ascending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.OnlyTextTitle, SortDirection.Ascending)
+            }
+        };
+        yield return new SortDefinition
+        {
+            Name = "Title Descending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.OnlyTextTitle, SortDirection.Descending)
+            }
+        };
+        yield return new SortDefinition
+        {
+            Name = "Importance Ascending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.Importance, SortDirection.Ascending)
+            }
+        };
+        yield return new SortDefinition
+        {
+            Name = "Importance Descending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.Importance, SortDirection.Descending)
+            }
+        };
     }
 }
