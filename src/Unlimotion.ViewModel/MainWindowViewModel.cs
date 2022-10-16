@@ -218,8 +218,14 @@ namespace Unlimotion.ViewModel
                     }
 
                     var first = m.Cache.Items.First();
-                    return new EmojiFilter { Emoji = first.Emoji, Title = first.Title, ShowTasks = true };
+                    var filter = new EmojiFilter();
+                    filter.ShowTasks = true;
+                    filter.Title = first.Title;
+                    filter.Emoji = first.Emoji;
+                    filter.SortText = (first.Title??"").Replace(first.Emoji, "").Trim();
+                    return filter;
                 })
+                .SortBy(f => f.SortText)
                 .Bind(out _emojiFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -576,7 +582,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
-        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true };
+        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true, SortText = "\u0000"};
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
     }
@@ -587,5 +593,6 @@ namespace Unlimotion.ViewModel
         public string Title { get; set; }
         public string Emoji { get; set; }
         public bool ShowTasks { get; set; }
+        public string SortText { get; set; }
     }
 }
