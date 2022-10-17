@@ -24,6 +24,7 @@ namespace Unlimotion.Desktop
         {
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
 
