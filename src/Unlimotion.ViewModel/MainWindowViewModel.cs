@@ -566,6 +566,8 @@ namespace Unlimotion.ViewModel
 
         public ICommand CreateInner { get; set; }
 
+        public ICommand MoveToPath { get; set; }
+
         private IConfiguration _configuration;
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());

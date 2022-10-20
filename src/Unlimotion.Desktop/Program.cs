@@ -8,6 +8,7 @@ using AutoMapper;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Microsoft.Extensions.Configuration;
+using ServiceStack;
 using Splat;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
@@ -22,8 +23,20 @@ namespace Unlimotion.Desktop
         [STAThread]
         public static void Main(string[] args)
         {
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create("Settings.json");
+            var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
+            var configPath = "Settings.json";
+            if (configArg!= null)
+            {
+                var path = configArg.Split("=").Last();
+                if (!path.IsNullOrEmpty())
+                {
+                    configPath = path;
+                }
+            }
+
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
 

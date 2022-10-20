@@ -35,6 +35,7 @@ namespace Unlimotion.Android
             }
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(settingsPath);
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
 
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);

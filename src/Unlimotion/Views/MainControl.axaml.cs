@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using ReactiveUI;
+using Splat;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
@@ -37,6 +38,41 @@ namespace Unlimotion.Views
                     });
                     disposables.Add(subscription);
                 }
+
+                vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    if (vm.CurrentTaskItem == null)
+                        return;
+                    var dialogs = Locator.Current.GetService<IDialogs>();
+                    var path = await dialogs.ShowOpenFolderDialogAsync("Task Storage Path");
+                    
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        var taskStorage = new FileTaskStorage(path);
+                        var set = new HashSet<string>();
+                        var queue = new Queue<TaskItemViewModel>();
+                        queue.Enqueue(vm.CurrentTaskItem);
+                        while (queue.Count>0)
+                        {
+                            var task = queue.Dequeue();
+                            if (!set.Contains(task.Id))
+                            {
+                                set.Add(task.Id);
+                                await taskStorage.Save(task.Model);
+                                foreach (var item in task.ContainsTasks)
+                                {
+                                    queue.Enqueue(item);
+                                }
+                            }
+                        }
+
+                        var currentTaskStorage = Locator.Current.GetService<ITaskStorage>();
+                        foreach (var id in set)
+                        {
+                            await currentTaskStorage.Remove(id);
+                        }
+                    }
+                });
             }
         }
 
