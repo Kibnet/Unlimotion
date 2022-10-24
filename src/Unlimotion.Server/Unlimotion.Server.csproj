@@ -20,9 +20,9 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
-		<PackageReference Include="RavenDB.Embedded" Version="5.4.2" />
+		<PackageReference Include="RavenDB.Embedded" Version="5.4.4" />
 		<PackageReference Include="Serilog.AspNetCore" Version="6.0.1" />
-		<PackageReference Include="ServiceStack.Api.OpenApi" Version="6.3.0" />
+		<PackageReference Include="ServiceStack.Api.OpenApi" Version="6.4.0" />
 		<PackageReference Include="ServiceStack.Api.Swagger" Version="5.14.0" />
 		<PackageReference Include="SignalR.EasyUse.Server" Version="0.2.1" />
 		<PackageReference Include="WritableJsonConfiguration" Version="6.0.0" />
