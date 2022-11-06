@@ -436,6 +436,11 @@ public class ServerTaskStorage : ITaskStorage
         }
     }
 
+    public IEnumerable<ComputedTaskInfo> GetTasksComputedInfo()
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task<bool> Save(TaskItem item)
     {
         while (IsActive)
@@ -454,6 +459,11 @@ public class ServerTaskStorage : ITaskStorage
         }
 
         return false;
+    }
+
+    public Task<bool> SaveComputedTaskInfo(ComputedTaskInfo computedTaskInfo)
+    {
+        throw new NotImplementedException();
     }
 
     public async Task<bool> Remove(string itemId)

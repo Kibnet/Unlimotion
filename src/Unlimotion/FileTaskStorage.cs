@@ -12,10 +12,12 @@ namespace Unlimotion
     public class FileTaskStorage : ITaskStorage
     {
         public string Path { get; private set; }
+        public string ComputedTasksInfoPath { get; private set; }
 
         public FileTaskStorage(string path)
         {
             Path = path;
+            ComputedTasksInfoPath = path + "/ComputedTasksInfo";
         }
 
         public IEnumerable<TaskItem> GetAll()
@@ -50,6 +52,36 @@ namespace Unlimotion
             }
         }
 
+        public IEnumerable<ComputedTaskInfo> GetTasksComputedInfo()
+        {
+            var directoryInfo = new DirectoryInfo(ComputedTasksInfoPath);
+
+            if (!directoryInfo.Exists)
+                directoryInfo.Create();
+            
+            foreach (var fileInfo in directoryInfo.EnumerateFiles())
+            {
+                string json;
+                using (var reader = fileInfo.OpenText())
+                {
+                    json = reader.ReadToEnd();
+                }
+
+                ComputedTaskInfo computedTaskInfo;
+                try
+                {
+                    computedTaskInfo = JsonConvert.DeserializeObject<ComputedTaskInfo>(json);
+                }
+                catch (Exception e)
+                {
+                    computedTaskInfo = null;
+                }
+
+                if (computedTaskInfo != null)
+                    yield return computedTaskInfo;
+            }
+        }
+
         private void Init()
         {
             var directoryInfo = new DirectoryInfo(Path);
@@ -74,28 +106,14 @@ namespace Unlimotion
         public async Task<bool> Save(TaskItem item)
         {
             item.Id ??= Guid.NewGuid().ToString();
-
-            var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id)); 
-            var converter = new IsoDateTimeConverter()
-            {
-                DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
-                Culture = CultureInfo.InvariantCulture,
-                DateTimeStyles = DateTimeStyles.None
-            };
-            try
-            {
-                using var writer = fileInfo.CreateText();
-                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
-                await writer.WriteAsync(json);
-
-                return true;
-            }
-            catch (Exception e)
-            {
-                return false;
-            }
+            return await SaveBase(Path, item.Id, item);
         }
+        
+        public async Task<bool> SaveComputedTaskInfo(ComputedTaskInfo taskInfo)
+        {
+            return await SaveBase(ComputedTasksInfoPath, string.Join("_", taskInfo.TaskId, taskInfo.Type.ToString()), taskInfo);
+        }
+
 
         public async Task<bool> Remove(string itemId)
         {
@@ -119,6 +137,30 @@ namespace Unlimotion
 
         public async Task Disconnect()
         {
+        }
+
+        private async Task<bool> SaveBase(string path, string name, object objForSerialization)
+        {
+            var directoryInfo = new DirectoryInfo(path);
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, name)); 
+            var converter = new IsoDateTimeConverter
+            {
+                DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
+                Culture = CultureInfo.InvariantCulture,
+                DateTimeStyles = DateTimeStyles.None
+            };
+            try
+            {
+                using var writer = fileInfo.CreateText();
+                var json = JsonConvert.SerializeObject(objForSerialization, Formatting.Indented, converter);
+                await writer.WriteAsync(json);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
         }
     }
 }

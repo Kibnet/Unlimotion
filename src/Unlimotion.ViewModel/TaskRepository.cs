@@ -11,9 +11,11 @@ namespace Unlimotion.ViewModel
     public interface ITaskRepository
     {
         SourceCache<TaskItemViewModel, string> Tasks { get; }
+        SourceList<ComputedTaskInfo> ComputedTasksInfo { get; }
         void Init();
         Task Remove(string itemId);
         Task Save(TaskItem item);
+        Task SaveComputedTaskInfo(ComputedTaskInfo info);
         IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
         TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations);
     }
@@ -22,6 +24,7 @@ namespace Unlimotion.ViewModel
     {
         private readonly ITaskStorage _taskStorage;
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+        public SourceList<ComputedTaskInfo> ComputedTasksInfo { get; private set; }
         IObservable<Func<TaskItemViewModel, bool>> rootFilter;
         private Dictionary<string, HashSet<string>> blockedById { get; set; }
 
@@ -54,24 +57,25 @@ namespace Unlimotion.ViewModel
             await _taskStorage.Save(item);
         }
 
-        public void Init() => Init(_taskStorage.GetAll());
-        
-        private void Init(IEnumerable<TaskItem> items)
+        public async Task SaveComputedTaskInfo(ComputedTaskInfo info)
         {
-            Tasks = new(item => item.Id);
-            blockedById = new();
+	        await _taskStorage.SaveComputedTaskInfo(info);
+        }
+
+        public void Init() => Init(_taskStorage.GetAll(), _taskStorage.GetTasksComputedInfo());
+        
+        private void Init(IEnumerable<TaskItem> items, IEnumerable<ComputedTaskInfo> tasksRules)
+        {
+	        Tasks = new(item => item.Id);
+	        ComputedTasksInfo = new SourceList<ComputedTaskInfo>();
+	        
+	        foreach (var rule in tasksRules)
+		        ComputedTasksInfo.Add(rule);
+	        
             foreach (var taskItem in items)
             {
                 var vm = new TaskItemViewModel(taskItem, this);
                 Tasks.AddOrUpdate(vm);
-
-                if (taskItem.BlocksTasks.Any())
-                {
-                    foreach (var blocksTask in taskItem.BlocksTasks)
-                    {
-                        AddBlockedBy(blocksTask, taskItem);
-                    }
-                }
             }
 
             rootFilter = Tasks.Connect()
@@ -90,29 +94,6 @@ namespace Unlimotion.ViewModel
 					return (Func<TaskItemViewModel, bool>)Predicate;
 				});
         }
-		
-		public void AddBlockedBy(string blocksTask, TaskItem taskItem)
-		{
-			if (!blockedById.TryGetValue(blocksTask, out var hashSet))
-			{
-				hashSet = new HashSet<string>();
-				blockedById[blocksTask] = hashSet;
-			}
-
-			hashSet.Add(taskItem.Id);
-		}
-
-		public void RemoveBlockedBy(string subTask, string taskItemId)
-		{
-			if (blockedById.TryGetValue(subTask, out var hashSet))
-			{
-				hashSet.Remove(taskItemId);
-				if (hashSet.Count == 0)
-				{
-					blockedById.Remove(subTask);
-				}
-			}
-		}
 		
 		public TaskItemViewModel GetById(string id)
 		{

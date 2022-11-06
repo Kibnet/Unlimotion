@@ -36,6 +36,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
+        private ReadOnlyObservableCollection<ComputedTaskInfo> _computedTasksInfo;
 
         private void Init(ITaskRepository taskRepository)
         {
@@ -161,26 +162,18 @@ namespace Unlimotion.ViewModel
                         switch (change.Reason)
                         {
                             case ListChangeReason.Add:
-                                change.Item.Current.BlockedBy.Add(Id);
+                                AddTaskInfoRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
                                 break;
                             case ListChangeReason.AddRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Add(Id);
-                                }
-
+                                // при первой блокировке идет не в "case ListChangeReason.Add", а сюда
+                                AddTaskInfoRecursively(taskRepository, change.Range.First(), Id, TaskInfoType.IsBlocked);
                                 break;
                             case ListChangeReason.Replace:
                                 break;
                             case ListChangeReason.Remove:
-                                change.Item.Current.BlockedBy.Remove(Id);
+                                RemoveTaskInfoRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
                                 break;
                             case ListChangeReason.RemoveRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Remove(Id);
-                                }
-
                                 break;
                             case ListChangeReason.Refresh:
                                 break;
@@ -194,12 +187,18 @@ namespace Unlimotion.ViewModel
                     }
                 }).AddToDispose(this);
 
-            //Subscribe BlockedBy
-            var blockedByFilter = BlockedBy.ToObservableChangeSet()
+            taskRepository.ComputedTasksInfo.Connect()
+                .Filter(e => e.TaskId == Id)
+                .Bind(out _computedTasksInfo)
+                .Subscribe()
+                .AddToDispose(this);
+            
+            //Subscribe ComputedTaskInfo
+            var blockedByFilter = ComputedTasksInfo.ToObservableChangeSet()
                 .ToCollection()
                 .Select(items =>
                 {
-                    bool Predicate(TaskItemViewModel task) => items.Contains(task.Id);
+                    bool Predicate(TaskItemViewModel task) => items.FirstOrDefault(e => e.FromIds.Contains(task.Id)) != null;
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
@@ -208,7 +207,7 @@ namespace Unlimotion.ViewModel
                 .Bind(out _blockedByTasks)
                 .Subscribe()
                 .AddToDispose(this);
-
+            
             //Subscribe IsCompleted
             this.WhenAnyValue(m => m.IsCompleted).Subscribe(b =>
             {
@@ -263,7 +262,7 @@ namespace Unlimotion.ViewModel
                     NotHaveUncompletedContains = result;
                 })
                 .AddToDispose(this);
-
+            
             //Subscribe NotHaveUncompletedBlockedBy
             BlockedByTasks.ToObservableChangeSet()
                 .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
@@ -278,7 +277,7 @@ namespace Unlimotion.ViewModel
                     NotHaveUncompletedBlockedBy = result;
                 })
                 .AddToDispose(this);
-
+            
             //Set IsCanBeCompleted
             this.WhenAnyValue(m => m.NotHaveUncompletedContains, m => m.NotHaveUncompletedBlockedBy)
                 .Subscribe(tuple =>
@@ -366,7 +365,7 @@ namespace Unlimotion.ViewModel
             UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
                 m =>
                 {
-                    this.Blocks.Remove(m.Id);
+                    Blocks.Remove(m.Id);
                     return Unit.Default;
                 });
 
@@ -543,11 +542,11 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<TaskItemViewModel> BlocksTasks => _blocksTasks;
 
         public ReadOnlyObservableCollection<TaskItemViewModel> BlockedByTasks => _blockedByTasks;
+        public ReadOnlyObservableCollection<ComputedTaskInfo> ComputedTasksInfo => _computedTasksInfo;
 
         public ObservableCollection<string> Contains { get; set; } = new();
         public ObservableCollection<string> Parents { get; set; } = new();
         public ObservableCollection<string> Blocks { get; set; } = new();
-        public ObservableCollection<string> BlockedBy { get; set; } = new();
 
         public ICommand UnblockCommand { get; set; }
         public ICommand UnblockMeCommand { get; set; }
@@ -570,17 +569,18 @@ namespace Unlimotion.ViewModel
 
         public void BlockBy(TaskItemViewModel blocker)
         {
+            if (blocker.Id == Id) return;
             blocker.Blocks.Add(Id);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()
         {
             var stack = new Stack<TaskItemViewModel>();
-            var curent = this;
-            while (curent.ParentsTasks.Any())
+            var current = this;
+            while (current.ParentsTasks.Any())
             {
-                curent = curent.ParentsTasks.First();
-                stack.Push(curent);
+                current = current.ParentsTasks.First();
+                stack.Push(current);
             }
 
             while (stack.TryPop(out var result))
@@ -637,5 +637,89 @@ namespace Unlimotion.ViewModel
             new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
             new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
         };
+        
+        private static void AddTaskInfoRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId, TaskInfoType type)
+        {
+            AddTaskInfo(taskRepository, parentTask, fromId, type);
+            
+            Foo(parentTask);
+ 
+            void Foo(TaskItemViewModel task)
+            {
+                if (task.ContainsTasks.Count == 0)
+                    return;
+                
+                foreach (var downTask in task.ContainsTasks.ToList())
+                {
+                    AddTaskInfo(taskRepository, downTask, task.Id, type);
+                    Foo(downTask);
+                }
+            }
+        }
+        
+        private static void RemoveTaskInfoRecursively(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
+        {
+            RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+            
+            Foo(task.Id);
+
+            void Foo(string parentId)
+            {
+                var tasksInfo = taskRepository.ComputedTasksInfo.Items
+                    .Where(e => e.FromIds.Contains(parentId) && e.Type == type).ToList();
+                
+                foreach (var taskInfo in tasksInfo)
+                {
+                    RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId, type);
+                    Foo(taskInfo.TaskId);
+                }
+            }
+        }
+
+        private static void AddTaskInfo(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
+        {
+            var taskInfo =
+                taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e =>
+                    e.TaskId == task.Id);
+
+            if (taskInfo != null && taskInfo.FromIds.Contains(fromId))
+                return;
+
+            if (taskInfo == null)
+            {
+                taskInfo = new ComputedTaskInfo
+                {
+                    TaskId = task.Id,
+                    Type = type
+                };
+                
+                taskInfo.FromIds.Add(fromId);
+                
+                taskRepository.ComputedTasksInfo.Add(taskInfo);
+                taskRepository.SaveComputedTaskInfo(taskInfo);
+            }
+
+            else
+            {
+                taskInfo.FromIds.Add(fromId);
+                taskRepository.ComputedTasksInfo.Remove(taskInfo);
+                taskRepository.ComputedTasksInfo.Add(taskInfo);
+            }
+        }
+        
+        private static void RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId, TaskInfoType type)
+        {
+           var vm = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == taskId);
+           if (fromId == vm?.Parents.FirstOrDefault())
+                return;
+            
+           var compTaskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == taskId && e.Type == type);
+           compTaskInfo?.FromIds.Remove(fromId);
+
+           taskRepository.ComputedTasksInfo.Remove(compTaskInfo);
+           taskRepository.ComputedTasksInfo.Add(compTaskInfo);
+           
+           taskRepository.SaveComputedTaskInfo(compTaskInfo);
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
@@ -101,6 +102,17 @@ namespace Unlimotion.ViewModel
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 await task.SaveItemCommand.Execute();
                 CurrentTaskItem.Contains.Add(task.Id);
+
+                if (CurrentTaskItem.BlockedByTasks.Count != 0)
+                {
+                    taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
+                    {
+                        TaskId = task.Id,
+                        FromIds = new List<string>{CurrentTaskItem.Id},
+                        Type = TaskInfoType.IsBlocked
+                    });
+                }
+
                 taskRepository.Tasks.AddOrUpdate(task);
 
                 CurrentTaskItem = task;
@@ -459,7 +471,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
@@ -484,7 +496,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
@@ -499,7 +511,7 @@ namespace Unlimotion.ViewModel
                     else
                     {
                         CurrentItemBlockedBy = null;
-                    }
+                    }   
                 })
                 .AddToDispose(connectionDisposableList);
         }
