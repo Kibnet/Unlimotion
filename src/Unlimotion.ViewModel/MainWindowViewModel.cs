@@ -25,6 +25,7 @@ namespace Unlimotion.ViewModel
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
             _configuration = Locator.Current.GetService<IConfiguration>();
             Settings = new SettingsViewModel(_configuration);
+            Graph = new GraphViewModel();
             Locator.CurrentMutable.RegisterConstant(Settings);
             ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
@@ -138,7 +139,15 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
 
-            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode)
+            this.WhenAnyValue(m => m.CurrentGraphItem)
+                .Subscribe(m =>
+                {
+                    if (m != null || CurrentTaskItem == null)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode, m=>m.GraphMode)
                 .Subscribe((a) => { SelectCurrentTask(); })
                 .AddToDispose(connectionDisposableList);
 
@@ -472,7 +481,7 @@ namespace Unlimotion.ViewModel
 
         private void SelectCurrentTask()
         {
-            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode)
+            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode)
             {
                 if (AllTasksMode)
                 {
@@ -489,6 +498,10 @@ namespace Unlimotion.ViewModel
                 else if (ArchivedMode)
                 {
                     CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
+                }
+                else if (GraphMode)
+                {
+                    CurrentGraphItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
                 }
             }
         }
@@ -535,6 +548,7 @@ namespace Unlimotion.ViewModel
         public bool UnlockedMode { get; set; }
         public bool CompletedMode { get; set; }
         public bool ArchivedMode { get; set; }
+        public bool GraphMode { get; set; }
         public bool SettingsMode { get; set; }
 
         public INotificationManagerWrapper ManagerWrapper { get; }
@@ -558,6 +572,7 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
         public TaskWrapperViewModel CurrentCompletedItem { get; set; }
         public TaskWrapperViewModel CurrentArchivedItem { get; set; }
+        public TaskWrapperViewModel CurrentGraphItem { get; set; }
 
         public TaskWrapperViewModel CurrentItemContains { get; private set; }
         public TaskWrapperViewModel CurrentItemParents { get; private set; }
@@ -584,6 +599,7 @@ namespace Unlimotion.ViewModel
         public bool? ShowWanted { get; set; }
 
         public SettingsViewModel Settings { get; set; }
+        public GraphViewModel Graph { get; set; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
