@@ -186,6 +186,10 @@ namespace Unlimotion.ViewModel
                 .Filter(taskFilter)
                 .Transform(item =>
                 {
+                    if (item.Parents.Count > 0)
+                    {
+                        return null;
+                    }
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
