@@ -6,6 +6,7 @@
 		xmlns:unlimotion="clr-namespace:Unlimotion"
 		xmlns:views="clr-namespace:Unlimotion.Views"
 		xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
+		xmlns:converters="clr-namespace:Unlimotion.Converters"
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 		x:Class="Unlimotion.Views.MainControl"
 		Name="MainControl">
@@ -129,7 +130,7 @@
 										<Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
-                                            <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+											<Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
@@ -159,7 +160,7 @@
 										<Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
-                                            <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+											<Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
 											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
@@ -205,9 +206,13 @@
 						<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
 						<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
 						<Label Content="Planned Begin DateTime"/>
-						<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}" IsTodayHighlighted="True"/>
+						<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}" 
+											IsTodayHighlighted="True" 
+											DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
 						<Label Content="Planned End DateTime"/>
-						<CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}" IsTodayHighlighted="True" />
+						<CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}" 
+											IsTodayHighlighted="True" 
+											DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
 						<Label Content="Repeater Templates"/>
 						<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
 							<ComboBox.ItemTemplate>
