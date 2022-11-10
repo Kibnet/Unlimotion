@@ -8,45 +8,19 @@
              xmlns:local="clr-namespace:Unlimotion.Views.Graph"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Unlimotion.Views.GraphControl">
-	<Grid ColumnDefinitions="Auto,Auto,1*"
-        RowDefinitions="Auto,Auto,1*"
-        Margin="4">
-		<TextBlock Text="Select Graph:"
-				   Margin="4"
-				   Grid.Row="0" Grid.Column="0" />
-		<TextBlock Text="Select Zoom:"
-				   Margin="4"
-				   Grid.Row="0" Grid.Column="1" />
-		<TextBlock Text="Select Layout Method:"
-				   Margin="4"
-				   Grid.Row="0" Grid.Column="2" />
-		<Slider Name="zoomer"
-				Orientation="Horizontal"
-				Width="200"
-				Value="1"
-				Minimum="0.3" Maximum="3"
-				Margin="4"
-				Grid.Row="1" Grid.Column="1" />
-		<ComboBox Name="layoutMethods"
-				  Margin="4"
-				  Width="160"
-				  Grid.Row="1" Grid.Column="2" />
-		<ScrollViewer HorizontalScrollBarVisibility="Auto"
-					  VerticalScrollBarVisibility="Auto"
-					  Grid.Row="2" Grid.Column="0"
-					  Grid.ColumnSpan="3">
-			<LayoutTransformControl Classes="screen pdf">
-				<LayoutTransformControl.LayoutTransform>
-					<ScaleTransform ScaleX="{Binding Value, ElementName=zoomer}"
-									ScaleY="{Binding Value, ElementName=zoomer}"/>
-				</LayoutTransformControl.LayoutTransform>
+	<Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto">
+			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.2"
+							ClipToBounds="True" Focusable="True"
+							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
 				<avaloniaGraphControl:GraphPanel
 								Graph="{Binding MyGraph}"
 								LayoutMethod="{Binding SelectedItem, ElementName=layoutMethods}">
 					<avaloniaGraphControl:GraphPanel.DataTemplates>
-                        <DataTemplate DataType="{x:Type avaloniaGraphControl:Edge}">
-                            <avaloniaGraphControl:Connection Brush="White" />
-                        </DataTemplate>
+						<DataTemplate DataType="{x:Type avaloniaGraphControl:Edge}">
+							<avaloniaGraphControl:Connection Brush="White" />
+						</DataTemplate>
 						<DataTemplate DataType="{x:Type local:InteractiveItem}">
 							<ToggleButton Content="{Binding Name}" Padding="20,5" />
 						</DataTemplate>
@@ -55,11 +29,12 @@
 											 Shape="RoundedRectangle"
 											 HorizontalAlignment="Stretch"
 											 BorderForeground="White"
+											 TextForeground="White"
 											 VerticalAlignment="Stretch" />
 						</DataTemplate>
-                    </avaloniaGraphControl:GraphPanel.DataTemplates>
+					</avaloniaGraphControl:GraphPanel.DataTemplates>
 				</avaloniaGraphControl:GraphPanel>
-			</LayoutTransformControl>
+			</ZoomBorder>
 		</ScrollViewer>
 	</Grid>
 </UserControl>
