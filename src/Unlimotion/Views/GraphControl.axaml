@@ -1,28 +1,44 @@
 ﻿<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-             xmlns:unlimotion="clr-namespace:Unlimotion"
-             xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
-             xmlns:local="clr-namespace:Unlimotion.Views.Graph"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-             x:Class="Unlimotion.Views.GraphControl">
-	<Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+			 xmlns:unlimotion="clr-namespace:Unlimotion"
+			 xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
+			 xmlns:local="clr-namespace:Unlimotion.Views.Graph"
+			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:Class="Unlimotion.Views.GraphControl">
+	<Grid RowDefinitions="Auto,*">
+		<WrapPanel Orientation="Horizontal">
+			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
+			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
+		</WrapPanel>
+		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
-			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.2"
-							ClipToBounds="True" Focusable="True"
+			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
+							ClipToBounds="True" Focusable="True" PanButton="Right"
 							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
 				<avaloniaGraphControl:GraphPanel
 								Graph="{Binding MyGraph}"
-								LayoutMethod="{Binding SelectedItem, ElementName=layoutMethods}">
+                                LayoutMethod="SugiyamaScheme">
 					<avaloniaGraphControl:GraphPanel.DataTemplates>
-						<DataTemplate DataType="{x:Type avaloniaGraphControl:Edge}">
-							<avaloniaGraphControl:Connection Brush="White" />
+						<DataTemplate DataType="{x:Type local:BlockEdge}">
+							<avaloniaGraphControl:Connection Brush="Red"/>
 						</DataTemplate>
-						<DataTemplate DataType="{x:Type local:InteractiveItem}">
-							<ToggleButton Content="{Binding Name}" Padding="20,5" />
+						<DataTemplate DataType="{x:Type local:ContainEdge}">
+							<avaloniaGraphControl:Connection Brush="Green" />
+						</DataTemplate>
+						<DataTemplate DataType="{x:Type viewModel:TaskItemViewModel}">
+							<Grid ColumnDefinitions="Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+								<TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+							</Grid>
+							<!--<Border BorderBrush="Gray" CornerRadius="4" BorderThickness="1" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+                                <Grid ColumnDefinitions="Auto, *" Margin="5,0">
+									<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+									<TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+								</Grid>
+							</Border>-->
 						</DataTemplate>
 						<DataTemplate DataType="{x:Type local:CompositeItem}">
 							<avaloniaGraphControl:TextSticker Text="{Binding Name}"

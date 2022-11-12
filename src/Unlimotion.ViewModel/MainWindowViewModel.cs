@@ -21,6 +21,7 @@ namespace Unlimotion.ViewModel
 
         public MainWindowViewModel()
         {
+            Locator.CurrentMutable.RegisterConstant(this);
             connectionDisposableList.AddToDispose(this);
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
             _configuration = Locator.Current.GetService<IConfiguration>();
@@ -329,6 +330,8 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             UnlockedItems = _unlockedItems;
+
+            Graph.Tasks = CurrentItems;
 
             //Bind Completed
             taskRepository.Tasks

@@ -1,9 +1,9 @@
-﻿using Avalonia.Controls;
+﻿using System.Collections.Generic;
+using Avalonia.Controls;
 using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
-using AvaloniaGraphControl;
-using System.Diagnostics;
+using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.Views.Graph;
 
@@ -20,8 +20,6 @@ namespace Unlimotion.Views
             if (_zoomBorder != null)
             {
                 _zoomBorder.KeyDown += ZoomBorder_KeyDown;
-
-                _zoomBorder.ZoomChanged += ZoomBorder_ZoomChanged;
             }
         }
 
@@ -30,13 +28,50 @@ namespace Unlimotion.Views
             var dc = DataContext as GraphViewModel;
             if (dc != null)
             {
-                dc.MyGraph = new SimpleWithSubgraph();
+                
+                var graph = new AvaloniaGraphControl.Graph();
+                dc.MyGraph = graph;
+                
+                var hashSet = new HashSet<TaskItemViewModel>();
+                var queue = new Queue<TaskItemViewModel>();
+                foreach (var task in dc.Tasks)
+                {
+                    queue.Enqueue(task.TaskItem);
+                }
+
+                while (queue.TryDequeue(out var task))
+                {
+                    if (!hashSet.Contains(task))
+                    {
+                        foreach (var containsTask in task.ContainsTasks)
+                        {
+                            graph.Edges.Add(new ContainEdge(containsTask, task));
+                            if (!hashSet.Contains(containsTask))
+                            {
+                                queue.Enqueue(containsTask);
+                            }
+                        }
+                        foreach (var blocks in task.BlocksTasks)
+                        {
+                            graph.Edges.Add(new BlockEdge(task, blocks));
+                        }
+
+                        hashSet.Add(task);
+                    }
+                }
+
+                //graph.Parent[b1] = b;
+                //graph.Parent[b2] = b;
+                //graph.Parent[b3] = b;
+                //graph.Parent[b4] = b;
             }
         }
 
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
+            AddHandler(DragDrop.DropEvent, MainControl.Drop);
+            AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
         }
 
         private void ZoomBorder_KeyDown(object? sender, KeyEventArgs e)
@@ -58,10 +93,30 @@ namespace Unlimotion.Views
                     break;
             }
         }
-
-        private void ZoomBorder_ZoomChanged(object sender, ZoomChangedEventArgs e)
+        
+        private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            Debug.WriteLine($"[ZoomChanged] {e.ZoomX} {e.ZoomY} {e.OffsetX} {e.OffsetY}");
+            var pointer = e.GetCurrentPoint(this);
+            if (pointer.Properties.IsLeftButtonPressed)
+            {
+                var dragData = new DataObject();
+                var control = sender as IControl;
+                var dc = control?.DataContext;
+                if (dc == null)
+                {
+                    return;
+                }
+
+                var mwm = Locator.Current.GetService<MainWindowViewModel>();
+                mwm.CurrentTaskItem = dc as TaskItemViewModel;
+
+                dragData.Set(CustomFormat, dc);
+
+                var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            }
         }
+
+
+        private const string CustomFormat = "application/xxx-unlimotion-task-item";
     }
 }

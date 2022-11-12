@@ -103,7 +103,7 @@ namespace Unlimotion.Views
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
-        void DragOver(object sender, DragEventArgs e)
+        public static void DragOver(object sender, DragEventArgs e)
         {
             if (e.Data.Contains(CustomFormat))
             {
@@ -166,7 +166,7 @@ namespace Unlimotion.Views
             }
         }
 
-        void Drop(object sender, DragEventArgs e)
+        public static void Drop(object sender, DragEventArgs e)
         {
             if (e.Data.Contains(CustomFormat))
             {
