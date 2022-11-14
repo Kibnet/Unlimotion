@@ -14,7 +14,10 @@ public class GraphViewModel
     }
     public object MyGraph { get; set; }
     public ReadOnlyObservableCollection<TaskWrapperViewModel> Tasks { get; set; }
+    public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedTasks { get; set; }
 
+    public bool OnlyUnlocked { get; set; } = true;
+    public bool HideUnactual { get; set; }
 
     public bool ShowCompleted { get=> mwm.ShowCompleted; set=> mwm.ShowCompleted=value; }
 

@@ -1,8 +1,11 @@
 ﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using AvaloniaGraphControl;
 using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.Views.Graph;
@@ -30,40 +33,77 @@ namespace Unlimotion.Views
             {
                 
                 var graph = new AvaloniaGraphControl.Graph();
+                graph.Orientation = AvaloniaGraphControl.Graph.Orientations.Horizontal;
                 dc.MyGraph = graph;
-                
-                var hashSet = new HashSet<TaskItemViewModel>();
-                var queue = new Queue<TaskItemViewModel>();
-                foreach (var task in dc.Tasks)
+                if (dc.OnlyUnlocked)
                 {
-                    queue.Enqueue(task.TaskItem);
+                    BuildFromTasks(graph, dc.UnlockedTasks, dc.HideUnactual);
                 }
-
-                while (queue.TryDequeue(out var task))
+                else
                 {
-                    if (!hashSet.Contains(task))
-                    {
-                        foreach (var containsTask in task.ContainsTasks)
-                        {
-                            graph.Edges.Add(new ContainEdge(containsTask, task));
-                            if (!hashSet.Contains(containsTask))
-                            {
-                                queue.Enqueue(containsTask);
-                            }
-                        }
-                        foreach (var blocks in task.BlocksTasks)
-                        {
-                            graph.Edges.Add(new BlockEdge(task, blocks));
-                        }
-
-                        hashSet.Add(task);
-                    }
+                    BuildFromTasks(graph, dc.Tasks, dc.HideUnactual);
                 }
 
                 //graph.Parent[b1] = b;
                 //graph.Parent[b2] = b;
                 //graph.Parent[b3] = b;
                 //graph.Parent[b4] = b;
+            }
+        }
+        
+        private static void BuildFromTasks(AvaloniaGraphControl.Graph graph,
+            ReadOnlyObservableCollection<TaskWrapperViewModel> tasks, bool hideUnactual)
+        {
+            var hashSet = new HashSet<TaskItemViewModel>();
+            var haveLinks = new HashSet<TaskItemViewModel>();
+            var queue = new Queue<TaskItemViewModel>();
+            foreach (var task in tasks)
+            {
+                queue.Enqueue(task.TaskItem);
+            }
+
+            while (queue.TryDequeue(out var task))
+            {
+                if (hideUnactual && task.IsCompleted != false)
+                {
+                    continue;
+                }
+                if (!hashSet.Contains(task))
+                {
+                    foreach (var containsTask in task.ContainsTasks)
+                    {
+                        if (hideUnactual && containsTask.IsCompleted != false)
+                        {
+                            continue;
+                        }
+                        graph.Edges.Add(new ContainEdge(containsTask, task));
+                        haveLinks.Add(containsTask);
+                        haveLinks.Add(task);
+                        if (!hashSet.Contains(containsTask))
+                        {
+                            queue.Enqueue(containsTask);
+                        }
+                    }
+
+                    foreach (var blocks in task.BlocksTasks)
+                    {
+                        if (hideUnactual && blocks.IsCompleted != false)
+                        {
+                            continue;
+                        }
+                        graph.Edges.Add(new BlockEdge(task, blocks));
+                        haveLinks.Add(blocks);
+                        haveLinks.Add(task);
+                    }
+
+                    hashSet.Add(task);
+                }
+            }
+
+            hashSet.ExceptWith(haveLinks);
+            foreach (var task in hashSet)
+            {
+                graph.Edges.Add(new Edge(task, task));
             }
         }
 

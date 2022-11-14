@@ -10,6 +10,8 @@
 			 x:Class="Unlimotion.Views.GraphControl">
 	<Grid RowDefinitions="Auto,*">
 		<WrapPanel Orientation="Horizontal">
+			<CheckBox Content="OnlyUnlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
+			<CheckBox Content="HideUnactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
 			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
 			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 		</WrapPanel>

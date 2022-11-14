@@ -332,6 +332,26 @@ namespace Unlimotion.ViewModel
             UnlockedItems = _unlockedItems;
 
             Graph.Tasks = CurrentItems;
+            taskRepository.Tasks
+                .Connect()
+                .Filter(taskFilter)
+                .Filter(emojiFilter)
+                .Transform(item =>
+                {
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = RemoveTask,
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        Filter = taskFilter,
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
+                    return wrapper;
+                })
+                .Bind(out _FilteredItems)
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+            Graph.UnlockedTasks = _FilteredItems;
 
             //Bind Completed
             taskRepository.Tasks
@@ -569,6 +589,8 @@ namespace Unlimotion.ViewModel
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems { get; set; }
+
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _FilteredItems;
 
         public TaskItemViewModel CurrentTaskItem { get; set; }
         public TaskWrapperViewModel CurrentItem { get; set; }
