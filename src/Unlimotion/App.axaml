@@ -2,14 +2,45 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Unlimotion"
              x:Class="Unlimotion.App">
-    <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates>
+	<Application.DataTemplates>
+		<local:ViewLocator/>
+	</Application.DataTemplates>
 
-    <Application.Styles>
-        <FluentTheme Mode="Dark"/>
-        <Style Selector="Label.IsCanBeCompleted">
-            <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
-        </Style>
-    </Application.Styles>
+	<Application.Styles>
+		<FluentTheme Mode="Dark"/>
+		<Style Selector="Label.IsCanBeCompleted">
+			<Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
+		</Style>
+		<Style Selector="Expander" >
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <DockPanel MinWidth="{TemplateBinding MinWidth}"
+                               MaxWidth="{TemplateBinding MaxWidth}">
+                        <Border x:Name="ExpanderContent"
+                                IsVisible="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                MinHeight="{TemplateBinding MinHeight}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                Padding="0">
+                            <ContentPresenter x:Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ToggleButton 
+                                      VerticalAlignment="Stretch"
+                                      Content="&#x003C;" VerticalContentAlignment="Center"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      IsEnabled="{TemplateBinding IsEnabled}"
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter>
+		</Style>
+
+	</Application.Styles>
 </Application>
