@@ -336,6 +336,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .Filter(taskFilter)
                 .Filter(emojiFilter)
+                .Filter(wantedFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
