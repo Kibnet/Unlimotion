@@ -11,6 +11,9 @@
 		<Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
 		</Style>
+        <Style Selector="TextBlock.IsCanBeCompleted">
+            <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
+        </Style>
 		<Style Selector="Expander" >
             <Setter Property="Template">
                 <ControlTemplate>
