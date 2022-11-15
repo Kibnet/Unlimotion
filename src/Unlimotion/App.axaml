@@ -17,7 +17,7 @@
 		<Style Selector="Expander" >
             <Setter Property="Template">
                 <ControlTemplate>
-                    <DockPanel MinWidth="{TemplateBinding MinWidth}"
+                    <Grid MinWidth="{TemplateBinding MinWidth}" ColumnDefinitions="*,Auto"
                                MaxWidth="{TemplateBinding MaxWidth}">
                         <Border x:Name="ExpanderContent"
                                 IsVisible="{TemplateBinding IsExpanded, Mode=TwoWay}"
@@ -34,13 +34,13 @@
                                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                         </Border>
-                        <ToggleButton 
-                                      VerticalAlignment="Stretch"
+                        <ToggleButton
+                            Grid.Column="1" VerticalAlignment="Stretch"
                                       Content="&#x003C;" VerticalContentAlignment="Center"
                                       CornerRadius="{TemplateBinding CornerRadius}"
                                       IsEnabled="{TemplateBinding IsEnabled}"
                                       IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
-                    </DockPanel>
+                    </Grid>
                 </ControlTemplate>
             </Setter>
 		</Style>
