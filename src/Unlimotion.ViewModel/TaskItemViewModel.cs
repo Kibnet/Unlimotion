@@ -246,6 +246,9 @@ namespace Unlimotion.ViewModel
                 {
                     ArchiveDateTime = DateTimeOffset.UtcNow;
                 }
+
+                Blocks.Clear();
+                RemoveTaskInfoRecursively(taskRepository, null, Id, TaskInfoType.IsBlocked);
             });
 
             //Subscribe NotHaveUncompletedContains
@@ -323,6 +326,8 @@ namespace Unlimotion.ViewModel
 
             RemoveFunc = parent =>
             {
+                RemoveTaskInfoRecursively(taskRepository, null, Id, TaskInfoType.IsBlocked);
+
                 if (parent == null)
                 {
                     foreach (var model in ParentsTasks.ToList())
@@ -659,28 +664,51 @@ namespace Unlimotion.ViewModel
         
         private static void RemoveTaskInfoRecursively(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
         {
-            RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+            // нельзя отказываться от родителя (от его блокировки)
+            if (fromId == task?.Parents?.FirstOrDefault())
+                return;
             
+            // если была не конкретная разблокировка, а выполнение/архивирование блокирующей задачи
+            if (task == null)
+            {
+                var parentsBlockedTasks = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId) && e.Type == type).ToList();
+
+                foreach (var parentBlockedTask in parentsBlockedTasks)
+                {
+                    RemoveTaskInfo(taskRepository, parentBlockedTask.TaskId, fromId, type);
+                    Foo(parentBlockedTask.TaskId);
+                }
+
+                return;
+            }
+            
+            // если есть у родителя есть блокировка, то вниз не передаем
+            if (taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => task.Parents.Contains(e.TaskId)) != null)
+            {
+                RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+                return;
+            }
+
+            RemoveTaskInfo(taskRepository, task.Id, fromId, type);
             Foo(task.Id);
 
             void Foo(string parentId)
             {
                 var tasksInfo = taskRepository.ComputedTasksInfo.Items
                     .Where(e => e.FromIds.Contains(parentId) && e.Type == type).ToList();
-                
+
                 foreach (var taskInfo in tasksInfo)
                 {
-                    RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId, type);
-                    Foo(taskInfo.TaskId);
+                    // если у дитя есть блокировка, то вниз не передаем
+                    if (RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId, type))
+                        Foo(taskInfo.TaskId);
                 }
             }
         }
 
         private static void AddTaskInfo(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
         {
-            var taskInfo =
-                taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e =>
-                    e.TaskId == task.Id);
+            var taskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == task.Id);
 
             if (taskInfo != null && taskInfo.FromIds.Contains(fromId))
                 return;
@@ -707,19 +735,18 @@ namespace Unlimotion.ViewModel
             }
         }
         
-        private static void RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId, TaskInfoType type)
+        private static bool RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId, TaskInfoType type)
         {
-           var vm = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == taskId);
-           if (fromId == vm?.Parents.FirstOrDefault())
-                return;
-            
            var compTaskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == taskId && e.Type == type);
+           
            compTaskInfo?.FromIds.Remove(fromId);
 
            taskRepository.ComputedTasksInfo.Remove(compTaskInfo);
            taskRepository.ComputedTasksInfo.Add(compTaskInfo);
            
            taskRepository.SaveComputedTaskInfo(compTaskInfo);
+
+           return compTaskInfo?.FromIds.Count == 0;
         }
     }
 }

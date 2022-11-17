@@ -69,10 +69,13 @@ namespace Unlimotion.ViewModel
                     if (AllTasksMode && CurrentItem?.Parent != null)
                     {
                         CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                        CreateComputedBlockedTaskInfo(taskRepository, task.Id, CurrentItem.Parent.TaskItem.Id);
                     }
                     else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
-                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                        var firstParent = CurrentTaskItem.ParentsTasks.First();
+                        firstParent.Contains.Add(task.Id);
+                        CreateComputedBlockedTaskInfo(taskRepository, task.Id, firstParent.Id);
                     }
                 }
 
@@ -84,11 +87,13 @@ namespace Unlimotion.ViewModel
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
             {
+                var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
                     CreateSibling.Execute(null);
                     parent.Blocks.Add(CurrentTaskItem.Id);
+                    CreateComputedBlockedTaskInfo(taskRepository, CurrentTaskItem.Id, parent.Id);
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -105,12 +110,7 @@ namespace Unlimotion.ViewModel
 
                 if (CurrentTaskItem.BlockedByTasks.Count != 0)
                 {
-                    taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
-                    {
-                        TaskId = task.Id,
-                        FromIds = new List<string>{CurrentTaskItem.Id},
-                        Type = TaskInfoType.IsBlocked
-                    });
+                    CreateComputedBlockedTaskInfo(taskRepository, task.Id, CurrentTaskItem.Id);
                 }
 
                 taskRepository.Tasks.AddOrUpdate(task);
@@ -555,6 +555,16 @@ namespace Unlimotion.ViewModel
             {
                 task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem);
             }
+        }
+        
+        private void CreateComputedBlockedTaskInfo(ITaskRepository taskRepository, string blockedTaskId, string blockingTaskId)
+        {
+            taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
+            {
+                TaskId = blockedTaskId,
+                FromIds = new List<string> {blockingTaskId},
+                Type = TaskInfoType.IsBlocked
+            });
         }
 
         public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
