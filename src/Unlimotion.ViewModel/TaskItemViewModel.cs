@@ -162,16 +162,16 @@ namespace Unlimotion.ViewModel
                         switch (change.Reason)
                         {
                             case ListChangeReason.Add:
-                                AddTaskInfoRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
+                                AddBlockRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
                                 break;
                             case ListChangeReason.AddRange:
                                 // при первой блокировке идет не в "case ListChangeReason.Add", а сюда
-                                AddTaskInfoRecursively(taskRepository, change.Range.First(), Id, TaskInfoType.IsBlocked);
+                                AddBlockRecursively(taskRepository, change.Range.First(), Id, TaskInfoType.IsBlocked);
                                 break;
                             case ListChangeReason.Replace:
                                 break;
                             case ListChangeReason.Remove:
-                                RemoveTaskInfoRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
+                                RemoveBlockRecursively(taskRepository, change.Item.Current, Id);
                                 break;
                             case ListChangeReason.RemoveRange:
                                 break;
@@ -234,6 +234,7 @@ namespace Unlimotion.ViewModel
                         }
                         var cloned = taskRepository.Clone(clone, ParentsTasks.ToArray());
                     }
+                    RemoveBlockRecursively(taskRepository, null, Id);
                 }
 
                 if (b == false)
@@ -245,10 +246,8 @@ namespace Unlimotion.ViewModel
                 if (b == null && ArchiveDateTime == null)
                 {
                     ArchiveDateTime = DateTimeOffset.UtcNow;
+                    RemoveBlockRecursively(taskRepository, null, Id);
                 }
-
-                Blocks.Clear();
-                RemoveTaskInfoRecursively(taskRepository, null, Id, TaskInfoType.IsBlocked);
             });
 
             //Subscribe NotHaveUncompletedContains
@@ -326,8 +325,8 @@ namespace Unlimotion.ViewModel
 
             RemoveFunc = parent =>
             {
-                RemoveTaskInfoRecursively(taskRepository, null, Id, TaskInfoType.IsBlocked);
-
+                RemoveBlockRecursively(taskRepository, null, Id);
+                
                 if (parent == null)
                 {
                     foreach (var model in ParentsTasks.ToList())
@@ -643,9 +642,14 @@ namespace Unlimotion.ViewModel
             new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
         };
         
-        private static void AddTaskInfoRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId, TaskInfoType type)
+        private static void AddBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId, TaskInfoType type)
         {
             AddTaskInfo(taskRepository, parentTask, fromId, type);
+
+            var vm = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == fromId);
+
+            if (vm?.IsCompleted == true || vm?.ArchiveDateTime != null)
+                return;
             
             Foo(parentTask);
  
@@ -662,36 +666,45 @@ namespace Unlimotion.ViewModel
             }
         }
         
-        private static void RemoveTaskInfoRecursively(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
+        private static void RemoveBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel task, string fromId)
         {
-            // нельзя отказываться от родителя (от его блокировки)
-            if (fromId == task?.Parents?.FirstOrDefault())
-                return;
+            var blockRemovingType = DefineBlockRemovingType(fromId, task, taskRepository);
+            const TaskInfoType type = TaskInfoType.IsBlocked;
             
-            // если была не конкретная разблокировка, а выполнение/архивирование блокирующей задачи
-            if (task == null)
+            switch (blockRemovingType)
+            {
+                case BlockRemovingType.FromBlockedParent: return;
+                case BlockRemovingType.BlockingTaskIsCompletedOrArchived:
+                    RemoveBlockingFromCompletedOrArchived();
+                    return;
+                case BlockRemovingType.ParentHasBlock:
+                    RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+                    return;
+                case BlockRemovingType.Concrete:
+                    RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+                    Foo(task.Id);
+                    return;
+            }
+
+
+            void RemoveBlockingFromCompletedOrArchived()
             {
                 var parentsBlockedTasks = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId) && e.Type == type).ToList();
 
                 foreach (var parentBlockedTask in parentsBlockedTasks)
                 {
-                    RemoveTaskInfo(taskRepository, parentBlockedTask.TaskId, fromId, type);
-                    Foo(parentBlockedTask.TaskId);
-                }
+                    var children = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == parentBlockedTask.TaskId)?.Contains;
+                    var childrenComputedTasksInfo =
+                        taskRepository.ComputedTasksInfo.Items.Where(e => children != null && children.Contains(e.TaskId));
 
-                return;
+                    foreach (var childComputedTasksInfo in childrenComputedTasksInfo)
+                    {
+                        RemoveTaskInfo(taskRepository, childComputedTasksInfo.TaskId, fromId, type);
+                        Foo(parentBlockedTask.TaskId);
+                    }
+                }
             }
             
-            // если есть у родителя есть блокировка, то вниз не передаем
-            if (taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => task.Parents.Contains(e.TaskId)) != null)
-            {
-                RemoveTaskInfo(taskRepository, task.Id, fromId, type);
-                return;
-            }
-
-            RemoveTaskInfo(taskRepository, task.Id, fromId, type);
-            Foo(task.Id);
-
             void Foo(string parentId)
             {
                 var tasksInfo = taskRepository.ComputedTasksInfo.Items
@@ -747,6 +760,28 @@ namespace Unlimotion.ViewModel
            taskRepository.SaveComputedTaskInfo(compTaskInfo);
 
            return compTaskInfo?.FromIds.Count == 0;
+        }
+
+        private static BlockRemovingType DefineBlockRemovingType(string fromId, TaskItemViewModel task, ITaskRepository taskRepository)
+        {
+            if (fromId == task?.Parents?.FirstOrDefault())
+                return BlockRemovingType.FromBlockedParent;
+
+            if (task == null)
+                return BlockRemovingType.BlockingTaskIsCompletedOrArchived;
+
+            if (taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => task.Parents.Contains(e.TaskId) && e.Type == TaskInfoType.IsBlocked) != null)
+                return BlockRemovingType.ParentHasBlock;
+
+            return BlockRemovingType.Concrete;
+        }
+        
+        private enum BlockRemovingType
+        {
+            FromBlockedParent = 1,
+            BlockingTaskIsCompletedOrArchived = 2,
+            ParentHasBlock = 3,
+            Concrete = 4,
         }
     }
 }
