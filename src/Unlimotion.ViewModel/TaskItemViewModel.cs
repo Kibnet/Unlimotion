@@ -162,11 +162,11 @@ namespace Unlimotion.ViewModel
                         switch (change.Reason)
                         {
                             case ListChangeReason.Add:
-                                AddBlockRecursively(taskRepository, change.Item.Current, Id, TaskInfoType.IsBlocked);
+                                AddBlockRecursively(taskRepository, change.Item.Current, Id);
                                 break;
                             case ListChangeReason.AddRange:
                                 // при первой блокировке идет не в "case ListChangeReason.Add", а сюда
-                                AddBlockRecursively(taskRepository, change.Range.First(), Id, TaskInfoType.IsBlocked);
+                                AddBlockRecursively(taskRepository, change.Range.First(), Id);
                                 break;
                             case ListChangeReason.Replace:
                                 break;
@@ -294,6 +294,11 @@ namespace Unlimotion.ViewModel
                     {
                         UnlockedDateTime = null;
                     }
+
+                    if (!NotHaveUncompletedBlockedBy)
+                    {
+                        AddBlockRecursively(taskRepository, this, Id);
+                    }
                 })
                 .AddToDispose(this);
 
@@ -311,7 +316,7 @@ namespace Unlimotion.ViewModel
                         var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
                         var tasks = ContainsTasks.Where(m => m.IsCompleted == false).ToList();
                         notificationManager.Ask("Archive contained tasks",
-                            $"Are you sure you want to archive the {tasks.Count} contatined tasks from \"{this.Model.Title}\"?",
+                            $"Are you sure you want to archive the {tasks.Count} contained tasks from \"{this.Model.Title}\"?",
                             () =>
                             {
                                 foreach (var task in tasks)
@@ -642,17 +647,37 @@ namespace Unlimotion.ViewModel
             new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
         };
         
-        private static void AddBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId, TaskInfoType type)
+        private static void AddBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId)
         {
-            AddTaskInfo(taskRepository, parentTask, fromId, type);
+            var type = TaskInfoType.IsBlocked;
+            var blockAddingType = DefineBlockAddingType(fromId, parentTask.Id, taskRepository);
 
-            var vm = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == fromId);
+            switch (blockAddingType)
+            {
+                case BlockAddingType.FromArchivedOrCompleted:
+                    AddTaskInfo(taskRepository, parentTask, fromId, type);
+                    return;
+                case BlockAddingType.ChildrenBlockRecovery:
+                {
+                    var children = parentTask.ContainsTasks;
+                    foreach (var child in children)
+                    {
+                        AddTaskInfo(taskRepository, child, fromId, type);
+                        Foo(child);
+                    }
 
-            if (vm?.IsCompleted == true || vm?.ArchiveDateTime != null)
-                return;
+                    return;
+                }
+                case BlockAddingType.General:
+                {
+                    AddTaskInfo(taskRepository, parentTask, fromId, type);
+                    Foo(parentTask);
+                    return;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
             
-            Foo(parentTask);
- 
             void Foo(TaskItemViewModel task)
             {
                 if (task.ContainsTasks.Count == 0)
@@ -776,12 +801,32 @@ namespace Unlimotion.ViewModel
             return BlockRemovingType.Concrete;
         }
         
+        private static BlockAddingType DefineBlockAddingType(string blockerId, string blockingId, ITaskRepository taskRepository)
+        {
+            if (blockerId == blockingId)
+                return BlockAddingType.ChildrenBlockRecovery;
+            
+            var vm = taskRepository.Tasks.Items.FirstOrDefault(e => e.Id == blockerId);
+
+            if (vm?.IsCompleted == true || vm?.ArchiveDateTime != null)
+                return BlockAddingType.FromArchivedOrCompleted;
+
+            return BlockAddingType.General;
+        }
+        
         private enum BlockRemovingType
         {
-            FromBlockedParent = 1,
-            BlockingTaskIsCompletedOrArchived = 2,
-            ParentHasBlock = 3,
-            Concrete = 4,
+            FromBlockedParent,
+            BlockingTaskIsCompletedOrArchived,
+            ParentHasBlock,
+            Concrete
+        }
+        
+        private enum BlockAddingType
+        {
+            General,
+            ChildrenBlockRecovery,
+            FromArchivedOrCompleted
         }
     }
 }
