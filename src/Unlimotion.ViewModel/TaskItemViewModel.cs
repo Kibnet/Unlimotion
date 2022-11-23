@@ -362,13 +362,32 @@ namespace Unlimotion.ViewModel
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
             {
-
                 Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
+                    .Where(changed =>
+                    {
+                        var args = changed.EventArgs as PropertyChangedEventArgs;
+                        switch (args.PropertyName)
+                        {
+                            case nameof(Title):
+                            case nameof(IsCompleted):
+                            case nameof(Description):
+                            case nameof(ArchiveDateTime):
+                            case nameof(UnlockedDateTime):
+                            case nameof(PlannedBeginDateTime):
+                            case nameof(PlannedEndDateTime):
+                            case nameof(PlannedDuration):
+                            case nameof(Repeater):
+                            case nameof(Importance):
+                            case nameof(Wanted):
+                                return true;
+                        }
+
+                        return false;
+                    })
                     .Throttle(TimeSpan.FromSeconds(2))
                     .Subscribe(x =>
                     {
-                        var args = x.EventArgs as PropertyChangedEventArgs;
-                        SaveOnPropertyChanged(x.Sender, args);
+                        if (_isInited) SaveItemCommand.Execute();
                     }
                     )
                     .AddToDispose(this);
@@ -394,11 +413,29 @@ namespace Unlimotion.ViewModel
                     if (r is INotifyPropertyChanged repeater)
                     {
                         Observable.FromEventPattern(repeater, nameof(INotifyPropertyChanged.PropertyChanged))
+                            .Where(changed =>
+                            {
+                                var args = changed.EventArgs as PropertyChangedEventArgs;
+                                switch (args.PropertyName)
+                                {
+                                    //case nameof(Repeater.Type)://TODO из интерфейса прилетает изменение при переключении
+                                    case nameof(Repeater.AfterComplete):
+                                    case nameof(Repeater.Period):
+                                    case nameof(Repeater.Monday):
+                                    case nameof(Repeater.Tuesday):
+                                    case nameof(Repeater.Wednesday):
+                                    case nameof(Repeater.Thursday):
+                                    case nameof(Repeater.Friday):
+                                    case nameof(Repeater.Saturday):
+                                    case nameof(Repeater.Sunday):
+                                        return true;
+                                }
+                                return false;
+                            })
                             .Throttle(TimeSpan.FromSeconds(2))
                             .Subscribe(x =>
                             {
-                                var args = x.EventArgs as PropertyChangedEventArgs;
-                                SaveOnRepeaterPropertyChanged(x.Sender, args);
+                                if (_isInited) SaveItemCommand.Execute();
                             }
                             )
                             .AddToDispose(this);
@@ -407,45 +444,6 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             _isInited = true;
-        }
-
-        private void SaveOnRepeaterPropertyChanged(object sender, PropertyChangedEventArgs e)
-        {
-            switch (e.PropertyName)
-            {
-                //case nameof(Repeater.Type)://TODO из интерфейса прилетает изменение при переключении
-                case nameof(Repeater.AfterComplete):
-                case nameof(Repeater.Period):
-                case nameof(Repeater.Monday):
-                case nameof(Repeater.Tuesday):
-                case nameof(Repeater.Wednesday):
-                case nameof(Repeater.Thursday):
-                case nameof(Repeater.Friday):
-                case nameof(Repeater.Saturday):
-                case nameof(Repeater.Sunday):
-                    if (_isInited) SaveItemCommand.Execute();
-                    break;
-            }
-        }
-
-        private void SaveOnPropertyChanged(object sender, PropertyChangedEventArgs e)
-        {
-            switch (e.PropertyName)
-            {
-                case nameof(Title):
-                case nameof(IsCompleted):
-                case nameof(Description):
-                case nameof(ArchiveDateTime):
-                case nameof(UnlockedDateTime):
-                case nameof(PlannedBeginDateTime):
-                case nameof(PlannedEndDateTime):
-                case nameof(PlannedDuration):
-                case nameof(Repeater):
-                case nameof(Importance):
-                case nameof(Wanted):
-                    if (_isInited) SaveItemCommand.Execute();
-                    break;
-            }
         }
 
         public ICommand ArchiveCommand { get; set; }
