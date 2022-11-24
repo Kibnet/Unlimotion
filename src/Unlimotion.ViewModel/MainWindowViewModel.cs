@@ -547,7 +547,7 @@ namespace Unlimotion.ViewModel
         {
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {
-                this.ManagerWrapper.Ask("Remove task",
+                ManagerWrapper.Ask("Remove task",
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
                     () => task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem));
             }
