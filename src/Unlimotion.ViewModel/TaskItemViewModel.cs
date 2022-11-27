@@ -649,20 +649,19 @@ namespace Unlimotion.ViewModel
         
         private static void AddBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel parentTask, string fromId)
         {
-            var type = TaskInfoType.IsBlocked;
             var blockAddingType = DefineBlockAddingType(fromId, parentTask.Id, taskRepository);
 
             switch (blockAddingType)
             {
                 case BlockAddingType.FromArchivedOrCompleted:
-                    AddTaskInfo(taskRepository, parentTask, fromId, type);
+                    AddTaskInfo(taskRepository, parentTask, fromId);
                     return;
                 case BlockAddingType.ChildrenBlockRecovery:
                 {
                     var children = parentTask.ContainsTasks;
                     foreach (var child in children)
                     {
-                        AddTaskInfo(taskRepository, child, fromId, type);
+                        AddTaskInfo(taskRepository, child, fromId);
                         Foo(child);
                     }
 
@@ -670,7 +669,7 @@ namespace Unlimotion.ViewModel
                 }
                 case BlockAddingType.General:
                 {
-                    AddTaskInfo(taskRepository, parentTask, fromId, type);
+                    AddTaskInfo(taskRepository, parentTask, fromId);
                     Foo(parentTask);
                     return;
                 }
@@ -685,7 +684,7 @@ namespace Unlimotion.ViewModel
                 
                 foreach (var downTask in task.ContainsTasks.ToList())
                 {
-                    AddTaskInfo(taskRepository, downTask, task.Id, type);
+                    AddTaskInfo(taskRepository, downTask, task.Id);
                     Foo(downTask);
                 }
             }
@@ -694,7 +693,6 @@ namespace Unlimotion.ViewModel
         private static void RemoveBlockRecursively(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, BlockRemovingType? removingType = null)
         {
             var blockRemovingType = removingType?? DefineBlockRemovingType(fromId, task, taskRepository);
-            const TaskInfoType type = TaskInfoType.IsBlocked;
             
             switch (blockRemovingType)
             {
@@ -704,10 +702,10 @@ namespace Unlimotion.ViewModel
                     RemoveBlockingFromCompletedOrArchived();
                     return;
                 case BlockRemovingType.ParentHasBlock:
-                    RemoveTaskInfo(taskRepository, task.Id, fromId, type);
+                    RemoveTaskInfo(taskRepository, task.Id, fromId);
                     return;
                 case BlockRemovingType.Concrete:
-                    if (RemoveTaskInfo(taskRepository, task.Id, fromId, type) == CanRemoveBlockLower.Yes) 
+                    if (RemoveTaskInfo(taskRepository, task.Id, fromId) == CanRemoveBlockLower.Yes) 
                         Foo(task.Id);
                     return;
                 case BlockRemovingType.BlockerIsDeleting:
@@ -717,11 +715,11 @@ namespace Unlimotion.ViewModel
             
             void RemoveBlockingFromDeleting()
             {
-                var computedTasksInfo = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId) && e.Type == type).ToList();
+                var computedTasksInfo = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId)).ToList();
 
                 foreach (var computedTaskInfo in computedTasksInfo)
                 {
-                    if (RemoveTaskInfo(taskRepository, computedTaskInfo.TaskId, fromId, type) == CanRemoveBlockLower.Yes)
+                    if (RemoveTaskInfo(taskRepository, computedTaskInfo.TaskId, fromId) == CanRemoveBlockLower.Yes)
                         Foo(computedTaskInfo.TaskId);
                 }
             }
@@ -729,7 +727,7 @@ namespace Unlimotion.ViewModel
 
             void RemoveBlockingFromCompletedOrArchived()
             {
-                var parentsBlockedTasksInfo = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId) && e.Type == type).ToList();
+                var parentsBlockedTasksInfo = taskRepository.ComputedTasksInfo.Items.Where(e => e.FromIds.Contains(fromId)).ToList();
 
                 foreach (var parentBlockedTaskInfo in parentsBlockedTasksInfo)
                 {
@@ -746,7 +744,7 @@ namespace Unlimotion.ViewModel
                         foreach (var childComputedTasksInfo in childrenComputedTasksInfo)
                         {
                             if (RemoveTaskInfo(taskRepository, childComputedTasksInfo.TaskId,
-                                    parentBlockedTaskInfo.TaskId, type) == CanRemoveBlockLower.Yes)
+                                    parentBlockedTaskInfo.TaskId) == CanRemoveBlockLower.Yes)
                                 Foo(childComputedTasksInfo.TaskId);
                         }
                     }
@@ -756,18 +754,18 @@ namespace Unlimotion.ViewModel
             void Foo(string parentId)
             {
                 var tasksInfo = taskRepository.ComputedTasksInfo.Items
-                    .Where(e => e.FromIds.Contains(parentId) && e.Type == type).ToList();
+                    .Where(e => e.FromIds.Contains(parentId)).ToList();
 
                 foreach (var taskInfo in tasksInfo)
                 {
                     // если у дитя есть блокировка, то вниз не передаем
-                    if (RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId, type) == CanRemoveBlockLower.Yes)
+                    if (RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId) == CanRemoveBlockLower.Yes)
                         Foo(taskInfo.TaskId);
                 }
             }
         }
 
-        private static void AddTaskInfo(ITaskRepository taskRepository, TaskItemViewModel task, string fromId, TaskInfoType type)
+        private static void AddTaskInfo(ITaskRepository taskRepository, TaskItemViewModel task, string fromId)
         {
             var taskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == task.Id);
 
@@ -778,8 +776,7 @@ namespace Unlimotion.ViewModel
             {
                 taskInfo = new ComputedTaskInfo
                 {
-                    TaskId = task.Id,
-                    Type = type
+                    TaskId = task.Id
                 };
                 
                 taskInfo.FromIds.Add(fromId);
@@ -797,9 +794,9 @@ namespace Unlimotion.ViewModel
             }
         }
         
-        private static CanRemoveBlockLower RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId, TaskInfoType type)
+        private static CanRemoveBlockLower RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId)
         {
-           var compTaskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == taskId && e.Type == type);
+           var compTaskInfo = taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == taskId);
            
            compTaskInfo?.FromIds.Remove(fromId);
 
@@ -819,7 +816,7 @@ namespace Unlimotion.ViewModel
             if (task == null)
                 return BlockRemovingType.BlockerIsCompletedOrArchived;
 
-            if (taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => task.Parents.Contains(e.TaskId) && e.Type == TaskInfoType.IsBlocked) != null)
+            if (taskRepository.ComputedTasksInfo.Items.FirstOrDefault(e => task.Parents.Contains(e.TaskId)) != null)
                 return BlockRemovingType.ParentHasBlock;
 
             return BlockRemovingType.Concrete;

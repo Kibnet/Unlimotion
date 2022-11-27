@@ -562,8 +562,7 @@ namespace Unlimotion.ViewModel
             taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
             {
                 TaskId = blockedTaskId,
-                FromIds = new List<string> {blockingTaskId},
-                Type = TaskInfoType.IsBlocked
+                FromIds = new List<string> {blockingTaskId}
             });
         }
 
