@@ -706,7 +706,7 @@ namespace Unlimotion.ViewModel
                     return;
                 case BlockRemovingType.Concrete:
                     if (RemoveTaskInfo(taskRepository, task.Id, fromId) == CanRemoveBlockLower.Yes) 
-                        Foo(task.Id);
+                        RemoveBlockLower(task.Id);
                     return;
                 case BlockRemovingType.BlockerIsDeleting:
                     RemoveBlockingFromDeleting();
@@ -720,7 +720,7 @@ namespace Unlimotion.ViewModel
                 foreach (var computedTaskInfo in computedTasksInfo)
                 {
                     if (RemoveTaskInfo(taskRepository, computedTaskInfo.TaskId, fromId) == CanRemoveBlockLower.Yes)
-                        Foo(computedTaskInfo.TaskId);
+                        RemoveBlockLower(computedTaskInfo.TaskId);
                 }
             }
 
@@ -745,13 +745,13 @@ namespace Unlimotion.ViewModel
                         {
                             if (RemoveTaskInfo(taskRepository, childComputedTasksInfo.TaskId,
                                     parentBlockedTaskInfo.TaskId) == CanRemoveBlockLower.Yes)
-                                Foo(childComputedTasksInfo.TaskId);
+                                RemoveBlockLower(childComputedTasksInfo.TaskId);
                         }
                     }
                 }
             }
             
-            void Foo(string parentId)
+            void RemoveBlockLower(string parentId)
             {
                 var tasksInfo = taskRepository.ComputedTasksInfo.Items
                     .Where(e => e.FromIds.Contains(parentId)).ToList();
@@ -760,7 +760,7 @@ namespace Unlimotion.ViewModel
                 {
                     // если у дитя есть блокировка, то вниз не передаем
                     if (RemoveTaskInfo(taskRepository, taskInfo.TaskId, parentId) == CanRemoveBlockLower.Yes)
-                        Foo(taskInfo.TaskId);
+                        RemoveBlockLower(taskInfo.TaskId);
                 }
             }
         }
