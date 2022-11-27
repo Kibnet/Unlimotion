@@ -69,13 +69,13 @@ namespace Unlimotion.ViewModel
                     if (AllTasksMode && CurrentItem?.Parent != null)
                     {
                         CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        CreateComputedBlockedTaskInfo(taskRepository, task.Id, CurrentItem.Parent.TaskItem.Id);
+                        CreateComputedBlockedTaskInfo(task.Id, CurrentItem.Parent.TaskItem.Id);
                     }
                     else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
                         var firstParent = CurrentTaskItem.ParentsTasks.First();
                         firstParent.Contains.Add(task.Id);
-                        CreateComputedBlockedTaskInfo(taskRepository, task.Id, firstParent.Id);
+                        CreateComputedBlockedTaskInfo(task.Id, firstParent.Id);
                     }
                 }
 
@@ -87,13 +87,12 @@ namespace Unlimotion.ViewModel
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
             {
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
                     CreateSibling.Execute(null);
                     parent.Blocks.Add(CurrentTaskItem.Id);
-                    CreateComputedBlockedTaskInfo(taskRepository, CurrentTaskItem.Id, parent.Id);
+                    CreateComputedBlockedTaskInfo(CurrentTaskItem.Id, parent.Id);
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -110,7 +109,7 @@ namespace Unlimotion.ViewModel
 
                 if (CurrentTaskItem.BlockedByTasks.Count != 0)
                 {
-                    CreateComputedBlockedTaskInfo(taskRepository, task.Id, CurrentTaskItem.Id);
+                    CreateComputedBlockedTaskInfo(task.Id, CurrentTaskItem.Id);
                 }
 
                 taskRepository.Tasks.AddOrUpdate(task);
@@ -557,8 +556,9 @@ namespace Unlimotion.ViewModel
             }
         }
         
-        private void CreateComputedBlockedTaskInfo(ITaskRepository taskRepository, string blockedTaskId, string blockingTaskId)
+        private void CreateComputedBlockedTaskInfo(string blockedTaskId, string blockingTaskId)
         {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
             taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
             {
                 TaskId = blockedTaskId,
