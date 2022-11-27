@@ -438,7 +438,8 @@ public class ServerTaskStorage : ITaskStorage
 
     public IEnumerable<ComputedTaskInfo> GetTasksComputedInfo()
     {
-        throw new NotImplementedException();
+        //TODO Реализовать через вычислимый индекс
+        yield break;
     }
 
     public async Task<bool> Save(TaskItem item)
@@ -461,9 +462,10 @@ public class ServerTaskStorage : ITaskStorage
         return false;
     }
 
-    public Task<bool> SaveComputedTaskInfo(ComputedTaskInfo computedTaskInfo)
+    public async Task<bool> SaveComputedTaskInfo(ComputedTaskInfo computedTaskInfo)
     {
-        throw new NotImplementedException();
+        //TODO Этого метода тут вообще быть не должно
+        return false;
     }
 
     public async Task<bool> Remove(string itemId)

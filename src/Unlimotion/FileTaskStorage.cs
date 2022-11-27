@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -17,7 +18,7 @@ namespace Unlimotion
         public FileTaskStorage(string path)
         {
             Path = path;
-            ComputedTasksInfoPath = path + "/ComputedTasksInfo";
+            ComputedTasksInfoPath = path + "/ComputedInfo";
         }
 
         public IEnumerable<TaskItem> GetAll()
@@ -27,59 +28,43 @@ namespace Unlimotion
             {
                 Init();
             }
-            foreach (var fileInfo in directoryInfo.EnumerateFiles())
-            {
-                string json;
-                using (var reader = fileInfo.OpenText())
-                {
-                    json = reader.ReadToEnd();
-                }
 
-                TaskItem task;
-                try
-                {
-                    task = JsonConvert.DeserializeObject<TaskItem>(json);
-                }
-                catch (Exception e)
-                {
-                    task = null;
-                }
-
-                if (task != null)
-                {
-                    yield return task;
-                }
-            }
+            return directoryInfo.EnumerateFiles()
+                .Select(ReadItem<TaskItem>)
+                .Where(item => item != null)!;
         }
-
+        
         public IEnumerable<ComputedTaskInfo> GetTasksComputedInfo()
         {
             var directoryInfo = new DirectoryInfo(ComputedTasksInfoPath);
 
             if (!directoryInfo.Exists)
                 directoryInfo.Create();
-            
-            foreach (var fileInfo in directoryInfo.EnumerateFiles())
+
+            return directoryInfo.EnumerateFiles()
+                .Select(ReadItem<ComputedTaskInfo>)
+                .Where(item => item != null)!;
+        }
+
+        private static T? ReadItem<T>(FileInfo fileInfo) where T : class
+        {
+            string json;
+            using (var reader = fileInfo.OpenText())
             {
-                string json;
-                using (var reader = fileInfo.OpenText())
-                {
-                    json = reader.ReadToEnd();
-                }
-
-                ComputedTaskInfo computedTaskInfo;
-                try
-                {
-                    computedTaskInfo = JsonConvert.DeserializeObject<ComputedTaskInfo>(json);
-                }
-                catch (Exception e)
-                {
-                    computedTaskInfo = null;
-                }
-
-                if (computedTaskInfo != null)
-                    yield return computedTaskInfo;
+                json = reader.ReadToEnd();
             }
+
+            T? task;
+            try
+            {
+                task = JsonConvert.DeserializeObject<T>(json);
+            }
+            catch (Exception e)
+            {
+                task = null;
+            }
+
+            return task;
         }
 
         private void Init()
@@ -106,12 +91,12 @@ namespace Unlimotion
         public async Task<bool> Save(TaskItem item)
         {
             item.Id ??= Guid.NewGuid().ToString();
-            return await SaveBase(Path, item.Id, item);
+            return await SaveItem(Path, item.Id, item);
         }
-        
+
         public async Task<bool> SaveComputedTaskInfo(ComputedTaskInfo taskInfo)
         {
-            return await SaveBase(ComputedTasksInfoPath, string.Join("_", taskInfo.TaskId, taskInfo.Type.ToString()), taskInfo);
+            return await SaveItem(ComputedTasksInfoPath, taskInfo.TaskId, taskInfo);
         }
 
 
@@ -139,10 +124,10 @@ namespace Unlimotion
         {
         }
 
-        private async Task<bool> SaveBase(string path, string name, object objForSerialization)
+        private static async Task<bool> SaveItem(string path, string name, object objForSerialization)
         {
             var directoryInfo = new DirectoryInfo(path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, name)); 
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, name));
             var converter = new IsoDateTimeConverter
             {
                 DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
