@@ -26,7 +26,6 @@ namespace Unlimotion.ViewModel
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
         public SourceList<ComputedTaskInfo> ComputedTasksInfo { get; private set; }
         IObservable<Func<TaskItemViewModel, bool>> rootFilter;
-        private Dictionary<string, HashSet<string>> blockedById { get; set; }
 
         public TaskRepository(ITaskStorage taskStorage)
         {
@@ -37,19 +36,6 @@ namespace Unlimotion.ViewModel
         {
             Tasks.Remove(itemId);
             await _taskStorage.Remove(itemId);
-            if (blockedById.TryGetValue(itemId, out var hashSet))
-            {
-                blockedById.Remove(itemId);
-                foreach (var blockedId in hashSet)
-                {
-                    var task = GetById(blockedId);
-                    if (task != null)
-                    {
-                        task.Blocks.Remove(itemId);
-                        await Save(task.Model);
-                    }
-                }
-            }
         }
 
         public async Task Save(TaskItem item)

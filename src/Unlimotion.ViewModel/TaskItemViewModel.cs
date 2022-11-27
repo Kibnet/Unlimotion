@@ -341,6 +341,7 @@ namespace Unlimotion.ViewModel
                 }
                 //Удаление ссылки из родителя
                 parent?.Contains.Remove(Id);
+
                 //Если родителей не осталось, удаляется сама задача
                 if (Parents.Count == 0)
                 {
@@ -349,6 +350,11 @@ namespace Unlimotion.ViewModel
                     foreach (var containsTask in ContainsTasks.ToList())
                     {
                         containsTask.Parents.Remove(Id);
+                    }
+
+                    foreach (var blockingTask in BlockedByTasks.ToList())
+                    {
+                        blockingTask.Blocks.Remove(Id);
                     }
 
                     return true;
