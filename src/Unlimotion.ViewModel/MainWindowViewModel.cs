@@ -69,13 +69,15 @@ namespace Unlimotion.ViewModel
                     if (AllTasksMode && CurrentItem?.Parent != null)
                     {
                         CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        CreateComputedBlockedTaskInfo(task.Id, CurrentItem.Parent.TaskItem.Id);
+                        if (CurrentItem.Parent.TaskItem.BlockedByTasks.Count > 0)
+                            CreateComputedBlockedTaskInfo(task.Id, CurrentItem.Parent.TaskItem.Id);
                     }
                     else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
                         var firstParent = CurrentTaskItem.ParentsTasks.First();
                         firstParent.Contains.Add(task.Id);
-                        CreateComputedBlockedTaskInfo(task.Id, firstParent.Id);
+                        if (CurrentItem.Parent.TaskItem.BlockedByTasks.Count > 0)
+                            CreateComputedBlockedTaskInfo(task.Id, firstParent.Id);
                     }
                 }
 
