@@ -561,7 +561,7 @@ namespace Unlimotion.ViewModel
         private void CreateComputedBlockedTaskInfo(string blockedTaskId, string blockingTaskId)
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            taskRepository.ComputedTasksInfo.Add(new ComputedTaskInfo
+            taskRepository.ComputedTasksInfo.AddOrUpdate(new ComputedTaskInfo
             {
                 TaskId = blockedTaskId,
                 FromIds = new List<string> {blockingTaskId}

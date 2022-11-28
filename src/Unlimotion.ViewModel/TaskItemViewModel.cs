@@ -267,7 +267,7 @@ namespace Unlimotion.ViewModel
             
             //Subscribe NotHaveUncompletedBlockedBy
             BlockedByTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted, e => e.ComputedTasksInfo))
                 .StartWithEmpty()
                 .ToCollection()
                 .Select(items =>
@@ -787,15 +787,14 @@ namespace Unlimotion.ViewModel
                 
                 taskInfo.FromIds.Add(fromId);
                 
-                taskRepository.ComputedTasksInfo.Add(taskInfo);
+                taskRepository.ComputedTasksInfo.AddOrUpdate(taskInfo);
                 taskRepository.SaveComputedTaskInfo(taskInfo);
             }
 
             else
             {
                 taskInfo.FromIds.Add(fromId);
-                taskRepository.ComputedTasksInfo.Remove(taskInfo);
-                taskRepository.ComputedTasksInfo.Add(taskInfo);
+                taskRepository.ComputedTasksInfo.AddOrUpdate(taskInfo);
                 taskRepository.SaveComputedTaskInfo(taskInfo);
             }
         }
@@ -806,8 +805,7 @@ namespace Unlimotion.ViewModel
            
            compTaskInfo?.FromIds.Remove(fromId);
 
-           taskRepository.ComputedTasksInfo.Remove(compTaskInfo);
-           taskRepository.ComputedTasksInfo.Add(compTaskInfo);
+           taskRepository.ComputedTasksInfo.AddOrUpdate(compTaskInfo);
            
            taskRepository.SaveComputedTaskInfo(compTaskInfo);
 

@@ -11,7 +11,7 @@ namespace Unlimotion.ViewModel
     public interface ITaskRepository
     {
         SourceCache<TaskItemViewModel, string> Tasks { get; }
-        SourceList<ComputedTaskInfo> ComputedTasksInfo { get; }
+        SourceCache<ComputedTaskInfo, string> ComputedTasksInfo { get; }
         void Init();
         Task Remove(string itemId);
         Task Save(TaskItem item);
@@ -24,7 +24,7 @@ namespace Unlimotion.ViewModel
     {
         private readonly ITaskStorage _taskStorage;
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
-        public SourceList<ComputedTaskInfo> ComputedTasksInfo { get; private set; }
+        public SourceCache<ComputedTaskInfo, string> ComputedTasksInfo { get; private set; }
         IObservable<Func<TaskItemViewModel, bool>> rootFilter;
 
         public TaskRepository(ITaskStorage taskStorage)
@@ -50,13 +50,15 @@ namespace Unlimotion.ViewModel
 
         public void Init() => Init(_taskStorage.GetAll(), _taskStorage.GetTasksComputedInfo());
         
-        private void Init(IEnumerable<TaskItem> items, IEnumerable<ComputedTaskInfo> tasksRules)
+        private void Init(IEnumerable<TaskItem> items, IEnumerable<ComputedTaskInfo> tasksInfo)
         {
 	        Tasks = new(item => item.Id);
-	        ComputedTasksInfo = new SourceList<ComputedTaskInfo>();
+	        ComputedTasksInfo = new(item => item.TaskId);
 	        
-	        foreach (var rule in tasksRules)
-		        ComputedTasksInfo.Add(rule);
+	        foreach (var taskInfo in tasksInfo)
+	        {
+		        ComputedTasksInfo.AddOrUpdate(taskInfo);
+	        }
 	        
             foreach (var taskItem in items)
             {
