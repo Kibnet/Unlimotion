@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive.Linq;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using AvaloniaGraphControl;
 using DynamicData.Binding;
 using ReactiveUI;
@@ -31,42 +33,52 @@ namespace Unlimotion.Views
 
         private GraphViewModel? dc;
         private DisposableList disposableList = new DisposableListRealization();
-        private IDisposable subscribe;
 
         private void GraphControl_DataContextChanged(object sender, System.EventArgs e)
         {
-            dc = DataContext as GraphViewModel;
-
-            if (dc != null)
+            var newdc = DataContext as GraphViewModel;
+            if (dc != newdc)
             {
-                dc.WhenAnyValue(
-                    m => m.OnlyUnlocked,
-                    m => m.HideUnactual,
-                    m => m.ShowArchived,
-                    m => m.ShowCompleted,
-                    m => m.ShowWanted)
-                    .Subscribe(t => { UpdateGraph(); }).AddToDispose(disposableList);
+                dc = newdc;
+                disposableList.Dispose();
+                disposableList.Disposables.Clear();
+                
+                if (dc != null)
+                {
+                    dc.WhenAnyValue(
+                            m => m.OnlyUnlocked,
+                            m => m.HideUnactual,
+                            m => m.ShowArchived,
+                            m => m.ShowCompleted,
+                            m => m.ShowWanted)
+                        .Subscribe(t => { UpdateGraph(); })
+                        .AddToDispose(disposableList);
+
+                    dc.UnlockedTasks.ObserveCollectionChanges()
+                        .Throttle(TimeSpan.FromMilliseconds(100))
+                        .Subscribe(p => UpdateGraph())
+                        .AddToDispose(disposableList);
+
+                    dc.Tasks.ObserveCollectionChanges()
+                        .Throttle(TimeSpan.FromMilliseconds(100))
+                        .Subscribe(p => UpdateGraph())
+                        .AddToDispose(disposableList);
+                }
             }
+           
         }
+
 
         private void UpdateGraph()
         {
+            if (dc == null) return;
+
             if (dc.OnlyUnlocked)
             {
-                if (subscribe != null)
-                {
-                    subscribe.Dispose();
-                }
-                subscribe = dc.UnlockedTasks.ObserveCollectionChanges().Subscribe(p => UpdateGraph());
                 BuildFromTasks(dc.UnlockedTasks, dc.HideUnactual);
             }
             else
             {
-                if (subscribe != null)
-                {
-                    subscribe.Dispose();
-                }
-                subscribe = dc.Tasks.ObserveCollectionChanges().Subscribe(p => UpdateGraph());
                 BuildFromTasks(dc.Tasks, dc.HideUnactual);
             }
         }
@@ -126,8 +138,12 @@ namespace Unlimotion.Views
             {
                 graph.Edges.Add(new Edge(task, task));
             }
-            var control = this.GetControl<GraphPanel>("Graph");
-            control.Graph = graph;
+
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var control = this.GetControl<GraphPanel>("Graph");
+                control.Graph = graph;
+            });
         }
 
         private void InitializeComponent()
