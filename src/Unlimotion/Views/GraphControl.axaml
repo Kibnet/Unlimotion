@@ -1,0 +1,60 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+			 xmlns:unlimotion="clr-namespace:Unlimotion"
+			 xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
+			 xmlns:local="clr-namespace:Unlimotion.Views.Graph"
+			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:Class="Unlimotion.Views.GraphControl">
+	<Grid RowDefinitions="Auto,*">
+		<WrapPanel Orientation="Horizontal">
+            <CheckBox Content="Hide Unactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
+			<CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
+			<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
+            <ComboBox Items="{Binding EmojiFilters}" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
+			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
+			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
+		</WrapPanel>
+		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+					  HorizontalScrollBarVisibility="Auto">
+			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
+							ClipToBounds="True" Focusable="True" PanButton="Right"
+							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+				<avaloniaGraphControl:GraphPanel x:Name="Graph"
+								LayoutMethod="SugiyamaScheme">
+					<avaloniaGraphControl:GraphPanel.DataTemplates>
+						<DataTemplate DataType="{x:Type local:BlockEdge}">
+							<avaloniaGraphControl:Connection Brush="Red"/>
+						</DataTemplate>
+						<DataTemplate DataType="{x:Type local:ContainEdge}">
+							<avaloniaGraphControl:Connection Brush="Green" />
+						</DataTemplate>
+						<DataTemplate DataType="{x:Type viewModel:TaskItemViewModel}">
+							<Grid ColumnDefinitions="Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+								<Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
+								<TextBlock Grid.Column="2" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+							</Grid>
+							<!--<Border BorderBrush="Gray" CornerRadius="4" BorderThickness="1" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+								<Grid ColumnDefinitions="Auto, *" Margin="5,0">
+									<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+									<TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+								</Grid>
+							</Border>-->
+						</DataTemplate>
+						<DataTemplate DataType="{x:Type local:CompositeItem}">
+							<avaloniaGraphControl:TextSticker Text="{Binding Name}"
+											 Shape="RoundedRectangle"
+											 HorizontalAlignment="Stretch"
+											 BorderForeground="White"
+											 TextForeground="White"
+											 VerticalAlignment="Stretch" />
+						</DataTemplate>
+					</avaloniaGraphControl:GraphPanel.DataTemplates>
+				</avaloniaGraphControl:GraphPanel>
+			</ZoomBorder>
+		</ScrollViewer>
+	</Grid>
+</UserControl>
