@@ -10,11 +10,12 @@
 			 x:Class="Unlimotion.Views.GraphControl">
 	<Grid RowDefinitions="Auto,*">
 		<WrapPanel Orientation="Horizontal">
-			<CheckBox Content="OnlyUnlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
-			<CheckBox Content="HideUnactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
-			<CheckBox Content="Wanted" IsChecked="{Binding ShowWanted}" Margin="10,0,0,0"/>
-			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
-			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
+            <CheckBox Content="Hide Unactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
+			<CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
+			<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
+            <ComboBox Items="{Binding EmojiFilters}" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
+			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
+			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
 		</WrapPanel>
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
 					  HorizontalScrollBarVisibility="Auto">

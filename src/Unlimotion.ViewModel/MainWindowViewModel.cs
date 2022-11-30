@@ -245,6 +245,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             EmojiFilters = _emojiFilters;
+            Graph.EmojiFilters = _emojiFilters;
 
             var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
                 .Select(filter =>
