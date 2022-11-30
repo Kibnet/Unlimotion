@@ -1,11 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
+using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using AvaloniaGraphControl;
+using DynamicData.Binding;
+using ReactiveUI;
 using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.Views.Graph;
@@ -26,34 +29,52 @@ namespace Unlimotion.Views
             }
         }
 
+        private GraphViewModel? dc;
+        private DisposableList disposableList = new DisposableListRealization();
+        private IDisposable subscribe;
+
         private void GraphControl_DataContextChanged(object sender, System.EventArgs e)
         {
-            var dc = DataContext as GraphViewModel;
+            dc = DataContext as GraphViewModel;
+
             if (dc != null)
             {
-                
-                var graph = new AvaloniaGraphControl.Graph();
-                graph.Orientation = AvaloniaGraphControl.Graph.Orientations.Horizontal;
-                dc.MyGraph = graph;
-                if (dc.OnlyUnlocked)
-                {
-                    BuildFromTasks(graph, dc.UnlockedTasks, dc.HideUnactual);
-                }
-                else
-                {
-                    BuildFromTasks(graph, dc.Tasks, dc.HideUnactual);
-                }
-
-                //graph.Parent[b1] = b;
-                //graph.Parent[b2] = b;
-                //graph.Parent[b3] = b;
-                //graph.Parent[b4] = b;
+                dc.WhenAnyValue(
+                    m => m.OnlyUnlocked,
+                    m => m.HideUnactual,
+                    m => m.ShowArchived,
+                    m => m.ShowCompleted,
+                    m => m.ShowWanted)
+                    .Subscribe(t => { UpdateGraph(); }).AddToDispose(disposableList);
             }
         }
-        
-        private static void BuildFromTasks(AvaloniaGraphControl.Graph graph,
-            ReadOnlyObservableCollection<TaskWrapperViewModel> tasks, bool hideUnactual)
+
+        private void UpdateGraph()
         {
+            if (dc.OnlyUnlocked)
+            {
+                if (subscribe != null)
+                {
+                    subscribe.Dispose();
+                }
+                subscribe = dc.UnlockedTasks.ObserveCollectionChanges().Subscribe(p => UpdateGraph());
+                BuildFromTasks(dc.UnlockedTasks, dc.HideUnactual);
+            }
+            else
+            {
+                if (subscribe != null)
+                {
+                    subscribe.Dispose();
+                }
+                subscribe = dc.Tasks.ObserveCollectionChanges().Subscribe(p => UpdateGraph());
+                BuildFromTasks(dc.Tasks, dc.HideUnactual);
+            }
+        }
+
+        private void BuildFromTasks(ReadOnlyObservableCollection<TaskWrapperViewModel> tasks, bool hideUnactual)
+        {
+            var graph = new AvaloniaGraphControl.Graph();
+            graph.Orientation = AvaloniaGraphControl.Graph.Orientations.Horizontal;
             var hashSet = new HashSet<TaskItemViewModel>();
             var haveLinks = new HashSet<TaskItemViewModel>();
             var queue = new Queue<TaskItemViewModel>();
@@ -105,6 +126,8 @@ namespace Unlimotion.Views
             {
                 graph.Edges.Add(new Edge(task, task));
             }
+            var control = this.GetControl<GraphPanel>("Graph");
+            control.Graph = graph;
         }
 
         private void InitializeComponent()
@@ -133,7 +156,7 @@ namespace Unlimotion.Views
                     break;
             }
         }
-        
+
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var pointer = e.GetCurrentPoint(this);

@@ -17,13 +17,12 @@
 			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 		</WrapPanel>
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto">
+					  HorizontalScrollBarVisibility="Auto">
 			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
 							ClipToBounds="True" Focusable="True" PanButton="Right"
 							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-				<avaloniaGraphControl:GraphPanel
-								Graph="{Binding MyGraph}"
-                                LayoutMethod="SugiyamaScheme">
+				<avaloniaGraphControl:GraphPanel x:Name="Graph"
+								LayoutMethod="SugiyamaScheme">
 					<avaloniaGraphControl:GraphPanel.DataTemplates>
 						<DataTemplate DataType="{x:Type local:BlockEdge}">
 							<avaloniaGraphControl:Connection Brush="Red"/>
@@ -34,11 +33,11 @@
 						<DataTemplate DataType="{x:Type viewModel:TaskItemViewModel}">
 							<Grid ColumnDefinitions="Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-                                <Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
+								<Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
 							</Grid>
 							<!--<Border BorderBrush="Gray" CornerRadius="4" BorderThickness="1" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
-                                <Grid ColumnDefinitions="Auto, *" Margin="5,0">
+								<Grid ColumnDefinitions="Auto, *" Margin="5,0">
 									<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
 									<TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
 								</Grid>

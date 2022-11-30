@@ -12,7 +12,7 @@ public class GraphViewModel
     {
         mwm = Locator.Current.GetService<MainWindowViewModel>();
     }
-    public object MyGraph { get; set; }
+
     public ReadOnlyObservableCollection<TaskWrapperViewModel> Tasks { get; set; }
     public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedTasks { get; set; }
 
