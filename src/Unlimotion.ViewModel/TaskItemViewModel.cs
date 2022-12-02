@@ -784,19 +784,11 @@ namespace Unlimotion.ViewModel
                 {
                     TaskId = task.Id
                 };
-                
-                taskInfo.FromIds.Add(fromId);
-                
-                taskRepository.ComputedTasksInfo.AddOrUpdate(taskInfo);
-                taskRepository.SaveComputedTaskInfo(taskInfo);
             }
-
-            else
-            {
-                taskInfo.FromIds.Add(fromId);
-                taskRepository.ComputedTasksInfo.AddOrUpdate(taskInfo);
-                taskRepository.SaveComputedTaskInfo(taskInfo);
-            }
+      
+            taskInfo.FromIds.Add(fromId);
+            taskRepository.ComputedTasksInfo.AddOrUpdate(taskInfo);
+            taskRepository.SaveComputedTaskInfo(taskInfo);
         }
         
         private static CanRemoveBlockLower RemoveTaskInfo(ITaskRepository taskRepository, string taskId, string fromId)

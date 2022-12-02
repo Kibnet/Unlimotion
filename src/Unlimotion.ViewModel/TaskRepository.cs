@@ -55,15 +55,33 @@ namespace Unlimotion.ViewModel
 	        Tasks = new(item => item.Id);
 	        ComputedTasksInfo = new(item => item.TaskId);
 	        
-	        foreach (var taskInfo in tasksInfo)
-	        {
-		        ComputedTasksInfo.AddOrUpdate(taskInfo);
-	        }
-	        
             foreach (var taskItem in items)
             {
                 var vm = new TaskItemViewModel(taskItem, this);
                 Tasks.AddOrUpdate(vm);
+            }
+
+            foreach (var taskInfo in tasksInfo)
+            {
+                ComputedTasksInfo.AddOrUpdate(taskInfo);
+            }
+
+            foreach (var child in Tasks.Items)
+            {
+                foreach (var blockingParent in child.ParentsTasks.Where(e => e.BlockedByTasks.Any()))
+                {
+                    var taskInfo = ComputedTasksInfo.Items.FirstOrDefault(e => e.TaskId == child.Id);
+
+                    if (taskInfo == null)
+                        taskInfo = new ComputedTaskInfo { TaskId = child.Id };
+
+                    if (!taskInfo.FromIds.Contains(blockingParent.Id))
+                    {
+                        taskInfo.FromIds.Add(blockingParent.Id);
+                        ComputedTasksInfo.AddOrUpdate(taskInfo);
+                        SaveComputedTaskInfo(taskInfo);
+                    }
+                }
             }
 
             rootFilter = Tasks.Connect()
