@@ -199,7 +199,7 @@ namespace Unlimotion.Views
 
         private const string CustomFormat = "application/xxx-unlimotion-task-item";
 
-        private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
             var mwm = Locator.Current.GetService<MainWindowViewModel>();
             if (mwm != null)

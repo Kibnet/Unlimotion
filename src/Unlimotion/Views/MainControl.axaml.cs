@@ -276,7 +276,7 @@ namespace Unlimotion.Views
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
-        private void Task_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        private void Task_OnDoubleTapped(object sender, TappedEventArgs e)
         {
             var vm = DataContext as MainWindowViewModel;
             if (vm != null)
@@ -289,8 +289,8 @@ namespace Unlimotion.Views
                 }
             }
         }
-
-        private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        
+        private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
             var vm = DataContext as MainWindowViewModel;
             if (vm != null)

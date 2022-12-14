@@ -7,9 +7,16 @@
 	</Application.DataTemplates>
 
 	<Application.Styles>
+		<FluentTheme Mode="Dark"/>
+        <Style Selector="Label">
+            <Setter Property="Foreground" Value="{StaticResource SystemBaseHighColor}"/>
+        </Style>
 		<Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
 		</Style>
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource SystemBaseHighColor}"/>
+        </Style>
         <Style Selector="TextBlock.IsCanBeCompleted">
             <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
         </Style>
