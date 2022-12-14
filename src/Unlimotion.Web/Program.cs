@@ -1,28 +1,52 @@
-﻿using System;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Unlimotion.Web;
-using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-public class Program
+﻿using System.IO;
+using System.Runtime.Versioning;
+using Avalonia;
+using Avalonia.Web;
+using Avalonia.ReactiveUI;
+using Unlimotion;
+using AutoMapper;
+using Microsoft.Extensions.Configuration;
+using Splat;
+using Unlimotion.ViewModel;
+using WritableJsonConfiguration;
+
+[assembly: SupportedOSPlatform("browser")]
+
+internal partial class Program
 {
-    public static async Task Main(string[] args)
-    {
-        await CreateHostBuilder(args).Build().RunAsync();
-    }
+    private static void Main(string[] args) => BuildAvaloniaApp()
+        .UseReactiveUI()
+        .SetupBrowserApp("out");
 
-    public static WebAssemblyHostBuilder CreateHostBuilder(string[] args)
+    public static AppBuilder BuildAvaloniaApp()
     {
-        var builder = WebAssemblyHostBuilder.CreateDefault(args);
-        
-        builder.RootComponents.Add<App>("#app");
-        
-        builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+        TaskStorages.DefaultStoragePath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "Tasks");
 
-        return builder;
+        var settingsPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "Settings.json");
+        if (!File.Exists(settingsPath))
+        {
+            var stream = File.CreateText(settingsPath);
+            stream.Write(@"{}");
+            stream.Close();
+        }
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(settingsPath);
+        Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+        Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
+
+        var mapper = AppModelMapping.ConfigureMapping();
+        Locator.CurrentMutable.Register<IMapper>(() => mapper);
+
+        var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+        if (taskStorageSettings == null)
+        {
+            taskStorageSettings = new TaskStorageSettings();
+            configuration.Set("TaskStorage", taskStorageSettings);
+        }
+        var isServerMode = taskStorageSettings.IsServerMode;
+        TaskStorages.RegisterStorage(isServerMode, configuration);
+
+        var notificationManager = new NotificationManagerWrapperWrapper();
+        Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+        return AppBuilder.Configure<App>();
     }
 }
-
-
-
-

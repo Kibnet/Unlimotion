@@ -7,8 +7,11 @@ namespace Unlimotion
 {
     public class ViewLocator : IDataTemplate
     {
-        public IControl Build(object data)
-        {
+    public IControl? Build(object? data)
+    {
+        if (data is null)
+            return null;
+
             var name = data.GetType().FullName!.Replace("ViewModel", "View");
             var type = Type.GetType(name);
 
@@ -16,10 +19,8 @@ namespace Unlimotion
             {
                 return (Control)Activator.CreateInstance(type)!;
             }
-            else
-            {
-                return new TextBlock { Text = "Not Found: " + name };
-            }
+
+            return new TextBlock { Text = "Not Found: " + name };
         }
 
         public bool Match(object data)
