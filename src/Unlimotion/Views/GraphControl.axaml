@@ -32,7 +32,7 @@
 							<avaloniaGraphControl:Connection Brush="Green" />
 						</DataTemplate>
 						<DataTemplate DataType="{x:Type viewModel:TaskItemViewModel}">
-							<Grid ColumnDefinitions="Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+							<Grid ColumnDefinitions="Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped">
 								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
 								<Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
 								<TextBlock Grid.Column="2" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />

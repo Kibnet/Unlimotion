@@ -6,6 +6,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
@@ -197,5 +198,14 @@ namespace Unlimotion.Views
 
 
         private const string CustomFormat = "application/xxx-unlimotion-task-item";
+
+        private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        {
+            var mwm = Locator.Current.GetService<MainWindowViewModel>();
+            if (mwm != null)
+            {
+                mwm.DetailsAreOpen = !mwm.DetailsAreOpen;
+            }
+        }
     }
 }

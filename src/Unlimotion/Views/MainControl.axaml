@@ -25,7 +25,7 @@
 			</Grid>
 		</DataTemplate>
 		<DataTemplate DataType="viewModel:TaskWrapperViewModel">
-			<Grid>
+			<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
 						Content="❌"
@@ -95,7 +95,7 @@
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<Grid >
+									<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
 										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
@@ -124,7 +124,7 @@
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<Grid>
+									<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
 										<Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
@@ -154,7 +154,7 @@
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<Grid>
+									<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
 										<Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
@@ -182,7 +182,7 @@
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
-		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right">
+		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right" IsExpanded="{Binding DetailsAreOpen}">
 			<Grid DataContext="{Binding CurrentTaskItem}">
 				<Border>
 					<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
