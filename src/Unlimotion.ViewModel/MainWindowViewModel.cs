@@ -634,6 +634,7 @@ namespace Unlimotion.ViewModel
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true, SortText = "\u0000"};
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
+        public bool DetailsAreOpen { get; set; }
     }
 
     [AddINotifyPropertyChangedInterface]

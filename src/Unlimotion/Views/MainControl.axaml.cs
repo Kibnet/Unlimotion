@@ -289,5 +289,14 @@ namespace Unlimotion.Views
                 }
             }
         }
+
+        private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        {
+            var vm = DataContext as MainWindowViewModel;
+            if (vm != null)
+            {
+                vm.DetailsAreOpen = !vm.DetailsAreOpen;
+            }
+        }
     }
 }
