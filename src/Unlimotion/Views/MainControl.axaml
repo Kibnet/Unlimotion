@@ -117,6 +117,14 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
+							<Label Content="From" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker SelectedDate="{Binding CompletedDateFilter.From}"
+							                    IsTodayHighlighted="True"
+							                    DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+							<Label Content="To" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker SelectedDate="{Binding CompletedDateFilter.To}"
+							                    IsTodayHighlighted="True"
+							                    DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  Items="{Binding CompletedItems}"
@@ -147,6 +155,14 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
+							<Label Content="From" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker SelectedDate="{Binding ArchivedDateFilter.From}"
+							                    IsTodayHighlighted="True"
+							                    DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+							<Label Content="To" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker SelectedDate="{Binding ArchivedDateFilter.To}"
+							                    IsTodayHighlighted="True"
+							                    DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  Items="{Binding ArchivedItems}"

@@ -305,7 +305,28 @@ namespace Unlimotion.ViewModel
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+            
+            var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        return filter.Item1.Date <= task.ArchiveDateTime?.Date && task.ArchiveDateTime?.Date <= filter.Item2.Date;
+                    }
 
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+            
+            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        return filter.Item1.Date <= task.CompletedDateTime?.Date && task.CompletedDateTime?.Date <= filter.Item2.Date;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
 
             //Bind Unlocked
             taskRepository.Tasks
@@ -361,6 +382,7 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
                 .Filter(emojiFilter)
+                .Filter(completedDateFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -385,6 +407,7 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
                 .Filter(emojiFilter)
+                .Filter(archiveDateFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -635,6 +658,9 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
+
+        public DateFilter CompletedDateFilter { get; set; } = new();
+        public DateFilter ArchivedDateFilter { get; set; } = new();
     }
 
     [AddINotifyPropertyChangedInterface]
@@ -644,5 +670,12 @@ namespace Unlimotion.ViewModel
         public string Emoji { get; set; }
         public bool ShowTasks { get; set; }
         public string SortText { get; set; }
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class DateFilter
+    {
+        public DateTime From { get; set; } = DateTime.Today.AddDays(-7);
+        public DateTime To { get; set; } = DateTime.Today;
     }
 }
