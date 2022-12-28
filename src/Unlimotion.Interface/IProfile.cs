@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Unlimotion.Client.ViewModel
+namespace Unlimotion.Interface
 {
-   public interface IProfile
-   {
-      Task Open(string userId);
-   }
+    public interface IProfile
+    {
+        Task Open(string userId);
+    }
 }
