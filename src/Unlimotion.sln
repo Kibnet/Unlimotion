@@ -35,6 +35,8 @@ Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-co
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Web", "Unlimotion.Web\Unlimotion.Web.csproj", "{78D52C5C-119F-430C-B0F4-7B91222EC384}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.iOS", "Unlimotion.iOS\Unlimotion.iOS.csproj", "{FAEB9E81-5207-46F7-A642-B5248E284420}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -95,6 +97,10 @@ Global
 		{78D52C5C-119F-430C-B0F4-7B91222EC384}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78D52C5C-119F-430C-B0F4-7B91222EC384}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78D52C5C-119F-430C-B0F4-7B91222EC384}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FAEB9E81-5207-46F7-A642-B5248E284420}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FAEB9E81-5207-46F7-A642-B5248E284420}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FAEB9E81-5207-46F7-A642-B5248E284420}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FAEB9E81-5207-46F7-A642-B5248E284420}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
