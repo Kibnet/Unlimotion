@@ -306,23 +306,43 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
             
-            var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To)
-                .Select(filter =>
+            this.WhenAnyValue(m => m.ArchivedDateFilter.CurrentOption, m => m.ArchivedDateFilter.IsCustom)
+                .Subscribe(filter =>
                 {
+                    if (!filter.Item2)
+                        ArchivedDateFilter.SetDateTimes(filter.Item1);
+                });
+            
+            var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To, m => m.ArchivedDateFilter.IsCustom)
+                .Select(filter =>
+                {   
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return filter.Item1.Date <= task.ArchiveDateTime?.Date && task.ArchiveDateTime?.Date <= filter.Item2.Date;
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
+                        
+                        return filter.Item1 <= task.ArchiveDateTime?.Date && task.ArchiveDateTime?.Date <= filter.Item2;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
             
-            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To)
+            this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
+                .Subscribe(filter =>
+                {
+                    if (!filter.Item2)
+                        CompletedDateFilter.SetDateTimes(filter.Item1);
+                });
+
+            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To, m => m.CompletedDateFilter.IsCustom)
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return filter.Item1.Date <= task.CompletedDateTime?.Date && task.CompletedDateTime?.Date <= filter.Item2.Date;
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
+                        
+                        return filter.Item1 <= task.CompletedDateTime?.Date && task.CompletedDateTime?.Date <= filter.Item2;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
@@ -381,8 +401,8 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
-                .Filter(emojiFilter)
                 .Filter(completedDateFilter)
+                .Filter(emojiFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -406,8 +426,8 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
-                .Filter(emojiFilter)
                 .Filter(archiveDateFilter)
+                .Filter(emojiFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -661,6 +681,8 @@ namespace Unlimotion.ViewModel
 
         public DateFilter CompletedDateFilter { get; set; } = new();
         public DateFilter ArchivedDateFilter { get; set; } = new();
+        
+        public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
     }
 
     [AddINotifyPropertyChangedInterface]
@@ -670,12 +692,5 @@ namespace Unlimotion.ViewModel
         public string Emoji { get; set; }
         public bool ShowTasks { get; set; }
         public string SortText { get; set; }
-    }
-
-    [AddINotifyPropertyChangedInterface]
-    public class DateFilter
-    {
-        public DateTime From { get; set; } = DateTime.Today.AddDays(-7);
-        public DateTime To { get; set; } = DateTime.Today;
     }
 }

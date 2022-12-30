@@ -117,14 +117,18 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
-							<Label Content="From" Margin="10 0 10 0" VerticalAlignment="Center"/>
-							<CalendarDatePicker SelectedDate="{Binding CompletedDateFilter.From}"
+							<CheckBox Content="Custom" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
+							                    SelectedDate="{Binding CompletedDateFilter.From}"
 							                    IsTodayHighlighted="True"
 							                    DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-							<Label Content="To" Margin="10 0 10 0" VerticalAlignment="Center"/>
-							<CalendarDatePicker SelectedDate="{Binding CompletedDateFilter.To}"
+							<Label Content="To" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
+							                    SelectedDate="{Binding CompletedDateFilter.To}"
 							                    IsTodayHighlighted="True"
 							                    DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+							<ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  Items="{Binding CompletedItems}"
@@ -155,14 +159,18 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
-							<Label Content="From" Margin="10 0 10 0" VerticalAlignment="Center"/>
-							<CalendarDatePicker SelectedDate="{Binding ArchivedDateFilter.From}"
+							<CheckBox Content="Custom" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center" />
+							<Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
+							                    SelectedDate="{Binding ArchivedDateFilter.From}"
 							                    IsTodayHighlighted="True"
 							                    DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-							<Label Content="To" Margin="10 0 10 0" VerticalAlignment="Center"/>
-							<CalendarDatePicker SelectedDate="{Binding ArchivedDateFilter.To}"
+							<Label Content="To" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
+							                    SelectedDate="{Binding ArchivedDateFilter.To}"
 							                    IsTodayHighlighted="True"
 							                    DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+							<ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  Items="{Binding ArchivedItems}"
