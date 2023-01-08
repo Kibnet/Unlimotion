@@ -305,7 +305,50 @@ namespace Unlimotion.ViewModel
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+            
+            this.WhenAnyValue(m => m.ArchivedDateFilter.CurrentOption, m => m.ArchivedDateFilter.IsCustom)
+                .Subscribe(filter =>
+                {
+                    if (!filter.Item2)
+                        ArchivedDateFilter.SetDateTimes(filter.Item1);
+                });
+            
+            var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To, m => m.ArchivedDateFilter.IsCustom)
+                .Select(filter =>
+                {   
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
 
+                        var dateTime = task.ArchiveDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+            
+            this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
+                .Subscribe(filter =>
+                {
+                    if (!filter.Item2)
+                        CompletedDateFilter.SetDateTimes(filter.Item1);
+                });
+
+            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To, m => m.CompletedDateFilter.IsCustom)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
+
+                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
 
             //Bind Unlocked
             taskRepository.Tasks
@@ -360,6 +403,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
+                .Filter(completedDateFilter)
                 .Filter(emojiFilter)
                 .Transform(item =>
                 {
@@ -384,6 +428,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
+                .Filter(archiveDateFilter)
                 .Filter(emojiFilter)
                 .Transform(item =>
                 {
@@ -635,6 +680,11 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
+
+        public DateFilter CompletedDateFilter { get; set; } = new();
+        public DateFilter ArchivedDateFilter { get; set; } = new();
+        
+        public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
     }
 
     [AddINotifyPropertyChangedInterface]
