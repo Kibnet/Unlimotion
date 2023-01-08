@@ -320,8 +320,9 @@ namespace Unlimotion.ViewModel
                     {
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
-                        
-                        return filter.Item1 <= task.ArchiveDateTime?.Date && task.ArchiveDateTime?.Date <= filter.Item2;
+
+                        var dateTime = task.ArchiveDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
@@ -341,8 +342,9 @@ namespace Unlimotion.ViewModel
                     {
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
-                        
-                        return filter.Item1 <= task.CompletedDateTime?.Date && task.CompletedDateTime?.Date <= filter.Item2;
+
+                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Unlimotion.ViewModel;
 
@@ -6,19 +7,29 @@ public static class Options
 {
     public static readonly Dictionary<string, DateFilterType> DateFilterOptions = new()
     {
-        {"All", DateFilterType.All},
-        {"Last two days", DateFilterType.LastTwoDays},
-        {"Last week", DateFilterType.LastWeek},
-        {"Last month", DateFilterType.LastMonth},
-        {"Last year", DateFilterType.LastYear},
+        {"Today", DateFilterType.Today},
+        {"Week", DateFilterType.Week},
+        {"Month", DateFilterType.Month},
+        {"Quarter", DateFilterType.Quarter},
+        {"Year", DateFilterType.Year},
+        {"Last Two Days", DateFilterType.LastTwoDays},
+        {"Last Week", DateFilterType.LastWeek},
+        {"Last Month", DateFilterType.LastMonth},
+        {"Last Year", DateFilterType.LastYear},
+        {"All Time", DateFilterType.AllTime},
     };
-    
+
     public enum DateFilterType
     {
-        All = 0,
-        LastTwoDays = 2,
-        LastWeek = 7,
-        LastMonth = 30,
-        LastYear = 365
+        Today,
+        Week,
+        Month,
+        Quarter,
+        Year,
+        LastTwoDays,
+        LastWeek,
+        LastMonth,
+        LastYear,
+        AllTime,
     }
 }

@@ -117,7 +117,7 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
-							<CheckBox Content="Custom" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
+							<CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
 							                    SelectedDate="{Binding CompletedDateFilter.From}"
@@ -159,7 +159,7 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<ComboBox Items="{Binding EmojiFilters}"/>
-							<CheckBox Content="Custom" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center" />
+							<CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center" />
 							<Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
 							                    SelectedDate="{Binding ArchivedDateFilter.From}"
