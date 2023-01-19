@@ -96,6 +96,9 @@
 							                    IsTodayHighlighted="True"
 							                    DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 							<ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
+                            <ComboBox Items="{Binding EmojiFilters}"/>
+                            <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
+                            <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 						          Items="{Binding LastCreatedItems}"

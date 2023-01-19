@@ -474,7 +474,10 @@ namespace Unlimotion.ViewModel
             //Bind LastCreated
             taskRepository.Tasks
                 .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .Filter(taskFilter)
                 .Filter(lastCreatedDateFilter)
+                .Filter(emojiFilter)
                 .Transform(item => 
                 {
                     var actions = new TaskWrapperActions
