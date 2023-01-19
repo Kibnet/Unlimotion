@@ -327,28 +327,6 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
-            this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
-                .Subscribe(filter =>
-                {
-                    if (!filter.Item2)
-                        CompletedDateFilter.SetDateTimes(filter.Item1);
-                });
-
-            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To, m => m.CompletedDateFilter.IsCustom)
-                .Select(filter =>
-                {
-                    bool Predicate(TaskItemViewModel task)
-                    {
-                        if (filter.Item1 == null || filter.Item2 == null)
-                            return true;
-
-                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
-                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
-                    }
-
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
 
             //Bind Unlocked
             taskRepository.Tasks
@@ -397,6 +375,28 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
             Graph.UnlockedTasks = _FilteredItems;
+            
+            this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
+                .Subscribe(filter =>
+                {
+                    if (!filter.Item2)
+                        CompletedDateFilter.SetDateTimes(filter.Item1);
+                });
+
+            var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To, m => m.CompletedDateFilter.IsCustom)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
+
+                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
 
             //Bind Completed
             taskRepository.Tasks
@@ -432,7 +432,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -447,6 +447,54 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             ArchivedItems = _archivedItems;
+            
+            this.WhenAnyValue(m => m.LastCreatedDateFilter.CurrentOption, m => m.LastCreatedDateFilter.IsCustom)
+                .Subscribe(filter =>
+                {
+                    if (!filter.Item2)
+                        LastCreatedDateFilter.SetDateTimes(filter.Item1);
+                });
+
+            var lastCreatedDateFilter = this.WhenAnyValue(m => m.LastCreatedDateFilter.From, m => m.LastCreatedDateFilter.To, m => m.LastCreatedDateFilter.IsCustom)
+                
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.Item1 == null || filter.Item2 == null)
+                            return true;
+
+                        var dateTime = task.CreatedDateTime.Add(DateTimeOffset.Now.Offset).Date;
+                        return filter.Item1 <= dateTime && dateTime <= filter.Item2;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+            
+            //Bind LastCreated
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .Filter(taskFilter)
+                .Filter(lastCreatedDateFilter)
+                .Filter(emojiFilter)
+                .Transform(item => 
+                {
+                    var actions = new TaskWrapperActions
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = RemoveTask,
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
+                    return wrapper;
+                })
+                .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
+                .Bind(out _lastCreatedItems)
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+
+            LastCreatedItems = _lastCreatedItems;
 
             //Bind Current Item Contains
             this.WhenAnyValue(m => m.CurrentTaskItem)
@@ -551,7 +599,7 @@ namespace Unlimotion.ViewModel
 
         private void SelectCurrentTask()
         {
-            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode)
+            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode)
             {
                 if (AllTasksMode)
                 {
@@ -573,6 +621,10 @@ namespace Unlimotion.ViewModel
                 {
                     CurrentGraphItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
                 }
+                else if (LastCreatedMode)
+                {
+                    CurrentItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentItems);
+                }
             }
         }
 
@@ -580,7 +632,7 @@ namespace Unlimotion.ViewModel
         {
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {
-                this.ManagerWrapper.Ask("Remove task",
+                ManagerWrapper.Ask("Remove task",
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
                     () => task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem));
             }
@@ -620,6 +672,7 @@ namespace Unlimotion.ViewModel
         public bool ArchivedMode { get; set; }
         public bool GraphMode { get; set; }
         public bool SettingsMode { get; set; }
+        public bool LastCreatedMode { get; set; }
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
@@ -638,6 +691,9 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _FilteredItems;
+        
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastCreatedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> LastCreatedItems { get; set; }
 
         public TaskItemViewModel CurrentTaskItem { get; set; }
         public TaskWrapperViewModel CurrentItem { get; set; }
@@ -683,6 +739,7 @@ namespace Unlimotion.ViewModel
 
         public DateFilter CompletedDateFilter { get; set; } = new();
         public DateFilter ArchivedDateFilter { get; set; } = new();
+        public DateFilter LastCreatedDateFilter { get; set; } = new();
         
         public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
     }

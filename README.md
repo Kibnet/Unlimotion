@@ -85,6 +85,10 @@ It's a hierarchical representation of all tasks.
 At the root are those tasks that don't have parents.
 ![All Tasks](media/All%20Tasks.jpg)
 
+### Last Created
+Shows all tasks by creation date in descending order.
+![Last Created](media/Last%20Created.jpg)
+
 ### Unlocked
 Window of Opportunity - represents only those tasks that are currently available for execution.
 ![Unlocked](media/Unlocked.jpg)
@@ -96,6 +100,12 @@ The list of completed tasks in the reverse order of execution - the last ones fr
 ### Archived
 The list of archived tasks in the reverse order of archiving - the last ones from the top. This includes tasks that no longer need to be performed, but you don't want to delete them either.
 ![Archived](media/Archived.jpg)
+
+### Roadmap
+Displaying tasks in the form of a roadmap. Inspired by the development tree from games. In this view, tasks are displayed in the form of a directed graph, which allows you to visualize the tracks of tasks that need to be completed in order to reach the goal.
+Green arrows - child-parent relationship
+Red arrows - the ratio of the blocking task to the blocked one
+![Roadmap](media/Roadmap.jpg)
 
 ### Settings
 Settings window - allows you to change the parameters that affect the operation of the program.
