@@ -596,7 +596,7 @@ namespace Unlimotion.ViewModel
 
         private void SelectCurrentTask()
         {
-            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode & LastCreatedMode)
+            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode)
             {
                 if (AllTasksMode)
                 {
