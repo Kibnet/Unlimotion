@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -16,7 +17,7 @@ namespace Unlimotion.Views
     {
         public MainControl()
         {
-            InitializeComponent(); 
+            InitializeComponent();
             DataContextChanged += MainWindow_DataContextChanged;
         }
 
@@ -31,7 +32,7 @@ namespace Unlimotion.Views
                     var subscription = innerCommand.Subscribe(unit =>
                     {
                         var toExpand = vm.CurrentItem;
-                        if (toExpand!= null)
+                        if (toExpand != null)
                         {
                             Expand(toExpand);
                         }
@@ -45,14 +46,14 @@ namespace Unlimotion.Views
                         return;
                     var dialogs = Locator.Current.GetService<IDialogs>();
                     var path = await dialogs.ShowOpenFolderDialogAsync("Task Storage Path");
-                    
+
                     if (!string.IsNullOrWhiteSpace(path))
                     {
                         var taskStorage = new FileTaskStorage(path);
                         var set = new HashSet<string>();
                         var queue = new Queue<TaskItemViewModel>();
                         queue.Enqueue(vm.CurrentTaskItem);
-                        while (queue.Count>0)
+                        while (queue.Count > 0)
                         {
                             var task = queue.Dequeue();
                             if (!set.Contains(task.Id))
@@ -80,14 +81,14 @@ namespace Unlimotion.Views
 
         private void InitializeComponent()
         {
-            AvaloniaXamlLoader.Load(this); 
+            AvaloniaXamlLoader.Load(this);
 
             AddHandler(DragDrop.DropEvent, Drop);
             AddHandler(DragDrop.DragOverEvent, DragOver);
         }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
-        
+
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var dragData = new DataObject();
@@ -105,25 +106,9 @@ namespace Unlimotion.Views
 
         public static void DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.Contains(CustomFormat))
+            if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
             {
-                var control = e.Source as IControl;
-                var task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem;
-                if (task == null)
-                {
-                    task = control?.FindParentDataContext<TaskItemViewModel>();
-                }
-                var subItem = e.Data.Get(CustomFormat) switch
-                {
-                    TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
-                    TaskItemViewModel taskItemViewModel => taskItemViewModel,
-                    _ => null
-                };
-                if (subItem == null)
-                {
-                    e.DragEffects = DragDropEffects.None;
-                    return;
-                }
+                if (GetTasks(e, out var task, out var subItem)) return;
 
                 if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
                 {
@@ -166,28 +151,41 @@ namespace Unlimotion.Views
             }
         }
 
+        private static bool GetTasks(DragEventArgs e, out TaskItemViewModel? task, out TaskItemViewModel? subItem)
+        {
+            var control = e.Source as IControl;
+            task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
+                   control?.FindParentDataContext<TaskItemViewModel>();
+
+            var sub = e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat);
+            subItem = sub switch
+            {
+                TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
+                TaskItemViewModel taskItemViewModel => taskItemViewModel,
+                _ => null
+            };
+
+            if (subItem == null || task == null)
+            {
+                e.DragEffects = DragDropEffects.None;
+                return true;
+            }
+
+            return false;
+        }
+
         public static void Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.Contains(CustomFormat))
+            if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
             {
-                var control = e.Source as IControl;
-                var task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem;
-                var sub = e.Data.Get(CustomFormat);
-                var subItem = sub switch
-                {
-                    TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
-                    TaskItemViewModel taskItemViewModel => taskItemViewModel,
-                    _ => null
-                };
-                if (subItem == null)
-                {
-                    e.DragEffects = DragDropEffects.None;
-                    return;
-                }
+                if (GetTasks(e, out var task, out var subItem)) return;
+
                 if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
                 {
                     e.DragEffects &= DragDropEffects.Copy;
                     subItem.CloneInto(task);
+                    UpdateGraph(e.Source);
+                    e.Handled = true;
                 }
                 else if (e.KeyModifiers == KeyModifiers.Shift)
                 {
@@ -195,11 +193,11 @@ namespace Unlimotion.Views
                     {
                         TaskItemViewModel parent = null;
                         var breakFlag = false;
-                        if (subItem.Parents.Count<=1)
+                        if (subItem.Parents.Count <= 1)
                         {
                             parent = subItem.ParentsTasks.FirstOrDefault();
                         }
-                        else if (sub is TaskWrapperViewModel parentWrapper)
+                        else if ((e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat)) is TaskWrapperViewModel parentWrapper)
                         {
                             parent = parentWrapper.Parent.TaskItem;
                         }
@@ -210,9 +208,11 @@ namespace Unlimotion.Views
                         }
 
                         if (!breakFlag)
-                    {
-                        e.DragEffects &= DragDropEffects.Move;
+                        {
+                            e.DragEffects &= DragDropEffects.Move;
                             subItem.MoveInto(task, parent);
+                            UpdateGraph(e.Source);
+                            e.Handled = true;
                         }
                     }
                     else
@@ -225,11 +225,15 @@ namespace Unlimotion.Views
                 {
                     e.DragEffects &= DragDropEffects.Link;
                     task.BlockBy(subItem);
+                    UpdateGraph(e.Source);
+                    e.Handled = true;
                 }
                 else if (e.KeyModifiers == KeyModifiers.Alt)
                 {
                     e.DragEffects &= DragDropEffects.Link;
                     subItem.BlockBy(task);
+                    UpdateGraph(e.Source);
+                    e.Handled = true;
                 }
                 else
                 {
@@ -237,6 +241,8 @@ namespace Unlimotion.Views
                     {
                         e.DragEffects &= DragDropEffects.Copy;
                         subItem.CopyInto(task);
+                        UpdateGraph(e.Source);
+                        e.Handled = true;
                     }
                     else
                     {
@@ -283,7 +289,7 @@ namespace Unlimotion.Views
             {
                 var control = sender as IControl;
                 var wrapper = control?.DataContext as TaskWrapperViewModel;
-                if (wrapper!=null)
+                if (wrapper != null)
                 {
                     vm.CurrentTaskItem = wrapper.TaskItem;
                 }
@@ -296,6 +302,17 @@ namespace Unlimotion.Views
             if (vm != null)
             {
                 vm.DetailsAreOpen = !vm.DetailsAreOpen;
+            }
+        }
+
+        private static void UpdateGraph(IInteractive? eSource)
+        {
+            var control = eSource as IControl;
+            var mc = control?.FindParentDataContext<MainWindowViewModel>();
+            var vm = mc as MainWindowViewModel;
+            if (vm?.Graph?.UpdateGraph != null)
+            {
+                vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
             }
         }
     }

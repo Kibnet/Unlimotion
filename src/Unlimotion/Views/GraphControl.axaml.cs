@@ -64,6 +64,9 @@ namespace Unlimotion.Views
                         .Throttle(TimeSpan.FromMilliseconds(100))
                         .Subscribe(p => UpdateGraph())
                         .AddToDispose(disposableList);
+                    dc.WhenAnyValue(m => m.UpdateGraph)
+                        .Subscribe(t => { UpdateGraph(); })
+                        .AddToDispose(disposableList);
                 }
             }
            
@@ -197,7 +200,7 @@ namespace Unlimotion.Views
         }
 
 
-        private const string CustomFormat = "application/xxx-unlimotion-task-item";
+        public const string CustomFormat = "application/xxx-unlimotion-task-item";
 
         private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
         {
