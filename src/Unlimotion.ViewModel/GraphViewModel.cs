@@ -18,6 +18,8 @@ public class GraphViewModel
 
     public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
+    public bool UpdateGraph { get; set; }
+
     public bool OnlyUnlocked { get; set; } = true;
     public bool HideUnactual { get; set; }
 
