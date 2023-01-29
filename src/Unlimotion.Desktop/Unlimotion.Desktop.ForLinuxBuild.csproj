@@ -1,5 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
+		<AssemblyName>Unlimotion.Desktop</AssemblyName>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net6.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
@@ -8,6 +9,7 @@
 		<TrimMode>copyused</TrimMode>
 		<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
 		<ApplicationIcon>Assets\Unlimotion.ico</ApplicationIcon>
+		<RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
 	</PropertyGroup>
 	<ItemGroup>
 		<!--This helps with theme dll-s trimming.
@@ -28,5 +30,17 @@
 		<AvaloniaResource Include="Assets\**" />
 		<None Remove=".gitignore" />
 		<None Remove="Assets\Unlimotion.ico" />
+	</ItemGroup>
+	<ItemGroup>
+		<DebDotNetDependencies Include="libc6, libgcc1, libgssapi-krb5-2, libstdc++6, zlib1g, libssl3 | libssl1.1 | libssl1.0.2 | libssl1.0.1 | libssl1.0.0 | libssl0.9.8, libicu70 | libicu69 | libicu68 | libicu67 | libicu66 | libicu65 | libicu64 | libicu63 | libicu62 | libicu61 | libicu60 | libicu59 | libicu58 | libicu57 | libicu56 | libicu55 | libicu54 | libicu53 | libicu52" />
+		<Content Include="Assets\Unlimotion.ico" CopyToPublishDirectory="Always" LinuxFileMode="744">
+			<LinuxPath>/usr/share/icons/hicolor/48x48/apps/Unlimotion.ico</LinuxPath>
+		</Content>
+		<Content Include="ci\deb\unlimotion.desktop" CopyToPublishDirectory="Always" LinuxFileMode="544">
+			<LinuxPath>/usr/share/applications/unlimotion.desktop</LinuxPath>
+		</Content>
+		<Content Include="ci\deb\create-symlink.sh" CopyToPublishDirectory="Always" LinuxFileMode="755">
+			 <LinuxPath>/usr/bin/Unlimotion.Desktop</LinuxPath>
+		</Content>
 	</ItemGroup>
 </Project>

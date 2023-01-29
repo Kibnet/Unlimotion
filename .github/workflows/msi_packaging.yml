@@ -1,0 +1,39 @@
+name: Unlimotion msiPkg
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  advinst-aip-build:
+    runs-on: windows-2022
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: feat/deb-packaging
+
+    - name: Publish
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net6.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net6.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+
+    - name: Build AIP
+      uses: caphyon/advinst-github-action@v1.0
+      with:
+        advinst-version: '20.3.2'
+        advinst-enable-automation: 'true'
+        aip-path: ${{ github.workspace }}\Unlimotion.aip
+        aip-build-name: DefaultBuild
+        aip-package-name: Unlimotion.msi
+        aip-output-dir:  ${{ github.workspace }}\setup
+        aip-commands: |
+          SetProperty FOO="foo"
+          SetVersion 1.2.0
+
+    - name: Upload MsiPkg to Release
+      uses: xresloader/upload-to-github-release@v1.3.11
+      with:
+        file: ${{ github.workspace }}\setup\Unlimotion.msi
+        tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

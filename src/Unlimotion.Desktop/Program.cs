@@ -1,5 +1,7 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.ReactiveUI;
@@ -17,6 +19,10 @@ namespace Unlimotion.Desktop
 {
     class Program
     {
+        private const string DefaultConfigName = "Settings.json";
+        private const string TasksFolderName = "Tasks";
+        private const string UnlimotionFolderName = "Unlimotion";
+        
         // Initialization code. Don't use any Avalonia, third-party APIs or any
         // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
         // yet and stuff might break.
@@ -24,14 +30,27 @@ namespace Unlimotion.Desktop
         public static void Main(string[] args)
         {
             var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
-            var configPath = "Settings.json";
-            if (configArg!= null)
+            
+#if DEBUG
+            var configPath = DefaultConfigName;
+#else
+            var unlimotionFolder = Environment.GetFolderPath(Environment.SpecialFolder.Personal).CombineWith(UnlimotionFolderName);
+            var configPath = unlimotionFolder.CombineWith(DefaultConfigName);
+#endif
+
+            if (configArg != null)
             {
                 var path = configArg.Split("=").Last();
                 if (!path.IsNullOrEmpty())
                 {
                     configPath = path;
                 }
+            }
+            else
+            {
+#if !DEBUG
+                Directory.CreateDirectory(unlimotionFolder);
+#endif
             }
 
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
@@ -41,8 +60,12 @@ namespace Unlimotion.Desktop
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
 
             var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
-
-            TaskStorages.DefaultStoragePath = "Tasks";
+            
+#if DEBUG
+            TaskStorages.DefaultStoragePath = TasksFolderName;
+#else
+            TaskStorages.DefaultStoragePath = Path.GetDirectoryName(configPath).CombineWith(TasksFolderName);
+#endif
             TaskStorages.RegisterStorage(isServerMode, configuration);
 
             var notificationManager = new NotificationManagerWrapperWrapper();

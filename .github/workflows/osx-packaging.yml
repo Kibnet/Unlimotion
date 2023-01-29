@@ -1,0 +1,29 @@
+name: Unlimotion macOSPkg
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  osx-build:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: feat/deb-packaging
+
+    - name: Publish
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh
+
+    - name: Generate App
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh
+
+    - name: Generate Pkg
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh
+
+    - name: Upload MacOSPkg To Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ./*.pkg	

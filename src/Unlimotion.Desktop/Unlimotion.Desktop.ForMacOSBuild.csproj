@@ -8,6 +8,19 @@
 		<TrimMode>copyused</TrimMode>
 		<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
 		<ApplicationIcon>Assets\Unlimotion.ico</ApplicationIcon>
+		<RuntimeIdentifiers>osx-x64</RuntimeIdentifiers>
+
+    		<CFBundleName>Unlimotion</CFBundleName> <!-- Also defines .app file name -->
+    		<CFBundleDisplayName>Unlimotion</CFBundleDisplayName>
+    		<CFBundleIdentifier>com.Unlimotion</CFBundleIdentifier>
+    		<CFBundleVersion>1.0.0</CFBundleVersion>
+		<CFBundleShortVersionString>1.0.0</CFBundleShortVersionString>
+    		<CFBundlePackageType>APPL</CFBundlePackageType>
+    		<CFBundleSignature>????</CFBundleSignature>
+    		<CFBundleExecutable>Unlimotion.Desktop.ForMacOSBuild</CFBundleExecutable>
+    		<CFBundleIconFile>Unlimotion.icns</CFBundleIconFile> <!-- Will be copied from output directory -->
+    		<NSPrincipalClass>NSApplication</NSPrincipalClass>
+    		<NSHighResolutionCapable>true</NSHighResolutionCapable>
 	</PropertyGroup>
 	<ItemGroup>
 		<!--This helps with theme dll-s trimming.
@@ -25,8 +38,6 @@
 		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<AvaloniaResource Include="Assets\**" />
-		<None Remove=".gitignore" />
-		<None Remove="Assets\Unlimotion.ico" />
+		<PackageReference Include="Dotnet.Bundle" Version="*" />
 	</ItemGroup>
 </Project>
