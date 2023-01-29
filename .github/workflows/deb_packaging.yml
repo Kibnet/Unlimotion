@@ -1,0 +1,23 @@
+name: Unlimotion debPkg
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  deb-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: feat/deb-packaging
+
+    - name: Generate DebPkg
+      run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh
+
+    - name: Upload DebPkg To Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ./src/Unlimotion.Desktop/ci/deb/*.deb
