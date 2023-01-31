@@ -107,6 +107,8 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
             }).AddToDisposeAndReturn(connectionDisposableList);
 
+            Remove = ReactiveCommand.Create(() => RemoveTaskItem(CurrentItem.TaskItem));
+
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentItem)
                 .Subscribe(m =>
@@ -642,6 +644,19 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        private void RemoveTaskItem(TaskItemViewModel task)
+        {
+            ManagerWrapper.Ask("Remove task",
+                $"Are you sure you want to remove the task \"{task.Title}\" from disk?",
+                () =>
+                {
+                    foreach (var parent in task.ParentsTasks.ToList())
+                    {
+                        task.RemoveFunc.Invoke(parent);
+                    }
+                });
+        }
+
         public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
         {
             if (taskItemViewModel == null)
@@ -714,6 +729,8 @@ namespace Unlimotion.ViewModel
         public ICommand CreateInner { get; set; }
 
         public ICommand MoveToPath { get; set; }
+
+        public ICommand Remove { get; set; }
 
         private IConfiguration _configuration;
 

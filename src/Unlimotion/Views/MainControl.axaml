@@ -260,6 +260,7 @@
 								<Button Command="{Binding #MainControl.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
 								<Button Command="{Binding #MainControl.DataContext.CreateInner}">➕Inner</Button>
 								<Button Command="{Binding #MainControl.DataContext.MoveToPath}">Move To Path</Button>
+								<Button Command="{Binding #MainControl.DataContext.Remove}">Remove</Button>
 							</WrapPanel>
 							<Grid ColumnDefinitions="Auto, *">
 								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
