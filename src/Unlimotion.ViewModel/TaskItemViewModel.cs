@@ -628,6 +628,8 @@ namespace Unlimotion.ViewModel
 
         public RepeaterPatternViewModel Repeater { get; set; }
 
+        public bool IsHaveRepeater => Repeater != null && Repeater.Type != RepeaterType.None;
+
         public List<RepeaterPatternViewModel> Repeaters => new()
         {
             new RepeaterPatternViewModel { Type = RepeaterType.None },
