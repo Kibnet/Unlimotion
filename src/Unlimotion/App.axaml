@@ -14,6 +14,22 @@
         <Style Selector="TextBlock.IsCanBeCompleted">
             <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
         </Style>
+        <Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="TextBox[UseFloatingWatermark=True]">
+            <Setter Property="MinHeight" Value="42"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+		</Style>
+        <Style Selector="CalendarDatePicker[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="CalendarDatePicker[UseFloatingWatermark=True]">
+            <Setter Property="MinHeight" Value="42"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
 		<Style Selector="Expander" >
             <Setter Property="Template">
                 <ControlTemplate>

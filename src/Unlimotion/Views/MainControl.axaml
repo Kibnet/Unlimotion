@@ -16,8 +16,9 @@
 	<UserControl.Resources>
 		<unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
 		<unlimotion:EqualConverter x:Key="EqualConverter"/>
+		<unlimotion:NotEqualConverter x:Key="NotEqualConverter"/>
 	</UserControl.Resources>
-    <UserControl.DataTemplates>
+	<UserControl.DataTemplates>
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
 			<Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
 				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
@@ -25,7 +26,7 @@
 			</Grid>
 		</DataTemplate>
 		<DataTemplate DataType="viewModel:TaskWrapperViewModel">
-			<Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
+			<Grid Background="Transparent">
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
 						Content="❌"
@@ -75,7 +76,7 @@
 								  Name="CurrentTree">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed"/>
+									<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped"/>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
 						</TreeView>
@@ -87,23 +88,23 @@
 							<CheckBox Content="Custom period" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<Label Content="From" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding LastCreatedDateFilter.From}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding LastCreatedDateFilter.From}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
 							<Label Content="To" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding LastCreatedDateFilter.To}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding LastCreatedDateFilter.To}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 							<ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
-                            <ComboBox Items="{Binding EmojiFilters}"/>
-                            <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
-                            <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
+							<ComboBox Items="{Binding EmojiFilters}"/>
+							<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
+							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-						          Items="{Binding LastCreatedItems}"
-						          SelectedItem="{Binding CurrentItem}"
-						          SelectionMode="Single">
+								  Items="{Binding LastCreatedItems}"
+								  SelectedItem="{Binding CurrentItem}"
+								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
 								<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 									<Grid>
@@ -114,10 +115,10 @@
 											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-										        Content="❌"
-										        BorderThickness="0"
-										        HorizontalAlignment="Right"
-										        Command="{Binding RemoveCommand}"/>
+												Content="❌"
+												BorderThickness="0"
+												HorizontalAlignment="Right"
+												Command="{Binding RemoveCommand}"/>
 									</Grid>
 								</TreeDataTemplate>
 							</TreeView.ItemTemplate>
@@ -163,14 +164,14 @@
 							<CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding CompletedDateFilter.From}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding CompletedDateFilter.From}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
 							<Label Content="To" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding CompletedDateFilter.To}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding CompletedDateFilter.To}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 							<ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
@@ -205,14 +206,14 @@
 							<CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center" />
 							<Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding ArchivedDateFilter.From}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding ArchivedDateFilter.From}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
 							<Label Content="To" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
-							                    SelectedDate="{Binding ArchivedDateFilter.To}"
-							                    IsTodayHighlighted="True"
-							                    DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+												SelectedDate="{Binding ArchivedDateFilter.To}"
+												IsTodayHighlighted="True"
+												DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
 							<ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
@@ -249,112 +250,131 @@
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
-		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right" IsExpanded="{Binding DetailsAreOpen}">
-			<Grid DataContext="{Binding CurrentTaskItem}">
-				<Border>
-					<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-						<StackPanel Margin="10">
-
-							<WrapPanel>
-								<Button Command="{Binding #MainControl.DataContext.CreateSibling}">➕Sibling</Button>
-								<Button Command="{Binding #MainControl.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
-								<Button Command="{Binding #MainControl.DataContext.CreateInner}">➕Inner</Button>
-								<Button Command="{Binding #MainControl.DataContext.MoveToPath}">Move To Path</Button>
-								<Button Command="{Binding #MainControl.DataContext.Remove}">Remove</Button>
-							</WrapPanel>
-							<Grid ColumnDefinitions="Auto, *">
-								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
-								<TextBox Grid.Column="1" TextWrapping="Wrap" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
-							</Grid>
-							<Grid ColumnDefinitions="Auto, Auto, *">
-								<CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
-								<NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Grid.Column="1"/>
-								<TextBox Grid.Column="2" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>
-							</Grid>
-							<TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="Description"></TextBox>
-							<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}"/>
-							<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}"/>
-							<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}"/>
-							<Label Content="Planned Begin DateTime"/>
-							<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
-												IsTodayHighlighted="True"
-												DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
-							<Label Content="Planned End DateTime"/>
-							<CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}"
-												IsTodayHighlighted="True"
-												DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
-							<Label Content="Repeater Templates"/>
-							<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
-								<ComboBox.ItemTemplate>
-									<DataTemplate DataType="viewModel:RepeaterPatternViewModel">
-										<Label Content="{Binding Title}"/>
-									</DataTemplate>
-								</ComboBox.ItemTemplate>
-							</ComboBox>
-							<Label Content="Repeater"/>
-							<ContentControl DataContext="{Binding Repeater}">
+		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right" IsExpanded="{Binding DetailsAreOpen}" VerticalContentAlignment="Stretch">
+			<Grid VerticalAlignment="Stretch">
+				<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
+					<StackPanel Margin="10">
+						<WrapPanel>
+							<Button Command="{Binding #MainControl.DataContext.CreateSibling}">➕Sibling</Button>
+							<Button Command="{Binding #MainControl.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
+							<Button Command="{Binding #MainControl.DataContext.CreateInner}">➕Inner</Button>
+							<Button Command="{Binding #MainControl.DataContext.MoveToPath}">Move To Path</Button>
+							<Button Command="{Binding #MainControl.DataContext.Remove}">Remove</Button>
+						</WrapPanel>
+						<Border IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+							<StackPanel DataContext="{Binding CurrentTaskItem}" >
+								<Grid ColumnDefinitions="Auto, *">
+									<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
+									<TextBox Grid.Column="1" TextWrapping="Wrap" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
+								</Grid>
+								<Grid ColumnDefinitions="Auto, Auto, Auto, *">
+									<CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
+									<NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Watermark="Importance" Grid.Column="1"/>
+									<Button Grid.Column="2" Content="Archive" Command="{Binding ArchiveCommand}"/>
+									<TextBox Grid.Column="3" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>
+								</Grid>
+								<TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="Description" UseFloatingWatermark="True"></TextBox>
 								<WrapPanel>
-									<ComboBox Items="{Binding RepeaterTypes}" SelectedItem="{Binding Type}"/>
-									<NumericUpDown Value="{Binding Period}"/>
-									<ToggleButton IsChecked="{Binding Monday}" Content="Monday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Tuesday}" Content="Tuesday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Wednesday}" Content="Wednesday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Thursday}" Content="Thursday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Friday}" Content="Friday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Saturday}" Content="Saturday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<ToggleButton IsChecked="{Binding Sunday}" Content="Sunday" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}}"/>
-									<CheckBox IsChecked="{Binding AfterComplete}" Content="After Complete"/>
+									<Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0}}" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+									<Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0}}" IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+									<Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0}}" IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+									<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}" IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
 								</WrapPanel>
-							</ContentControl>
-							<Label>Planned Duration:</Label>
-							<TextBox Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
-									 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"/>
-							<StackPanel Orientation="Horizontal">
-								<Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0}}"/>
-								<Button Content="Archive" Command="{Binding ArchiveCommand}"/>
+
+								<Grid ColumnDefinitions="*,*,*">
+									<CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
+														IsTodayHighlighted="True"
+														Watermark="Planned Begin"
+														UseFloatingWatermark="True"
+														HorizontalAlignment="Stretch"
+														DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
+									<TextBox Grid.Column="1"
+											 Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
+											 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
+											 HorizontalAlignment="Stretch"
+											 Watermark="Planned Duration" UseFloatingWatermark="True" />
+									<CalendarDatePicker Grid.Column="2" SelectedDate="{Binding PlannedEndDateTime}"
+														IsTodayHighlighted="True"
+														Watermark="Planned End"
+														UseFloatingWatermark="True"
+														HorizontalAlignment="Stretch"
+														DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
+								</Grid>
+								<Label Content="Repeater Templates"/>
+								<StackPanel Orientation="Horizontal">
+									<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
+										<ComboBox.ItemTemplate>
+											<DataTemplate DataType="viewModel:RepeaterPatternViewModel">
+												<Label Content="{Binding Title}"/>
+											</DataTemplate>
+										</ComboBox.ItemTemplate>
+									</ComboBox>
+									<Border IsVisible="{Binding IsHaveRepeater}">
+										<WrapPanel DataContext="{Binding Repeater}" >
+											<ComboBox Items="{Binding RepeaterTypes}" SelectedItem="{Binding Type}" />
+											<NumericUpDown Value="{Binding Period}" Watermark="Period" ToolTip.Tip="Period"/>
+											<CheckBox IsChecked="{Binding AfterComplete}" Content="After Complete"/>
+										</WrapPanel>
+									</Border>
+								</StackPanel>
+								<Border IsVisible="{Binding IsHaveRepeater}">
+									<UniformGrid Columns="7" DataContext="{Binding Repeater}" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static viewModel:RepeaterType.Weekly}, FallbackValue={x:Static viewModel:RepeaterType.None}}">
+										<ToggleButton IsChecked="{Binding Monday}" Content="Monday" HorizontalAlignment="Stretch" />
+										<ToggleButton IsChecked="{Binding Tuesday}" Content="Tuesday" HorizontalAlignment="Stretch" />
+										<ToggleButton IsChecked="{Binding Wednesday}" Content="Wednesday" HorizontalAlignment="Stretch"/>
+										<ToggleButton IsChecked="{Binding Thursday}" Content="Thursday" HorizontalAlignment="Stretch" />
+										<ToggleButton IsChecked="{Binding Friday}" Content="Friday" HorizontalAlignment="Stretch" />
+										<ToggleButton IsChecked="{Binding Saturday}" Content="Saturday" HorizontalAlignment="Stretch" />
+										<ToggleButton IsChecked="{Binding Sunday}" Content="Sunday" HorizontalAlignment="Stretch" />
+									</UniformGrid>
+								</Border>
+
+								<StackPanel Orientation="Horizontal">
+
+								</StackPanel>
+
+								<Label>Parents Tasks:</Label>
+								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemParents.SubTasks}">
+									<TreeView.ItemTemplate>
+										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
+										</TreeDataTemplate>
+									</TreeView.ItemTemplate>
+								</TreeView>
+
+								<Label>Blocking Tasks:</Label>
+								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlockedBy.SubTasks}">
+									<TreeView.ItemTemplate>
+										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
+										</TreeDataTemplate>
+									</TreeView.ItemTemplate>
+								</TreeView>
+
+								<Label>Containing Tasks:</Label>
+								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemContains.SubTasks}">
+									<TreeView.ItemTemplate>
+										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
+										</TreeDataTemplate>
+									</TreeView.ItemTemplate>
+								</TreeView>
+
+								<Label>Blocked Tasks:</Label>
+								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlocks.SubTasks}">
+									<TreeView.ItemTemplate>
+										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
+										</TreeDataTemplate>
+									</TreeView.ItemTemplate>
+								</TreeView>
+
 							</StackPanel>
-
-							<Label>Parents Tasks:</Label>
-							<TreeView Items="{Binding #MainControl.DataContext.CurrentItemParents.SubTasks}">
-								<TreeView.ItemTemplate>
-									<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-										<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
-									</TreeDataTemplate>
-								</TreeView.ItemTemplate>
-							</TreeView>
-
-							<Label>Blocking Tasks:</Label>
-							<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlockedBy.SubTasks}">
-								<TreeView.ItemTemplate>
-									<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-										<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
-									</TreeDataTemplate>
-								</TreeView.ItemTemplate>
-							</TreeView>
-
-							<Label>Containing Tasks:</Label>
-							<TreeView Items="{Binding #MainControl.DataContext.CurrentItemContains.SubTasks}">
-								<TreeView.ItemTemplate>
-									<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-										<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
-									</TreeDataTemplate>
-								</TreeView.ItemTemplate>
-							</TreeView>
-
-							<Label>Blocked Tasks:</Label>
-							<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlocks.SubTasks}">
-								<TreeView.ItemTemplate>
-									<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-										<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
-									</TreeDataTemplate>
-								</TreeView.ItemTemplate>
-							</TreeView>
-
-						</StackPanel>
-					</ScrollViewer>
-				</Border>
+						</Border>
+					</StackPanel>
+				</ScrollViewer>
 			</Grid>
 		</Expander>
 	</Grid>
-	
+
 </UserControl>
