@@ -1,4 +1,4 @@
-name: Unlimotion MacOSPkg
+name: Unlimotion macOSPkg
 
 on:
   release:
