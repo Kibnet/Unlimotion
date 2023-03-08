@@ -18,3 +18,18 @@ public class EqualConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+
+public class NotEqualConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value == null && parameter == null)
+            return false;
+        return value == null || !value.Equals(parameter);
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
