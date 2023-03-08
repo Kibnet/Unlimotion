@@ -18,10 +18,10 @@ jobs:
       run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh
 
     - name: Generate App
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-app-publish.sh
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh
 
     - name: Generate Pkg
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-pkg-publish.sh
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh
 
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1
