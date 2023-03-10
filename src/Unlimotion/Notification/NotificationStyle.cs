@@ -75,11 +75,11 @@ public class NotificationStyle : AvaloniaObject, IStyle, IResourceProvider
         }
     }
 
-    public bool TryGetResource(object key, out object? value)
+    public bool TryGetResource(object key, ThemeVariant? theme, out object? value)
     {
         if (!_isLoading && Loaded is IResourceProvider p)
         {
-            return p.TryGetResource(key, out value);
+            return p.TryGetResource(key, theme, out value);
         }
 
         value = null;
@@ -90,7 +90,5 @@ public class NotificationStyle : AvaloniaObject, IStyle, IResourceProvider
     void IResourceProvider.RemoveOwner(IResourceHost owner) => (Loaded as IResourceProvider)?.RemoveOwner(owner);
     
 
-    IReadOnlyList<IStyle> IStyle.Children => _loaded?.Children ?? Array.Empty<IStyle>();
-    
-    public SelectorMatchResult TryAttach(IStyleable target, object? host) => Loaded.TryAttach(target, host);
+    IReadOnlyList<IStyle> IStyle.Children => _loaded?.Children ?? Array.Empty<IStyle>();    
 }

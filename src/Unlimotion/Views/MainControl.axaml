@@ -240,9 +240,9 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
-				<TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
+				<!--<TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
 					<views:GraphControl DataContext="{Binding Graph}"/>
-				</TabItem>
+				</TabItem>-->
 				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
 					<views:SettingsControl DataContext="{Binding Settings}"/>
 				</TabItem>

@@ -92,7 +92,7 @@ namespace Unlimotion.Views
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var dragData = new DataObject();
-            var control = sender as IControl;
+            var control = sender as Control;
             var dc = control?.DataContext;
             if (dc == null)
             {
@@ -153,7 +153,7 @@ namespace Unlimotion.Views
 
         private static bool GetTasks(DragEventArgs e, out TaskItemViewModel? task, out TaskItemViewModel? subItem)
         {
-            var control = e.Source as IControl;
+            var control = e.Source as Control;
             task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
                    control?.FindParentDataContext<TaskItemViewModel>();
 
@@ -259,13 +259,14 @@ namespace Unlimotion.Views
         public void Expand(TaskWrapperViewModel task)
         {
             if (task == null) return;
-            var treeView = this.Get<TreeView>("CurrentTree");
-            var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
-            if (treeItem == null) return;
-            if (treeItem.ContainerControl is TreeViewItem item)
-            {
-                treeView.ExpandSubTree(item);
-            }
+            //TODO сломано
+            //var treeView = this.Get<TreeView>("CurrentTree");
+            //var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
+            //if (treeItem == null) return;
+            //if (treeItem.ContainerControl is TreeViewItem item)
+            //{
+            //    treeView.ExpandSubTree(item);
+            //}
         }
 
         private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -287,7 +288,7 @@ namespace Unlimotion.Views
             var vm = DataContext as MainWindowViewModel;
             if (vm != null)
             {
-                var control = sender as IControl;
+                var control = sender as Control;
                 var wrapper = control?.DataContext as TaskWrapperViewModel;
                 if (wrapper != null)
                 {
@@ -305,9 +306,9 @@ namespace Unlimotion.Views
             }
         }
 
-        private static void UpdateGraph(IInteractive? eSource)
+        private static void UpdateGraph(object? eSource)
         {
-            var control = eSource as IControl;
+            var control = eSource as Control;
             var mc = control?.FindParentDataContext<MainWindowViewModel>();
             var vm = mc as MainWindowViewModel;
             if (vm?.Graph?.UpdateGraph != null)

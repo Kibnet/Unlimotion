@@ -29,7 +29,7 @@ namespace Unlimotion
             Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
         };
 
-        public static FluentTheme Fluent = new FluentTheme(new Uri("avares://ControlCatalog/Styles"));
+        public static FluentTheme Fluent = new FluentTheme();
 
         public static Styles DefaultLight = new Styles
         {
@@ -65,7 +65,7 @@ namespace Unlimotion
 
         public override void Initialize()
         {
-            App.Fluent.Mode = FluentThemeMode.Dark;
+            //App.Fluent.Mode = FluentThemeMode.Dark;
             Styles.Insert(0, Fluent);
             
             //Styles.Insert(1, DataGridFluent);

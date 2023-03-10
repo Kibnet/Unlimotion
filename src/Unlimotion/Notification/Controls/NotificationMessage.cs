@@ -322,7 +322,7 @@ public class NotificationMessage : TemplatedControl, INotificationMessage, INoti
     /// </summary>
     /// <param name="dependencyObject">The dependency object.</param>
     /// <param name="dependencyPropertyChangedEventArgs">The <see cref="DependencyPropertyChangedEventArgs" /> instance containing the event data.</param>
-    private static void AccentBrushPropertyChangedCallback(IAvaloniaObject dependencyObject,
+    private static void AccentBrushPropertyChangedCallback(AvaloniaObject dependencyObject,
         AvaloniaPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
     {
         if (!(dependencyObject is NotificationMessage @this))
@@ -368,7 +368,7 @@ public class NotificationMessage : TemplatedControl, INotificationMessage, INoti
     /// </summary>
     /// <param name="dependencyObject">The dependency object.</param>
     /// <param name="dependencyPropertyChangedEventArgs">The <see cref="DependencyPropertyChangedEventArgs" /> instance containing the event data.</param>
-    private static void BadgeTextPropertyChangedCallback(IAvaloniaObject dependencyObject,
+    private static void BadgeTextPropertyChangedCallback(AvaloniaObject dependencyObject,
         AvaloniaPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
     {
         if (!(dependencyObject is NotificationMessage @this))
@@ -396,7 +396,7 @@ public class NotificationMessage : TemplatedControl, INotificationMessage, INoti
     /// </summary>
     /// <param name="dependencyObject">The dependency object.</param>
     /// <param name="dependencyPropertyChangedEventArgs">The <see cref="DependencyPropertyChangedEventArgs" /> instance containing the event data.</param>
-    private static void HeaderPropertyChangesCallback(IAvaloniaObject dependencyObject,
+    private static void HeaderPropertyChangesCallback(AvaloniaObject dependencyObject,
         AvaloniaPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
     {
         if (!(dependencyObject is NotificationMessage @this))
@@ -422,7 +422,7 @@ public class NotificationMessage : TemplatedControl, INotificationMessage, INoti
     /// </summary>
     /// <param name="dependencyObject">The dependency object.</param>
     /// <param name="dependencyPropertyChangedEventArgs">The <see cref="DependencyPropertyChangedEventArgs" /> instance containing the event data.</param>
-    private static void MessagePropertyChangesCallback(IAvaloniaObject dependencyObject,
+    private static void MessagePropertyChangesCallback(AvaloniaObject dependencyObject,
         AvaloniaPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
     {
         if (!(dependencyObject is NotificationMessage @this))

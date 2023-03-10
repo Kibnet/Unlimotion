@@ -228,7 +228,7 @@ namespace Unlimotion.Views
             if (pointer.Properties.IsLeftButtonPressed)
             {
                 var dragData = new DataObject();
-                var control = sender as IControl;
+                var control = sender as Control;
                 var dc = control?.DataContext;
                 if (dc == null)
                 {

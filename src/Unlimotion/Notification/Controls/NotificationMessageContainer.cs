@@ -37,7 +37,7 @@ public class NotificationMessageContainer : ItemsControl
     /// <param name="dependencyObject">The dependency object.</param>
     /// <param name="dependencyPropertyChangedEventArgs">The <see cref="DependencyPropertyChangedEventArgs"/> instance containing the event data.</param>
     /// <exception cref="NullReferenceException">Dependency object is not of valid type - expected NotificationMessageContainer.</exception>
-    private static void ManagerPropertyChangedCallback(IAvaloniaObject dependencyObject,
+    private static void ManagerPropertyChangedCallback(AvaloniaObject dependencyObject,
         AvaloniaPropertyChangedEventArgs dependencyPropertyChangedEventArgs)
     {
         if (!(dependencyObject is NotificationMessageContainer @this))
