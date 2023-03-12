@@ -40,7 +40,7 @@
 			<LinuxPath>/usr/share/applications/unlimotion.desktop</LinuxPath>
 		</Content>
 		<Content Include="ci\deb\create-symlink.sh" CopyToPublishDirectory="Always" LinuxFileMode="755">
-			 <LinuxPath>/usr/bin/Unlimotion.Desktop</LinuxPath>
+			 <LinuxPath>/usr/bin/Unlimotion</LinuxPath>
 		</Content>
 	</ItemGroup>
 </Project>

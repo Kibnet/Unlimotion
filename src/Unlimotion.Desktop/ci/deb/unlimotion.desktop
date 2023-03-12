@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Encoding=UTF-8
-Name=Unlimotion.Desktop
+Name=Unlimotion
 Comment=This is application Unlimotion
 Icon=/usr/share/icons/hicolor/48x48/apps/Unlimotion.ico
 Exec=/usr/local/bin/Unlimotion.Desktop
