@@ -15,7 +15,7 @@ jobs:
         ref: feat/deb-packaging
 
     - name: Publish
-      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net6.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net6.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net6.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net6.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
 
     - name: Build AIP
       uses: caphyon/advinst-github-action@v1.0
@@ -24,16 +24,16 @@ jobs:
         advinst-enable-automation: 'true'
         aip-path: ${{ github.workspace }}\Unlimotion.aip
         aip-build-name: DefaultBuild
-        aip-package-name: Unlimotion.msi
+        aip-package-name: Unlimotion-${{  github.ref_name }}.msi
         aip-output-dir:  ${{ github.workspace }}\setup
         aip-commands: |
           SetProperty FOO="foo"
-          SetVersion 1.2.0
+          SetVersion ${{  github.ref_name }}
 
     - name: Upload MsiPkg to Release
       uses: xresloader/upload-to-github-release@v1.3.11
       with:
-        file: ${{ github.workspace }}\setup\Unlimotion.msi
+        file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
         tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
