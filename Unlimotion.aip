@@ -153,8 +153,8 @@
     <ROW Registry="Version" Root="-1" Key="Software\[Manufacturer]\[ProductName]" Name="Version" Value="[ProductVersion]" Component_="ProductInformation"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiShortsComponent">
-    <ROW Shortcut="Unlimotion.Desktop" Directory_="SHORTCUTDIR" Name="UNLIMO~1.DES|Unlimotion.Desktop" Component_="Unlimotion.Desktop.exe" Target="[#Unlimotion.Desktop.exe]" Hotkey="0" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
-    <ROW Shortcut="Unlimotion.Desktop_1" Directory_="DesktopFolder" Name="UNLIMO~1.DES|Unlimotion.Desktop" Component_="Unlimotion.Desktop.exe" Target="[#Unlimotion.Desktop.exe]" Hotkey="0" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
+    <ROW Shortcut="Unlimotion.Desktop" Directory_="SHORTCUTDIR" Name="UNLIMO~1|Unlimotion" Component_="Unlimotion.Desktop.exe" Target="[#Unlimotion.Desktop.exe]" Hotkey="0" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
+    <ROW Shortcut="Unlimotion.Desktop_1" Directory_="DesktopFolder" Name="UNLIMO~1|Unlimotion" Component_="Unlimotion.Desktop.exe" Target="[#Unlimotion.Desktop.exe]" Hotkey="0" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiThemeComponent">
     <ATTRIBUTE name="UsedTheme" value="classic"/>
