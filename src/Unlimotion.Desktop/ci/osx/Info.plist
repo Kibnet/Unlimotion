@@ -15,7 +15,7 @@
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleExecutable</key>
-    <string>Unlimotion.Desktop.ForMacOSBuild</string>
+    <string>Unlimotion.Desktop.ForMacBuild</string>
     <key>CFBundleIconFile</key>
     <string>Unlimotion.icns</string>
     <key>CFBundleShortVersionString</key>
