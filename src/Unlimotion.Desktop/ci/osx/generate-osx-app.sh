@@ -11,8 +11,8 @@ INFO_PLIST="./src/Unlimotion.Desktop/ci/osx/Info.plist"
 ICON_FILE="./src/Unlimotion.Desktop/Assets/Unlimotion.icns"
 VERSION=$1
 
-sed -i "s/CFBundleVersionExample/$VERSION/g" $INFO_PLIST
-sed -i "s/CFBundleShortVersionStringExample/$VERSION/g" $INFO_PLIST
+sed -i '' "s/CFBundleVersionExample/$VERSION/g" $INFO_PLIST
+sed -i '' "s/CFBundleShortVersionStringExample/$VERSION/g" $INFO_PLIST
 
 if [ -d "$APP_NAME" ]
 then
