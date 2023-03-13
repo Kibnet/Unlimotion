@@ -15,13 +15,13 @@ jobs:
         ref: feat/deb-packaging
 
     - name: Publish
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{  github.ref_name }}
 
     - name: Generate App
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{  github.ref_name }}
 
     - name: Generate Pkg
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{  github.ref_name }}
 
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1

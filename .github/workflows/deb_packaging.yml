@@ -15,9 +15,12 @@ jobs:
         ref: feat/deb-packaging
 
     - name: Generate DebPkg
-      run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh
+      run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{  github.ref_name }}
+
+    - name: Rename DebPkg
+      run: mv ./src/Unlimotion.Desktop/bin/Release/net6.0/linux-x64/*.deb ./src/Unlimotion.Desktop/bin/Release/net6.0/linux-x64/Unlimotion-${{  github.ref_name }}.deb
 
     - name: Upload DebPkg To Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./src/Unlimotion.Desktop/ci/deb/*.deb
+        files: ./src/Unlimotion.Desktop/bin/Release/net6.0/linux-x64/Unlimotion-${{  github.ref_name }}.deb

@@ -1,5 +1,5 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+﻿	<Project Sdk="Microsoft.NET.Sdk">
+		<PropertyGroup>
 		<AssemblyName>Unlimotion.Desktop</AssemblyName>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net6.0</TargetFramework>
@@ -9,7 +9,7 @@
 		<TrimMode>copyused</TrimMode>
 		<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
 		<ApplicationIcon>Assets\Unlimotion.ico</ApplicationIcon>
-		<RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+		<RuntimeIdentifier>linux-x64</RuntimeIdentifier>
 	</PropertyGroup>
 	<ItemGroup>
 		<!--This helps with theme dll-s trimming.
