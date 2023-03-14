@@ -10,6 +10,13 @@
 4. Storing your data on your device
 
 ## Launching the application
+Case 1:
+If you use OS Windows, Debian or MacOS, you can click on the link with releases and download the latest version of this application.
+You need to run the following command: sudo chmod -R 755 /Applications/Unlimotion.app after installing on MacOS.
+Rights aren't automatically granted due to Apple's security policy for unsigned applications.
+No additional steps are required for correct installation on OS Windows and Debian.
+
+Case 2:
 1. Download and install the [.NET 6.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
 2. Download the latest version of the program's source code as a [zip-archive](https://github.com/Kibnet/Unlimotion/archive/refs/heads/main.zip) and **unpack** it to any folder on your computer.
 If you know the git version control system, instead of downloading the archive, clone this [git-repository](https://github.com/Kibnet/Unlimotion.git)

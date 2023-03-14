@@ -12,7 +12,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
       with:
-        ref: feat/deb-packaging
+        ref: main
 
     - name: Publish
       run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net6.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net6.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
