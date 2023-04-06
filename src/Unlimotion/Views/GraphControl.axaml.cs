@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using Avalonia.Controls;
@@ -105,6 +106,9 @@ namespace Unlimotion.Views
                 {
                     continue;
                 }
+                
+                var containsTaskIds = task.ContainsTasks.Select(e => e.Id);
+                
                 if (!hashSet.Contains(task))
                 {
                     foreach (var containsTask in task.ContainsTasks)
@@ -113,7 +117,18 @@ namespace Unlimotion.Views
                         {
                             continue;
                         }
-                        graph.Edges.Add(new ContainEdge(containsTask, task));
+
+                        var childBlocksAnotherChild = containsTask.Blocks.Any(item => containsTaskIds.Where(id => id != containsTask.Id).Contains(item));
+                        var hasChildBlocksBlocker = containsTask.Blocks.Any(item => task.BlockedBy.Contains(item));
+                        
+                        if (hasChildBlocksBlocker || childBlocksAnotherChild)
+                        {
+                        }
+                        else
+                        {
+                            graph.Edges.Add(new ContainEdge(containsTask, task));
+                        }
+                        
                         haveLinks.Add(containsTask);
                         haveLinks.Add(task);
                         if (!hashSet.Contains(containsTask))
