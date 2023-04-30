@@ -13,7 +13,7 @@
             <CheckBox Content="Hide Unactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
 			<CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
 			<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
-            <ComboBox Items="{Binding EmojiFilters}" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
+            <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>
 			<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
 			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0" IsVisible="{Binding !OnlyUnlocked}"/>
 		</WrapPanel>

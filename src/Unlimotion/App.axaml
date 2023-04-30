@@ -7,18 +7,11 @@
 	</Application.DataTemplates>
 
 	<Application.Styles>
-		<!--<FluentTheme Mode="Dark"/>-->
-        <Style Selector="Label">
-            <Setter Property="Foreground" Value="{StaticResource SystemBaseHighColor}"/>
-        </Style>
 		<Style Selector="Label.IsCanBeCompleted">
-			<Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
+			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
-        <Style Selector="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource SystemBaseHighColor}"/>
-        </Style>
         <Style Selector="TextBlock.IsCanBeCompleted">
-            <Setter Property="Foreground" Value="{StaticResource SystemBaseMediumLowColor}"/>
+			<Setter Property="Opacity" Value="0.4"/>
         </Style>
         <Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
             <Setter Property="FontSize" Value="10"/>

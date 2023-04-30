@@ -64,12 +64,12 @@
 				<TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<ComboBox Items="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}"/>
+							<ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}"/>
 							<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
 							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding CurrentItems}"
+								  ItemsSource="{Binding CurrentItems}"
 								  SelectedItem="{Binding CurrentItem}"
 								  SelectionMode="Single"
 								  Name="CurrentTree">
@@ -95,13 +95,13 @@
 												SelectedDate="{Binding LastCreatedDateFilter.To}"
 												IsTodayHighlighted="True"
 												DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-							<ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
-							<ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
+							<ComboBox ItemsSource="{Binding EmojiFilters}"/>
 							<CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="10,0,0,0"/>
 							<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="10,0,0,0"/>
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding LastCreatedItems}"
+								  ItemsSource="{Binding LastCreatedItems}"
 								  SelectedItem="{Binding CurrentItem}"
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
@@ -128,12 +128,12 @@
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
-							<ComboBox Items="{Binding UnlockedTimeFilters}" Margin="10 0"/>
-							<ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="10 0"/>
+							<ComboBox ItemsSource="{Binding EmojiFilters}"/>
 						</WrapPanel>
 
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding UnlockedItems}"
+								  ItemsSource="{Binding UnlockedItems}"
 								  SelectedItem="{Binding CurrentUnlockedItem}"
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
@@ -159,7 +159,7 @@
 				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox ItemsSource="{Binding EmojiFilters}"/>
 							<CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}"
@@ -171,10 +171,10 @@
 												SelectedDate="{Binding CompletedDateFilter.To}"
 												IsTodayHighlighted="True"
 												DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-							<ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
+							<ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding CompletedItems}"
+								  ItemsSource="{Binding CompletedItems}"
 								  SelectedItem="{Binding CurrentCompletedItem}"
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
@@ -201,7 +201,7 @@
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
-							<ComboBox Items="{Binding EmojiFilters}"/>
+							<ComboBox ItemsSource="{Binding EmojiFilters}"/>
 							<CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center" />
 							<Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="10 0 10 0" VerticalAlignment="Center"/>
 							<CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}"
@@ -213,10 +213,10 @@
 												SelectedDate="{Binding ArchivedDateFilter.To}"
 												IsTodayHighlighted="True"
 												DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-							<ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" Items="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
+							<ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="10 0 0 0" />
 						</WrapPanel>
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-								  Items="{Binding ArchivedItems}"
+								  ItemsSource="{Binding ArchivedItems}"
 								  SelectedItem="{Binding CurrentArchivedItem}"
 								  SelectionMode="Single">
 							<TreeView.ItemTemplate>
@@ -301,7 +301,7 @@
 								</Grid>
 								<Label Content="Repeater Templates"/>
 								<StackPanel Orientation="Horizontal">
-									<ComboBox Items="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
+									<ComboBox ItemsSource="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
 										<ComboBox.ItemTemplate>
 											<DataTemplate DataType="viewModel:RepeaterPatternViewModel">
 												<Label Content="{Binding Title}"/>
@@ -310,7 +310,7 @@
 									</ComboBox>
 									<Border IsVisible="{Binding IsHaveRepeater}">
 										<WrapPanel DataContext="{Binding Repeater}" >
-											<ComboBox Items="{Binding RepeaterTypes}" SelectedItem="{Binding Type}" />
+											<ComboBox ItemsSource="{Binding RepeaterTypes}" SelectedItem="{Binding Type}" />
 											<NumericUpDown Value="{Binding Period}" Watermark="Period" ToolTip.Tip="Period"/>
 											<CheckBox IsChecked="{Binding AfterComplete}" Content="After Complete"/>
 										</WrapPanel>
@@ -333,7 +333,7 @@
 								</StackPanel>
 
 								<Label>Parents Tasks:</Label>
-								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemParents.SubTasks}">
+								<TreeView ItemsSource="{Binding #MainControl.DataContext.CurrentItemParents.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -342,7 +342,7 @@
 								</TreeView>
 
 								<Label>Blocking Tasks:</Label>
-								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlockedBy.SubTasks}">
+								<TreeView ItemsSource="{Binding #MainControl.DataContext.CurrentItemBlockedBy.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -351,7 +351,7 @@
 								</TreeView>
 
 								<Label>Containing Tasks:</Label>
-								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemContains.SubTasks}">
+								<TreeView ItemsSource="{Binding #MainControl.DataContext.CurrentItemContains.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -360,7 +360,7 @@
 								</TreeView>
 
 								<Label>Blocked Tasks:</Label>
-								<TreeView Items="{Binding #MainControl.DataContext.CurrentItemBlocks.SubTasks}">
+								<TreeView ItemsSource="{Binding #MainControl.DataContext.CurrentItemBlocks.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>

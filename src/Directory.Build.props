@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <AvaloniaVersion>11.0.0-preview6</AvaloniaVersion>
-    <AvaloniaPanAndZoomVersion>11.0.0-preview6</AvaloniaPanAndZoomVersion>
+    <AvaloniaVersion>11.0.0-preview7</AvaloniaVersion>
+    <AvaloniaAndroidVersion>11.0.0-preview7</AvaloniaAndroidVersion>
   </PropertyGroup>
 </Project>

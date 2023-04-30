@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading;
 using Avalonia.Controls;
-using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
@@ -21,15 +18,13 @@ namespace Unlimotion.Views
 {
     public partial class GraphControl : UserControl
     {
-        private readonly ZoomBorder? _zoomBorder;
         public GraphControl()
         {
             DataContextChanged += GraphControl_DataContextChanged;
             InitializeComponent();
-            _zoomBorder = this.Find<ZoomBorder>("ZoomBorder");
-            if (_zoomBorder != null)
+            if (this.ZoomBorder != null)
             {
-                _zoomBorder.KeyDown += ZoomBorder_KeyDown;
+                this.ZoomBorder.KeyDown += ZoomBorder_KeyDown;
             }
         }
 
@@ -207,17 +202,17 @@ namespace Unlimotion.Views
             switch (e.Key)
             {
                 case Key.F:
-                    _zoomBorder?.Fill();
+                    this.ZoomBorder?.Fill();
                     break;
                 case Key.U:
-                    _zoomBorder?.Uniform();
+                    this.ZoomBorder?.Uniform();
                     break;
                 case Key.R:
-                    _zoomBorder?.ResetMatrix();
+                    this.ZoomBorder?.ResetMatrix();
                     break;
                 case Key.T:
-                    _zoomBorder?.ToggleStretchMode();
-                    _zoomBorder?.AutoFit();
+                    this.ZoomBorder?.ToggleStretchMode();
+                    this.ZoomBorder?.AutoFit();
                     break;
             }
         }

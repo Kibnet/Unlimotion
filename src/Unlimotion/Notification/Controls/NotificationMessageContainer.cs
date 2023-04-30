@@ -88,7 +88,7 @@ public class NotificationMessageContainer : ItemsControl
 
     private void RemoveMessage(INotificationMessage message)
     {
-        (this.Items as AvaloniaList<object>).Remove(message);
+        this.Items.Remove(message);
     }
 
     /// <summary>
@@ -103,7 +103,7 @@ public class NotificationMessageContainer : ItemsControl
             throw new InvalidOperationException(
                 "Can't use both ItemsSource and Items collection at the same time.");*/
 
-        (this.Items as AvaloniaList<object>).Add(args.Message);
+        this.Items.Add(args.Message);
 
         if (args.Message is INotificationAnimation animatableMessage)
         {
