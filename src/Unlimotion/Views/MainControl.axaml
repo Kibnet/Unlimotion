@@ -28,7 +28,7 @@
 			<Grid Background="Transparent">
 				<ContentControl Content="{Binding TaskItem}"/>
 				<Button Background="#00000000"
-						Content="Х"
+						Content="❌"
 						BorderThickness="0"
 						HorizontalAlignment="Right"
 						Command="{Binding RemoveCommand}"/>
@@ -230,7 +230,7 @@
 											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
 										</Grid>
 										<Button Background="#00000000"
-												Content="Х"
+												Content="❌"
 												BorderThickness="0"
 												HorizontalAlignment="Right"
 												Command="{Binding RemoveCommand}"/>
@@ -240,9 +240,9 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
-				<!--<TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
+				<TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
 					<views:GraphControl DataContext="{Binding Graph}"/>
-				</TabItem>-->
+				</TabItem>
 				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
 					<views:SettingsControl DataContext="{Binding Settings}"/>
 				</TabItem>

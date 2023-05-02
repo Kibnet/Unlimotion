@@ -7,6 +7,6 @@
     </PackageReference>
   </ItemGroup>
   <PropertyGroup>
-    <AvaloniaVersion>0.10.18</AvaloniaVersion>
+    <AvaloniaVersion>11.0.0-preview7</AvaloniaVersion>
   </PropertyGroup>
 </Project>
