@@ -17,7 +17,7 @@ Rights aren't automatically granted due to Apple's security policy for unsigned 
 No additional steps are required for correct installation on OS Windows and Debian.
 
 Case 2:
-1. Download and install the [.NET 6.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
+1. Download and install the [.NET 7.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
 2. Download the latest version of the program's source code as a [zip-archive](https://github.com/Kibnet/Unlimotion/archive/refs/heads/main.zip) and **unpack** it to any folder on your computer.
 If you know the git version control system, instead of downloading the archive, clone this [git-repository](https://github.com/Kibnet/Unlimotion.git)
 to your computer in any folder using your favorite git-client (for example [Fork](https://git-fork.com/)).

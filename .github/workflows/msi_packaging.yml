@@ -15,7 +15,7 @@ jobs:
         ref: main
 
     - name: Publish
-      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net6.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net6.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net7.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net7.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
 
     - name: Build AIP
       uses: caphyon/advinst-github-action@v1.0
