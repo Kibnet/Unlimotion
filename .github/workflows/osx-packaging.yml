@@ -12,7 +12,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
       with:
-        ref: main
+        ref: ${{ github.sha }}
 
     - name: Publish
       run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{  github.ref_name }}

@@ -12,15 +12,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
       with:
-        ref: main
-
+        ref: ${{ github.sha }}
+      
     - name: Generate DebPkg
       run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{  github.ref_name }}
 
     - name: Rename DebPkg
-      run: mv ./src/Unlimotion.Desktop/bin/Release/net7.0/linux-x64/*.deb ./src/Unlimotion.Desktop/bin/Release/net7.0/linux-x64/Unlimotion-${{  github.ref_name }}.deb
+      run: cd ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64 && mv ./*.deb ./Unlimotion-${{  github.ref_name }}.deb
 
     - name: Upload DebPkg To Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./src/Unlimotion.Desktop/bin/Release/net7.0/linux-x64/Unlimotion-${{  github.ref_name }}.deb
+        files: ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64/Unlimotion-${{  github.ref_name }}.deb
