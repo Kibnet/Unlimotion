@@ -5,6 +5,8 @@
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:views="clr-namespace:Unlimotion.Views"
         xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
+        xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
+        xmlns:unlimotion="clr-namespace:Unlimotion"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainWindow"
         Icon="/Assets/Unlimotion.ico"
@@ -14,12 +16,40 @@
 		<viewModel:MainWindowViewModel/>
 	</Design.DataContext>
 	<Panel>
-		<views:MainControl Name="MainControl"/>
-		<Border VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-			<Border.Styles>
-				<StyleInclude Source="/Notification/Themes/Custom.axaml" />
-			</Border.Styles>
-			<controls:NotificationMessageContainer Name="Notification" Manager="{Binding ManagerWrapper.Manager}"></controls:NotificationMessageContainer>
-		</Border>
+		<dialogHostAvalonia:DialogHost CloseOnClickAway="True" Identifier="Ask">
+			<dialogHostAvalonia:DialogHost.DataTemplates>
+				<DataTemplate DataType="unlimotion:AskViewModel">
+
+					<Grid Margin="10" RowDefinitions="Auto,Auto,Auto">
+
+						<TextBlock TextAlignment="Center"
+								   TextWrapping="Wrap"
+								   FontWeight="Bold"
+								   Text="{Binding Header}"/>
+						<TextBlock Grid.Row="1" TextAlignment="Center"
+								   TextWrapping="Wrap"
+								   Text="{Binding Message}" />
+						<Grid Grid.Row="2" Margin="0,10,0,0">
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*"/>
+								<ColumnDefinition Width="*"/>
+							</Grid.ColumnDefinitions>
+							<Button Grid.Column="0"
+									HorizontalAlignment="Stretch"
+									HorizontalContentAlignment="Center"
+									Command="{Binding YesCommand}"
+									Content="Yes"/>
+							<Button Grid.Column="1"
+									HorizontalAlignment="Stretch"
+									HorizontalContentAlignment="Center"
+									Command="{Binding NoCommand}"
+									Content="No"/>
+						</Grid>
+					</Grid>
+				</DataTemplate>
+			</dialogHostAvalonia:DialogHost.DataTemplates>
+			<!-- put the content over which the dialog is shown here (e.g. your main window grid)-->
+			<views:MainControl Name="MainControl"/>
+		</dialogHostAvalonia:DialogHost>
 	</Panel>
 </Window>

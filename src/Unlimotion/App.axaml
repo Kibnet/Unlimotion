@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Unlimotion"
+             xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              x:Class="Unlimotion.App">
 	<Application.DataTemplates>
 		<local:ViewLocator/>
@@ -38,7 +39,7 @@
                                 IsVisible="{TemplateBinding IsExpanded, Mode=TwoWay}"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderThickness="1,1,1,1"
                                 MinHeight="{TemplateBinding MinHeight}"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Stretch"
@@ -59,7 +60,7 @@
                 </ControlTemplate>
             </Setter>
 		</Style>
-
+        <dialogHostAvalonia:DialogHostStyles />
 	</Application.Styles>
 	<TrayIcon.Icons>
 		<TrayIcons>
