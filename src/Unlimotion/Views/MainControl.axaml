@@ -250,7 +250,7 @@
 			</TabControl>
 		</Grid>
 		<!--Редактор задачи-->
-		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right" IsExpanded="{Binding DetailsAreOpen}" VerticalContentAlignment="Stretch">
+		<Expander Grid.Column="1" Grid.Row="1" MaxWidth="600" ExpandDirection="Right" IsExpanded="{Binding DetailsAreOpen}" VerticalContentAlignment="Stretch" VerticalAlignment="Stretch">
 			<Grid VerticalAlignment="Stretch">
 				<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
 					<StackPanel Margin="10">
