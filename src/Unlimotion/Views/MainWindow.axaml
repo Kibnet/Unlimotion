@@ -4,7 +4,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
         xmlns:views="clr-namespace:Unlimotion.Views"
-        xmlns:controls="clr-namespace:Unlimotion.Notification.Controls"
         xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
         xmlns:unlimotion="clr-namespace:Unlimotion"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"

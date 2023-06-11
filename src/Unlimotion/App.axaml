@@ -6,9 +6,9 @@
 	<Application.DataTemplates>
 		<local:ViewLocator/>
 	</Application.DataTemplates>
-
 	<Application.Styles>
-		<Style Selector="Label.IsCanBeCompleted">
+        <FluentTheme/>
+        <Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
         <Style Selector="TextBlock.IsCanBeCompleted">
