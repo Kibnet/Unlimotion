@@ -78,7 +78,6 @@ namespace Unlimotion.Desktop
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
             => AppBuilder.Configure<App>()            
-                .AfterSetup(AfterSetup)
                 .UsePlatformDetect()
 #if DEBUG
                 .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
@@ -87,19 +86,5 @@ namespace Unlimotion.Desktop
 #endif
 
                 .UseReactiveUI();
-
-        private static void AfterSetup(AppBuilder obj)
-        {            
-            (obj.Instance as App).OnLoaded += (sender, args) =>
-            {
-#if DEBUG
-                if (obj.Instance.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                {
-                    desktop.MainWindow?.AttachDevTools();
-                    desktop.Windows.FirstOrDefault()?.AttachDevTools();
-                }
-#endif
-            };
-        }
     }
 }

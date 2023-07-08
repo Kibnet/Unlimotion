@@ -18,6 +18,8 @@ namespace Unlimotion.Views
         public MainControl()
         {
             InitializeComponent();
+            AddHandler(DragDrop.DropEvent, Drop);
+            AddHandler(DragDrop.DragOverEvent, DragOver);
             DataContextChanged += MainWindow_DataContextChanged;
         }
 
@@ -78,14 +80,6 @@ namespace Unlimotion.Views
         }
 
         private List<IDisposable> disposables = new();
-
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
-
-            AddHandler(DragDrop.DropEvent, Drop);
-            AddHandler(DragDrop.DragOverEvent, DragOver);
-        }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
 

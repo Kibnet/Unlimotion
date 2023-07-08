@@ -22,6 +22,8 @@ namespace Unlimotion.Views
         {
             DataContextChanged += GraphControl_DataContextChanged;
             InitializeComponent();
+            AddHandler(DragDrop.DropEvent, MainControl.Drop);
+            AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
             if (this.ZoomBorder != null)
             {
                 this.ZoomBorder.KeyDown += ZoomBorder_KeyDown;
@@ -184,17 +186,9 @@ namespace Unlimotion.Views
             // Обновление графического представления графа в пользовательском интерфейсе
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var control = this.GetControl<GraphPanel>("Graph");
-                control.Graph = graph;
+                Graph.Graph = graph;
             });
 
-        }
-
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
-            AddHandler(DragDrop.DropEvent, MainControl.Drop);
-            AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
         }
 
         private void ZoomBorder_KeyDown(object? sender, KeyEventArgs e)
