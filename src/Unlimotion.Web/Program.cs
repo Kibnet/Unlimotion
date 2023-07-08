@@ -1,10 +1,15 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
+using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using Avalonia;
-using Avalonia.Web;
-using Avalonia.ReactiveUI;
+using Avalonia.Browser;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using Unlimotion;
 using AutoMapper;
+using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
@@ -15,8 +20,8 @@ using WritableJsonConfiguration;
 internal partial class Program
 {
     private static void Main(string[] args) => BuildAvaloniaApp()
-        .UseReactiveUI()
-        .SetupBrowserApp("out");
+       .UseReactiveUI()
+       .StartBrowserAppAsync("out");
 
     public static AppBuilder BuildAvaloniaApp()
     {
