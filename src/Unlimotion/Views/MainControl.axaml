@@ -6,6 +6,7 @@
 		xmlns:unlimotion="clr-namespace:Unlimotion"
 		xmlns:views="clr-namespace:Unlimotion.Views"
 		xmlns:converters="clr-namespace:Unlimotion.Converters"
+		xmlns:behavior="clr-namespace:Unlimotion.Behavior"
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 		x:Name="Main"
 		x:Class="Unlimotion.Views.MainControl">
@@ -289,10 +290,13 @@
 														HorizontalAlignment="Stretch"
 														DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
 									<TextBox Grid.Column="1"
-											 Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
-											 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
+									         ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
 											 HorizontalAlignment="Stretch"
-											 Watermark="Planned Duration" UseFloatingWatermark="True" />
+											 Watermark="Planned Duration" UseFloatingWatermark="True">
+										 <Interaction.Behaviors>
+											 <behavior:LostFocusUpdateBindingBehavior Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"/>
+										 </Interaction.Behaviors>
+									</TextBox>
 									<CalendarDatePicker Grid.Column="2" SelectedDate="{Binding PlannedEndDateTime}"
 														IsTodayHighlighted="True"
 														Watermark="Planned End"
