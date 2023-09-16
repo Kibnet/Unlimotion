@@ -298,26 +298,31 @@ namespace Unlimotion.ViewModel
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
-                if (IsCompleted == null)
+                var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
+
+                switch (IsCompleted)
                 {
-                    IsCompleted = false;
-                }
-                else if (IsCompleted == false)
-                {
-                    IsCompleted = null;
-                    if (ContainsTasks.Any(m => m.IsCompleted == false))
+                    case null:
                     {
-                        var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
-                        var tasks = ContainsTasks.Where(m => m.IsCompleted == false).ToList();
-                        notificationManager.Ask("Archive contained tasks",
-                            $"Are you sure you want to archive the {tasks.Count} contatined tasks from \"{this.Model.Title}\"?",
-                            () =>
-                            {
-                                foreach (var task in tasks)
-                                {
-                                    task.IsCompleted = null;
-                                }
-                            });
+                        IsCompleted = false;
+
+                        var archivedChildrenTasks = ContainsTasks.Where(e => e.IsCompleted == null).ToList();
+                        
+                        ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, archivedChildrenTasks,
+                            ArchiveMethodType.Unarchive);
+                        
+                        break;
+                    }
+                    case false:
+                    {
+                        IsCompleted = null;
+                        
+                        var notCompletedChildrenTasks = ContainsTasks.Where(e => e.IsCompleted == false).ToList();
+                        
+                        ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, notCompletedChildrenTasks,
+                            ArchiveMethodType.Archive);
+
+                        break;
                     }
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
@@ -639,5 +644,41 @@ namespace Unlimotion.ViewModel
             new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
             new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
         };
+
+        private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper notificationManager, string taskName,
+            List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
+        {
+            if (childrenTasks.Count == 0) return;
+            
+            Action yesAction = methodType switch
+            {
+                ArchiveMethodType.Archive => () =>
+                {
+                    foreach (var task in childrenTasks)
+                    {
+                        task.IsCompleted = null;
+                    }
+                },
+                ArchiveMethodType.Unarchive => () =>
+                {
+                    foreach (var task in childrenTasks)
+                    {
+                        task.IsCompleted = false;
+                    }
+                },
+                _ => throw new Exception("Undefined ArchiveMethodType")
+            };
+
+            var methodTypeString = methodType.ToString();
+            notificationManager.Ask($"{methodTypeString} contained tasks",
+                $"Are you sure you want to {methodTypeString.ToLower()} the {childrenTasks.Count} contained tasks from \"{taskName}\"?",
+                yesAction);
+        }
+
+        private enum ArchiveMethodType
+        {
+            Archive = 1,
+            Unarchive = 2
+        }
     }
 }
