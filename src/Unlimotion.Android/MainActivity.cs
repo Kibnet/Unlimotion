@@ -15,7 +15,7 @@ namespace Unlimotion.Android
     [Activity(Label = "Unlimotion.Android",
         Theme = "@style/MyTheme.NoActionBar",
         Icon = "@drawable/icon",
-        LaunchMode = LaunchMode.SingleTop,
+        MainLauncher = true,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
     public class MainActivity : AvaloniaMainActivity<App>
     {
@@ -49,6 +49,7 @@ namespace Unlimotion.Android
             var notificationManager = new NotificationManagerWrapperWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
             return base.CustomizeAppBuilder(builder)
+                .WithInterFont()
                 .UseReactiveUI();
         }
     }

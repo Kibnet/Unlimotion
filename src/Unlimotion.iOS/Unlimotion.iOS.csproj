@@ -3,18 +3,7 @@
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net7.0-ios</TargetFramework>
 		<SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
-		<ProvisioningType>manual</ProvisioningType>
 		<Nullable>enable</Nullable>
-		<UseInterpreter>True</UseInterpreter>
-		<RuntimeIdentifier>iossimulator-x64</RuntimeIdentifier>
-
-		<!-- These properties need to be set in order to run on a real iDevice -->
-		<!--<RuntimeIdentifier>ios-arm64</RuntimeIdentifier>-->
-		<!--<CodesignKey></CodesignKey>-->
-	</PropertyGroup>
-
-	<PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-		<CodesignKey>iPhone Developer</CodesignKey>
 	</PropertyGroup>
 
 	<ItemGroup>

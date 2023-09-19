@@ -1,41 +1,44 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Unlimotion"
+             x:Class="Unlimotion.App"
              xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
-             x:Class="Unlimotion.App">
+             RequestedThemeVariant="Default" >
+	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+
 	<Application.DataTemplates>
 		<local:ViewLocator/>
 	</Application.DataTemplates>
 	<Application.Styles>
-        <FluentTheme/>
-        <Style Selector="Label.IsCanBeCompleted">
+		<FluentTheme/>
+		<Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
-        <Style Selector="TextBlock.IsCanBeCompleted">
+		<Style Selector="TextBlock.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
-        </Style>
-        <Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-        </Style>
-        <Style Selector="TextBox[UseFloatingWatermark=True]">
-            <Setter Property="MinHeight" Value="42"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
-        <Style Selector="CalendarDatePicker[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-        </Style>
-        <Style Selector="CalendarDatePicker[UseFloatingWatermark=True]">
-            <Setter Property="MinHeight" Value="42"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
+		<Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+			<Setter Property="FontSize" Value="10"/>
+			<Setter Property="FontWeight" Value="Bold"/>
+		</Style>
+		<Style Selector="TextBox[UseFloatingWatermark=True]">
+			<Setter Property="MinHeight" Value="42"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+		</Style>
+		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+			<Setter Property="FontSize" Value="10"/>
+			<Setter Property="FontWeight" Value="Bold"/>
+		</Style>
+		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]">
+			<Setter Property="MinHeight" Value="42"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+		</Style>
 		<Style Selector="Expander" >
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Grid MinWidth="{TemplateBinding MinWidth}" ColumnDefinitions="*,Auto"
+			<Setter Property="Template">
+				<ControlTemplate>
+					<Grid MinWidth="{TemplateBinding MinWidth}" ColumnDefinitions="*,Auto"
                                MaxWidth="{TemplateBinding MaxWidth}">
-                        <Border x:Name="ExpanderContent"
+						<Border x:Name="ExpanderContent"
                                 IsVisible="{TemplateBinding IsExpanded, Mode=TwoWay}"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
@@ -44,42 +47,22 @@
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Stretch"
                                 Padding="0">
-                            <ContentPresenter x:Name="PART_ContentPresenter"
+							<ContentPresenter x:Name="PART_ContentPresenter"
                                               Content="{TemplateBinding Content}"
                                               ContentTemplate="{TemplateBinding ContentTemplate}"
                                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-                        </Border>
-                        <ToggleButton
+						</Border>
+						<ToggleButton
                             Grid.Column="1" VerticalAlignment="Stretch"
                                       Content="&#x003C;" VerticalContentAlignment="Center"
                                       CornerRadius="{TemplateBinding CornerRadius}"
                                       IsEnabled="{TemplateBinding IsEnabled}"
                                       IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}" />
-                    </Grid>
-                </ControlTemplate>
-            </Setter>
+					</Grid>
+				</ControlTemplate>
+			</Setter>
 		</Style>
-        <dialogHostAvalonia:DialogHostStyles />
+		<dialogHostAvalonia:DialogHostStyles />
 	</Application.Styles>
-	<TrayIcon.Icons>
-		<TrayIcons>
-			<TrayIcon Icon="/Assets/Unlimotion.ico" Command="{Binding ShowWindowCommand}" ToolTipText="Unlimotion">
-				<TrayIcon.Menu>
-					<NativeMenu>
-						<!--<NativeMenuItem Header="Settings">
-							<NativeMenu>
-								<NativeMenuItem Header="Option 1" ToggleType="Radio" IsChecked="True" Command="{Binding ToggleCommand}" />
-								<NativeMenuItem Header="Option 2" ToggleType="Radio" IsChecked="True" Command="{Binding ToggleCommand}" />
-								<NativeMenuItemSeparator />
-								<NativeMenuItem Header="Option 3" ToggleType="CheckBox" IsChecked="True" Command="{Binding ToggleCommand}" />
-								<NativeMenuItem Icon="/Assets/Unlimotion.ico" Header="Restore Defaults" Command="{Binding ToggleCommand}" />
-							</NativeMenu>
-						</NativeMenuItem>-->
-						<NativeMenuItem Header="Exit" Command="{Binding ExitCommand}" />
-					</NativeMenu>
-				</TrayIcon.Menu>
-			</TrayIcon>
-		</TrayIcons>
-	</TrayIcon.Icons>
 </Application>

@@ -14,7 +14,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion
 {
-    public class App : Application
+    public partial class App : Application
 #if LIVE
         ,ILiveView
 #endif

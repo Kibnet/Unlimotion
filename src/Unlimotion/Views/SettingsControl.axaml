@@ -5,6 +5,7 @@
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
              xmlns:unlimotion="clr-namespace:Unlimotion"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:DataType="viewModel:SettingsViewModel"
              x:Class="Unlimotion.Views.SettingsControl">
 	<Grid>
 		<ScrollViewer>

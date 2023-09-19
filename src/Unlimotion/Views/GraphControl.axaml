@@ -9,7 +9,7 @@
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="Unlimotion.Views.GraphControl">
 	<Grid RowDefinitions="Auto,*">
-		<WrapPanel Orientation="Horizontal">
+		<WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
             <CheckBox Content="Hide Unactual" IsChecked="{Binding HideUnactual}" Margin="10,0,0,0"/>
 			<CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="10,0,0,0"/>
 			<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0" IsVisible="{Binding OnlyUnlocked}"/>

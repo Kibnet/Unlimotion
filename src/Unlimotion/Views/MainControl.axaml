@@ -9,6 +9,7 @@
 		xmlns:behavior="clr-namespace:Unlimotion.Behavior"
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 		x:Name="Main"
+		x:DataType="viewModel:MainWindowViewModel"
 		x:Class="Unlimotion.Views.MainControl">
 
 	<Design.DataContext>
@@ -57,7 +58,7 @@
 	<Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*">
 		<!--Адрес-->
 		<Grid Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2" Margin="10" DragDrop.AllowDrop="True" DataContext="{Binding CurrentTaskItem}">
-			<TextBlock TextWrapping="Wrap" Text="{Binding $parent.Parent.DataContext.BreadScrumbs}" PointerPressed="BreadScrumbs_OnPointerPressed" FontWeight="Bold" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+			<TextBlock TextWrapping="Wrap" Text="{Binding $parent.Parent.((viewModel:MainWindowViewModel)DataContext).BreadScrumbs}" PointerPressed="BreadScrumbs_OnPointerPressed" FontWeight="Bold" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
 		</Grid>
 
 		<!--Панель навигации-->
@@ -256,11 +257,11 @@
 				<ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
 					<StackPanel Margin="10">
 						<WrapPanel>
-							<Button Command="{Binding #Main.DataContext.CreateSibling}">➕Sibling</Button>
-							<Button Command="{Binding #Main.DataContext.CreateBlockedSibling}">➕🔒Sibling</Button>
-							<Button Command="{Binding #Main.DataContext.CreateInner}">➕Inner</Button>
-							<Button Command="{Binding #Main.DataContext.MoveToPath}">Move To Path</Button>
-							<Button Command="{Binding #Main.DataContext.Remove}">Remove</Button>
+							<Button Command="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CreateSibling}">➕Sibling</Button>
+							<Button Command="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CreateBlockedSibling}">➕🔒Sibling</Button>
+							<Button Command="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CreateInner}">➕Inner</Button>
+							<Button Command="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).MoveToPath}">Move To Path</Button>
+							<Button Command="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).Remove}">Remove</Button>
 						</WrapPanel>
 						<Border IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
 							<StackPanel DataContext="{Binding CurrentTaskItem}" >
@@ -338,7 +339,7 @@
 								</StackPanel>
 
 								<Label>Parents Tasks:</Label>
-								<TreeView ItemsSource="{Binding #Main.DataContext.CurrentItemParents.SubTasks}">
+								<TreeView ItemsSource="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CurrentItemParents.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -347,7 +348,7 @@
 								</TreeView>
 
 								<Label>Blocking Tasks:</Label>
-								<TreeView ItemsSource="{Binding #Main.DataContext.CurrentItemBlockedBy.SubTasks}">
+								<TreeView ItemsSource="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CurrentItemBlockedBy.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -356,7 +357,7 @@
 								</TreeView>
 
 								<Label>Containing Tasks:</Label>
-								<TreeView ItemsSource="{Binding #Main.DataContext.CurrentItemContains.SubTasks}">
+								<TreeView ItemsSource="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CurrentItemContains.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -365,7 +366,7 @@
 								</TreeView>
 
 								<Label>Blocked Tasks:</Label>
-								<TreeView ItemsSource="{Binding #Main.DataContext.CurrentItemBlocks.SubTasks}">
+								<TreeView ItemsSource="{Binding #Main.((viewModel:MainWindowViewModel)DataContext).CurrentItemBlocks.SubTasks}">
 									<TreeView.ItemTemplate>
 										<TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
 											<ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>

@@ -79,6 +79,7 @@ namespace Unlimotion.Desktop
         public static AppBuilder BuildAvaloniaApp()
             => AppBuilder.Configure<App>()            
                 .UsePlatformDetect()
+                .WithInterFont()
 #if DEBUG
                 .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
 #else
