@@ -636,11 +636,20 @@ namespace Unlimotion.ViewModel
             {
                 ManagerWrapper.Ask("Remove task",
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
-                    () => task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem));
+                    () =>
+                    {
+                        if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
+                        {
+                            CurrentTaskItem = null;
+                        }
+                    });
             }
             else
             {
-                task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem);
+                if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
+                {
+                    CurrentTaskItem = null;
+                }
             }
         }
 
@@ -654,6 +663,9 @@ namespace Unlimotion.ViewModel
                     {
                         task.RemoveFunc.Invoke(parent);
                     }
+
+                    task.RemoveFunc.Invoke(null);
+                    CurrentTaskItem = null;
                 });
         }
 

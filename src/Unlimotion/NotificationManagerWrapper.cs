@@ -1,23 +1,43 @@
+using DialogHostAvalonia;
 using System;
-using Unlimotion.Notification;
+using System.Reactive.Linq;
+using System.Windows.Input;
+using ReactiveUI;
 
 namespace Unlimotion;
 
 public class NotificationManagerWrapperWrapper : ViewModel.INotificationManagerWrapper
 {
-    public NotificationMessageManager Manager { get; } = new ();
-
     public void Ask(string header, string message, Action yesAction, Action noAction = null)
     {
-        Manager.CreateMessage()
-            .Accent("#0078D7")
-            .Animates(true)
-            .Background("#444")
-            .HasBadge("Question")
-            .HasHeader(header)
-            .HasMessage(message)
-            .Dismiss().WithButton("Yes", _ => { yesAction?.Invoke();})
-            .Dismiss().WithButton("No", _ => { noAction?.Invoke(); })
-            .Queue();
+        var askViewModel = new AskViewModel
+        {
+            Header = header,
+            Message = message,
+            YesAction = yesAction,
+            NoAction = noAction,
+        };
+
+        var id = DialogHost.Show(askViewModel);
+        askViewModel.CloseAction = () => DialogHost.GetDialogSession("Ask")?.Close(false);
     }
+}
+
+public class AskViewModel
+{
+    public string Header { get; set; }
+    public string Message { get; set; }
+    public Action YesAction { get; set; }
+    public Action NoAction { get; set; }
+    public ICommand YesCommand => ReactiveCommand.Create(() =>
+    {
+        YesAction?.Invoke();
+        CloseAction?.Invoke();
+    });
+    public ICommand NoCommand => ReactiveCommand.Create(() =>
+    {
+        NoAction?.Invoke();
+        CloseAction?.Invoke();
+    });
+    public Action CloseAction { get; set; }
 }

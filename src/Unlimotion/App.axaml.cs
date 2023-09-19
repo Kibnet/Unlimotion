@@ -1,10 +1,8 @@
 //#define LIVE
 
 using System;
-using System.Diagnostics;
 using System.Reactive;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 #if LIVE
@@ -16,7 +14,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion
 {
-    public class App : Application
+    public partial class App : Application
 #if LIVE
         ,ILiveView
 #endif
@@ -66,13 +64,11 @@ namespace Unlimotion
             }
 
             base.OnFrameworkInitializationCompleted();
-            OnLoaded?.Invoke(this, EventArgs.Empty);
         }
 
-        public object CreateView(Window window)
+        public App()
         {
-            window.DataContext ??= new MainWindowViewModel();
-            return new MainControl();
+            DataContext = new ApplicationViewModel();
         }
 
         private static bool IsProduction()

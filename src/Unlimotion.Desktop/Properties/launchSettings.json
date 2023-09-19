@@ -1,11 +1,11 @@
 {
   "profiles": {
     "Unlimotion.Desktop": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "-config=Settings.Shared.json"
     },
     "WSL": {
       "commandName": "WSL2",
-      "environmentVariables": {},
       "distributionName": ""
     }
   }

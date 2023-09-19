@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading;
 using Avalonia.Controls;
-using Avalonia.Controls.PanAndZoom;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
@@ -21,15 +18,15 @@ namespace Unlimotion.Views
 {
     public partial class GraphControl : UserControl
     {
-        private readonly ZoomBorder? _zoomBorder;
         public GraphControl()
         {
             DataContextChanged += GraphControl_DataContextChanged;
             InitializeComponent();
-            _zoomBorder = this.Find<ZoomBorder>("ZoomBorder");
-            if (_zoomBorder != null)
+            AddHandler(DragDrop.DropEvent, MainControl.Drop);
+            AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
+            if (this.ZoomBorder != null)
             {
-                _zoomBorder.KeyDown += ZoomBorder_KeyDown;
+                this.ZoomBorder.KeyDown += ZoomBorder_KeyDown;
             }
         }
 
@@ -189,17 +186,9 @@ namespace Unlimotion.Views
             // Обновление графического представления графа в пользовательском интерфейсе
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var control = this.GetControl<GraphPanel>("Graph");
-                control.Graph = graph;
+                Graph.Graph = graph;
             });
 
-        }
-
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
-            AddHandler(DragDrop.DropEvent, MainControl.Drop);
-            AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
         }
 
         private void ZoomBorder_KeyDown(object? sender, KeyEventArgs e)
@@ -207,17 +196,17 @@ namespace Unlimotion.Views
             switch (e.Key)
             {
                 case Key.F:
-                    _zoomBorder?.Fill();
+                    this.ZoomBorder?.Fill();
                     break;
                 case Key.U:
-                    _zoomBorder?.Uniform();
+                    this.ZoomBorder?.Uniform();
                     break;
                 case Key.R:
-                    _zoomBorder?.ResetMatrix();
+                    this.ZoomBorder?.ResetMatrix();
                     break;
                 case Key.T:
-                    _zoomBorder?.ToggleStretchMode();
-                    _zoomBorder?.AutoFit();
+                    this.ZoomBorder?.ToggleStretchMode();
+                    this.ZoomBorder?.AutoFit();
                     break;
             }
         }
@@ -228,7 +217,7 @@ namespace Unlimotion.Views
             if (pointer.Properties.IsLeftButtonPressed)
             {
                 var dragData = new DataObject();
-                var control = sender as IControl;
+                var control = sender as Control;
                 var dc = control?.DataContext;
                 if (dc == null)
                 {
@@ -247,7 +236,7 @@ namespace Unlimotion.Views
 
         public const string CustomFormat = "application/xxx-unlimotion-task-item";
 
-        private void TaskTree_OnDoubleTapped(object? sender, RoutedEventArgs e)
+        private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
             var mwm = Locator.Current.GetService<MainWindowViewModel>();
             if (mwm != null)

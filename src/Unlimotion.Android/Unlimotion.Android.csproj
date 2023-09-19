@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net6.0-android</TargetFramework>
+		<TargetFramework>net7.0-android</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
 		<Nullable>enable</Nullable>
@@ -9,9 +9,7 @@
 		<ApplicationVersion>1</ApplicationVersion>
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
-		<MSBuildEnableWorkloadResolver>true</MSBuildEnableWorkloadResolver>
-		<!--<RunAOTCompilation>true</RunAOTCompilation>
-	<AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>-->
+		<AndroidEnableProfiledAot>False</AndroidEnableProfiledAot>
 	</PropertyGroup>
 	<ItemGroup>
 		<AndroidResource Include="Icon.png">
@@ -19,21 +17,9 @@
 		</AndroidResource>
 	</ItemGroup>
 
-	<PropertyGroup Condition="'$(Configuration)'=='Release' and '$(TF_BUILD)' == ''">
-		<RunAOTCompilation>False</RunAOTCompilation>
-		<EnableLLVM>True</EnableLLVM>
-		<EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<EmbedAssembliesIntoApk>False</EmbedAssembliesIntoApk>
-		<RunAOTCompilation>False</RunAOTCompilation>
-	</PropertyGroup>
-
 	<ItemGroup>
-		<PackageReference Include="Xamarin.AndroidX.AppCompat" Version="1.5.1" />
-		<PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel" Version="2.5.1" />
-		<PackageReference Include="Avalonia.Android" Version="$(AvaloniaAndroidVersion)" />
+		<PackageReference Include="Avalonia.Android" Version="$(AvaloniaVersion)" />
+		<PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.1" />
 	</ItemGroup>
 
 	<ItemGroup>

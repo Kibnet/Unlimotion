@@ -1,1 +1,1 @@
-dotnet run --project src\Unlimotion.Desktop
+dotnet run --project src\Unlimotion.Desktop\Unlimotion.Desktop.csproj

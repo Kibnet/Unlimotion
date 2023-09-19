@@ -1,12 +1,12 @@
 #See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
 WORKDIR /app
 EXPOSE 5004
 EXPOSE 5005
 EXPOSE 5006
 
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["Unlimotion.Server/Unlimotion.Server.csproj", "Unlimotion.Server/"]
 COPY ["Unlimotion.Interface/Unlimotion.Interface.csproj", "Unlimotion.Interface/"]
