@@ -306,7 +306,7 @@ namespace Unlimotion.ViewModel
                     {
                         IsCompleted = false;
 
-                        var archivedChildrenTasks = ContainsTasks.Where(e => e.IsCompleted == null).ToList();
+                        var archivedChildrenTasks = GetChildrenTasks(e => e.IsCompleted == null).ToList();
                         
                         ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, archivedChildrenTasks,
                             ArchiveMethodType.Unarchive);
@@ -317,7 +317,7 @@ namespace Unlimotion.ViewModel
                     {
                         IsCompleted = null;
                         
-                        var notCompletedChildrenTasks = ContainsTasks.Where(e => e.IsCompleted == false).ToList();
+                        var notCompletedChildrenTasks = GetChildrenTasks(e => e.IsCompleted == false).ToList();
                         
                         ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, notCompletedChildrenTasks,
                             ArchiveMethodType.Archive);
@@ -467,6 +467,25 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             _isInited = true;
+        }
+
+        private IEnumerable<TaskItemViewModel> GetChildrenTasks(Func<TaskItemViewModel, bool> predicate)
+        {
+            var queue = new Queue<TaskItemViewModel>();
+
+            foreach (var child in ContainsTasks.Where(predicate))
+            {
+                queue.Enqueue(child);
+            }
+
+            while (queue.TryDequeue(out var current))
+            {
+                yield return current;
+                foreach (var child in current.ContainsTasks.Where(predicate))
+                {
+                    queue.Enqueue(child);
+                }
+            }
         }
 
         public ICommand ArchiveCommand { get; set; }
