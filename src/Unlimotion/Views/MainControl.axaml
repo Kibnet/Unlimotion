@@ -64,6 +64,7 @@
 		<!--Панель навигации-->
 		<Grid Grid.Column="0" Grid.Row="1">
 			<TabControl TabStripPlacement="Top">
+				<!--All Tasks-->
 				<TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
@@ -84,6 +85,7 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
+				<!--Last Created-->
 				<TabItem Header="Last Created" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
@@ -127,14 +129,15 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
+				<!--Unlocked-->
 				<TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
 							<CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="10,0,0,0"/>
-							<ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="10 0"/>
-							<ComboBox ItemsSource="{Binding EmojiFilters}"/>
+							<ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="10,0,0,0" Height="44"/>
+							<ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="10 0" Height="44"/>
+							<ComboBox ItemsSource="{Binding EmojiFilters}" Height="44"/>
 						</WrapPanel>
-
 						<TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
 								  ItemsSource="{Binding UnlockedItems}"
 								  SelectedItem="{Binding CurrentUnlockedItem}"
@@ -158,7 +161,7 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
-
+				<!--Completed-->
 				<TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
@@ -201,6 +204,7 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
+				<!--Archived-->
 				<TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
 					<Grid RowDefinitions="Auto,*">
 						<WrapPanel Orientation="Horizontal">
@@ -243,9 +247,11 @@
 						</TreeView>
 					</Grid>
 				</TabItem>
+				<!--Roadmap-->
 				<TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
 					<views:GraphControl DataContext="{Binding Graph}"/>
 				</TabItem>
+				<!--Settings-->
 				<TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
 					<views:SettingsControl DataContext="{Binding Settings}"/>
 				</TabItem>

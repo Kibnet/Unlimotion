@@ -32,7 +32,9 @@ namespace Unlimotion.ViewModel
             ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowWanted = _configuration.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
             var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
+            var sortNameForUnlocked = _configuration.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
+            CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.Name == sortNameForUnlocked) ?? SortDefinitions.First();
             
             this.WhenAnyValue(m => m.ShowCompleted)
                 .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b))
@@ -45,6 +47,9 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
                 .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
+                .AddToDispose(this);
+            this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
+                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
                 .AddToDispose(this);
 
             var conn = ReactiveCommand.CreateFromTask(Connect)
@@ -173,6 +178,7 @@ namespace Unlimotion.ViewModel
 
             //Set sort definition
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
+            var sortObservableForUnlocked = this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked).Select(d => d.Comparer);
 
             //Set All Tasks Filter
             var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
@@ -194,7 +200,10 @@ namespace Unlimotion.ViewModel
             //Bind Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .AutoRefreshOnObservable(m => m.WhenAny(
+                    m => m.IsCanBeCompleted, 
+                    m => m.IsCompleted, 
+                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Filter(taskFilter)
                 .Transform(item =>
                 {
@@ -333,7 +342,14 @@ namespace Unlimotion.ViewModel
             //Bind Unlocked
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, m => m.PlannedBeginDateTime, m => m.Wanted))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                    m => m.IsCanBeCompleted, 
+                    m => m.IsCompleted,
+                    m => m.UnlockedDateTime,
+                    m => m.PlannedBeginDateTime,
+                    m => m.Wanted,
+                    m => m.PlannedDuration,
+                    m => m.PlannedEndDateTime))
                 .Filter(unlockedTimeFilter)
                 .Filter(emojiFilter)
                 .Filter(wantedFilter)
@@ -348,7 +364,7 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .SortBy(m => m.TaskItem.UnlockedDateTime)
+                .Sort(sortObservableForUnlocked)
                 .Bind(out _unlockedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -748,6 +764,7 @@ namespace Unlimotion.ViewModel
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
         public SortDefinition CurrentSortDefinition { get; set; }
+        public SortDefinition CurrentSortDefinitionForUnlocked { get; set; }
 
         public bool ShowCompleted { get; set; }
 
