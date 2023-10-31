@@ -100,7 +100,6 @@ namespace Unlimotion
             else
             {
                 taskStorage = CreateFileTaskStorage(settings?.Path);
-                _dbWatcher = new FileDbWatcher(settings?.Path);
                 //_dbWatcher.Start();
                 //Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(fileDbWather);
             }
@@ -116,6 +115,7 @@ namespace Unlimotion
             if (string.IsNullOrEmpty(path))
                 storagePath = DefaultStoragePath;
             var taskStorage = new FileTaskStorage(storagePath);
+            _dbWatcher = new FileDbWatcher(storagePath);
             return taskStorage;
         }
     }
