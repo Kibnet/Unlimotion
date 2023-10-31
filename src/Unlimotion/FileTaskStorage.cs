@@ -25,7 +25,8 @@ namespace Unlimotion
             {
                 Init();
             }
-            foreach (var fileInfo in directoryInfo.EnumerateFiles()) {
+            foreach (var fileInfo in directoryInfo.EnumerateFiles())
+            {
                 var task = LoadFromFile(fileInfo.FullName);
                 if (task != null)
                 {
@@ -60,7 +61,7 @@ namespace Unlimotion
             item.Id ??= Guid.NewGuid().ToString();
 
             var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id)); 
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
             var converter = new IsoDateTimeConverter()
             {
                 DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
@@ -95,7 +96,7 @@ namespace Unlimotion
                 return false;
             }
         }
-        
+
         public async Task<bool> Connect()
         {
             return await Task.FromResult(true);
@@ -105,13 +106,16 @@ namespace Unlimotion
         {
         }
 
-        public TaskItem? LoadFromFile(string filePath) {
+        public TaskItem? LoadFromFile(string filePath)
+        {
             var jsonSerializer = new JsonSerializer();
             using var reader = File.OpenText(filePath);
-            try {
-                return (TaskItem?)jsonSerializer.Deserialize(reader, typeof(TaskItem));    
+            try
+            {
+                return (TaskItem?)jsonSerializer.Deserialize(reader, typeof(TaskItem));
             }
-            catch (Exception e) {
+            catch (Exception e)
+            {
                 return null;
             }
         }

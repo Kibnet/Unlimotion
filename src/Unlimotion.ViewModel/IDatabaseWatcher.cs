@@ -2,7 +2,8 @@ using System;
 using System.Threading.Tasks;
 
 namespace Unlimotion.ViewModel;
-public interface IDatabaseWatcher {
+public interface IDatabaseWatcher
+{
     event EventHandler<DbUpdatedEventArgs>? OnDatabaseUpdated;
     bool IsEnabled { get; set; }
     Task Start();

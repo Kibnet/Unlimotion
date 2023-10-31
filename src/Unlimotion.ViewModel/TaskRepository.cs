@@ -38,11 +38,12 @@ namespace Unlimotion.ViewModel
             _taskStorage = taskStorage;
             _dbWatcher = dbWatcher;
         }
-		
+
         public async Task Remove(string itemId)
         {
             var isWatherAcive = _dbWatcher != null && _dbWatcher.IsEnabled;
-            if (isWatherAcive) {
+            if (isWatherAcive)
+            {
                 _dbWatcher.Stop();
             }
             Tasks.Remove(itemId);
@@ -60,25 +61,28 @@ namespace Unlimotion.ViewModel
                     }
                 }
             }
-            if (isWatherAcive) {
+            if (isWatherAcive)
+            {
                 _dbWatcher.Start();
             }
         }
 
         public async Task Save(TaskItem item)
         {
-            if (_dbWatcher != null && _dbWatcher.IsEnabled) {
+            if (_dbWatcher != null && _dbWatcher.IsEnabled)
+            {
                 _dbWatcher.Stop();
                 await _taskStorage.Save(item);
                 await _dbWatcher.Start();
             }
-            else {
+            else
+            {
                 await _taskStorage.Save(item);
             }
         }
 
         public void Init() => Init(_taskStorage.GetAll());
-        
+
         private void Init(IEnumerable<TaskItem> items)
         {
             Tasks = new(item => item.Id);
@@ -98,35 +102,40 @@ namespace Unlimotion.ViewModel
             }
 
             rootFilter = Tasks.Connect()
-				.AutoRefreshOnObservable(t => t.Contains.ToObservableChangeSet())
-				.TransformMany(item =>
-				{
-					var many = item.Contains.Where(s => !string.IsNullOrEmpty(s)).Select(id => id);
-					return many;
-				}, s => s)
-				
-				.Distinct(k => k)
-				.ToCollection()
-				.Select(items =>
-				{
-					bool Predicate(TaskItemViewModel task) => items.Count == 0 || items.All(t => t != task.Id);
-					return (Func<TaskItemViewModel, bool>)Predicate;
-				});
-            if (_dbWatcher != null) 
+                .AutoRefreshOnObservable(t => t.Contains.ToObservableChangeSet())
+                .TransformMany(item =>
+                {
+                    var many = item.Contains.Where(s => !string.IsNullOrEmpty(s)).Select(id => id);
+                    return many;
+                }, s => s)
+
+                .Distinct(k => k)
+                .ToCollection()
+                .Select(items =>
+                {
+                    bool Predicate(TaskItemViewModel task) => items.Count == 0 || items.All(t => t != task.Id);
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+            if (_dbWatcher != null)
             {
                 _dbWatcher.OnDatabaseUpdated += async (object? sender, DbUpdatedEventArgs e) => await _dbWatcher_OnDatabaseUpdated(sender, e);
                 Task.Run(() => _dbWatcher.Start());
             }
         }
 
-        private async Task _dbWatcher_OnDatabaseUpdated(object? sender, DbUpdatedEventArgs e) {
-            foreach (var task in e.UpdatedTasks) {
+        private async Task _dbWatcher_OnDatabaseUpdated(object? sender, DbUpdatedEventArgs e)
+        {
+            foreach (var task in e.UpdatedTasks)
+            {
                 TaskItem? taskItem;
-                switch (task.UpdatingType) {
+                switch (task.UpdatingType)
+                {
                     case UpdatingTaskType.TaskCreated:
-                        if (!Tasks.Keys.Contains(new FileInfo(task.Id).Name)) {
+                        if (!Tasks.Keys.Contains(new FileInfo(task.Id).Name))
+                        {
                             taskItem = LoadTaskItemFromFile(task.Id);
-                            if (taskItem != null) {
+                            if (taskItem != null)
+                            {
                                 var vm = new TaskItemViewModel(taskItem, this);
                                 Tasks.AddOrUpdate(vm);
                             }
@@ -134,13 +143,15 @@ namespace Unlimotion.ViewModel
                         break;
                     case UpdatingTaskType.TaskDeleted:
                         var fi = new FileInfo(task.Id);
-                        if (Tasks.Keys.Contains(fi.Name)) {
+                        if (Tasks.Keys.Contains(fi.Name))
+                        {
                             Tasks.Remove(fi.Name);
                         }
                         break;
                     case UpdatingTaskType.TaskChanged:
                         taskItem = LoadTaskItemFromFile(task.Id);
-                        if (taskItem != null) {
+                        if (taskItem != null)
+                        {
                             var vm = new TaskItemViewModel(taskItem, this);
                             Tasks.AddOrUpdate(vm);
                         }
@@ -151,8 +162,10 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private TaskItem? LoadTaskItemFromFile(string filePath) {
-            if (_taskStorage is IFileTaskStorage fts) {
+        private TaskItem? LoadTaskItemFromFile(string filePath)
+        {
+            if (_taskStorage is IFileTaskStorage fts)
+            {
                 return fts.LoadFromFile(filePath);
             }
 
@@ -160,52 +173,52 @@ namespace Unlimotion.ViewModel
         }
 
         public void AddBlockedBy(string blocksTask, TaskItem taskItem)
-		{
-			if (!blockedById.TryGetValue(blocksTask, out var hashSet))
-			{
-				hashSet = new HashSet<string>();
-				blockedById[blocksTask] = hashSet;
-			}
+        {
+            if (!blockedById.TryGetValue(blocksTask, out var hashSet))
+            {
+                hashSet = new HashSet<string>();
+                blockedById[blocksTask] = hashSet;
+            }
 
-			hashSet.Add(taskItem.Id);
-		}
+            hashSet.Add(taskItem.Id);
+        }
 
-		public void RemoveBlockedBy(string subTask, string taskItemId)
-		{
-			if (blockedById.TryGetValue(subTask, out var hashSet))
-			{
-				hashSet.Remove(taskItemId);
-				if (hashSet.Count == 0)
-				{
-					blockedById.Remove(subTask);
-				}
-			}
-		}
-		
-		public TaskItemViewModel? GetById(string id)
-		{
-			var item = Tasks.Lookup(id);
-			return item.HasValue ? item.Value : null;
-		}
-		
-		public IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots()
-		{
-			IObservable<IChangeSet<TaskItemViewModel, string>> roots;
-			roots = Tasks.Connect()
-				.Filter(rootFilter);
-			return roots;
-		}
+        public void RemoveBlockedBy(string subTask, string taskItemId)
+        {
+            if (blockedById.TryGetValue(subTask, out var hashSet))
+            {
+                hashSet.Remove(taskItemId);
+                if (hashSet.Count == 0)
+                {
+                    blockedById.Remove(subTask);
+                }
+            }
+        }
 
-		public TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations)
-		{
-			var task = new TaskItemViewModel(clone, this);
-			task.SaveItemCommand.Execute();
-			foreach (var destination in destinations)
-			{
-				destination.Contains.Add(task.Id);
-			}
-			this.Tasks.AddOrUpdate(task);
-			return task;
-		}
-	}
+        public TaskItemViewModel? GetById(string id)
+        {
+            var item = Tasks.Lookup(id);
+            return item.HasValue ? item.Value : null;
+        }
+
+        public IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots()
+        {
+            IObservable<IChangeSet<TaskItemViewModel, string>> roots;
+            roots = Tasks.Connect()
+                .Filter(rootFilter);
+            return roots;
+        }
+
+        public TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations)
+        {
+            var task = new TaskItemViewModel(clone, this);
+            task.SaveItemCommand.Execute();
+            foreach (var destination in destinations)
+            {
+                destination.Contains.Add(task.Id);
+            }
+            this.Tasks.AddOrUpdate(task);
+            return task;
+        }
+    }
 }

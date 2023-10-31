@@ -1,8 +1,9 @@
 namespace Unlimotion.ViewModel.Models
 {
-    public enum UpdatingTaskType {
+    public enum UpdatingTaskType
+    {
         TaskCreated,
-        TaskDeleted, 
+        TaskDeleted,
         TaskChanged
     }
 }

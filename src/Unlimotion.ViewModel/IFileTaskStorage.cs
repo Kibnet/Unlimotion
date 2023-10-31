@@ -1,5 +1,7 @@
-namespace Unlimotion.ViewModel {
-    public interface IFileTaskStorage {
+namespace Unlimotion.ViewModel
+{
+    public interface IFileTaskStorage
+    {
         TaskItem? LoadFromFile(string filePath);
     }
 }

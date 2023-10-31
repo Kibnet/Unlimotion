@@ -12,7 +12,8 @@ using System.ComponentModel;
 
 namespace Unlimotion
 {
-    public static class TaskStorages {
+    public static class TaskStorages
+    {
         private static IDatabaseWatcher _dbWatcher;
         public static string DefaultStoragePath;
 
@@ -98,7 +99,7 @@ namespace Unlimotion
             }
             else
             {
-                taskStorage = CreateFileTaskStorage(settings?.Path); 
+                taskStorage = CreateFileTaskStorage(settings?.Path);
                 _dbWatcher = new FileDbWatcher(settings?.Path);
                 //_dbWatcher.Start();
                 //Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(fileDbWather);
