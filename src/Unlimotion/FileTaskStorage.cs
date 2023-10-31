@@ -9,7 +9,7 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion
 {
-    public class FileTaskStorage : ITaskStorage
+    public class FileTaskStorage : ITaskStorage, IFileTaskStorage
     {
         public string Path { get; private set; }
 
@@ -25,24 +25,8 @@ namespace Unlimotion
             {
                 Init();
             }
-            foreach (var fileInfo in directoryInfo.EnumerateFiles())
-            {
-                string json;
-                using (var reader = fileInfo.OpenText())
-                {
-                    json = reader.ReadToEnd();
-                }
-
-                TaskItem task;
-                try
-                {
-                    task = JsonConvert.DeserializeObject<TaskItem>(json);
-                }
-                catch (Exception e)
-                {
-                    task = null;
-                }
-
+            foreach (var fileInfo in directoryInfo.EnumerateFiles()) {
+                var task = LoadFromFile(fileInfo.FullName);
                 if (task != null)
                 {
                     yield return task;
@@ -111,7 +95,7 @@ namespace Unlimotion
                 return false;
             }
         }
-
+        
         public async Task<bool> Connect()
         {
             return await Task.FromResult(true);
@@ -119,6 +103,17 @@ namespace Unlimotion
 
         public async Task Disconnect()
         {
+        }
+
+        public TaskItem? LoadFromFile(string filePath) {
+            var jsonSerializer = new JsonSerializer();
+            using var reader = File.OpenText(filePath);
+            try {
+                return (TaskItem?)jsonSerializer.Deserialize(reader, typeof(TaskItem));    
+            }
+            catch (Exception e) {
+                return null;
+            }
         }
     }
 }

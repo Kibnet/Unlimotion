@@ -8,11 +8,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.VisualTree;
 using ServiceStack.Logging;
+using System.ComponentModel;
 
 namespace Unlimotion
 {
-    public static class TaskStorages
-    {
+    public static class TaskStorages {
+        private static IDatabaseWatcher _dbWatcher;
         public static string DefaultStoragePath;
 
         public static void SetSettingsCommands()
@@ -97,11 +98,14 @@ namespace Unlimotion
             }
             else
             {
-                taskStorage = CreateFileTaskStorage(settings?.Path);
+                taskStorage = CreateFileTaskStorage(settings?.Path); 
+                _dbWatcher = new FileDbWatcher(settings?.Path);
+                //_dbWatcher.Start();
+                //Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(fileDbWather);
             }
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            var taskRepository = new TaskRepository(taskStorage);
+            var taskRepository = new TaskRepository(taskStorage, _dbWatcher);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
         }
 
