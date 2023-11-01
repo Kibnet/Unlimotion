@@ -2,27 +2,27 @@ using System;
 
 namespace Unlimotion.ViewModel.Models
 {
-    public class UpdatedTask
+    public class TaskUpdateEvent
     {
-        public DateTime UpdatedDateTime { get; }
+        public DateTime EventDateTime { get; }
         /// <summary>
         /// В случае с таском, полученным из файла Id - полный путь к файлу<br/>
         /// В случае с таском, полученным из Базы Данных, Id - это идентификатор записи в БД
         /// </summary>
         public string Id { get; }
-        public UpdatingTaskType UpdatingType { get; }
-        public UpdatedTask(string id, UpdatingTaskType updatingType)
+        public UpdateType Type { get; }
+        public TaskUpdateEvent(string id, UpdateType type)
         {
             Id = id;
-            UpdatingType = updatingType;
-            UpdatedDateTime = DateTime.Now;
+            Type = type;
+            EventDateTime = DateTime.Now;
         }
 
-        public UpdatedTask(string id, UpdatingTaskType updatingType, DateTime updatedDateTime)
+        public TaskUpdateEvent(string id, UpdateType type, DateTime eventDateTime)
         {
             Id = id;
-            UpdatingType = updatingType;
-            UpdatedDateTime = updatedDateTime;
+            Type = type;
+            EventDateTime = eventDateTime;
         }
 
         public override int GetHashCode()

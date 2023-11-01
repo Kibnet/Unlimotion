@@ -16,11 +16,13 @@ namespace Unlimotion.ViewModel
     public class FileDbWatcher : IDatabaseWatcher
     {
         private readonly string _path;
-        private readonly HashSet<UpdatedTask> _updatedTasks = new();
+        private readonly HashSet<TaskUpdateEvent> _updatedTasks = new();
+        private List<string> _ignoredTasks = new();
         private FileSystemWatcher _watcher;
         private CancellationTokenSource _ct;
         private readonly object _utLock = new object();
-        public bool IsEnabled { get; set; }
+        private readonly object _itLock = new object();
+        public bool IsEnabled { get; private set; }
         public event EventHandler<DbUpdatedEventArgs>? OnDatabaseUpdated;
 
         public FileDbWatcher(string path)
@@ -73,16 +75,30 @@ namespace Unlimotion.ViewModel
             _ct?.Cancel();
         }
 
+        public void AddIgnoredTask(string taskId) {
+            lock (_itLock) {
+                _ignoredTasks.Add(taskId);
+            }
+        }
+
+        public void RemoveIgnoredTask(string taskId) {
+            lock (_itLock) {
+                var ignoredTask = _ignoredTasks.FirstOrDefault(t => t == taskId);
+                if (ignoredTask != null) _ignoredTasks.Remove(ignoredTask);
+            }
+        }
+
         private void OnError(object sender, ErrorEventArgs e)
         {
             Debug.WriteLine("Ошибка в файлВачере!!!");
         }
 
-        private void AddTaskToCollection(UpdatedTask task)
+        private void AddTaskToCollection(TaskUpdateEvent taskUpdateEvent)
         {
+            if (_ignoredTasks.Contains(taskUpdateEvent.Id)) return;
             lock (_utLock)
             {
-                _updatedTasks.Add(task);
+                _updatedTasks.Add(taskUpdateEvent);
             }
         }
 
@@ -90,19 +106,19 @@ namespace Unlimotion.ViewModel
         {
             if (e.ChangeType == WatcherChangeTypes.Changed)
             {
-                AddTaskToCollection(new UpdatedTask(e.FullPath!, UpdatingTaskType.TaskChanged,
+                AddTaskToCollection(new TaskUpdateEvent(e.FullPath!, UpdateType.TaskChanged,
                     File.GetLastWriteTime(e.FullPath)));
             }
         }
 
         private void OnDeleted(object sender, FileSystemEventArgs e)
         {
-            AddTaskToCollection(new UpdatedTask(e.FullPath!, UpdatingTaskType.TaskDeleted));
+            AddTaskToCollection(new TaskUpdateEvent(e.FullPath!, UpdateType.TaskDeleted));
         }
 
         private void OnCreated(object sender, FileSystemEventArgs e)
         {
-            AddTaskToCollection(new UpdatedTask(e.FullPath!, UpdatingTaskType.TaskCreated));
+            AddTaskToCollection(new TaskUpdateEvent(e.FullPath!, UpdateType.TaskCreated));
         }
 
         private void GenerateEvent()

@@ -41,11 +41,6 @@ namespace Unlimotion.ViewModel
 
         public async Task Remove(string itemId)
         {
-            var isWatherAcive = _dbWatcher != null && _dbWatcher.IsEnabled;
-            if (isWatherAcive)
-            {
-                _dbWatcher.Stop();
-            }
             Tasks.Remove(itemId);
             await _taskStorage.Remove(itemId);
             if (blockedById.TryGetValue(itemId, out var hashSet))
@@ -61,24 +56,11 @@ namespace Unlimotion.ViewModel
                     }
                 }
             }
-            if (isWatherAcive)
-            {
-                _dbWatcher.Start();
-            }
         }
-
+        
         public async Task Save(TaskItem item)
         {
-            if (_dbWatcher != null && _dbWatcher.IsEnabled)
-            {
-                _dbWatcher.Stop();
-                await _taskStorage.Save(item);
-                await _dbWatcher.Start();
-            }
-            else
-            {
-                await _taskStorage.Save(item);
-            }
+            await _taskStorage.Save(item);
         }
 
         public void Init() => Init(_taskStorage.GetAll());
@@ -119,7 +101,7 @@ namespace Unlimotion.ViewModel
             if (_dbWatcher != null)
             {
                 _dbWatcher.OnDatabaseUpdated += async (object? sender, DbUpdatedEventArgs e) => await _dbWatcher_OnDatabaseUpdated(sender, e);
-                Task.Run(() => _dbWatcher.Start());
+                _dbWatcher.Start();
             }
         }
 
@@ -128,9 +110,9 @@ namespace Unlimotion.ViewModel
             foreach (var task in e.UpdatedTasks)
             {
                 TaskItem? taskItem;
-                switch (task.UpdatingType)
+                switch (task.Type)
                 {
-                    case UpdatingTaskType.TaskCreated:
+                    case UpdateType.TaskCreated:
                         if (!Tasks.Keys.Contains(new FileInfo(task.Id).Name))
                         {
                             taskItem = LoadTaskItemFromFile(task.Id);
@@ -141,14 +123,11 @@ namespace Unlimotion.ViewModel
                             }
                         }
                         break;
-                    case UpdatingTaskType.TaskDeleted:
+                    case UpdateType.TaskDeleted:
                         var fi = new FileInfo(task.Id);
-                        if (Tasks.Keys.Contains(fi.Name))
-                        {
-                            Tasks.Remove(fi.Name);
-                        }
+                        Remove(fi.Name);
                         break;
-                    case UpdatingTaskType.TaskChanged:
+                    case UpdateType.TaskChanged:
                         taskItem = LoadTaskItemFromFile(task.Id);
                         if (taskItem != null)
                         {

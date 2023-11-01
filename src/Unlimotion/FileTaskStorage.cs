@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Splat;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion
@@ -12,10 +13,12 @@ namespace Unlimotion
     public class FileTaskStorage : ITaskStorage, IFileTaskStorage
     {
         public string Path { get; private set; }
+        private readonly IDatabaseWatcher _dbWatcher;
 
         public FileTaskStorage(string path)
         {
             Path = path;
+            _dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
         }
 
         public IEnumerable<TaskItem> GetAll()
@@ -72,12 +75,16 @@ namespace Unlimotion
             {
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
+                _dbWatcher.AddIgnoredTask(fileInfo.FullName);
                 await writer.WriteAsync(json);
+                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
+
 
                 return true;
             }
             catch (Exception e)
             {
+                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return false;
             }
         }
@@ -88,11 +95,14 @@ namespace Unlimotion
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
             try
             {
+                _dbWatcher.AddIgnoredTask(fileInfo.FullName);
                 fileInfo.Delete();
+                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return true;
             }
             catch (Exception e)
             {
+                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return false;
             }
         }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -194,10 +195,21 @@ namespace Unlimotion.ViewModel
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
             await taskStorage.Connect();
 
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            ITaskRepository? taskRepository;
+            taskRepository = Locator.Current.GetService<ITaskRepository>();
             taskRepository.Init();
 
+            //Если из коллекции пропадает итем, то очищаем выделенный итем.
+            taskRepository.Tasks.Connect()
+                .OnItemRemoved(x =>
+                {
+                    if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
+                })
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+
             //Bind Roots
+            #region Roots
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
@@ -229,8 +241,10 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
             
             CurrentItems = _currentItems;
+            #endregion Roots
 
             //Bind Emoji
+            #region Emoji
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
@@ -338,8 +352,10 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+            #endregion Emoji
 
             //Bind Unlocked
+            #region Unlocked
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAnyValue(
@@ -415,8 +431,10 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+            #endregion Unlocked
 
             //Bind Completed
+            #region Completed
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
@@ -440,8 +458,10 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             CompletedItems = _completedItems;
+            #endregion Completed
 
             //Bind Archived
+            #region Archived
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
@@ -488,8 +508,10 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
+            #endregion Archived
+
             //Bind LastCreated
+            #region LastCreated
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted, m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
@@ -513,8 +535,10 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             LastCreatedItems = _lastCreatedItems;
+            #endregion LastCreated
 
             //Bind Current Item Contains
+            #region Current Item Contains
             this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
@@ -538,6 +562,7 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
+            #endregion Current Item Contains
 
             //Bind Current Item Parents
             this.WhenAnyValue(m => m.CurrentTaskItem)

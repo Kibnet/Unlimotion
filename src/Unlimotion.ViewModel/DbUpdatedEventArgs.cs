@@ -6,6 +6,6 @@ namespace Unlimotion.ViewModel
 {
     public class DbUpdatedEventArgs : EventArgs
     {
-        public List<UpdatedTask> UpdatedTasks { get; set; } = new List<UpdatedTask>();
+        public List<TaskUpdateEvent> UpdatedTasks { get; set; } = new List<TaskUpdateEvent>();
     }
 }
