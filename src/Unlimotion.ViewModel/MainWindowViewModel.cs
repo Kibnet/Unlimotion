@@ -205,6 +205,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
                 })
+                .OnItemUpdated((newItem,oldItem) =>
+                {
+                    if (newItem.Id == CurrentTaskItem?.Id && newItem.Id == oldItem.Id) CurrentTaskItem = newItem;
+                })
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
