@@ -11,11 +11,20 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/tasks", "GET", Summary = "Получение задач", Notes = "Подгрузка задач с паджинацией")]
     public class GetTasks : IReturn<TaskItemPage>
     {
-        [ApiMember(IsRequired = false, Description = "Идентификатор задачи до которой получать")]
+        [ApiMember(IsRequired = false, Description = "Время задачи после которой получать")]
         public DateTimeOffset? BeforePostTime { get; set; }
         
-        [ApiMember(IsRequired = false, Description = "Идентификатор задачи после которой получать")]
+        [ApiMember(IsRequired = false, Description = "Размер страницы результатов")]
         public int? PageSize { get;set; }
+    }
+
+    [Api("Task")]
+    [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
+    [Route("/tasks/{Id}", "GET", Summary = "Получение задачи", Notes = "Подгрузка задачи по идентификатору")]
+    public class GetTask : IReturn<TaskItemMold>
+    {
+        [ApiMember(IsRequired = true, Description = "Идентификатор задачи")]
+        public string Id { get; set; }
     }
 
     [Api("Task")]

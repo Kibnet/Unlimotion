@@ -5,44 +5,34 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData;
 using DynamicData.Binding;
-using Splat;
-using System.ComponentModel;
 using System.IO;
 using Unlimotion.ViewModel.Models;
 
 namespace Unlimotion.ViewModel
 {
-    public interface ITaskRepository
-    {
-        SourceCache<TaskItemViewModel, string> Tasks { get; }
-        void Init();
-        Task Remove(string itemId);
-        Task Save(TaskItem item);
-        IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
-        TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations);
-    }
-
     public class TaskRepository : ITaskRepository
     {
-        private readonly ITaskStorage _taskStorage;
-        private readonly IDatabaseWatcher? _dbWatcher;
-        public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
-        IObservable<Func<TaskItemViewModel, bool>> rootFilter;
+        private readonly ITaskStorage taskStorage;
+        private readonly IDatabaseWatcher? dbWatcher;
         private Dictionary<string, HashSet<string>> blockedById { get; set; }
+        private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
+        public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+
         public TaskRepository(ITaskStorage taskStorage)
         {
-            _taskStorage = taskStorage;
+            this.taskStorage = taskStorage;
         }
+
         public TaskRepository(ITaskStorage taskStorage, IDatabaseWatcher? dbWatcher = null)
         {
-            _taskStorage = taskStorage;
-            _dbWatcher = dbWatcher;
+            this.taskStorage = taskStorage;
+            this.dbWatcher = dbWatcher;
         }
 
         public async Task Remove(string itemId)
         {
             Tasks.Remove(itemId);
-            await _taskStorage.Remove(itemId);
+            await taskStorage.Remove(itemId);
             if (blockedById.TryGetValue(itemId, out var hashSet))
             {
                 blockedById.Remove(itemId);
@@ -60,10 +50,15 @@ namespace Unlimotion.ViewModel
         
         public async Task Save(TaskItem item)
         {
-            await _taskStorage.Save(item);
+            await taskStorage.Save(item);
         }
 
-        public void Init() => Init(_taskStorage.GetAll());
+        public Task<TaskItem> Load(string itemId)
+        {
+            return taskStorage.Load(itemId);
+        }
+
+        public void Init() => Init(taskStorage.GetAll());
 
         private void Init(IEnumerable<TaskItem> items)
         {
@@ -98,57 +93,37 @@ namespace Unlimotion.ViewModel
                     bool Predicate(TaskItemViewModel task) => items.Count == 0 || items.All(t => t != task.Id);
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            if (_dbWatcher != null)
+            if (dbWatcher != null)
             {
-                _dbWatcher.OnDatabaseUpdated += async (object? sender, DbUpdatedEventArgs e) => await _dbWatcher_OnDatabaseUpdated(sender, e);
-                _dbWatcher.Start();
+                taskStorage.Updating += TaskStorageOnUpdating;
+                dbWatcher.OnUpdated += DbWatcherOnOnUpdated;
             }
         }
 
-        private async Task _dbWatcher_OnDatabaseUpdated(object? sender, DbUpdatedEventArgs e)
+        private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
         {
-            foreach (var task in e.UpdatedTasks)
-            {
-                TaskItem? taskItem;
-                switch (task.Type)
-                {
-                    case UpdateType.TaskCreated:
-                        if (!Tasks.Keys.Contains(new FileInfo(task.Id).Name))
-                        {
-                            taskItem = LoadTaskItemFromFile(task.Id);
-                            if (taskItem != null)
-                            {
-                                var vm = new TaskItemViewModel(taskItem, this);
-                                Tasks.AddOrUpdate(vm);
-                            }
-                        }
-                        break;
-                    case UpdateType.TaskDeleted:
-                        var fi = new FileInfo(task.Id);
-                        Remove(fi.Name);
-                        break;
-                    case UpdateType.TaskChanged:
-                        taskItem = LoadTaskItemFromFile(task.Id);
-                        if (taskItem != null)
-                        {
-                            var vm = new TaskItemViewModel(taskItem, this);
-                            Tasks.AddOrUpdate(vm);
-                        }
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-            }
+            dbWatcher?.AddIgnoredTask(e.Id);
         }
 
-        private TaskItem? LoadTaskItemFromFile(string filePath)
+        private async void DbWatcherOnOnUpdated(object sender, DbUpdatedEventArgs e)
         {
-            if (_taskStorage is IFileTaskStorage fts)
+            switch (e.Type)
             {
-                return fts.LoadFromFile(filePath);
+                case UpdateType.Saved:
+                    var taskItem = await Load(e.Id);
+                    if (taskItem != null)
+                    {
+                        var vm = new TaskItemViewModel(taskItem, this);
+                        Tasks.AddOrUpdate(vm);
+                    }
+                    break;
+                case UpdateType.Removed:
+                    var fileInfo = new FileInfo(e.Id);
+                    await Remove(fileInfo.Name);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
-
-            return null;
         }
 
         public void AddBlockedBy(string blocksTask, TaskItem taskItem)

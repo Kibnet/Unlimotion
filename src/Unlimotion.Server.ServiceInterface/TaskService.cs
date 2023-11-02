@@ -34,6 +34,16 @@ namespace Unlimotion.Server.ServiceInterface
         }
 
         [Authenticate]
+        public async Task<TaskItemMold> Get(GetTask request)
+        {
+            var session = Request.ThrowIfUnauthorized();
+            var task = await RavenSession.Query<TaskItem>()
+                .Where(chat => chat.Id == request.Id)
+                .FirstAsync();
+            return Mapper.Map<TaskItemMold>(task);
+        }
+        
+        [Authenticate]
         public async Task Post(BulkInsertTasks request)
         {
             var session = Request.ThrowIfUnauthorized();

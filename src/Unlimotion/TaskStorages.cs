@@ -4,17 +4,11 @@ using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
-using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.VisualTree;
-using ServiceStack.Logging;
-using System.ComponentModel;
 
 namespace Unlimotion
 {
     public static class TaskStorages
     {
-        private static IDatabaseWatcher _dbWatcher;
         public static string DefaultStoragePath;
 
         public static void SetSettingsCommands()
@@ -93,29 +87,36 @@ namespace Unlimotion
             }
 
             ITaskStorage taskStorage;
+            IDatabaseWatcher dbWatcher;
             if (isServerMode)
             {
                 taskStorage = new ServerTaskStorage(settings?.URL);
+                dbWatcher = null;
             }
             else
             {
                 taskStorage = CreateFileTaskStorage(settings?.Path);
+                dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
             }
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            var taskRepository = new TaskRepository(taskStorage, _dbWatcher);
+            var taskRepository = new TaskRepository(taskStorage, dbWatcher);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
         }
 
         private static FileTaskStorage CreateFileTaskStorage(string? path)
         {
+            var storagePath = GetStoragePath(path);
+            var taskStorage = new FileTaskStorage(storagePath);
+            return taskStorage;
+        }
+
+        private static string GetStoragePath(string? path)
+        {
             var storagePath = path;
             if (string.IsNullOrEmpty(path))
                 storagePath = DefaultStoragePath;
-            _dbWatcher = new FileDbWatcher(storagePath);
-            Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(_dbWatcher);
-            var taskStorage = new FileTaskStorage(storagePath);
-            return taskStorage;
+            return storagePath;
         }
     }
 

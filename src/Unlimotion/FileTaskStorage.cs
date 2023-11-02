@@ -5,20 +5,22 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using Splat;
+using ServiceStack.Text;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Models;
+using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
-    public class FileTaskStorage : ITaskStorage, IFileTaskStorage
+    public class FileTaskStorage : ITaskStorage
     {
         public string Path { get; private set; }
-        private readonly IDatabaseWatcher _dbWatcher;
+
+        public event EventHandler<TaskStorageUpdateEventArgs> Updating;
 
         public FileTaskStorage(string path)
         {
             Path = path;
-            _dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
         }
 
         public IEnumerable<TaskItem> GetAll()
@@ -30,7 +32,7 @@ namespace Unlimotion
             }
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
-                var task = LoadFromFile(fileInfo.FullName);
+                var task = Load(fileInfo.FullName).Result;
                 if (task != null)
                 {
                     yield return task;
@@ -73,18 +75,20 @@ namespace Unlimotion
             };
             try
             {
+                var updateEventArgs = new TaskStorageUpdateEventArgs
+                {
+                    Id = fileInfo.FullName,
+                    Type = UpdateType.Saved,
+                };
+                Updating?.Invoke(this, updateEventArgs);
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
-                _dbWatcher.AddIgnoredTask(fileInfo.FullName);
                 await writer.WriteAsync(json);
-                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
-
 
                 return true;
             }
             catch (Exception e)
             {
-                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return false;
             }
         }
@@ -95,15 +99,32 @@ namespace Unlimotion
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
             try
             {
-                _dbWatcher.AddIgnoredTask(fileInfo.FullName);
+                Updating?.Invoke(this, new TaskStorageUpdateEventArgs()
+                {
+                    Id = fileInfo.FullName,
+                    Type = UpdateType.Removed,
+                });
                 fileInfo.Delete();
-                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return true;
             }
             catch (Exception e)
             {
-                _dbWatcher.RemoveIgnoredTask(fileInfo.FullName);
                 return false;
+            }
+        }
+
+        public async Task<TaskItem> Load(string itemId)
+        {
+            var jsonSerializer = new JsonSerializer();
+            try
+            {
+                using var reader = File.OpenText(itemId);
+                using var jsonReader = new JsonTextReader(reader);
+                return jsonSerializer.Deserialize<TaskItem>(jsonReader);
+            }
+            catch (Exception e)
+            {
+                return null;
             }
         }
 
@@ -114,20 +135,6 @@ namespace Unlimotion
 
         public async Task Disconnect()
         {
-        }
-
-        public TaskItem? LoadFromFile(string filePath)
-        {
-            var jsonSerializer = new JsonSerializer();
-            using var reader = File.OpenText(filePath);
-            try
-            {
-                return (TaskItem?)jsonSerializer.Deserialize(reader, typeof(TaskItem));
-            }
-            catch (Exception e)
-            {
-                return null;
-            }
         }
     }
 }
