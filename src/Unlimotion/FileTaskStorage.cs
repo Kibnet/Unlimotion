@@ -5,13 +5,18 @@ using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using ServiceStack.Text;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Models;
+using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
     public class FileTaskStorage : ITaskStorage
     {
         public string Path { get; private set; }
+
+        public event EventHandler<TaskStorageUpdateEventArgs> Updating;
 
         public FileTaskStorage(string path)
         {
@@ -27,22 +32,7 @@ namespace Unlimotion
             }
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
-                string json;
-                using (var reader = fileInfo.OpenText())
-                {
-                    json = reader.ReadToEnd();
-                }
-
-                TaskItem task;
-                try
-                {
-                    task = JsonConvert.DeserializeObject<TaskItem>(json);
-                }
-                catch (Exception e)
-                {
-                    task = null;
-                }
-
+                var task = Load(fileInfo.FullName).Result;
                 if (task != null)
                 {
                     yield return task;
@@ -76,7 +66,7 @@ namespace Unlimotion
             item.Id ??= Guid.NewGuid().ToString();
 
             var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id)); 
+            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
             var converter = new IsoDateTimeConverter()
             {
                 DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
@@ -85,6 +75,12 @@ namespace Unlimotion
             };
             try
             {
+                var updateEventArgs = new TaskStorageUpdateEventArgs
+                {
+                    Id = fileInfo.FullName,
+                    Type = UpdateType.Saved,
+                };
+                Updating?.Invoke(this, updateEventArgs);
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
                 await writer.WriteAsync(json);
@@ -103,12 +99,32 @@ namespace Unlimotion
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
             try
             {
+                Updating?.Invoke(this, new TaskStorageUpdateEventArgs()
+                {
+                    Id = fileInfo.FullName,
+                    Type = UpdateType.Removed,
+                });
                 fileInfo.Delete();
                 return true;
             }
             catch (Exception e)
             {
                 return false;
+            }
+        }
+
+        public async Task<TaskItem> Load(string itemId)
+        {
+            var jsonSerializer = new JsonSerializer();
+            try
+            {
+                using var reader = File.OpenText(itemId);
+                using var jsonReader = new JsonTextReader(reader);
+                return jsonSerializer.Deserialize<TaskItem>(jsonReader);
+            }
+            catch (Exception e)
+            {
+                return null;
             }
         }
 

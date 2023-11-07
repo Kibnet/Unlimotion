@@ -15,11 +15,14 @@ using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Models;
 
 namespace Unlimotion;
 
 public class ServerTaskStorage : ITaskStorage
 {
+    public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+
     public ServerTaskStorage(string url)
     {
         Url = url;
@@ -110,6 +113,21 @@ public class ServerTaskStorage : ITaskStorage
         await SignOut();
     }
 
+    public async Task<TaskItem> Load(string itemId)
+    {
+        try
+        {
+            var task = serviceClient.GetAsync(new GetTask()).Result;
+            var mapped = mapper.Map<TaskItem>(task);
+            return mapped;
+        }
+        catch (Exception e)
+        {
+            //TODO пробросить ошибку пользователю
+        }
+        return null;
+    }
+
     public async Task<bool> Connect()
     {
         try
@@ -166,97 +184,25 @@ public class ServerTaskStorage : ITaskStorage
                 }
 
             });
-
-            ///Обновление отредактированных сообщений в окне чата.
+            
             _connection.Subscribe<ReceiveTaskItem>(async data =>
             {
-                //TODO обновление задачи в реалтайме
-                //if (messageDictionary.TryGetValue(data.Id, out var keyValue))
-                //{
-                //    keyValue.Text = data.Text;
-                //    keyValue.LastEditTime = data.LastEditTime;
-
-                //    if (data.QuotedMessage != null)
-                //    {
-                //        MessageViewModel newQuotedMessage = mapper.Map<MessageViewModel>(data.QuotedMessage);
-                //        if (messageDictionary.TryGetValue(data.QuotedMessage.Id, out var message))
-                //        {
-                //            mapper.Map(newQuotedMessage, message);
-                //            keyValue.QuotedMessage = message;
-                //        }
-                //        else
-                //        {
-                //            newQuotedMessage.IsMyMessage = User.Id == data.QuotedMessage.UserId;
-                //            newQuotedMessage.Attachments = data.QuotedMessage.Attachments?
-                //                                                    .Select(s =>
-                //                                                    {
-                //                                                        var attah = mapper?.Map<AttachmentMold>(s);
-                //                                                        var newAttachment = new AttachmentMessageViewModel(attah);
-                //                                                        return newAttachment;
-                //                                                    }).ToList();
-
-                //            messageDictionary[data.QuotedMessage.Id] = newQuotedMessage;
-                //            keyValue.QuotedMessage = newQuotedMessage;
-                //        }
-                //    }
-                //    else
-                //    {
-                //        keyValue.QuotedMessage = null;
-                //    }
-                //}
+                //обновление задачи в реалтайме
+                Updating?.Invoke(this, new TaskStorageUpdateEventArgs
+                {
+                    Type = UpdateType.Saved,
+                    Id = data.Id,
+                });
             });
-
-            ///Получает новые сообщения и добавляет их в окно чата. 
+            
             _connection.Subscribe<DeleteTaskItem>(async data =>
             {
-                //TODO удаление задачи в реалтайме
-                //MessageViewModel newMessage = mapper.Map<MessageViewModel>(data);
-
-                //newMessage.IsMyMessage = User.Id == data.UserId;
-                //newMessage.Attachments = data.Attachments?
-                //    .Select(s =>
-                //    {
-                //        var attah = mapper?.Map<AttachmentMold>(s);
-                //        var newAttachment = new AttachmentMessageViewModel(attah);
-                //        return newAttachment;
-                //    }).ToList();
-                //if (data.QuotedMessage != null)
-                //{
-                //    MessageViewModel newQuotedMessage = mapper.Map<MessageViewModel>(data.QuotedMessage);
-                //    if (messageDictionary.TryGetValue(data.QuotedMessage.Id, out var quotedMessage))
-                //    {
-                //        mapper.Map(newQuotedMessage, quotedMessage);
-                //        newMessage.QuotedMessage = quotedMessage;
-                //    }
-                //    else
-                //    {
-                //        newQuotedMessage.IsMyMessage = User.Id == data.QuotedMessage.UserId;
-                //        newQuotedMessage.Attachments = data.QuotedMessage.Attachments?
-                //            .Select(s =>
-                //            {
-                //                var attah = mapper?.Map<AttachmentMold>(s);
-                //                var newAttachment = new AttachmentMessageViewModel(attah);
-                //                return newAttachment;
-                //            }).ToList();
-
-                //        messageDictionary[newQuotedMessage.Id] = newQuotedMessage;
-                //    }
-                //}
-                //if (Messages.Count != 0)
-                //{
-                //    if (Messages.Last().UserId != data.UserId)
-                //    {
-                //        newMessage.ShowNickname = true;
-                //    }
-                //}
-                //else
-                //{
-                //    newMessage.ShowNickname = true;
-                //}
-                //Messages.Add(newMessage);
-                //MessageReceived?.Invoke(new ReceivedMessageArgs(newMessage));
-                //messageDictionary[newMessage.Id] = newMessage;
-                //AutoScrollWhenSendingMyMessage = User.Id == newMessage.UserId;
+                //удаление задачи в реалтайме
+                Updating?.Invoke(this, new TaskStorageUpdateEventArgs
+                {
+                    Type = UpdateType.Removed,
+                    Id = data.Id,
+                });
             });
 
             _connection.Closed += connectionOnClosed();
