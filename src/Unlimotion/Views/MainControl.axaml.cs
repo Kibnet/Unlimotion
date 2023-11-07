@@ -1,4 +1,4 @@
-using System;
+Ôªøusing System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
@@ -7,8 +7,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
@@ -51,7 +53,12 @@ namespace Unlimotion.Views
 
                     if (!string.IsNullOrWhiteSpace(path))
                     {
-                        var taskStorage = new FileTaskStorage(path);
+                        var configuration = Locator.Current.GetService<IConfiguration>();
+                        var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+                        
+                        var taskStorage = new FileTaskStorage(path, 
+                            new BackupViaGitService(storageSettings.GitUserName, storageSettings.GitPassword, path));
+                        
                         var set = new HashSet<string>();
                         var queue = new Queue<TaskItemViewModel>();
                         queue.Enqueue(vm.CurrentTaskItem);
@@ -253,7 +260,7 @@ namespace Unlimotion.Views
         public void Expand(TaskWrapperViewModel task)
         {
             if (task == null) return;
-            //TODO ÒÎÓÏ‡ÌÓ
+            //TODO —Å–ª–æ–º–∞–Ω–æ
             //var treeView = this.Get<TreeView>("CurrentTree");
             //var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
             //if (treeItem == null) return;

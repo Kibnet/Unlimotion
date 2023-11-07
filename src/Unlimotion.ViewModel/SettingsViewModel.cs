@@ -46,6 +46,24 @@ public class SettingsViewModel
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsServerMode)).Get<bool>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsServerMode)).Set(value);
     }
+    
+    public bool GitBackupEnabled
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitBackupEnabled)).Get<bool>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitBackupEnabled)).Set(value);
+    }
+    
+    public string GitUserName
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitUserName)).Get<string>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitUserName)).Set(value);
+    }
+    
+    public string GitPassword
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Get<string>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Set(value);
+    }
 
     public ICommand ConnectCommand { get; set; }
     public ICommand MigrateCommand { get; set; }

@@ -12,4 +12,8 @@ public class TaskStorageSettings
     public string Password { get; set; }
 
     public bool IsServerMode { get ; set ; }
+    
+    public string GitUserName { get; set; }
+    public string GitPassword { get; set; }
+    public bool GitBackupEnabled { get; set; }
 }
