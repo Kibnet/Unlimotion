@@ -2,15 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
-using Unlimotion.Services;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
@@ -56,8 +52,7 @@ namespace Unlimotion.Views
                         var configuration = Locator.Current.GetService<IConfiguration>();
                         var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
                         
-                        var taskStorage = new FileTaskStorage(path, 
-                            new BackupViaGitService(storageSettings.GitUserName, storageSettings.GitPassword, path));
+                        var taskStorage = new FileTaskStorage(path);
                         
                         var set = new HashSet<string>();
                         var queue = new Queue<TaskItemViewModel>();

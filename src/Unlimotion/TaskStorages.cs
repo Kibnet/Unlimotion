@@ -1,11 +1,9 @@
-﻿using System;
+﻿﻿using System;
 using Splat;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
-using ServiceStack.Logging;
-using Unlimotion.Services;
 
 namespace Unlimotion
 {
@@ -29,8 +27,8 @@ namespace Unlimotion
                 {
                     return;
                 }
-                var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-                var fileTaskStorage = CreateFileTaskStorage(storageSettings);
+                var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                var fileTaskStorage = CreateFileTaskStorage(storagePath);
                 await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -40,8 +38,8 @@ namespace Unlimotion
                 {
                     return;
                 }
-                var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-                var fileTaskStorage = CreateFileTaskStorage(storageSettings);
+                var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                var fileTaskStorage = CreateFileTaskStorage(storagePath);
                 var tasks = serverTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
@@ -59,8 +57,8 @@ namespace Unlimotion
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-                var fileTaskStorage = CreateFileTaskStorage(storageSettings);
+                var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                var fileTaskStorage = CreateFileTaskStorage(storagePath);
                 var tasks = fileTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
@@ -81,7 +79,7 @@ namespace Unlimotion
 
         public static void RegisterStorage(bool isServerMode, IConfiguration configuration)
         {
-            var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+            var settings = configuration.Get<TaskStorageSettings>("TaskStorage");
             var prevStorage = Locator.Current.GetService<ITaskStorage>();
             if (prevStorage != null)
             {
@@ -92,13 +90,13 @@ namespace Unlimotion
             IDatabaseWatcher dbWatcher;
             if (isServerMode)
             {
-                taskStorage = new ServerTaskStorage(storageSettings?.URL);
+                taskStorage = new ServerTaskStorage(settings?.URL);
                 dbWatcher = null;
             }
             else
             {
-                taskStorage = CreateFileTaskStorage(storageSettings);
-                dbWatcher = new FileDbWatcher(GetStoragePath(storageSettings?.Path));
+                taskStorage = CreateFileTaskStorage(settings?.Path);
+                dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
             }
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
@@ -106,13 +104,10 @@ namespace Unlimotion
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
         }
 
-        private static FileTaskStorage CreateFileTaskStorage(TaskStorageSettings? settings)
+        private static FileTaskStorage CreateFileTaskStorage(string? path)
         {
-            var storagePath = GetStoragePath(settings?.Path);
-            var taskStorage = new FileTaskStorage(storagePath, 
-                settings?.GitBackupEnabled == true
-                    ? new BackupViaGitService(settings.GitUserName, settings.GitPassword, storagePath)
-                    : null);
+            var storagePath = GetStoragePath(path);
+            var taskStorage = new FileTaskStorage(storagePath);
             return taskStorage;
         }
 

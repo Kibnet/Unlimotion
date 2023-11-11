@@ -10,8 +10,12 @@ using AutoMapper;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Microsoft.Extensions.Configuration;
+using Quartz;
+using Quartz.Impl;
 using ServiceStack;
 using Splat;
+using Unlimotion.Scheduling.Jobs;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
 
@@ -54,13 +58,20 @@ namespace Unlimotion.Desktop
             }
 
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
+            var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
             Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
+            var repositoryPath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
+                ? TasksFolderName
+                : taskStorageSettings.Path;
+            Locator.CurrentMutable.Register<IRemoteBackupService>(() => 
+                new BackupViaGitService(taskStorageSettings.GitUserName, taskStorageSettings.GitPassword, 
+                    repositoryPath));
 
-            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
-            
+            var isServerMode = taskStorageSettings?.IsServerMode == true;
+
 #if DEBUG
             TaskStorages.DefaultStoragePath = TasksFolderName;
 #else
@@ -68,8 +79,32 @@ namespace Unlimotion.Desktop
 #endif
             TaskStorages.RegisterStorage(isServerMode, configuration);
 
-            var notificationManager = new NotificationManagerWrapperWrapper();
+            var notificationManager = new NotificationManagerWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+            
+            if (taskStorageSettings?.GitBackupEnabled == true)
+            {
+                var schedulerFactory = new StdSchedulerFactory();
+                var scheduler = schedulerFactory.GetScheduler().Result;
+
+                var pullJob = JobBuilder.Create<GitPullJob>()
+                    .WithIdentity("GitPullJob", "GitPullJob")
+                    .Build();
+                
+                var pushJob = JobBuilder.Create<GitPushJob>()
+                    .WithIdentity("GitPushJob", "GitPushJob")
+                    .Build();
+
+                var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
+                    taskStorageSettings.GitPullIntervalSeconds);
+                var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
+                    taskStorageSettings.GitPushIntervalSeconds);
+
+                scheduler.ScheduleJob(pullJob, pullTrigger);
+                scheduler.ScheduleJob(pushJob, pushTrigger);
+
+                scheduler.Start();
+            }
 
             BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
@@ -87,5 +122,17 @@ namespace Unlimotion.Desktop
 #endif
 
                 .UseReactiveUI();
+        
+        private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds) 
+        {
+            return TriggerBuilder.Create()
+                .WithIdentity(name, group)
+                .StartNow()
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInSeconds(seconds)
+                    .RepeatForever())
+                .Build();
+        }
     }
 }
+

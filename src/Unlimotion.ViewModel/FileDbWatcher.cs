@@ -11,6 +11,7 @@ namespace Unlimotion.ViewModel
     public class FileDbWatcher : IDatabaseWatcher
     {
         private readonly string _path;
+        private const string GitFolderName = ".git";
         private MemoryCache ignoredTasks = MemoryCache.Default;
         private MemoryCache changedTasks = MemoryCache.Default;
         private FileSystemWatcher _watcher;
@@ -62,6 +63,11 @@ namespace Unlimotion.ViewModel
             return (s, e) =>
             {
                 if (changedTasks.Contains(e.FullPath))
+                {
+                    return;
+                }
+
+                if (e.FullPath.Contains(GitFolderName))
                 {
                     return;
                 }

@@ -2,12 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using ServiceStack.Text;
-using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
@@ -17,14 +14,12 @@ namespace Unlimotion
     public class FileTaskStorage : ITaskStorage
     {
         public string Path { get; private set; }
-        public IRemoteBackupService? GitBackupService { get; private set; }
 
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
 
-        public FileTaskStorage(string path, IRemoteBackupService? gitBackupService)
+        public FileTaskStorage(string path)
         {
             Path = path;
-            GitBackupService = gitBackupService;
         }
 
         public IEnumerable<TaskItem> GetAll()
@@ -89,8 +84,6 @@ namespace Unlimotion
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
                 await writer.WriteAsync(json);
 
-                new Thread(() => GitBackupService?.Push($"Saved/Updated the task with ID \"{item.Id}\" and Title \"{item.Title}\"")).Start();
-                
                 return true;
             }
             catch (Exception e)
@@ -111,9 +104,6 @@ namespace Unlimotion
                     Type = UpdateType.Removed,
                 });
                 fileInfo.Delete();
-                
-                new Thread(() => GitBackupService?.Push($"Removed the task with ID \"{itemId}\"")).Start();
-                
                 return true;
             }
             catch (Exception e)

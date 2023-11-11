@@ -1,12 +1,11 @@
 using DialogHostAvalonia;
 using System;
-using System.Reactive.Linq;
 using System.Windows.Input;
 using ReactiveUI;
 
 namespace Unlimotion;
 
-public class NotificationManagerWrapperWrapper : ViewModel.INotificationManagerWrapper
+public class NotificationManagerWrapper : ViewModel.INotificationManagerWrapper
 {
     public void Ask(string header, string message, Action yesAction, Action noAction = null)
     {
