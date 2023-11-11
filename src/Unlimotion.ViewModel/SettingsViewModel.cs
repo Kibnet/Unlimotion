@@ -64,6 +64,18 @@ public class SettingsViewModel
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Get<string>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Set(value);
     }
+    
+    public int GitPushIntervalSeconds
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPushIntervalSeconds)).Get<int>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPushIntervalSeconds)).Set(value);
+    }
+    
+    public int GitPullIntervalSeconds
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPullIntervalSeconds)).Get<int>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPullIntervalSeconds)).Set(value);
+    }
 
     public ICommand ConnectCommand { get; set; }
     public ICommand MigrateCommand { get; set; }

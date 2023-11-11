@@ -49,11 +49,7 @@ namespace Unlimotion.Views
 
                     if (!string.IsNullOrWhiteSpace(path))
                     {
-                        var configuration = Locator.Current.GetService<IConfiguration>();
-                        var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-                        
                         var taskStorage = new FileTaskStorage(path);
-                        
                         var set = new HashSet<string>();
                         var queue = new Queue<TaskItemViewModel>();
                         queue.Enqueue(vm.CurrentTaskItem);
