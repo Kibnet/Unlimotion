@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<TargetFramework>net7.0</TargetFramework>
 		<Nullable>enable</Nullable>
@@ -25,7 +25,7 @@
 		<!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
 		<PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="$(AvaloniaVersion)" />
 		<PackageReference Include="AvaloniaGraphControl" Version="0.5.0" />
-		<PackageReference Include="ServiceStack.Client" Version="6.4.0" />
+		<PackageReference Include="ServiceStack.Client" Version="6.11.0" />
 		<PackageReference Include="SignalR.EasyUse.Client" Version="0.2.1" />
 	</ItemGroup>
 	<ItemGroup>
