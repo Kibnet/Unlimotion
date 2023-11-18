@@ -47,7 +47,7 @@ internal partial class Program
         var isServerMode = taskStorageSettings.IsServerMode;
         TaskStorages.RegisterStorage(isServerMode, configuration);
 
-        var notificationManager = new NotificationManagerWrapperWrapper();
+        var notificationManager = new NotificationManagerWrapper();
         Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
         return AppBuilder.Configure<App>();
     }

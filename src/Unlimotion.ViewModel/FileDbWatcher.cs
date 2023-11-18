@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,13 +9,13 @@ namespace Unlimotion.ViewModel
 {
     public class FileDbWatcher : IDatabaseWatcher
     {
-        private readonly string _path;
         private const string GitFolderName = ".git";
-        private MemoryCache ignoredTasks = MemoryCache.Default;
-        private MemoryCache changedTasks = MemoryCache.Default;
-        private FileSystemWatcher _watcher;
-        object _itLock = new object();
+        private readonly MemoryCache ignoredTasks = MemoryCache.Default;
+        private readonly FileSystemWatcher watcher;
+        private readonly object itLock = new();
         public event EventHandler<DbUpdatedEventArgs> OnUpdated;
+        private readonly MemoryCache cache = new("EventThrottlerCache");
+        private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
 
         public FileDbWatcher(string path)
         {
@@ -28,26 +27,26 @@ namespace Unlimotion.ViewModel
             {
                 throw new DirectoryNotFoundException("Directory does not exist: " + path);
             }
-            _watcher = new FileSystemWatcher(path);
+            watcher = new FileSystemWatcher(path);
 
-            _watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite;
+            watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite;
 
-            var throttle = CreateThrottledEventHandler(OnChanged, TimeSpan.FromSeconds(1));
-            _watcher.Changed += throttle;
-            _watcher.Created += throttle;
-            _watcher.Deleted += throttle;
+            var throttle = CreateThrottledEventHandler(OnChanged);
+            watcher.Changed += throttle;
+            watcher.Created += throttle;
+            watcher.Deleted += throttle;
 
             //todo Добавить логер и логировать ошибки
-            _watcher.Error += OnError;
-            _watcher.IncludeSubdirectories = true;
-            _watcher.EnableRaisingEvents = true;
+            watcher.Error += OnError;
+            watcher.IncludeSubdirectories = true;
+            watcher.EnableRaisingEvents = true;
         }
 
         public void AddIgnoredTask(string taskId)
         {
-            lock (_itLock)
+            lock (itLock)
             {
-                ignoredTasks.Add(taskId, _itLock, new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(5) });
+                ignoredTasks.Add(taskId, itLock, new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(5) });
             }
         }
 
@@ -57,29 +56,23 @@ namespace Unlimotion.ViewModel
         }
 
         private FileSystemEventHandler CreateThrottledEventHandler(
-            FileSystemEventHandler handler,
-            TimeSpan throttle)
+            FileSystemEventHandler handler)
         {
             return (s, e) =>
             {
-                if (changedTasks.Contains(e.FullPath))
-                {
-                    return;
-                }
-
                 if (e.FullPath.Contains(GitFolderName))
-                {
                     return;
-                }
-
-                changedTasks.Add(e.FullPath, _itLock, new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(1) });
-                Task.Delay(throttle).ContinueWith(_ => handler(s, e));
+                
+                if (cache.Get(e.FullPath) != null) 
+                    cache.Set(e.FullPath, e.FullPath, GetCachePolicy(() => handler(s, e)));
+                else
+                    cache.Add(e.FullPath, e.FullPath, GetCachePolicy(() => handler(s, e)));
             };
         }
 
         private void OnChanged(object sender, FileSystemEventArgs e)
         {
-            lock (_itLock)
+            lock (itLock)
             {
                 var fileInfo = new FileInfo(e.FullPath);
                 if (ignoredTasks.Contains(fileInfo.FullName))
@@ -107,6 +100,19 @@ namespace Unlimotion.ViewModel
                     });
                     break;
             }
+        }
+        
+        private CacheItemPolicy GetCachePolicy(Action handler)
+        {
+            return new CacheItemPolicy
+            {
+                AbsoluteExpiration = DateTimeOffset.Now.Add(throttlePeriod),
+                RemovedCallback = args =>
+                {
+                    if (args.RemovedReason != CacheEntryRemovedReason.Expired) return;
+                    Task.Run(handler);
+                }
+            };
         }
     }
 }

@@ -58,19 +58,14 @@ namespace Unlimotion.Desktop
             }
 
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
-            var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+            var gitSettings = configuration.Get<GitSettings>("Git");
             Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
             Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
-            var repositoryPath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
-                ? TasksFolderName
-                : taskStorageSettings.Path;
-            Locator.CurrentMutable.Register<IRemoteBackupService>(() => 
-                new BackupViaGitService(taskStorageSettings.GitUserName, taskStorageSettings.GitPassword, 
-                    repositoryPath));
+            Locator.CurrentMutable.Register<IRemoteBackupService>(() => new BackupViaGitService());
 
-            var isServerMode = taskStorageSettings?.IsServerMode == true;
+            var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
 
 #if DEBUG
             TaskStorages.DefaultStoragePath = TasksFolderName;
@@ -81,24 +76,24 @@ namespace Unlimotion.Desktop
 
             var notificationManager = new NotificationManagerWrapper();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
-            
-            if (taskStorageSettings?.GitBackupEnabled == true)
-            {
-                var schedulerFactory = new StdSchedulerFactory();
-                var scheduler = schedulerFactory.GetScheduler().Result;
 
+            var schedulerFactory = new StdSchedulerFactory();
+            var scheduler = schedulerFactory.GetScheduler().Result;
+            Locator.CurrentMutable.RegisterConstant(scheduler);
+
+            if (gitSettings?.PullIntervalSeconds != null && gitSettings?.PushIntervalSeconds != null)
+            {
                 var pullJob = JobBuilder.Create<GitPullJob>()
                     .WithIdentity("GitPullJob", "GitPullJob")
                     .Build();
-                
                 var pushJob = JobBuilder.Create<GitPushJob>()
                     .WithIdentity("GitPushJob", "GitPushJob")
                     .Build();
-
+                
                 var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                    taskStorageSettings.GitPullIntervalSeconds);
+                    gitSettings.PullIntervalSeconds);
                 var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                    taskStorageSettings.GitPushIntervalSeconds);
+                    gitSettings.PushIntervalSeconds);
 
                 scheduler.ScheduleJob(pullJob, pullTrigger);
                 scheduler.ScheduleJob(pushJob, pushTrigger);

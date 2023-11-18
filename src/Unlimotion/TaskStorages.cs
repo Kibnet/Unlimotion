@@ -1,10 +1,12 @@
-﻿﻿using System;
+﻿using System;
 using Splat;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
-
+using Quartz;
+using ITrigger = Quartz.ITrigger;
+ 
 namespace Unlimotion
 {
     public static class TaskStorages
@@ -19,6 +21,20 @@ namespace Unlimotion
                 .Subscribe(c =>
                 {
                     RegisterStorage(c.Value, configuration);
+                });
+            settingsViewModel.ObservableForProperty(m => m.GitPullIntervalSeconds)
+                .Subscribe(c =>
+                {
+                    var scheduler = Locator.Current.GetService<IScheduler>();
+                    var triggerKey = new TriggerKey("PullTrigger", "GitPullJob");
+                    scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
+                });
+            settingsViewModel.ObservableForProperty(m => m.GitPushIntervalSeconds)
+                .Subscribe(c =>
+                {
+                    var scheduler = Locator.Current.GetService<IScheduler>();
+                    var triggerKey = new TriggerKey("PushTrigger", "GitPushJob");
+                    scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob", c.Value));
                 });
             settingsViewModel.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -118,6 +134,16 @@ namespace Unlimotion
                 storagePath = DefaultStoragePath;
             return storagePath;
         }
+        
+        private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds) 
+        {
+            return TriggerBuilder.Create()
+                .WithIdentity(name, group)
+                .StartNow()
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInSeconds(seconds)
+                    .RepeatForever())
+                .Build();
+        }
     }
-
 }

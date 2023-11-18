@@ -9,11 +9,13 @@ public class SettingsViewModel
 {
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
+    private readonly IConfiguration _gitSettings;
 
     public SettingsViewModel(IConfiguration configuration)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
+        _gitSettings = configuration.GetSection("Git");
     }
 
     public string TaskStoragePath
@@ -49,34 +51,58 @@ public class SettingsViewModel
     
     public bool GitBackupEnabled
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitBackupEnabled)).Get<bool>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitBackupEnabled)).Set(value);
+        get => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Get<bool>();
+        set => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Set(value);
     }
     
     public string GitUserName
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitUserName)).Get<string>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitUserName)).Set(value);
+        get => _gitSettings.GetSection(nameof(GitSettings.UserName)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.UserName)).Set(value);
     }
     
     public string GitPassword
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Get<string>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPassword)).Set(value);
+        get => _gitSettings.GetSection(nameof(GitSettings.Password)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.Password)).Set(value);
     }
     
     public int GitPushIntervalSeconds
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPushIntervalSeconds)).Get<int>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPushIntervalSeconds)).Set(value);
+        get => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Get<int>();
+        set => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(value);
     }
     
     public int GitPullIntervalSeconds
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPullIntervalSeconds)).Get<int>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.GitPullIntervalSeconds)).Set(value);
+        get => _gitSettings.GetSection(nameof(GitSettings.PullIntervalSeconds)).Get<int>();
+        set => _gitSettings.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(value);
     }
 
+    public string GitRemoteName
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
+    }
+    
+    public string GitPushRefSpec
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Set(value);
+    }
+    
+    public string GitCommitterName
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Set(value);
+    }
+    
+    public string GitCommitterEmail
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Set(value);
+    }
+    
     public ICommand ConnectCommand { get; set; }
     public ICommand MigrateCommand { get; set; }
     public ICommand BackupCommand { get; set; }
