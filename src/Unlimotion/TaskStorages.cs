@@ -22,6 +22,16 @@ namespace Unlimotion
                 {
                     RegisterStorage(c.Value, configuration);
                 });
+            settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled)
+                .Subscribe(c =>
+                {
+                    var scheduler = Locator.Current.GetService<IScheduler>();
+
+                    if (c.Value)
+                        scheduler.ResumeAll();
+                    else
+                        scheduler.PauseAll();
+                });
             settingsViewModel.ObservableForProperty(m => m.GitPullIntervalSeconds)
                 .Subscribe(c =>
                 {
