@@ -25,6 +25,8 @@ namespace Unlimotion
             settingsViewModel.ObservableForProperty(m => m.GitPullIntervalSeconds)
                 .Subscribe(c =>
                 {
+                    if (c.Value == null)
+                        return;
                     var scheduler = Locator.Current.GetService<IScheduler>();
                     var triggerKey = new TriggerKey("PullTrigger", "GitPullJob");
                     scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
@@ -32,6 +34,8 @@ namespace Unlimotion
             settingsViewModel.ObservableForProperty(m => m.GitPushIntervalSeconds)
                 .Subscribe(c =>
                 {
+                    if (c.Value == null)
+                        return;
                     var scheduler = Locator.Current.GetService<IScheduler>();
                     var triggerKey = new TriggerKey("PushTrigger", "GitPushJob");
                     scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob", c.Value));

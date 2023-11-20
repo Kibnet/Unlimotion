@@ -16,17 +16,17 @@ public class TaskStorageSettings
 
 public class GitSettings
 {
-    public bool BackupEnabled { get; set; }
-    
-    public string UserName { get; set; }
-    public string Password { get; set; }
-    
-    public int PullIntervalSeconds { get; set; }
-    public int PushIntervalSeconds { get; set; }
+    public bool BackupEnabled { get; set; } = false;
 
-    public string RemoteName { get; set; }
-    public string PushRefSpec { get; set; }
-    
-    public string CommitterName { get; set; }
-    public string CommitterEmail { get; set; }
+    public string UserName { get; set; } = "YourEmail";
+    public string Password { get; set; } = "YourToken";
+
+    public int PullIntervalSeconds { get; set; } = 30;
+    public int PushIntervalSeconds { get; set; } = 60;
+
+    public string RemoteName { get; set; } = "origin";
+    public string PushRefSpec { get; set; } = "refs/heads/main";
+
+    public string CommitterName { get; set; } = "Backuper";
+    public string CommitterEmail { get; set; } = "Backuper@unlimotion.ru";
 }

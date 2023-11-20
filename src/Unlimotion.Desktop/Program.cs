@@ -81,7 +81,27 @@ namespace Unlimotion.Desktop
             var scheduler = schedulerFactory.GetScheduler().Result;
             Locator.CurrentMutable.RegisterConstant(scheduler);
 
-            if (gitSettings?.PullIntervalSeconds != null && gitSettings?.PushIntervalSeconds != null)
+            if (gitSettings == null)
+            {
+                gitSettings = new GitSettings();
+                var gitSection = configuration.GetSection("Git");
+                
+                gitSection.GetSection(nameof(GitSettings.BackupEnabled)).Set(false);
+                
+                gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
+                gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
+                    
+                gitSection.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(gitSettings.PullIntervalSeconds);
+                gitSection.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(gitSettings.PushIntervalSeconds);
+                
+                gitSection.GetSection(nameof(GitSettings.RemoteName)).Set(gitSettings.RemoteName);
+                gitSection.GetSection(nameof(GitSettings.PushRefSpec)).Set(gitSettings.PushRefSpec);
+                
+                gitSection.GetSection(nameof(GitSettings.CommitterName)).Set(gitSettings.CommitterName);
+                gitSection.GetSection(nameof(GitSettings.CommitterEmail)).Set(gitSettings.CommitterEmail);
+            }
+
+            if (gitSettings.BackupEnabled)
             {
                 var pullJob = JobBuilder.Create<GitPullJob>()
                     .WithIdentity("GitPullJob", "GitPullJob")
