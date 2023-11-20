@@ -20,19 +20,19 @@ public class BackupViaGitService : IRemoteBackupService
         {
             var settings = GetSettings();
             CheckGitSettings(settings.git.UserName, settings.git.Password);
-            
+
             using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
-        
-            if (!repo.RetrieveStatus().IsDirty)
-                return;
 
-            Commands.Checkout(repo, settings.git.PushRefSpec);
+            if (repo.RetrieveStatus().IsDirty)
+            {
+                Commands.Checkout(repo, settings.git.PushRefSpec);
         
-            Commands.Stage(repo, "*");
+                Commands.Stage(repo, "*");
         
-            var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
+                var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
 
-            repo.Commit(msg, committer, committer);
+                repo.Commit(msg, committer, committer);
+            }
 
             var options = new PushOptions
             {
