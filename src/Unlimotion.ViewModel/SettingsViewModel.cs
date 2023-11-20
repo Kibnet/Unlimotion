@@ -1,6 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using PropertyChanged;
+using Splat;
+using System.Collections.Generic;
 using System.Windows.Input;
+using Unlimotion.Services;
 
 namespace Unlimotion.ViewModel;
 
@@ -90,7 +93,17 @@ public class SettingsViewModel
         get => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Set(value);
     }
-    
+
+    public List<string> Refs
+    {
+        get
+        {
+            var service = Locator.Current.GetService<IRemoteBackupService>();
+            return service?.Refs();
+        }
+    }
+
+
     public string GitCommitterName
     {
         get => _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Get<string>();

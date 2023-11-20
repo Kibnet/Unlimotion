@@ -41,7 +41,7 @@
                 <Label Content="Git Remote Name"/>
                 <TextBox Text="{Binding GitRemoteName}"></TextBox>
                 <Label Content="Git PushRefSpec"/>
-                <TextBox Text="{Binding GitPushRefSpec}"></TextBox>
+                <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}"/>
                 <Label Content="Git Committer Name"/>
                 <TextBox Text="{Binding GitCommitterName}"></TextBox>
                 <Label Content="Git Committer Email"/>

@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using Avalonia.Threading;
 using LibGit2Sharp;
@@ -13,6 +15,28 @@ public class BackupViaGitService : IRemoteBackupService
 {
     private const string TasksFolderName = "Tasks";
     private static readonly object LockObject = new();
+
+    public List<string> Refs()
+    {
+        var result = new List<string>();
+        try
+        {
+            var settings = GetSettings();
+
+            using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
+            var refs = repo.Refs;
+            foreach (var re in refs)
+            {
+                if (re.CanonicalName.StartsWith("refs/heads"))
+                {
+                    result.Add(re.CanonicalName);
+                }
+            }
+        }
+        catch (Exception ex) { }
+       
+        return result;
+    }
 
     public void Push(string msg)
     {
