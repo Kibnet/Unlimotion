@@ -47,7 +47,7 @@ namespace Unlimotion.ViewModel
                 }
             }
         }
-        
+
         public async Task Save(TaskItem item)
         {
             await taskStorage.Save(item);
@@ -113,8 +113,17 @@ namespace Unlimotion.ViewModel
                     var taskItem = await Load(e.Id);
                     if (taskItem != null)
                     {
-                        var vm = new TaskItemViewModel(taskItem, this);
-                        Tasks.AddOrUpdate(vm);
+                        var vml = Tasks.Lookup(taskItem.Id);
+                        if (vml.HasValue)
+                        {
+                            var vm = vml.Value;
+                            vm.Update(taskItem);
+                        }
+                        else
+                        {
+                            var vm = new TaskItemViewModel(taskItem, this);
+                            Tasks.AddOrUpdate(vm);
+                        }
                     }
                     break;
                 case UpdateType.Removed:
