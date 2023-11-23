@@ -28,6 +28,24 @@
 				<TextBox Text="{Binding Login}"></TextBox>
 				<Label Content="Server Password"/>
 				<TextBox PasswordChar="*" Text="{Binding Password}"/>
+				
+				<CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Git Backup Enabled"/>
+				<Label Content="Git UserName"/>
+				<TextBox Text="{Binding GitUserName}"></TextBox>
+				<Label Content="Git Password"/>
+				<TextBox PasswordChar="*" Text="{Binding GitPassword}"/>
+                <Label Content="Git Pull Interval Seconds"/>
+                <TextBox Text="{Binding GitPullIntervalSeconds}"></TextBox>
+                <Label Content="Git Push Interval Seconds"/>
+                <TextBox Text="{Binding GitPushIntervalSeconds}"></TextBox>
+                <Label Content="Git Remote Name"/>
+                <TextBox Text="{Binding GitRemoteName}"></TextBox>
+                <Label Content="Git PushRefSpec"/>
+                <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}"/>
+                <Label Content="Git Committer Name"/>
+                <TextBox Text="{Binding GitCommitterName}"></TextBox>
+                <Label Content="Git Committer Email"/>
+                <TextBox Text="{Binding GitCommitterEmail}"></TextBox>
 			</StackPanel>
 		</ScrollViewer>
 	</Grid>

@@ -13,3 +13,20 @@ public class TaskStorageSettings
 
     public bool IsServerMode { get ; set ; }
 }
+
+public class GitSettings
+{
+    public bool BackupEnabled { get; set; } = false;
+
+    public string UserName { get; set; } = "YourEmail";
+    public string Password { get; set; } = "YourToken";
+
+    public int PullIntervalSeconds { get; set; } = 30;
+    public int PushIntervalSeconds { get; set; } = 60;
+
+    public string RemoteName { get; set; } = "origin";
+    public string PushRefSpec { get; set; } = "refs/heads/main";
+
+    public string CommitterName { get; set; } = "Backuper";
+    public string CommitterEmail { get; set; } = "Backuper@unlimotion.ru";
+}
