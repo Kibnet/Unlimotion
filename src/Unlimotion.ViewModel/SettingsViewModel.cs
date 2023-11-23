@@ -87,7 +87,16 @@ public class SettingsViewModel
         get => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
     }
-    
+
+    public List<string> Remotes
+    {
+        get
+        {
+            var service = Locator.Current.GetService<IRemoteBackupService>();
+            return service?.Remotes();
+        }
+    }
+
     public string GitPushRefSpec
     {
         get => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Get<string>();

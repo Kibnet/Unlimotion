@@ -34,9 +34,29 @@ public class BackupViaGitService : IRemoteBackupService
             }
         }
         catch (Exception ex) { }
-       
+
         return result;
     }
+
+    public List<string> Remotes()
+    {
+        var result = new List<string>();
+        try
+        {
+            var settings = GetSettings();
+
+            using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
+            var remotes = repo.Network.Remotes;
+            foreach (var remote in remotes)
+            {
+                result.Add(remote.Name);
+            }
+        }
+        catch (Exception ex) { }
+
+        return result;
+    }
+
 
     public void Push(string msg)
     {
@@ -50,9 +70,9 @@ public class BackupViaGitService : IRemoteBackupService
             if (repo.RetrieveStatus().IsDirty)
             {
                 Commands.Checkout(repo, settings.git.PushRefSpec);
-        
+
                 Commands.Stage(repo, "*");
-        
+
                 var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
 
                 repo.Commit(msg, committer, committer);
@@ -67,7 +87,7 @@ public class BackupViaGitService : IRemoteBackupService
                         Password = settings.git.Password,
                     }
             };
-      
+
             try
             {
                 repo.Network.Push(repo.Network.Remotes[settings.git.RemoteName], settings.git.PushRefSpec, options);
@@ -87,7 +107,7 @@ public class BackupViaGitService : IRemoteBackupService
         {
             var settings = GetSettings();
             CheckGitSettings(settings.git.UserName, settings.git.Password);
-        
+
             using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
             var options = new PullOptions
             {
@@ -121,7 +141,7 @@ public class BackupViaGitService : IRemoteBackupService
     {
         return string.IsNullOrWhiteSpace(pathFromSettings) ? TasksFolderName : pathFromSettings;
     }
-    
+
     private static void CheckGitSettings(string userName, string password)
     {
         if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
@@ -131,7 +151,7 @@ public class BackupViaGitService : IRemoteBackupService
     private static (GitSettings git, string? repositoryPath) GetSettings()
     {
         var configuration = Locator.Current.GetService<IConfiguration>();
-        return (configuration.Get<GitSettings>("Git"), 
+        return (configuration.Get<GitSettings>("Git"),
             configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
     }
 
@@ -140,7 +160,7 @@ public class BackupViaGitService : IRemoteBackupService
         Dispatcher.UIThread.InvokeAsync(() =>
         {
             var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
-            notificationManager?.Ask("Git Error", message, 
+            notificationManager?.Ask("Git Error", message,
                 () => Debug.WriteLine($"User read the git error {message} at {DateTime.Now}"));
         });
     }

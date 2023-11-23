@@ -126,7 +126,14 @@ namespace Unlimotion
             else
             {
                 taskStorage = CreateFileTaskStorage(settings?.Path);
-                dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
+                try
+                {
+                    dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
+                }
+                catch (Exception ex)
+                {
+                    dbWatcher = null;
+                }
             }
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
