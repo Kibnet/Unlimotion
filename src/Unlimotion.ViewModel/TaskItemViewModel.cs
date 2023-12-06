@@ -37,6 +37,8 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
+        private TimeSpan? plannedPeriod;
+        private DateCommands commands = null;
 
         private void Init(ITaskRepository taskRepository)
         {
@@ -46,7 +48,6 @@ namespace Unlimotion.ViewModel
                 await taskRepository.Save(model);
                 Id = model.Id;
             });
-
 
             //Subscribe ContainsTasks
             var containsFilter = Contains.ToObservableChangeSet()
@@ -418,6 +419,55 @@ namespace Unlimotion.ViewModel
                     .AddToDispose(this);
             }
 
+            //При изменении начала
+            this.WhenAnyValue(m => m.PlannedBeginDateTime).Subscribe(b =>
+            {
+                //Если есть начальная и конечная дата
+                if (b.HasValue && PlannedEndDateTime != null)
+                {
+                    //Если есть вычисленный период
+                    if (plannedPeriod.HasValue)
+                    {
+                        //Вычисляется новая конечная дата
+                        var newValue = b.Value.Add(plannedPeriod.Value);
+                        //Если есть изменения
+                        if (PlannedEndDateTime != newValue)
+                        {
+                            //Меняем дату
+                            PlannedEndDateTime = newValue;
+                        }
+                    }
+                    //Если нет вычисленного периода
+                    else
+                    {
+                        //Если начало раньше либо равно концу
+                        if (b.Value <= PlannedEndDateTime)
+                            //Вычисляем период
+                            plannedPeriod = PlannedEndDateTime - b.Value;
+                        //Если начало позже конца
+                        else
+                            //Обнуляем период
+                            plannedPeriod = null;
+                    }
+                }
+            });
+
+            this.WhenAnyValue(m => m.PlannedEndDateTime).Subscribe(b =>
+            {
+                //Если есть начальная и конечная дата
+                if (PlannedBeginDateTime != null && b.HasValue)
+                {
+                    //Если начало раньше либо равно концу
+                    if (PlannedBeginDateTime <= b.Value)
+                        //Вычисляем период
+                        plannedPeriod = b.Value - PlannedBeginDateTime;
+                    //Если начало позже конца
+                    else
+                        //Обнуляем период
+                        plannedPeriod = null;
+                }
+            });
+
             Contains.ToObservableChangeSet()
                 .Subscribe(set =>
                 {
@@ -536,6 +586,16 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? ArchiveDateTime { get; set; }
         public DateTime? PlannedBeginDateTime { get; set; }
         public DateTime? PlannedEndDateTime { get; set; }
+
+        /// <summary>
+        /// Период планируемых дат, вычислимое поле
+        /// </summary>
+        public TimeSpan? PlannedPeriod
+        {
+            get => plannedPeriod;
+            set => plannedPeriod = value;
+        }
+
         public TimeSpan? PlannedDuration { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
@@ -643,6 +703,11 @@ namespace Unlimotion.ViewModel
             new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
             new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
         };
+
+        /// <summary>
+        /// Команды для быстрого выбора дат, ленивая загрузка
+        /// </summary>
+        public DateCommands Commands => commands ??= new DateCommands(this);
 
         private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper notificationManager, string taskName,
             List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
