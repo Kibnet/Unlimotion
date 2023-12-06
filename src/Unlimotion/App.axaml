@@ -14,6 +14,9 @@
 		<Style Selector="Label.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
+        <Style Selector="Label.IsWanted">
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
 		<Style Selector="TextBlock.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>

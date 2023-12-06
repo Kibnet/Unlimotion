@@ -24,7 +24,7 @@
 		<DataTemplate DataType="viewModel:TaskItemViewModel">
 			<Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
 				<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+				<Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
 			</Grid>
 		</DataTemplate>
 		<DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -116,7 +116,7 @@
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.CreatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
 										</Grid>
 										<Button Background="#00000000"
 												Content="❌"
@@ -148,7 +148,7 @@
 										<Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 											<CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+											<Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
 										</Grid>
 										<Button Background="#00000000"
 												Content="❌"
@@ -191,7 +191,7 @@
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
 										</Grid>
 										<Button Background="#00000000"
 												Content="❌"
@@ -234,7 +234,7 @@
 											<Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
 											<Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" />
+											<Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
 										</Grid>
 										<Button Background="#00000000"
 												Content="❌"
@@ -297,20 +297,20 @@
 														HorizontalAlignment="Stretch"
 														DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
 									<DropDownButton Content="Set Begin" Grid.Row="1">
-                                        <DropDownButton.Flyout>
-                                            <MenuFlyout>
-                                                <MenuItem Header="Today" Command="{Binding Commands.SetBeginToday}"/>
-                                                <MenuItem Header="Tomorrow" Command="{Binding Commands.SetBeginTomorrow}"/>
-                                                <MenuItem Header="Next Monday" Command="{Binding Commands.SetBeginNextMonday}"/>
-                                                <MenuItem Header="First day of next month" Command="{Binding Commands.SetBegin1DayNextMonth}"/>
-                                                <MenuItem Header="None" Command="{Binding Commands.SetBeginNone}"/>
-                                            </MenuFlyout>
-                                        </DropDownButton.Flyout>
-                                    </DropDownButton>
-                                    <TextBox Grid.Column="1"
-                                             ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
-                                             HorizontalAlignment="Stretch"
-                                             Watermark="Planned Duration" UseFloatingWatermark="True">
+										<DropDownButton.Flyout>
+											<MenuFlyout>
+												<MenuItem Header="Today" Command="{Binding Commands.SetBeginToday}"/>
+												<MenuItem Header="Tomorrow" Command="{Binding Commands.SetBeginTomorrow}"/>
+												<MenuItem Header="Next Monday" Command="{Binding Commands.SetBeginNextMonday}"/>
+												<MenuItem Header="First day of next month" Command="{Binding Commands.SetBegin1DayNextMonth}"/>
+												<MenuItem Header="None" Command="{Binding Commands.SetBeginNone}"/>
+											</MenuFlyout>
+										</DropDownButton.Flyout>
+									</DropDownButton>
+									<TextBox Grid.Column="1"
+											 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
+											 HorizontalAlignment="Stretch"
+											 Watermark="Planned Duration" UseFloatingWatermark="True">
 										 <Interaction.Behaviors>
 											 <behavior:LostFocusUpdateBindingBehavior Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"/>
 										 </Interaction.Behaviors>
@@ -321,21 +321,21 @@
 														UseFloatingWatermark="True"
 														HorizontalAlignment="Stretch"
 														DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <DropDownButton Content="Set End" Grid.Column="2" Grid.Row="1">
-                                        <DropDownButton.Flyout>
-                                            <MenuFlyout>
-                                                <MenuItem Header="Today" Command="{Binding Commands.SetEndToday}"/>
-                                                <MenuItem Header="Tomorrow" Command="{Binding Commands.SetEndTomorrow}"/>
-                                                <MenuItem Header="Next Friday" Command="{Binding Commands.SetEndNextFriday}"/>
-                                                <MenuItem Header="1 day" Command="{Binding Commands.SetEnd1Days}"/>
-                                                <MenuItem Header="5 days" Command="{Binding Commands.SetEnd5Days}"/>
-                                                <MenuItem Header="7 days" Command="{Binding Commands.SetEnd7Days}"/>
-                                                <MenuItem Header="10 days" Command="{Binding Commands.SetEnd10Days}"/>
-                                                <MenuItem Header="1 month" Command="{Binding Commands.SetEnd1Month}"/>
-                                                <MenuItem Header="None" Command="{Binding Commands.SetEndNone}"/>
-                                            </MenuFlyout>
-                                        </DropDownButton.Flyout>
-                                    </DropDownButton>
+									<DropDownButton Content="Set End" Grid.Column="2" Grid.Row="1">
+										<DropDownButton.Flyout>
+											<MenuFlyout>
+												<MenuItem Header="Today" Command="{Binding Commands.SetEndToday}"/>
+												<MenuItem Header="Tomorrow" Command="{Binding Commands.SetEndTomorrow}"/>
+												<MenuItem Header="Next Friday" Command="{Binding Commands.SetEndNextFriday}"/>
+												<MenuItem Header="1 day" Command="{Binding Commands.SetEnd1Days}"/>
+												<MenuItem Header="5 days" Command="{Binding Commands.SetEnd5Days}"/>
+												<MenuItem Header="7 days" Command="{Binding Commands.SetEnd7Days}"/>
+												<MenuItem Header="10 days" Command="{Binding Commands.SetEnd10Days}"/>
+												<MenuItem Header="1 month" Command="{Binding Commands.SetEnd1Month}"/>
+												<MenuItem Header="None" Command="{Binding Commands.SetEndNone}"/>
+											</MenuFlyout>
+										</DropDownButton.Flyout>
+									</DropDownButton>
 								</Grid>
 								<Label Content="Repeater Templates"/>
 								<StackPanel Orientation="Horizontal">
