@@ -247,6 +247,7 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
+                .Filter(m => m != null)
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
                 .Bind(out _currentItems)
@@ -731,7 +732,7 @@ namespace Unlimotion.ViewModel
             }
 
             //Прямой поиск по коллекции
-            var finded = source.FirstOrDefault(t => t.TaskItem == taskItemViewModel);
+            var finded = source.FirstOrDefault(t => t?.TaskItem == taskItemViewModel);
             if (finded != null)
             {
                 return finded;
