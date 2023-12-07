@@ -126,10 +126,22 @@ public class BackupViaGitService : IRemoteBackupService
 
             try
             {
-                repo.Stashes.Add(signature, "Stash before pull");
-                Commands.Pull(repo, signature, options);
-                repo.Stashes.Pop(0);
+                var stashMsg = $"Stash before pull {Guid.NewGuid()}";
                 
+                repo.Stashes.Add(signature, stashMsg);
+                Commands.Pull(repo, signature, options);
+                
+                var stash = repo.Stashes.FirstOrDefault(e => e.Message.Contains(stashMsg));
+
+                if (stash != null)
+                {
+                    var stashIndex = repo.Stashes.ToList().IndexOf(stash);
+                    var applyStatus = repo.Stashes.Apply(stashIndex);
+
+                    if (applyStatus == StashApplyStatus.Applied)
+                        repo.Stashes.Remove(stashIndex);
+                }
+
                 if (repo.Index.Conflicts.Any())
                 {
                     const string errorMessage = "Fix conflicts and then commit the result";
