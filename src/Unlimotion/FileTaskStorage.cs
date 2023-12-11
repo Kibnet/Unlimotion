@@ -98,11 +98,6 @@ namespace Unlimotion
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
             try
             {
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs()
-                {
-                    Id = fileInfo.FullName,
-                    Type = UpdateType.Removed,
-                });
                 fileInfo.Delete();
                 return true;
             }

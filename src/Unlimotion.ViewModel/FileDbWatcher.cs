@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.Caching;
+using Splat;
 using Unlimotion.ViewModel.Models;
 
 namespace Unlimotion.ViewModel
@@ -10,12 +11,15 @@ namespace Unlimotion.ViewModel
     public class FileDbWatcher : IDatabaseWatcher
     {
         private const string GitFolderName = ".git";
+        private const string GitLockPostfix = ".lock";
+        private const string GitOrigPostfix = ".orig";
         private readonly MemoryCache ignoredTasks = MemoryCache.Default;
         private readonly FileSystemWatcher watcher;
         private readonly object itLock = new();
         public event EventHandler<DbUpdatedEventArgs> OnUpdated;
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
+        private readonly DebugLogger logger = new();
 
         public FileDbWatcher(string path)
         {
@@ -60,13 +64,18 @@ namespace Unlimotion.ViewModel
         {
             return (s, e) =>
             {
-                if (e.FullPath.Contains(GitFolderName))
+                var fullPath = e.FullPath;
+                
+                if (fullPath.Contains(GitFolderName) || fullPath.EndsWith(GitOrigPostfix))
                     return;
                 
-                if (cache.Get(e.FullPath) != null) 
-                    cache.Set(e.FullPath, e.FullPath, GetCachePolicy(() => handler(s, e)));
-                else
-                    cache.Add(e.FullPath, e.FullPath, GetCachePolicy(() => handler(s, e)));
+                if (fullPath.EndsWith(GitLockPostfix)) 
+                    fullPath = e.FullPath.Replace(GitLockPostfix, "");
+                
+                if (cache.Get(fullPath) != null) 
+                    cache.Set(fullPath, fullPath, GetCachePolicy(() => handler(s, e)));
+                else 
+                    cache.Add(fullPath, fullPath, GetCachePolicy(() => handler(s, e)));
             };
         }
 
@@ -100,6 +109,7 @@ namespace Unlimotion.ViewModel
                     });
                     break;
             }
+            logger.Write($"{DateTimeOffset.Now}: {e.FullPath} {e.ChangeType}.", LogLevel.Debug);
         }
         
         private CacheItemPolicy GetCachePolicy(Action handler)

@@ -343,7 +343,7 @@ namespace Unlimotion.ViewModel
                 //Если родителей не осталось, удаляется сама задача
                 if (Parents.Count == 0)
                 {
-                    taskRepository.Remove(Id);
+                    taskRepository.Remove(Id, true);
 
                     foreach (var containsTask in ContainsTasks.ToList())
                     {

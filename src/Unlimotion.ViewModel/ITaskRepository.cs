@@ -8,7 +8,7 @@ public interface ITaskRepository
 {
     SourceCache<TaskItemViewModel, string> Tasks { get; }
     void Init();
-    Task Remove(string itemId);
+    Task Remove(string itemId, bool deleteFile);
     Task Save(TaskItem item);
     Task<TaskItem> Load(string itemId);
     IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
