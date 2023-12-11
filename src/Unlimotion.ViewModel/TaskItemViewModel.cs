@@ -610,6 +610,11 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<TaskItemViewModel> BlockedByTasks => _blockedByTasks;
 
+        public TaskWrapperViewModel CurrentItemContains => Locator.Current.GetService<MainWindowViewModel>()?.CurrentItemContains;
+        public TaskWrapperViewModel CurrentItemParents => Locator.Current.GetService<MainWindowViewModel>()?.CurrentItemParents;
+        public TaskWrapperViewModel CurrentItemBlocks => Locator.Current.GetService<MainWindowViewModel>()?.CurrentItemBlocks;
+        public TaskWrapperViewModel CurrentItemBlockedBy => Locator.Current.GetService<MainWindowViewModel>()?.CurrentItemBlockedBy;
+
         public ObservableCollection<string> Contains { get; set; } = new();
         public ObservableCollection<string> Parents { get; set; } = new();
         public ObservableCollection<string> Blocks { get; set; } = new();
