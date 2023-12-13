@@ -51,6 +51,7 @@ namespace Unlimotion.ViewModel
             lock (itLock)
             {
                 ignoredTasks.Add(taskId, itLock, new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(5) });
+                logger.Write($"{DateTimeOffset.Now}: ${taskId} is added to ignored", LogLevel.Debug);
             }
         }
 
@@ -87,6 +88,7 @@ namespace Unlimotion.ViewModel
                 if (ignoredTasks.Contains(fileInfo.FullName))
                 {
                     ignoredTasks.Remove(fileInfo.FullName);
+                    logger.Write($"{DateTimeOffset.Now}: {fileInfo.FullName} is removed from ignored", LogLevel.Debug);
                     return;
                 }
             }
