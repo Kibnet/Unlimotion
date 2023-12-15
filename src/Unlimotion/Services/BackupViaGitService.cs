@@ -131,9 +131,7 @@ public class BackupViaGitService : IRemoteBackupService
                     new Identity(settings.git.CommitterName, settings.git.CommitterEmail),
                     DateTimeOffset.Now);
 
-                var stashMsg = $"Stash before merge {Guid.NewGuid()}";
-
-                repo.Stashes.Add(signature, stashMsg);
+                var stash = repo.Stashes.Add(signature, "Stash before merge");
                 
                 Commands.Checkout(repo, settings.git.PushRefSpec);
                 
@@ -147,8 +145,6 @@ public class BackupViaGitService : IRemoteBackupService
                     Debug.WriteLine(errorMessage);
                     new Thread(() => ShowUiError(errorMessage)).Start();
                 }
-
-                var stash = repo.Stashes.FirstOrDefault(e => e.Message.Contains(stashMsg));
 
                 if (stash != null)
                 {
