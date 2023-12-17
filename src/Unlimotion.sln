@@ -18,6 +18,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution", "Solution", "{4B
 		Directory.Build.props = Directory.Build.props
 		global.json = global.json
 		nuget.config = nuget.config
+		..\run.linux.sh = ..\run.linux.sh
+		..\run.macos.sh = ..\run.macos.sh
+		..\run.windows.cmd = ..\run.windows.cmd
+		..\Unlimotion.aip = ..\Unlimotion.aip
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Interface", "Unlimotion.Interface\Unlimotion.Interface.csproj", "{538AE278-309D-463C-94AD-96457D36E92B}"
