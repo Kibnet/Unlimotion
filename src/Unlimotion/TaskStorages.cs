@@ -17,12 +17,12 @@ namespace Unlimotion
         {
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
-            settingsViewModel.ObservableForProperty(m => m.IsServerMode)
+            settingsViewModel.ObservableForProperty(m => m.IsServerMode, true)
                 .Subscribe(c =>
                 {
                     RegisterStorage(c.Value, configuration);
                 });
-            settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled)
+            settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled, true)
                 .Subscribe(c =>
                 {
                     var scheduler = Locator.Current.GetService<IScheduler>();
@@ -32,7 +32,7 @@ namespace Unlimotion
                     else
                         scheduler.PauseAll();
                 });
-            settingsViewModel.ObservableForProperty(m => m.GitPullIntervalSeconds)
+            settingsViewModel.ObservableForProperty(m => m.GitPullIntervalSeconds, true)
                 .Subscribe(c =>
                 {
                     if (c.Value == null)
@@ -41,7 +41,7 @@ namespace Unlimotion
                     var triggerKey = new TriggerKey("PullTrigger", "GitPullJob");
                     scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
                 });
-            settingsViewModel.ObservableForProperty(m => m.GitPushIntervalSeconds)
+            settingsViewModel.ObservableForProperty(m => m.GitPushIntervalSeconds, true)
                 .Subscribe(c =>
                 {
                     if (c.Value == null)
