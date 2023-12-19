@@ -88,15 +88,21 @@ public class BackupViaGitService : IRemoteBackupService
                     }
             };
 
-            try
+            var localBranch = repo.Branches[settings.git.PushRefSpec];
+            var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
+
+            if (localBranch.Tip.Sha != remoteBranch.Tip.Sha)
             {
-                repo.Network.Push(repo.Network.Remotes[settings.git.RemoteName], settings.git.PushRefSpec, options);
-            }
-            catch (Exception e)
-            {
-                var errorMessage = $"Can't push the remote repository, because {e.Message}";
-                Debug.WriteLine(errorMessage);
-                new Thread(() => ShowUiError(errorMessage)).Start();
+                try
+                {
+                    repo.Network.Push(repo.Network.Remotes[settings.git.RemoteName], settings.git.PushRefSpec, options);
+                }
+                catch (Exception e)
+                {
+                    var errorMessage = $"Can't push the remote repository, because {e.Message}";
+                    Debug.WriteLine(errorMessage);
+                    new Thread(() => ShowUiError(errorMessage)).Start();
+                }
             }
         }
     }
@@ -109,9 +115,9 @@ public class BackupViaGitService : IRemoteBackupService
             CheckGitSettings(settings.git.UserName, settings.git.Password);
 
             using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
-            
+
             var refSpecs = repo.Network.Remotes[settings.git.RemoteName].FetchRefSpecs.Select(x => x.Specification);
-          
+
             Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
             {
                 CredentialsProvider = (_, _, _) =>
@@ -121,7 +127,7 @@ public class BackupViaGitService : IRemoteBackupService
                         Password = settings.git.Password
                     }
             }, string.Empty);
-            
+
             var localBranch = repo.Branches[settings.git.PushRefSpec];
             var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
 
@@ -132,9 +138,9 @@ public class BackupViaGitService : IRemoteBackupService
                     DateTimeOffset.Now);
 
                 var stash = repo.Stashes.Add(signature, "Stash before merge");
-                
+
                 Commands.Checkout(repo, settings.git.PushRefSpec);
-                
+
                 try
                 {
                     repo.Merge(remoteBranch, signature, new MergeOptions());
