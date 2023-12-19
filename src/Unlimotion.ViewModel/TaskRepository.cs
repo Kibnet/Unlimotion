@@ -29,10 +29,11 @@ namespace Unlimotion.ViewModel
             this.dbWatcher = dbWatcher;
         }
 
-        public async Task Remove(string itemId)
+        public async Task Remove(string itemId, bool deleteFile)
         {
             Tasks.Remove(itemId);
-            await taskStorage.Remove(itemId);
+            if (deleteFile)
+                await taskStorage.Remove(itemId);
             if (blockedById.TryGetValue(itemId, out var hashSet))
             {
                 blockedById.Remove(itemId);
@@ -96,7 +97,7 @@ namespace Unlimotion.ViewModel
             if (dbWatcher != null)
             {
                 taskStorage.Updating += TaskStorageOnUpdating;
-                dbWatcher.OnUpdated += DbWatcherOnOnUpdated;
+                dbWatcher.OnUpdated += DbWatcherOnUpdated;
             }
         }
 
@@ -105,7 +106,7 @@ namespace Unlimotion.ViewModel
             dbWatcher?.AddIgnoredTask(e.Id);
         }
 
-        private async void DbWatcherOnOnUpdated(object sender, DbUpdatedEventArgs e)
+        private async void DbWatcherOnUpdated(object sender, DbUpdatedEventArgs e)
         {
             switch (e.Type)
             {
@@ -128,7 +129,7 @@ namespace Unlimotion.ViewModel
                     break;
                 case UpdateType.Removed:
                     var fileInfo = new FileInfo(e.Id);
-                    await Remove(fileInfo.Name);
+                    await Remove(fileInfo.Name, false);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
