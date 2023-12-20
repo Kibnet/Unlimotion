@@ -469,6 +469,7 @@ namespace Unlimotion.ViewModel
             });
 
             Contains.ToObservableChangeSet()
+                .Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute();
@@ -476,6 +477,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             Blocks.ToObservableChangeSet()
+                .Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute();
@@ -803,7 +805,8 @@ namespace Unlimotion.ViewModel
 
             if (list == null || list.Count == 0)
             {
-                observableCollection.Clear();
+                if(observableCollection.Count > 0)
+                    observableCollection.Clear();
                 return;
             }
 
