@@ -24,3 +24,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64/Unlimotion-${{  github.ref_name }}.deb
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_ACTIONS: true
+  GITHUB_REF_NAME: ${{  github.ref_name }}

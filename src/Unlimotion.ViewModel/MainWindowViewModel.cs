@@ -22,6 +22,7 @@ namespace Unlimotion.ViewModel
 
         public MainWindowViewModel()
         {
+            Title = Locator.Current.GetService<IAppNameDefinitionService>().GetVersion();
             Locator.CurrentMutable.RegisterConstant(this);
             connectionDisposableList.AddToDispose(this);
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
@@ -748,6 +749,7 @@ namespace Unlimotion.ViewModel
             finded = selected?.FirstOrDefault(p => p.TaskItem == taskItemViewModel);
             return finded;
         }
+        public string Title { get; set; }
         public bool AllTasksMode { get; set; }
         public bool UnlockedMode { get; set; }
         public bool CompletedMode { get; set; }
