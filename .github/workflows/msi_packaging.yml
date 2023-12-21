@@ -8,6 +8,12 @@ on:
 jobs:
   advinst-aip-build:
     runs-on: windows-2022
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_ACTIONS: true
+      GITHUB_REF_NAME: ${{  github.ref_name }}
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -35,5 +41,3 @@ jobs:
       with:
         file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
         tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

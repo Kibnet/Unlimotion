@@ -8,6 +8,12 @@ on:
 jobs:
   osx-build:
     runs-on: macos-latest
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_ACTIONS: true
+      GITHUB_REF_NAME: ${{  github.ref_name }}
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
