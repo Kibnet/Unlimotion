@@ -17,7 +17,7 @@ namespace Unlimotion
         {
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
-            settingsViewModel.ObservableForProperty(m => m.IsServerMode, true)
+            settingsViewModel.ObservableForProperty(m => m.IsServerMode)
                 .Subscribe(c =>
                 {
                     RegisterStorage(c.Value, configuration);
