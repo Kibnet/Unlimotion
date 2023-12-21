@@ -5,15 +5,34 @@ on:
     types:
       - published
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   deb-build:
     runs-on: ubuntu-latest
+
     steps:
+    - name: Debug GitHub Actions environment
+      run: |
+        echo "GITHUB_REF: ${{ github.ref_name }}"
+          
     - name: Checkout
       uses: actions/checkout@v3
       with:
         ref: ${{ github.sha }}
-      
+        
+    - name: Set AppName
+      run: |
+        file_path=$(find . -type f -name "AppNameDefinitionService.cs")
+        
+        if [ -n "$file_path" ]; then
+         sed -i 's/AppName = "ReleaseTag";/AppName = "${{ github.ref_name }}";/g' "$file_path"
+        else
+         echo "File not found."
+         exit 1
+        fi
+
     - name: Generate DebPkg
       run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{  github.ref_name }}
 

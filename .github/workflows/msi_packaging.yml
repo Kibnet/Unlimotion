@@ -5,15 +5,34 @@ on:
     types:
       - published
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   advinst-aip-build:
     runs-on: windows-2022
+
     steps:
+    - name: Debug GitHub Actions environment
+      run: |
+        echo "GITHUB_REF: ${{ github.ref_name }}"
+        
     - name: Checkout
       uses: actions/checkout@v3
       with:
         ref: ${{ github.sha }}
+        
+    - name: Set AppName
+      run: |
+        $filePath = Get-ChildItem -Path . -Recurse -Filter "AppNameDefinitionService.cs" | Select-Object -ExpandProperty FullName
 
+        if ($filePath) {
+          (Get-Content -Path $filePath) -replace 'ReleaseTag', "${{ github.ref_name }}" | Set-Content -Path $filePath
+        } else {
+          Write-Error "File not found."
+          exit 1
+        }
+        
     - name: Publish
       run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net7.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net7.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
 
@@ -35,5 +54,3 @@ jobs:
       with:
         file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
         tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
