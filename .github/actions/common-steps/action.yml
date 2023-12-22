@@ -1,0 +1,9 @@
+﻿name: 'Common Steps'
+description: 'Reusable common steps'
+runs:
+  using: "composite"
+  steps:
+    - name: Debug GitHub Actions environment
+      shell: bash
+      run: |
+        echo "GITHUB_REF: ${{ github.ref_name }}"
