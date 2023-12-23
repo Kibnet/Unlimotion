@@ -19,7 +19,7 @@ jobs:
         ref: ${{ github.sha }}
         
     - name: Debug Ref Name
-      uses: ./.github/actions/common-steps
+      uses: ./.github/actions/debug-step
         
     - name: Set AppName
       run: |

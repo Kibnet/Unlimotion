@@ -19,19 +19,10 @@ jobs:
         ref: ${{ github.sha }}
         
     - name: Debug Ref Name
-      uses: ./.github/actions/common-steps
+      uses: ./.github/actions/debug-step
         
     - name: Set AppName
-      run: |
-        file_path=$(find . -type f -name "AppNameDefinitionService.cs")
-        
-        if [ -n "$file_path" ]; then
-         sed -i 's/AppName = "ReleaseTag";/AppName = "${{ github.ref_name }}";/g' "$file_path"
-        else
-         echo "File not found."
-         exit 1
-        fi
-      shell: bash
+      uses: ./.github/actions/setAppName-byBash-step
         
     - name: Publish
       run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net7.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net7.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
