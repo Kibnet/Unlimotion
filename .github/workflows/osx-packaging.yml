@@ -22,16 +22,7 @@ jobs:
       uses: ./.github/actions/debug-step
         
     - name: Set AppName
-      run: |
-        file_path=$(find . -type f -name "AppNameDefinitionService.cs" -print -quit)
-  
-        if [ -n "$file_path" ]; then
-          sed -i '' 's/ReleaseTag/${{ github.ref_name }}/g' "$file_path"
-          echo "Replacement completed successfully."
-        else
-          echo "File not found."
-          exit 1
-        fi
+      uses: ./.github/actions/setAppName-byBash-step
 
     - name: Publish
       run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ github.ref_name }}
