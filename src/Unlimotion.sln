@@ -42,6 +42,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.iOS", "Unlimotio
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Browser", "Unlimotion.Browser\Unlimotion.Browser.csproj", "{08B3C356-E89E-4353-9B05-647B44B85F0F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.BeforeBuild", "Unlimotion.BeforeBuild\Unlimotion.BeforeBuild.csproj", "{699E05E9-72C2-4D24-9B04-8862812B7EEE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -106,6 +108,10 @@ Global
 		{08B3C356-E89E-4353-9B05-647B44B85F0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{08B3C356-E89E-4353-9B05-647B44B85F0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{08B3C356-E89E-4353-9B05-647B44B85F0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{699E05E9-72C2-4D24-9B04-8862812B7EEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{699E05E9-72C2-4D24-9B04-8862812B7EEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{699E05E9-72C2-4D24-9B04-8862812B7EEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{699E05E9-72C2-4D24-9B04-8862812B7EEE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -40,4 +40,5 @@
 	<ItemGroup>
 		<PackageReference Include="Dotnet.Bundle" Version="*" />
 	</ItemGroup>
+	<Import Project="./BeforeBuild.targets" />
 </Project>
