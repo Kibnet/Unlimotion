@@ -1,6 +1,0 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-		<Message Importance="high" Text="BeforeBuild target is starting..." />
-		<Exec Command="C:\Workspace\Unlimotion\src\Unlimotion.BeforeBuild\bin\Debug\net7.0\Unlimotion.BeforeBuild.exe" />
-	</Target>
-</Project>

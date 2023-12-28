@@ -2,5 +2,5 @@
 
 public interface IAppNameDefinitionService
 {
-    string GetVersion();
+    string GetAppName();
 }

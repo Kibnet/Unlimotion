@@ -1,9 +1,0 @@
-﻿name: 'Show Ref Name'
-description: 'Reusable common step: Show Ref Name'
-runs:
-  using: "composite"
-  steps:
-    - name: Show Ref Name
-      shell: bash
-      run: |
-        echo "GITHUB_REF: ${{ github.ref_name }}"

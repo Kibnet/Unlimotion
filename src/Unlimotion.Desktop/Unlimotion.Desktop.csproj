@@ -28,5 +28,4 @@
 		<None Remove=".gitignore" />
 		<None Remove="Assets\Unlimotion.ico" />
 	</ItemGroup>
-	<Import Project="./BeforeBuild.targets" />
 </Project>

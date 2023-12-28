@@ -6,14 +6,12 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-        <RootNamespace>Unlimotion.BeforBuild</RootNamespace>
     </PropertyGroup>
 
-    <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
-    </ItemGroup>
+	<PropertyGroup>
+		<!-- Установка препроцессорных директив на основе переменных окружения -->
+		<DefineConstants Condition="'$(GITHUB_ACTIONS)' == 'true'">$(DefineConstants);GITHUB_ACTIONS</DefineConstants>
+	</PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="LibGit2Sharp" Version="0.29.0" />

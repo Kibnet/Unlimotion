@@ -18,12 +18,6 @@ jobs:
       with:
         ref: ${{ github.sha }}
         
-    - name: Debug Ref Name
-      uses: ./.github/actions/debug-step
-        
-    - name: Set AppName
-      uses: ./.github/actions/setAppName-byBash-step
-        
     - name: Publish
       run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net7.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net7.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
 

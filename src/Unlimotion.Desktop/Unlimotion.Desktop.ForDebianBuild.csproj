@@ -43,5 +43,4 @@
 			 <LinuxPath>/usr/bin/Unlimotion</LinuxPath>
 		</Content>
 	</ItemGroup>
-	<Import Project="./BeforeBuild.targets" />
 </Project>

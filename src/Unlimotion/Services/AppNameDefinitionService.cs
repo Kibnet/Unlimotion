@@ -2,16 +2,9 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion.Services;
 
-public class AppNameDefinitionService : IAppNameDefinitionService
+public partial class AppNameDefinitionService : IAppNameDefinitionService
 {
-    private string AppName { get; }
-    
-    public AppNameDefinitionService()
-    {
-        AppName = "Unlimotion ReleaseTag"; // DON'T Change. It's used for workflows and BeforeBuild.targets
-    }
-    
-    public string GetVersion()
+    public string GetAppName()
     {
         return AppName;
     }
