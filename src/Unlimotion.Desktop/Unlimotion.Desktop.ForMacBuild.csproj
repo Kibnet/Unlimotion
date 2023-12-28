@@ -40,4 +40,8 @@
 	<ItemGroup>
 		<PackageReference Include="Dotnet.Bundle" Version="*" />
 	</ItemGroup>
+	<Target Name="PreBuild" BeforeTargets="BeforeCompile">
+		<Message Importance="high" Text="BeforeBuild target is starting..." />
+		<Exec Command="..\Unlimotion.AppName\builds\osx-x64\Unlimotion.AppName" />
+	</Target>
 </Project>

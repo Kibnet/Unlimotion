@@ -35,8 +35,4 @@
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
 	</ItemGroup>
-	<ItemGroup>
-		<Compile Include="./Services/AppNameDefinitionService.cs.pre-build.cs" />
-	</ItemGroup>
-	<Import Project="./BeforeBuild.targets" />
 </Project>

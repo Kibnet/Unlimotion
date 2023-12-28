@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net7.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="LibGit2Sharp" Version="0.29.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="builds\" />
+      <Folder Include="builds\linux-x64\" />
+      <Folder Include="builds\osx-x64\" />
+      <Folder Include="builds\win-x64\" />
+    </ItemGroup>
+
+</Project>

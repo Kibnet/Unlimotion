@@ -28,4 +28,8 @@
 		<None Remove=".gitignore" />
 		<None Remove="Assets\Unlimotion.ico" />
 	</ItemGroup>
+	<Target Name="PreBuild" BeforeTargets="BeforeCompile">
+		<Message Importance="high" Text="BeforeBuild target is starting..." />
+		<Exec Command="..\Unlimotion.AppName\builds\win-x64\Unlimotion.AppName.exe" />
+	</Target>
 </Project>
