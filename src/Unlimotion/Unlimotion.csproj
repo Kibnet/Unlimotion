@@ -35,6 +35,10 @@
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
 	</ItemGroup>
+	<PropertyGroup>
+		<!-- Установка препроцессорных директив на основе переменных окружения -->
+		<DefineConstants Condition="'$(GITHUB_ACTIONS)' == 'true'">$(DefineConstants);GITHUB_ACTIONS</DefineConstants>
+	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
