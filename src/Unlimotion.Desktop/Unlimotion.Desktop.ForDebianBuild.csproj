@@ -43,8 +43,4 @@
 			 <LinuxPath>/usr/bin/Unlimotion</LinuxPath>
 		</Content>
 	</ItemGroup>
-	<Target Name="PreBuild" BeforeTargets="BeforeCompile">
-		<Message Importance="high" Text="BeforeBuild target is starting..." />
-		<Exec Command="..\Unlimotion.AppName\builds\linux-x64\Unlimotion.AppName" />
-	</Target>
 </Project>

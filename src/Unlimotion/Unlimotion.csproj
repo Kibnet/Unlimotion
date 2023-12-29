@@ -35,4 +35,7 @@
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+	</ItemGroup>
 </Project>
