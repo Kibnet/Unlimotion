@@ -35,9 +35,14 @@ public class AppNameGenerator : ISourceGenerator
 
         sb.AppendLine("using Unlimotion.ViewModel;");
         sb.AppendLine("namespace Unlimotion.Services;");
+        sb.AppendLine(string.Empty);
+        
         sb.AppendLine("public partial class AppNameDefinitionService");
         sb.AppendLine("{");
-        sb.AppendLine($"        private string AppName = \"{fullName}\";");
+        sb.AppendLine("     public AppNameDefinitionService()");
+        sb.AppendLine("     {");
+        sb.AppendLine($"         AppName = \"{fullName}\";");
+        sb.AppendLine("     }");
         sb.AppendLine("}");
 
         // Add the source code to the compilation
