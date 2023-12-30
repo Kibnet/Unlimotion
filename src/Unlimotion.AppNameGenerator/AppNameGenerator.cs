@@ -18,12 +18,14 @@ public class AppNameGenerator : ISourceGenerator
         additionalAppName = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
 #else
         var branchName = RunGitCommand("symbolic-ref --short HEAD");
-        var commitHash = RunGitCommand("rev-parse HEAD");
+        var shortCommitHash = RunGitCommand("rev-parse HEAD");
+        if (shortCommitHash.Length >= 7)
+            shortCommitHash = shortCommitHash.Substring(0, 7);
 
         sb.Append('[');
         sb.Append(branchName);
         sb.Append(" -> ");
-        sb.Append(commitHash);
+        sb.Append(shortCommitHash);
         if (HasUncommittedChanges())
             sb.Append('*');
         sb.Append(']');
