@@ -18,8 +18,8 @@ public class AppNameGenerator : ISourceGenerator
         var appFullName = string.Empty;
         var sb = new StringBuilder();
 #if GITHUB_ACTIONS
-        additionalAppName = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
-        appFullName = $$"{DefaultAppName} {additionalAppName}";
+        var additionalAppName = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
+        appFullName = $"{DefaultAppName} {additionalAppName}";
 #else
         var mainSyntaxTree = context.Compilation.SyntaxTrees.First(x => x.HasCompilationUnitRoot);
         var directoryPath = Path.GetDirectoryName(mainSyntaxTree.FilePath);
