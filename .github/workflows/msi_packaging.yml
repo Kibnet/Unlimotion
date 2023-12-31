@@ -5,6 +5,9 @@ on:
     types:
       - published
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   advinst-aip-build:
     runs-on: windows-2022
