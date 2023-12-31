@@ -5,7 +5,7 @@ on:
     types:
       - published
 
-env:
+env:  
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -17,11 +17,6 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: ${{ github.sha }}
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '8.0.100'
 
     - name: Generate DebPkg
       run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{  github.ref_name }}
