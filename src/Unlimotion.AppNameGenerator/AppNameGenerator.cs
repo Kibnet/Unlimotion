@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 
@@ -9,32 +11,45 @@ namespace Unlimotion.AppGenerator;
 public class AppNameGenerator : ISourceGenerator
 {
     private const string DefaultAppName = "Unlimotion";
+    private static string callingProjectPath;
 
     public void Execute(GeneratorExecutionContext context)
     {
-        var additionalAppName = string.Empty;
+        var appFullName = string.Empty;
         var sb = new StringBuilder();
 #if GITHUB_ACTIONS
         additionalAppName = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
+        appFullName = $$"{DefaultAppName} {additionalAppName}";
 #else
-        var branchName = RunGitCommand("symbolic-ref --short HEAD");
-        var shortCommitHash = RunGitCommand("rev-parse HEAD");
-        if (shortCommitHash.Length >= 7)
-            shortCommitHash = shortCommitHash.Substring(0, 7);
-
-        sb.Append('[');
-        sb.Append(branchName);
-        sb.Append(" -> ");
-        sb.Append(shortCommitHash);
-        if (HasUncommittedChanges())
-            sb.Append('*');
-        sb.Append(']');
+        var mainSyntaxTree = context.Compilation.SyntaxTrees.First(x => x.HasCompilationUnitRoot);
+        var directoryPath = Path.GetDirectoryName(mainSyntaxTree.FilePath);
         
-        additionalAppName = sb.ToString();
-        sb.Clear();
-#endif
-        var fullName = $"{DefaultAppName} {additionalAppName}";
+        if (directoryPath != null)
+        {
+            callingProjectPath = directoryPath;
 
+            var branchName = RunGitCommand("symbolic-ref --short HEAD");
+            var shortCommitHash = RunGitCommand("rev-parse HEAD");
+            if (shortCommitHash.Length >= 7)
+                shortCommitHash = shortCommitHash.Substring(0, 7);
+
+            sb.Append(DefaultAppName);
+            if (HasUncommittedChanges())
+                sb.Append('*');
+            sb.Append(" [");
+            sb.Append(branchName);
+            sb.Append(" -> ");
+            sb.Append(shortCommitHash);
+            sb.Append(']');
+        
+            appFullName = sb.ToString();
+            sb.Clear();
+        }
+        else
+        {
+            appFullName = "AppNameGenerator: Calling project not found";
+        }
+#endif
         sb.AppendLine("using Unlimotion.ViewModel;");
         sb.AppendLine("namespace Unlimotion.Services;");
         sb.AppendLine(string.Empty);
@@ -43,7 +58,7 @@ public class AppNameGenerator : ISourceGenerator
         sb.AppendLine("{");
         sb.AppendLine("     public AppNameDefinitionService()");
         sb.AppendLine("     {");
-        sb.AppendLine($"         AppName = \"{fullName}\";");
+        sb.AppendLine($"         AppName = \"{appFullName}\";");
         sb.AppendLine("     }");
         sb.AppendLine("}");
 
@@ -64,7 +79,8 @@ public class AppNameGenerator : ISourceGenerator
             Arguments = arguments,
             RedirectStandardOutput = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = callingProjectPath
         };
 
         using var process = Process.Start(startInfo);
@@ -80,7 +96,8 @@ public class AppNameGenerator : ISourceGenerator
             Arguments = "diff --quiet HEAD --",
             UseShellExecute = false,
             RedirectStandardOutput = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = callingProjectPath
         };
 
         using var process = Process.Start(startInfo);
