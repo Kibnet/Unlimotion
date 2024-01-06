@@ -64,6 +64,7 @@ namespace Unlimotion.Desktop
             var mapper = AppModelMapping.ConfigureMapping();
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
             Locator.CurrentMutable.Register<IRemoteBackupService>(() => new BackupViaGitService());
+            Locator.CurrentMutable.RegisterConstant(new AppNameDefinitionService(), typeof(IAppNameDefinitionService));
 
             var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
 

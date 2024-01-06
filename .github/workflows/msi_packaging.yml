@@ -5,17 +5,21 @@ on:
     types:
       - published
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   advinst-aip-build:
     runs-on: windows-2022
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
       with:
         ref: ${{ github.sha }}
-
+        
     - name: Publish
-      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net7.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net7.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net8.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net8.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }}
 
     - name: Build AIP
       uses: caphyon/advinst-github-action@v1.0
@@ -35,5 +39,3 @@ jobs:
       with:
         file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
         tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

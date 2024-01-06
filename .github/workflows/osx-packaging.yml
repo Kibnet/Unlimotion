@@ -4,10 +4,14 @@ on:
   release:
     types:
       - published
+        
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   osx-build:
     runs-on: macos-latest
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -15,15 +19,15 @@ jobs:
         ref: ${{ github.sha }}
 
     - name: Publish
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{  github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ github.ref_name }}
 
     - name: Generate App
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{  github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{ github.ref_name }}
 
     - name: Generate Pkg
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{  github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{ github.ref_name }}
 
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1
       with:
-        files: ./*.pkg	
+        files: ./*.pkg
