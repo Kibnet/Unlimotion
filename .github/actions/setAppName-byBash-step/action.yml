@@ -9,7 +9,7 @@ runs:
         file_path=$(find . -type f -name "AppNameDefinitionService.cs")
         
         if [ -n "$file_path" ]; then
-         sed -i'' 's/ReleaseTag/${{ github.ref_name }}/g' "$file_path"
+         sed -i.bak 's/ReleaseTag/${{ github.ref_name }}/g' "$file_path"
         else
          echo "File not found."
          exit 1
