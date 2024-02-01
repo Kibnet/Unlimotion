@@ -469,7 +469,7 @@ namespace Unlimotion.ViewModel
             });
 
             Contains.ToObservableChangeSet()
-                .Throttle(TimeSpan.FromSeconds(2))
+                //.Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute();
@@ -477,7 +477,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
 
             Blocks.ToObservableChangeSet()
-                .Throttle(TimeSpan.FromSeconds(2))
+                //.Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(set =>
                 {
                     if (_isInited) SaveItemCommand.Execute();

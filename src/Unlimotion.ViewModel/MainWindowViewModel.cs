@@ -58,7 +58,7 @@ namespace Unlimotion.ViewModel
                 .AddToDisposeAndReturn(this);
             Settings.ConnectCommand = conn;
 
-            conn.Subscribe(RegisterCommands);
+            conn.Subscribe(RegisterCommands).AddToDispose(this);
             try
             {
                 conn.Execute().Wait();
