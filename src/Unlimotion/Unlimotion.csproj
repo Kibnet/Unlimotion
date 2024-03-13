@@ -26,7 +26,8 @@
 		<PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="$(AvaloniaVersion)" />
 		<PackageReference Include="AvaloniaGraphControl" Version="0.6.1" />
 		<PackageReference Include="LibGit2Sharp" Version="0.29.0" />
-		<PackageReference Include="Quartz" Version="3.7.0" />
+		<PackageReference Include="Mileeena.Notification.Avalonia" Version="2.1.2" />
+		<PackageReference Include="Quartz" Version="3.8.1" />
 		<PackageReference Include="ServiceStack.Client" Version="6.4.0" />
 		<PackageReference Include="SignalR.EasyUse.Client" Version="0.2.1" />
 	</ItemGroup>

@@ -14,6 +14,8 @@ namespace Unlimotion.ViewModel
     {
         private readonly ITaskStorage taskStorage;
         private readonly IDatabaseWatcher? dbWatcher;
+        public event EventHandler<EventArgs> Initiated;
+
         private Dictionary<string, HashSet<string>> blockedById { get; set; }
         private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
@@ -99,6 +101,8 @@ namespace Unlimotion.ViewModel
                 taskStorage.Updating += TaskStorageOnUpdating;
                 dbWatcher.OnUpdated += DbWatcherOnUpdated;
             }
+
+            OnInited();
         }
 
         private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
@@ -183,6 +187,11 @@ namespace Unlimotion.ViewModel
             }
             this.Tasks.AddOrUpdate(task);
             return task;
+        }
+
+        protected virtual void OnInited()
+        {
+            Initiated?.Invoke(this, EventArgs.Empty);
         }
     }
 }

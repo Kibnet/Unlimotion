@@ -67,5 +67,6 @@
 			</Setter>
 		</Style>
 		<dialogHostAvalonia:DialogHostStyles />
-	</Application.Styles>
+        <StyleInclude Source="avares://Notification.Avalonia/Themes/Generic.xaml" />
+    </Application.Styles>
 </Application>
