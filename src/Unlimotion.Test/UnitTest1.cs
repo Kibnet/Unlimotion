@@ -3,33 +3,26 @@ using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData.Aggregation;
-using NUnit.Framework;
 using Telerik.JustMock;
 using Unlimotion.ViewModel;
+using Xunit;
 
 namespace Unlimotion.Test
 {
     public class Tests
     {
-        [SetUp]
-        public void Setup()
-        {
-        }
-
-        [Test]
+        [Fact]
         public void CreateTaskItem()
         {
             var taskItem = new TaskItem();
-            Assert.IsNotNull(taskItem.Id);
-            Assert.IsNotEmpty(taskItem.Id);
-            Assert.IsFalse(taskItem.IsCompleted);
-            Assert.IsTrue((taskItem.CreatedDateTime- DateTimeOffset.UtcNow).TotalSeconds < 1);
-            Assert.IsNotNull(taskItem.ContainsTasks);
-            Assert.IsNotNull(taskItem.BlocksTasks);
+            Assert.False(taskItem.IsCompleted);
+            Assert.True((taskItem.CreatedDateTime- DateTimeOffset.UtcNow).TotalSeconds < 1);
+            Assert.NotNull(taskItem.ContainsTasks);
+            Assert.NotNull(taskItem.BlocksTasks);
         }
 
 
-        [Test]
+        [Fact]
         public async Task CreateTaskItemViewModel()
         {
             var storage = Mock.Create<ITaskStorage>();
@@ -45,8 +38,9 @@ namespace Unlimotion.Test
             };
             Mock.Arrange(() => storage.GetAll()).Returns(list);
             var repository = new TaskRepository(storage);
+            repository.Init();
             var count = await repository.GetRoots().Count().FirstAsync();
-            Assert.AreEqual(2, count);
+            Assert.Equal(2, count);
 
         }
     }

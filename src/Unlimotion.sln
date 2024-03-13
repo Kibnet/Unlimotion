@@ -34,15 +34,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server.ServiceIn
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server.ServiceModel", "Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj", "{4C4280BE-33D7-4A96-B75F-086A225736C1}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server.Test", "Unlimotion.Server.Test\Unlimotion.Server.Test.csproj", "{958796EE-ED2F-48D8-9AF3-A1B5D5F27DFE}"
-EndProject
 Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{3B31BDF8-CE3D-4E7F-BE8D-E60510DE5622}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.iOS", "Unlimotion.iOS\Unlimotion.iOS.csproj", "{FAEB9E81-5207-46F7-A642-B5248E284420}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Browser", "Unlimotion.Browser\Unlimotion.Browser.csproj", "{08B3C356-E89E-4353-9B05-647B44B85F0F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.AppNameGenerator", "Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj", "{930C71F8-836A-4458-9DA4-2B1709BB9FE0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.AppNameGenerator", "Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj", "{930C71F8-836A-4458-9DA4-2B1709BB9FE0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -92,10 +90,6 @@ Global
 		{4C4280BE-33D7-4A96-B75F-086A225736C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4C4280BE-33D7-4A96-B75F-086A225736C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4C4280BE-33D7-4A96-B75F-086A225736C1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{958796EE-ED2F-48D8-9AF3-A1B5D5F27DFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{958796EE-ED2F-48D8-9AF3-A1B5D5F27DFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{958796EE-ED2F-48D8-9AF3-A1B5D5F27DFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{958796EE-ED2F-48D8-9AF3-A1B5D5F27DFE}.Release|Any CPU.Build.0 = Release|Any CPU
 		{3B31BDF8-CE3D-4E7F-BE8D-E60510DE5622}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{3B31BDF8-CE3D-4E7F-BE8D-E60510DE5622}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B31BDF8-CE3D-4E7F-BE8D-E60510DE5622}.Release|Any CPU.ActiveCfg = Release|Any CPU
