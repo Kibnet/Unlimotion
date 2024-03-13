@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.1</TargetFramework>
+		<TargetFramework>net8.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AutoMapper" Version="12.0.0" />
+		<PackageReference Include="AutoMapper" Version="13.0.1" />
 		<PackageReference Include="RavenDB.Client" Version="5.4.4" />
 		<PackageReference Include="ServiceStack.Server" Version="6.4.0" />
 	</ItemGroup>
