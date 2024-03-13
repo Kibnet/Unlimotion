@@ -8,6 +8,7 @@ public interface ITaskRepository
 {
     SourceCache<TaskItemViewModel, string> Tasks { get; }
     void Init();
+    event EventHandler<EventArgs> Initiated;
     Task Remove(string itemId, bool deleteFile);
     Task Save(TaskItem item);
     Task<TaskItem> Load(string itemId);

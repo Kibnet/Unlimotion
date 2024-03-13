@@ -56,6 +56,12 @@ public class SettingsViewModel
         get => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Get<bool>();
         set => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Set(value);
     }
+
+    public bool GitShowStatusToasts
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.ShowStatusToasts)).Get<bool>();
+        set => _gitSettings.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(value);
+    }
     
     public string GitUserName
     {

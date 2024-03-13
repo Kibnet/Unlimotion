@@ -33,7 +33,10 @@ public class BackupViaGitService : IRemoteBackupService
                 }
             }
         }
-        catch (Exception ex) { }
+        catch (Exception ex)
+        {
+            ShowUiError(ex.Message);
+        }
 
         return result;
     }
@@ -52,7 +55,10 @@ public class BackupViaGitService : IRemoteBackupService
                 result.Add(remote.Name);
             }
         }
-        catch (Exception ex) { }
+        catch (Exception ex)
+        {
+            ShowUiError(ex.Message);
+        }
 
         return result;
     }
@@ -67,6 +73,7 @@ public class BackupViaGitService : IRemoteBackupService
 
             using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
 
+            ShowUiMessage("Start Git Push");
             if (repo.RetrieveStatus().IsDirty)
             {
                 Commands.Checkout(repo, settings.git.PushRefSpec);
@@ -76,6 +83,8 @@ public class BackupViaGitService : IRemoteBackupService
                 var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
 
                 repo.Commit(msg, committer, committer);
+
+                ShowUiMessage("Commit Created");
             }
 
             var options = new PushOptions
@@ -96,12 +105,13 @@ public class BackupViaGitService : IRemoteBackupService
                 try
                 {
                     repo.Network.Push(repo.Network.Remotes[settings.git.RemoteName], settings.git.PushRefSpec, options);
+                    ShowUiMessage("Push Successful");
                 }
                 catch (Exception e)
                 {
                     var errorMessage = $"Can't push the remote repository, because {e.Message}";
                     Debug.WriteLine(errorMessage);
-                    new Thread(() => ShowUiError(errorMessage)).Start();
+                    ShowUiError(errorMessage);
                 }
             }
         }
@@ -118,6 +128,7 @@ public class BackupViaGitService : IRemoteBackupService
 
             var refSpecs = repo.Network.Remotes[settings.git.RemoteName].FetchRefSpecs.Select(x => x.Specification);
 
+            ShowUiMessage("Start Git Pull");
             Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
             {
                 CredentialsProvider = (_, _, _) =>
@@ -144,12 +155,13 @@ public class BackupViaGitService : IRemoteBackupService
                 try
                 {
                     repo.Merge(remoteBranch, signature, new MergeOptions());
+                    ShowUiMessage("Merge Successful");
                 }
                 catch (Exception e)
                 {
                     var errorMessage = $"Can't merge remote branch to local branch, because {e.Message}";
                     Debug.WriteLine(errorMessage);
-                    new Thread(() => ShowUiError(errorMessage)).Start();
+                    ShowUiError(errorMessage);
                 }
 
                 if (stash != null)
@@ -157,6 +169,7 @@ public class BackupViaGitService : IRemoteBackupService
                     var stashIndex = repo.Stashes.ToList().IndexOf(stash);
                     var applyStatus = repo.Stashes.Apply(stashIndex);
 
+                    ShowUiMessage("Stash Applied");
                     if (applyStatus == StashApplyStatus.Applied)
                         repo.Stashes.Remove(stashIndex);
                 }
@@ -164,7 +177,7 @@ public class BackupViaGitService : IRemoteBackupService
                 if (repo.Index.Conflicts.Any())
                 {
                     const string errorMessage = "Fix conflicts and then commit the result";
-                    new Thread(() => ShowUiError(errorMessage)).Start();
+                    ShowUiError(errorMessage);
                 }
             }
         }
@@ -190,11 +203,18 @@ public class BackupViaGitService : IRemoteBackupService
 
     private static void ShowUiError(string message)
     {
-        Dispatcher.UIThread.InvokeAsync(() =>
+        Debug.WriteLine($"Git error: {message} at {DateTime.Now}");
+        var notify = Locator.Current.GetService<INotificationManagerWrapper>();
+        notify?.ErrorToast(message);
+    }
+
+    private static void ShowUiMessage(string message)
+    {
+        var settings = GetSettings();
+        if (settings.git.ShowStatusToasts)
         {
-            var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
-            notificationManager?.Ask("Git Error", message,
-                () => Debug.WriteLine($"User read the git error {message} at {DateTime.Now}"));
-        });
+            var notify = Locator.Current.GetService<INotificationManagerWrapper>();
+            notify?.SuccessToast(message);
+        }
     }
 }

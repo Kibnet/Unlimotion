@@ -17,6 +17,7 @@ public class TaskStorageSettings
 public class GitSettings
 {
     public bool BackupEnabled { get; set; } = false;
+    public bool ShowStatusToasts { get; set; } = true;
 
     public string UserName { get; set; } = "YourEmail";
     public string Password { get; set; } = "YourToken";

@@ -1,7 +1,10 @@
 using DialogHostAvalonia;
 using System;
 using System.Windows.Input;
+using Avalonia.Notification;
+using Avalonia.Threading;
 using ReactiveUI;
+using Splat;
 
 namespace Unlimotion;
 
@@ -19,6 +22,35 @@ public class NotificationManagerWrapper : ViewModel.INotificationManagerWrapper
 
         var id = DialogHost.Show(askViewModel);
         askViewModel.CloseAction = () => DialogHost.GetDialogSession("Ask")?.Close(false);
+    }
+
+
+    public void ErrorToast(string message)
+    {
+        var notify = Locator.Current.GetService<INotificationMessageManager>();
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            notify?.CreateMessage()
+            .Background("#DC483D")
+            .HasMessage(message)
+            .Dismiss().WithDelay(TimeSpan.FromSeconds(7))
+            .WithCloseButton()
+            .Queue();
+        });
+    }
+
+    public void SuccessToast(string message)
+    {
+        var notify = Locator.Current.GetService<INotificationMessageManager>();
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            notify?.CreateMessage()
+                .Background("#008800")
+                .HasMessage(message)
+                .Dismiss().WithDelay(TimeSpan.FromSeconds(7))
+                .WithCloseButton()
+                .Queue();
+        });
     }
 }
 

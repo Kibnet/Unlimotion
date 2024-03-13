@@ -58,6 +58,9 @@ namespace Unlimotion.ViewModel
         private void OnError(object sender, ErrorEventArgs e)
         {
             Debug.WriteLine("Error in FileWatcher");
+            var notify = Locator.Current.GetService<INotificationManagerWrapper>();
+            notify?.ErrorToast(e.GetException().Message);
+
         }
 
         private FileSystemEventHandler CreateThrottledEventHandler(

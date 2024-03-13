@@ -88,6 +88,7 @@ namespace Unlimotion.Desktop
                 var gitSection = configuration.GetSection("Git");
                 
                 gitSection.GetSection(nameof(GitSettings.BackupEnabled)).Set(false);
+                gitSection.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(gitSettings.ShowStatusToasts);
                 
                 gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
                 gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
@@ -102,23 +103,27 @@ namespace Unlimotion.Desktop
                 gitSection.GetSection(nameof(GitSettings.CommitterEmail)).Set(gitSettings.CommitterEmail);
             }
             
-            var pullJob = JobBuilder.Create<GitPullJob>()
-                .WithIdentity("GitPullJob", "GitPullJob")
-                .Build();
-            var pushJob = JobBuilder.Create<GitPushJob>()
-                .WithIdentity("GitPushJob", "GitPushJob")
-                .Build();
-                
-            var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                gitSettings.PullIntervalSeconds);
-            var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                gitSettings.PushIntervalSeconds);
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            taskRepository.Initiated += (sender, eventArgs) =>
+            {
+                var pullJob = JobBuilder.Create<GitPullJob>()
+                    .WithIdentity("GitPullJob", "Git")
+                    .Build();
+                var pushJob = JobBuilder.Create<GitPushJob>()
+                    .WithIdentity("GitPushJob", "Git")
+                    .Build();
 
-            scheduler.ScheduleJob(pullJob, pullTrigger);
-            scheduler.ScheduleJob(pushJob, pushTrigger);
+                var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
+                    gitSettings.PullIntervalSeconds);
+                var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
+                    gitSettings.PushIntervalSeconds);
 
-            if (gitSettings.BackupEnabled)
-                scheduler.Start();
+                scheduler.ScheduleJob(pullJob, pullTrigger);
+                scheduler.ScheduleJob(pushJob, pushTrigger);
+
+                if (gitSettings.BackupEnabled)
+                    scheduler.Start();
+            };
 
             BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
@@ -141,7 +146,6 @@ namespace Unlimotion.Desktop
         {
             return TriggerBuilder.Create()
                 .WithIdentity(name, group)
-                .StartNow()
                 .WithSimpleSchedule(x => x
                     .WithIntervalInSeconds(seconds)
                     .RepeatForever())

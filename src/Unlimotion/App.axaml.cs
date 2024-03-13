@@ -5,10 +5,12 @@ using System.Reactive;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Notification;
 #if LIVE
 using Live.Avalonia;
 #endif
 using ReactiveUI;
+using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
@@ -47,7 +49,7 @@ namespace Unlimotion
                 {
                     desktop.MainWindow = new MainWindow
                     {
-                        DataContext = new MainWindowViewModel(),
+                        DataContext = GetMainWindowViewModel(),
                     };
                 }
 
@@ -59,7 +61,17 @@ namespace Unlimotion
             {
                 singleViewPlatform.MainView = new MainControl
                 {
-                    DataContext = new MainWindowViewModel(),
+                    DataContext = GetMainWindowViewModel(),
+                };
+            }
+
+            MainWindowViewModel GetMainWindowViewModel()
+            {
+                var notificationMessageManager = new NotificationMessageManager();
+                Locator.CurrentMutable.RegisterConstant<INotificationMessageManager>(notificationMessageManager);
+                return new MainWindowViewModel
+                {
+                    ToastNotificationManager = notificationMessageManager
                 };
             }
 

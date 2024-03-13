@@ -829,6 +829,7 @@ namespace Unlimotion.ViewModel
         public DateFilter LastCreatedDateFilter { get; set; } = new();
         
         public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
+        public object ToastNotificationManager { get; set; }
     }
 
     [AddINotifyPropertyChangedInterface]
