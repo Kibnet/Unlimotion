@@ -28,7 +28,7 @@
 		<PackageReference Include="LibGit2Sharp" Version="0.29.0" />
 		<PackageReference Include="Mileeena.Notification.Avalonia" Version="2.1.2" />
 		<PackageReference Include="Quartz" Version="3.8.1" />
-		<PackageReference Include="ServiceStack.Client" Version="6.4.0" />
+		<PackageReference Include="ServiceStack.Client" Version="8.2.2" />
 		<PackageReference Include="SignalR.EasyUse.Client" Version="0.2.1" />
 	</ItemGroup>
 	<ItemGroup>
