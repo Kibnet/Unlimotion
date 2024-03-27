@@ -58,10 +58,9 @@ namespace Unlimotion.ViewModel
                 .AddToDisposeAndReturn(this);
             Settings.ConnectCommand = conn;
 
-            conn.Subscribe(RegisterCommands).AddToDispose(this);
             try
             {
-                conn.Execute().Wait();
+                conn.Execute();
             }
             catch (Exception e)
             {
@@ -70,7 +69,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private void RegisterCommands(Unit unit)
+        private void RegisterCommands()
         {
             CreateSibling = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -653,6 +652,7 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
+            RegisterCommands();
         }
 
         private void SelectCurrentTask()
