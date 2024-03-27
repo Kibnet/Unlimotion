@@ -30,38 +30,37 @@ namespace Unlimotion.ViewModel
             Settings = new SettingsViewModel(_configuration);
             Graph = new GraphViewModel();
             Locator.CurrentMutable.RegisterConstant(Settings);
-            ShowCompleted = _configuration.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
-            ShowArchived = _configuration.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
-            ShowWanted = _configuration.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
-            var sortName = _configuration.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
-            var sortNameForUnlocked = _configuration.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
+            ShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
+            ShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
+            ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
+            var sortName = _configuration?.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
+            var sortNameForUnlocked = _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
             CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.Name == sortNameForUnlocked) ?? SortDefinitions.First();
-            
+
             this.WhenAnyValue(m => m.ShowCompleted)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowCompleted").Set(b))
+                .Subscribe(b => _configuration?.GetSection("AllTasks:ShowCompleted").Set(b))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowArchived)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowArchived").Set(b))
+                .Subscribe(b => _configuration?.GetSection("AllTasks:ShowArchived").Set(b))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowWanted)
-                .Subscribe(b => _configuration.GetSection("AllTasks:ShowWanted").Set(b))
+                .Subscribe(b => _configuration?.GetSection("AllTasks:ShowWanted").Set(b))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
-                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
+                .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
-                .Subscribe(b => _configuration.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
+                .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
                 .AddToDispose(this);
 
             var conn = ReactiveCommand.CreateFromTask(Connect)
                 .AddToDisposeAndReturn(this);
             Settings.ConnectCommand = conn;
 
-            conn.Subscribe(RegisterCommands).AddToDispose(this);
             try
             {
-                conn.Execute().Wait();
+                conn.Execute();
             }
             catch (Exception e)
             {
@@ -70,7 +69,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private void RegisterCommands(Unit unit)
+        private void RegisterCommands()
         {
             CreateSibling = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -166,7 +165,7 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
 
-            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode, m=>m.GraphMode)
+            this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode, m => m.GraphMode)
                 .Subscribe((a) => { SelectCurrentTask(); })
                 .AddToDispose(connectionDisposableList);
 
@@ -215,7 +214,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
                 })
-                .OnItemUpdated((newItem,oldItem) =>
+                .OnItemUpdated((newItem, oldItem) =>
                 {
                     if (newItem.Id == CurrentTaskItem?.Id && newItem.Id == oldItem.Id) CurrentTaskItem = newItem;
                 })
@@ -227,8 +226,8 @@ namespace Unlimotion.ViewModel
             taskRepository.GetRoots()
                 .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
-                    m => m.IsCanBeCompleted, 
-                    m => m.IsCompleted, 
+                    m => m.IsCanBeCompleted,
+                    m => m.IsCompleted,
                     m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Filter(taskFilter)
                 .Transform(item =>
@@ -254,7 +253,7 @@ namespace Unlimotion.ViewModel
                 .Bind(out _currentItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
-            
+
             CurrentItems = _currentItems;
             #endregion Roots
 
@@ -276,7 +275,7 @@ namespace Unlimotion.ViewModel
                     filter.ShowTasks = true;
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
-                    filter.SortText = (first.Title??"").Replace(first.Emoji, "").Trim();
+                    filter.SortText = (first.Title ?? "").Replace(first.Emoji, "").Trim();
                     return filter;
                 })
                 .SortBy(f => f.SortText)
@@ -331,7 +330,7 @@ namespace Unlimotion.ViewModel
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
+
             var unlockedTimeFilter = UnlockedTimeFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
@@ -339,23 +338,23 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return UnlockedTimeFilter.IsUnlocked(task) && 
-                               (filter.All(e => e.ShowTasks == false) || 
+                        return UnlockedTimeFilter.IsUnlocked(task) &&
+                               (filter.All(e => e.ShowTasks == false) ||
                                filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
+
             this.WhenAnyValue(m => m.ArchivedDateFilter.CurrentOption, m => m.ArchivedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
                     if (!filter.Item2)
                         ArchivedDateFilter.SetDateTimes(filter.Item1);
                 });
-            
+
             var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To, m => m.ArchivedDateFilter.IsCustom)
                 .Select(filter =>
-                {   
+                {
                     bool Predicate(TaskItemViewModel task)
                     {
                         if (filter.Item1 == null || filter.Item2 == null)
@@ -374,7 +373,7 @@ namespace Unlimotion.ViewModel
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    m => m.IsCanBeCompleted, 
+                    m => m.IsCanBeCompleted,
                     m => m.IsCompleted,
                     m => m.UnlockedDateTime,
                     m => m.PlannedBeginDateTime,
@@ -424,7 +423,7 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
             Graph.UnlockedTasks = _FilteredItems;
-            
+
             this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
@@ -500,7 +499,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             ArchivedItems = _archivedItems;
-            
+
             this.WhenAnyValue(m => m.LastCreatedDateFilter.CurrentOption, m => m.LastCreatedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
@@ -509,7 +508,7 @@ namespace Unlimotion.ViewModel
                 });
 
             var lastCreatedDateFilter = this.WhenAnyValue(m => m.LastCreatedDateFilter.From, m => m.LastCreatedDateFilter.To, m => m.LastCreatedDateFilter.IsCustom)
-                
+
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)
@@ -533,7 +532,7 @@ namespace Unlimotion.ViewModel
                 .Filter(taskFilter)
                 .Filter(lastCreatedDateFilter)
                 .Filter(emojiFilter)
-                .Transform(item => 
+                .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
                     {
@@ -653,6 +652,7 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
+            RegisterCommands();
         }
 
         private void SelectCurrentTask()
@@ -775,7 +775,7 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _FilteredItems;
-        
+
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastCreatedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> LastCreatedItems { get; set; }
 
@@ -819,7 +819,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
-        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true, SortText = "\u0000"};
+        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true, SortText = "\u0000" };
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
@@ -827,8 +827,9 @@ namespace Unlimotion.ViewModel
         public DateFilter CompletedDateFilter { get; set; } = new();
         public DateFilter ArchivedDateFilter { get; set; } = new();
         public DateFilter LastCreatedDateFilter { get; set; } = new();
-        
+
         public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
+        public object TabItems { get; }
         public object ToastNotificationManager { get; set; }
     }
 

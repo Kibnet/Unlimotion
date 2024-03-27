@@ -30,7 +30,16 @@ public class ServerTaskStorage : ITaskStorage
         ServicePointManager.ServerCertificateValidationCallback +=
             (sender, cert, chain, sslPolicyErrors) => true;
         configuration = Locator.Current.GetService<IConfiguration>();
-        settings = configuration.Get<ClientSettings>("ClientSettings");
+
+        try
+        {
+            settings = configuration.Get<ClientSettings>("ClientSettings");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
         if (settings == null)
         {
             settings = new ClientSettings();
@@ -184,7 +193,7 @@ public class ServerTaskStorage : ITaskStorage
                 }
 
             });
-            
+
             _connection.Subscribe<ReceiveTaskItem>(async data =>
             {
                 //обновление задачи в реалтайме
@@ -194,7 +203,7 @@ public class ServerTaskStorage : ITaskStorage
                     Id = data.Id,
                 });
             });
-            
+
             _connection.Subscribe<DeleteTaskItem>(async data =>
             {
                 //удаление задачи в реалтайме
@@ -307,7 +316,7 @@ public class ServerTaskStorage : ITaskStorage
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.ExpireTime = tokenResult.ExpireTime;
             serviceClient.BearerToken = settings.AccessToken;
-            configuration.Set("ClientSettings", configuration);
+            configuration.Set("ClientSettings", settings);
             await Login();
             IsSignedIn = true;
         }
