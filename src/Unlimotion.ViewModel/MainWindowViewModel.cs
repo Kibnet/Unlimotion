@@ -22,7 +22,7 @@ namespace Unlimotion.ViewModel
 
         public MainWindowViewModel()
         {
-            Title = Locator.Current.GetService<IAppNameDefinitionService>().GetAppName();
+            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName();
             Locator.CurrentMutable.RegisterConstant(this);
             connectionDisposableList.AddToDispose(this);
             ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
