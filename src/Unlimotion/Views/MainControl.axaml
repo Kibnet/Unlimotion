@@ -280,6 +280,7 @@
                     <ScrollViewer IsVisible="{Binding DetailsAreOpen}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
                         <StackPanel Margin="10">
                             <WrapPanel>
+                                <Button Command="{Binding Create}">➕New</Button>
                                 <Button Command="{Binding CreateSibling}">➕Sibling</Button>
                                 <Button Command="{Binding CreateBlockedSibling}">➕🔒Sibling</Button>
                                 <Button Command="{Binding CreateInner}">➕Inner</Button>
