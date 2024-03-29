@@ -63,7 +63,7 @@
 
         <!--Панель навигации-->
         <SplitView Grid.Row="1" IsPaneOpen="{Binding DetailsAreOpen}"
-                   DisplayMode="CompactOverlay"
+                   DisplayMode="CompactInline"
                    UseLightDismissOverlayMode="False"
                    OpenPaneLength="{Binding #mainControl.Bounds.Width, Converter={converters:MinValueConverter}, ConverterParameter=600}"
                    CompactPaneLength="20"
