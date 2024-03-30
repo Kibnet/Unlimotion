@@ -7,6 +7,7 @@ using DynamicData;
 using DynamicData.Binding;
 using System.IO;
 using Unlimotion.ViewModel.Models;
+using System.Threading;
 
 namespace Unlimotion.ViewModel
 {
@@ -19,6 +20,12 @@ namespace Unlimotion.ViewModel
         private Dictionary<string, HashSet<string>> blockedById { get; set; }
         private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+        public bool isPause;
+
+        public void SetPause(bool pause)
+        {
+            isPause = pause;
+        }
 
         public TaskRepository(ITaskStorage taskStorage)
         {
@@ -53,6 +60,10 @@ namespace Unlimotion.ViewModel
 
         public async Task Save(TaskItem item)
         {
+            while (isPause)
+            {
+                Thread.SpinWait(1);
+            }
             await taskStorage.Save(item);
         }
 

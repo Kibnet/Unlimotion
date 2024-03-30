@@ -11,6 +11,7 @@ public interface ITaskRepository
     event EventHandler<EventArgs> Initiated;
     Task Remove(string itemId, bool deleteFile);
     Task Save(TaskItem item);
+    public void SetPause(bool pause);
     Task<TaskItem> Load(string itemId);
     IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
     TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations);

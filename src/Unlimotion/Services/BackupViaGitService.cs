@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using Avalonia.Threading;
+using DynamicData.Experimental;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Models;
 
 namespace Unlimotion.Services;
 
@@ -73,18 +76,28 @@ public class BackupViaGitService : IRemoteBackupService
 
             using var repo = new Repository(GetRepositoryPath(settings.repositoryPath));
 
+            var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
+
             ShowUiMessage("Start Git Push");
-            if (repo.RetrieveStatus().IsDirty)
+            try
             {
-                Commands.Checkout(repo, settings.git.PushRefSpec);
+                dbwatcher?.SetEnable(false);
+                if (repo.RetrieveStatus().IsDirty)
+                {
+                    Commands.Checkout(repo, settings.git.PushRefSpec);
 
-                Commands.Stage(repo, "*");
+                    Commands.Stage(repo, "*");
 
-                var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
+                    var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
 
-                repo.Commit(msg, committer, committer);
+                    repo.Commit(msg, committer, committer);
 
-                ShowUiMessage("Commit Created");
+                    ShowUiMessage("Commit Created");
+                }
+            }
+            finally
+            {
+                dbwatcher?.SetEnable(true);
             }
 
             var options = new PushOptions
@@ -104,6 +117,7 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 try
                 {
+                    dbwatcher?.SetEnable(false);
                     repo.Network.Push(repo.Network.Remotes[settings.git.RemoteName], settings.git.PushRefSpec, options);
                     ShowUiMessage("Push Successful");
                 }
@@ -112,6 +126,10 @@ public class BackupViaGitService : IRemoteBackupService
                     var errorMessage = $"Can't push the remote repository, because {e.Message}";
                     Debug.WriteLine(errorMessage);
                     ShowUiError(errorMessage);
+                }
+                finally
+                {
+                    dbwatcher?.SetEnable(true);
                 }
             }
         }
@@ -129,56 +147,94 @@ public class BackupViaGitService : IRemoteBackupService
             var refSpecs = repo.Network.Remotes[settings.git.RemoteName].FetchRefSpecs.Select(x => x.Specification);
 
             ShowUiMessage("Start Git Pull");
-            Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
+
+            var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            try
             {
-                CredentialsProvider = (_, _, _) =>
-                    new UsernamePasswordCredentials
+                dbwatcher?.SetEnable(false);
+                taskRepository?.SetPause(true);
+                Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
+                {
+                    CredentialsProvider = (_, _, _) =>
+                        new UsernamePasswordCredentials
+                        {
+                            Username = settings.git.UserName,
+                            Password = settings.git.Password
+                        }
+                }, string.Empty);
+
+                var localBranch = repo.Branches[settings.git.PushRefSpec];
+                var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
+
+                if (localBranch.Tip.Sha != remoteBranch.Tip.Sha)
+                {
+                    var changes = repo.Diff.Compare<TreeChanges>(localBranch.Tip.Tree, remoteBranch.Tip.Tree);
+
+                    var signature = new Signature(new Identity(settings.git.CommitterName, settings.git.CommitterEmail),DateTimeOffset.Now);
+
+                    var stash = repo.Stashes.Add(signature, "Stash before merge");
+
+                    Commands.Checkout(repo, settings.git.PushRefSpec);
+
+                    try
                     {
-                        Username = settings.git.UserName,
-                        Password = settings.git.Password
+                        var results = repo.Merge(remoteBranch, signature, new MergeOptions());
+
+                        var configuration = Locator.Current.GetService<IConfiguration>();
+                        var mainSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+                        // Выводим список измененных файлов
+                        foreach (var change in changes)
+                        {
+                            var fullPath = Path.Combine(mainSettings.Path, change.Path);
+                            UpdateType mode;
+                             switch (change.Status)
+                            {
+                                case ChangeKind.Added:
+                                case ChangeKind.Modified:
+                                case ChangeKind.Renamed:
+                                case ChangeKind.Copied:
+                                    mode = UpdateType.Saved;
+                                    break;
+                                case ChangeKind.Deleted:
+                                    mode = UpdateType.Removed;
+                                    break;
+                                default:
+                                    continue;
+                            }
+                            dbwatcher.ForceUpdateFile(fullPath, mode);
+                        }
+                        ShowUiMessage("Merge Successful");
                     }
-            }, string.Empty);
+                    catch (Exception e)
+                    {
+                        var errorMessage = $"Can't merge remote branch to local branch, because {e.Message}";
+                        Debug.WriteLine(errorMessage);
+                        ShowUiError(errorMessage);
+                    }
 
-            var localBranch = repo.Branches[settings.git.PushRefSpec];
-            var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
+                    if (stash != null)
+                    {
+                        var stashIndex = repo.Stashes.ToList().IndexOf(stash);
+                        var applyStatus = repo.Stashes.Apply(stashIndex);
 
-            if (localBranch.Tip.Sha != remoteBranch.Tip.Sha)
+                        ShowUiMessage("Stash Applied");
+                        if (applyStatus == StashApplyStatus.Applied)
+                            repo.Stashes.Remove(stashIndex);
+                    }
+
+                    if (repo.Index.Conflicts.Any())
+                    {
+                        const string errorMessage = "Fix conflicts and then commit the result";
+                        ShowUiError(errorMessage);
+                    }
+                }
+            }
+            finally
             {
-                var signature = new Signature(
-                    new Identity(settings.git.CommitterName, settings.git.CommitterEmail),
-                    DateTimeOffset.Now);
+                dbwatcher?.SetEnable(true);
 
-                var stash = repo.Stashes.Add(signature, "Stash before merge");
-
-                Commands.Checkout(repo, settings.git.PushRefSpec);
-
-                try
-                {
-                    repo.Merge(remoteBranch, signature, new MergeOptions());
-                    ShowUiMessage("Merge Successful");
-                }
-                catch (Exception e)
-                {
-                    var errorMessage = $"Can't merge remote branch to local branch, because {e.Message}";
-                    Debug.WriteLine(errorMessage);
-                    ShowUiError(errorMessage);
-                }
-
-                if (stash != null)
-                {
-                    var stashIndex = repo.Stashes.ToList().IndexOf(stash);
-                    var applyStatus = repo.Stashes.Apply(stashIndex);
-
-                    ShowUiMessage("Stash Applied");
-                    if (applyStatus == StashApplyStatus.Applied)
-                        repo.Stashes.Remove(stashIndex);
-                }
-
-                if (repo.Index.Conflicts.Any())
-                {
-                    const string errorMessage = "Fix conflicts and then commit the result";
-                    ShowUiError(errorMessage);
-                }
+                taskRepository?.SetPause(false);
             }
         }
     }
