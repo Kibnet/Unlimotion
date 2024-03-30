@@ -20,6 +20,21 @@ namespace Unlimotion.ViewModel
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
         private readonly DebugLogger logger = new();
+        private bool isEnable;
+
+        public void SetEnable(bool enable)
+        {
+            isEnable = enable;
+        }
+
+        public void ForceUpdateFile(string filename, UpdateType type)
+        {
+            OnUpdated?.Invoke(this, new DbUpdatedEventArgs
+            {
+                Id = filename,
+                Type = type
+            });
+        }
 
         public FileDbWatcher(string path)
         {
@@ -43,6 +58,7 @@ namespace Unlimotion.ViewModel
             //todo Добавить логер и логировать ошибки
             watcher.Error += OnError;
             watcher.IncludeSubdirectories = true;
+            isEnable = true;
             watcher.EnableRaisingEvents = true;
         }
 
@@ -68,6 +84,9 @@ namespace Unlimotion.ViewModel
         {
             return (s, e) =>
             {
+                if (isEnable == false)
+                    return;
+
                 var fullPath = e.FullPath;
                 
                 if (fullPath.Contains(GitFolderName) || fullPath.EndsWith(GitOrigPostfix))
@@ -85,6 +104,9 @@ namespace Unlimotion.ViewModel
 
         private void OnChanged(object sender, FileSystemEventArgs e)
         {
+            if (isEnable == false)
+                return;
+
             lock (itLock)
             {
                 var fileInfo = new FileInfo(e.FullPath);

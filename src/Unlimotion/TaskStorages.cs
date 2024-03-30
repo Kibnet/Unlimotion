@@ -122,6 +122,7 @@ namespace Unlimotion
             {
                 taskStorage = new ServerTaskStorage(settings?.URL);
                 dbWatcher = null;
+                Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             }
             else
             {
@@ -129,10 +130,12 @@ namespace Unlimotion
                 try
                 {
                     dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
+                    Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
                 }
                 catch (Exception ex)
                 {
                     dbWatcher = null;
+                    Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
                 }
             }
 
