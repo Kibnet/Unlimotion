@@ -71,6 +71,15 @@ namespace Unlimotion.ViewModel
 
         private void RegisterCommands()
         {
+            Create = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+                await task.SaveItemCommand.Execute();
+                CurrentTaskItem = task;
+                SelectCurrentTask();
+
+            }).AddToDisposeAndReturn(connectionDisposableList);
             CreateSibling = ReactiveCommand.CreateFromTask(async () =>
             {
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
@@ -790,6 +799,8 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentItemParents { get; private set; }
         public TaskWrapperViewModel CurrentItemBlocks { get; private set; }
         public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; }
+
+        public ICommand Create { get; set; }
 
         public ICommand CreateSibling { get; set; }
 
