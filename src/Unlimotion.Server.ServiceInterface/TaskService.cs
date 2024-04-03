@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Raven.Client.Documents.BulkInsert;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
+using System;
 
 namespace Unlimotion.Server.ServiceInterface
 {
@@ -18,6 +19,19 @@ namespace Unlimotion.Server.ServiceInterface
         public IDocumentStore DocumentStore { get; set; }
         public IMapper Mapper { get; set; }
         private const string TaskPrefix = "TaskItem/";
+        public enum Period
+        { 
+           currentDay,
+           currentWeek,
+           currentMonth,
+           currentQuarter,
+           currentYear,
+           lastTwoDays,
+           lastWeek,
+           lastMonth,
+           lastYear,
+           allTime
+        }
 
         [Authenticate]
         public async Task<TaskItemPage> Get(GetAllTasks request)
@@ -26,6 +40,48 @@ namespace Unlimotion.Server.ServiceInterface
             var uid = session.UserAuthId;
             var tasks = await RavenSession.Query<TaskItem>()
                 .Where(chat => chat.UserId == uid)
+                .ToListAsync();
+            return new TaskItemPage
+            {
+                Tasks = tasks.Select(e => Mapper.Map<TaskItemMold>(e)).ToList()
+            };
+        }
+
+        [Authenticate]
+        public async Task<TaskItemPage> Get(GetUnlockedTasks request)
+        {
+            var session = Request.ThrowIfUnauthorized();
+            var uid = session.UserAuthId;
+            var tasks = await RavenSession.Query<TaskItem>()
+                .Where(task => task.UserId == uid && task.UnlockedDateTime != null)
+                .ToListAsync();
+            return new TaskItemPage
+            {
+                Tasks = tasks.Select(e => Mapper.Map<TaskItemMold>(e)).ToList()
+            };
+        }
+
+        [Authenticate]
+        public async Task<TaskItemPage> Get(GetCompletedTasks request)
+        {
+            var session = Request.ThrowIfUnauthorized();
+            var uid = session.UserAuthId;
+            var tasks = await RavenSession.Query<TaskItem>()
+                .Where(task => task.UserId == uid && task.CompletedDateTime != null)
+                .ToListAsync();
+            return new TaskItemPage
+            {
+                Tasks = tasks.Select(e => Mapper.Map<TaskItemMold>(e)).ToList()
+            };
+        }
+
+        [Authenticate]
+        public async Task<TaskItemPage> Get(GetArchivedTasks request)
+        {
+            var session = Request.ThrowIfUnauthorized();
+            var uid = session.UserAuthId;
+            var tasks = await RavenSession.Query<TaskItem>()
+                .Where(task => task.UserId == uid && task.ArchiveDateTime != null)
                 .ToListAsync();
             return new TaskItemPage
             {

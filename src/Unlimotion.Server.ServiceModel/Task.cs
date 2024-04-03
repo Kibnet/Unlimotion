@@ -35,6 +35,24 @@ namespace Unlimotion.Server.ServiceModel
 
     [Api("Task")]
     [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
+    [Route("/tasks/unlocked", "GET", Summary = "Получение списка доступных для выполнения задач", Notes = "Получение списка доступных для выполнения задач")]
+    public class GetUnlockedTasks : IReturn<TaskItemPage>
+    { }
+
+    [Api("Task")]
+    [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
+    [Route("/tasks/completed", "GET", Summary = "Получение списка завершенных задач", Notes = "Получение списка завершенных задач")]
+    public class GetCompletedTasks : IReturn<TaskItemPage>
+    { }
+
+    [Api("Task")]
+    [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
+    [Route("/tasks/archived", "GET", Summary = "Получение списка архивированных задач", Notes = "Получение списка архивированных задач")]
+    public class GetArchivedTasks : IReturn<TaskItemPage>
+    { }
+
+    [Api("Task")]
+    [ApiResponse(HttpStatusCode.BadRequest, "Неверно составлен запрос", ResponseType = typeof(void))]
     [Route("/tasks/bulk", "POST", Summary = "Массовая загрузка списка задач", Notes = "Массовая загрузка списка задач")]
     public class BulkInsertTasks : IReturnVoid
     {
