@@ -87,20 +87,22 @@ namespace Unlimotion.ViewModel
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                await task.SaveItemCommand.Execute();
+                //await task.SaveItemCommand.Execute();
                 if (CurrentTaskItem != null)
                 {
                     if (AllTasksMode && CurrentItem?.Parent != null)
                     {
-                        CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                        //CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
+                        await ((TaskRepository)taskRepository).UpdateAsync(task, CurrentItem.Parent.TaskItem, BLL.Action.AddChild);
                     }
                     else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
-                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);
+                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id); //это пока оставила, потом вернусь 
+                        taskRepository.Tasks.AddOrUpdate(task);
                     }
                 }
 
-                taskRepository.Tasks.AddOrUpdate(task);
+                //taskRepository.Tasks.AddOrUpdate(task);
 
                 CurrentTaskItem = task;
                 SelectCurrentTask();
@@ -124,9 +126,11 @@ namespace Unlimotion.ViewModel
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                await task.SaveItemCommand.Execute();
-                CurrentTaskItem.Contains.Add(task.Id);
-                taskRepository.Tasks.AddOrUpdate(task);
+                //await task.SaveItemCommand.Execute();
+                //CurrentTaskItem.Contains.Add(task.Id);
+                //taskRepository.Tasks.AddOrUpdate(task);
+                await ((TaskRepository)taskRepository).UpdateAsync(task, CurrentTaskItem, BLL.Action.AddChild);
+
 
                 CurrentTaskItem = task;
                 SelectCurrentTask();
