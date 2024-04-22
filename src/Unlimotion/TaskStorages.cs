@@ -5,8 +5,12 @@ using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
 using Quartz;
+using AutoMapper;
 using ITrigger = Quartz.ITrigger;
- 
+using Unlimotion.TaskTree;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+
 namespace Unlimotion
 {
     public static class TaskStorages
@@ -17,6 +21,7 @@ namespace Unlimotion
         {
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
+            var mapper = Locator.Current.GetService<IMapper>();
             settingsViewModel.ObservableForProperty(m => m.IsServerMode)
                 .Subscribe(c =>
                 {
@@ -59,7 +64,10 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
+                var tasks = new List<TaskItem>();
+                await foreach (var task in fileTaskStorage.GetAll())
+                    tasks.Add(task);
+                await serverTaskStorage.BulkInsert(tasks);
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -70,29 +78,27 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = serverTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in serverTaskStorage.GetAll())
                 {
-                    task.Id = task.Id.Replace("TaskItem/", "");
-                    if (task.BlocksTasks != null)
-                    {
+                      task.Id = task.Id.Replace("TaskItem/", "");
+                      if (task.BlocksTasks != null)
+                      {
                         task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    if (task.ContainsTasks != null)
-                    {
+                      }
+                      if (task.ContainsTasks != null)
+                      {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    await fileTaskStorage.Save(task);
+                      }
+                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = fileTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in fileTaskStorage.GetAll())
                 {
-                    await fileTaskStorage.Save(task);
+                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
@@ -163,6 +169,8 @@ namespace Unlimotion
                 dbWatcher = null;
                 Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             }
+            var taskTreeManager = new TaskTreeManager((IStorage)taskStorage);
+            taskStorage.TaskTreeManager = taskTreeManager;
             return taskStorage;
         }
 
@@ -170,6 +178,7 @@ namespace Unlimotion
         {
             var storagePath = GetStoragePath(path);
             var taskStorage = new FileTaskStorage(storagePath);
+            Locator.CurrentMutable.RegisterConstant(taskStorage, typeof(FileTaskStorage));
             return taskStorage;
         }
 

@@ -14,5 +14,5 @@ public interface ITaskRepository
     public void SetPause(bool pause);
     Task<TaskItem> Load(string itemId);
     IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots();
-    TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations);
+    Task <TaskItemViewModel> Clone(TaskItem clone, params TaskItemViewModel[] destinations);
 }

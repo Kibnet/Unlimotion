@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -19,16 +20,18 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class TaskItemViewModel : DisposableList
     {
-        public TaskItemViewModel(TaskItem model, ITaskRepository taskRepository)
+        public TaskItemViewModel(TaskItem model, ITaskStorage taskStorage)
         {
             Model = model;
-            Init(taskRepository);
+            _taskStorage = taskStorage;
+            Init(taskStorage);
         }
 
+        private ITaskStorage _taskStorage;
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
                                             (BlockedByTasks.All(m => m.IsCompleted != false));
 
-        public ReactiveCommand<Unit, Unit> SaveItemCommand;
+        public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
         private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
@@ -41,14 +44,12 @@ namespace Unlimotion.ViewModel
         private DateCommands commands = null;
         public SetDurationCommands SetDurationCommands { get; set; }
 
-        private void Init(ITaskRepository taskRepository)
+        private void Init(ITaskStorage taskStorage)
         {
             SetDurationCommands = new SetDurationCommands(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var model = Model;
-                await taskRepository.Save(model);
-                Id = model.Id;
+                 await taskStorage.Update(this);
             });
 
             //Subscribe ContainsTasks
@@ -60,53 +61,11 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(containsFilter)
                 .Bind(out _containsTasks)
                 .Subscribe()
-                .AddToDispose(this);
-
-            //Subscribe for set Parent for children
-            ContainsTasks.ToObservableChangeSet()
-                .Subscribe(set =>
-                {
-                    foreach (var change in set)
-                    {
-                        switch (change.Reason)
-                        {
-                            case ListChangeReason.Add:
-                                change.Item.Current.Parents.Add(Id);
-                                break;
-                            case ListChangeReason.AddRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.Parents.Add(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Replace:
-                                break;
-                            case ListChangeReason.Remove:
-                                change.Item.Current.Parents.Remove(Id);
-                                break;
-                            case ListChangeReason.RemoveRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.Parents.Remove(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Refresh:
-                                break;
-                            case ListChangeReason.Moved:
-                                break;
-                            case ListChangeReason.Clear:
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-                    }
-                }).AddToDispose(this);
+                .AddToDispose(this);            
 
             //Subscribe ParentsTasks
             var parentsFilter = Parents.ToObservableChangeSet()
@@ -117,7 +76,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(parentsFilter)
                 .Bind(out _parentsTasks)
                 .Subscribe()
@@ -149,53 +108,11 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(blocksFilter)
                 .Bind(out _blocksTasks)
                 .Subscribe()
-                .AddToDispose(this);
-
-            //Subscribe for set BlockedBy for Blocks
-            BlocksTasks.ToObservableChangeSet()
-                .Subscribe(set =>
-                {
-                    foreach (var change in set)
-                    {
-                        switch (change.Reason)
-                        {
-                            case ListChangeReason.Add:
-                                change.Item.Current.BlockedBy.Add(Id);
-                                break;
-                            case ListChangeReason.AddRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Add(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Replace:
-                                break;
-                            case ListChangeReason.Remove:
-                                change.Item.Current.BlockedBy.Remove(Id);
-                                break;
-                            case ListChangeReason.RemoveRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Remove(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Refresh:
-                                break;
-                            case ListChangeReason.Moved:
-                                break;
-                            case ListChangeReason.Clear:
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-                    }
-                }).AddToDispose(this);
+                .AddToDispose(this);            
 
             //Subscribe BlockedBy
             var blockedByFilter = BlockedBy.ToObservableChangeSet()
@@ -206,14 +123,14 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(blockedByFilter)
                 .Bind(out _blockedByTasks)
                 .Subscribe()
                 .AddToDispose(this);
 
             //Subscribe IsCompleted
-            this.WhenAnyValue(m => m.IsCompleted).Subscribe(b =>
+            this.WhenAnyValue(m => m.IsCompleted).Subscribe(async b =>
             {
                 if (b == true && CompletedDateTime == null)
                 {
@@ -224,6 +141,7 @@ namespace Unlimotion.ViewModel
                         var clone = new TaskItem
                         {
                             BlocksTasks = Model.BlocksTasks.ToList(),
+                            BlockedByTasks = Model.BlockedByTasks.ToList(),
                             ContainsTasks = Model.ContainsTasks.ToList(),
                             Description = Model.Description,
                             Title = Model.Title,
@@ -236,7 +154,7 @@ namespace Unlimotion.ViewModel
                             clone.PlannedEndDateTime =
                                 clone.PlannedBeginDateTime.Value.Add(PlannedEndDateTime.Value - PlannedBeginDateTime.Value);
                         }
-                        var cloned = taskRepository.Clone(clone, ParentsTasks.ToArray());
+                        var cloned = await taskStorage.Clone(new TaskItemViewModel(clone, taskStorage), ParentsTasks.ToArray());
                     }
                 }
 
@@ -330,38 +248,14 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            RemoveFunc = parent =>
-            {
-                if (parent == null)
-                {
-                    foreach (var model in ParentsTasks.ToList())
-                    {
-                        model.Contains.Remove(Id);
-                    }
-                }
-                //Удаление ссылки из родителя
-                parent?.Contains.Remove(Id);
-                //Если родителей не осталось, удаляется сама задача
-                if (Parents.Count == 0)
-                {
-                    taskRepository.Remove(Id, true);
+            RemoveFunc = async () => await (taskStorage.Delete(this));            
 
-                    foreach (var containsTask in ContainsTasks.ToList())
-                    {
-                        containsTask.Parents.Remove(Id);
-                    }
-
-                    return true;
-                }
-
-                return false;
-            };
-
-            CloneFunc = destination =>
+            CloneFunc = async destination =>
             {
                 var clone = new TaskItem
                 {
                     BlocksTasks = Model.BlocksTasks.ToList(),
+                    BlockedByTasks = Model.BlockedByTasks.ToList(),
                     ContainsTasks = Model.ContainsTasks.ToList(),
                     Description = Model.Description,
                     Title = Model.Title,
@@ -369,22 +263,23 @@ namespace Unlimotion.ViewModel
                     Repeater = Model.Repeater,
                     Wanted = Model.Wanted,
                 };
-                return taskRepository.Clone(clone, destination);
+                var vm = new TaskItemViewModel(clone, taskStorage);
+                return await taskStorage.Clone(vm, destination);
             };
 
-            UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                m =>
+            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
+                (m) =>
                 {
-                    this.Blocks.Remove(m.Id);
+                    taskStorage.Unblock(this, m);
                     return Unit.Default;
                 });
 
-            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                m =>
+            DeleteParentChildRelationCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
+                (m) =>
                 {
-                    m.Blocks.Remove(Id);
+                    taskStorage.RemoveParentChildConnection(this, m);
                     return Unit.Default;
-                });
+                });            
 
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
@@ -414,7 +309,7 @@ namespace Unlimotion.ViewModel
                     .Throttle(TimeSpan.FromSeconds(10))
                     .Subscribe(x =>
                     {
-                        if (_isInited) SaveItemCommand.Execute();
+                        if (_isInited) SaveItemCommand.Execute();                                                                        
                     }
                     )
                     .AddToDispose(this);
@@ -474,23 +369,7 @@ namespace Unlimotion.ViewModel
                         //Обнуляем период
                         plannedPeriod = null;
                 }
-            });
-
-            Contains.ToObservableChangeSet()
-                //.Throttle(TimeSpan.FromSeconds(2))
-                .Subscribe(set =>
-                {
-                    if (_isInited) SaveItemCommand.Execute();
-                })
-                .AddToDispose(this);
-
-            Blocks.ToObservableChangeSet()
-                //.Throttle(TimeSpan.FromSeconds(2))
-                .Subscribe(set =>
-                {
-                    if (_isInited) SaveItemCommand.Execute();
-                })
-                .AddToDispose(this);
+            });            
 
             this.WhenAnyValue(t => t.Repeater)
                 .Subscribe(r =>
@@ -551,8 +430,8 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; }
-        public Func<TaskItemViewModel, bool> RemoveFunc { get; set; }
-        public Func<TaskItemViewModel, TaskItemViewModel> CloneFunc { get; set; }
+        public Func<Task<bool>> RemoveFunc { get; set; }
+        public Func<TaskItemViewModel, Task<TaskItemViewModel>> CloneFunc { get; set; }
 
         public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId) ? Parents.Count == 1 : Parents.Count == 0);
 
@@ -574,8 +453,11 @@ namespace Unlimotion.ViewModel
                     Importance = Importance,
                     Wanted = Wanted,
                     IsCompleted = IsCompleted,
+                    PrevVersion = PrevVersion,
                     BlocksTasks = Blocks.ToList(),
+                    BlockedByTasks = BlockedBy.ToList(),
                     ContainsTasks = Contains.ToList(),
+                    ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model,
                 };
             set
@@ -585,11 +467,12 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public string Id { get; private set; }
+        public string Id { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public bool IsCanBeCompleted { get; private set; }
         public bool? IsCompleted { get; set; }
+        public bool PrevVersion { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
@@ -608,7 +491,7 @@ namespace Unlimotion.ViewModel
 
         public TimeSpan? PlannedDuration { get; set; }
         public int Importance { get; set; }
-        public bool Wanted { get; set; }
+        public bool Wanted { get; set; }        
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
@@ -628,28 +511,27 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<string> Blocks { get; set; } = new();
         public ObservableCollection<string> BlockedBy { get; set; } = new();
 
-        public ICommand UnblockCommand { get; set; }
-        public ICommand UnblockMeCommand { get; set; }
-
-        public void CopyInto(TaskItemViewModel destination)
+        public ICommand UnblockCommand { get; set; }        
+        public ICommand DeleteParentChildRelationCommand { get; set; }
+        
+        public async Task CopyInto(TaskItemViewModel destination)
         {
-            destination.Contains.Add(Id);
+            await _taskStorage.CopyInto(this, [destination]);
         }
 
-        public void MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
+        public async Task MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
         {
-            destination.Contains.Add(Id);
-            source?.Contains?.Remove(Id);
+            await _taskStorage.MoveInto(this, [destination], source);
         }
 
-        public TaskItemViewModel CloneInto(TaskItemViewModel destination)
+        public async Task<TaskItemViewModel> CloneInto(TaskItemViewModel destination)
         {
-            return CloneFunc.Invoke(destination);
+            return await CloneFunc.Invoke(destination);
         }
 
-        public void BlockBy(TaskItemViewModel blocker)
+        public async void BlockBy(TaskItemViewModel blocker)
         {
-            blocker.Blocks.Add(Id);
+            await _taskStorage.Block(this, blocker);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()
@@ -784,9 +666,13 @@ namespace Unlimotion.ViewModel
             if (Importance != taskItem.Importance) Importance = taskItem.Importance;
             if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
             if (IsCompleted != taskItem.IsCompleted) IsCompleted = taskItem.IsCompleted;
+            if (PrevVersion != taskItem.PrevVersion) PrevVersion = taskItem.PrevVersion;
+
 
             SynchronizeCollections(Blocks, taskItem.BlocksTasks);
+            SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
             SynchronizeCollections(Contains, taskItem.ContainsTasks);
+            SynchronizeCollections(Parents, taskItem.ParentTasks);
 
             if (taskItem.Repeater != null)
             {
@@ -812,7 +698,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
+        public static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
         {
             if (observableCollection == null)
             {

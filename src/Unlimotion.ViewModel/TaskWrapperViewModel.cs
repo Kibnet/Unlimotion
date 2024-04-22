@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -79,7 +80,8 @@ public class TaskWrapperViewModel : DisposableList
         _actions = actions;
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _actions.RemoveAction.Invoke(this);
+            if (_actions.RemoveAction != null) 
+                _actions.RemoveAction?.Invoke(this);
         });
     }
 

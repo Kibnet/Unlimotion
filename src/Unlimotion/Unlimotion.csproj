@@ -32,6 +32,8 @@
 		<PackageReference Include="SignalR.EasyUse.Client" Version="0.2.1" />
 	</ItemGroup>
 	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.Server.Domain\Unlimotion.Server.Domain.csproj" />
+		<ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
