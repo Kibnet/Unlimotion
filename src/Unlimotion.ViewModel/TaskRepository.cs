@@ -8,6 +8,8 @@ using DynamicData.Binding;
 using System.IO;
 using Unlimotion.ViewModel.Models;
 using System.Threading;
+using Unlimotion.ViewModel.BLL;
+
 
 namespace Unlimotion.ViewModel
 {
@@ -203,6 +205,61 @@ namespace Unlimotion.ViewModel
         protected virtual void OnInited()
         {
             Initiated?.Invoke(this, EventArgs.Empty);
+        }
+        public async Task UpdateAsync(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
+        {
+            var taskChange = GetTaskChange(change, parent, action);
+
+            switch (action)
+            {
+                case BLL.Action.AddChild:
+                    {
+                        await Save(change.Model);
+                        taskChange.Id = change.Model.Id;
+                        var treeChange = await TaskTreeManager.ProcessTaskChangeAsync(taskChange, this);
+                        foreach (var item in treeChange)
+                        {
+                            Tasks.AddOrUpdate(item);
+                        }
+                    }
+                    break;
+                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
+            }                      
+        }
+
+        public void Update(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
+        {
+            switch (action)
+            {
+                case BLL.Action.SetParent:
+                    change.Parents.Add(parent.Id);
+                    break;
+                case BLL.Action.RemoveParent:
+                    change.Parents.Remove(parent.Id);
+                    break;
+                case BLL.Action.RemoveContains:
+                    parent.Contains.Remove(change.Id);
+                    break;
+                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
+            }
+        }
+
+        private TaskChange GetTaskChange(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
+        {
+            return new TaskChange
+            {
+                Id = change.Id,
+                Parent = parent,
+                Action = action,
+                Title = change.Title,
+                Description = change.Description,
+                IsCompleted = change.IsCompleted,
+                PlannedBeginDateTime = change.PlannedBeginDateTime,
+                PlannedEndDateTime = change.PlannedEndDateTime,
+                PlannedDuration = change.PlannedDuration,
+                Importance = change.Importance,
+                Wanted = change.Wanted
+            };
         }
     }
 }

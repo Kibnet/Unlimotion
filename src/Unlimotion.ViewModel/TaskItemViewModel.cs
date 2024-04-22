@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -67,32 +68,34 @@ namespace Unlimotion.ViewModel
             //Subscribe for set Parent for children
             ContainsTasks.ToObservableChangeSet()
                 .Subscribe(set =>
-                {
+                { 
                     foreach (var change in set)
                     {
                         switch (change.Reason)
                         {
                             case ListChangeReason.Add:
-                                change.Item.Current.Parents.Add(Id);
+                                //change.Item.Current.Parents.Add(Id);
+                                ((TaskRepository)taskRepository).Update(change.Item.Current, this, BLL.Action.SetParent); 
                                 break;
                             case ListChangeReason.AddRange:
                                 foreach (var model in change.Range)
                                 {
-                                    model.Parents.Add(Id);
+                                    //model.Parents.Add(Id);
+                                    ((TaskRepository)taskRepository).Update(model, this, BLL.Action.SetParent);
                                 }
-
                                 break;
                             case ListChangeReason.Replace:
                                 break;
                             case ListChangeReason.Remove:
-                                change.Item.Current.Parents.Remove(Id);
+                                //change.Item.Current.Parents.Remove(Id);
+                                ((TaskRepository)taskRepository).Update(change.Item.Current, this, BLL.Action.RemoveParent);
                                 break;
                             case ListChangeReason.RemoveRange:
                                 foreach (var model in change.Range)
                                 {
-                                    model.Parents.Remove(Id);
+                                    //model.Parents.Remove(Id);
+                                    ((TaskRepository)taskRepository).Update(model, this, BLL.Action.RemoveParent);
                                 }
-
                                 break;
                             case ListChangeReason.Refresh:
                                 break;
@@ -335,11 +338,15 @@ namespace Unlimotion.ViewModel
                 {
                     foreach (var model in ParentsTasks.ToList())
                     {
-                        model.Contains.Remove(Id);
+                        //model.Contains.Remove(Id);
+                        ((TaskRepository)taskRepository).Update(this, model, BLL.Action.RemoveContains);                        
                     }
                 }
                 //Удаление ссылки из родителя
-                parent?.Contains.Remove(Id);
+                //parent?.Contains.Remove(Id);
+                if (parent != null)
+                    ((TaskRepository)taskRepository).Update(this, parent, BLL.Action.RemoveContains);
+                
                 //Если родителей не осталось, удаляется сама задача
                 if (Parents.Count == 0)
                 {
@@ -347,7 +354,8 @@ namespace Unlimotion.ViewModel
 
                     foreach (var containsTask in ContainsTasks.ToList())
                     {
-                        containsTask.Parents.Remove(Id);
+                        //containsTask.Parents.Remove(Id);
+                        ((TaskRepository)taskRepository).Update(containsTask, this, BLL.Action.RemoveParent);
                     }
 
                     return true;
