@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -230,42 +231,6 @@ namespace Unlimotion.ViewModel
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
-            //Bind Roots
-            #region Roots
-            taskRepository.GetRoots()
-                .AutoRefreshOnObservable(m => m.Contains.ToObservableChangeSet())
-                .AutoRefreshOnObservable(m => m.WhenAny(
-                    m => m.IsCanBeCompleted,
-                    m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
-                .Filter(taskFilter)
-                .Transform(item =>
-                {
-                    if (item.Parents.Count > 0)
-                    {
-                        return null;
-                    }
-                    var actions = new TaskWrapperActions()
-                    {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
-                        SortComparer = sortObservable,
-                        Filter = taskFilter,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .Filter(m => m != null)
-                .Sort(sortObservable)
-                .TreatMovesAsRemoveAdd()
-                .Bind(out _currentItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
-
-            CurrentItems = _currentItems;
-            #endregion Roots
-
             //Bind Emoji
             #region Emoji
             taskRepository.Tasks
@@ -281,7 +246,8 @@ namespace Unlimotion.ViewModel
 
                     var first = m.Cache.Items.First();
                     var filter = new EmojiFilter();
-                    filter.ShowTasks = true;
+                    filter.Source = first;
+                    filter.ShowTasks = false;
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
                     filter.SortText = (first.Title ?? "").Replace(first.Emoji, "").Trim();
@@ -377,6 +343,62 @@ namespace Unlimotion.ViewModel
                 });
             #endregion Emoji
 
+            //Bind Roots
+            #region Roots
+
+            var emojiRootFilter = _emojiFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.All(e => e.ShowTasks == false))
+                        {
+                            return task.Parents.Count == 0;
+                        }
+                        foreach (var item in filter.Where(e => e.ShowTasks))
+                        {
+                            if (task.Id == item.Source?.Id)
+                                return true;
+                        }
+
+                        return false;
+                    }
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
+                .AutoRefreshOnObservable(m => m.WhenAny(
+                    m => m.IsCanBeCompleted,
+                    m => m.IsCompleted,
+                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                .Filter(taskFilter)
+                .Filter(emojiRootFilter)
+                .Transform(item =>
+                {
+                    var actions = new TaskWrapperActions()
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = RemoveTask,
+                        GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
+                        SortComparer = sortObservable,
+                        Filter = new() { taskFilter },
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions);
+                    return wrapper;
+                })
+                .Sort(sortObservable)
+                .TreatMovesAsRemoveAdd()
+                .Bind(out _currentItems)
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+
+            CurrentItems = _currentItems;
+            #endregion Roots
+
             //Bind Unlocked
             #region Unlocked
             taskRepository.Tasks
@@ -423,7 +445,7 @@ namespace Unlimotion.ViewModel
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        Filter = taskFilter,
+                        Filter = new() { taskFilter },
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -830,7 +852,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
 
-        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = true, SortText = "\u0000" };
+        public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
@@ -851,5 +873,6 @@ namespace Unlimotion.ViewModel
         public string Emoji { get; set; }
         public bool ShowTasks { get; set; }
         public string SortText { get; set; }
+        public TaskItemViewModel Source { get; set; }
     }
 }
