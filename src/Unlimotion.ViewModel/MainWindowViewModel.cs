@@ -131,7 +131,7 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
             }).AddToDisposeAndReturn(connectionDisposableList);
 
-            Remove = ReactiveCommand.Create(() => RemoveTaskItem(CurrentItem.TaskItem));
+            Remove = ReactiveCommand.CreateFromTask(async () => RemoveTaskItem(CurrentItem.TaskItem));
 
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentItem)
