@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using DynamicData;
 using DynamicData.Aggregation;
+using DynamicData.PLinq;
 using Telerik.JustMock;
 using Unlimotion.ViewModel;
 using Xunit;
@@ -39,7 +41,7 @@ namespace Unlimotion.Test
             Mock.Arrange(() => storage.GetAll()).Returns(list);
             var repository = new TaskRepository(storage);
             repository.Init();
-            var count = await repository.GetRoots().Count().FirstAsync();
+            var count = await repository.Tasks.Connect().Filter(m => m.Parents.Count == 0).Count().FirstAsync();
             Assert.Equal(2, count);
 
         }
