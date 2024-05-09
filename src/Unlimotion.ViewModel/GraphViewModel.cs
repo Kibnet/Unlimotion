@@ -20,9 +20,8 @@ public class GraphViewModel
 
     public bool UpdateGraph { get; set; }
 
-    public bool OnlyUnlocked { get; set; } = true;
-    public bool HideUnactual { get; set; }
-
+    public bool OnlyUnlocked { get; set; }
+    
     public bool? ShowWanted { get=> mwm.ShowWanted; set=> mwm.ShowWanted = value; }
 
     public bool ShowCompleted { get=> mwm.ShowCompleted; set=> mwm.ShowCompleted=value; }

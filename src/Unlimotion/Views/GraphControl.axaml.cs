@@ -46,7 +46,6 @@ namespace Unlimotion.Views
                 {
                     dc.WhenAnyValue(
                             m => m.OnlyUnlocked,
-                            m => m.HideUnactual,
                             m => m.ShowArchived,
                             m => m.ShowCompleted,
                             m => m.ShowWanted)
@@ -77,11 +76,11 @@ namespace Unlimotion.Views
 
             if (dc.OnlyUnlocked)
             {
-                BuildFromTasks(dc.UnlockedTasks, dc.HideUnactual);
+                BuildFromTasks(dc.UnlockedTasks);
             }
             else
             {
-                BuildFromTasks(dc.Tasks, dc.HideUnactual);
+                BuildFromTasks(dc.Tasks);
             }
         }
 
@@ -90,7 +89,7 @@ namespace Unlimotion.Views
         /// </summary>
         /// <param name="tasks"></param>
         /// <param name="hideUnactual"></param>
-        private void BuildFromTasks(ReadOnlyObservableCollection<TaskWrapperViewModel> tasks, bool hideUnactual)
+        private void BuildFromTasks(ReadOnlyObservableCollection<TaskWrapperViewModel> tasks)
         {
             // Инициализация графа и установка его ориентации
             var graph = new AvaloniaGraphControl.Graph();
@@ -99,78 +98,60 @@ namespace Unlimotion.Views
             // Инициализация коллекций для хранения информации о задачах и связях между ними
             var hashSet = new HashSet<TaskItemViewModel>();
             var haveLinks = new HashSet<TaskItemViewModel>();
-            var queue = new Queue<TaskItemViewModel>();
+            var queue = new Queue<TaskWrapperViewModel>();
 
             // Добавление всех задач из списка tasks в очередь для обработки
             foreach (var task in tasks)
             {
-                queue.Enqueue(task.TaskItem);
+                queue.Enqueue(task);
             }
 
             // Обработка задач из очереди, пока очередь не станет пустой
             while (queue.TryDequeue(out var task))
             {
-                // Если задача завершена и указано скрывать незначимые, пропускаем обработку
-                if (hideUnactual && task.IsCompleted != false)
-                {
-                    continue;
-                }
-
                 // Получение ID задач, содержащихся в текущей задаче
-                var containsTaskIds = task.ContainsTasks.Select(e => e.Id);
+                var containsTaskIds = task.SubTasks.Select(e => e.TaskItem.Id);
 
                 // Если задача еще не обработана
-                if (!hashSet.Contains(task))
+                if (!hashSet.Contains(task.TaskItem))
                 {
                     // Обработка задач, содержащихся в текущей задаче
-                    foreach (var containsTask in task.ContainsTasks)
+                    foreach (var containsTask in task.SubTasks)
                     {
-                        // Если содержащаяся задача завершена и указано скрывать незначимые, пропускаем обработку
-                        if (hideUnactual && containsTask.IsCompleted != false)
-                        {
-                            continue;
-                        }
-
                         // Проверка, блокирует ли содержащаяся задача другую задачу или имеет блокировщика
-                        var childBlocksAnotherChild = containsTask.Blocks.Any(item => containsTaskIds.Where(id => id != containsTask.Id).Contains(item));
-                        var hasChildBlocksBlocker = containsTask.Blocks.Any(item => task.BlockedBy.Contains(item));
+                        var childBlocksAnotherChild = containsTask.TaskItem.Blocks.Any(item => containsTaskIds.Where(id => id != containsTask.TaskItem.Id).Contains(item));
+                        var hasChildBlocksBlocker = containsTask.TaskItem.Blocks.Any(item => task.TaskItem.BlockedBy.Contains(item));
 
                         // Если содержащаяся задача не блокирует другую задачу и не имеет блокировщика, добавляем связь
                         if (!hasChildBlocksBlocker && !childBlocksAnotherChild)
                         {
-                            graph.Edges.Add(new ContainEdge(containsTask, task));
+                            graph.Edges.Add(new ContainEdge(containsTask.TaskItem, task.TaskItem));
                         }
 
                         // Добавляем содержащуюся задачу и текущую задачу в список задач, имеющих связи
-                        haveLinks.Add(containsTask);
-                        haveLinks.Add(task);
+                        haveLinks.Add(containsTask.TaskItem);
+                        haveLinks.Add(task.TaskItem);
 
                         // Если содержащаяся задача еще не обработана, добавляем ее в очередь для обработки
-                        if (!hashSet.Contains(containsTask))
+                        if (!hashSet.Contains(containsTask.TaskItem))
                         {
                             queue.Enqueue(containsTask);
                         }
                     }
 
                     // Обработка задач, блокирующих текущую задачу
-                    foreach (var blocks in task.BlocksTasks)
+                    foreach (var blocks in task.TaskItem.BlocksTasks)
                     {
-                        // Если блокирующая задача завершена и указано скрывать незначимые, пропускаем обработку
-                        if (hideUnactual && blocks.IsCompleted != false)
-                        {
-                            continue;
-                        }
-
                         // Добавление связи блокировки между текущей задачей и блокирующей задачей
-                        graph.Edges.Add(new BlockEdge(task, blocks));
+                        graph.Edges.Add(new BlockEdge(task.TaskItem, blocks));
 
                         // Добавление блокирующей задачи и текущей задачи в список задач, имеющих связи
                         haveLinks.Add(blocks);
-                        haveLinks.Add(task);
+                        haveLinks.Add(task.TaskItem);
                     }
 
                     // Добавление текущей задачи в список обработанных задач
-                    hashSet.Add(task);
+                    hashSet.Add(task.TaskItem);
                 }
             }
 

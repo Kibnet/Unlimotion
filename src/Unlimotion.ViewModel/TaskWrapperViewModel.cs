@@ -16,7 +16,7 @@ public class TaskWrapperActions
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
-    public IObservable<Func<TaskItemViewModel, bool>> Filter = Filters.Default;
+    public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
 
@@ -97,8 +97,15 @@ public class TaskWrapperViewModel : DisposableList
             if (_subTasks == null)
             {
                 var tasks = _actions.ChildSelector.Invoke(TaskItem);
+                if (_actions.Filter.Count > 0)
+                {
+                    foreach (var filter in _actions.Filter)
+                    {
+                        tasks = tasks.Filter(filter);
+                    }
+                }
+
                 tasks
-                    .Filter(_actions.Filter)
                     .Transform(model => new TaskWrapperViewModel(this, model, _actions))
                     .Sort(_actions.SortComparer)
                     .Bind(out _subTasks)

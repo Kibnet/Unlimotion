@@ -66,7 +66,7 @@ namespace Unlimotion.ViewModel
         {
             lock (itLock)
             {
-                ignoredTasks.Add(taskId, itLock,  new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(5) });
+                ignoredTasks.Add(taskId, itLock,  new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(60) });
                 logger.Write($"{DateTimeOffset.Now}: ${taskId} is added to ignored", LogLevel.Debug);
             }
         }

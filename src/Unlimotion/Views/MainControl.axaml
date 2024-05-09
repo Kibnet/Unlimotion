@@ -85,6 +85,7 @@
                     <TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
+                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>

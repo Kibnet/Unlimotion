@@ -215,7 +215,10 @@ namespace Unlimotion.ViewModel
                 case BLL.Action.AddChild:
                     {
                         await Save(change.Model);
+<<<<<<< HEAD
                         taskChange.Id = change.Model.Id;
+=======
+>>>>>>> 09f238ecf9e67168094dd7f715b1e882f3227d11
                         var treeChange = await TaskTreeManager.ProcessTaskChangeAsync(taskChange, this);
                         foreach (var item in treeChange)
                         {
