@@ -8,7 +8,6 @@ using DynamicData.Binding;
 using System.IO;
 using Unlimotion.ViewModel.Models;
 using System.Threading;
-using Unlimotion.ViewModel.BLL;
 
 
 namespace Unlimotion.ViewModel
@@ -190,15 +189,17 @@ namespace Unlimotion.ViewModel
             return roots;
         }
 
-        public TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations)
+        public async Task<TaskItemViewModel> Clone(TaskItem clone, params TaskItemViewModel[] destinations)
         {
             var task = new TaskItemViewModel(clone, this);
-            task.SaveItemCommand.Execute();
-            foreach (var destination in destinations)
+            //task.SaveItemCommand.Execute();
+            /*foreach (var destination in destinations)
             {
                 destination.Contains.Add(task.Id);
-            }
-            this.Tasks.AddOrUpdate(task);
+            }*/
+            await UpdateStorageAsync(task, TaskAction.Clone, null, destinations);
+            //this.Tasks.AddOrUpdate(task);
+
             return task;
         }
 
@@ -206,63 +207,70 @@ namespace Unlimotion.ViewModel
         {
             Initiated?.Invoke(this, EventArgs.Empty);
         }
-        public async Task UpdateAsync(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
+        public async Task<bool> UpdateStorageAsync(TaskItemViewModel change, TaskAction action, TaskItemViewModel? currentTask = null, TaskItemViewModel[]? additionalParents = null)
         {
-            var taskChange = GetTaskChange(change, parent, action);
-
             switch (action)
             {
-                case BLL.Action.AddChild:
+                case TaskAction.Add:
                     {
-                        await Save(change.Model);
-<<<<<<< HEAD
-                        taskChange.Id = change.Model.Id;
-=======
->>>>>>> 09f238ecf9e67168094dd7f715b1e882f3227d11
-                        var treeChange = await TaskTreeManager.ProcessTaskChangeAsync(taskChange, this);
-                        foreach (var item in treeChange)
+                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask!.Model);
+                        foreach (var task in taskItemList)
                         {
-                            Tasks.AddOrUpdate(item);
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                            
                         }
+                        return true;
+                    }                    
+                case TaskAction.Delete:
+                    {
+                        var parentsItemList = await new TaskTreeManager().DeleteTask(change.Model, taskStorage);
+                        foreach (var parent in parentsItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(parent, this));
+                        }
+                        Tasks.Remove(change);
+                        return true;
                     }
-                    break;
-                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
-            }                      
-        }
+                case TaskAction.Update:
+                    {
+                        await new TaskTreeManager().UpdateTask(change.Model, taskStorage);
+                        return true;
+                    }
+                case TaskAction.Clone:
+                    {
+                        if (additionalParents == null) throw new ArgumentNullException("Stepparents aren't provided");
+                        
+                        var taskItemList = await new TaskTreeManager().CloneTask(change, taskStorage, additionalParents);
+                        foreach (var task in taskItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        return true;
+                    }
+                case TaskAction.CopyInto:
+                    {
+                        if (additionalParents == null) throw new ArgumentNullException("Additional parent isn't provided");
 
-        public void Update(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
-        {
-            switch (action)
-            {
-                case BLL.Action.SetParent:
-                    change.Parents.Add(parent.Id);
-                    break;
-                case BLL.Action.RemoveParent:
-                    change.Parents.Remove(parent.Id);
-                    break;
-                case BLL.Action.RemoveContains:
-                    parent.Contains.Remove(change.Id);
-                    break;
-                _: throw new NotImplementedException("Передан неизвестный тип действия над таском");
-            }
-        }
+                        var taskItemList = await new TaskTreeManager().CopyTaskInto(change.Model, taskStorage, additionalParents[0]);
+                        foreach (var task in taskItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        return true;
+                    }
+                case TaskAction.MoveInto:
+                    {
+                        if (additionalParents == null) throw new ArgumentNullException("New parent isn't provided");
+                        if (currentTask == null) throw new ArgumentNullException("Current parent isn't provided");
 
-        private TaskChange GetTaskChange(TaskItemViewModel change, TaskItemViewModel parent, BLL.Action action)
-        {
-            return new TaskChange
-            {
-                Id = change.Id,
-                Parent = parent,
-                Action = action,
-                Title = change.Title,
-                Description = change.Description,
-                IsCompleted = change.IsCompleted,
-                PlannedBeginDateTime = change.PlannedBeginDateTime,
-                PlannedEndDateTime = change.PlannedEndDateTime,
-                PlannedDuration = change.PlannedDuration,
-                Importance = change.Importance,
-                Wanted = change.Wanted
-            };
-        }
+                        var taskItemList = await new TaskTreeManager().MoveTaskInto(change.Model, taskStorage, currentTask, additionalParents[0]);
+                        foreach (var task in taskItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        return true;
+                    }
+                default: return false;
+            }            
+        }              
     }
 }

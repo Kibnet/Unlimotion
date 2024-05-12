@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Microsoft.Extensions.Configuration;
@@ -166,7 +167,7 @@ namespace Unlimotion.Views
             return false;
         }
 
-        public static void Drop(object sender, DragEventArgs e)
+        public static async Task Drop(object sender, DragEventArgs e)
         {
             if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
             {
@@ -175,7 +176,7 @@ namespace Unlimotion.Views
                 if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
                 {
                     e.DragEffects &= DragDropEffects.Copy;
-                    subItem.CloneInto(task);
+                    await subItem.CloneInto(task);
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }
@@ -202,7 +203,7 @@ namespace Unlimotion.Views
                         if (!breakFlag)
                         {
                             e.DragEffects &= DragDropEffects.Move;
-                            subItem.MoveInto(task, parent);
+                            await subItem.MoveInto(task, parent);
                             UpdateGraph(e.Source);
                             e.Handled = true;
                         }
@@ -232,7 +233,7 @@ namespace Unlimotion.Views
                     if (subItem.CanMoveInto(task))
                     {
                         e.DragEffects &= DragDropEffects.Copy;
-                        subItem.CopyInto(task);
+                        await subItem.CopyInto(task);
                         UpdateGraph(e.Source);
                         e.Handled = true;
                     }

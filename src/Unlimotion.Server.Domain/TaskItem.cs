@@ -18,6 +18,7 @@ namespace Unlimotion.Server.Domain
         public DateTimeOffset? PlannedEndDateTime { get; set; }
         public TimeSpan? PlannedDuration { get; set; }
         public List<string> ContainsTasks { get; set; }
+        public List<string>? ParentTasks { get; set; }
         public List<string> BlocksTasks { get; set; }
         public RepeaterPattern Repeater { get; set; }
         public int Importance { get; set; }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
@@ -15,6 +16,7 @@ public class TaskWrapperActions
 {
     public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
     public Action<TaskWrapperViewModel> RemoveAction;
+    public Func<TaskWrapperViewModel, Task>? RemoveFunc;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
     public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
@@ -80,6 +82,7 @@ public class TaskWrapperViewModel : DisposableList
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             _actions.RemoveAction.Invoke(this);
+            await _actions.RemoveFunc?.Invoke(this);
         });
     }
 
