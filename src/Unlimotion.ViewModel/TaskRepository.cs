@@ -216,7 +216,8 @@ namespace Unlimotion.ViewModel
                         var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask?.Model);
                         foreach (var task in taskItemList)
                         {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                            
+                            change.Id = task.Id;
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                           
                         }
                         return true;
                     }                    
