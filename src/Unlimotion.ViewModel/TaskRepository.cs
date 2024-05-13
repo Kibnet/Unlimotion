@@ -213,7 +213,7 @@ namespace Unlimotion.ViewModel
             {
                 case TaskAction.Add:
                     {
-                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask!.Model);
+                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask?.Model);
                         foreach (var task in taskItemList)
                         {
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                            
