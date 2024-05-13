@@ -69,6 +69,7 @@ namespace Unlimotion
             {
                 var notificationMessageManager = new NotificationMessageManager();
                 Locator.CurrentMutable.RegisterConstant<INotificationMessageManager>(notificationMessageManager);
+                RxApp.DefaultExceptionHandler = new ObservableExceptionHandler();
                 return new MainWindowViewModel
                 {
                     ToastNotificationManager = notificationMessageManager
