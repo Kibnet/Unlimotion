@@ -8,6 +8,7 @@ using DynamicData.Binding;
 using System.IO;
 using Unlimotion.ViewModel.Models;
 using System.Threading;
+using System.Data;
 
 
 namespace Unlimotion.ViewModel
@@ -220,7 +221,17 @@ namespace Unlimotion.ViewModel
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                           
                         }
                         return true;
-                    }                    
+                    }
+                case TaskAction.AddChild:
+                    {
+                        var taskItemList = await new TaskTreeManager().AddChildTask(change.Model, taskStorage, currentTask!.Model);
+                        foreach (var task in taskItemList)
+                        {                            
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        change.Id = taskItemList.OrderBy(item => item.Id).First().Id;
+                        return true;
+                    }
                 case TaskAction.Delete:
                     {
                         var parentsItemList = await new TaskTreeManager().DeleteTask(change.Model, taskStorage);

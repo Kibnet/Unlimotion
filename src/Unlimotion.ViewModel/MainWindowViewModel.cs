@@ -131,7 +131,7 @@ namespace Unlimotion.ViewModel
                 //await task.SaveItemCommand.Execute();
                 //CurrentTaskItem.Contains.Add(task.Id);
                 //taskRepository.Tasks.AddOrUpdate(task);
-                await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentTaskItem);
+                await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.AddChild, CurrentTaskItem);
 
 
                 CurrentTaskItem = task;

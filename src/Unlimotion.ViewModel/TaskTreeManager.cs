@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DynamicData;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -17,7 +18,7 @@ public class TaskTreeManager
             result.Add(change);
             return result;
         }
-        //CreateSibling, CreateInner
+        //CreateSibling
         else
         {
             foreach (var parent in currentTask.ParentTasks)
@@ -35,6 +36,22 @@ public class TaskTreeManager
 
             return result;
         }
+    }
+    public async Task<List<TaskItem>> AddChildTask(TaskItem change, ITaskStorage taskStorage, TaskItem currentTask)
+    {
+        var result = new List<TaskItem>();
+
+        //CreateInner
+        change.ParentTasks.Add(currentTask.Id);
+        await taskStorage.Save(change);
+
+        currentTask.ContainsTasks.Add(change.Id);        
+        await taskStorage.Save(currentTask);
+        
+        result.Add(change);
+        result.Add(currentTask);
+
+        return result;        
     }
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, ITaskStorage taskStorage)
     {
