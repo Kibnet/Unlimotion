@@ -85,7 +85,7 @@ namespace Unlimotion.ViewModel
 
                 if (taskItem.BlocksTasks.Any())
                 {
-                    foreach (var blocksTask in taskItem.BlocksTasks)
+                    foreach (var blocksTask in taskItem.BlocksTasks.Where(s => s != null))
                     {
                         AddBlockedBy(blocksTask, taskItem);
                     }
@@ -153,6 +153,7 @@ namespace Unlimotion.ViewModel
 
         public void AddBlockedBy(string blocksTask, TaskItem taskItem)
         {
+            if (blocksTask == null) return;
             if (!blockedById.TryGetValue(blocksTask, out var hashSet))
             {
                 hashSet = new HashSet<string>();
@@ -164,6 +165,7 @@ namespace Unlimotion.ViewModel
 
         public void RemoveBlockedBy(string subTask, string taskItemId)
         {
+            if (subTask == null) return;
             if (blockedById.TryGetValue(subTask, out var hashSet))
             {
                 hashSet.Remove(taskItemId);
