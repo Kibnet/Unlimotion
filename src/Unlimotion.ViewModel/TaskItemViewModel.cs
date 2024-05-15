@@ -423,31 +423,38 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.PlannedBeginDateTime).Subscribe(b =>
             {
                 //Если есть начальная и конечная дата
-                if (b.HasValue && PlannedEndDateTime != null)
+                if (b.HasValue)
                 {
-                    //Если есть вычисленный период
-                    if (plannedPeriod.HasValue)
+                    if (PlannedEndDateTime != null)
                     {
-                        //Вычисляется новая конечная дата
-                        var newValue = b.Value.Add(plannedPeriod.Value);
-                        //Если есть изменения
-                        if (PlannedEndDateTime != newValue)
+                        //Если есть вычисленный период
+                        if (plannedPeriod.HasValue)
                         {
-                            //Меняем дату
-                            PlannedEndDateTime = newValue;
+                            //Вычисляется новая конечная дата
+                            var newValue = b.Value.Add(plannedPeriod.Value);
+                            //Если есть изменения
+                            if (PlannedEndDateTime != newValue)
+                            {
+                                //Меняем дату
+                                PlannedEndDateTime = newValue;
+                            }
+                        }
+                        //Если нет вычисленного периода
+                        else
+                        {
+                            //Если начало раньше либо равно концу
+                            if (b.Value <= PlannedEndDateTime)
+                                //Вычисляем период
+                                plannedPeriod = PlannedEndDateTime - b.Value;
+                            //Если начало позже конца
+                            else
+                                //Обнуляем период
+                                plannedPeriod = null;
                         }
                     }
-                    //Если нет вычисленного периода
                     else
                     {
-                        //Если начало раньше либо равно концу
-                        if (b.Value <= PlannedEndDateTime)
-                            //Вычисляем период
-                            plannedPeriod = PlannedEndDateTime - b.Value;
-                        //Если начало позже конца
-                        else
-                            //Обнуляем период
-                            plannedPeriod = null;
+                        PlannedEndDateTime = b.Value;
                     }
                 }
             });
