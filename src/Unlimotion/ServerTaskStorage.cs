@@ -124,9 +124,10 @@ public class ServerTaskStorage : ITaskStorage
 
     public async Task<TaskItem> Load(string itemId)
     {
+    {
         try
         {
-            var task = serviceClient.GetAsync(new GetTask()).Result;
+            var task = await serviceClient.GetAsync(new GetTask() { Id=itemId });
             var mapped = mapper.Map<TaskItem>(task);
             return mapped;
         }

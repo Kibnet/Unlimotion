@@ -21,9 +21,10 @@ public class TaskTreeManager
         //CreateSibling
         else
         {
+            await taskStorage.Save(change);
             foreach (var parent in currentTask.ParentTasks)
             {
-                change.ParentTasks.Add(parent);
+                change.ParentTasks.Add(parent);                
 
                 TaskItem parentTask = await taskStorage.Load(parent);
                 parentTask.ContainsTasks.Add(change.Id);

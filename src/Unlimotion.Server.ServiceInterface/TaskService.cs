@@ -34,7 +34,7 @@ namespace Unlimotion.Server.ServiceInterface
         }
 
         [Authenticate]
-        public async Task<TaskItemMold> Get(GetTask request)
+        public async Task<TaskItemMold> GetAsync(GetTask request)
         {
             var session = Request.ThrowIfUnauthorized();
             var task = await RavenSession.Query<TaskItem>()

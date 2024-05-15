@@ -229,7 +229,7 @@ namespace Unlimotion.ViewModel
                         {                            
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
                         }
-                        change.Id = taskItemList.OrderBy(item => item.Id).First().Id;
+                        change.Id = taskItemList.OrderByDescending(item => item.Id).First().Id;
                         return true;
                     }
                 case TaskAction.Delete:
