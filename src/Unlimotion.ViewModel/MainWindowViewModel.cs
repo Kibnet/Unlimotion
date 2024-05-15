@@ -92,11 +92,11 @@ namespace Unlimotion.ViewModel
                 //await task.SaveItemCommand.Execute();
                 if (CurrentTaskItem != null)
                 {
-                    if (AllTasksMode && CurrentItem?.Parent != null)
+                    if (AllTasksMode)
                     {
                         //CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
                         await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem);
-                    }
+                    }                    
                     /*else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
                         CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);  
