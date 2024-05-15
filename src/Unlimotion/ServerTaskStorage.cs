@@ -124,7 +124,6 @@ public class ServerTaskStorage : ITaskStorage
 
     public async Task<TaskItem> Load(string itemId)
     {
-    {
         try
         {
             var task = await serviceClient.GetAsync(new GetTask() { Id=itemId });
