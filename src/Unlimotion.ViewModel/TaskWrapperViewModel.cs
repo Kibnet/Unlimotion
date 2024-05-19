@@ -87,6 +87,7 @@ public class TaskWrapperViewModel : DisposableList
 
     public TaskItemViewModel TaskItem { get; set; }
     public TaskWrapperViewModel Parent { get; set; }
+    public DateTimeOffset? SpecialDateTime { get; set; }
 
     public string BreadScrumbs => _actions.GetBreadScrumbs?.Invoke(this);
 
