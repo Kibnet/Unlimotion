@@ -49,7 +49,7 @@ namespace Unlimotion.Server.Hubs
         {
             try
             {
-                string uid = Context.Items["uid"].ToString();
+                string uid = Context.Items["uid"]?.ToString();
                 var task = await _ravenSession.LoadAsync<TaskItem>(hubTask.Id);
                 if (task == null)
                 {
@@ -72,7 +72,8 @@ namespace Unlimotion.Server.Hubs
                 else if (task.UserId == uid)
                 {
                     var taskItem = Mapper.Map(hubTask, task);
-                    
+
+                    await _ravenSession.StoreAsync(taskItem);
                     await _ravenSession.SaveChangesAsync();
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);

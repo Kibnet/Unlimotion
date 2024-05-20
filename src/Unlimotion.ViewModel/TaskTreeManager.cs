@@ -84,29 +84,29 @@ public class TaskTreeManager
     {
         await taskStorage.Save(change);
     }
-    public async Task<List<TaskItem>> CloneTask(TaskItemViewModel change, ITaskStorage taskStorage, params TaskItemViewModel[] stepParents)
+    public async Task<List<TaskItem>> CloneTask(TaskItem change, ITaskStorage taskStorage, List<TaskItem> stepParents)
     {
         var result = new List<TaskItem>();
-        await taskStorage.Save(change.Model);
-
+        await taskStorage.Save(change);
+        
         foreach (var parent in stepParents)
         {
-            parent.Model.ContainsTasks.Add(change.Model.Id);
-            await taskStorage.Save(parent.Model);
-            result.Add(parent.Model);
+            parent.ContainsTasks.Add(change.Id);
+            await taskStorage.Save(parent);
+            result.Add(parent);
 
-            change.Model.ParentTasks.Add(parent.Id);
+            change.ParentTasks.Add(parent.Id);
         }
 
-        await taskStorage.Save(change.Model);
-        result.Add(change.Model);
+        await taskStorage.Save(change);
+        result.Add(change);
 
         return result;
     }
     public async Task<List<TaskItem>> CopyTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItemViewModel additionalParent)
     {
         var result = new List<TaskItem>();
-
+             
         change.ParentTasks.Add(additionalParent.Id);
         await taskStorage.Save(change);
         result.Add(change);

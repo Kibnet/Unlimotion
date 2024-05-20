@@ -9,6 +9,7 @@ using System.IO;
 using Unlimotion.ViewModel.Models;
 using System.Threading;
 using System.Data;
+using System.ComponentModel;
 
 
 namespace Unlimotion.ViewModel
@@ -250,12 +251,22 @@ namespace Unlimotion.ViewModel
                 case TaskAction.Clone:
                     {
                         if (additionalParents == null) throw new ArgumentNullException("Stepparents aren't provided");
-                        
-                        var taskItemList = await new TaskTreeManager().CloneTask(change, taskStorage, additionalParents);
+
+                        List<TaskItem> additionalItemParents = new List<TaskItem>();
+                        foreach (var newParent in additionalParents)
+                        {
+                            additionalItemParents.Add(newParent.Model);
+                        }
+                        var taskItemList = await new TaskTreeManager().CloneTask(change.Model, taskStorage, additionalItemParents);
                         foreach (var task in taskItemList)
                         {
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
                         }
+
+                        var clone = taskItemList.OrderByDescending(item => item.Id).First();
+                        change.Id = clone.Id;
+                        change.Parents.Add(clone.ParentTasks);
+                        
                         return true;
                     }
                 case TaskAction.CopyInto:
