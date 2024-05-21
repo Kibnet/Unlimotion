@@ -85,7 +85,7 @@ namespace Unlimotion.Server.Hubs
                     return task.Id;
                 }
 
-                return null;
+                throw new Exception("Uid таска не равен uid клиента");//return null;
             }
             catch (Exception e)
             {

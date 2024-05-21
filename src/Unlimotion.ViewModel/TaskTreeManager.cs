@@ -103,37 +103,149 @@ public class TaskTreeManager
 
         return result;
     }
-    public async Task<List<TaskItem>> CopyTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItemViewModel additionalParent)
-    {
-        var result = new List<TaskItem>();
-             
-        change.ParentTasks.Add(additionalParent.Id);
-        await taskStorage.Save(change);
-        result.Add(change);
-
-        additionalParent.Model.ContainsTasks.Add(change.Id);
-        await taskStorage.Save(additionalParent.Model);
-        result.Add(additionalParent.Model);
-
-        return result;
-    }
-    public async Task<List<TaskItem>> MoveTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItemViewModel newParent, TaskItemViewModel prevParent)
+    public async Task<List<TaskItem>> CopyTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItem additionalParent)
     {
         var result = new List<TaskItem>();
 
-        prevParent.Model.ContainsTasks.Remove(change.Id);
-        await taskStorage.Save(prevParent.Model);
-        result.Add(prevParent.Model);
+        var newParentIsAddedToTask = false;
+        while (newParentIsAddedToTask == false)
+        {
+            newParentIsAddedToTask = await AddNewParentToTask();            
+        }
 
-        change.ParentTasks.Add(newParent.Id);
-        change.ParentTasks.Remove(prevParent.Id);
-        await taskStorage.Save(change);
-        result.Add(change);
+        var taskIsAddedToNewParent = false;
+        while (taskIsAddedToNewParent == false)
+        {
+            taskIsAddedToNewParent = await AddTaskToNewParent();
+        }
+        
+        async Task<bool> AddNewParentToTask()
+        {
+            try
+            {
+                change = await taskStorage.Load(change.Id);
+                if (!change.ParentTasks.Contains(additionalParent.Id))
+                { 
+                   change.ParentTasks.Add(additionalParent.Id);
+                   await taskStorage.Save(change);                    
+                }
 
-        newParent.Model.ContainsTasks.Add(change.Id);
-        await taskStorage.Save(newParent.Model);
-        result.Add(newParent.Model);
+                result.Add(change);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        async Task<bool> AddTaskToNewParent()
+        {
+            try
+            {
+                change = await taskStorage.Load(change.Id);
+                if (!additionalParent.ContainsTasks.Contains(change.Id))
+                {
+                    additionalParent.ContainsTasks.Add(change.Id);
+                    await taskStorage.Save(additionalParent);
+                }
+
+                result.Add(additionalParent);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }   
 
         return result;
     }
+    public async Task<List<TaskItem>> MoveTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItem newParent, TaskItem? prevParent)
+    {
+        var result = new List<TaskItem>();
+
+        if (prevParent is not null)
+        {
+            var prevParentIsDisconnected = false;
+            while (prevParentIsDisconnected == false)
+            {
+                prevParentIsDisconnected = await DisconnectPrevParentWithTask();                
+            }            
+        }
+
+        var taskIsAddedToNewParent = false;
+        while (!taskIsAddedToNewParent)
+        {
+            taskIsAddedToNewParent = await AddTaskToNewParent();
+        }
+
+        var parentsAreUpdatedInTask = false;
+        while (!parentsAreUpdatedInTask)
+        {
+            parentsAreUpdatedInTask = await UpdateParentsInTask();
+        }
+
+
+        return result;
+
+        async Task<bool> DisconnectPrevParentWithTask()
+        {
+            try 
+            {
+                prevParent.ContainsTasks.Remove(change.Id);
+                await taskStorage.Save(prevParent);
+                result.Add(prevParent);
+                                
+                return true;    
+            }
+            catch (Exception ex) 
+            {
+                return false;
+            }
+        }
+        
+        async Task<bool> AddTaskToNewParent()
+        {
+            try
+            {
+                newParent = await taskStorage.Load(newParent.Id);
+                if (!newParent.ParentTasks.Contains(change.Id))
+                {
+                    newParent.ContainsTasks.Add(change.Id);
+                    await taskStorage.Save(newParent);
+                    
+                }
+                result.Add(newParent);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        
+        async Task<bool> UpdateParentsInTask()
+        {
+            try
+            {
+                change = await taskStorage.Load(change.Id);
+                
+                change.ParentTasks.Remove(prevParent.Id);
+                
+                if (!change.ParentTasks.Contains(newParent.Id))
+                {
+                    change.ParentTasks.Add(newParent.Id);                   
+                }
+                
+                await taskStorage.Save(change);
+                result.Add(change);
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+    }    
 }

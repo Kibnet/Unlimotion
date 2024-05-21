@@ -273,7 +273,13 @@ namespace Unlimotion.ViewModel
                     {
                         if (additionalParents == null) throw new ArgumentNullException("Additional parent isn't provided");
 
-                        var taskItemList = await new TaskTreeManager().CopyTaskInto(change.Model, taskStorage, additionalParents[0]);
+                        List<TaskItem> additionalItemParents = new List<TaskItem>();
+                        foreach (var newParent in additionalParents)
+                        {
+                            additionalItemParents.Add(newParent.Model);
+                        }
+                        
+                        var taskItemList = await new TaskTreeManager().CopyTaskInto(change.Model, taskStorage, additionalItemParents[0]);
                         foreach (var task in taskItemList)
                         {
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
@@ -283,9 +289,8 @@ namespace Unlimotion.ViewModel
                 case TaskAction.MoveInto:
                     {
                         if (additionalParents == null) throw new ArgumentNullException("New parent isn't provided");
-                        if (currentTask == null) throw new ArgumentNullException("Current parent isn't provided");
-
-                        var taskItemList = await new TaskTreeManager().MoveTaskInto(change.Model, taskStorage, currentTask, additionalParents[0]);
+                        
+                        var taskItemList = await new TaskTreeManager().MoveTaskInto(change.Model, taskStorage, additionalParents[0].Model, currentTask?.Model);
                         foreach (var task in taskItemList)
                         {
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
