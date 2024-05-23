@@ -246,6 +246,7 @@ namespace Unlimotion.ViewModel
                 case TaskAction.Update:
                     {
                         await new TaskTreeManager().UpdateTask(change.Model, taskStorage);
+                        Tasks.AddOrUpdate(change);
                         return true;
                     }
                 case TaskAction.Clone:

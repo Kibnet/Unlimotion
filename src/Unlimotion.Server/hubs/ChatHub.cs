@@ -55,7 +55,7 @@ namespace Unlimotion.Server.Hubs
                 {
                     var taskItem = Mapper.Map<TaskItem>(hubTask);
                     taskItem.CreatedDateTime = DateTimeOffset.UtcNow;
-                    taskItem.UserId = uid;
+                    taskItem.UserId = (uid is not null) ? uid : throw new Exception("Не передан uid");
 
                     await _ravenSession.StoreAsync(taskItem);
                     await _ravenSession.SaveChangesAsync();
@@ -107,7 +107,8 @@ namespace Unlimotion.Server.Hubs
 
                 //Получение своих задач для удаления
                 var tasks = await _ravenSession.LoadAsync<TaskItem>(idTasks);
-                var listMessages = tasks.Values.Where(item => item.UserId == uid).ToList();
+                var listMessages = (uid != null) ? tasks.Values.Where(item => item.UserId == uid).ToList()
+                                                 : throw new Exception("Не найден uid");
 
                 //Удаление из БД
                 foreach (var item in listMessages)
@@ -129,9 +130,8 @@ namespace Unlimotion.Server.Hubs
             }
             catch
             {
-
+                throw;
             }
-
         }
 
         public async Task Login(string token, string operatingSystem, string ipAddress, string nameVersionClient)

@@ -423,8 +423,9 @@ public class ServerTaskStorage : ITaskStorage
             }
             catch (Exception e)
             {
-                await Task.Delay(new Random().Next(0, 5) * 100);
+                //await Task.Delay(new Random().Next(0, 5) * 100);
                 //TODO пробросить ошибку пользователю
+                throw new Exception(e.Message);
             }
         }
 
