@@ -18,6 +18,7 @@ namespace Unlimotion.Interface
         public List<string> ContainsTasks { get; set; }
         public List<string>? ParentTasks { get; set; }
         public List<string> BlocksTasks { get; set; }
+        public List<string> BlockedByTasks { get; set; } = new();
         public RepeaterPatternHubMold Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }

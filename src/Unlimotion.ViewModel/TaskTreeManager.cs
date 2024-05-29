@@ -10,7 +10,7 @@ namespace Unlimotion.ViewModel;
 
 public class TaskTreeManager
 {
-    public async Task<List<TaskItem>> AddTask(TaskItem change, ITaskStorage taskStorage, TaskItem? currentTask = null)
+    public async Task<List<TaskItem>> AddTask(TaskItem change, ITaskStorage taskStorage, TaskItem? currentTask = null, bool isBlocked = false)
     {
         var result = new List<TaskItem>();
 
@@ -33,7 +33,7 @@ public class TaskTreeManager
             });
             return result;
         }
-        //CreateSibling
+        //CreateSibling, CreateBlockedSibling
         else
         {
             string newTaskId = null;
@@ -60,6 +60,17 @@ public class TaskTreeManager
                             result.Add(parentTask);
                         }                        
                     }
+
+                    if (isBlocked)
+                    {
+                        TaskItem currentTaskItem = await taskStorage.Load(currentTask.Id);
+                        if (!currentTaskItem.BlocksTasks.Contains(newTaskId))
+                            currentTask.BlocksTasks.Add(newTaskId);
+                        await taskStorage.Save(currentTask);
+                        result.Add(currentTask);
+
+                        change.BlockedByTasks.Add(currentTask.Id);
+                    }                    
 
                     await taskStorage.Save(change);
                     result.Add(change);
@@ -310,6 +321,75 @@ public class TaskTreeManager
                 return false;
             }
         });        
+
+        return result;
+    }
+    public async Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask, ITaskStorage taskStorage)
+    {
+        var result = new List<TaskItem>();
+
+        await IsCompletedAsync(async () =>
+        {
+            try
+            {
+                var blockingTaskItem = await taskStorage.Load(blockingTask.Id);
+                if (blockingTaskItem.BlocksTasks.Contains(taskToUnblock.Id))
+                {
+                    blockingTask.BlocksTasks.Remove(taskToUnblock.Id);
+                    await taskStorage.Save(blockingTask);
+                    result.Add(blockingTask);                   
+                }
+
+                var taskToUnblockItem = await taskStorage.Load(taskToUnblock.Id);
+                if (taskToUnblockItem.BlockedByTasks.Contains(blockingTask.Id))
+                {
+                    taskToUnblock.BlockedByTasks.Remove(blockingTask.Id);
+                    await taskStorage.Save(taskToUnblock);
+                    result.Add(taskToUnblock);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            };
+        });
+
+        return result;
+    }
+
+    public async Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask, ITaskStorage taskStorage)
+    {
+        var result = new List<TaskItem>();
+
+        await IsCompletedAsync(async () =>
+        {
+            try
+            {
+                var blockingTaskItem = await taskStorage.Load(blockingTask.Id);
+                if (!blockingTaskItem.BlocksTasks.Contains(taskToBlock.Id))
+                {
+                    blockingTask.BlocksTasks.Add(taskToBlock.Id);
+                    await taskStorage.Save(blockingTask);
+                    result.Add(blockingTask);
+                }
+
+                var taskToBlockItem = await taskStorage.Load(taskToBlock.Id);
+                if (!taskToBlockItem.BlockedByTasks.Contains(blockingTask.Id))
+                {
+                    taskToBlock.BlockedByTasks.Add(blockingTask.Id);
+                    await taskStorage.Save(taskToBlock);
+                    result.Add(taskToBlock);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            };
+        });
 
         return result;
     }

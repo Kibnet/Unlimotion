@@ -214,17 +214,17 @@ namespace Unlimotion.Views
                     }
 
                 }
-                else if (e.KeyModifiers == KeyModifiers.Control)
+                else if (e.KeyModifiers == KeyModifiers.Control) //The dragged task blocks the target task
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    task.BlockBy(subItem);
+                    task.BlockBy(subItem); //subItem блокирует task
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }
-                else if (e.KeyModifiers == KeyModifiers.Alt)
+                else if (e.KeyModifiers == KeyModifiers.Alt) //The target task blocks the dragged task
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    subItem.BlockBy(task);
+                    subItem.BlockBy(task); //task блокирует subItem
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }

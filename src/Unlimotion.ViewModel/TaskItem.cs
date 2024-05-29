@@ -20,6 +20,7 @@ namespace Unlimotion.ViewModel
         public List<string> ContainsTasks { get; set; } = new();
         public List<string> ParentTasks { get; set; } = new();
         public List<string> BlocksTasks { get; set; } = new();
+        public List<string> BlockedByTasks { get; set; } = new();
         public RepeaterPattern Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }        

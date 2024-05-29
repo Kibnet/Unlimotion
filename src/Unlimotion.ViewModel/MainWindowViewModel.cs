@@ -83,7 +83,7 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
 
             }).AddToDisposeAndReturn(connectionDisposableList);
-            CreateSibling = ReactiveCommand.CreateFromTask(async () =>
+            CreateSibling = ReactiveCommand.CreateFromTask(async (bool isBlocked = false) =>
             {
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
@@ -95,7 +95,7 @@ namespace Unlimotion.ViewModel
                     if (AllTasksMode)
                     {
                         //CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem);
+                        await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem, null, isBlocked);
                     }                    
                     /*else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
@@ -107,7 +107,7 @@ namespace Unlimotion.ViewModel
                 //taskRepository.Tasks.AddOrUpdate(task);
 
                 CurrentTaskItem = task;
-                SelectCurrentTask();
+                SelectCurrentTask();                
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
@@ -115,8 +115,8 @@ namespace Unlimotion.ViewModel
                 var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
-                    CreateSibling.Execute(null);
-                    parent.Blocks.Add(CurrentTaskItem.Id);
+                    CreateSibling.Execute(true);
+                    //parent.Blocks.Add(CurrentTaskItem.Id);
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -682,7 +682,8 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
+                                //m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
                             SortComparer = sortObservable
                         };

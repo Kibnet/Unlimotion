@@ -209,13 +209,13 @@ namespace Unlimotion.ViewModel
         {
             Initiated?.Invoke(this, EventArgs.Empty);
         }
-        public async Task<bool> UpdateStorageAsync(TaskItemViewModel change, TaskAction action, TaskItemViewModel? currentTask = null, TaskItemViewModel[]? additionalParents = null)
+        public async Task<bool> UpdateStorageAsync(TaskItemViewModel change, TaskAction action, TaskItemViewModel? currentTask = null, TaskItemViewModel[]? additionalParents = null, bool isBlocked = false)
         {
             switch (action)
             {
                 case TaskAction.Add:
                     {
-                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask?.Model);
+                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask?.Model, isBlocked);
                         foreach (var task in taskItemList)
                         {
                             change.Id = task.Id;
@@ -292,6 +292,28 @@ namespace Unlimotion.ViewModel
                         if (additionalParents == null) throw new ArgumentNullException("New parent isn't provided");
                         
                         var taskItemList = await new TaskTreeManager().MoveTaskInto(change.Model, taskStorage, additionalParents[0].Model, currentTask?.Model);
+                        foreach (var task in taskItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        return true;
+                    }
+                case TaskAction.Unblock:
+                    {
+                        if (currentTask is null) throw new ArgumentNullException("CurrentTask can't be null");
+
+                        var taskItemList = await new TaskTreeManager().UnblockTask(change.Model, currentTask?.Model!, taskStorage);
+                        foreach (var task in taskItemList)
+                        {
+                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+                        }
+                        return true;
+                    }
+                case TaskAction.Block:
+                    {
+                        if (currentTask is null) throw new ArgumentNullException("CurrentTask can't be null");
+
+                        var taskItemList = await new TaskTreeManager().BlockTask(change.Model, currentTask?.Model!, taskStorage);
                         foreach (var task in taskItemList)
                         {
                             Tasks.AddOrUpdate(new TaskItemViewModel(task, this));

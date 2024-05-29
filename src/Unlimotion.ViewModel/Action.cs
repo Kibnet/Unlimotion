@@ -14,6 +14,8 @@ namespace Unlimotion.ViewModel
         Update,
         Clone,
         CopyInto,
-        MoveInto
+        MoveInto,
+        Unblock,
+        Block
     }
 }
