@@ -342,6 +342,20 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
+            
+            var durationFilter = DurationFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        return (filter.All(e => e.ShowTasks == false) ||
+                                filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
 
             this.WhenAnyValue(m => m.ArchivedDateFilter.CurrentOption, m => m.ArchivedDateFilter.IsCustom)
                 .Subscribe(filter =>
@@ -443,6 +457,7 @@ namespace Unlimotion.ViewModel
                     m => m.PlannedDuration,
                     m => m.PlannedEndDateTime))
                 .Filter(unlockedTimeFilter)
+                .Filter(durationFilter)
                 .Filter(emojiFilter)
                 .Filter(wantedFilter)
                 .Transform(item =>
@@ -947,6 +962,7 @@ namespace Unlimotion.ViewModel
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<DurationFilter> DurationFilters { get; set; } = DurationFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
 
         public DateFilter CompletedDateFilter { get; set; } = new();
