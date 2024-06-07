@@ -75,10 +75,11 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 //await task.SaveItemCommand.Execute();
-                await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add);
+                //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add);
+                await taskRepository?.Add(task);
                 CurrentTaskItem = task;
                 SelectCurrentTask();
 
@@ -87,7 +88,7 @@ namespace Unlimotion.ViewModel
             {
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 //await task.SaveItemCommand.Execute();
                 if (CurrentTaskItem != null)
@@ -95,7 +96,8 @@ namespace Unlimotion.ViewModel
                     if (AllTasksMode)
                     {
                         //CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem, null, isBlocked);
+                        //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem, null, isBlocked);
+                        await taskRepository?.Add(task, CurrentItem.TaskItem, isBlocked);
                     }                    
                     /*else if (CurrentTaskItem?.ParentsTasks.Count > 0)
                     {
@@ -126,12 +128,13 @@ namespace Unlimotion.ViewModel
                     return;
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
+                var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 //await task.SaveItemCommand.Execute();
                 //CurrentTaskItem.Contains.Add(task.Id);
                 //taskRepository.Tasks.AddOrUpdate(task);
-                await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.AddChild, CurrentTaskItem);
+                //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.AddChild, CurrentTaskItem);
+                await taskRepository?.AddChild(task, CurrentTaskItem);
 
 
                 CurrentTaskItem = task;
@@ -219,9 +222,11 @@ namespace Unlimotion.ViewModel
 
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
             await taskStorage.Connect();
+            taskStorage.Init();
 
-            ITaskRepository? taskRepository;
-            taskRepository = Locator.Current.GetService<ITaskRepository>();
+            //TaskRepository? taskRepository;
+            //taskRepository = Locator.Current.GetService<ITaskRepository>();
+            var taskRepository = taskStorage;
             taskRepository.Init();
 
             //Если из коллекции пропадает итем, то очищаем выделенный итем.
@@ -682,7 +687,6 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                //m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
                             SortComparer = sortObservable
@@ -738,7 +742,6 @@ namespace Unlimotion.ViewModel
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
                     async () =>
                     {
-                        //if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
                           if (await task.TaskItem.RemoveFunc.Invoke())
                           {
                             CurrentTaskItem = null;
@@ -747,7 +750,6 @@ namespace Unlimotion.ViewModel
             }
             else
             {
-                //if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
                   if (await task.TaskItem.RemoveFunc.Invoke())
                   {
                     CurrentTaskItem = null;
@@ -761,11 +763,6 @@ namespace Unlimotion.ViewModel
                 $"Are you sure you want to remove the task \"{task.Title}\" from disk?",
                 async () =>
                 {
-                    /*foreach (var parent in task.ParentsTasks.ToList())
-                    {
-                        task.RemoveFunc.Invoke(parent);
-                    }*/
-
                     await task.RemoveFunc.Invoke();
                     CurrentTaskItem = null;
                 });

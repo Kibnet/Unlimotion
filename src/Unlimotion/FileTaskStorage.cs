@@ -2,66 +2,147 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
+using Avalonia.Controls;
+using DynamicData;
+using DynamicData.Binding;
+using ExCSS;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Splat;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
-    public class FileTaskStorage : ITaskStorage
+    public class FileTaskStorage : ITaskStorage, IStorage
     {
+        public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+        public ITaskTreeManager TaskTreeManager { get; set; }
+        
         public string Path { get; private set; }
+        private IDatabaseWatcher? dbWatcher;
+        public bool isPause;
+        private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
 
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
+        public event EventHandler<EventArgs> Initiated;
+        private IMapper mapper;
 
         public FileTaskStorage(string path)
         {
-            Path = path;
+            Path = path;   
+            mapper = Locator.Current.GetService<IMapper>();
         }
 
         public IEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-            if (!directoryInfo.Exists)
-            {
-                Init();
-            }
+
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
                 var task = Load(fileInfo.FullName).Result;
                 if (task != null)
                 {
-                    yield return task;
+                    yield return mapper.Map<TaskItem>(task);                  
                 }
             }
         }
-
-        private void Init()
+        public void Init() => Init(GetAll());
+        private void Init(IEnumerable<TaskItem> tasks)
         {
-            var directoryInfo = new DirectoryInfo(Path);
-            directoryInfo.Create();
-            var list = new[]
+            Tasks = new(item => item.Id);
+            
+            foreach (var task in tasks)
             {
-                new TaskItem { Title = "Task 1", Id = "1", ContainsTasks = new List<string> { "1.1", "1.2", "3" } },
-                new TaskItem { Title = "Task 1.1", Id = "1.1", BlocksTasks = new List<string> { "1.2" } },
-                new TaskItem { Title = "Task 1.2", Id = "1.2", BlocksTasks = new List<string> { "3.1" } },
-                new TaskItem { Title = "Task 2", Id = "2", ContainsTasks = new List<string> { "2.1", "3" } },
-                new TaskItem { Title = "Task 2.1", Id = "2.1" },
-                new TaskItem { Title = "Task 3", Id = "3", ContainsTasks = new List<string> { "3.1" } },
-                new TaskItem { Title = "Task 3.1", Id = "3.1" },
-                new TaskItem { Title = "Task 4", Id = "4" },
-            };
-            foreach (var item in list)
+                var vm = new TaskItemViewModel(task, this);
+                Tasks.AddOrUpdate(vm);                
+            }
+
+            rootFilter = Tasks.Connect()
+               .AutoRefreshOnObservable(t => t.Contains.ToObservableChangeSet())
+               .TransformMany(item =>
+               {
+                   var many = item.Contains.Where(s => !string.IsNullOrEmpty(s)).Select(id => id);
+                   return many;
+               }, s => s)
+               .Distinct(k => k)
+               .ToCollection()
+               .Select(items =>
+               {
+                   bool Predicate(TaskItemViewModel task) => items.Count == 0 || items.All(t => t != task.Id);
+                   return (Func<TaskItemViewModel, bool>)Predicate;
+               });
+
+            dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
+            Updating += TaskStorageOnUpdating;
+            dbWatcher.OnUpdated += DbWatcherOnUpdated;
+
+            OnInited();
+        }
+
+        private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
+        {
+            dbWatcher?.AddIgnoredTask(e.Id);
+        }
+
+        private async void DbWatcherOnUpdated(object sender, DbUpdatedEventArgs e)
+        {
+            switch (e.Type)
             {
-                Save(item);
+                case UpdateType.Saved:
+                    var taskItem = mapper.Map<TaskItem>(await Load(e.Id));
+                    if (taskItem != null)
+                    {
+                        var vml = Tasks.Lookup(taskItem.Id);
+                        if (vml.HasValue)
+                        {
+                            var vm = vml.Value;
+                            vm.Update(taskItem);
+                        }
+                        else
+                        {
+                            var vm = new TaskItemViewModel(taskItem, this);
+                            Tasks.AddOrUpdate(vm);
+                        }
+                    }
+                    break;
+                case UpdateType.Removed:
+                    var fileInfo = new FileInfo(e.Id);
+                    var deletedItem = Tasks.Lookup(fileInfo.Name);
+                    await Delete(deletedItem.Value, false);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 
-        public async Task<bool> Save(TaskItem item)
+        public IObservable<IChangeSet<TaskItemViewModel, string>> GetRoots()
         {
+            IObservable<IChangeSet<TaskItemViewModel, string>> roots;
+            roots = Tasks.Connect()
+                .Filter(rootFilter);
+            return roots;
+        }
+        protected virtual void OnInited()
+        {
+            Initiated?.Invoke(this, EventArgs.Empty);
+        }
+
+        public async Task<bool> Save(Server.Domain.TaskItem taskItem)
+        {
+            while (isPause)
+            {
+                Thread.SpinWait(1);
+            }
+            var item = mapper.Map<TaskItem>(taskItem);
+            
             item.Id ??= Guid.NewGuid().ToString();
 
             var directoryInfo = new DirectoryInfo(Path);
@@ -83,6 +164,7 @@ namespace Unlimotion
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
                 await writer.WriteAsync(json);
+                taskItem.Id = item.Id;
 
                 return true;
             }
@@ -110,16 +192,16 @@ namespace Unlimotion
             {
                 return false;
             }
-        }
-
-        public async Task<TaskItem> Load(string itemId)
+        }        
+ 
+        public async Task<Server.Domain.TaskItem> Load(string itemId)
         {
             var jsonSerializer = new JsonSerializer();
             try
             {
-                using var reader = File.OpenText(itemId);
+                using var reader = File.OpenText(System.IO.Path.Combine(Path, itemId));
                 using var jsonReader = new JsonTextReader(reader);
-                return jsonSerializer.Deserialize<TaskItem>(jsonReader);
+                return jsonSerializer.Deserialize<Server.Domain.TaskItem>(jsonReader);
             }
             catch (Exception e)
             {
@@ -134,6 +216,150 @@ namespace Unlimotion
 
         public async Task Disconnect()
         {
+        }
+
+        public void SetPause(bool pause)
+        {
+            isPause = pause;
+        }
+
+        public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)
+        {
+            var taskItemList = await TaskTreeManager.AddTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask?.Model),
+                isBlocked);
+
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+                if (currentTask is null || (!currentTask.Parents.Contains(task.Id) && currentTask.Id != task.Id)) 
+                    change.Id = task.Id;                 
+            }
+            return true;
+        }
+
+        public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
+        {
+            var taskItemList = await TaskTreeManager.AddChildTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+                if (task.Id != currentTask.Id)
+                {
+                    change.Id = task.Id;
+                    foreach (var parent in task.ParentTasks!)
+                    {
+                        change.Parents.Add(parent);
+                    }
+                    
+                }
+            }            
+            return true;
+        }
+
+        public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
+        {
+            var parentsItemList = await TaskTreeManager.DeleteTask(mapper.Map<Server.Domain.TaskItem>(change.Model));
+            foreach (var parent in parentsItemList)
+            {
+                UpdateCache(parent);
+            }
+            Tasks.Remove(change);
+            
+            return true;
+        }
+
+        public async Task<bool> Update(TaskItemViewModel change)
+        {
+            await TaskTreeManager.UpdateTask(mapper.Map<Server.Domain.TaskItem>(change.Model));
+            Tasks.AddOrUpdate(change);
+            return true;
+        }
+
+        public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
+        {
+            var additionalItemParents = new List<Server.Domain.TaskItem>();
+            foreach (var newParent in additionalParents)
+            {
+                additionalItemParents.Add(mapper.Map<Server.Domain.TaskItem>(newParent.Model));
+            }
+            var taskItemList = await TaskTreeManager.CloneTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                additionalItemParents);
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+                if (!task.ContainsTasks.Any())
+                {
+                    change.Id = task.Id;
+                    change.Parents.Add(task.ParentTasks!);
+                }
+            }            
+
+            return change;
+        }
+
+        public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
+        {
+            var additionalItemParents = new List<Server.Domain.TaskItem>();
+            foreach (var newParent in additionalParents)
+            {
+                additionalItemParents.Add(mapper.Map<Server.Domain.TaskItem>(newParent.Model));
+            }
+
+            var taskItemList = await TaskTreeManager.CopyTaskInto(
+                mapper.Map<Server.Domain.TaskItem>(change.Model), 
+                additionalItemParents[0]);
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+            }
+            return true;
+        }
+        private void UpdateCache(Server.Domain.TaskItem task)
+        {
+            var taskItem = mapper.Map<TaskItem>(task);
+            Tasks.AddOrUpdate(new TaskItemViewModel(taskItem, this));
+        }
+
+        public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)
+        {
+            var taskItemList = await TaskTreeManager.MoveTaskInto(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask?.Model));
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+            }
+            return true;
+        }
+
+        public async Task<bool> Unblock(TaskItemViewModel change, TaskItemViewModel? currentTask)
+        {
+            var taskItemList = await TaskTreeManager.UnblockTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask?.Model!));
+            foreach (var task in taskItemList)
+            {
+               UpdateCache(task);
+            }
+            return true;
+        }
+
+        public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel? currentTask)
+        {
+            var taskItemList = await TaskTreeManager.BlockTask(
+                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<Server.Domain.TaskItem>(currentTask?.Model!));
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+            }
+            return true;
         }
     }
 }

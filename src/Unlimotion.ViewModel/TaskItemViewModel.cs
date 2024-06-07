@@ -20,18 +20,18 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class TaskItemViewModel : DisposableList
     {
-        public TaskItemViewModel(TaskItem model, ITaskRepository taskRepository)
+        public TaskItemViewModel(TaskItem model, ITaskStorage taskStorage)
         {
             Model = model;
-            Init(taskRepository);
+            _taskStorage = taskStorage;
+            Init(taskStorage);
         }
 
-        private ITaskRepository _taskRepository;
+        private ITaskStorage _taskStorage;
         private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
                                             (BlockedByTasks.All(m => m.IsCompleted != false));
 
-        public ReactiveCommand<Unit, Unit> SaveItemCommand;
-        public ReactiveCommand<Unit, Unit> SaveItemCommandNew;
+        public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
         private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
@@ -43,19 +43,11 @@ namespace Unlimotion.ViewModel
         private TimeSpan? plannedPeriod;
         private DateCommands commands = null;
 
-        private void Init(ITaskRepository taskRepository)
+        private void Init(ITaskStorage taskStorage)
         {
-            _taskRepository = taskRepository;
-
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var model = Model;
-                await taskRepository.Save(model);
-                Id = model.Id;
-            });
-            SaveItemCommandNew = ReactiveCommand.CreateFromTask(async () =>
-            {
-                await ((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Update);
+                 await taskStorage.Update(this);
             });
 
             //Subscribe ContainsTasks
@@ -67,7 +59,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(containsFilter)
                 .Bind(out _containsTasks)
                 .Subscribe()
@@ -121,7 +113,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(parentsFilter)
                 .Bind(out _parentsTasks)
                 .Subscribe()
@@ -154,7 +146,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(blocksFilter)
                 .Bind(out _blocksTasks)
                 .Subscribe()
@@ -211,7 +203,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks.Connect()
+            taskStorage.Tasks.Connect()
                 .Filter(blockedByFilter)
                 .Bind(out _blockedByTasks)
                 .Subscribe()
@@ -242,7 +234,7 @@ namespace Unlimotion.ViewModel
                             clone.PlannedEndDateTime =
                                 clone.PlannedBeginDateTime.Value.Add(PlannedEndDateTime.Value - PlannedBeginDateTime.Value);
                         }
-                        var cloned = await taskRepository.Clone(clone, ParentsTasks.ToArray());
+                        var cloned = await taskStorage.Clone(new TaskItemViewModel(clone, taskStorage), ParentsTasks.ToArray());
                     }
                 }
 
@@ -336,8 +328,9 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            RemoveFunc = async () => await ((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Delete);             
-            
+            //RemoveFunc = async () => await ((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Delete);
+            RemoveFunc = async () => await (taskStorage.Delete(this));
+
             /*RemoveFunc = parent =>
             {
                 if (parent == null)
@@ -383,22 +376,14 @@ namespace Unlimotion.ViewModel
                     Repeater = Model.Repeater,
                     Wanted = Model.Wanted,
                 };
-                return await taskRepository.Clone(clone, destination);
+                var vm = new TaskItemViewModel(clone, taskStorage);
+                return await taskStorage.Clone(vm, destination);
             };
-
-            /*UnblockMeCommand = ReactiveCommand.Create<TaskItemViewModel>(
-                async m =>
-                {
-                    this.Blocks.Remove(m.Id);
-                    return Unit.Default;
-                });*/
 
             UnblockCommand = ReactiveCommand.Create<TaskItemViewModel>(
                 async m =>
                 {
-                    await((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Unblock, m);
-                    //m.Blocks.Remove(Id);
-                    //return Unit.Default;
+                    await taskStorage.Unblock(this, m);                    
                 });
 
             //Subscribe to Save when property changed
@@ -429,8 +414,7 @@ namespace Unlimotion.ViewModel
                     .Throttle(TimeSpan.FromSeconds(10))
                     .Subscribe(x =>
                     {
-                        //if (_isInited) SaveItemCommand.Execute();
-                        if (_isInited) SaveItemCommandNew.Execute();                                                
+                        if (_isInited) SaveItemCommand.Execute();                                                                        
                     }
                     )
                     .AddToDispose(this);
@@ -644,15 +628,12 @@ namespace Unlimotion.ViewModel
 
         public async Task CopyInto(TaskItemViewModel destination)
         {
-            //destination.Contains.Add(Id);
-            await ((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.CopyInto, null, [ destination ]);
+            await _taskStorage.CopyInto(this, [destination]);
         }
 
         public async Task MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
         {
-            //destination.Contains.Add(Id);
-            //source?.Contains?.Remove(Id);
-            await((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.MoveInto, source, [destination]);
+            await _taskStorage.MoveInto(this, [destination], source);
         }
 
         public async Task<TaskItemViewModel> CloneInto(TaskItemViewModel destination)
@@ -663,7 +644,8 @@ namespace Unlimotion.ViewModel
         public async void BlockBy(TaskItemViewModel blocker)
         {
             //blocker.Blocks.Add(Id);
-            await ((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.Block, blocker);
+            //await ((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.Block, blocker);
+            await _taskStorage.Block(this, blocker);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()

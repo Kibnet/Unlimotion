@@ -1,16 +1,17 @@
-﻿using DynamicData;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Polly;
+﻿using Polly;
 using Polly.Retry;
-using System.Linq;
+using Unlimotion.Server.Domain;
 
-namespace Unlimotion.ViewModel;
+namespace TaskTreeManager;
 
-public class TaskTreeManager
+public class TaskTreeManager : ITaskTreeManager
 {
-    public async Task<List<TaskItem>> AddTask(TaskItem change, ITaskStorage taskStorage, TaskItem? currentTask = null, bool isBlocked = false)
+    private IStorage Storage { get; init; }
+    public TaskTreeManager(IStorage storage)
+    {
+        Storage = storage;
+    }
+    public async Task<List<TaskItem>> AddTask(TaskItem change, TaskItem? currentTask = null, bool isBlocked = false)
     {
         var result = new List<TaskItem>();
 
@@ -21,15 +22,15 @@ public class TaskTreeManager
             {
                 try
                 {
-                    await taskStorage.Save(change);
+                    await Storage.Save(change);
                     result.Add(change);
-                    
+
                     return true;
                 }
                 catch
                 {
                     return false;
-                }                
+                }
             });
             return result;
         }
@@ -44,35 +45,35 @@ public class TaskTreeManager
                 {
                     if (newTaskId is null)
                     {
-                        await taskStorage.Save(change);
+                        await Storage.Save(change);
                         newTaskId = change.Id;
                     }
-                    
+
                     foreach (var parent in currentTask.ParentTasks)
                     {
                         change.ParentTasks.Add(parent);
 
-                        TaskItem parentTask = await taskStorage.Load(parent);
+                        TaskItem parentTask = await Storage.Load(parent);
                         if (!parentTask.ContainsTasks.Contains(newTaskId))
                         {
                             parentTask.ContainsTasks.Add(newTaskId);
-                            await taskStorage.Save(parentTask);
+                            await Storage.Save(parentTask);
                             result.Add(parentTask);
-                        }                        
+                        }
                     }
 
                     if (isBlocked)
                     {
-                        TaskItem currentTaskItem = await taskStorage.Load(currentTask.Id);
+                        TaskItem currentTaskItem = await Storage.Load(currentTask.Id);
                         if (!currentTaskItem.BlocksTasks.Contains(newTaskId))
                             currentTask.BlocksTasks.Add(newTaskId);
-                        await taskStorage.Save(currentTask);
+                        await Storage.Save(currentTask);
                         result.Add(currentTask);
 
                         change.BlockedByTasks.Add(currentTask.Id);
-                    }                    
+                    }
 
-                    await taskStorage.Save(change);
+                    await Storage.Save(change);
                     result.Add(change);
 
                     return true;
@@ -82,12 +83,12 @@ public class TaskTreeManager
                     return false;
                 }
             });
-            
+
 
             return result;
         }
     }
-    public async Task<List<TaskItem>> AddChildTask(TaskItem change, ITaskStorage taskStorage, TaskItem currentTask)
+    public async Task<List<TaskItem>> AddChildTask(TaskItem change, TaskItem currentTask)
     {
         var result = new List<TaskItem>();
         string newTaskId = null;
@@ -100,12 +101,12 @@ public class TaskTreeManager
                 if (newTaskId is null)
                 {
                     change.ParentTasks.Add(currentTask.Id);
-                    await taskStorage.Save(change);
+                    await Storage.Save(change);
                     newTaskId = change.Id;
-                }                
+                }
 
                 currentTask.ContainsTasks.Add(change.Id);
-                await taskStorage.Save(currentTask);
+                await Storage.Save(currentTask);
 
                 result.Add(change);
                 result.Add(currentTask);
@@ -118,9 +119,9 @@ public class TaskTreeManager
             }
         });
 
-        return result;        
+        return result;
     }
-    public async Task<List<TaskItem>> DeleteTask(TaskItem change, ITaskStorage taskStorage)
+    public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
         var result = new List<TaskItem>();
 
@@ -129,7 +130,7 @@ public class TaskTreeManager
             try
             {
                 //удалить во всех детях ссылки в Parents на удаляемый таск
-                var deletingTask = await taskStorage.Load(change.Id);
+                var deletingTask = (deleteInStorage) ? await Storage.Load(change.Id) : change;
 
                 if (deletingTask is not null)
                 {
@@ -137,11 +138,11 @@ public class TaskTreeManager
                     {
                         foreach (var child in deletingTask.ContainsTasks)
                         {
-                            var childTask = await taskStorage.Load(child);
+                            var childTask = await Storage.Load(child);
                             if (childTask.ParentTasks.Contains(deletingTask.Id))
                             {
                                 childTask.ParentTasks.Remove(deletingTask.Id);
-                                await taskStorage.Save(childTask);
+                                await Storage.Save(childTask);
                                 result.Add(childTask);
                             }
                         }
@@ -151,36 +152,61 @@ public class TaskTreeManager
                     {
                         foreach (var parent in deletingTask.ParentTasks)
                         {
-                            var parentTask = await taskStorage.Load(parent);
+                            var parentTask = await Storage.Load(parent);
                             if (parentTask.ContainsTasks.Contains(deletingTask.Id))
                             {
                                 parentTask.ContainsTasks.Remove(deletingTask.Id);
-                                await taskStorage.Save(parentTask);
+                                await Storage.Save(parentTask);
                                 result.Add(parentTask);
                             }
                         }
                     }
+
+                    //удалить во всех блокирующих тасках ссылку на удаляемый таск
+                    if (deletingTask.BlockedByTasks.Any())
+                    {
+                        foreach (var blocker in deletingTask.BlockedByTasks)
+                        {
+                            var blockerItem = await Storage.Load(blocker);
+                            blockerItem.BlocksTasks.Remove(deletingTask.Id);
+                            await Storage.Save(blockerItem);
+                            result.Add(blockerItem);
+                        }
+                    }
+
+                    //удалить во всех блокируемых тасках ссылку на удаляемый таск 
+                    if (deletingTask.BlocksTasks.Any())
+                    {
+                        foreach (var blocked in deletingTask.BlocksTasks)
+                        {
+                            var blockedItem = await Storage.Load(blocked);
+                            blockedItem.BlockedByTasks.Remove(deletingTask.Id);
+                            await Storage.Save(blockedItem);
+                            result.Add(blockedItem);
+                        }
+                    }
+
                     //удалить сам таск из БД
-                    await taskStorage.Remove(change.Id);
-                }        
-                
+                    if (deleteInStorage) await Storage.Remove(change.Id);
+                }
+
                 return true;
             }
             catch
             {
                 return false;
             };
-        });       
+        });
 
         return result;
     }
-    public async Task UpdateTask(TaskItem change, ITaskStorage taskStorage)
+    public async Task UpdateTask(TaskItem change)
     {
-        await IsCompletedAsync(async Task<bool>() =>
+        await IsCompletedAsync(async Task<bool> () =>
         {
             try
             {
-                await taskStorage.Save(change);
+                await Storage.Save(change);
                 return true;
             }
             catch
@@ -189,10 +215,10 @@ public class TaskTreeManager
             }
         });
     }
-    public async Task<List<TaskItem>> CloneTask(TaskItem change, ITaskStorage taskStorage, List<TaskItem> stepParents)
+    public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
         var result = new List<TaskItem>();
-        string newTaskId = null; 
+        string newTaskId = null;
 
         await IsCompletedAsync(async Task<bool> () =>
         {
@@ -200,55 +226,55 @@ public class TaskTreeManager
             {
                 if (newTaskId is null)
                 {
-                    await taskStorage.Save(change);
+                    await Storage.Save(change);
                     newTaskId = change.Id;
-                }                
+                }
 
                 foreach (var parent in stepParents)
                 {
-                    var parentTask = await taskStorage.Load(parent.Id);
+                    var parentTask = await Storage.Load(parent.Id);
 
                     if (!parentTask.ContainsTasks.Contains(newTaskId))
                     {
                         parentTask.ContainsTasks.Add(newTaskId);
-                        await taskStorage.Save(parentTask);    
+                        await Storage.Save(parentTask);
                         result.Add(parentTask);
                     }
 
-                    var changeTask = await taskStorage.Load(change.Id);
+                    var changeTask = await Storage.Load(change.Id);
 
                     if (!changeTask.ParentTasks.Contains(parent.Id))
                     {
                         changeTask.ParentTasks.Add(parent.Id);
-                        await taskStorage.Save(changeTask);
+                        await Storage.Save(changeTask);
                         result.Add(changeTask);
-                    }                    
-                } 
-                
+                    }
+                }
+
                 return true;
             }
-            catch 
+            catch
             {
                 return false;
             }
-        });        
+        });
 
         return result;
     }
-    public async Task<List<TaskItem>> CopyTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItem additionalParent)
+    public async Task<List<TaskItem>> CopyTaskInto(TaskItem change, TaskItem additionalParent)
     {
         var result = new List<TaskItem>();
-        
+
         await IsCompletedAsync(async Task<bool> () =>
         {
             try
             {
                 //add new parent to task
-                change = await taskStorage.Load(change.Id);
+                change = await Storage.Load(change.Id);
                 if (!change.ParentTasks.Contains(additionalParent.Id))
                 {
                     change.ParentTasks.Add(additionalParent.Id);
-                    await taskStorage.Save(change);
+                    await Storage.Save(change);
                 }
                 result.Add(change);
 
@@ -256,7 +282,7 @@ public class TaskTreeManager
                 if (!additionalParent.ContainsTasks.Contains(change.Id))
                 {
                     additionalParent.ContainsTasks.Add(change.Id);
-                    await taskStorage.Save(additionalParent);
+                    await Storage.Save(additionalParent);
                 }
                 result.Add(additionalParent);
 
@@ -267,10 +293,10 @@ public class TaskTreeManager
                 return false;
             }
         });
-        
+
         return result;
     }
-    public async Task<List<TaskItem>> MoveTaskInto(TaskItem change, ITaskStorage taskStorage, TaskItem newParent, TaskItem? prevParent)
+    public async Task<List<TaskItem>> MoveTaskInto(TaskItem change, TaskItem newParent, TaskItem? prevParent)
     {
         var result = new List<TaskItem>();
 
@@ -281,27 +307,27 @@ public class TaskTreeManager
                 //удаляем таск из prevParent.Contains
                 if (prevParent is not null)
                 {
-                    var prevParentTask = await taskStorage.Load(prevParent.Id);
+                    var prevParentTask = await Storage.Load(prevParent.Id);
                     if (prevParentTask.ContainsTasks.Contains(change.Id))
                     {
                         prevParentTask.ContainsTasks.Remove(change.Id);
-                        await taskStorage.Save(prevParentTask);
+                        await Storage.Save(prevParentTask);
                         result.Add(prevParentTask);
-                    }                    
+                    }
                 }
 
                 //добавляем таск в newParent.Contains
-                newParent = await taskStorage.Load(newParent.Id);
+                newParent = await Storage.Load(newParent.Id);
                 if (!newParent.ParentTasks.Contains(change.Id))
                 {
                     newParent.ContainsTasks.Add(change.Id);
-                    await taskStorage.Save(newParent);
+                    await Storage.Save(newParent);
 
                 }
                 result.Add(newParent);
 
                 //удаляем prevParent и добавляем newParent в таск
-                change = await taskStorage.Load(change.Id);
+                change = await Storage.Load(change.Id);
 
                 if (prevParent is not null)
                     change.ParentTasks.Remove(prevParent.Id);
@@ -311,7 +337,7 @@ public class TaskTreeManager
                     change.ParentTasks.Add(newParent.Id);
                 }
 
-                await taskStorage.Save(change);
+                await Storage.Save(change);
                 result.Add(change);
 
                 return true;
@@ -320,11 +346,11 @@ public class TaskTreeManager
             {
                 return false;
             }
-        });        
+        });
 
         return result;
     }
-    public async Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask, ITaskStorage taskStorage)
+    public async Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask)
     {
         var result = new List<TaskItem>();
 
@@ -332,19 +358,19 @@ public class TaskTreeManager
         {
             try
             {
-                var blockingTaskItem = await taskStorage.Load(blockingTask.Id);
+                var blockingTaskItem = await Storage.Load(blockingTask.Id);
                 if (blockingTaskItem.BlocksTasks.Contains(taskToUnblock.Id))
                 {
                     blockingTask.BlocksTasks.Remove(taskToUnblock.Id);
-                    await taskStorage.Save(blockingTask);
-                    result.Add(blockingTask);                   
+                    await Storage.Save(blockingTask);
+                    result.Add(blockingTask);
                 }
 
-                var taskToUnblockItem = await taskStorage.Load(taskToUnblock.Id);
+                var taskToUnblockItem = await Storage.Load(taskToUnblock.Id);
                 if (taskToUnblockItem.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToUnblock.BlockedByTasks.Remove(blockingTask.Id);
-                    await taskStorage.Save(taskToUnblock);
+                    await Storage.Save(taskToUnblock);
                     result.Add(taskToUnblock);
                 }
 
@@ -359,7 +385,7 @@ public class TaskTreeManager
         return result;
     }
 
-    public async Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask, ITaskStorage taskStorage)
+    public async Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask)
     {
         var result = new List<TaskItem>();
 
@@ -367,19 +393,19 @@ public class TaskTreeManager
         {
             try
             {
-                var blockingTaskItem = await taskStorage.Load(blockingTask.Id);
+                var blockingTaskItem = await Storage.Load(blockingTask.Id);
                 if (!blockingTaskItem.BlocksTasks.Contains(taskToBlock.Id))
                 {
                     blockingTask.BlocksTasks.Add(taskToBlock.Id);
-                    await taskStorage.Save(blockingTask);
+                    await Storage.Save(blockingTask);
                     result.Add(blockingTask);
                 }
 
-                var taskToBlockItem = await taskStorage.Load(taskToBlock.Id);
+                var taskToBlockItem = await Storage.Load(taskToBlock.Id);
                 if (!taskToBlockItem.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToBlock.BlockedByTasks.Add(blockingTask.Id);
-                    await taskStorage.Save(taskToBlock);
+                    await Storage.Save(taskToBlock);
                     result.Add(taskToBlock);
                 }
 
@@ -413,3 +439,4 @@ public class TaskTreeManager
         return (res);
     }
 }
+

@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
+using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
 using Unlimotion.ViewModel;
+using Unlimotion.TaskTree;
 
 namespace Unlimotion.Views
 {
@@ -22,6 +24,7 @@ namespace Unlimotion.Views
             DataContextChanged += MainWindow_DataContextChanged;
         }
 
+        private IMapper _mapper;
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
             var vm = DataContext as MainWindowViewModel;
@@ -60,7 +63,7 @@ namespace Unlimotion.Views
                             if (!set.Contains(task.Id))
                             {
                                 set.Add(task.Id);
-                                await taskStorage.Save(task.Model);
+                                await taskStorage.Save(_mapper.Map<Server.Domain.TaskItem>(task.Model));
                                 foreach (var item in task.ContainsTasks)
                                 {
                                     queue.Enqueue(item);
@@ -68,7 +71,7 @@ namespace Unlimotion.Views
                             }
                         }
 
-                        var currentTaskStorage = Locator.Current.GetService<ITaskStorage>();
+                        var currentTaskStorage = Locator.Current.GetService<IStorage>();
                         foreach (var id in set)
                         {
                             await currentTaskStorage.Remove(id);

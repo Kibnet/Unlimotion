@@ -29,6 +29,11 @@ namespace Unlimotion
             cfg.CreateMap<TaskItem, TaskItemHubMold>();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>();
+            cfg.CreateMap<RepeaterType, Server.Domain.RepeaterType>().ReverseMap();
+            cfg.CreateMap<RepeaterPattern, Server.Domain.RepeaterPattern>().ReverseMap();
+            cfg.CreateMap<TaskItem, Server.Domain.TaskItem>()
+                .ForMember(m => m.UserId, e => e.Ignore())
+                .ReverseMap();
         }
     }
 }

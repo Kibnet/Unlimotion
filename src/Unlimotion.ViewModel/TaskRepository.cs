@@ -1,6 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+//using System;
+//using System.Collections.Generic;
+/*using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData;
@@ -10,6 +10,7 @@ using Unlimotion.ViewModel.Models;
 using System.Threading;
 using System.Data;
 using System.ComponentModel;
+using Splat;
 
 
 namespace Unlimotion.ViewModel
@@ -199,129 +200,15 @@ namespace Unlimotion.ViewModel
             {
                 destination.Contains.Add(task.Id);
             }*/
-            await UpdateStorageAsync(task, TaskAction.Clone, null, destinations);
+            //await UpdateStorageAsync(task, TaskAction.Clone, null, destinations);
             //this.Tasks.AddOrUpdate(task);
 
-            return task;
-        }
+  //          return task;
+    //    }
 
-        protected virtual void OnInited()
-        {
-            Initiated?.Invoke(this, EventArgs.Empty);
-        }
-        public async Task<bool> UpdateStorageAsync(TaskItemViewModel change, TaskAction action, TaskItemViewModel? currentTask = null, TaskItemViewModel[]? additionalParents = null, bool isBlocked = false)
-        {
-            switch (action)
-            {
-                case TaskAction.Add:
-                    {
-                        var taskItemList = await new TaskTreeManager().AddTask(change.Model, taskStorage, currentTask?.Model, isBlocked);
-                        foreach (var task in taskItemList)
-                        {
-                            change.Id = task.Id;
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));                           
-                        }
-                        return true;
-                    }
-                case TaskAction.AddChild:
-                    {
-                        var taskItemList = await new TaskTreeManager().AddChildTask(change.Model, taskStorage, currentTask!.Model);
-                        foreach (var task in taskItemList)
-                        {                            
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-                        change.Id = taskItemList.OrderByDescending(item => item.Id).First().Id;
-                        return true;
-                    }
-                case TaskAction.Delete:
-                    {
-                        var parentsItemList = await new TaskTreeManager().DeleteTask(change.Model, taskStorage);
-                        foreach (var parent in parentsItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(parent, this));
-                        }
-                        Tasks.Remove(change);
-                        return true;
-                    }
-                case TaskAction.Update:
-                    {
-                        await new TaskTreeManager().UpdateTask(change.Model, taskStorage);
-                        Tasks.AddOrUpdate(change);
-                        return true;
-                    }
-                case TaskAction.Clone:
-                    {
-                        if (additionalParents == null) throw new ArgumentNullException("Stepparents aren't provided");
-
-                        List<TaskItem> additionalItemParents = new List<TaskItem>();
-                        foreach (var newParent in additionalParents)
-                        {
-                            additionalItemParents.Add(newParent.Model);
-                        }
-                        var taskItemList = await new TaskTreeManager().CloneTask(change.Model, taskStorage, additionalItemParents);
-                        foreach (var task in taskItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-
-                        var clone = taskItemList.OrderByDescending(item => item.Id).First();
-                        change.Id = clone.Id;
-                        change.Parents.Add(clone.ParentTasks);
-                        
-                        return true;
-                    }
-                case TaskAction.CopyInto:
-                    {
-                        if (additionalParents == null) throw new ArgumentNullException("Additional parent isn't provided");
-
-                        List<TaskItem> additionalItemParents = new List<TaskItem>();
-                        foreach (var newParent in additionalParents)
-                        {
-                            additionalItemParents.Add(newParent.Model);
-                        }
-                        
-                        var taskItemList = await new TaskTreeManager().CopyTaskInto(change.Model, taskStorage, additionalItemParents[0]);
-                        foreach (var task in taskItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-                        return true;
-                    }
-                case TaskAction.MoveInto:
-                    {
-                        if (additionalParents == null) throw new ArgumentNullException("New parent isn't provided");
-                        
-                        var taskItemList = await new TaskTreeManager().MoveTaskInto(change.Model, taskStorage, additionalParents[0].Model, currentTask?.Model);
-                        foreach (var task in taskItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-                        return true;
-                    }
-                case TaskAction.Unblock:
-                    {
-                        if (currentTask is null) throw new ArgumentNullException("CurrentTask can't be null");
-
-                        var taskItemList = await new TaskTreeManager().UnblockTask(change.Model, currentTask?.Model!, taskStorage);
-                        foreach (var task in taskItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-                        return true;
-                    }
-                case TaskAction.Block:
-                    {
-                        if (currentTask is null) throw new ArgumentNullException("CurrentTask can't be null");
-
-                        var taskItemList = await new TaskTreeManager().BlockTask(change.Model, currentTask?.Model!, taskStorage);
-                        foreach (var task in taskItemList)
-                        {
-                            Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
-                        }
-                        return true;
-                    }
-                default: return false;
-            }            
-        }              
-    }
-}
+      //  protected virtual void OnInited()
+        //{
+          //  Initiated?.Invoke(this, EventArgs.Empty);
+       // }              
+    //}
+//}
