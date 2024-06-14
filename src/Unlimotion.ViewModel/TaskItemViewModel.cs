@@ -63,46 +63,7 @@ namespace Unlimotion.ViewModel
                 .Filter(containsFilter)
                 .Bind(out _containsTasks)
                 .Subscribe()
-                .AddToDispose(this);
-
-            //Subscribe for set Parent for children
-            /*ContainsTasks.ToObservableChangeSet()
-                .Subscribe(set =>
-                { 
-                    foreach (var change in set)
-                    {
-                        switch (change.Reason)
-                        {
-                            case ListChangeReason.Add:
-                                change.Item.Current.Parents.Add(Id);
-                                break;
-                            case ListChangeReason.AddRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.Parents.Add(Id);                                                                    }
-                                break;
-                            case ListChangeReason.Replace:
-                                break;
-                            case ListChangeReason.Remove:
-                                change.Item.Current.Parents.Remove(Id);
-                                break;
-                            case ListChangeReason.RemoveRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.Parents.Remove(Id);                                    
-                                }
-                                break;
-                            case ListChangeReason.Refresh:
-                                break;
-                            case ListChangeReason.Moved:
-                                break;
-                            case ListChangeReason.Clear:
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-                    }
-                }).AddToDispose(this);*/
+                .AddToDispose(this);            
 
             //Subscribe ParentsTasks
             var parentsFilter = Parents.ToObservableChangeSet()
@@ -150,49 +111,7 @@ namespace Unlimotion.ViewModel
                 .Filter(blocksFilter)
                 .Bind(out _blocksTasks)
                 .Subscribe()
-                .AddToDispose(this);
-
-            //Subscribe for set BlockedBy for Blocks
-            /*BlocksTasks.ToObservableChangeSet()
-                .Subscribe(set =>
-                {
-                    foreach (var change in set)
-                    {
-                        switch (change.Reason)
-                        {
-                            case ListChangeReason.Add:
-                                change.Item.Current.BlockedBy.Add(Id);
-                                break;
-                            case ListChangeReason.AddRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Add(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Replace:
-                                break;
-                            case ListChangeReason.Remove:
-                                change.Item.Current.BlockedBy.Remove(Id);
-                                break;
-                            case ListChangeReason.RemoveRange:
-                                foreach (var model in change.Range)
-                                {
-                                    model.BlockedBy.Remove(Id);
-                                }
-
-                                break;
-                            case ListChangeReason.Refresh:
-                                break;
-                            case ListChangeReason.Moved:
-                                break;
-                            case ListChangeReason.Clear:
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-                    }
-                }).AddToDispose(this);*/
+                .AddToDispose(this);            
 
             //Subscribe BlockedBy
             var blockedByFilter = BlockedBy.ToObservableChangeSet()
@@ -328,40 +247,7 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            //RemoveFunc = async () => await ((TaskRepository)taskRepository).UpdateStorageAsync(this, TaskAction.Delete);
-            RemoveFunc = async () => await (taskStorage.Delete(this));
-
-            /*RemoveFunc = parent =>
-            {
-                if (parent == null)
-                {
-                    foreach (var model in ParentsTasks.ToList())
-                    {
-                        //model.Contains.Remove(Id);
-                        ((TaskRepository)taskRepository).Update(this, model, BLL.Action.RemoveContains);                        
-                    }
-                }
-                //Удаление ссылки из родителя
-                //parent?.Contains.Remove(Id);
-                if (parent != null)
-                    ((TaskRepository)taskRepository).Update(this, parent, BLL.Action.RemoveContains);
-                
-                //Если родителей не осталось, удаляется сама задача
-                if (Parents.Count == 0)
-                {
-                    taskRepository.Remove(Id, true);
-
-                    foreach (var containsTask in ContainsTasks.ToList())
-                    {
-                        //containsTask.Parents.Remove(Id);
-                        ((TaskRepository)taskRepository).Update(containsTask, this, BLL.Action.RemoveParent);
-                    }
-
-                    return true;
-                }
-
-                return false;
-            };*/
+            RemoveFunc = async () => await (taskStorage.Delete(this));            
 
             CloneFunc = async destination =>
             {
@@ -467,23 +353,7 @@ namespace Unlimotion.ViewModel
                         //Обнуляем период
                         plannedPeriod = null;
                 }
-            });
-
-            /*Contains.ToObservableChangeSet()
-                //.Throttle(TimeSpan.FromSeconds(2))
-                .Subscribe(set =>
-                {
-                    if (_isInited) SaveItemCommand.Execute();
-                })
-                .AddToDispose(this);*/
-
-            /*Blocks.ToObservableChangeSet()
-                //.Throttle(TimeSpan.FromSeconds(2))
-                .Subscribe(set =>
-                {
-                    if (_isInited) SaveItemCommand.Execute();
-                })
-                .AddToDispose(this);*/
+            });            
 
             this.WhenAnyValue(t => t.Repeater)
                 .Subscribe(r =>
@@ -643,8 +513,6 @@ namespace Unlimotion.ViewModel
 
         public async void BlockBy(TaskItemViewModel blocker)
         {
-            //blocker.Blocks.Add(Id);
-            //await ((TaskRepository)_taskRepository).UpdateStorageAsync(this, TaskAction.Block, blocker);
             await _taskStorage.Block(this, blocker);
         }
 

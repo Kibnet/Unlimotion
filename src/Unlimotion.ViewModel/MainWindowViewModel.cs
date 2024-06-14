@@ -77,8 +77,7 @@ namespace Unlimotion.ViewModel
             {
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                //await task.SaveItemCommand.Execute();
-                //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add);
+                
                 await taskRepository?.Add(task);
                 CurrentTaskItem = task;
                 SelectCurrentTask();
@@ -90,23 +89,14 @@ namespace Unlimotion.ViewModel
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                //await task.SaveItemCommand.Execute();
+                
                 if (CurrentTaskItem != null)
                 {
                     if (AllTasksMode)
                     {
-                        //CurrentItem.Parent.TaskItem.Contains.Add(task.Id);
-                        //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.Add, CurrentItem.TaskItem, null, isBlocked);
                         await taskRepository?.Add(task, CurrentItem.TaskItem, isBlocked);
                     }                    
-                    /*else if (CurrentTaskItem?.ParentsTasks.Count > 0)
-                    {
-                        CurrentTaskItem.ParentsTasks.First().Contains.Add(task.Id);  
-                        taskRepository.Tasks.AddOrUpdate(task);
-                    }*/
-                }
-
-                //taskRepository.Tasks.AddOrUpdate(task);
+                }               
 
                 CurrentTaskItem = task;
                 SelectCurrentTask();                
@@ -117,8 +107,7 @@ namespace Unlimotion.ViewModel
                 var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
-                    CreateSibling.Execute(true);
-                    //parent.Blocks.Add(CurrentTaskItem.Id);
+                    CreateSibling.Execute(true);                    
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -130,10 +119,7 @@ namespace Unlimotion.ViewModel
                     return;
                 var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                //await task.SaveItemCommand.Execute();
-                //CurrentTaskItem.Contains.Add(task.Id);
-                //taskRepository.Tasks.AddOrUpdate(task);
-                //await ((TaskRepository)taskRepository).UpdateStorageAsync(task, TaskAction.AddChild, CurrentTaskItem);
+                
                 await taskRepository?.AddChild(task, CurrentTaskItem);
 
 
@@ -224,8 +210,6 @@ namespace Unlimotion.ViewModel
             await taskStorage.Connect();
             taskStorage.Init();
 
-            //TaskRepository? taskRepository;
-            //taskRepository = Locator.Current.GetService<ITaskRepository>();
             var taskRepository = taskStorage;
             taskRepository.Init();
 
@@ -609,10 +593,7 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
-                            {
-                                //m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);                                
-                            },
+                            RemoveAction = m => { },
                             SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -635,10 +616,7 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
-                            {
-                                //m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
-                            },
+                            RemoveAction = m => { },
                             SortComparer = sortObservable
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);

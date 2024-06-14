@@ -82,7 +82,7 @@ public class TaskWrapperViewModel : DisposableList
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             _actions.RemoveAction.Invoke(this);
-            await _actions.RemoveFunc?.Invoke(this);
+            if (_actions.RemoveFunc != null) await _actions.RemoveFunc?.Invoke(this);
         });
     }
 

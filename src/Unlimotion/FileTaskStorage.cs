@@ -358,6 +358,8 @@ namespace Unlimotion
             foreach (var task in taskItemList)
             {
                 UpdateCache(task);
+                if (task.Id != currentTask.Id) currentTask.Blocks.Add(task.Id);
+
             }
             return true;
         }
