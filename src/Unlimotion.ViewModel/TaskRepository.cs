@@ -1,6 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+//using System;
+//using System.Collections.Generic;
+/*using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData;
@@ -8,6 +8,10 @@ using DynamicData.Binding;
 using System.IO;
 using Unlimotion.ViewModel.Models;
 using System.Threading;
+using System.Data;
+using System.ComponentModel;
+using Splat;
+
 
 namespace Unlimotion.ViewModel
 {
@@ -190,21 +194,23 @@ namespace Unlimotion.ViewModel
             return roots;
         }
 
-        public TaskItemViewModel Clone(TaskItem clone, params TaskItemViewModel[] destinations)
+        public async Task<TaskItemViewModel> Clone(TaskItem clone, params TaskItemViewModel[] destinations)
         {
             var task = new TaskItemViewModel(clone, this);
-            task.SaveItemCommand.Execute();
-            foreach (var destination in destinations)
+            //task.SaveItemCommand.Execute();
+            /*foreach (var destination in destinations)
             {
                 destination.Contains.Add(task.Id);
-            }
-            this.Tasks.AddOrUpdate(task);
-            return task;
-        }
+            }*/
+            //await UpdateStorageAsync(task, TaskAction.Clone, null, destinations);
+            //this.Tasks.AddOrUpdate(task);
 
-        protected virtual void OnInited()
-        {
-            Initiated?.Invoke(this, EventArgs.Empty);
-        }
-    }
-}
+  //          return task;
+    //    }
+
+      //  protected virtual void OnInited()
+        //{
+          //  Initiated?.Invoke(this, EventArgs.Empty);
+       // }              
+    //}
+//}
