@@ -1,16 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-		xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-		xmlns:unlimotion="clr-namespace:Unlimotion"
-		xmlns:views="clr-namespace:Unlimotion.Views"
-		xmlns:converters="clr-namespace:Unlimotion.Converters"
-		xmlns:behavior="clr-namespace:Unlimotion.Behavior"
-		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-		x:DataType="viewModel:MainWindowViewModel"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+xmlns:unlimotion="clr-namespace:Unlimotion"
+xmlns:views="clr-namespace:Unlimotion.Views"
+xmlns:converters="clr-namespace:Unlimotion.Converters"
+xmlns:behavior="clr-namespace:Unlimotion.Behavior"
+mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+x:DataType="viewModel:MainWindowViewModel"
         Name="mainControl"
-		x:Class="Unlimotion.Views.MainControl">
+x:Class="Unlimotion.Views.MainControl">
 
     <Design.DataContext>
         <viewModel:MainWindowViewModel/>
@@ -31,10 +31,10 @@
             <Grid Background="Transparent">
                 <ContentControl Content="{Binding TaskItem}"/>
                 <Button Background="#00000000"
-						Content="❌"
-						BorderThickness="0"
-						HorizontalAlignment="Right"
-						Command="{Binding RemoveCommand}"/>
+Content="❌"
+BorderThickness="0"
+HorizontalAlignment="Right"
+Command="{Binding RemoveCommand}"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:EmojiFilter">
@@ -367,6 +367,26 @@
                                                 <behavior:LostFocusUpdateBindingBehavior Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"/>
                                             </Interaction.Behaviors>
                                         </TextBox>
+
+                                        <DropDownButton Content="Set Duration" Grid.Column="1" Grid.Row="1">
+                                            <DropDownButton.Flyout>
+                                                <MenuFlyout>
+                                                    <MenuItem Header="1 minute" Command="{Binding SetDurationCommands.OneMinCommand}" />
+                                                    <MenuItem Header="5 minute" Command="{Binding SetDurationCommands.FiveMinutesCommand}" />
+                                                    <MenuItem Header="10 minute" Command="{Binding SetDurationCommands.TenMinutesCommand}" />
+                                                    <MenuItem Header="20 minute" Command="{Binding SetDurationCommands.TwentyMinutesCommand}" />
+                                                    <MenuItem Header="40 minute" Command="{Binding SetDurationCommands.FortyMinutesCommand}" />
+                                                    <MenuItem Header="1 hour" Command="{Binding SetDurationCommands.OneHourCommand}" />
+                                                    <MenuItem Header="2 hour" Command="{Binding SetDurationCommands.TwoHoursCommand}" />
+                                                    <MenuItem Header="4 hour" Command="{Binding SetDurationCommands.FourHoursCommand}" />
+                                                    <MenuItem Header="1 day" Command="{Binding SetDurationCommands.OneDayCommand}" />
+                                                    <MenuItem Header="2 day" Command="{Binding SetDurationCommands.TwoDaysCommand}" />
+                                                    <MenuItem Header="4 day" Command="{Binding SetDurationCommands.FourDaysCommand}" />
+                                                    <MenuItem Header="8 day" Command="{Binding SetDurationCommands.EightDaysCommand}" />
+                                                    <MenuItem Header="None" Command="{Binding SetDurationCommands.NoneCommand}" />
+                                                </MenuFlyout>
+                                            </DropDownButton.Flyout>
+                                        </DropDownButton>
                                         <CalendarDatePicker Grid.Column="2" SelectedDate="{Binding PlannedEndDateTime}"
                                                             IsTodayHighlighted="True"
                                                             Watermark="Planned End"
