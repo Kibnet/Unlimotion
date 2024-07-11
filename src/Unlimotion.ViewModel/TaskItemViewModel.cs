@@ -39,9 +39,11 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
         private TimeSpan? plannedPeriod;
         private DateCommands commands = null;
+        public SetDurationCommands SetDurationCommands { get; set; }
 
         private void Init(ITaskRepository taskRepository)
         {
+            SetDurationCommands = new SetDurationCommands(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var model = Model;
@@ -722,7 +724,7 @@ namespace Unlimotion.ViewModel
         /// Команды для быстрого выбора дат, ленивая загрузка
         /// </summary>
         public DateCommands Commands => commands ??= new DateCommands(this);
-
+        
         private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper notificationManager, string taskName,
             List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
         {
