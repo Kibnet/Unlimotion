@@ -150,10 +150,12 @@ public class BackupViaGitService : IRemoteBackupService
 
             var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            var taskstorage = Locator.Current.GetService<FileTaskStorage>();
             try
             {
                 dbwatcher?.SetEnable(false);
-                taskRepository?.SetPause(true);
+                //taskRepository?.SetPause(true);
+                taskstorage?.SetPause(true);
                 Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
                 {
                     CredentialsProvider = (_, _, _) =>
@@ -234,7 +236,8 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 dbwatcher?.SetEnable(true);
 
-                taskRepository?.SetPause(false);
+                //taskRepository?.SetPause(false);
+                taskstorage?.SetPause(false);
             }
         }
     }

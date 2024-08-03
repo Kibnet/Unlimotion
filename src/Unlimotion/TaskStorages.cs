@@ -5,7 +5,9 @@ using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
 using Quartz;
+using AutoMapper;
 using ITrigger = Quartz.ITrigger;
+using Unlimotion.TaskTree;
  
 namespace Unlimotion
 {
@@ -17,6 +19,7 @@ namespace Unlimotion
         {
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
+            var mapper = Locator.Current.GetService<IMapper>();
             settingsViewModel.ObservableForProperty(m => m.IsServerMode)
                 .Subscribe(c =>
                 {
@@ -59,7 +62,7 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
+                await serverTaskStorage.BulkInsert(await fileTaskStorage.GetAll());
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -70,7 +73,7 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = serverTaskStorage.GetAll();
+                var tasks = await serverTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
                     task.Id = task.Id.Replace("TaskItem/", "");
@@ -82,17 +85,17 @@ namespace Unlimotion
                     {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
                     }
-                    await fileTaskStorage.Save(task);
+                    await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = fileTaskStorage.GetAll();
+                var tasks = await fileTaskStorage.GetAll();
                 foreach (var task in tasks)
                 {
-                    await fileTaskStorage.Save(task);
+                    await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
@@ -127,27 +130,32 @@ namespace Unlimotion
             else
             {
                 taskStorage = CreateFileTaskStorage(settings?.Path);
+                
                 try
                 {
                     dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
-                    Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
+                    Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);               
                 }
                 catch (Exception ex)
                 {
                     dbWatcher = null;
                     Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
                 }
-            }
+                var taskTreeManager = new TaskTreeManager((IStorage)taskStorage);
+                taskStorage.TaskTreeManager = taskTreeManager;
+            }         
+            
 
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            var taskRepository = new TaskRepository(taskStorage, dbWatcher);
-            Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
+            //var taskRepository = new TaskRepository(taskStorage, dbWatcher);
+            //Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
         }
 
         private static FileTaskStorage CreateFileTaskStorage(string? path)
         {
             var storagePath = GetStoragePath(path);
             var taskStorage = new FileTaskStorage(storagePath);
+            Locator.CurrentMutable.RegisterConstant(taskStorage, typeof(FileTaskStorage));
             return taskStorage;
         }
 
