@@ -342,7 +342,7 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
+
             var durationFilter = DurationFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
@@ -410,6 +410,38 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
+            //Фильтрация в дереве по Wanted
+            var wantedTreeFilter = this.WhenAnyValue(m => m.ShowWanted)
+                .Select(filter =>
+                {
+                    bool Predicate(TaskWrapperViewModel task)
+                    {
+                        if (!filter.HasValue)
+                        {
+                            return true;
+                        }
+
+                        if (filter.Value)
+                        {
+                            if (task.SubTasks.Any())
+                            {
+                                return task.AllSubTasks().Any(sub => sub.TaskItem.Wanted);
+                            }
+
+                            return task.TaskItem.Wanted;
+                        }
+
+                        if (task.SubTasks.Any())
+                        {
+                            return task.AllSubTasks().Any(sub => !sub.TaskItem.Wanted);
+                        }
+
+                        return !task.TaskItem.Wanted;
+                    };
+
+                    return (Func<TaskWrapperViewModel, bool>)Predicate;
+                });
+
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
@@ -428,10 +460,12 @@ namespace Unlimotion.ViewModel
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter },
+                        PostFilter = new() { wantedTreeFilter },
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
+                .Filter(wantedTreeFilter)
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
                 .Bind(out _currentItems)
@@ -532,25 +566,25 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
-                .Filter(m => m.IsCompleted == true)
-                .Filter(completedDateFilter)
-                .Filter(emojiFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions()
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
+                    .Filter(m => m.IsCompleted == true)
+                    .Filter(completedDateFilter)
+                    .Filter(emojiFilter)
+                    .Transform(item =>
                     {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
-                .Bind(out _completedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
+                        var actions = new TaskWrapperActions()
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
+                    .Bind(out _completedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
 
             CompletedItems = _completedItems;
 
@@ -616,26 +650,26 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
-                .Filter(taskFilter)
-                .Filter(lastCreatedDateFilter)
-                .Filter(emojiFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
+                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .Filter(taskFilter)
+                    .Filter(lastCreatedDateFilter)
+                    .Filter(emojiFilter)
+                    .Transform(item =>
                     {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
-                .Bind(out _lastCreatedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
+                    .Bind(out _lastCreatedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
 
             LastCreatedItems = _lastCreatedItems;
 
@@ -653,8 +687,8 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             LastOpenedItems = _lastOpenedItems;
-            
-            this.WhenAnyValue(m => m.CurrentTaskItem, m=> m.DetailsAreOpen)
+
+            this.WhenAnyValue(m => m.CurrentTaskItem, m => m.DetailsAreOpen)
                 .Subscribe(item =>
                 {
                     if (DetailsAreOpen && item.Item1 != null && LastTaskItem != item.Item1)
@@ -808,7 +842,7 @@ namespace Unlimotion.ViewModel
                 {
                     CurrentLastCreated = FindTaskWrapperViewModel(CurrentTaskItem, LastCreatedItems);
                 }
-                else if(LastOpenedMode)
+                else if (LastOpenedMode)
                 {
                     CurrentLastOpenedItem = FindTaskWrapperViewModel(CurrentTaskItem, LastOpenedItems);
                 }

@@ -17,6 +17,7 @@ public class TaskWrapperActions
     public Action<TaskWrapperViewModel> RemoveAction;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
     public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
+    public List<IObservable<Func<TaskWrapperViewModel, bool>>> PostFilter = new() { Filters.DefaultPost };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
 
@@ -63,7 +64,10 @@ public static class Comparers
 public static class Filters
 {
     public static IObservable<Func<TaskItemViewModel, bool>> Default =
-        Observable.Return<Func<TaskItemViewModel, bool>>(m => m!=null);
+        Observable.Return<Func<TaskItemViewModel, bool>>(m => m != null);
+
+    public static IObservable<Func<TaskWrapperViewModel, bool>> DefaultPost =
+        Observable.Return<Func<TaskWrapperViewModel, bool>>(m => m != null);
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -91,6 +95,21 @@ public class TaskWrapperViewModel : DisposableList
 
     public string BreadScrumbs => _actions.GetBreadScrumbs?.Invoke(this);
 
+    public IEnumerable<TaskWrapperViewModel> AllSubTasks()
+    {
+        foreach (var subTask in SubTasks)
+        {
+            yield return subTask;
+        }
+        foreach (var subTask in SubTasks)
+        {
+            foreach (var allSubTask in subTask.AllSubTasks())
+            {
+                yield return allSubTask;
+            }
+        }
+    }
+
     public ReadOnlyObservableCollection<TaskWrapperViewModel> SubTasks
     {
         get
@@ -106,8 +125,17 @@ public class TaskWrapperViewModel : DisposableList
                     }
                 }
 
-                tasks
-                    .Transform(model => new TaskWrapperViewModel(this, model, _actions))
+                var transform = tasks.Transform(model => new TaskWrapperViewModel(this, model, _actions));
+
+                if (_actions.PostFilter.Count > 0)
+                {
+                    foreach (var filter in _actions.PostFilter)
+                    {
+                        transform = transform.Filter(filter);
+                    }
+                }
+
+                transform
                     .Sort(_actions.SortComparer)
                     .Bind(out _subTasks)
                     .Subscribe()
