@@ -442,13 +442,38 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskWrapperViewModel, bool>)Predicate;
                 });
 
+            var timeTreeFilter = UnlockedTimeFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskWrapperViewModel task)
+                    {
+                        return (filter.All(e => e.ShowTasks == false) ||
+                                filter.Where(e => e.ShowTasks).Any(item =>
+                                {
+                                    if (task.SubTasks.Any())
+                                    {
+                                        return task.AllSubTasks().Any(sub => item.Predicate(sub.TaskItem));
+                                    }
+
+                                    return item.Predicate(task.TaskItem);
+                                }));
+                    }
+
+                    return (Func<TaskWrapperViewModel, bool>)Predicate;
+                });
+
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
                     m => m.IsCanBeCompleted,
                     m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    m => m.Wanted,
+                    m => m.PlannedBeginDateTime,
+                    m => m.PlannedEndDateTime,
+                    m => m.UnlockedDateTime, (c, d, w, b, e, u) => c.Value && (d.Value == false)))
                 .Filter(taskFilter)
                 .Filter(emojiRootFilter)
                 .Transform(item =>
@@ -460,11 +485,13 @@ namespace Unlimotion.ViewModel
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter },
-                        PostFilter = new() { wantedTreeFilter },
+                        PostFilter = new() { timeTreeFilter, wantedTreeFilter },
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
+                .AutoRefreshOnObservable(m => m.SubTasks.ObserveCollectionChanges())
+                .Filter(timeTreeFilter)
                 .Filter(wantedTreeFilter)
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()

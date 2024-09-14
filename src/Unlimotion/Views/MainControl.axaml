@@ -91,6 +91,7 @@ Command="{Binding RemoveCommand}"/>
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
                             </WrapPanel>
