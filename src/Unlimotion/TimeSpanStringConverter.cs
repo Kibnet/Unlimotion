@@ -16,10 +16,16 @@ namespace Unlimotion
         public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             var span = value as TimeSpan?;
+            return SpanToString(span);
+        }
+
+        public static string SpanToString(TimeSpan? span)
+        {
             if (span == null)
             {
                 return "";
             }
+
             TimeSpan timeSpan = span.Value;
             StringBuilder sb = new StringBuilder();
             var list = new List<string>();
