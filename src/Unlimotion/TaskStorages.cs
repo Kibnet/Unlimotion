@@ -116,32 +116,54 @@ namespace Unlimotion
                 prevStorage.Disconnect();
             }
 
-            ITaskStorage taskStorage;
-            IDatabaseWatcher dbWatcher;
             if (isServerMode)
             {
-                taskStorage = new ServerTaskStorage(settings?.URL);
-                dbWatcher = null;
-                Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
+                RegisterServerTaskStorage(settings?.URL);
             }
             else
             {
-                taskStorage = CreateFileTaskStorage(settings?.Path);
-                try
-                {
-                    dbWatcher = new FileDbWatcher(GetStoragePath(settings?.Path));
-                    Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
-                }
-                catch (Exception ex)
-                {
-                    dbWatcher = null;
-                    Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
-                }
+                RegisterFileTaskStorage(settings?.Path);
             }
 
-            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            RegisterTaskRepository();
+        }
+
+        public static ITaskRepository RegisterTaskRepository()
+        {
+            var taskStorage = Locator.Current.GetService<ITaskStorage>();
+            var dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
+
             var taskRepository = new TaskRepository(taskStorage, dbWatcher);
             Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
+            return taskRepository;
+        }
+
+        public static ITaskStorage RegisterServerTaskStorage(string? settingsUrl)
+        {
+            ITaskStorage taskStorage;
+            taskStorage = new ServerTaskStorage(settingsUrl);
+            Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
+            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            return taskStorage;
+        }
+
+        public static ITaskStorage RegisterFileTaskStorage(string storagePath)
+        {
+            ITaskStorage taskStorage;
+            IDatabaseWatcher dbWatcher;
+            taskStorage = CreateFileTaskStorage(storagePath);
+            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            try
+            {
+                dbWatcher = new FileDbWatcher(GetStoragePath(storagePath));
+                Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
+            }
+            catch (Exception ex)
+            {
+                dbWatcher = null;
+                Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
+            }
+            return taskStorage;
         }
 
         private static FileTaskStorage CreateFileTaskStorage(string? path)

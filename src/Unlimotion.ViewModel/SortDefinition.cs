@@ -28,6 +28,15 @@ public class SortDefinition
                 new(w => w.TaskItem.CreatedDateTime, SortDirection.Ascending),
             }
         };
+        //Эмодзи
+        yield return new SortDefinition
+        {
+            Name = "Emodji",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.GetAllEmoji, SortDirection.Ascending),
+            },
+        };
         //По дате создания Asc
         yield return new SortDefinition
         {

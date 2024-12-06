@@ -136,7 +136,6 @@ namespace Unlimotion.ViewModel
                         list.Add(task.Emoji);
                     }
 
-                    list.Reverse();
                     GetAllEmoji = string.Join("", list);
                 })
                 .AddToDispose(this);
@@ -680,30 +679,33 @@ namespace Unlimotion.ViewModel
 
         public IEnumerable<TaskItemViewModel> GetAllParents()
         {
-            var hashSet = new HashSet<string>();
-            var queue = new Queue<TaskItemViewModel>();
-            foreach (var task in ParentsTasks)
-            {
-                queue.Enqueue(task);
-            }
+            var visited = new HashSet<string>();
+            var orderedParents = new List<TaskItemViewModel>();
 
-            while (queue.TryDequeue(out var parent))
+            void Traverse(TaskItemViewModel task)
             {
-                if (hashSet.Contains(parent.Id))
+                if (visited.Contains(task.Id))
+                    return;
+
+                visited.Add(task.Id);
+
+                // Сначала рекурсивно обходим родительские задачи
+                foreach (var parent in task.ParentsTasks.OrderBy(m => m.Title))
                 {
-                    continue;
+                    Traverse(parent);
                 }
 
-                hashSet.Add(parent.Id);
-                yield return parent;
-                if (parent.ParentsTasks.Count > 0)
-                {
-                    foreach (var task in parent.ParentsTasks)
-                    {
-                        queue.Enqueue(task);
-                    }
-                }
+                // Затем добавляем текущую задачу в список
+                orderedParents.Add(task);
             }
+
+            // Начинаем обход с непосредственных родителей текущей задачи
+            foreach (var task in ParentsTasks.OrderBy(m => m.Title))
+            {
+                Traverse(task);
+            }
+
+            return orderedParents;
         }
 
         public RepeaterPatternViewModel Repeater { get; set; }
