@@ -1,4 +1,4 @@
-﻿namespace Unlimotion.ViewModel;
+﻿namespace Unlimotion.Domain;
 
 public enum RepeaterType
 {

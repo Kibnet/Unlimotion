@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using AutoMapper.Configuration;
+using Unlimotion.Domain;
 using Unlimotion.Interface;
-using Unlimotion.Server.Domain;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds;
 using Unlimotion.Server.ServiceModel.Molds.Attachment;

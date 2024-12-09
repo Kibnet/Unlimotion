@@ -6,7 +6,7 @@ using DynamicData;
 using DynamicData.Aggregation;
 using DynamicData.PLinq;
 using Telerik.JustMock;
-using Unlimotion.ViewModel;
+using Unlimotion.Domain;
 using Xunit;
 
 namespace Unlimotion.Test;

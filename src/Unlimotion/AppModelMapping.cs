@@ -1,8 +1,8 @@
 ﻿using AutoMapper;
+using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel.Molds.Attachment;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
-using Unlimotion.ViewModel;
 
 namespace Unlimotion
 {
@@ -29,9 +29,9 @@ namespace Unlimotion
             cfg.CreateMap<TaskItem, TaskItemHubMold>();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>();
-            cfg.CreateMap<RepeaterType, Server.Domain.RepeaterType>().ReverseMap();
-            cfg.CreateMap<RepeaterPattern, Server.Domain.RepeaterPattern>().ReverseMap();
-            cfg.CreateMap<TaskItem, Server.Domain.TaskItem>()
+            cfg.CreateMap<RepeaterType, RepeaterType>().ReverseMap();
+            cfg.CreateMap<RepeaterPattern, RepeaterPattern>().ReverseMap();
+            cfg.CreateMap<TaskItem, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())
                 .ReverseMap();
         }

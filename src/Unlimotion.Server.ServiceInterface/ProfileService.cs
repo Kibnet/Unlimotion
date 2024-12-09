@@ -5,7 +5,7 @@ using AutoMapper;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Session;
 using ServiceStack;
-using Unlimotion.Server.Domain;
+using Unlimotion.Domain;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds;
 

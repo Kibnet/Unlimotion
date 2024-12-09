@@ -149,7 +149,6 @@ public class BackupViaGitService : IRemoteBackupService
             ShowUiMessage("Start Git Pull");
 
             var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
             var taskstorage = Locator.Current.GetService<FileTaskStorage>();
             try
             {

@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace Unlimotion.Server.Domain
+namespace Unlimotion.Domain
 {
     public class LoginAudit
     {

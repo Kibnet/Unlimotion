@@ -8,8 +8,8 @@ using Quartz;
 using AutoMapper;
 using ITrigger = Quartz.ITrigger;
 using Unlimotion.TaskTree;
-using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using Unlimotion.Domain;
 
 namespace Unlimotion
 {
@@ -89,7 +89,7 @@ namespace Unlimotion
                       {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
                       }
-                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
+                      await fileTaskStorage.Save(mapper.Map<TaskItem>(task));
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -98,7 +98,7 @@ namespace Unlimotion
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
                 await foreach (var task in fileTaskStorage.GetAll())
                 {
-                      await fileTaskStorage.Save(mapper.Map<Server.Domain.TaskItem>(task));
+                      await fileTaskStorage.Save(mapper.Map<TaskItem>(task));
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
@@ -130,18 +130,6 @@ namespace Unlimotion
             {
                 RegisterFileTaskStorage(settings?.Path);
             }
-
-            RegisterTaskRepository();
-        }
-
-        public static ITaskRepository RegisterTaskRepository()
-        {
-            var taskStorage = Locator.Current.GetService<ITaskStorage>();
-            var dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
-
-            var taskRepository = new TaskRepository(taskStorage, dbWatcher);
-            Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
-            return taskRepository;
         }
 
         public static ITaskStorage RegisterServerTaskStorage(string? settingsUrl)

@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.TaskTree;
 
@@ -63,7 +64,7 @@ namespace Unlimotion.Views
                             if (!set.Contains(task.Id))
                             {
                                 set.Add(task.Id);
-                                await taskStorage.Save(_mapper.Map<Server.Domain.TaskItem>(task.Model));
+                                await taskStorage.Save(_mapper.Map<TaskItem>(task.Model));
                                 foreach (var item in task.ContainsTasks)
                                 {
                                     queue.Enqueue(item);

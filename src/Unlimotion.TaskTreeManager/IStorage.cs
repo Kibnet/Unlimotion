@@ -1,4 +1,4 @@
-﻿using Unlimotion.Server.Domain;
+﻿using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 

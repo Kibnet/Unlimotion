@@ -7,11 +7,11 @@ using ServiceStack.Auth;
 using ServiceStack.Host;
 using SignalR.EasyUse.Server;
 using Unlimotion.Interface;
-using Unlimotion.Server.Domain;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Unlimotion.Domain;
 
 namespace Unlimotion.Server.Hubs
 {

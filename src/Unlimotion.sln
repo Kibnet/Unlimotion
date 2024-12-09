@@ -28,7 +28,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Interface", "Unl
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server", "Unlimotion.Server\Unlimotion.Server.csproj", "{64918B14-811E-4366-8867-716B09902ABF}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server.Domain", "Unlimotion.Server.Domain\Unlimotion.Server.Domain.csproj", "{E66D73CE-4F61-4D61-83BE-3E2F9710DC07}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Domain", "Unlimotion.Domain\Unlimotion.Domain.csproj", "{E66D73CE-4F61-4D61-83BE-3E2F9710DC07}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unlimotion.Server.ServiceInterface", "Unlimotion.Server.ServiceInterface\Unlimotion.Server.ServiceInterface.csproj", "{10713EF4-686A-4E00-9BD4-7A34F8BC8987}"
 EndProject

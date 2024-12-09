@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -9,22 +7,18 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
-using Avalonia.Controls;
 using DynamicData;
 using DynamicData.Binding;
-using ExCSS;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Splat;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
-using static System.Reflection.Metadata.BlobBuilder;
-using Unlimotion.Views.Graph;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
-using Unlimotion.Server.Domain;
-using TaskItem = Unlimotion.ViewModel.TaskItem;
 using LibGit2Sharp;
+using Microsoft.Msagl.Core.Geometry.Curves;
+using Unlimotion.Domain;
 
 namespace Unlimotion
 {
@@ -142,7 +136,7 @@ namespace Unlimotion
             Initiated?.Invoke(this, EventArgs.Empty);
         }
 
-        public async Task<bool> Save(Server.Domain.TaskItem taskItem)
+        public async Task<bool> Save(TaskItem taskItem)
         {
             while (isPause)
             {
@@ -201,14 +195,14 @@ namespace Unlimotion
             }
         }        
  
-        public async Task<Server.Domain.TaskItem> Load(string itemId)
+        public async Task<TaskItem> Load(string itemId)
         {
             var jsonSerializer = new JsonSerializer();
             try
             {
                 using var reader = File.OpenText(System.IO.Path.Combine(Path, itemId));
                 using var jsonReader = new JsonTextReader(reader);
-                return jsonSerializer.Deserialize<Server.Domain.TaskItem>(jsonReader);
+                return jsonSerializer.Deserialize<TaskItem>(jsonReader);
             }
             catch (Exception e)
             {
@@ -233,8 +227,8 @@ namespace Unlimotion
         public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)
         {
             var taskItemList = (await TaskTreeManager.AddTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
-                mapper.Map<Server.Domain.TaskItem>(currentTask?.Model),
+                mapper.Map<TaskItem>(change.Model),
+                mapper.Map<TaskItem>(currentTask?.Model),
                 isBlocked)).OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
@@ -252,8 +246,8 @@ namespace Unlimotion
         public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
             var taskItemList = (await TaskTreeManager.AddChildTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
-                mapper.Map<Server.Domain.TaskItem>(currentTask.Model)))
+                mapper.Map<TaskItem>(change.Model),
+                mapper.Map<TaskItem>(currentTask.Model)))
                 .OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
@@ -271,7 +265,7 @@ namespace Unlimotion
 
         public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
         {
-            var connectedItemList = await TaskTreeManager.DeleteTask(mapper.Map<Server.Domain.TaskItem>(change.Model));
+            var connectedItemList = await TaskTreeManager.DeleteTask(mapper.Map<TaskItem>(change.Model));
             
             foreach (var task in connectedItemList)
             {
@@ -284,19 +278,25 @@ namespace Unlimotion
 
         public async Task<bool> Update(TaskItemViewModel change)
         {
-            await TaskTreeManager.UpdateTask(mapper.Map<Server.Domain.TaskItem>(change.Model));
+            await Update(mapper.Map<TaskItem>(change.Model));
+            return true;
+        }
+
+        public async Task<bool> Update(TaskItem change)
+        {
+            await TaskTreeManager.UpdateTask(change);
             return true;
         }
 
         public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
         {
-            var additionalItemParents = new List<Server.Domain.TaskItem>();
+            var additionalItemParents = new List<TaskItem>();
             foreach (var newParent in additionalParents)
             {
-                additionalItemParents.Add(mapper.Map<Server.Domain.TaskItem>(newParent.Model));
+                additionalItemParents.Add(mapper.Map<TaskItem>(newParent.Model));
             }
             var taskItemList = (await TaskTreeManager.CloneTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
+                mapper.Map<TaskItem>(change.Model),
                 additionalItemParents)).OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
@@ -314,15 +314,15 @@ namespace Unlimotion
 
         public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
         {
-            var additionalItemParents = new List<Server.Domain.TaskItem>();
+            var additionalItemParents = new List<TaskItem>();
             foreach (var newParent in additionalParents)
             {
-                additionalItemParents.Add(mapper.Map<Server.Domain.TaskItem>(newParent.Model));
+                additionalItemParents.Add(mapper.Map<TaskItem>(newParent.Model));
             }
 
             var taskItemList = await TaskTreeManager.AddNewParentToTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
-                mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model));
+                mapper.Map<TaskItem>(change.Model),
+                mapper.Map<TaskItem>(additionalParents[0].Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
 
@@ -332,9 +332,9 @@ namespace Unlimotion
         public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask)
         {
             var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
-                mapper.Map<Server.Domain.TaskItem>(additionalParents[0].Model),
-                mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
+                mapper.Map<TaskItem>(change.Model),
+                mapper.Map<TaskItem>(additionalParents[0].Model),
+                mapper.Map<TaskItem>(currentTask.Model));
             
             taskItemList.ForEach(item => UpdateCache(item));
             
@@ -344,8 +344,8 @@ namespace Unlimotion
         public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
         {
             var taskItemList = await TaskTreeManager.UnblockTask(
-                mapper.Map<Server.Domain.TaskItem>(taskToUnblock.Model),
-                mapper.Map<Server.Domain.TaskItem>(blockingTask.Model));          
+                mapper.Map<TaskItem>(taskToUnblock.Model),
+                mapper.Map<TaskItem>(blockingTask.Model));          
 
             taskItemList.ForEach(item => UpdateCache(item));
             
@@ -355,8 +355,8 @@ namespace Unlimotion
         public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
             var taskItemList = await TaskTreeManager.BlockTask(
-                mapper.Map<Server.Domain.TaskItem>(change.Model),
-                mapper.Map<Server.Domain.TaskItem>(currentTask.Model));
+                mapper.Map<TaskItem>(change.Model),
+                mapper.Map<TaskItem>(currentTask.Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
             
@@ -366,13 +366,13 @@ namespace Unlimotion
         public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
         {
             var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
-                mapper.Map<Server.Domain.TaskItem>(parent.Model),
-                mapper.Map<Server.Domain.TaskItem>(child.Model));
+                mapper.Map<TaskItem>(parent.Model),
+                mapper.Map<TaskItem>(child.Model));
 
             taskItemList.ForEach(item => UpdateCache(item));
         }
 
-        private void UpdateCache(Server.Domain.TaskItem task)
+        private void UpdateCache(TaskItem task)
         {
             var vm = Tasks.Lookup(task.Id).Value;
 

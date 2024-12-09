@@ -14,6 +14,7 @@ using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Domain;
 
 namespace Unlimotion.ViewModel
 {

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
-using Unlimotion.Server.Domain;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.ViewModel

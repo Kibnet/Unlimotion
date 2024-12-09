@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Unlimotion.Server.Domain
+namespace Unlimotion.Domain
 {
     public class TaskItem
     {
@@ -10,7 +10,7 @@ namespace Unlimotion.Server.Domain
         public string Title { get; set; }
         public string Description { get; set; }
         public bool? IsCompleted { get; set; }
-        public DateTimeOffset CreatedDateTime { get; set; }
+        public DateTimeOffset CreatedDateTime { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }

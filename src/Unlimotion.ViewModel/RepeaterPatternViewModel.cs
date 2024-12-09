@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using PropertyChanged;
+using Unlimotion.Domain;
 
 namespace Unlimotion.ViewModel;
 
