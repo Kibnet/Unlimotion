@@ -1,4 +1,4 @@
-using System;
+п»їusing System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -48,12 +48,12 @@ namespace Unlimotion
 
             foreach (var fileInfo in directoryInfo.EnumerateFiles())
             {
-                var task = await TaskTreeManager.LoadTask(fileInfo.FullName);
+                var task = await TaskTreeManager.LoadTask(fileInfo.Name);
                 if (task != null)
                 {
                     yield return mapper.Map<TaskItem>(task);
                 }
-                else throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
+                else throw new FileLoadException($"РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р» СЃ Р·Р°РґР°С‡РµР№ {fileInfo.FullName}");
             }
         }
         public async Task Init() 
