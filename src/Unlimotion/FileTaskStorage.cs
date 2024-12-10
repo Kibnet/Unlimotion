@@ -51,7 +51,7 @@ namespace Unlimotion
                 var task = await TaskTreeManager.LoadTask(fileInfo.Name);
                 if (task != null)
                 {
-                    yield return mapper.Map<TaskItem>(task);
+                    yield return task;
                 }
                 else throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
             }
@@ -98,7 +98,7 @@ namespace Unlimotion
             switch (e.Type)
             {
                 case UpdateType.Saved:
-                    var taskItem = mapper.Map<TaskItem>(await Load(e.Id));
+                    var taskItem = await Load(e.Id);
                     if (taskItem != null)
                     {
                         var vml = Tasks.Lookup(taskItem.Id);
@@ -142,7 +142,7 @@ namespace Unlimotion
             {
                 Thread.SpinWait(1);
             }
-            var item = mapper.Map<TaskItem>(taskItem);
+            var item = taskItem;
             
             item.Id ??= Guid.NewGuid().ToString();
 
@@ -195,7 +195,7 @@ namespace Unlimotion
             }
         }        
  
-        public async Task<TaskItem> Load(string itemId)
+        public async Task<TaskItem?> Load(string itemId)
         {
             var jsonSerializer = new JsonSerializer();
             try
@@ -227,13 +227,13 @@ namespace Unlimotion
         public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)
         {
             var taskItemList = (await TaskTreeManager.AddTask(
-                mapper.Map<TaskItem>(change.Model),
-                mapper.Map<TaskItem>(currentTask?.Model),
+                change.Model,
+                currentTask?.Model,
                 isBlocked)).OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
-            change.Update(mapper.Map<TaskItem>(newTask));
+            change.Update(newTask);
             Tasks.AddOrUpdate(change);
 
             foreach (var task in taskItemList.SkipLast(1))
@@ -246,13 +246,13 @@ namespace Unlimotion
         public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
             var taskItemList = (await TaskTreeManager.AddChildTask(
-                mapper.Map<TaskItem>(change.Model),
-                mapper.Map<TaskItem>(currentTask.Model)))
+                change.Model,
+                currentTask.Model))
                 .OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
-            change.Update(mapper.Map<TaskItem>(newTask));
+            change.Update(newTask);
             Tasks.AddOrUpdate(change); 
 
             foreach (var task in taskItemList.SkipLast(1))
@@ -265,7 +265,7 @@ namespace Unlimotion
 
         public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
         {
-            var connectedItemList = await TaskTreeManager.DeleteTask(mapper.Map<TaskItem>(change.Model));
+            var connectedItemList = await TaskTreeManager.DeleteTask(change.Model);
             
             foreach (var task in connectedItemList)
             {
@@ -278,7 +278,7 @@ namespace Unlimotion
 
         public async Task<bool> Update(TaskItemViewModel change)
         {
-            await Update(mapper.Map<TaskItem>(change.Model));
+            await Update(change.Model);
             return true;
         }
 
@@ -293,15 +293,15 @@ namespace Unlimotion
             var additionalItemParents = new List<TaskItem>();
             foreach (var newParent in additionalParents)
             {
-                additionalItemParents.Add(mapper.Map<TaskItem>(newParent.Model));
+                additionalItemParents.Add(newParent.Model);
             }
             var taskItemList = (await TaskTreeManager.CloneTask(
-                mapper.Map<TaskItem>(change.Model),
+                change.Model,
                 additionalItemParents)).OrderBy(t => t.SortOrder);
 
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
-            change.Update(mapper.Map<TaskItem>(newTask));
+            change.Update(newTask);
             Tasks.AddOrUpdate(change);
             
             foreach (var task in taskItemList.SkipLast(1))
@@ -317,14 +317,14 @@ namespace Unlimotion
             var additionalItemParents = new List<TaskItem>();
             foreach (var newParent in additionalParents)
             {
-                additionalItemParents.Add(mapper.Map<TaskItem>(newParent.Model));
+                additionalItemParents.Add(newParent.Model);
             }
 
             var taskItemList = await TaskTreeManager.AddNewParentToTask(
-                mapper.Map<TaskItem>(change.Model),
-                mapper.Map<TaskItem>(additionalParents[0].Model));
+                change.Model,
+                additionalParents[0].Model);
 
-            taskItemList.ForEach(item => UpdateCache(item));
+            taskItemList.ForEach(UpdateCache);
 
             return true;
         }
@@ -332,11 +332,11 @@ namespace Unlimotion
         public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask)
         {
             var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
-                mapper.Map<TaskItem>(change.Model),
-                mapper.Map<TaskItem>(additionalParents[0].Model),
-                mapper.Map<TaskItem>(currentTask.Model));
+                change.Model,
+                additionalParents[0].Model,
+                currentTask?.Model);
             
-            taskItemList.ForEach(item => UpdateCache(item));
+            taskItemList.ForEach(UpdateCache);
             
             return true;
         }
@@ -344,10 +344,10 @@ namespace Unlimotion
         public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
         {
             var taskItemList = await TaskTreeManager.UnblockTask(
-                mapper.Map<TaskItem>(taskToUnblock.Model),
-                mapper.Map<TaskItem>(blockingTask.Model));          
+                taskToUnblock.Model,
+                blockingTask.Model);          
 
-            taskItemList.ForEach(item => UpdateCache(item));
+            taskItemList.ForEach(UpdateCache);
             
             return true;
         }
@@ -355,10 +355,10 @@ namespace Unlimotion
         public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
         {
             var taskItemList = await TaskTreeManager.BlockTask(
-                mapper.Map<TaskItem>(change.Model),
-                mapper.Map<TaskItem>(currentTask.Model));
+                change.Model,
+                currentTask.Model);
 
-            taskItemList.ForEach(item => UpdateCache(item));
+            taskItemList.ForEach(UpdateCache);
             
             return true;
         }
@@ -366,18 +366,18 @@ namespace Unlimotion
         public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
         {
             var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
-                mapper.Map<TaskItem>(parent.Model),
-                mapper.Map<TaskItem>(child.Model));
+                parent.Model,
+                child.Model);
 
-            taskItemList.ForEach(item => UpdateCache(item));
+            taskItemList.ForEach(UpdateCache);
         }
 
         private void UpdateCache(TaskItem task)
         {
-            var vm = Tasks.Lookup(task.Id).Value;
+            var vm = Tasks.Lookup(task.Id);
 
-            if (vm is not null)
-                vm.Update(mapper.Map<TaskItem>(task));
+            if (vm.HasValue)
+                vm.Value.Update(task);
             else
                 throw new NotFoundException($"No task with id = {task.Id} is found in cache");
         }

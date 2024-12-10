@@ -28,11 +28,9 @@ namespace Unlimotion.Views
         private IMapper _mapper;
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
-                var innerCommand = vm.CreateInner as ReactiveCommand<Unit, Unit>;
-                if (innerCommand != null)
+                if (vm.CreateInner is ReactiveCommand<Unit, Unit> innerCommand)
                 {
                     var subscription = innerCommand.Subscribe(unit =>
                     {
@@ -64,7 +62,7 @@ namespace Unlimotion.Views
                             if (!set.Contains(task.Id))
                             {
                                 set.Add(task.Id);
-                                await taskStorage.Save(_mapper.Map<TaskItem>(task.Model));
+                                await taskStorage.Save(task.Model);
                                 foreach (var item in task.ContainsTasks)
                                 {
                                     queue.Enqueue(item);
@@ -282,12 +280,10 @@ namespace Unlimotion.Views
 
         private void Task_OnDoubleTapped(object sender, TappedEventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
                 var control = sender as Control;
-                var wrapper = control?.DataContext as TaskWrapperViewModel;
-                if (wrapper != null)
+                if (control?.DataContext is TaskWrapperViewModel wrapper)
                 {
                     vm.CurrentTaskItem = wrapper.TaskItem;
                 }
@@ -296,8 +292,7 @@ namespace Unlimotion.Views
         
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
                 vm.DetailsAreOpen = !vm.DetailsAreOpen;
             }
@@ -306,8 +301,7 @@ namespace Unlimotion.Views
         private static void UpdateGraph(object? eSource)
         {
             var control = eSource as Control;
-            var mc = control?.FindParentDataContext<MainWindowViewModel>();
-            var vm = mc as MainWindowViewModel;
+            var vm = control?.FindParentDataContext<MainWindowViewModel>();
             if (vm?.Graph?.UpdateGraph != null)
             {
                 vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;

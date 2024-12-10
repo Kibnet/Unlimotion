@@ -89,7 +89,7 @@ namespace Unlimotion
                       {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
                       }
-                      await fileTaskStorage.Save(mapper.Map<TaskItem>(task));
+                      await fileTaskStorage.Save(task);
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -98,7 +98,7 @@ namespace Unlimotion
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
                 await foreach (var task in fileTaskStorage.GetAll())
                 {
-                      await fileTaskStorage.Save(mapper.Map<TaskItem>(task));
+                      await fileTaskStorage.Save(task);
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
