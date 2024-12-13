@@ -2,7 +2,7 @@
   "profiles": {
     "Unlimotion.Desktop": {
       "commandName": "Project",
-      "commandLineArgs": "-config=Settings.Shared.json"
+      "commandLineArgs": "-config=Settings.Refactor.json"
     },
     "WSL": {
       "commandName": "WSL2",

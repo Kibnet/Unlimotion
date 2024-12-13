@@ -378,8 +378,8 @@ namespace Unlimotion
 
             if (vm.HasValue)
                 vm.Value.Update(task);
-            else
-                throw new NotFoundException($"No task with id = {task.Id} is found in cache");
+            // else
+                // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
         }
     }
 }

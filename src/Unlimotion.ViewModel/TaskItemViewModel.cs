@@ -307,7 +307,7 @@ namespace Unlimotion.ViewModel
 
                         return false;
                     })
-                    .Throttle(TimeSpan.FromSeconds(10))
+                    .Throttle(TimeSpan.FromSeconds(1))
                     .Subscribe(x =>
                     {
                         if (_isInited) SaveItemCommand.Execute();                                                                        
