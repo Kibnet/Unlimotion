@@ -7,6 +7,7 @@ using System.Threading;
 using Avalonia.Threading;
 using DynamicData.Experimental;
 using LibGit2Sharp;
+using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
@@ -66,6 +67,48 @@ public class BackupViaGitService : IRemoteBackupService
         return result;
     }
 
+
+    public void CloneOrUpdateRepo()
+    {
+        try
+        {
+            var settings = GetSettings();
+            if (!Repository.IsValid(settings.repositoryPath))
+            {
+                ShowUiError($"Клонирование репозитория из {settings.git.RemoteUrl} в {settings.repositoryPath}");
+
+                var cloneOptions = new CloneOptions
+                {
+                    BranchName = settings.git.Branch,
+                    FetchOptions =
+                    {
+                        CredentialsProvider = GetCredentials(settings.git)
+                    }
+                };
+
+                Repository.Clone(settings.git.RemoteUrl, settings.repositoryPath, cloneOptions);
+            }
+            else
+            {
+                PullLatestChanges();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowUiError("Ошибка при клонировании или обновлении репозитория:\n" +ex.Message);
+        }
+    }
+
+
+    public CredentialsHandler GetCredentials(GitSettings gitSettings)
+    {
+        return (_url, _user, _cred) =>
+            new UsernamePasswordCredentials
+            {
+                Username = gitSettings.UserName,
+                Password = gitSettings.Password
+            };
+    }
 
     public void Push(string msg)
     {
