@@ -19,6 +19,8 @@ public class GitSettings
     public bool BackupEnabled { get; set; } = false;
     public bool ShowStatusToasts { get; set; } = true;
 
+    public string RemoteUrl { get; set; }
+    public string Branch { get; set; } = "master";
     public string UserName { get; set; } = "YourEmail";
     public string Password { get; set; } = "YourToken";
 
@@ -26,7 +28,7 @@ public class GitSettings
     public int PushIntervalSeconds { get; set; } = 60;
 
     public string RemoteName { get; set; } = "origin";
-    public string PushRefSpec { get; set; } = "refs/heads/main";
+    public string PushRefSpec { get; set; } = "refs/heads/master";
 
     public string CommitterName { get; set; } = "Backuper";
     public string CommitterEmail { get; set; } = "Backuper@unlimotion.ru";

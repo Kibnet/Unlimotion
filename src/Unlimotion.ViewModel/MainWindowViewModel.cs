@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Configuration;
 using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
@@ -55,13 +56,9 @@ namespace Unlimotion.ViewModel
                 .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
                 .AddToDispose(this);
 
-            var conn = ReactiveCommand.CreateFromTask(Connect)
-                .AddToDisposeAndReturn(this);
-            Settings.ConnectCommand = conn;
-
             try
             {
-                conn.Execute();
+                Connect().Wait();
             }
             catch (Exception e)
             {
@@ -207,7 +204,7 @@ namespace Unlimotion.ViewModel
             ;
         }
 
-        private async Task Connect()
+        public async Task Connect()
         {
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();

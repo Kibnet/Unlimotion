@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -29,7 +30,7 @@ namespace Unlimotion
             {
                 Init();
             }
-            foreach (var fileInfo in directoryInfo.EnumerateFiles())
+            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).OrderBy(info => info.CreationTime))
             {
                 var task = Load(fileInfo.FullName).Result;
                 if (task != null)
@@ -43,21 +44,6 @@ namespace Unlimotion
         {
             var directoryInfo = new DirectoryInfo(Path);
             directoryInfo.Create();
-            var list = new[]
-            {
-                new TaskItem { Title = "Task 1", Id = "1", ContainsTasks = new List<string> { "1.1", "1.2", "3" } },
-                new TaskItem { Title = "Task 1.1", Id = "1.1", BlocksTasks = new List<string> { "1.2" } },
-                new TaskItem { Title = "Task 1.2", Id = "1.2", BlocksTasks = new List<string> { "3.1" } },
-                new TaskItem { Title = "Task 2", Id = "2", ContainsTasks = new List<string> { "2.1", "3" } },
-                new TaskItem { Title = "Task 2.1", Id = "2.1" },
-                new TaskItem { Title = "Task 3", Id = "3", ContainsTasks = new List<string> { "3.1" } },
-                new TaskItem { Title = "Task 3.1", Id = "3.1" },
-                new TaskItem { Title = "Task 4", Id = "4" },
-            };
-            foreach (var item in list)
-            {
-                Save(item);
-            }
         }
 
         public async Task<bool> Save(TaskItem item)
