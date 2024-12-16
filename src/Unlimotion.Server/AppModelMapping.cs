@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using AutoMapper.Configuration;
+using Unlimotion.Domain;
 using Unlimotion.Interface;
-using Unlimotion.Server.Domain;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds;
 using Unlimotion.Server.ServiceModel.Molds.Attachment;
@@ -36,7 +36,7 @@ namespace Unlimotion.Server
             cfg.CreateMap<TaskItem, ReceiveTaskItem>();
             cfg.CreateMap<TaskItemHubMold, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())
-                .ForMember(m => m.CreatedDateTime, e => e.Ignore());
+                .ForMember(m => m.CreatedDateTime, e => e.Ignore());            
 
             cfg.CreateMap<User, UserProfileMold>();
             cfg.CreateMap<User, MyUserProfileMold>()

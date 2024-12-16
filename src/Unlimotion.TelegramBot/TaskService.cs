@@ -1,26 +1,26 @@
 ﻿using DynamicData;
 using DynamicData.Binding;
 using Serilog;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.TelegramBot
 {
     public class TaskService
     {
-        ITaskRepository repository;
+        ITaskStorage storage;
 
         public TaskService(string repoPath)
         {
-            TaskStorages.RegisterFileTaskStorage(repoPath);
-            repository = TaskStorages.RegisterTaskRepository();
-            repository.Init();
+            storage = TaskStorages.RegisterFileTaskStorage(repoPath);
+            storage.Init();
         }
 
         public TaskItemViewModel GetTask(string id)
         {
             try
             {
-                return repository.Tasks.Lookup(id).Value;
+                return storage.Tasks.Lookup(id).Value;
             }
             catch (Exception ex)
             {
@@ -33,7 +33,7 @@ namespace Unlimotion.TelegramBot
         {
             try
             {
-                repository.Save(task);
+                storage.Update(task);
             }
             catch (Exception ex)
             {
@@ -45,7 +45,8 @@ namespace Unlimotion.TelegramBot
         {
             try
             {
-                repository.Remove(id, true);
+                var task = storage.Tasks.Lookup(id).Value;
+                storage.Delete(task);
             }
             catch (Exception ex)
             {
@@ -62,7 +63,7 @@ namespace Unlimotion.TelegramBot
             }
             try
             {
-                tasks = repository.Tasks.Items
+                tasks = storage.Tasks.Items
                     .Where(m => (m.Title != null && m.Title.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
                                 (m.Description != null && m.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
                     .ToList();
@@ -80,7 +81,7 @@ namespace Unlimotion.TelegramBot
             try
             {
                 // Привязываем изменения к ObservableCollection
-                repository.GetRoots()
+                storage.GetRoots()
                     .Bind(TaskList)
                     .Subscribe();
 

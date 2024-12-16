@@ -8,7 +8,7 @@ using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
-using Unlimotion.Server.Domain;
+using Unlimotion.Domain;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds;
 

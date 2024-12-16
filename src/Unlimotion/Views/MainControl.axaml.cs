@@ -2,12 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
+using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
+using Unlimotion.TaskTree;
 
 namespace Unlimotion.Views
 {
@@ -21,13 +25,12 @@ namespace Unlimotion.Views
             DataContextChanged += MainWindow_DataContextChanged;
         }
 
+        private IMapper _mapper;
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
-                var innerCommand = vm.CreateInner as ReactiveCommand<Unit, Unit>;
-                if (innerCommand != null)
+                if (vm.CreateInner is ReactiveCommand<Unit, Unit> innerCommand)
                 {
                     var subscription = innerCommand.Subscribe(unit =>
                     {
@@ -67,7 +70,7 @@ namespace Unlimotion.Views
                             }
                         }
 
-                        var currentTaskStorage = Locator.Current.GetService<ITaskStorage>();
+                        var currentTaskStorage = Locator.Current.GetService<IStorage>();
                         foreach (var id in set)
                         {
                             await currentTaskStorage.Remove(id);
@@ -166,7 +169,7 @@ namespace Unlimotion.Views
             return false;
         }
 
-        public static void Drop(object sender, DragEventArgs e)
+        public static async Task Drop(object sender, DragEventArgs e)
         {
             if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
             {
@@ -175,7 +178,7 @@ namespace Unlimotion.Views
                 if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
                 {
                     e.DragEffects &= DragDropEffects.Copy;
-                    subItem.CloneInto(task);
+                    await subItem.CloneInto(task);
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }
@@ -202,7 +205,7 @@ namespace Unlimotion.Views
                         if (!breakFlag)
                         {
                             e.DragEffects &= DragDropEffects.Move;
-                            subItem.MoveInto(task, parent);
+                            await subItem.MoveInto(task, parent);
                             UpdateGraph(e.Source);
                             e.Handled = true;
                         }
@@ -213,17 +216,17 @@ namespace Unlimotion.Views
                     }
 
                 }
-                else if (e.KeyModifiers == KeyModifiers.Control)
+                else if (e.KeyModifiers == KeyModifiers.Control) //The dragged task blocks the target task
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    task.BlockBy(subItem);
+                    task.BlockBy(subItem); //subItem блокирует task
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }
-                else if (e.KeyModifiers == KeyModifiers.Alt)
+                else if (e.KeyModifiers == KeyModifiers.Alt) //The target task blocks the dragged task
                 {
                     e.DragEffects &= DragDropEffects.Link;
-                    subItem.BlockBy(task);
+                    subItem.BlockBy(task); //task блокирует subItem
                     UpdateGraph(e.Source);
                     e.Handled = true;
                 }
@@ -232,7 +235,7 @@ namespace Unlimotion.Views
                     if (subItem.CanMoveInto(task))
                     {
                         e.DragEffects &= DragDropEffects.Copy;
-                        subItem.CopyInto(task);
+                        await subItem.CopyInto(task);
                         UpdateGraph(e.Source);
                         e.Handled = true;
                     }
@@ -277,12 +280,10 @@ namespace Unlimotion.Views
 
         private void Task_OnDoubleTapped(object sender, TappedEventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
                 var control = sender as Control;
-                var wrapper = control?.DataContext as TaskWrapperViewModel;
-                if (wrapper != null)
+                if (control?.DataContext is TaskWrapperViewModel wrapper)
                 {
                     vm.CurrentTaskItem = wrapper.TaskItem;
                 }
@@ -291,8 +292,7 @@ namespace Unlimotion.Views
         
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
-            var vm = DataContext as MainWindowViewModel;
-            if (vm != null)
+            if (DataContext is MainWindowViewModel vm)
             {
                 vm.DetailsAreOpen = !vm.DetailsAreOpen;
             }
@@ -301,8 +301,7 @@ namespace Unlimotion.Views
         private static void UpdateGraph(object? eSource)
         {
             var control = eSource as Control;
-            var mc = control?.FindParentDataContext<MainWindowViewModel>();
-            var vm = mc as MainWindowViewModel;
+            var vm = control?.FindParentDataContext<MainWindowViewModel>();
             if (vm?.Graph?.UpdateGraph != null)
             {
                 vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
