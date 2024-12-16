@@ -91,6 +91,8 @@ namespace Unlimotion.Desktop
                 gitSection.GetSection(nameof(GitSettings.BackupEnabled)).Set(false);
                 gitSection.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(gitSettings.ShowStatusToasts);
                 
+                gitSection.GetSection(nameof(GitSettings.RemoteUrl)).Set(gitSettings.RemoteUrl);
+                gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
                 gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
                 gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
                     

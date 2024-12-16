@@ -45,8 +45,7 @@ namespace Unlimotion
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-
-            foreach (var fileInfo in directoryInfo.EnumerateFiles())
+            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).OrderBy(info => info.CreationTime))
             {
                 var task = await TaskTreeManager.LoadTask(fileInfo.Name);
                 if (task != null)

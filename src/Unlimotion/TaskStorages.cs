@@ -22,11 +22,12 @@ namespace Unlimotion
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
             var mapper = Locator.Current.GetService<IMapper>();
-            settingsViewModel.ObservableForProperty(m => m.IsServerMode)
-                .Subscribe(c =>
-                {
-                    RegisterStorage(c.Value, configuration);
-                });
+            settingsViewModel.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                RegisterStorage(settingsViewModel.IsServerMode, configuration);
+                var mainWindowViewModel = Locator.Current.GetService<MainWindowViewModel>();
+                await mainWindowViewModel.Connect();
+            });
             settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled, true)
                 .Subscribe(c =>
                 {
@@ -110,6 +111,21 @@ namespace Unlimotion
                     settingsViewModel.TaskStoragePath = path;
                     //TODO сделать относительный путь
                 }
+            });
+            settingsViewModel.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.CloneOrUpdateRepo();
+            });
+            settingsViewModel.PullCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Pull();
+            });
+            settingsViewModel.PushCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Push("Manual backup");
             });
         }
 
