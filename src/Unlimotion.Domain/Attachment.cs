@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Unlimotion.Server.Domain
+namespace Unlimotion.Domain
 {
     public class Attachment
     {

@@ -11,17 +11,22 @@ using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using SignalR.EasyUse.Client;
 using Splat;
+using Unlimotion.TaskTree;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
+using DynamicData;
+using Unlimotion.Domain;
 
 namespace Unlimotion;
 
 public class ServerTaskStorage : ITaskStorage
 {
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+    //public event EventHandler<EventArgs> Initiated;
+    public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
 
     public ServerTaskStorage(string url)
     {
@@ -45,6 +50,8 @@ public class ServerTaskStorage : ITaskStorage
             settings = new ClientSettings();
         }
         mapper = Locator.Current.GetService<IMapper>();
+        TaskTreeManager = Locator.Current.GetService<ITaskTreeManager>()
+            ?? throw new NullReferenceException("ITaskTreeManager is not found");
     }
 
     ClientSettings settings;
@@ -56,6 +63,8 @@ public class ServerTaskStorage : ITaskStorage
 
     //TODO Проверить что не создаёт проблем при закрытии
     public bool IsActive = true;
+
+    public ITaskTreeManager TaskTreeManager { get; set; }
 
     private Func<Exception, Task> connectionOnClosed()
     {
@@ -121,12 +130,16 @@ public class ServerTaskStorage : ITaskStorage
     {
         await SignOut();
     }
+    public Task Init()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task<TaskItem> Load(string itemId)
     {
         try
         {
-            var task = serviceClient.GetAsync(new GetTask()).Result;
+            var task = await serviceClient.GetAsync(new GetTask() { Id=itemId });
             var mapped = mapper.Map<TaskItem>(task);
             return mapped;
         }
@@ -369,12 +382,12 @@ public class ServerTaskStorage : ITaskStorage
 
     public bool IsSignedIn { get; set; }
 
-    public IEnumerable<TaskItem> GetAll()
+    public async IAsyncEnumerable<TaskItem> GetAll()
     {
         TaskItemPage? tasks = null;
         try
         {
-            tasks = serviceClient.GetAsync(new GetAllTasks()).Result;
+            tasks = await serviceClient.GetAsync(new GetAllTasks());
         }
         catch (Exception e)
         {
@@ -389,6 +402,7 @@ public class ServerTaskStorage : ITaskStorage
                 yield return mapped;
             }
         }
+        //return taskItems;
     }
 
     public async Task<bool> Save(TaskItem item)
@@ -403,8 +417,9 @@ public class ServerTaskStorage : ITaskStorage
             }
             catch (Exception e)
             {
-                await Task.Delay(new Random().Next(0, 5) * 100);
+                //await Task.Delay(new Random().Next(0, 5) * 100);
                 //TODO пробросить ошибку пользователю
+                throw new Exception(e.Message);
             }
         }
 
@@ -422,8 +437,9 @@ public class ServerTaskStorage : ITaskStorage
             }
             catch (Exception e)
             {
-                await Task.Delay(new Random().Next(0, 5) * 100);
+                //await Task.Delay(new Random().Next(0, 5) * 100);
                 //TODO пробросить ошибку пользователю
+                throw new Exception(e.Message);
             }
         }
 
@@ -440,5 +456,149 @@ public class ServerTaskStorage : ITaskStorage
         {
             //TODO пробросить ошибку пользователю
         }
+    }
+
+    /*protected virtual void OnInited()
+    {
+        Initiated?.Invoke(this, EventArgs.Empty);
+    }*/
+    public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)
+    {
+        var taskItemList = await TaskTreeManager.AddTask(
+            change.Model,
+            currentTask?.Model,
+            isBlocked);
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+            change.Id = task.Id;
+        }
+        return true;
+    }
+
+    public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
+    {
+        var taskItemList = await TaskTreeManager.AddChildTask(
+            change.Model,
+            currentTask.Model);
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+        }
+        change.Id = taskItemList.OrderByDescending(item => item.Id).First().Id;
+        return true;
+    }
+
+    public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
+    {
+        var parentsItemList = await TaskTreeManager.DeleteTask(change.Model);
+        foreach (var parent in parentsItemList)
+        {
+            UpdateCache(parent);
+        }
+        Tasks.Remove(change);
+
+        return true;
+    }
+
+    public async Task<bool> Update(TaskItemViewModel change)
+    {
+        await TaskTreeManager.UpdateTask(change.Model);
+        Tasks.AddOrUpdate(change);
+        return true;
+    }
+    public async Task<bool> Update(TaskItem change)
+    {
+        await TaskTreeManager.UpdateTask(change);
+        Tasks.AddOrUpdate(new TaskItemViewModel(change, this));
+        return true;
+    }
+
+    public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
+    {
+        var additionalItemParents = new List<TaskItem>();
+        foreach (var newParent in additionalParents)
+        {
+            additionalItemParents.Add(newParent.Model);
+        }
+        var taskItemList = await TaskTreeManager.CloneTask(
+            change.Model,
+            additionalItemParents);
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+        }
+
+        var clone = taskItemList.OrderByDescending(item => item.Id).First();
+        change.Id = clone.Id;
+        change.Parents.Add(clone.ParentTasks);
+
+        return change;
+    }
+
+    public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
+    {
+        var additionalItemParents = new List<TaskItem>();
+        foreach (var newParent in additionalParents)
+        {
+            additionalItemParents.Add(newParent.Model);
+        }
+
+        var taskItemList = await TaskTreeManager.AddNewParentToTask(
+                change.Model,
+                additionalParents[0].Model);
+
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+        }
+        return true;
+    }
+    private void UpdateCache(TaskItem task)
+    {
+        Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+    }
+
+    public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)
+    {
+        var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
+                change.Model,
+                additionalParents?.FirstOrDefault()?.Model,
+                currentTask?.Model);
+
+        taskItemList.ForEach(UpdateCache);
+        
+        return true;
+    }
+
+    public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
+    {
+        var taskItemList = await TaskTreeManager.UnblockTask(
+            taskToUnblock.Model,
+            blockingTask.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
+
+        return true;
+    }
+
+    public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
+    {
+        var taskItemList = await TaskTreeManager.BlockTask(
+            change.Model,
+            currentTask.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
+
+        return true;
+    }
+
+    public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
+    {
+        var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
+            parent.Model,
+            child.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
     }
 }

@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
              xmlns:unlimotion="clr-namespace:Unlimotion"
+             xmlns:behaviours="clr-namespace:TestAutoCompleteBehaviour.Behaviours"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:DataType="viewModel:SettingsViewModel"
              x:Class="Unlimotion.Views.SettingsControl">
@@ -30,7 +31,16 @@
                 <TextBox PasswordChar="*" Text="{Binding Password}"/>
 
                 <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Git Backup Enabled"/>
+                <WrapPanel>
+                    <Button Content="Clone" Command="{Binding CloneCommand}"/>
+                    <Button Content="Pull" Command="{Binding PullCommand}"/>
+                    <Button Content="Push" Command="{Binding PushCommand}"/>
+                </WrapPanel>
                 <CheckBox IsChecked="{Binding GitShowStatusToasts}" Content="Show Git Status Toasts"/>
+                <Label Content="Git RemoteUrl"/>
+                <TextBox Text="{Binding GitRemoteUrl}"></TextBox>
+                <Label Content="Git Branch"/>
+                <TextBox Text="{Binding GitBranch}"></TextBox>
                 <Label Content="Git UserName"/>
                 <TextBox Text="{Binding GitUserName}"></TextBox>
                 <Label Content="Git Password"/>
@@ -40,9 +50,25 @@
                 <Label Content="Git Push Interval Seconds"/>
                 <TextBox Text="{Binding GitPushIntervalSeconds}"></TextBox>
                 <Label Content="Git Remote Name"/>
-                <ComboBox SelectedItem="{Binding GitRemoteName}" ItemsSource="{Binding Remotes}" HorizontalAlignment="Stretch"/>
+                <AutoCompleteBox SelectedItem="{Binding GitRemoteName}" 
+                                 ItemsSource="{Binding Remotes}" 
+                                 IsTextCompletionEnabled="True"
+                                 FilterMode="Contains"
+                                 HorizontalAlignment="Stretch">
+                    <Interaction.Behaviors>
+                        <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour/>
+                    </Interaction.Behaviors>
+                </AutoCompleteBox>
                 <Label Content="Git PushRefSpec"/>
-                <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}" HorizontalAlignment="Stretch"/>
+                <AutoCompleteBox SelectedItem="{Binding GitPushRefSpec}"  
+                                 ItemsSource="{Binding Refs}"
+                                 IsTextCompletionEnabled="True"
+                                 FilterMode="Contains"
+                                 HorizontalAlignment="Stretch">
+                    <Interaction.Behaviors>
+                        <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour/>
+                    </Interaction.Behaviors>
+                </AutoCompleteBox>
                 <Label Content="Git Committer Name"/>
                 <TextBox Text="{Binding GitCommitterName}"></TextBox>
                 <Label Content="Git Committer Email"/>

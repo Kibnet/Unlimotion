@@ -18,6 +18,7 @@ using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
+using Unlimotion.TaskTree;
 
 namespace Unlimotion.Desktop
 {
@@ -65,7 +66,7 @@ namespace Unlimotion.Desktop
             Locator.CurrentMutable.Register<IMapper>(() => mapper);
             Locator.CurrentMutable.Register<IRemoteBackupService>(() => new BackupViaGitService());
             Locator.CurrentMutable.RegisterConstant(new AppNameDefinitionService(), typeof(IAppNameDefinitionService));
-
+            
             var isServerMode = configuration.Get<TaskStorageSettings>("TaskStorage")?.IsServerMode == true;
 
 #if DEBUG
@@ -81,7 +82,7 @@ namespace Unlimotion.Desktop
             var schedulerFactory = new StdSchedulerFactory();
             var scheduler = schedulerFactory.GetScheduler().Result;
             Locator.CurrentMutable.RegisterConstant(scheduler);
-
+            
             if (gitSettings == null)
             {
                 gitSettings = new GitSettings();
@@ -90,6 +91,8 @@ namespace Unlimotion.Desktop
                 gitSection.GetSection(nameof(GitSettings.BackupEnabled)).Set(false);
                 gitSection.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(gitSettings.ShowStatusToasts);
                 
+                gitSection.GetSection(nameof(GitSettings.RemoteUrl)).Set(gitSettings.RemoteUrl);
+                gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
                 gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
                 gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
                     
@@ -103,7 +106,8 @@ namespace Unlimotion.Desktop
                 gitSection.GetSection(nameof(GitSettings.CommitterEmail)).Set(gitSettings.CommitterEmail);
             }
             
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            //var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            var taskRepository = Locator.Current.GetService<FileTaskStorage>();
             taskRepository.Initiated += (sender, eventArgs) =>
             {
                 var pullJob = JobBuilder.Create<GitPullJob>()
@@ -124,6 +128,8 @@ namespace Unlimotion.Desktop
                 if (gitSettings.BackupEnabled)
                     scheduler.Start();
             };
+
+            
 
             BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
