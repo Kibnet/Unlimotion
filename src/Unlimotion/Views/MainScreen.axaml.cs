@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace Unlimotion.Views
 {
-    public partial class MainWindow : Window
+    public partial class MainScreen : UserControl
     {
-        public MainWindow()
+        public MainScreen()
         {
             InitializeComponent();
         }       

@@ -20,7 +20,7 @@ public class NotificationManagerWrapper : ViewModel.INotificationManagerWrapper
             NoAction = noAction,
         };
 
-        var id = DialogHost.Show(askViewModel);
+        DialogHost.Show(askViewModel, "Ask");
         askViewModel.CloseAction = () => DialogHost.GetDialogSession("Ask")?.Close(false);
     }
 
