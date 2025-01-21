@@ -25,4 +25,10 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<NativeLibrary Include="lib\arm64-v8a\git2-3f4182d.so">
+			<Link>lib\arm64-v8a\libgit2-3f4182d.so</Link>
+		</NativeLibrary>
+	</ItemGroup>
 </Project>
