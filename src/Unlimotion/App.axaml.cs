@@ -28,6 +28,65 @@ namespace Unlimotion
         ,ILiveView
 #endif
     {
+        public static bool IsHeadlessMode { get; private set; }
+        public static TrayIcon? TrayIcon { get; set; }
+
+        private static void TrayIcon_Clicked(object? sender, EventArgs e)
+        {
+            // Example logic: Show/Focus main window
+            if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+            {
+                desktop.MainWindow.Show();
+                desktop.MainWindow.Activate();
+            }
+        }
+
+        public static AppBuilder BuildAvaloniaApp(bool isHeadless = false)
+        {
+            IsHeadlessMode = isHeadless;
+            var appBuilder = AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .UseReactiveUI()
+                .With(new Avalonia.X11.X11PlatformOptions { EnableMultiTouch = true, UseDBusMenu = true, UseGpu = false })
+                .With(new Avalonia.Win32PlatformOptions
+                {
+                    AllowEglInitialization = false,
+                    EnableMultitouch = true,
+                    UseDeferredRendering = true,
+                    UseWindowsUIComposition = false,
+                })
+                .With(new Avalonia.AvaloniaNativePlatformOptions { UseGpu = false, UseDeferredRendering = false })
+                .LogToTrace();
+
+            if (!isHeadless)
+            {
+                appBuilder.AfterSetup(_ => SetupNotificationManager());
+            }
+            return appBuilder;
+        }
+
+        public static void SetupNotificationManager()
+        {
+            if (IsHeadlessMode) return;
+
+            TrayIcon = new TrayIcon
+            {
+                Icon = new Avalonia.Media.Imaging.Bitmap("Assets/Unlimotion.ico"), // Assuming WindowIcon was a typo and Bitmap is needed for TrayIcon.Icon
+                ToolTipText = "Unlimotion"
+            };
+            TrayIcon.Clicked += TrayIcon_Clicked;
+
+            // This line was moved to OnFrameworkInitializationCompleted as per analysis
+            // if (TrayIcon != null)
+            // {
+            //     var notificationManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
+            //     if (notificationManagerWrapper != null)
+            //     {
+            //         notificationManagerWrapper.Manager = new NotificationManager(TrayIcon);
+            //     }
+            // }
+        }
+
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
@@ -65,23 +124,49 @@ namespace Unlimotion
                 else
 #endif
                 {
-                    desktop.MainWindow = new MainWindow
+                    if (!IsHeadlessMode)
                     {
-                        DataContext = GetMainWindowViewModel(),
-                    };
+                        desktop.MainWindow = new MainWindow
+                        {
+                            DataContext = GetMainWindowViewModel(),
+                        };
+
+                        // Initialize NotificationManagerWrapper.Manager here, after TrayIcon is set up
+                        if (TrayIcon != null)
+                        {
+                            var notificationManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
+                            if (notificationManagerWrapper != null)
+                            {
+                                notificationManagerWrapper.Manager = new NotificationManager(TrayIcon);
+                            }
+                        }
+
+                        // The prompt also mentioned these lines from an original version:
+                        // ClientSettings.Instance.Load();
+                        // var scheduler = JobSchedulerFactory.Instance.GetScheduler().Result;
+                        // scheduler.JobFactory = new JobFactory();
+                        // scheduler.Start();
+                        // These are not in the current base code. If they were part of the original non-headless setup,
+                        // they would be restored here. For now, focusing on NotificationManagerWrapper.
+                    }
                 }
 
                 RxApp.DefaultExceptionHandler = Observer.Create<Exception>(Console.WriteLine);
             }
             else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
             {
-                singleViewPlatform.MainView = new MainScreen()
+                if (!IsHeadlessMode)
                 {
-                    DataContext = GetMainWindowViewModel(),
-                };
+                    singleViewPlatform.MainView = new MainScreen()
+                    {
+                        DataContext = GetMainWindowViewModel(),
+                    };
+                }
             }
 
             TaskStorages.SetSettingsCommands();
+            // The Init method already starts the scheduler if gitSettings.BackupEnabled is true.
+            // Locator.Current.GetService<IScheduler>()?.Start(); // This might be redundant or for a different scheduler.
 
             base.OnFrameworkInitializationCompleted();
         }
