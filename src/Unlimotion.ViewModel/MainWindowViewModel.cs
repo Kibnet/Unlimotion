@@ -8,12 +8,16 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using DynamicData;
 using DynamicData.Binding;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
+using Unlimotion.Services;
+using Unlimotion.Views;
 
 namespace Unlimotion.ViewModel
 {
@@ -129,7 +133,7 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
             }).AddToDisposeAndReturn(connectionDisposableList);
 
-            Remove = ReactiveCommand.CreateFromTask(async () => RemoveTaskItem(CurrentTaskItem));
+            Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));
 
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentItem)
@@ -421,7 +425,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter },
@@ -462,7 +466,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -486,7 +490,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                         Filter = new() { taskFilter },
                     };
@@ -538,7 +542,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions()
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -568,7 +572,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -623,7 +627,7 @@ namespace Unlimotion.ViewModel
                     var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
+                        RemoveAction = async task => await RemoveTask(task),
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
@@ -660,7 +664,7 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = RemoveTask,
+                            RemoveAction = async task => await RemoveTask(task),
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
                         };
                         var wrapper = new TaskWrapperViewModel(null, item.Item1, actions)
@@ -683,9 +687,11 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
+                            RemoveAction = async wrapperViewModel =>
                             {
-                                m.Parent.TaskItem.Contains.Remove(m.TaskItem.Id);
+                                wrapperViewModel.Parent.TaskItem.Contains.Remove(wrapperViewModel.TaskItem.Id);
+                                // Assuming an async removal from repository or service if needed
+                                // await Task.CompletedTask; // Placeholder if no async repo call
                             },
                             SortComparer = sortObservable
                         };
@@ -709,9 +715,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
+                            RemoveAction = async wrapperViewModel =>
                             {
-                                m.TaskItem.Contains.Remove(m.Parent.TaskItem.Id);
+                                wrapperViewModel.TaskItem.Contains.Remove(wrapperViewModel.Parent.TaskItem.Id);
+                                // await Task.CompletedTask; // Placeholder
                             },
                             SortComparer = sortObservable
                         };
@@ -734,9 +741,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
+                            RemoveAction = async wrapperViewModel =>
                             {
-                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
+                                wrapperViewModel.TaskItem.UnblockCommand.Execute(wrapperViewModel.Parent.TaskItem);
+                                // await Task.CompletedTask; // Placeholder
                             },
                             SortComparer = sortObservable
                         };
@@ -759,9 +767,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
-                            RemoveAction = m =>
+                            RemoveAction = async wrapperViewModel =>
                             {
-                                m.TaskItem.UnblockMeCommand.Execute(m.Parent.TaskItem);
+                                wrapperViewModel.TaskItem.UnblockMeCommand.Execute(wrapperViewModel.Parent.TaskItem);
+                                // await Task.CompletedTask; // Placeholder
                             },
                             SortComparer = sortObservable
                         };
@@ -812,43 +821,132 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private void RemoveTask(TaskWrapperViewModel task)
+        private void DeleteSingleTaskLogic(TaskItemViewModel task, ITaskRepository taskRepository)
         {
-            if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
+            if (task == null) return;
+
+            // Remove task from all its current parents
+            foreach (var parentVM in task.ParentsTasks.ToList()) // ToList to avoid modification issues while iterating
             {
-                ManagerWrapper.Ask("Remove task",
-                    $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
-                    () =>
-                    {
-                        if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
-                        {
-                            CurrentTaskItem = null;
-                        }
-                    });
+                task.RemoveFunc.Invoke(parentVM);
             }
-            else
+
+            // Final removal call for the task itself (handles orphan deletion from repository)
+            task.RemoveFunc.Invoke(null);
+
+            if (CurrentTaskItem?.Id == task.Id)
             {
-                if (task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
+                CurrentTaskItem = null;
+            }
+        }
+
+        private void DeleteTaskAndChildrenLogic(TaskItemViewModel task, List<TaskItemViewModel> nestedChildren, ITaskRepository taskRepository)
+        {
+            if (task == null) return;
+
+            // Delete all nested children first
+            // Iterate in reverse to handle cases where children might also be parents of other children in the list,
+            // though RemoveFunc(null) should make them independent for deletion.
+            // Using ToList() to avoid issues if the underlying collection is modified by RemoveFunc.
+            foreach (var childTask in nestedChildren.ToList())
+            {
+                // Remove child from all its parents first
+                foreach (var parentVM in childTask.ParentsTasks.ToList())
+                {
+                    childTask.RemoveFunc.Invoke(parentVM);
+                }
+                // Then remove the child task itself
+                childTask.RemoveFunc.Invoke(null); // This will call taskRepository.Remove for the child if it becomes an orphan
+
+                if (CurrentTaskItem?.Id == childTask.Id)
                 {
                     CurrentTaskItem = null;
                 }
             }
+
+            // Then, delete the main task itself
+            DeleteSingleTaskLogic(task, taskRepository); // This already handles CurrentTaskItem check for the main task
         }
 
-        private void RemoveTaskItem(TaskItemViewModel task)
+        private async Task RemoveTask(TaskWrapperViewModel taskWrapper)
         {
-            ManagerWrapper.Ask("Remove task",
-                $"Are you sure you want to remove the task \"{task.Title}\" from disk?",
-                () =>
-                {
-                    foreach (var parent in task.ParentsTasks.ToList())
-                    {
-                        task.RemoveFunc.Invoke(parent);
-                    }
+            if (taskWrapper == null || taskWrapper.TaskItem == null)
+            {
+                return;
+            }
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            if (taskRepository == null)
+            {
+                // Log error or handle appropriately
+                return;
+            }
 
-                    task.RemoveFunc.Invoke(null);
-                    CurrentTaskItem = null;
-                });
+            var taskItem = taskWrapper.TaskItem;
+            var nestedChildren = taskItem.GetChildrenTasksRecursive().ToList();
+
+            var dialog = new DeleteTaskConfirmationDialog(taskItem.Title, nestedChildren.Count);
+
+            Window owner = null;
+            if (Application.Current.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopLifetime)
+            {
+                owner = desktopLifetime.MainWindow;
+            }
+
+            var dialogResult = await dialog.ShowDialog<DeleteTaskDialogResult>(owner);
+
+            switch (dialogResult)
+            {
+                case DeleteTaskDialogResult.DeleteSingle:
+                    DeleteSingleTaskLogic(taskItem, taskRepository);
+                    break;
+                case DeleteTaskDialogResult.DeleteWithChildren:
+                    DeleteTaskAndChildrenLogic(taskItem, nestedChildren, taskRepository);
+                    break;
+                case DeleteTaskDialogResult.Cancel:
+                default:
+                    // Do nothing
+                    break;
+            }
+        }
+
+        private async Task RemoveTaskItem(TaskItemViewModel task)
+        {
+            if (task == null)
+            {
+                return;
+            }
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            if (taskRepository == null)
+            {
+                // Log error or handle appropriately
+                return;
+            }
+
+            var nestedChildren = task.GetChildrenTasksRecursive().ToList();
+
+            var dialog = new DeleteTaskConfirmationDialog(task.Title, nestedChildren.Count);
+
+            Window owner = null;
+            if (Application.Current.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopLifetime)
+            {
+                owner = desktopLifetime.MainWindow;
+            }
+
+            var dialogResult = await dialog.ShowDialog<DeleteTaskDialogResult>(owner);
+
+            switch (dialogResult)
+            {
+                case DeleteTaskDialogResult.DeleteSingle:
+                    DeleteSingleTaskLogic(task, taskRepository);
+                    break;
+                case DeleteTaskDialogResult.DeleteWithChildren:
+                    DeleteTaskAndChildrenLogic(task, nestedChildren, taskRepository);
+                    break;
+                case DeleteTaskDialogResult.Cancel:
+                default:
+                    // Do nothing
+                    break;
+            }
         }
 
         public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)

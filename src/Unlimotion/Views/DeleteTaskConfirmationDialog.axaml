@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Unlimotion.ViewModel"
+        x:Class="Unlimotion.Views.DeleteTaskConfirmationDialog"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Confirm Deletion"
+        Width="400" Height="150"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        DataContext="{Binding RelativeSource={RelativeSource Self}, Path=ViewModel}">
+
+    <Design.DataContext>
+        <vm:DeleteTaskConfirmationDialogViewModel TaskTitle="Sample Task" NestedChildrenCount="3" closeAction="{x:Null}"/>
+    </Design.DataContext>
+
+    <StackPanel Spacing="10" Margin="15">
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+            <Button Content="Delete Only This Task" Command="{Binding DeleteSingleCommand}"/>
+            <Button Content="Delete This Task and All Nested Tasks" Command="{Binding DeleteWithChildrenCommand}" IsVisible="{Binding ShowDeleteWithChildrenButton}"/>
+            <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
