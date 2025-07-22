@@ -17,7 +17,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.Server.ServiceInterface\Unlimotion.Server.ServiceInterface.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
+		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
 
 </Project>

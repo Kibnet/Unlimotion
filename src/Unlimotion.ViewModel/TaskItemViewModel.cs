@@ -40,7 +40,7 @@ namespace Unlimotion.ViewModel
         private TimeSpan? plannedPeriod;
         private DateCommands commands = null;
         public SetDurationCommands SetDurationCommands { get; set; }
-
+        public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = TimeSpan.FromSeconds(10);
         private void Init(ITaskRepository taskRepository)
         {
             SetDurationCommands = new SetDurationCommands(this);
@@ -411,7 +411,7 @@ namespace Unlimotion.ViewModel
 
                         return false;
                     })
-                    .Throttle(TimeSpan.FromSeconds(10))
+                    .Throttle(PropertyChangedThrottleTimeSpanDefault)
                     .Subscribe(x =>
                     {
                         if (_isInited) SaveItemCommand.Execute();
