@@ -1,7 +1,9 @@
 ﻿using DynamicData;
 using Splat;
 using System;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.ViewModel;
@@ -18,19 +20,30 @@ namespace Unlimotion.Test
         }
 
         [Fact]
-        public Task CreateRootTask()
+        public async Task CreateRootTask()
         {
-            var taskRepositoryMock = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepositoryMock);
+            //Нажимаем кнопку создать задачу
+            fixture.MainWindowViewModelTest.Create.Execute(null);
 
-            // Добавляем корневую задачу
-            var rootTaskViewModel = new TaskItemViewModel(MainWindowViewModelFixture.RootTask, taskRepositoryMock);
-            rootTaskViewModel.SaveItemCommand.Execute();
-            taskRepositoryMock.Tasks.AddOrUpdate(rootTaskViewModel);
-            var task = fixture.MainWindowViewModelTest.CurrentItems.FirstOrDefault(t => t.TaskItem.Id == MainWindowViewModelFixture.RootTaskId);
-            Assert.NotNull(task);
-            Assert.Equivalent(rootTaskViewModel, task.TaskItem);
-            return Task.CompletedTask;
+            var newTaskItemViewModel = fixture.MainWindowViewModelTest.CurrentTaskItem;
+            newTaskItemViewModel.PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromSeconds(0.1);
+            newTaskItemViewModel.Title = fixture.RootTask.Title;
+            newTaskItemViewModel.Description = fixture.RootTask.Description;
+            Thread.Sleep(TimeSpan.FromSeconds(30));
+
+            var taskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
+
+            Assert.Multiple(
+            () =>
+            {
+                Assert.NotNull(taskItem);
+                Assert.Equal(taskItem.Title, fixture.RootTask.Title);
+                Assert.Equal(taskItem.Description, fixture.RootTask.Description);
+                Assert.Equal(taskItem.Id, newTaskItemViewModel.Id);
+            }
+            );
+
+            DeleteFilesFromTasksFolder();
         }
 
         [Fact]
@@ -40,7 +53,7 @@ namespace Unlimotion.Test
             Assert.NotNull(taskRepositoryMock);
 
             // Добавляем корневую задачу
-            var rootTaskViewModel = new TaskItemViewModel(MainWindowViewModelFixture.RootTask, taskRepositoryMock);
+            var rootTaskViewModel = new TaskItemViewModel(fixture.RootTask, taskRepositoryMock);
             rootTaskViewModel.SaveItemCommand.Execute();
             taskRepositoryMock.Tasks.AddOrUpdate(rootTaskViewModel);
 
@@ -51,7 +64,7 @@ namespace Unlimotion.Test
             var newTask = taskRepositoryMock.Tasks.Items.FirstOrDefault(t => t.Id == MainWindowViewModelFixture.RootTaskId);
             Assert.Equal(newTask.Title, renameTask.Title);
 
-            Thread.Sleep(TimeSpan.FromSeconds(10));
+            Thread.Sleep(TimeSpan.FromSeconds(1));
             var newStorageTask = await taskRepositoryMock.Load(MainWindowViewModelFixture.RootTaskId);
             Assert.Equal(renameTask.Title, newStorageTask.Title);
         }
@@ -63,7 +76,7 @@ namespace Unlimotion.Test
             Assert.NotNull(taskRepositoryMock);
 
             // Добавляем корневую задачу
-            var rootTaskViewModel = new TaskItemViewModel(MainWindowViewModelFixture.RootTask, taskRepositoryMock);
+            var rootTaskViewModel = new TaskItemViewModel(fixture.RootTask, taskRepositoryMock);
             rootTaskViewModel.SaveItemCommand.Execute();
             taskRepositoryMock.Tasks.AddOrUpdate(rootTaskViewModel);
 
@@ -79,6 +92,19 @@ namespace Unlimotion.Test
             Assert.Equal(2, count);
             Assert.Equal(2, taskRepositoryMock.Tasks.Count);
             return Task.CompletedTask;
+        }
+
+        private TaskItem GetStorageTaskItem(string taskId)
+        {
+            var taskItemString = File.ReadAllText(Path.Combine(fixture.DefaultTasksFolderPath, taskId));
+            return JsonSerializer.Deserialize<TaskItem>(taskItemString);
+        }
+
+        private void DeleteFilesFromTasksFolder()
+        {
+            DirectoryInfo tasksFolder = new DirectoryInfo(fixture.DefaultTasksFolderPath);
+            foreach (FileInfo file in tasksFolder.GetFiles()) file.Delete();
+            foreach (DirectoryInfo subDirectory in tasksFolder.GetDirectories()) subDirectory.Delete(true);
         }
     }
 }

@@ -7,6 +7,20 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0" />
+	  <None Remove="TestSettings.json" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="TestSettings.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="JustMock" Version="2024.1.124.247" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
 		<PackageReference Include="xunit" Version="2.7.0" />
