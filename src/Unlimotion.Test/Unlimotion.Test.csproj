@@ -7,12 +7,36 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf" />
+	  <None Remove="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7" />
+	  <None Remove="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8" />
+	  <None Remove="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f" />
 	  <None Remove="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0" />
+	  <None Remove="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f" />
+	  <None Remove="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56" />
 	  <None Remove="TestSettings.json" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Include="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="TestSettings.json">
@@ -21,6 +45,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FluentAssertions.Json" Version="8.0.0" />
 		<PackageReference Include="JustMock" Version="2024.1.124.247" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
 		<PackageReference Include="xunit" Version="2.7.0" />

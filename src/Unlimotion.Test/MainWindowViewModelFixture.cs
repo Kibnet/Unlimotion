@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Avalonia.Notification;
+using Splat;
+using System;
 using System.IO;
 using Unlimotion.ViewModel;
 
@@ -13,6 +15,13 @@ namespace Unlimotion.Test
         public string DefaultSnapshotsFolderPath => Path.Combine(Environment.CurrentDirectory, "Snapshots");
         public string DefaultRootTasPath => Path.Combine(DefaultSnapshotsFolderPath, RootTaskId);
         public const string RootTaskId = "baaf00ad-e250-4828-8bec-a6b42525fda0";
+        public const string RootTask2Id = "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf";
+        public const string SubTask22Id = "53c5b18d-3818-4467-b8bb-0346b21ebbc7";  
+        public const string RootTask3Id = "d63fbe66-4a91-44e4-b704-d85091831c56";
+        public const string BlockedTask2Id = "a1d12137-8bca-46d2-bb1c-a413149123d8";
+        public const string RootTask4Id = "c119a20a-6b75-40df-97c2-d2ca3822085f";
+        public const string SubTask41Id = "b5a0c236-e738-4619-8f2a-d9454414fe6f";
+
         public TaskItem RootTask = new TaskItem
         {
             Id = RootTaskId,
@@ -23,9 +32,25 @@ namespace Unlimotion.Test
         public MainWindowViewModelFixture()
         {
             Directory.CreateDirectory(DefaultTasksFolderPath);
+            CopyTaskFromSnapshotsFolder();
             App.Init(_defaultConfigName);
+
+            var notificationMessageManagerMock = new NotificationManagerWrapperMock();
+            Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationMessageManagerMock);
             MainWindowViewModelTest = new MainWindowViewModel();
 
+        }
+
+        private void CopyTaskFromSnapshotsFolder()
+        {
+            string[] files = Directory.GetFiles(DefaultSnapshotsFolderPath);
+
+            foreach (string file in files)
+            {
+                var fileInfo = new FileInfo(file);
+                var newFilePath = Path.Combine(DefaultTasksFolderPath, fileInfo.Name);
+                fileInfo.MoveTo(newFilePath, true);
+            }
         }
     }
 }
