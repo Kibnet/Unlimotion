@@ -1,4 +1,5 @@
-﻿using DynamicData;
+﻿using KellermanSoftware.CompareNetObjects;
+using DynamicData;
 using FluentAssertions;
 using Newtonsoft.Json.Linq;
 using Splat;
@@ -10,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.ViewModel;
 using Xunit;
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Unlimotion.Test
 {
@@ -53,10 +55,9 @@ namespace Unlimotion.Test
             Assert.NotNull(taskRepository);
 
             var renameTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
-            renameTask.PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromSeconds(0.1);
             renameTask.Title = "Changed task title";
 
-            Thread.Sleep(TimeSpan.FromSeconds(30));
+            Thread.Sleep(renameTask.PropertyChangedThrottleTimeSpanDefault.Add(TimeSpan.FromSeconds(1)));
             var taskItem = GetStorageTaskItem(renameTask.Id);
             Assert.Equal(renameTask.Title, taskItem.Title);
         }
@@ -141,26 +142,51 @@ namespace Unlimotion.Test
         /// Создание зависимой соседней задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
-        public Task CreateBlockedSibling_Success()
+        [Theory]
+        [InlineData(MainWindowViewModelFixture.RootTaskId)]
+        [InlineData(MainWindowViewModelFixture.SubTask22Id)]
+        public Task CreateBlockedSibling_Success(string taskId)
         {
+            CompareLogic compareLogic = new CompareLogic();
+
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             Assert.NotNull(taskRepository);
+            //Запоминаем сколько задач было
+            var taskCount = taskRepository.Tasks.Count;
 
             // Берем корневую задачу и делаем ее выбранной
-            var rootTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var rootTaskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
+            var rootTaskItemBeforeTest = GetStorageTaskItem(rootTaskViewModel.Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
-
             fixture.MainWindowViewModelTest.CreateBlockedSibling.Execute(null);
-
             //Assert
-            var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
-            var rootTaskItem = GetStorageTaskItem(rootTaskViewModel.Id);
+            //Проверяем что создалась ровно 1 задача
+            Assert.Equal(taskCount+1, taskRepository.Tasks.Count);
 
-            Assert.NotEmpty(rootTaskItem.BlocksTasks);
+            //Находим вновь созданную задачу в репозитории
+            var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
+            
+            Assert.True(newTaskItemViewModel.Parents.Count <= rootTaskViewModel.Parents.Count);
+            if (rootTaskViewModel.Parents.Count>0)
+            {
+                Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), rootTaskViewModel.Parents);
+            }
+            //Загружаем новую задачу из файла
+            var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
+            //Проверяем что файл с правильным ID
+            Assert.Contains(newTaskItemViewModel.Id, newTaskItem.Id);
+            //Загружаем корневую задачу из файла
+            var rootTaskItemAfterTest = GetStorageTaskItem(rootTaskViewModel.Id);
+            //Сравниваем старую и новую версию корневой задачи
+            var result = compareLogic.Compare(rootTaskItemBeforeTest, rootTaskItemAfterTest);
+            //Должно быть одно различие в количестве BlocksTasks
+            Assert.Equal("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count, Values (0,1)\r\nEnd Differences (Maximum of 1 differences shown).", result.DifferencesString);
+            //Новая задача должна быть в Blocks во вьюмодели корневой задачи
+            Assert.Contains(newTaskItemViewModel.Id, rootTaskViewModel.Blocks);
+            //Новая задача должна быть в BlocksTasks в файле корневой задачи
+            Assert.Contains(newTaskItemViewModel.Id, rootTaskItemAfterTest.BlocksTasks);
 
-            Assert.Contains(newTaskItemViewModel.Id, rootTaskItem.BlocksTasks);
-
+            //Удаление новой задачи
             DeleteTask(newTaskItemViewModel.Id);
             return Task.CompletedTask;
         }
