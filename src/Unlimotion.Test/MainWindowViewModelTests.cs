@@ -117,20 +117,22 @@ namespace Unlimotion.Test
             Assert.NotNull(taskRepository);
 
             // Берем корневую задачу и делаем ее выбранной
-            var rootTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
-            fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
+            var subTask22ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = subTask22ViewModel;
 
             fixture.MainWindowViewModelTest.CreateSibling.Execute(null);
 
             //Assert
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
-            Assert.Empty(newTaskItemViewModel.Parents);
-            Assert.Equal(rootTaskViewModel.Parents.Count, newTaskItemViewModel.Parents.Count);
 
-            var count = fixture.MainWindowViewModelTest.CurrentItems.Count;
-            Assert.Equal(2, count);
-            Assert.Equal(2, taskRepository.Tasks.Count);
+            var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
+            var rootTask2Item = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
 
+            Assert.Contains(newTaskItem.Id, rootTask2Item.ContainsTasks);
+
+            var RootTask2ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
+
+            RootTask2ViewModel.Contains.Remove(newTaskItem.Id);
             DeleteTask(newTaskItemViewModel.Id);
             return Task.CompletedTask;
         }
@@ -153,12 +155,11 @@ namespace Unlimotion.Test
 
             //Assert
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
-            Assert.NotEmpty(rootTaskViewModel.Blocks);
-            var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
-            Assert.NotEmpty(newTaskItem.BlocksTasks);
+            var rootTaskItem = GetStorageTaskItem(rootTaskViewModel.Id);
 
-            Assert.Contains(newTaskItemViewModel.Id, rootTaskViewModel.Blocks);
-            Assert.Contains(newTaskItemViewModel.Id, newTaskItem.BlocksTasks);
+            Assert.NotEmpty(rootTaskItem.BlocksTasks);
+
+            Assert.Contains(newTaskItemViewModel.Id, rootTaskItem.BlocksTasks);
 
             DeleteTask(newTaskItemViewModel.Id);
             return Task.CompletedTask;
@@ -477,6 +478,149 @@ namespace Unlimotion.Test
             Assert.Null(task4TaskItem);
             var subTask41TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id);
             Assert.NotNull(subTask41TaskItem);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Архивация задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task ArchiveCommandWithoutContainsTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var archiveTask11ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchiveTask11Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask11ViewModel;
+            ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var archiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask11Id);
+            Assert.NotNull(archiveTask11.ArchiveDateTime);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Архивация задачи с подзадачами
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task ArchiveCommandWithContainsTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var archiveTask1ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchiveTask1Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask1ViewModel;
+            ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var archiveTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask1Id);
+            var archiveTask11Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask11Id);
+            Assert.NotNull(archiveTask1Item.ArchiveDateTime);
+            Assert.NotNull(archiveTask11Item.ArchiveDateTime);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Разархивация задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task UnArchiveCommandWithoutContainsTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var archivedTask11ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchivedTask11Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask11ViewModel;
+            ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var unArchiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask11Id);
+            Assert.Null(unArchiveTask11.ArchiveDateTime);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Разархивация задачи с подзадачами
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task UnArchiveCommandWithContainsTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var archivedTask1ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchivedTask1Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask1ViewModel;
+            ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var archivedTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask1Id);
+            var archivedTask11Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask11Id);
+            Assert.Null(archivedTask1Item.ArchiveDateTime);
+            Assert.Null(archivedTask11Item.ArchiveDateTime);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Выполнение задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task IsCompletedTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var rootTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
+            ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            Assert.Equal(true, rootTask.IsCompleted);
+            Assert.NotNull(rootTask.CompletedDateTime);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Отмена выполнения задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task NotCompletedTask_Success()
+        {
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+
+            var completedTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.CompletedTaskId).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = completedTaskViewModel;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = false;
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            var completedTask = GetStorageTaskItem(MainWindowViewModelFixture.CompletedTaskId);
+            Assert.Equal(false, completedTask.IsCompleted);
+            Assert.Null(completedTask.CompletedDateTime);
 
             return Task.CompletedTask;
         }

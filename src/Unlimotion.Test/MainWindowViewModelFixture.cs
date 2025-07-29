@@ -21,6 +21,11 @@ namespace Unlimotion.Test
         public const string BlockedTask2Id = "a1d12137-8bca-46d2-bb1c-a413149123d8";
         public const string RootTask4Id = "c119a20a-6b75-40df-97c2-d2ca3822085f";
         public const string SubTask41Id = "b5a0c236-e738-4619-8f2a-d9454414fe6f";
+        public const string ArchiveTask1Id = "0f154faf-7e8e-4cb2-9824-c9f1bfcf1984";
+        public const string ArchiveTask11Id = "c136273b-99c9-4157-a8f2-5a128cb8b6de";
+        public const string ArchivedTask1Id = "f6c3c536-217a-4190-b548-4d41a5c88bc2";
+        public const string ArchivedTask11Id = "35250eba-d745-4928-ae1c-740601a71b58";
+        public const string CompletedTaskId = "a0cc3a70-1fb1-41f7-895c-c3425d893d39";
 
         public TaskItem RootTask = new TaskItem
         {

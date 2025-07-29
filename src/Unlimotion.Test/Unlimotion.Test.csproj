@@ -7,21 +7,35 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="Snapshots\0f154faf-7e8e-4cb2-9824-c9f1bfcf1984" />
 	  <None Remove="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf" />
+	  <None Remove="Snapshots\35250eba-d745-4928-ae1c-740601a71b58" />
 	  <None Remove="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7" />
+	  <None Remove="Snapshots\a0cc3a70-1fb1-41f7-895c-c3425d893d39" />
 	  <None Remove="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8" />
 	  <None Remove="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f" />
 	  <None Remove="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0" />
 	  <None Remove="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f" />
+	  <None Remove="Snapshots\c136273b-99c9-4157-a8f2-5a128cb8b6de" />
 	  <None Remove="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56" />
+	  <None Remove="Snapshots\f6c3c536-217a-4190-b548-4d41a5c88bc2" />
 	  <None Remove="TestSettings.json" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Include="Snapshots\0f154faf-7e8e-4cb2-9824-c9f1bfcf1984">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	  <Content Include="Snapshots\35250eba-d745-4928-ae1c-740601a71b58">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\a0cc3a70-1fb1-41f7-895c-c3425d893d39">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8">
@@ -36,7 +50,13 @@
 	  <Content Include="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	  <Content Include="Snapshots\c136273b-99c9-4157-a8f2-5a128cb8b6de">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\f6c3c536-217a-4190-b548-4d41a5c88bc2">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="TestSettings.json">
