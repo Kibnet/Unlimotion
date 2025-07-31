@@ -13,10 +13,10 @@ namespace Unlimotion.Test
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
         public string DefaultTasksFolderPath => Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
         public string DefaultSnapshotsFolderPath => Path.Combine(Environment.CurrentDirectory, "Snapshots");
-        public string DefaultRootTasPath => Path.Combine(DefaultSnapshotsFolderPath, RootTaskId);
+        public string DefaultRootTaskPath => Path.Combine(DefaultSnapshotsFolderPath, RootTaskId);
         public const string RootTaskId = "baaf00ad-e250-4828-8bec-a6b42525fda0";
         public const string RootTask2Id = "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf";
-        public const string SubTask22Id = "53c5b18d-3818-4467-b8bb-0346b21ebbc7";  
+        public const string SubTask22Id = "53c5b18d-3818-4467-b8bb-0346b21ebbc7";
         public const string RootTask3Id = "d63fbe66-4a91-44e4-b704-d85091831c56";
         public const string BlockedTask2Id = "a1d12137-8bca-46d2-bb1c-a413149123d8";
         public const string RootTask4Id = "c119a20a-6b75-40df-97c2-d2ca3822085f";
@@ -27,12 +27,18 @@ namespace Unlimotion.Test
         public const string ArchivedTask11Id = "35250eba-d745-4928-ae1c-740601a71b58";
         public const string CompletedTaskId = "a0cc3a70-1fb1-41f7-895c-c3425d893d39";
 
-        public TaskItem RootTask = new TaskItem
-        {
-            Id = RootTaskId,
-            Title = "Root Task 1",
-            Description = "Root Task 1 Description"
-        };
+        public const string RootTask5Id = "262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd";
+        public const string BlockedTask5Id = "411df323-a873-4aac-bd35-9dc0cc976ea2";
+
+        public const string RootTask6Id = "91c641a1-db98-4689-bd45-54d7ffc92d98";
+        public const string BlockedTask6Id = "5c06d648-9c04-47f4-8d5a-12f936bcd883";
+        public const string DeadlockTask6Id = "6a34c1cc-5283-4f60-9138-aee91bf6a6cb";
+        public const string DeadlockBlockedTask6Id = "0d8726d4-ea55-491e-9f52-6215ccb1ef19";
+
+        public const string RootTask7Id = "18718dff-9364-4651-98ed-75be265a7751";
+        public const string BlockedTask7Id = "f41774af-38f6-486c-9c5d-e4ba3300438c";
+        public const string DeadlockTask7Id = "9b4b876e-6d4f-47f4-8007-f36fc291ed72";
+        public const string DeadlockBlockedTask7Id = "4bdbac51-11f8-4629-b592-4641dd387867";
 
         public MainWindowViewModelFixture()
         {

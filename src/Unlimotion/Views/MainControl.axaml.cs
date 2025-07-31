@@ -214,17 +214,31 @@ namespace Unlimotion.Views
                 }
                 else if (e.KeyModifiers == KeyModifiers.Control)
                 {
-                    e.DragEffects &= DragDropEffects.Link;
-                    task.BlockBy(subItem);
-                    UpdateGraph(e.Source);
-                    e.Handled = true;
+                    if (!subItem.BlockedBy.Contains(task.Id))
+                    {
+                        e.DragEffects &= DragDropEffects.Link;
+                        task.BlockBy(subItem);
+                        UpdateGraph(e.Source);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        e.DragEffects = DragDropEffects.None;
+                    }
                 }
                 else if (e.KeyModifiers == KeyModifiers.Alt)
                 {
-                    e.DragEffects &= DragDropEffects.Link;
-                    subItem.BlockBy(task);
-                    UpdateGraph(e.Source);
-                    e.Handled = true;
+                    if (!subItem.BlockedBy.Contains(task.Id))
+                    {
+                        e.DragEffects &= DragDropEffects.Link;
+                        subItem.BlockBy(task);
+                        UpdateGraph(e.Source);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        e.DragEffects = DragDropEffects.None;
+                    }
                 }
                 else
                 {

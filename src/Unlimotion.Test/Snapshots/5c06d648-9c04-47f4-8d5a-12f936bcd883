@@ -1,0 +1,18 @@
+{
+  "Id": "5c06d648-9c04-47f4-8d5a-12f936bcd883",
+  "Title": "Blocked task 6",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-31T03:38:35.609+00:00",
+  "UnlockedDateTime": "2025-07-31T03:38:35.609+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "BlocksTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false
+}

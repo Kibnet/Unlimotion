@@ -1,7 +1,6 @@
-﻿using KellermanSoftware.CompareNetObjects;
-using DynamicData;
+﻿using Avalonia.Controls;
 using FluentAssertions;
-using Newtonsoft.Json.Linq;
+using KellermanSoftware.CompareNetObjects;
 using Splat;
 using System;
 using System.IO;
@@ -633,7 +632,7 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Fact]
-        public Task NotCompletedTask_Success()
+        public Task CancelCompletedTask_Success()
         {
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             Assert.NotNull(taskRepository);
@@ -650,6 +649,160 @@ namespace Unlimotion.Test
 
             return Task.CompletedTask;
         }
+
+        /// <summary>
+        /// Выполнение зависимой задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task CompletingBlockingTask_Success()
+        {
+            CompareLogic compareLogic = new CompareLogic();
+
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+            var blockingTask5BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
+            var blockedTask5BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask5Id);
+
+            //Берем задачу "task 5", которая блокирует задачу "blocked task 5" и делаем ее выполненной
+            var blockingTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask5Id).Value;
+            fixture.MainWindowViewModelTest.CurrentTaskItem = blockingTaskViewModel;
+            fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
+            Thread.Sleep(TimeSpan.FromSeconds(20));
+
+            // Assert
+            // Загружаем задачу "blocked task 5" из файла, которая была заблокированная
+            var blockedTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask5Id);
+            //У нее проставлено время разблокировки
+            Assert.NotNull(blockedTask5AfterTest.UnlockedDateTime);
+            var result = compareLogic.Compare(blockedTask5BeforeTest, blockedTask5AfterTest);
+            //Должно быть одно различие: проставлена дата разблокировки
+            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [null,DateTimeOffset], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime, Values ((null)",
+                result.DifferencesString);
+
+            var blockedTask5ViewModel = taskRepository.Tasks.Items.First(i => i.Id == MainWindowViewModelFixture.BlockedTask5Id);
+            Assert.NotNull(blockedTask5ViewModel);
+            //Теперь блокируемый таск можно выполнить
+            Assert.True(blockedTask5ViewModel.IsCanBeCompleted);
+
+            var rootTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
+            //Проверяем, что в блокирующем таске изменилось только поле IsCompleted
+            result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
+            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted",
+               result.DifferencesString);
+            Assert.True(rootTask5AfterTest.IsCompleted);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Создание зависимой связи
+        /// </summary>
+        /// <returns></returns>
+        [Theory]
+        [InlineData(MainWindowViewModelFixture.BlockedTask6Id, MainWindowViewModelFixture.RootTask6Id)]
+        [InlineData(MainWindowViewModelFixture.DeadlockTask6Id, MainWindowViewModelFixture.DeadlockBlockedTask6Id)]
+        public Task AddBlokedByLinkTask_Success(string draggableId, string distinationId)
+        {
+            CompareLogic compareLogic = new CompareLogic();
+
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+            var distinationBeforeTest = GetStorageTaskItem(distinationId);
+            var draggableBeforeTest = GetStorageTaskItem(draggableId);
+
+            //Alt - Целевая задача блокирует перетаскиваемую задачу
+            //Берем задачу "Blocked task 6" и с Alt перетаскиваем ее в "task 6"
+            //либо берем задачу "deadlock task 6" и с Alt перетаскиваем ее в "deadlock blocked task 6"
+            var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
+            var distinationTask6ViewModel = taskRepository.Tasks.Lookup(distinationId).Value;
+
+            //Попытка создание зависимой связи, когда перетаскиваемая задача уже заблокирована целевой
+            //не даем создать взаимоблокировку
+            var isDistinationNotBlockedByDraggable = !distinationTask6ViewModel.BlockedBy.Contains(draggableViewModel.Id);
+            if (isDistinationNotBlockedByDraggable)
+            {
+                draggableViewModel.BlockBy(distinationTask6ViewModel);
+            }
+
+            // Assert
+            var rootTaskAfterTest = GetStorageTaskItem(distinationId);
+            var blockeddraggableAfterTest = GetStorageTaskItem(draggableId);
+
+            var result = compareLogic.Compare(distinationBeforeTest, rootTaskAfterTest);
+            //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
+            if (isDistinationNotBlockedByDraggable)
+            {
+                Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
+                result.DifferencesString);
+
+                result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
+                Assert.True(result.AreEqual);
+
+                Assert.NotNull(rootTaskAfterTest);
+
+                Assert.NotEmpty(rootTaskAfterTest.BlocksTasks);
+                Assert.Contains(blockeddraggableAfterTest.Id, rootTaskAfterTest.BlocksTasks);
+            }
+            else
+                Assert.True(result.AreEqual);
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Создание обратной зависимой связи
+        /// </summary>
+        /// <returns></returns>
+        [Theory]
+        [InlineData(MainWindowViewModelFixture.RootTask7Id, MainWindowViewModelFixture.BlockedTask7Id)]
+        [InlineData(MainWindowViewModelFixture.DeadlockBlockedTask7Id, MainWindowViewModelFixture.DeadlockTask7Id)]
+        public Task AddReverseBlokedByLinkTask_Success(string draggableId, string distinationId)
+        {
+            CompareLogic compareLogic = new CompareLogic();
+
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+            var draggableBeforeTest = GetStorageTaskItem(draggableId);
+            var distinationBeforeTest = GetStorageTaskItem(distinationId);
+
+            //Ctrl - Перетаскиваемая задача блокирует целевую задачу
+            //Берем задачу "task 7" и с Ctrl перетаскиваем ее в "Blocked task 7"
+            //или берем задачу "deadlock blocked task 7" и с Ctrl перетаскиваем ее в "deadlock task 7"
+            var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
+            var distinationViewModel = taskRepository.Tasks.Lookup(distinationId).Value;
+
+            //не даем создать взаимоблокировку
+            var isDraggableNotBlockedByDistination = !draggableViewModel.BlockedBy.Contains(distinationViewModel.Id);
+            if (isDraggableNotBlockedByDistination)
+            {
+                distinationViewModel.BlockBy(draggableViewModel);
+            }
+
+            // Assert
+            var draggableAfterTest = GetStorageTaskItem(draggableId);
+            var distinationAfterTest = GetStorageTaskItem(distinationId);
+
+            var result = compareLogic.Compare(draggableBeforeTest, draggableAfterTest);
+            if (isDraggableNotBlockedByDistination)
+            {
+                //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
+                Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
+                result.DifferencesString);
+                result = compareLogic.Compare(distinationBeforeTest, distinationAfterTest);
+                Assert.True(result.AreEqual);
+
+                Assert.NotNull(draggableAfterTest);
+
+                Assert.NotEmpty(draggableAfterTest.BlocksTasks);
+                Assert.Contains(distinationAfterTest.Id, draggableAfterTest.BlocksTasks);
+            }
+            else
+                Assert.True(result.AreEqual);
+
+            return Task.CompletedTask;
+        }
+
 
         private TaskItem GetStorageTaskItem(string taskId)
         {

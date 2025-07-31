@@ -7,10 +7,19 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="Snapshots\0d8726d4-ea55-491e-9f52-6215ccb1ef19" />
 	  <None Remove="Snapshots\0f154faf-7e8e-4cb2-9824-c9f1bfcf1984" />
 	  <None Remove="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf" />
+	  <None Remove="Snapshots\18718dff-9364-4651-98ed-75be265a7751" />
+	  <None Remove="Snapshots\262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd" />
 	  <None Remove="Snapshots\35250eba-d745-4928-ae1c-740601a71b58" />
+	  <None Remove="Snapshots\411df323-a873-4aac-bd35-9dc0cc976ea2" />
+	  <None Remove="Snapshots\4bdbac51-11f8-4629-b592-4641dd387867" />
 	  <None Remove="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7" />
+	  <None Remove="Snapshots\5c06d648-9c04-47f4-8d5a-12f936bcd883" />
+	  <None Remove="Snapshots\6a34c1cc-5283-4f60-9138-aee91bf6a6cb" />
+	  <None Remove="Snapshots\91c641a1-db98-4689-bd45-54d7ffc92d98" />
+	  <None Remove="Snapshots\9b4b876e-6d4f-47f4-8007-f36fc291ed72" />
 	  <None Remove="Snapshots\a0cc3a70-1fb1-41f7-895c-c3425d893d39" />
 	  <None Remove="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8" />
 	  <None Remove="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f" />
@@ -18,21 +27,49 @@
 	  <None Remove="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f" />
 	  <None Remove="Snapshots\c136273b-99c9-4157-a8f2-5a128cb8b6de" />
 	  <None Remove="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56" />
+	  <None Remove="Snapshots\f41774af-38f6-486c-9c5d-e4ba3300438c" />
 	  <None Remove="Snapshots\f6c3c536-217a-4190-b548-4d41a5c88bc2" />
 	  <None Remove="TestSettings.json" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Include="Snapshots\0d8726d4-ea55-491e-9f52-6215ccb1ef19">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\0f154faf-7e8e-4cb2-9824-c9f1bfcf1984">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	  <Content Include="Snapshots\18718dff-9364-4651-98ed-75be265a7751">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\35250eba-d745-4928-ae1c-740601a71b58">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
+	  <Content Include="Snapshots\411df323-a873-4aac-bd35-9dc0cc976ea2">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\4bdbac51-11f8-4629-b592-4641dd387867">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="Snapshots\53c5b18d-3818-4467-b8bb-0346b21ebbc7">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\5c06d648-9c04-47f4-8d5a-12f936bcd883">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\6a34c1cc-5283-4f60-9138-aee91bf6a6cb">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\91c641a1-db98-4689-bd45-54d7ffc92d98">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\9b4b876e-6d4f-47f4-8007-f36fc291ed72">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\a0cc3a70-1fb1-41f7-895c-c3425d893d39">
@@ -54,6 +91,9 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\d63fbe66-4a91-44e4-b704-d85091831c56">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\f41774af-38f6-486c-9c5d-e4ba3300438c">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\f6c3c536-217a-4190-b548-4d41a5c88bc2">
