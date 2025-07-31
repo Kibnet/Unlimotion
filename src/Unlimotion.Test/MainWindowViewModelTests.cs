@@ -204,15 +204,15 @@ namespace Unlimotion.Test
             var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
             var rootTask2 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
             // Берем корневую задачу, куда перемещаем задачу
-            var distinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
-            subTask22.MoveInto(distinationRootTask, rootTask2);
+            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            subTask22.MoveInto(destinationRootTask, rootTask2);
 
             //Assert
-            var distinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
             Assert.Empty(rootTask2TaskItem.ContainsTasks);
-            Assert.NotEmpty(distinationTaskItem.ContainsTasks);
-            Assert.Contains(subTask22.Id, distinationTaskItem.ContainsTasks);
+            Assert.NotEmpty(destinationTaskItem.ContainsTasks);
+            Assert.Contains(subTask22.Id, destinationTaskItem.ContainsTasks);
 
             return Task.CompletedTask;
         }
@@ -230,12 +230,12 @@ namespace Unlimotion.Test
             // Берем внутреннюю задачу
             var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
             // Берем корневую задачу, куда добавляем ссылку на задачу
-            var distinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
-            subTask22.CloneInto(distinationRootTask);
+            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            subTask22.CloneInto(destinationRootTask);
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
 
             //Assert
-            var distinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
 
@@ -244,10 +244,10 @@ namespace Unlimotion.Test
             Assert.NotEmpty(rootTask2TaskItem.ContainsTasks);
             Assert.Contains(subTask22.Id, rootTask2TaskItem.ContainsTasks);
 
-            Assert.NotEmpty(distinationTaskItem.ContainsTasks);
-            Assert.Contains(newTaskItem.Id, distinationTaskItem.ContainsTasks);
+            Assert.NotEmpty(destinationTaskItem.ContainsTasks);
+            Assert.Contains(newTaskItem.Id, destinationTaskItem.ContainsTasks);
 
-            distinationRootTask.Contains.Remove(newTaskItem.Id);
+            destinationRootTask.Contains.Remove(newTaskItem.Id);
             DeleteTask(newTaskItem.Id);
             return Task.CompletedTask;
         }
@@ -266,21 +266,21 @@ namespace Unlimotion.Test
             var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
             var rootTask3 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask3Id).Value;
             // Берем корневую задачу, куда перемещаем ссылку на задачу
-            var distinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
-            subTask22.MoveInto(distinationRootTask, rootTask3);
+            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            subTask22.MoveInto(destinationRootTask, rootTask3);
 
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
 
             //Assert
-            var distinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
             var rootTask3TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask3Id);
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
 
             Assert.NotNull(newTaskItem);
 
-            Assert.NotEmpty(distinationTaskItem.ContainsTasks);
-            Assert.Contains(subTask22.Id, distinationTaskItem.ContainsTasks);
+            Assert.NotEmpty(destinationTaskItem.ContainsTasks);
+            Assert.Contains(subTask22.Id, destinationTaskItem.ContainsTasks);
 
             //Проверка, что у задачи T 3 больше нет ссылки на T 2.2
             Assert.DoesNotContain(subTask22.Id, rootTask3TaskItem.ContainsTasks);
@@ -702,36 +702,36 @@ namespace Unlimotion.Test
         [Theory]
         [InlineData(MainWindowViewModelFixture.BlockedTask6Id, MainWindowViewModelFixture.RootTask6Id)]
         [InlineData(MainWindowViewModelFixture.DeadlockTask6Id, MainWindowViewModelFixture.DeadlockBlockedTask6Id)]
-        public Task AddBlokedByLinkTask_Success(string draggableId, string distinationId)
+        public Task AddBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
             CompareLogic compareLogic = new CompareLogic();
 
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             Assert.NotNull(taskRepository);
-            var distinationBeforeTest = GetStorageTaskItem(distinationId);
+            var destinationBeforeTest = GetStorageTaskItem(destinationId);
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
 
             //Alt - Целевая задача блокирует перетаскиваемую задачу
             //Берем задачу "Blocked task 6" и с Alt перетаскиваем ее в "task 6"
             //либо берем задачу "deadlock task 6" и с Alt перетаскиваем ее в "deadlock blocked task 6"
             var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
-            var distinationTask6ViewModel = taskRepository.Tasks.Lookup(distinationId).Value;
+            var destinationTask6ViewModel = taskRepository.Tasks.Lookup(destinationId).Value;
 
             //Попытка создание зависимой связи, когда перетаскиваемая задача уже заблокирована целевой
             //не даем создать взаимоблокировку
-            var isDistinationNotBlockedByDraggable = !distinationTask6ViewModel.BlockedBy.Contains(draggableViewModel.Id);
-            if (isDistinationNotBlockedByDraggable)
+            var isdestinationNotBlockedByDraggable = !destinationTask6ViewModel.BlockedBy.Contains(draggableViewModel.Id);
+            if (isdestinationNotBlockedByDraggable)
             {
-                draggableViewModel.BlockBy(distinationTask6ViewModel);
+                draggableViewModel.BlockBy(destinationTask6ViewModel);
             }
 
             // Assert
-            var rootTaskAfterTest = GetStorageTaskItem(distinationId);
+            var rootTaskAfterTest = GetStorageTaskItem(destinationId);
             var blockeddraggableAfterTest = GetStorageTaskItem(draggableId);
 
-            var result = compareLogic.Compare(distinationBeforeTest, rootTaskAfterTest);
+            var result = compareLogic.Compare(destinationBeforeTest, rootTaskAfterTest);
             //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
-            if (isDistinationNotBlockedByDraggable)
+            if (isdestinationNotBlockedByDraggable)
             {
                 Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
                 result.DifferencesString);
@@ -757,45 +757,45 @@ namespace Unlimotion.Test
         [Theory]
         [InlineData(MainWindowViewModelFixture.RootTask7Id, MainWindowViewModelFixture.BlockedTask7Id)]
         [InlineData(MainWindowViewModelFixture.DeadlockBlockedTask7Id, MainWindowViewModelFixture.DeadlockTask7Id)]
-        public Task AddReverseBlokedByLinkTask_Success(string draggableId, string distinationId)
+        public Task AddReverseBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
             CompareLogic compareLogic = new CompareLogic();
 
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             Assert.NotNull(taskRepository);
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
-            var distinationBeforeTest = GetStorageTaskItem(distinationId);
+            var destinationBeforeTest = GetStorageTaskItem(destinationId);
 
             //Ctrl - Перетаскиваемая задача блокирует целевую задачу
             //Берем задачу "task 7" и с Ctrl перетаскиваем ее в "Blocked task 7"
             //или берем задачу "deadlock blocked task 7" и с Ctrl перетаскиваем ее в "deadlock task 7"
             var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
-            var distinationViewModel = taskRepository.Tasks.Lookup(distinationId).Value;
+            var destinationViewModel = taskRepository.Tasks.Lookup(destinationId).Value;
 
             //не даем создать взаимоблокировку
-            var isDraggableNotBlockedByDistination = !draggableViewModel.BlockedBy.Contains(distinationViewModel.Id);
-            if (isDraggableNotBlockedByDistination)
+            var isDraggableNotBlockedBydestination = !draggableViewModel.BlockedBy.Contains(destinationViewModel.Id);
+            if (isDraggableNotBlockedBydestination)
             {
-                distinationViewModel.BlockBy(draggableViewModel);
+                destinationViewModel.BlockBy(draggableViewModel);
             }
 
             // Assert
             var draggableAfterTest = GetStorageTaskItem(draggableId);
-            var distinationAfterTest = GetStorageTaskItem(distinationId);
+            var destinationAfterTest = GetStorageTaskItem(destinationId);
 
             var result = compareLogic.Compare(draggableBeforeTest, draggableAfterTest);
-            if (isDraggableNotBlockedByDistination)
+            if (isDraggableNotBlockedBydestination)
             {
                 //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
                 Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
                 result.DifferencesString);
-                result = compareLogic.Compare(distinationBeforeTest, distinationAfterTest);
+                result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
                 Assert.True(result.AreEqual);
 
                 Assert.NotNull(draggableAfterTest);
 
                 Assert.NotEmpty(draggableAfterTest.BlocksTasks);
-                Assert.Contains(distinationAfterTest.Id, draggableAfterTest.BlocksTasks);
+                Assert.Contains(destinationAfterTest.Id, draggableAfterTest.BlocksTasks);
             }
             else
                 Assert.True(result.AreEqual);
@@ -803,8 +803,68 @@ namespace Unlimotion.Test
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Клонирование задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task CloneTask_Success()
+        {
+            CompareLogic compareLogic = new CompareLogic();
 
-        private TaskItem GetStorageTaskItem(string taskId)
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+            //Запоминаем сколько задач было
+            var taskCount = taskRepository.Tasks.Count;
+
+            var destination8BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.DestinationTask8Id);
+            var clonedTask8BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.ClonedTask8Id);
+
+            //Ctrl+Shift - Клонировать перетаскиваемую задачу в целевую как подзадачу
+            //Берем задачу "cloned task 8" и с Ctrl+Shift перетаскиваем ее в подзадачу "destination task 8"
+            //"cloned task 8" задача содержит "clonned sub task  8.1"
+            var clonedViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ClonedTask8Id).Value;
+            var destinationViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.DestinationTask8Id).Value;
+            clonedViewModel.CloneInto(destinationViewModel);
+
+            //Assert
+            //Проверяем что создалась ровно 1 задача
+            Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
+
+            //Находим созданную склонированную задачу в репозитории
+            var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
+
+            //Загружаем новую задачу из файла
+            var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
+            //Загружаем целевую задачу из файла
+            var destinationTask8ItemAfterTest = GetStorageTaskItem(destinationViewModel.Id);
+
+            //Сравниваем старую и новую версию целевой задачи
+            var result = compareLogic.Compare(destination8BeforeTest, destinationTask8ItemAfterTest);
+            //Должно быть одно различие в количестве ContainsTasks
+            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.ContainsTasks.Count != Actual.ContainsTasks.Count",
+                result.DifferencesString);
+            //Новая задача должна быть в Contains во вьюмодели целевой задачи
+            Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
+            //Новая задача должна быть в BlocksTasks в файле целевой задачи
+            Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
+            
+            //Берем клонируюмую задачу из файла
+            var clonedTask8ItemAfterTest = GetStorageTaskItem(destinationViewModel.Id);
+            //Сравниваем клонируюмую задачу с новой созданной
+            result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
+            //Должны отличаться id
+            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id",
+                result.DifferencesString);
+            Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
+
+            //Удаление новой задачи
+            DeleteTask(newTaskItemViewModel.Id);
+            return Task.CompletedTask;
+        }
+
+
+            private TaskItem GetStorageTaskItem(string taskId)
         {
             var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
             if (!File.Exists(path))

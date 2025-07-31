@@ -1,4 +1,5 @@
 ﻿using Avalonia.Notification;
+using Microsoft.AspNetCore.SignalR;
 using Splat;
 using System;
 using System.IO;
@@ -39,6 +40,11 @@ namespace Unlimotion.Test
         public const string BlockedTask7Id = "f41774af-38f6-486c-9c5d-e4ba3300438c";
         public const string DeadlockTask7Id = "9b4b876e-6d4f-47f4-8007-f36fc291ed72";
         public const string DeadlockBlockedTask7Id = "4bdbac51-11f8-4629-b592-4641dd387867";
+
+        public const string ClonedTask8Id = "2b39b656-f74b-4231-b0ed-ae283fbf9437";
+        public const string ClonnedSubTask81Id = "2eef36b4-b557-4fd7-a202-1fa414f5e41f";
+        public const string RootTask8Id = "b5908ff4-5f94-41ad-90b2-46521b1fb3dd";
+        public const string DestinationTask8Id = "a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b";
 
         public MainWindowViewModelFixture()
         {

@@ -12,6 +12,8 @@
 	  <None Remove="Snapshots\10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf" />
 	  <None Remove="Snapshots\18718dff-9364-4651-98ed-75be265a7751" />
 	  <None Remove="Snapshots\262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd" />
+	  <None Remove="Snapshots\2b39b656-f74b-4231-b0ed-ae283fbf9437" />
+	  <None Remove="Snapshots\2eef36b4-b557-4fd7-a202-1fa414f5e41f" />
 	  <None Remove="Snapshots\35250eba-d745-4928-ae1c-740601a71b58" />
 	  <None Remove="Snapshots\411df323-a873-4aac-bd35-9dc0cc976ea2" />
 	  <None Remove="Snapshots\4bdbac51-11f8-4629-b592-4641dd387867" />
@@ -22,6 +24,8 @@
 	  <None Remove="Snapshots\9b4b876e-6d4f-47f4-8007-f36fc291ed72" />
 	  <None Remove="Snapshots\a0cc3a70-1fb1-41f7-895c-c3425d893d39" />
 	  <None Remove="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8" />
+	  <None Remove="Snapshots\a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b" />
+	  <None Remove="Snapshots\b5908ff4-5f94-41ad-90b2-46521b1fb3dd" />
 	  <None Remove="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f" />
 	  <None Remove="Snapshots\baaf00ad-e250-4828-8bec-a6b42525fda0" />
 	  <None Remove="Snapshots\c119a20a-6b75-40df-97c2-d2ca3822085f" />
@@ -46,6 +50,12 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\2b39b656-f74b-4231-b0ed-ae283fbf9437">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\2eef36b4-b557-4fd7-a202-1fa414f5e41f">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\35250eba-d745-4928-ae1c-740601a71b58">
@@ -76,6 +86,12 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\a1d12137-8bca-46d2-bb1c-a413149123d8">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\b5908ff4-5f94-41ad-90b2-46521b1fb3dd">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\b5a0c236-e738-4619-8f2a-d9454414fe6f">
