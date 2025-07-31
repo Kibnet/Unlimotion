@@ -1,8 +1,8 @@
-﻿using Avalonia.Notification;
-using Microsoft.AspNetCore.SignalR;
+﻿using ServiceStack;
 using Splat;
 using System;
 using System.IO;
+using System.Threading;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Test
@@ -10,7 +10,11 @@ namespace Unlimotion.Test
     public class MainWindowViewModelFixture
     {
         private const string _defaultConfigName = "TestSettings.json";
-        private const string _defaultTasksFolderName = "Tasks";
+        public string _uniquiID => _guid.ToString();
+        private ThreadLocal<Guid> _guid = new ThreadLocal<Guid>(() => Guid.NewGuid());
+
+        private string _uniqueConfigName => $"TestSettings_{_uniquiID}.json";
+        private string _defaultTasksFolderName => $"Tasks_{_uniquiID}";
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
         public string DefaultTasksFolderPath => Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
         public string DefaultSnapshotsFolderPath => Path.Combine(Environment.CurrentDirectory, "Snapshots");
@@ -50,7 +54,13 @@ namespace Unlimotion.Test
         {
             Directory.CreateDirectory(DefaultTasksFolderPath);
             CopyTaskFromSnapshotsFolder();
-            App.Init(_defaultConfigName);
+            var fileInfo = new FileInfo(_defaultConfigName);
+            var content = fileInfo.ReadAllText();
+            content = content.Replace("\"Path\": \"Tasks\"", $"\"Path\": \"{_defaultTasksFolderName}\"");
+            var configFile = File.Create(_uniqueConfigName);
+            configFile.Write(content);
+            configFile.Close();
+            App.Init(_uniqueConfigName);
 
             var notificationMessageManagerMock = new NotificationManagerWrapperMock();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationMessageManagerMock);
@@ -66,8 +76,17 @@ namespace Unlimotion.Test
             {
                 var fileInfo = new FileInfo(file);
                 var newFilePath = Path.Combine(DefaultTasksFolderPath, fileInfo.Name);
-                fileInfo.MoveTo(newFilePath, true);
+                fileInfo.CopyTo(newFilePath, true);
             }
+        }
+
+        public void CleanTasks()
+        {
+            if (File.Exists(_uniqueConfigName))
+            {
+                File.Delete(_uniqueConfigName);
+            }
+            Directory.Delete(DefaultTasksFolderPath, true);
         }
     }
 }

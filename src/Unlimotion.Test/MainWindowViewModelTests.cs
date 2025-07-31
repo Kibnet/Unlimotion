@@ -10,17 +10,26 @@ using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.ViewModel;
 using Xunit;
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Unlimotion.Test
 {
-    public class MainWindowViewModelTests : IClassFixture<MainWindowViewModelFixture>
+    public class MainWindowViewModelTests : IDisposable
     {
         MainWindowViewModelFixture fixture;
-        public MainWindowViewModelTests(MainWindowViewModelFixture fixture)
+        public MainWindowViewModelTests()
         {
-            this.fixture = fixture;
+            TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(10);
+            this.fixture = new MainWindowViewModelFixture();
         }
+
+        /// <summary>
+        /// Очистка после тестов
+        /// </summary>
+        public void Dispose()
+        {
+            fixture.CleanTasks();
+        }
+
 
         /// <summary>
         /// Создание задачи в корне
@@ -56,11 +65,11 @@ namespace Unlimotion.Test
             var renameTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
             renameTask.Title = "Changed task title";
 
-            Thread.Sleep(renameTask.PropertyChangedThrottleTimeSpanDefault.Add(TimeSpan.FromSeconds(1)));
+            WaitThrottleTime();
             var taskItem = GetStorageTaskItem(renameTask.Id);
             Assert.Equal(renameTask.Title, taskItem.Title);
         }
-
+        
         /// <summary>
         /// Создание вложенной задачи
         /// </summary>
@@ -521,7 +530,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask11ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var archiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask11Id);
@@ -544,7 +553,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask1ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var archiveTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask1Id);
@@ -569,7 +578,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask11ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var unArchiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask11Id);
@@ -592,7 +601,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask1ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var archivedTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask1Id);
@@ -617,7 +626,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
@@ -640,7 +649,7 @@ namespace Unlimotion.Test
             var completedTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.CompletedTaskId).Value;
             fixture.MainWindowViewModelTest.CurrentTaskItem = completedTaskViewModel;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = false;
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             var completedTask = GetStorageTaskItem(MainWindowViewModelFixture.CompletedTaskId);
@@ -668,7 +677,7 @@ namespace Unlimotion.Test
             var blockingTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask5Id).Value;
             fixture.MainWindowViewModelTest.CurrentTaskItem = blockingTaskViewModel;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
-            Thread.Sleep(TimeSpan.FromSeconds(20));
+            WaitThrottleTime();
 
             // Assert
             // Загружаем задачу "blocked task 5" из файла, которая была заблокированная
@@ -872,7 +881,6 @@ namespace Unlimotion.Test
 
             var taskItemString = File.ReadAllText(Path.Combine(fixture.DefaultTasksFolderPath, taskId));
             return JsonSerializer.Deserialize<TaskItem>(taskItemString);
-
         }
 
         private void DeleteTask(string id)
@@ -881,12 +889,9 @@ namespace Unlimotion.Test
             var fileInfo = new FileInfo(taskPath);
             fileInfo.Delete();
         }
-
-        private void DeleteFilesFromTasksFolder()
+        private static void WaitThrottleTime()
         {
-            DirectoryInfo tasksFolder = new DirectoryInfo(fixture.DefaultTasksFolderPath);
-            foreach (FileInfo file in tasksFolder.GetFiles()) file.Delete();
-            foreach (DirectoryInfo subDirectory in tasksFolder.GetDirectories()) subDirectory.Delete(true);
+            Thread.Sleep(TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1)));
         }
     }
 }
