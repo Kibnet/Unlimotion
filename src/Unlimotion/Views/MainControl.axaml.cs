@@ -214,7 +214,7 @@ namespace Unlimotion.Views
                 }
                 else if (e.KeyModifiers == KeyModifiers.Control)
                 {
-                    if (!subItem.BlockedBy.Contains(task.Id))
+                    if (subItem.Id != task.Id && !subItem.BlockedBy.Contains(task.Id))
                     {
                         e.DragEffects &= DragDropEffects.Link;
                         task.BlockBy(subItem);
@@ -228,7 +228,7 @@ namespace Unlimotion.Views
                 }
                 else if (e.KeyModifiers == KeyModifiers.Alt)
                 {
-                    if (!subItem.BlockedBy.Contains(task.Id))
+                    if (subItem.Id != task.Id && !task.BlockedBy.Contains(subItem.Id))
                     {
                         e.DragEffects &= DragDropEffects.Link;
                         subItem.BlockBy(task);
