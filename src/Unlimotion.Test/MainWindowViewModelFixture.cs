@@ -56,7 +56,7 @@ namespace Unlimotion.Test
             CopyTaskFromSnapshotsFolder();
             var fileInfo = new FileInfo(_defaultConfigName);
             var content = fileInfo.ReadAllText();
-            content = content.Replace("\"Path\": \"Tasks\"", $"\"Path\": \"{_defaultTasksFolderName}\"");
+            content = content.Replace("Tasks", _defaultTasksFolderName);
             var configFile = File.Create(_uniqueConfigName);
             configFile.Write(content);
             configFile.Close();
