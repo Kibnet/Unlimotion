@@ -1,5 +1,4 @@
-﻿using Avalonia.Controls;
-using FluentAssertions;
+﻿using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
 using Splat;
 using System;
@@ -69,7 +68,7 @@ namespace Unlimotion.Test
             var taskItem = GetStorageTaskItem(renameTask.Id);
             Assert.Equal(renameTask.Title, taskItem.Title);
         }
-        
+
         /// <summary>
         /// Создание вложенной задачи
         /// </summary>
@@ -169,13 +168,13 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CreateBlockedSibling.Execute(null);
             //Assert
             //Проверяем что создалась ровно 1 задача
-            Assert.Equal(taskCount+1, taskRepository.Tasks.Count);
+            Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
 
             //Находим вновь созданную задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
-            
+
             Assert.True(newTaskItemViewModel.Parents.Count <= rootTaskViewModel.Parents.Count);
-            if (rootTaskViewModel.Parents.Count>0)
+            if (rootTaskViewModel.Parents.Count > 0)
             {
                 Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), rootTaskViewModel.Parents);
             }
@@ -820,6 +819,7 @@ namespace Unlimotion.Test
         public Task CloneTask_Success()
         {
             CompareLogic compareLogic = new CompareLogic();
+            compareLogic.Config.MaxDifferences = 5;
 
             var taskRepository = Locator.Current.GetService<ITaskRepository>();
             Assert.NotNull(taskRepository);
@@ -832,9 +832,10 @@ namespace Unlimotion.Test
             //Ctrl+Shift - Клонировать перетаскиваемую задачу в целевую как подзадачу
             //Берем задачу "cloned task 8" и с Ctrl+Shift перетаскиваем ее в подзадачу "destination task 8"
             //"cloned task 8" задача содержит "clonned sub task  8.1"
-            var clonedViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ClonedTask8Id).Value;
-            var destinationViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.DestinationTask8Id).Value;
+            var clonedViewModel = taskRepository.Tasks.Items.FirstOrDefault(m => m.Id == MainWindowViewModelFixture.ClonedTask8Id);
+            var destinationViewModel = taskRepository.Tasks.Items.FirstOrDefault(m => m.Id == MainWindowViewModelFixture.DestinationTask8Id);
             clonedViewModel.CloneInto(destinationViewModel);
+            WaitThrottleTime();
 
             //Assert
             //Проверяем что создалась ровно 1 задача
@@ -842,28 +843,40 @@ namespace Unlimotion.Test
 
             //Находим созданную склонированную задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
+            Assert.NotNull(newTaskItemViewModel);
 
             //Загружаем новую задачу из файла
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
             //Загружаем целевую задачу из файла
-            var destinationTask8ItemAfterTest = GetStorageTaskItem(destinationViewModel.Id);
+            var destinationTask8ItemAfterTest = GetStorageTaskItem(MainWindowViewModelFixture.DestinationTask8Id);
+            //Новая задача должна быть в массиве ContainsTasks целевой задачи из файла
+            Assert.NotEmpty(destinationTask8ItemAfterTest.ContainsTasks);
+            Assert.Contains(newTaskItemViewModel.Id, destinationTask8ItemAfterTest.ContainsTasks);
+            //Теперь у целевой задачи есть невыполненные задачи внутри. Она заблокирована
+            Assert.Null(destinationTask8ItemAfterTest.UnlockedDateTime);
 
             //Сравниваем старую и новую версию целевой задачи
             var result = compareLogic.Compare(destination8BeforeTest, destinationTask8ItemAfterTest);
-            //Должно быть одно различие в количестве ContainsTasks
-            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.ContainsTasks.Count != Actual.ContainsTasks.Count",
-                result.DifferencesString);
+
+            //Должно быть одно различие в количестве ContainsTasks 
+            var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.UnlockedDateTime));
+            var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.ContainsTasks));
+
+            Assert.NotNull(unlockedDateTimeDifference);
+            Assert.NotNull(containsTasksDifference);
+            Assert.StartsWith("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
+                unlockedDateTimeDifference.ToString());
+            Assert.Equal("Types [List`1,List`1], Item Expected.ContainsTasks.Count != Actual.ContainsTasks.Count, Values (0,1)",
+                containsTasksDifference.ToString());
             //Новая задача должна быть в Contains во вьюмодели целевой задачи
             Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
-            //Новая задача должна быть в BlocksTasks в файле целевой задачи
-            Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
-            
+
             //Берем клонируюмую задачу из файла
-            var clonedTask8ItemAfterTest = GetStorageTaskItem(destinationViewModel.Id);
+            var clonedTask8ItemAfterTest = GetStorageTaskItem(clonedViewModel.Id);
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
-            //Должны отличаться id
-            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id",
+            //Должны отличаться id и дата создания
+            Assert.StartsWith($"\r\nBegin Differences (2 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id, Values ({MainWindowViewModelFixture.ClonedTask8Id},{newTaskItemViewModel.Id})\r\nTypes [DateTimeOffset,DateTimeOffset], Item Expected.CreatedDateTime != Actual.CreatedDateTime",
                 result.DifferencesString);
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
 
@@ -873,7 +886,7 @@ namespace Unlimotion.Test
         }
 
 
-            private TaskItem GetStorageTaskItem(string taskId)
+        private TaskItem GetStorageTaskItem(string taskId)
         {
             var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
             if (!File.Exists(path))
@@ -891,7 +904,8 @@ namespace Unlimotion.Test
         }
         private static void WaitThrottleTime()
         {
-            Thread.Sleep(TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1)));
+            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(5));
+            Thread.Sleep(sleepTime);
         }
     }
 }

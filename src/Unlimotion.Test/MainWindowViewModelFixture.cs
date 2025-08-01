@@ -47,7 +47,6 @@ namespace Unlimotion.Test
 
         public const string ClonedTask8Id = "2b39b656-f74b-4231-b0ed-ae283fbf9437";
         public const string ClonnedSubTask81Id = "2eef36b4-b557-4fd7-a202-1fa414f5e41f";
-        public const string RootTask8Id = "b5908ff4-5f94-41ad-90b2-46521b1fb3dd";
         public const string DestinationTask8Id = "a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b";
 
         public MainWindowViewModelFixture()
