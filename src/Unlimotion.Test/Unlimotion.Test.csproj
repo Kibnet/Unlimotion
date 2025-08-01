@@ -14,6 +14,7 @@
 	  <None Remove="Snapshots\262653d2-3e1c-4ab0-a1ce-b4aaea1a80dd" />
 	  <None Remove="Snapshots\2b39b656-f74b-4231-b0ed-ae283fbf9437" />
 	  <None Remove="Snapshots\2eef36b4-b557-4fd7-a202-1fa414f5e41f" />
+	  <None Remove="Snapshots\3445eef8-4382-4607-b2fb-37a820467f1c" />
 	  <None Remove="Snapshots\35250eba-d745-4928-ae1c-740601a71b58" />
 	  <None Remove="Snapshots\411df323-a873-4aac-bd35-9dc0cc976ea2" />
 	  <None Remove="Snapshots\4bdbac51-11f8-4629-b592-4641dd387867" />
@@ -55,6 +56,9 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\2eef36b4-b557-4fd7-a202-1fa414f5e41f">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="Snapshots\3445eef8-4382-4607-b2fb-37a820467f1c">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>
 	  <Content Include="Snapshots\35250eba-d745-4928-ae1c-740601a71b58">

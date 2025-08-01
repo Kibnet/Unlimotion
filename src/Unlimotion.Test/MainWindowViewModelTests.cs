@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
+using ServiceStack;
 using Splat;
 using System;
 using System.IO;
@@ -858,7 +859,7 @@ namespace Unlimotion.Test
             //Сравниваем старую и новую версию целевой задачи
             var result = compareLogic.Compare(destination8BeforeTest, destinationTask8ItemAfterTest);
 
-            //Должно быть одно различие в количестве ContainsTasks 
+            //Должно быть 2 различия в количестве ContainsTasks и UnlockedDateTime
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.UnlockedDateTime));
             var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.ContainsTasks));
 
@@ -885,6 +886,82 @@ namespace Unlimotion.Test
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Выполнение повторяемой задачи
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public Task CopleteRepeatableTaskTask_Success()
+        {
+            CompareLogic compareLogic = new CompareLogic();
+            compareLogic.Config.MaxDifferences = 10;
+
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            Assert.NotNull(taskRepository);
+            //Запоминаем сколько задач было
+            var taskCount = taskRepository.Tasks.Count;
+
+            var repeateTask9BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RepeateTask9Id);
+
+            //Берем задачу "Repeate task 9" и делаем ее выполненной
+            var repeateTask9ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RepeateTask9Id).Value;
+            repeateTask9ViewModel.IsCompleted = true;
+            WaitThrottleTime();
+
+            //Assert
+            //Проверяем что создалась ровно 1 задача
+            Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
+
+    
+            //Берем задачу из файла
+            var repeateTask9AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RepeateTask9Id);
+            //Провереряем что исходная "Repeate task 9" задача выполнена
+            Assert.Equal(true, repeateTask9AfterTest.IsCompleted);
+            Assert.NotNull(repeateTask9AfterTest.CompletedDateTime);
+
+            //Сравниваем старую и новую версию задачи
+            var result = compareLogic.Compare(repeateTask9BeforeTest, repeateTask9AfterTest);
+
+            //Должно быть только 2 различия: IsCompleted и CompletedDateTime
+            var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.IsCompleted));
+            var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CompletedDateTime));
+
+            Assert.NotNull(isCompletedDifference);
+            Assert.NotNull(completedDateTimeDifference);
+            Assert.Equal("Types [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted, Values (False,True)",
+                isCompletedDifference.ToString());
+            Assert.StartsWith("Types [null,DateTimeOffset], Item Expected.CompletedDateTime != Actual.CompletedDateTime",
+                completedDateTimeDifference.ToString());
+
+            //Находим созданную склонированную повторяющейся "Repeate task 9" задачу в репозитории
+            var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
+            //Берем новую задачу из файла
+            var newTask9 = GetStorageTaskItem(newTaskItemViewModel.Id);
+            //Сравниваем ее с исходной до выполнения
+            result = compareLogic.Compare(repeateTask9BeforeTest, newTask9);
+
+            //Должно быть только 5 различия: Id, CreatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
+            var idDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.Id));
+            var createdDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CreatedDateTime));
+            var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UnlockedDateTime));
+            var plannedBeginDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedBeginDateTime));
+            var plannedEndDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedEndDateTime));
+
+            Assert.NotNull(idDifference);
+            Assert.NotNull(createdDateTimeDifference);
+            Assert.NotNull(unlockedDateTimeDifference);
+            Assert.NotNull(plannedBeginDateTimeDifference);
+            Assert.NotNull(plannedEndDateTimeDifference);
+
+            //У двух задач должны быть одни предки во вьюмоделе
+            Assert.True(repeateTask9ViewModel.Parents.Count >= newTaskItemViewModel.Parents.Count);
+            if (repeateTask9ViewModel.Parents.Count > 0)
+            {
+                Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), repeateTask9ViewModel.Parents);
+            }
+
+            return Task.CompletedTask;
+        }
 
         private TaskItem GetStorageTaskItem(string taskId)
         {

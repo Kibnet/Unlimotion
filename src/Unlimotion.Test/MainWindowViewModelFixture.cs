@@ -49,6 +49,8 @@ namespace Unlimotion.Test
         public const string ClonnedSubTask81Id = "2eef36b4-b557-4fd7-a202-1fa414f5e41f";
         public const string DestinationTask8Id = "a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b";
 
+        public const string RepeateTask9Id = "3445eef8-4382-4607-b2fb-37a820467f1c";
+
         public MainWindowViewModelFixture()
         {
             Directory.CreateDirectory(DefaultTasksFolderPath);
