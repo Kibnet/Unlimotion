@@ -224,9 +224,9 @@ namespace Unlimotion.Test
             var taskCount = taskRepository.Tasks.Count;
 
             // Берем корневую задачу и делаем ее выбранной
-            var rootTaskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
-            var rootTaskItemBeforeTest = GetStorageTaskItem(rootTaskViewModel.Id);
-            fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
+            var taskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
+            var taskItemBeforeTest = GetStorageTaskItem(taskViewModel.Id);
+            fixture.MainWindowViewModelTest.CurrentTaskItem = taskViewModel;
             fixture.MainWindowViewModelTest.CreateBlockedSibling.Execute(null);
             //Assert
             //Проверяем что создалась ровно 1 задача
@@ -235,25 +235,25 @@ namespace Unlimotion.Test
             //Находим вновь созданную задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
 
-            Assert.True(newTaskItemViewModel.Parents.Count <= rootTaskViewModel.Parents.Count);
-            if (rootTaskViewModel.Parents.Count > 0)
+            Assert.True(newTaskItemViewModel.Parents.Count <= taskViewModel.Parents.Count);
+            if (taskViewModel.Parents.Count > 0)
             {
-                Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), rootTaskViewModel.Parents);
+                Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), taskViewModel.Parents);
             }
             //Загружаем новую задачу из файла
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
             //Проверяем что файл с правильным ID
             Assert.Contains(newTaskItemViewModel.Id, newTaskItem.Id);
             //Загружаем корневую задачу из файла
-            var rootTaskItemAfterTest = GetStorageTaskItem(rootTaskViewModel.Id);
+            var taskItemAfterTest = GetStorageTaskItem(taskViewModel.Id);
             //Сравниваем старую и новую версию корневой задачи
-            var result = compareLogic.Compare(rootTaskItemBeforeTest, rootTaskItemAfterTest);
+            var result = compareLogic.Compare(taskItemBeforeTest, taskItemAfterTest);
             //Должно быть одно различие в количестве BlocksTasks
-            Assert.Equal("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count, Values (0,1)\r\nEnd Differences (Maximum of 1 differences shown).", result.DifferencesString);
+            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count, Values (0,1)", result.DifferencesString);
             //Новая задача должна быть в Blocks во вьюмодели корневой задачи
-            Assert.Contains(newTaskItemViewModel.Id, rootTaskViewModel.Blocks);
+            Assert.Contains(newTaskItemViewModel.Id, taskViewModel.Blocks);
             //Новая задача должна быть в BlocksTasks в файле корневой задачи
-            Assert.Contains(newTaskItemViewModel.Id, rootTaskItemAfterTest.BlocksTasks);
+            Assert.Contains(newTaskItemViewModel.Id, taskItemAfterTest.BlocksTasks);
 
             return Task.CompletedTask;
         }
@@ -316,7 +316,7 @@ namespace Unlimotion.Test
             Assert.Contains(newTaskItem.Id, destinationTaskItem.ContainsTasks);
 
             destinationRootTask.Contains.Remove(newTaskItem.Id);
-            DeleteTask(newTaskItem.Id);
+
             return Task.CompletedTask;
         }
 
@@ -377,6 +377,7 @@ namespace Unlimotion.Test
             fixture.MainWindowViewModelTest.CurrentTaskItem = subTask22ViewModel;
             var task2TaskWrapper = fixture.MainWindowViewModelTest.CurrentTaskItem.CurrentItemParents.SubTasks.Where(st => st.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id).First();
             task2TaskWrapper.RemoveCommand.Execute(null);
+            WaitThrottleTime();
 
             // Assert
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
@@ -752,11 +753,20 @@ namespace Unlimotion.Test
             Assert.True(blockedTask5ViewModel.IsCanBeCompleted);
 
             var rootTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
-            //Проверяем, что в блокирующем таске изменилось только поле IsCompleted
+            //Проверяем, что в блокирующем таске изменилось
             result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
-            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted",
-               result.DifferencesString);
+            //Должно быть 2 различия поля IsCompleted и CompletedDateTime
+            var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(rootTask5AfterTest.IsCompleted));
+            var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(rootTask5AfterTest.CompletedDateTime));
+
+            Assert.NotNull(isCompletedDifference);
+            Assert.NotNull(completedDateTimeDifference);
+            Assert.StartsWith("Types [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted, Values (False,True)",
+               isCompletedDifference.ToString());
+            Assert.StartsWith("Types [null,DateTimeOffset], Item Expected.CompletedDateTime != Actual.CompletedDateTime",
+               completedDateTimeDifference.ToString());
             Assert.True(rootTask5AfterTest.IsCompleted);
+            Assert.NotNull(rootTask5AfterTest.CompletedDateTime);
 
             return Task.CompletedTask;
         }
@@ -931,8 +941,6 @@ namespace Unlimotion.Test
                 result.DifferencesString);
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
 
-            //Удаление новой задачи
-            DeleteTask(newTaskItemViewModel.Id);
             return Task.CompletedTask;
         }
 
@@ -1020,12 +1028,6 @@ namespace Unlimotion.Test
             return JsonSerializer.Deserialize<TaskItem>(taskItemString);
         }
 
-        private void DeleteTask(string id)
-        {
-            var taskPath = Path.Combine(fixture.DefaultTasksFolderPath, id);
-            var fileInfo = new FileInfo(taskPath);
-            fileInfo.Delete();
-        }
         private static void WaitThrottleTime()
         {
             var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(5));
