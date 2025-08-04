@@ -18,8 +18,8 @@ namespace Unlimotion.Test
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
         public string DefaultTasksFolderPath => Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
         public string DefaultSnapshotsFolderPath => Path.Combine(Environment.CurrentDirectory, "Snapshots");
-        public string DefaultRootTaskPath => Path.Combine(DefaultSnapshotsFolderPath, RootTaskId);
-        public const string RootTaskId = "baaf00ad-e250-4828-8bec-a6b42525fda0";
+        public string DefaultRootTaskPath => Path.Combine(DefaultSnapshotsFolderPath, RootTask1Id);
+        public const string RootTask1Id = "baaf00ad-e250-4828-8bec-a6b42525fda0";
         public const string RootTask2Id = "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf";
         public const string SubTask22Id = "53c5b18d-3818-4467-b8bb-0346b21ebbc7";
         public const string RootTask3Id = "d63fbe66-4a91-44e4-b704-d85091831c56";
