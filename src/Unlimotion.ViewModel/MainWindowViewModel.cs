@@ -75,6 +75,8 @@ namespace Unlimotion.ViewModel
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 await task.SaveItemCommand.Execute();
                 CurrentTaskItem = task;
+                taskRepository.Tasks.AddOrUpdate(task);
+
                 SelectCurrentTask();
 
             }).AddToDisposeAndReturn(connectionDisposableList);
