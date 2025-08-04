@@ -1018,14 +1018,27 @@ namespace Unlimotion.Test
             return Task.CompletedTask;
         }
 
-        private TaskItem GetStorageTaskItem(string taskId)
+        private TaskItemViewModel? GetTask(string taskId, bool DontAssertNull = false)
+        {
+            var result = fixture.MainWindowViewModelTest.taskRepository.Tasks.Lookup(taskId);
+            if (result.HasValue)
+            {
+                return result.Value;
+            }
+
+            if (!DontAssertNull)
+                Assert.Fail("Задача не найдена");
+
+            return null;
+        }
+
+        private TaskItem? GetStorageTaskItem(string taskId)
         {
             var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
             if (!File.Exists(path))
                 return null;
-
-            var taskItemString = File.ReadAllText(Path.Combine(fixture.DefaultTasksFolderPath, taskId));
-            return JsonSerializer.Deserialize<TaskItem>(taskItemString);
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<TaskItem>(json);
         }
 
         private static void WaitThrottleTime()
