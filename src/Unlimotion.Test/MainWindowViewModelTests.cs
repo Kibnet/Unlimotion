@@ -1030,7 +1030,7 @@ namespace Unlimotion.Test
 
         private static void WaitThrottleTime()
         {
-            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(5));
+            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1));
             Thread.Sleep(sleepTime);
         }
     }
