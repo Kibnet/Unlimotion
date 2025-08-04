@@ -71,7 +71,6 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 await task.SaveItemCommand.Execute();
                 CurrentTaskItem = task;
@@ -84,7 +83,6 @@ namespace Unlimotion.ViewModel
             {
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 await task.SaveItemCommand.Execute();
                 if (CurrentTaskItem != null)
@@ -121,7 +119,6 @@ namespace Unlimotion.ViewModel
                     return;
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 await task.SaveItemCommand.Execute();
                 CurrentTaskItem.Contains.Add(task.Id);
@@ -206,6 +203,8 @@ namespace Unlimotion.ViewModel
             ;
         }
 
+        public ITaskRepository? taskRepository;
+
         public async Task Connect()
         {
             connectionDisposableList.Dispose();
@@ -231,7 +230,6 @@ namespace Unlimotion.ViewModel
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
             await taskStorage.Connect();
 
-            ITaskRepository? taskRepository;
             taskRepository = Locator.Current.GetService<ITaskRepository>();
             taskRepository.Init();
 
@@ -779,7 +777,7 @@ namespace Unlimotion.ViewModel
             RegisterCommands();
         }
 
-        private void SelectCurrentTask()
+        public void SelectCurrentTask()
         {
             if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastOpenedMode)
             {
