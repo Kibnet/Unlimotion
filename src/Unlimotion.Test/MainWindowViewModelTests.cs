@@ -1,7 +1,5 @@
 ﻿using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
-using ServiceStack;
-using Splat;
 using System;
 using System.IO;
 using System.Linq;
@@ -17,12 +15,15 @@ namespace Unlimotion.Test
     {
         MainWindowViewModelFixture fixture;
         CompareLogic compareLogic;
+        ITaskRepository taskRepository;
+
         public MainWindowViewModelTests()
         {
             compareLogic = new CompareLogic();
             compareLogic.Config.MaxDifferences = 10;
             TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(10);
             this.fixture = new MainWindowViewModelFixture();
+            taskRepository = fixture.MainWindowViewModelTest.taskRepository;
         }
 
         /// <summary>
@@ -1018,6 +1019,99 @@ namespace Unlimotion.Test
             return Task.CompletedTask;
         }
 
+        [Fact]
+        public Task CreateTask_EmptyTitle_ShouldNotCreate()
+        {
+            var repo = fixture.MainWindowViewModelTest.taskRepository;
+            var taskCountBefore = repo.Tasks.Count;
+            var task = new TaskItemViewModel(new TaskItem(), repo); // Title is null
+            fixture.MainWindowViewModelTest.CurrentTaskItem = task;
+            fixture.MainWindowViewModelTest.CreateInner.Execute(null);
+
+            repo.Tasks.Count.Should().Be(taskCountBefore);
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task MoveInto_NullSource_ShouldSucceed()
+        {
+            var subTask = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            var destination = GetTask(MainWindowViewModelFixture.RootTask1Id);
+
+            subTask.MoveInto(destination, null);
+
+            var stored = GetStorageTaskItem(destination.Id);
+            stored.ContainsTasks.Should().Contain(subTask.Id);
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task RemoveTask_NoParents_ShouldDeleteFile()
+        {
+            var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
+            string path = Path.Combine(fixture.DefaultTasksFolderPath, task.Id);
+            File.Exists(path).Should().BeTrue();
+
+            task.RemoveFunc.Invoke(null);
+            File.Exists(path).Should().BeFalse();
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task RemoveTask_HasParents_ShouldNotDeleteFile()
+        {
+            var parent = GetTask(MainWindowViewModelFixture.RootTask2Id);
+            var child = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            string path = Path.Combine(fixture.DefaultTasksFolderPath, child.Id);
+            File.Exists(path).Should().BeTrue();
+
+            child.RemoveFunc.Invoke(parent);
+            File.Exists(path).Should().BeTrue();
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task SelectCurrentTaskMode_SyncsCorrectly()
+        {
+            var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
+            fixture.MainWindowViewModelTest.CurrentTaskItem = task;
+
+            fixture.MainWindowViewModelTest.AllTasksMode = true;
+            fixture.MainWindowViewModelTest.SelectCurrentTask();
+            fixture.MainWindowViewModelTest.CurrentItem?.TaskItem.Should().Be(task);
+
+            fixture.MainWindowViewModelTest.AllTasksMode = false;
+            fixture.MainWindowViewModelTest.CompletedMode = true;
+            fixture.MainWindowViewModelTest.SelectCurrentTask();
+            fixture.MainWindowViewModelTest.CurrentCompletedItem?.TaskItem.Should().Be(task);
+
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task BlockedTask_CompletionIsPrevented()
+        {
+            var blocked = GetTask(MainWindowViewModelFixture.BlockedTask5Id);
+            blocked.IsCanBeCompleted.Should().BeFalse();
+            return Task.CompletedTask;
+        }
+
+        [Fact]
+        public Task CloneInto_MultipleParents_ResultsCorrect()
+        {
+            var repo = fixture.MainWindowViewModelTest.taskRepository;
+            var src = GetTask(MainWindowViewModelFixture.ClonedTask8Id);
+            var dest1 = GetTask(MainWindowViewModelFixture.RootTask1Id);
+            var dest2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
+
+            var clone = src.CloneInto(dest1);
+            dest2.Contains.Add(clone.Id);
+
+            clone.Parents.Count.Should().Be(2);
+            clone.Parents.Should().Contain(dest1.Id);
+            clone.Parents.Should().Contain(dest2.Id);
+            return Task.CompletedTask;
+        }
         private TaskItemViewModel? GetTask(string taskId, bool DontAssertNull = false)
         {
             var result = fixture.MainWindowViewModelTest.taskRepository.Tasks.Lookup(taskId);
