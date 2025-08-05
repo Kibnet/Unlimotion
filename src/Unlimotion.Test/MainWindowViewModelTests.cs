@@ -42,8 +42,6 @@ namespace Unlimotion.Test
         [Fact]
         public async Task CreateRootTask()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
 
@@ -71,12 +69,9 @@ namespace Unlimotion.Test
         [Fact]
         public async Task RenameTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             //Берем задачу из файла
-            var rootTaskItemBeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
-            var renameTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var rootTaskItemBeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
+            var renameTask = GetTask(MainWindowViewModelFixture.RootTask1Id);
             renameTask.Title = "Changed task title";
             WaitThrottleTime();
 
@@ -95,15 +90,12 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTaskId)]
+        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
         [InlineData(MainWindowViewModelFixture.RootTask2Id)]
         public Task CreateInnerTask_Success(string taskId)
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу и делаем ее выбранной
-            var taskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
+            var taskViewModel = GetTask(taskId);
             fixture.MainWindowViewModelTest.CurrentTaskItem = taskViewModel;
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
@@ -124,7 +116,7 @@ namespace Unlimotion.Test
             // Сравниваем старую и новую версию задачи
             var result = compareLogic.Compare(taskItemBeforeTest, taskItemAfterTest);
 
-            //Должно быть различие в количестве ContainsTasks           
+            //Должно быть различие в количестве ContainsTasks
             var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(taskItemAfterTest.ContainsTasks));
             Assert.NotNull(containsTasksDifference);
             Assert.Equal($"Types [List`1,List`1], Item Expected.ContainsTasks.Count != Actual.ContainsTasks.Count, Values ({taskItemBeforeTest.ContainsTasks.Count},{taskItemAfterTest.ContainsTasks.Count})",
@@ -154,11 +146,8 @@ namespace Unlimotion.Test
         [Fact]
         public Task CreateInnerTask_Fail()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем корневую задачу и делаем ее выбранной
-            var rootTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var rootTaskViewModel = GetTask(MainWindowViewModelFixture.RootTask1Id);
             fixture.MainWindowViewModelTest.CreateInner.Execute(null);
 
             //Assert
@@ -173,15 +162,12 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTaskId)]
+        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
         [InlineData(MainWindowViewModelFixture.SubTask22Id)]
         public Task CreateSiblingTask_Success(string taskId)
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу и делаем ее выбранной
-            var taskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
+            var taskViewModel = GetTask(taskId);
             fixture.MainWindowViewModelTest.CurrentTaskItem = taskViewModel;
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
@@ -194,7 +180,7 @@ namespace Unlimotion.Test
 
             //Находим вновь созданную задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
-            
+
             Assert.True(newTaskItemViewModel.Parents.Count <= taskViewModel.Parents.Count);
             //Если выбранная задача была подзадачей
             if (taskViewModel.Parents.Count > 0)
@@ -215,17 +201,15 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTaskId)]
+        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
         [InlineData(MainWindowViewModelFixture.SubTask22Id)]
         public Task CreateBlockedSibling_Success(string taskId)
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
 
             // Берем корневую задачу и делаем ее выбранной
-            var taskViewModel = taskRepository.Tasks.Lookup(taskId).Value;
+            var taskViewModel = GetTask(taskId);
             var taskItemBeforeTest = GetStorageTaskItem(taskViewModel.Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = taskViewModel;
             fixture.MainWindowViewModelTest.CreateBlockedSibling.Execute(null);
@@ -266,18 +250,15 @@ namespace Unlimotion.Test
         [Fact]
         public Task MovingToRootTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем внутреннюю задачу
-            var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
-            var rootTask2 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
+            var subTask22 = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            var rootTask2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
             // Берем корневую задачу, куда перемещаем задачу
-            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var destinationRootTask = GetTask(MainWindowViewModelFixture.RootTask1Id);
             subTask22.MoveInto(destinationRootTask, rootTask2);
 
             //Assert
-            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
             Assert.Empty(rootTask2TaskItem.ContainsTasks);
             Assert.NotEmpty(destinationTaskItem.ContainsTasks);
@@ -293,18 +274,15 @@ namespace Unlimotion.Test
         [Fact]
         public Task CloneToRootTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем внутреннюю задачу
-            var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
+            var subTask22 = GetTask(MainWindowViewModelFixture.SubTask22Id);
             // Берем корневую задачу, куда добавляем ссылку на задачу
-            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var destinationRootTask = GetTask(MainWindowViewModelFixture.RootTask1Id);
             subTask22.CloneInto(destinationRootTask);
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
 
             //Assert
-            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
 
@@ -328,20 +306,17 @@ namespace Unlimotion.Test
         [Fact]
         public Task MovingTaskWithTwoParentsToRootTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем внутреннюю задачу
-            var subTask22 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
-            var rootTask3 = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask3Id).Value;
+            var subTask22 = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            var rootTask3 = GetTask(MainWindowViewModelFixture.RootTask3Id);
             // Берем корневую задачу, куда перемещаем ссылку на задачу
-            var destinationRootTask = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var destinationRootTask = GetTask(MainWindowViewModelFixture.RootTask1Id);
             subTask22.MoveInto(destinationRootTask, rootTask3);
 
             var newTaskItemViewModel = taskRepository.Tasks.Items.Last();
 
             //Assert
-            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var destinationTaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             var rootTask3TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask3Id);
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
             var rootTask2TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
@@ -368,12 +343,9 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentItemParentsRemove_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу T 2.2 и делаем ее выбранной
-            var subTask22ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.SubTask22Id).Value;
-            var rootTask2ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
+            var subTask22ViewModel = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            var rootTask2ViewModel = GetTask(MainWindowViewModelFixture.RootTask2Id);
 
             fixture.MainWindowViewModelTest.CurrentTaskItem = subTask22ViewModel;
             var task2TaskWrapper = fixture.MainWindowViewModelTest.CurrentTaskItem.CurrentItemParents.SubTasks.Where(st => st.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id).First();
@@ -396,11 +368,8 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentItemContainsRemove_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу T 2 и делаем ее выбранной
-            var rootTask2ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
+            var rootTask2ViewModel = GetTask(MainWindowViewModelFixture.RootTask2Id);
 
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTask2ViewModel;
             var task22TaskWrapper = fixture.MainWindowViewModelTest.CurrentTaskItem.CurrentItemContains.SubTasks.Where(st => st.TaskItem.Id == MainWindowViewModelFixture.SubTask22Id).First();
@@ -423,11 +392,8 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentItemBlockedByRemove_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем заблокированную задачу задачей T 2 и делаем ее выбранной
-            var blockedTask2ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.BlockedTask2Id).Value;
+            var blockedTask2ViewModel = GetTask(MainWindowViewModelFixture.BlockedTask2Id);
 
             fixture.MainWindowViewModelTest.CurrentTaskItem = blockedTask2ViewModel;
             var blockedTask22TaskWrapper = fixture.MainWindowViewModelTest.CurrentTaskItem.CurrentItemBlockedBy.SubTasks.Where(st => st.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id).First();
@@ -450,11 +416,8 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentItemBlocksRemove_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу T 2 и делаем ее выбранной
-            var rootTask2ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask2Id).Value;
+            var rootTask2ViewModel = GetTask(MainWindowViewModelFixture.RootTask2Id);
 
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTask2ViewModel;
             var blockedTask22TaskWrapper = fixture.MainWindowViewModelTest.CurrentTaskItem.CurrentItemBlocks.SubTasks.Where(st => st.TaskItem.Id == MainWindowViewModelFixture.BlockedTask2Id).First();
@@ -524,10 +487,8 @@ namespace Unlimotion.Test
             parentTask4.RemoveCommand.Execute(null);
 
             // Assert
-            var task4TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id);
-            Assert.Null(task4TaskItem);
-            var subTask41TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id);
-            Assert.NotNull(subTask41TaskItem);
+            GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id).Should().BeNull();
+            GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -544,10 +505,8 @@ namespace Unlimotion.Test
             parentTask4.RemoveCommand.Execute(null);
 
             // Assert
-            var task4TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id);
-            Assert.NotNull(task4TaskItem);
-            var subTask41TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id);
-            Assert.NotNull(subTask41TaskItem);
+            GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id).Should().NotBeNull();
+            GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -559,11 +518,8 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentTaskItemRemove_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
             // Берем задачу T 4 и делаем ее выбранной
-            var rootTask4ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask4Id).Value;
+            var rootTask4ViewModel = GetTask(MainWindowViewModelFixture.RootTask4Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTask4ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.Remove.Execute(null);
@@ -584,10 +540,7 @@ namespace Unlimotion.Test
         [Fact]
         public Task ArchiveCommandWithoutContainsTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var archiveTask11ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchiveTask11Id).Value;
+            var archiveTask11ViewModel = GetTask(MainWindowViewModelFixture.ArchiveTask11Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask11ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
@@ -607,10 +560,7 @@ namespace Unlimotion.Test
         [Fact]
         public Task ArchiveCommandWithContainsTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var archiveTask1ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchiveTask1Id).Value;
+            var archiveTask1ViewModel = GetTask(MainWindowViewModelFixture.ArchiveTask1Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = archiveTask1ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
@@ -632,10 +582,7 @@ namespace Unlimotion.Test
         [Fact]
         public Task UnArchiveCommandWithoutContainsTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var archivedTask11ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchivedTask11Id).Value;
+            var archivedTask11ViewModel = GetTask(MainWindowViewModelFixture.ArchivedTask11Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask11ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
@@ -655,10 +602,7 @@ namespace Unlimotion.Test
         [Fact]
         public Task UnArchiveCommandWithContainsTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var archivedTask1ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.ArchivedTask1Id).Value;
+            var archivedTask1ViewModel = GetTask(MainWindowViewModelFixture.ArchivedTask1Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = archivedTask1ViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.ArchiveCommand.Execute(null);
@@ -680,17 +624,14 @@ namespace Unlimotion.Test
         [Fact]
         public Task IsCompletedTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var rootTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTaskId).Value;
+            var rootTaskViewModel = GetTask(MainWindowViewModelFixture.RootTask1Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = rootTaskViewModel;
             ((NotificationManagerWrapperMock)fixture.MainWindowViewModelTest.ManagerWrapper).AskResult = true;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
             WaitThrottleTime();
 
             // Assert
-            var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTaskId);
+            var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             Assert.Equal(true, rootTask.IsCompleted);
             Assert.NotNull(rootTask.CompletedDateTime);
 
@@ -704,10 +645,7 @@ namespace Unlimotion.Test
         [Fact]
         public Task CancelCompletedTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
-
-            var completedTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.CompletedTaskId).Value;
+            var completedTaskViewModel = GetTask(MainWindowViewModelFixture.CompletedTaskId);
             fixture.MainWindowViewModelTest.CurrentTaskItem = completedTaskViewModel;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = false;
             WaitThrottleTime();
@@ -727,13 +665,11 @@ namespace Unlimotion.Test
         [Fact]
         public Task CompletingBlockingTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             var blockingTask5BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
             var blockedTask5BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask5Id);
 
             //Берем задачу "task 5", которая блокирует задачу "blocked task 5" и делаем ее выполненной
-            var blockingTaskViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RootTask5Id).Value;
+            var blockingTaskViewModel = GetTask(MainWindowViewModelFixture.RootTask5Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = blockingTaskViewModel;
             fixture.MainWindowViewModelTest.CurrentTaskItem.IsCompleted = true;
             WaitThrottleTime();
@@ -781,16 +717,14 @@ namespace Unlimotion.Test
         [InlineData(MainWindowViewModelFixture.DeadlockTask6Id, MainWindowViewModelFixture.DeadlockBlockedTask6Id)]
         public Task AddBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             var destinationBeforeTest = GetStorageTaskItem(destinationId);
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
 
             //Alt - Целевая задача блокирует перетаскиваемую задачу
             //Берем задачу "Blocked task 6" и с Alt перетаскиваем ее в "task 6"
             //либо берем задачу "deadlock task 6" и с Alt перетаскиваем ее в "deadlock blocked task 6"
-            var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
-            var destinationTask6ViewModel = taskRepository.Tasks.Lookup(destinationId).Value;
+            var draggableViewModel = GetTask(draggableId);
+            var destinationTask6ViewModel = GetTask(destinationId);
 
             //Попытка создание зависимой связи, когда перетаскиваемая задача уже заблокирована целевой
             //не даем создать взаимоблокировку
@@ -834,16 +768,14 @@ namespace Unlimotion.Test
         [InlineData(MainWindowViewModelFixture.DeadlockBlockedTask7Id, MainWindowViewModelFixture.DeadlockTask7Id)]
         public Task AddReverseBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
             var destinationBeforeTest = GetStorageTaskItem(destinationId);
 
             //Ctrl - Перетаскиваемая задача блокирует целевую задачу
             //Берем задачу "task 7" и с Ctrl перетаскиваем ее в "Blocked task 7"
             //или берем задачу "deadlock blocked task 7" и с Ctrl перетаскиваем ее в "deadlock task 7"
-            var draggableViewModel = taskRepository.Tasks.Lookup(draggableId).Value;
-            var destinationViewModel = taskRepository.Tasks.Lookup(destinationId).Value;
+            var draggableViewModel = GetTask(draggableId);
+            var destinationViewModel = GetTask(destinationId);
 
             //не даем создать взаимоблокировку
             var isDraggableNotBlockedBydestination = !draggableViewModel.BlockedBy.Contains(destinationViewModel.Id);
@@ -883,8 +815,6 @@ namespace Unlimotion.Test
         [Fact]
         public Task CloneTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
 
@@ -952,15 +882,13 @@ namespace Unlimotion.Test
         [Fact]
         public Task CopleteRepeatableTaskTask_Success()
         {
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            Assert.NotNull(taskRepository);
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
 
             var repeateTask9BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RepeateTask9Id);
 
             //Берем задачу "Repeate task 9" и делаем ее выполненной
-            var repeateTask9ViewModel = taskRepository.Tasks.Lookup(MainWindowViewModelFixture.RepeateTask9Id).Value;
+            var repeateTask9ViewModel = GetTask(MainWindowViewModelFixture.RepeateTask9Id);
             repeateTask9ViewModel.IsCompleted = true;
             WaitThrottleTime();
 
@@ -1019,29 +947,41 @@ namespace Unlimotion.Test
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Если у выбранной задачи нет имени, вложенные создавать нельзя
+        /// </summary>
+        /// <returns></returns>
         [Fact]
         public Task CreateTask_EmptyTitle_ShouldNotCreate()
         {
-            var repo = fixture.MainWindowViewModelTest.taskRepository;
-            var taskCountBefore = repo.Tasks.Count;
-            var task = new TaskItemViewModel(new TaskItem(), repo); // Title is null
+            var taskCountBefore = taskRepository.Tasks.Count;
+            var task = new TaskItemViewModel(new TaskItem(), taskRepository); // Title is null
             fixture.MainWindowViewModelTest.CurrentTaskItem = task;
             fixture.MainWindowViewModelTest.CreateInner.Execute(null);
 
-            repo.Tasks.Count.Should().Be(taskCountBefore);
+            taskRepository.Tasks.Count.Should().Be(taskCountBefore);
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Перемещение без источника должно работать как копирование
+        /// </summary>
+        /// <returns></returns>
         [Fact]
         public Task MoveInto_NullSource_ShouldSucceed()
         {
             var subTask = GetTask(MainWindowViewModelFixture.SubTask22Id);
             var destination = GetTask(MainWindowViewModelFixture.RootTask1Id);
+            var firstParent = subTask.ParentsTasks.First();
 
             subTask.MoveInto(destination, null);
 
             var stored = GetStorageTaskItem(destination.Id);
             stored.ContainsTasks.Should().Contain(subTask.Id);
+
+
+            var stored2 = GetStorageTaskItem(firstParent.Id);
+            stored2.ContainsTasks.Should().Contain(subTask.Id);
             return Task.CompletedTask;
         }
 
@@ -1076,14 +1016,15 @@ namespace Unlimotion.Test
             var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
             fixture.MainWindowViewModelTest.CurrentTaskItem = task;
 
+            fixture.MainWindowViewModelTest.AllTasksMode.Should().BeFalse();
+            fixture.MainWindowViewModelTest.CurrentItem.Should().BeNull();
             fixture.MainWindowViewModelTest.AllTasksMode = true;
-            fixture.MainWindowViewModelTest.SelectCurrentTask();
-            fixture.MainWindowViewModelTest.CurrentItem?.TaskItem.Should().Be(task);
+            fixture.MainWindowViewModelTest.CurrentItem.TaskItem.Should().Be(task);
 
             fixture.MainWindowViewModelTest.AllTasksMode = false;
-            fixture.MainWindowViewModelTest.CompletedMode = true;
-            fixture.MainWindowViewModelTest.SelectCurrentTask();
-            fixture.MainWindowViewModelTest.CurrentCompletedItem?.TaskItem.Should().Be(task);
+            fixture.MainWindowViewModelTest.CurrentUnlockedItem.Should().BeNull();
+            fixture.MainWindowViewModelTest.UnlockedMode = true;
+            fixture.MainWindowViewModelTest.CurrentUnlockedItem.TaskItem.Should().Be(task);
 
             return Task.CompletedTask;
         }
@@ -1099,19 +1040,19 @@ namespace Unlimotion.Test
         [Fact]
         public Task CloneInto_MultipleParents_ResultsCorrect()
         {
-            var repo = fixture.MainWindowViewModelTest.taskRepository;
             var src = GetTask(MainWindowViewModelFixture.ClonedTask8Id);
             var dest1 = GetTask(MainWindowViewModelFixture.RootTask1Id);
             var dest2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
+            dest2.CopyInto(dest2);
 
             var clone = src.CloneInto(dest1);
-            dest2.Contains.Add(clone.Id);
 
             clone.Parents.Count.Should().Be(2);
             clone.Parents.Should().Contain(dest1.Id);
             clone.Parents.Should().Contain(dest2.Id);
             return Task.CompletedTask;
         }
+
         private TaskItemViewModel? GetTask(string taskId, bool DontAssertNull = false)
         {
             var result = fixture.MainWindowViewModelTest.taskRepository.Tasks.Lookup(taskId);

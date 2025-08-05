@@ -777,7 +777,7 @@ namespace Unlimotion.ViewModel
             RegisterCommands();
         }
 
-        public void SelectCurrentTask()
+        private void SelectCurrentTask()
         {
             if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastOpenedMode)
             {
