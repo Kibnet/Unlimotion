@@ -1047,9 +1047,9 @@ namespace Unlimotion.Test
 
             var clone = src.CloneInto(dest1);
 
-            clone.Parents.Count.Should().Be(2);
+            clone.Parents.Count.Should().Be(1);
             clone.Parents.Should().Contain(dest1.Id);
-            clone.Parents.Should().Contain(dest2.Id);
+            clone.Parents.Should().NotContain(dest2.Id);
             return Task.CompletedTask;
         }
 
