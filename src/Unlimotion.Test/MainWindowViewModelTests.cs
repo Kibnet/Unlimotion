@@ -1,4 +1,5 @@
-﻿using FluentAssertions;
+﻿using ExCSS;
+using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
 using System;
 using System.IO;
@@ -380,13 +381,15 @@ namespace Unlimotion.Test
         [Fact]
         public Task ItemRemoveCommand_Success()
         {
-            var parentTask4 = mainWindowVM.CurrentItems.First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            parentTask4.RemoveCommand.Execute(null);
+            var parent = mainWindowVM.CurrentItems
+                .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
+            var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
-            // Assert
-            GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id).Should().BeNull();
-            GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
+            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
+            TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, -1);
+            
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id).Should().BeNull();
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id).Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -398,13 +401,15 @@ namespace Unlimotion.Test
         [Fact]
         public Task CancelItemRemoveCommand_Success()
         {
-            var parentTask4 = mainWindowVM.CurrentItems.First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
-            parentTask4.RemoveCommand.Execute(null);
+            var parent = mainWindowVM.CurrentItems
+                .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
+            var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
-            // Assert
-            GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id).Should().NotBeNull();
-            GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
+            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
+            TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, 0);
+
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id).Should().NotBeNull();
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id).Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -416,17 +421,14 @@ namespace Unlimotion.Test
         [Fact]
         public Task CurrentTaskItemRemove_Success()
         {
-            // Берем задачу T 4 и делаем ее выбранной
-            var rootTask4ViewModel = GetTask(MainWindowViewModelFixture.RootTask4Id);
-            mainWindowVM.CurrentTaskItem = rootTask4ViewModel;
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            mainWindowVM.Remove.Execute(null);
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask4Id);
 
-            // Assert
-            var task4TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id);
-            Assert.Null(task4TaskItem);
-            var subTask41TaskItem = GetStorageTaskItem(MainWindowViewModelFixture.SubTask41Id);
-            Assert.NotNull(subTask41TaskItem);
+            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
+            
+            TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -1);
+            
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id).Should().BeNull();
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -438,15 +440,14 @@ namespace Unlimotion.Test
         [Fact]
         public Task ArchiveCommandWithoutContainsTask_Success()
         {
-            var archiveTask11ViewModel = GetTask(MainWindowViewModelFixture.ArchiveTask11Id);
-            mainWindowVM.CurrentTaskItem = archiveTask11ViewModel;
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask11Id);
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null);
-            WaitThrottleTime();
-
-            // Assert
-            var archiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask11Id);
-            Assert.NotNull(archiveTask11.ArchiveDateTime);
+            
+            TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
+            
+            var archived = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            archived.ArchiveDateTime.Should().NotBeNull();
+            archived.IsCompleted.Should().BeNull();
 
             return Task.CompletedTask;
         }
@@ -458,17 +459,16 @@ namespace Unlimotion.Test
         [Fact]
         public Task ArchiveCommandWithContainsTask_Success()
         {
-            var archiveTask1ViewModel = GetTask(MainWindowViewModelFixture.ArchiveTask1Id);
-            mainWindowVM.CurrentTaskItem = archiveTask1ViewModel;
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null);
-            WaitThrottleTime();
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask1Id);
 
-            // Assert
-            var archiveTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask1Id);
-            var archiveTask11Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchiveTask11Id);
-            Assert.NotNull(archiveTask1Item.ArchiveDateTime);
-            Assert.NotNull(archiveTask11Item.ArchiveDateTime);
+            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
+            TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
+            
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchiveTask1Id)
+                .ArchiveDateTime.Should().NotBeNull();
+
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchiveTask11Id)
+                .ArchiveDateTime.Should().NotBeNull();
 
             return Task.CompletedTask;
         }
@@ -480,15 +480,13 @@ namespace Unlimotion.Test
         [Fact]
         public Task UnArchiveCommandWithoutContainsTask_Success()
         {
-            var archivedTask11ViewModel = GetTask(MainWindowViewModelFixture.ArchivedTask11Id);
-            mainWindowVM.CurrentTaskItem = archivedTask11ViewModel;
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask11Id);
+            
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null);
-            WaitThrottleTime();
-
-            // Assert
-            var unArchiveTask11 = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask11Id);
-            Assert.Null(unArchiveTask11.ArchiveDateTime);
+            TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
+            
+            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id)
+                .ArchiveDateTime.Should().BeNull();
 
             return Task.CompletedTask;
         }
