@@ -463,12 +463,15 @@ namespace Unlimotion.Test
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
-            
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchiveTask1Id)
-                .ArchiveDateTime.Should().NotBeNull();
 
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchiveTask11Id)
-                .ArchiveDateTime.Should().NotBeNull();
+            var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            taskItem.ArchiveDateTime.Should().NotBeNull();
+            taskItem.IsCompleted.Should().BeNull();
+
+            var subItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath,
+                MainWindowViewModelFixture.ArchiveTask11Id);
+            subItem.ArchiveDateTime.Should().NotBeNull();
+            subItem.IsCompleted.Should().BeNull();
 
             return Task.CompletedTask;
         }
@@ -484,9 +487,10 @@ namespace Unlimotion.Test
             
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
-            
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id)
-                .ArchiveDateTime.Should().BeNull();
+
+            var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            taskItem.ArchiveDateTime.Should().BeNull();
+            taskItem.IsCompleted.Should().BeFalse();
 
             return Task.CompletedTask;
         }
@@ -498,17 +502,19 @@ namespace Unlimotion.Test
         [Fact]
         public Task UnArchiveCommandWithContainsTask_Success()
         {
-            var archivedTask1ViewModel = GetTask(MainWindowViewModelFixture.ArchivedTask1Id);
-            mainWindowVM.CurrentTaskItem = archivedTask1ViewModel;
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null);
-            WaitThrottleTime();
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask1Id);
 
-            // Assert
-            var archivedTask1Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask1Id);
-            var archivedTask11Item = GetStorageTaskItem(MainWindowViewModelFixture.ArchivedTask11Id);
-            Assert.Null(archivedTask1Item.ArchiveDateTime);
-            Assert.Null(archivedTask11Item.ArchiveDateTime);
+            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
+            TestHelpers.ActionNotCreateItems(() => 
+                mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
+
+            var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            taskItem.ArchiveDateTime.Should().BeNull();
+            taskItem.IsCompleted.Should().BeFalse();
+
+            var subitem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id);
+            subitem.ArchiveDateTime.Should().BeNull();
+            subitem.IsCompleted.Should().BeFalse();
 
             return Task.CompletedTask;
         }
