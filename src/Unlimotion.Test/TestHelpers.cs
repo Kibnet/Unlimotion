@@ -7,6 +7,7 @@ using System.Windows.Input;
 using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.ViewModel;
+using Unlimotion.Domain;
 
 namespace Unlimotion.Test
 {
@@ -20,7 +21,7 @@ namespace Unlimotion.Test
         }
 
         public static void ActionNotCreateItems(Action action,
-            ITaskRepository taskRepository, int changeCount = 0)
+            ITaskStorage taskRepository, int changeCount = 0)
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
@@ -29,7 +30,7 @@ namespace Unlimotion.Test
         }
 
         public static TaskItemViewModel CreateAndReturnNewTaskItem(Action action,
-            ITaskRepository taskRepository,
+            ITaskStorage taskRepository,
             int expectedNewTasks = 1)
         {
             var taskCountBefore = taskRepository.Tasks.Count;
@@ -40,7 +41,7 @@ namespace Unlimotion.Test
         }
 
         public static TaskItemViewModel CreateAndReturnNewTaskItem(ICommand command,
-            ITaskRepository taskRepository,
+            ITaskStorage taskRepository,
             int expectedNewTasks = 1)
         {
             return CreateAndReturnNewTaskItem(() => command.Execute(null), taskRepository, expectedNewTasks);
@@ -98,7 +99,7 @@ namespace Unlimotion.Test
             task.ContainsTasks.Should().Contain(expectedId);
         }
 
-        public static TaskItemViewModel CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskRepository repository, int expectedNewTasks = 1)
+        public static TaskItemViewModel CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskStorage repository, int expectedNewTasks = 1)
         {
             var created = CreateAndReturnNewTaskItem(action, repository, expectedNewTasks);
             viewModel.CurrentTaskItem = created;

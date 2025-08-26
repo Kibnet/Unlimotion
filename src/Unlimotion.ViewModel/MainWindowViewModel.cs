@@ -24,6 +24,7 @@ namespace Unlimotion.ViewModel
     {
         private DisposableList connectionDisposableList = new DisposableListRealization();
 
+        public ITaskStorage? taskRepository;
         public MainWindowViewModel()
         {
             Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName();
@@ -73,8 +74,6 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                                
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);                
                 
                 await taskRepository?.Add(task);
@@ -86,8 +85,7 @@ namespace Unlimotion.ViewModel
             {
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskStorage>();
-                
+
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 
                 if (CurrentTaskItem != null)
@@ -117,7 +115,6 @@ namespace Unlimotion.ViewModel
                     return;
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                var taskRepository = Locator.Current.GetService<ITaskStorage>();
                 
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
                 
@@ -776,7 +773,7 @@ namespace Unlimotion.ViewModel
             RegisterCommands();
         }
 
-        private void SelectCurrentTask()
+        public void SelectCurrentTask()
         {
             if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastOpenedMode)
             {

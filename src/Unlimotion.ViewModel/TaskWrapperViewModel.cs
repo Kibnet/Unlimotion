@@ -87,6 +87,7 @@ public class TaskWrapperViewModel : DisposableList
     public ICommand RemoveCommand { get; }
 
     public TaskItemViewModel TaskItem { get; set; }
+    public string Id => TaskItem?.Id;
     public TaskWrapperViewModel Parent { get; set; }
     public DateTimeOffset? SpecialDateTime { get; set; }
 

@@ -17,6 +17,7 @@ public class BackupViaGitService : IRemoteBackupService
 {
     private const string TasksFolderName = "Tasks";
     private static readonly object LockObject = new();
+    public static Func<string, string> GetAbsolutePath;
 
     public List<string> Refs()
     {

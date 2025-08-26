@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using Xunit;
+using Unlimotion.Domain;
 
 namespace Unlimotion.Test
 {
@@ -18,7 +19,7 @@ namespace Unlimotion.Test
         private readonly MainWindowViewModelFixture fixture;
         private readonly MainWindowViewModel mainWindowVM;
         private readonly CompareLogic compareLogic;
-        private readonly ITaskRepository taskRepository;
+        private readonly ITask taskRepository;
 
         public MainWindowViewModelTests()
         {
