@@ -1,0 +1,30 @@
+{
+  "TaskStorage": {
+    "Path": "Tasks",
+    "URL": "",
+    "Login": "",
+    "Password": "",
+    "IsServerMode": "False"
+  },
+  "Git": {
+    "BackupEnabled": "False",
+    "ShowStatusToasts": "True",
+    "RemoteUrl": "",
+    "Branch": "master",
+    "UserName": "YourEmail",
+    "Password": "YourToken",
+    "PullIntervalSeconds": "30",
+    "PushIntervalSeconds": "60",
+    "RemoteName": "origin",
+    "PushRefSpec": "refs/heads/master",
+    "CommitterName": "Backuper",
+    "CommitterEmail": "Backuper@unlimotion.ru"
+  },
+  "AllTasks": {
+    "ShowCompleted": "False",
+    "ShowArchived": "False",
+    "ShowWanted": "False",
+    "CurrentSortDefinition": "Comfort",
+    "CurrentSortDefinitionForUnlocked": "Comfort"
+  }
+}
