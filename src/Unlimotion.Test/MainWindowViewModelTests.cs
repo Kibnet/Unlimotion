@@ -19,7 +19,7 @@ namespace Unlimotion.Test
         private readonly MainWindowViewModelFixture fixture;
         private readonly MainWindowViewModel mainWindowVM;
         private readonly CompareLogic compareLogic;
-        private readonly ITask taskRepository;
+        private readonly ITaskStorage taskRepository;
 
         public MainWindowViewModelTests()
         {
@@ -895,7 +895,7 @@ namespace Unlimotion.Test
             string path = Path.Combine(fixture.DefaultTasksFolderPath, task.Id);
             File.Exists(path).Should().BeTrue();
 
-            task.RemoveFunc.Invoke(null);
+            task.RemoveFunc.Invoke();
             File.Exists(path).Should().BeFalse();
             return Task.CompletedTask;
         }
@@ -908,7 +908,7 @@ namespace Unlimotion.Test
             string path = Path.Combine(fixture.DefaultTasksFolderPath, child.Id);
             File.Exists(path).Should().BeTrue();
 
-            child.RemoveFunc.Invoke(parent);
+            child.RemoveFunc.Invoke();
             File.Exists(path).Should().BeTrue();
             return Task.CompletedTask;
         }
@@ -948,7 +948,7 @@ namespace Unlimotion.Test
             var dest2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
             dest2.CopyInto(dest2);
 
-            var clone = src.CloneInto(dest1);
+            var clone = src.CloneInto(dest1).GetAwaiter().GetResult();
 
             clone.Parents.Count.Should().Be(1);
             clone.Parents.Should().Contain(dest1.Id);
