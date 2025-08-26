@@ -1,0 +1,18 @@
+{
+  "Id": "18718dff-9364-4651-98ed-75be265a7751",
+  "Title": "task 7",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-31T06:46:56.270+00:00",
+  "UnlockedDateTime": "2025-07-31T06:46:56.272+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "BlocksTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false
+}

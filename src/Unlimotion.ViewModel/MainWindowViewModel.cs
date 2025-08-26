@@ -225,9 +225,8 @@ namespace Unlimotion.ViewModel
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
             await taskStorage.Connect();
             await taskStorage.Init();
-
-            var taskRepository = taskStorage;
-            await taskRepository.Init();
+            
+            taskRepository = taskStorage;
 
             //Если из коллекции пропадает итем, то очищаем выделенный итем.
             taskRepository.Tasks.Connect()

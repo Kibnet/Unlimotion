@@ -1,0 +1,20 @@
+{
+  "Id": "c119a20a-6b75-40df-97c2-d2ca3822085f",
+  "Title": "Task 4",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-28T14:43:19.275+00:00",
+  "UnlockedDateTime": null,
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [
+    "b5a0c236-e738-4619-8f2a-d9454414fe6f"
+  ],
+  "BlocksTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false
+}

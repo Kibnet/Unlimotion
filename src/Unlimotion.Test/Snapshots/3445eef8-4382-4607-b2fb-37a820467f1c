@@ -1,0 +1,23 @@
+{
+  "Id": "3445eef8-4382-4607-b2fb-37a820467f1c",
+  "Title": "Repeate task 9",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-31T13:04:16.573+00:00",
+  "UnlockedDateTime": "2025-07-31T13:04:19.909+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": "2025-07-31T00:00:00.000+03:00",
+  "PlannedEndDateTime": "2025-08-02T00:00:00.000+03:00",
+  "PlannedDuration": "01:00:00",
+  "ContainsTasks": [],
+  "BlocksTasks": [],
+  "Repeater": {
+    "Type": 1,
+    "Period": 1,
+    "AfterComplete": false,
+    "Pattern": []
+  },
+  "Importance": 0,
+  "Wanted": false
+}
