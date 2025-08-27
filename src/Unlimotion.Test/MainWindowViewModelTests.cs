@@ -642,7 +642,7 @@ namespace Unlimotion.Test
             var blockeddraggableAfterTest = GetStorageTaskItem(draggableId);
 
             var result = compareLogic.Compare(destinationBeforeTest, rootTaskAfterTest);
-            //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
+            //Должно быть одно различие: проставлен id блокируемой задачи "Blocked task 6"
             if (isdestinationNotBlockedByDraggable)
             {
                 Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
@@ -694,11 +694,18 @@ namespace Unlimotion.Test
             var result = compareLogic.Compare(draggableBeforeTest, draggableAfterTest);
             if (isDraggableNotBlockedBydestination)
             {
-                //Должно быть одно различие: проставлен id блокируемой задачи "Blocked taask 6"
-                Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
+                //Должно быть три различия: проставлен id блокируемой задачи "Blocked taask 6"
+                Assert.Contains("Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
                 result.DifferencesString);
+
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
-                Assert.True(result.AreEqual);
+                //Должно быть 2 различия: id задач которые блокируют и sortOrder
+                Assert.StartsWith("\r\nBegin Differences (2 differences):",
+                    result.DifferencesString);
+                Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
+                    result.DifferencesString);
+                Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
+                    result.DifferencesString);
 
                 Assert.NotNull(draggableAfterTest);
 
