@@ -220,8 +220,16 @@ public class TaskTreeManager : ITaskTreeManager
                     newTaskId = change.Id;
                 }
 
-                stepParents.ForEach(async parent => result.AddOrUpdateRange(
-                (await CreateParentChildRelation(parent, change)).Dict));
+                if (stepParents?.Count > 0)
+                {
+                    stepParents.ForEach(async parent => result.AddOrUpdateRange(
+                    (await CreateParentChildRelation(parent, change)).Dict));
+                }
+                else
+                {
+                    change.SortOrder = DateTime.Now;
+                    result.AddOrUpdate(change.Id, change);
+                }
 
                 return true;
             }
