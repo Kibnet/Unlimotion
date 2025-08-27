@@ -92,7 +92,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (AllTasksMode)
                     {
-                        await taskRepository?.Add(task, CurrentItem.TaskItem, isBlocked);
+                        await taskRepository?.Add(task, CurrentTaskItem, isBlocked);
                     }                    
                 }               
 

@@ -8,6 +8,7 @@ using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.ViewModel;
 using Unlimotion.Domain;
+using System.Threading.Tasks;
 
 namespace Unlimotion.Test
 {
@@ -20,37 +21,37 @@ namespace Unlimotion.Test
             return task;
         }
 
-        public static void ActionNotCreateItems(Action action,
+        public static async Task ActionNotCreateItems(Action action,
             ITaskStorage taskRepository, int changeCount = 0)
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
-            WaitThrottleTime();
+            await WaitThrottleTime();
             taskRepository.Tasks.Count.Should().Be(taskCountBefore + changeCount);
         }
 
-        public static TaskItemViewModel CreateAndReturnNewTaskItem(Action action,
+        public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(Action action,
             ITaskStorage taskRepository,
             int expectedNewTasks = 1)
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
-            WaitThrottleTime();
+            await WaitThrottleTime();
             taskRepository.Tasks.Count.Should().Be(taskCountBefore + expectedNewTasks);
             return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
         }
 
-        public static TaskItemViewModel CreateAndReturnNewTaskItem(ICommand command,
+        public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(ICommand command,
             ITaskStorage taskRepository,
             int expectedNewTasks = 1)
         {
-            return CreateAndReturnNewTaskItem(() => command.Execute(null), taskRepository, expectedNewTasks);
+            return await CreateAndReturnNewTaskItem(() => command.Execute(null), taskRepository, expectedNewTasks);
         }
 
-        public static void WaitThrottleTime()
+        public static async Task WaitThrottleTime()
         {
             var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1));
-            Thread.Sleep(sleepTime);
+            await Task.Delay(sleepTime);
         }
 
         public static TaskItemViewModel GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing = true)
@@ -99,9 +100,9 @@ namespace Unlimotion.Test
             task.ContainsTasks.Should().Contain(expectedId);
         }
 
-        public static TaskItemViewModel CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskStorage repository, int expectedNewTasks = 1)
+        public static async Task<TaskItemViewModel> CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskStorage repository, int expectedNewTasks = 1)
         {
-            var created = CreateAndReturnNewTaskItem(action, repository, expectedNewTasks);
+            var created = await CreateAndReturnNewTaskItem(action, repository, expectedNewTasks);
             viewModel.CurrentTaskItem = created;
             return created;
         }

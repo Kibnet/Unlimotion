@@ -11,14 +11,14 @@ namespace Unlimotion.Test
     {
         private const string _defaultConfigName = "TestSettings.json";
         public string _uniquiID => _guid.ToString();
-        private ThreadLocal<Guid> _guid = new ThreadLocal<Guid>(() => Guid.NewGuid());
+        private ThreadLocal<Guid> _guid;
 
-        private string _uniqueConfigName => $"TestSettings_{_uniquiID}.json";
-        private string _defaultTasksFolderName => $"Tasks_{_uniquiID}";
+        private string _uniqueConfigName;
+        private string _defaultTasksFolderName;
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
-        public string DefaultTasksFolderPath => Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
-        public string DefaultSnapshotsFolderPath => Path.Combine(Environment.CurrentDirectory, "Snapshots");
-        public string DefaultRootTaskPath => Path.Combine(DefaultSnapshotsFolderPath, RootTask1Id);
+        public string DefaultTasksFolderPath;
+        public string DefaultSnapshotsFolderPath;
+        public string DefaultRootTaskPath;
         public const string RootTask1Id = "baaf00ad-e250-4828-8bec-a6b42525fda0";
         public const string RootTask2Id = "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf";
         public const string SubTask22Id = "53c5b18d-3818-4467-b8bb-0346b21ebbc7";
@@ -53,6 +53,12 @@ namespace Unlimotion.Test
 
         public MainWindowViewModelFixture()
         {
+            _guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
+            _uniqueConfigName = $"TestSettings_{_uniquiID}.json";
+            _defaultTasksFolderName = $"Tasks_{_uniquiID}";
+            DefaultTasksFolderPath = Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
+            DefaultSnapshotsFolderPath = Path.Combine(Environment.CurrentDirectory, "Snapshots");
+            DefaultRootTaskPath = Path.Combine(DefaultSnapshotsFolderPath, RootTask1Id);
             Directory.CreateDirectory(DefaultTasksFolderPath);
             CopyTaskFromSnapshotsFolder();
             var fileInfo = new FileInfo(_defaultConfigName);
