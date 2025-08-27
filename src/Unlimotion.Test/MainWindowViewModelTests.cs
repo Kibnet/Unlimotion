@@ -770,8 +770,13 @@ namespace Unlimotion.Test
             var clonedTask8ItemAfterTest = GetStorageTaskItem(clonedViewModel.Id);
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
-            //Должны отличаться id и дата создания
-            Assert.StartsWith($"\r\nBegin Differences (2 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id, Values ({MainWindowViewModelFixture.ClonedTask8Id},{newTaskItemViewModel.Id})\r\nTypes [DateTimeOffset,DateTimeOffset], Item Expected.CreatedDateTime != Actual.CreatedDateTime",
+            //Должны отличаться id, дата создания, кол-во родителей и sortOrder
+            Assert.StartsWith($"\r\nBegin Differences (4 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id, Values ({MainWindowViewModelFixture.ClonedTask8Id},{newTaskItemViewModel.Id})",
+                result.DifferencesString);
+            Assert.Contains("Types [DateTimeOffset,DateTimeOffset], Item Expected.CreatedDateTime != Actual.CreatedDateTime", result.DifferencesString);
+            Assert.Contains("Types [List`1,List`1], Item Expected.ParentTasks.Count != Actual.ParentTasks.Count",
+                result.DifferencesString);
+            Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
                 result.DifferencesString);
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
 
