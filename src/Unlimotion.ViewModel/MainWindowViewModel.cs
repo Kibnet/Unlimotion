@@ -74,8 +74,8 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);                
-                
+                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+
                 await taskRepository?.Add(task);
                 CurrentTaskItem = task;
                 SelectCurrentTask();
@@ -87,17 +87,17 @@ namespace Unlimotion.ViewModel
                     return;
 
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                
+
                 if (CurrentTaskItem != null)
                 {
                     if (AllTasksMode)
                     {
                         await taskRepository?.Add(task, CurrentTaskItem, isBlocked);
-                    }                    
-                }               
+                    }
+                }
 
                 CurrentTaskItem = task;
-                SelectCurrentTask();                
+                SelectCurrentTask();
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
@@ -105,7 +105,7 @@ namespace Unlimotion.ViewModel
                 var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
-                    CreateSibling.Execute(true);                    
+                    CreateSibling.Execute(true);
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -115,9 +115,9 @@ namespace Unlimotion.ViewModel
                     return;
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
-                
+
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-                
+
                 await taskRepository?.AddChild(task, CurrentTaskItem);
 
 
@@ -225,7 +225,7 @@ namespace Unlimotion.ViewModel
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
             await taskStorage.Connect();
             await taskStorage.Init();
-            
+
             taskRepository = taskStorage;
 
             //Если из коллекции пропадает итем, то очищаем выделенный итем.
@@ -334,7 +334,7 @@ namespace Unlimotion.ViewModel
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
-            
+
             var durationFilter = DurationFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
@@ -645,8 +645,8 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             LastOpenedItems = _lastOpenedItems;
-            
-            this.WhenAnyValue(m => m.CurrentTaskItem, m=> m.DetailsAreOpen)
+
+            this.WhenAnyValue(m => m.CurrentTaskItem, m => m.DetailsAreOpen)
                 .Subscribe(item =>
                 {
                     if (DetailsAreOpen && item.Item1 != null && LastTaskItem != item.Item1)
@@ -678,7 +678,8 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) => {
+                            RemoveAction = (m) =>
+                            {
 
                                 m.Parent.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
                             },
@@ -704,9 +705,10 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) => {
+                            RemoveAction = (m) =>
+                            {
 
-                                m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);                              
+                                m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -729,7 +731,7 @@ namespace Unlimotion.ViewModel
                         var actions = new TaskWrapperActions()
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) => 
+                            RemoveAction = (m) =>
                             {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
@@ -800,7 +802,7 @@ namespace Unlimotion.ViewModel
                 {
                     CurrentLastCreated = FindTaskWrapperViewModel(CurrentTaskItem, LastCreatedItems);
                 }
-                else if(LastOpenedMode)
+                else if (LastOpenedMode)
                 {
                     CurrentLastOpenedItem = FindTaskWrapperViewModel(CurrentTaskItem, LastOpenedItems);
                 }
@@ -815,18 +817,18 @@ namespace Unlimotion.ViewModel
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
                     async () =>
                     {
-                          if (await task.TaskItem.RemoveFunc.Invoke())
-                          {
+                        if (await task.TaskItem.RemoveFunc.Invoke())
+                        {
                             CurrentTaskItem = null;
-                          }
+                        }
                     });
             }
             else
             {
-                  if (await task.TaskItem.RemoveFunc.Invoke())
-                  {
+                if (await task.TaskItem.RemoveFunc.Invoke())
+                {
                     CurrentTaskItem = null;
-                  }
+                }
             }
         }
 

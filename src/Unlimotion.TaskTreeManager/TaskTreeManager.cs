@@ -176,7 +176,13 @@ public class TaskTreeManager : ITaskTreeManager
 
                 // Удаление самой задачи
                 if (deleteInStorage)
+                {
+                    // В случае разрыва отношений (задача/подзадача), удаляемая таска может попасть в результат
+                    // в этом случае файл после удаления создатся снова.
+                    // Удаляем из результата
+                    result.Dict.Remove(change.Id);
                     await Storage.Remove(change.Id);
+                }
 
                 return true;
             }

@@ -251,7 +251,7 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            RemoveFunc = async () => await (taskStorage.Delete(this));            
+            RemoveFunc = async () => await (taskStorage.Delete(this));
 
             CloneFunc = async destination =>
             {
