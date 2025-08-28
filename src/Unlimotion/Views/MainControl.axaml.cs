@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Splat;
 using Unlimotion.Domain;

@@ -2,18 +2,25 @@
 
 using System;
 using System.Reactive;
+using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
+using Microsoft.Extensions.Configuration;
+using Quartz;
+using Quartz.Impl;
 #if LIVE
 using Live.Avalonia;
 #endif
 using ReactiveUI;
 using Splat;
+using Unlimotion.Scheduling.Jobs;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using Unlimotion.Scheduling.Jobs;
+using WritableJsonConfiguration;
 using Unlimotion.Services;
 using WritableJsonConfiguration;
 using Microsoft.Extensions.Configuration;
@@ -75,7 +82,7 @@ namespace Unlimotion
             }
             else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
             {
-                singleViewPlatform.MainView = new MainControl
+                singleViewPlatform.MainView = new MainScreen()
                 {
                     DataContext = GetMainWindowViewModel(),
                 };
@@ -195,6 +202,103 @@ namespace Unlimotion
 #else
         return true;
 #endif
+        }
+
+        public static void Init(string configPath)
+        {
+            //Создание конфига
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
+            Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
+            Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
+
+            //Создание маппера
+            var mapper = AppModelMapping.ConfigureMapping();
+            Locator.CurrentMutable.Register<IMapper>(() => mapper);
+
+            //Создание сервиса для работы с git
+            Locator.CurrentMutable.Register<IRemoteBackupService>(() => new BackupViaGitService());
+
+            //Создание сервиса для получения имени приложения
+            Locator.CurrentMutable.RegisterConstant(new AppNameDefinitionService(), typeof(IAppNameDefinitionService));
+
+            //Получение настроек
+            var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+            if (taskStorageSettings == null)
+            {
+                taskStorageSettings = new TaskStorageSettings();
+                configuration.Set("TaskStorage", taskStorageSettings);
+            }
+
+            var isServerMode = taskStorageSettings.IsServerMode;
+
+            //Регистрация хранилища
+            TaskStorages.RegisterStorage(isServerMode, configuration);
+
+            //Регистрация менеджера уведомлений
+            var notificationManager = new NotificationManagerWrapper();
+            Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+
+            //Регистрация планировщика
+            var schedulerFactory = new StdSchedulerFactory();
+            var scheduler = schedulerFactory.GetScheduler().Result;
+            Locator.CurrentMutable.RegisterConstant(scheduler);
+
+            //Инициализация настроек git
+            var gitSettings = configuration.Get<GitSettings>("Git");
+            if (gitSettings == null)
+            {
+                gitSettings = new GitSettings();
+                var gitSection = configuration.GetSection("Git");
+
+                gitSection.GetSection(nameof(GitSettings.BackupEnabled)).Set(false);
+                gitSection.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(gitSettings.ShowStatusToasts);
+
+                gitSection.GetSection(nameof(GitSettings.RemoteUrl)).Set(gitSettings.RemoteUrl);
+                gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
+                gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
+                gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
+
+                gitSection.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(gitSettings.PullIntervalSeconds);
+                gitSection.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(gitSettings.PushIntervalSeconds);
+
+                gitSection.GetSection(nameof(GitSettings.RemoteName)).Set(gitSettings.RemoteName);
+                gitSection.GetSection(nameof(GitSettings.PushRefSpec)).Set(gitSettings.PushRefSpec);
+
+                gitSection.GetSection(nameof(GitSettings.CommitterName)).Set(gitSettings.CommitterName);
+                gitSection.GetSection(nameof(GitSettings.CommitterEmail)).Set(gitSettings.CommitterEmail);
+            }
+
+            //Инициализация планировщика
+            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            taskRepository.Initiated += (sender, eventArgs) =>
+            {
+                var pullJob = JobBuilder.Create<GitPullJob>()
+                    .WithIdentity("GitPullJob", "Git")
+                    .Build();
+                var pushJob = JobBuilder.Create<GitPushJob>()
+                    .WithIdentity("GitPushJob", "Git")
+                    .Build();
+
+                var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
+                    gitSettings.PullIntervalSeconds);
+                var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
+                    gitSettings.PushIntervalSeconds);
+
+                scheduler.ScheduleJob(pullJob, pullTrigger);
+                scheduler.ScheduleJob(pushJob, pushTrigger);
+
+                if (gitSettings.BackupEnabled)
+                    scheduler.Start();
+            };
+        }
+        private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds)
+        {
+            return TriggerBuilder.Create()
+                .WithIdentity(name, group)
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInSeconds(seconds)
+                    .RepeatForever())
+                .Build();
         }
     }
 }

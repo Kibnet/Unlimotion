@@ -27,6 +27,8 @@ namespace Unlimotion
                 RegisterStorage(settingsViewModel.IsServerMode, configuration);
                 var mainWindowViewModel = Locator.Current.GetService<MainWindowViewModel>();
                 await mainWindowViewModel.Connect();
+                var notify = Locator.Current.GetService<INotificationManagerWrapper>();
+                notify?.SuccessToast($"Хранилище задач подключено и все задачи из него загружены");
             });
             settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled, true)
                 .Subscribe(c =>
@@ -111,6 +113,21 @@ namespace Unlimotion
                     settingsViewModel.TaskStoragePath = path;
                     //TODO сделать относительный путь
                 }
+            });
+            settingsViewModel.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.CloneOrUpdateRepo();
+            });
+            settingsViewModel.PullCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Pull();
+            });
+            settingsViewModel.PushCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Push("Manual backup");
             });
             settingsViewModel.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
             {

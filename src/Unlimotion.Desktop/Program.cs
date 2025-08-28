@@ -66,7 +66,7 @@ namespace Unlimotion.Desktop
                 Directory.CreateDirectory(unlimotionFolder);
 #endif
             }
-
+            
             BackupViaGitService.GetAbsolutePath = path => new DirectoryInfo(path).FullName;
 
             App.Init(configPath);
@@ -87,16 +87,6 @@ namespace Unlimotion.Desktop
 #endif
 
                 .UseReactiveUI();
-        
-        private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds) 
-        {
-            return TriggerBuilder.Create()
-                .WithIdentity(name, group)
-                .WithSimpleSchedule(x => x
-                    .WithIntervalInSeconds(seconds)
-                    .RepeatForever())
-                .Build();
-        }
     }
 }
 
