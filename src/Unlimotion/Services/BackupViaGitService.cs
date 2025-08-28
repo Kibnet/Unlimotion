@@ -24,11 +24,11 @@ public class BackupViaGitService : IRemoteBackupService
         var result = new List<string>();
         try
         {
-            var settings = GetSettings(); 
-            if (!Repository.IsValid(settings.repositoryPath??""))
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
             {
                 return result;
-            }
             }
 
             using var repo = new Repository(path);
@@ -55,13 +55,13 @@ public class BackupViaGitService : IRemoteBackupService
         try
         {
             var settings = GetSettings();
-            if (!Repository.IsValid(settings.repositoryPath ?? ""))
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
             {
                 return result;
             }
-
-
             using var repo = new Repository(path);
+
             var remotes = repo.Network.Remotes;
             foreach (var remote in remotes)
             {
@@ -75,56 +75,7 @@ public class BackupViaGitService : IRemoteBackupService
 
         return result;
     }
-   
-    public void CloneOrUpdateRepo()
-    {
-        try
-        {
-            var settings = GetSettings();
 
-            var path = GetRepositoryPath(settings.repositoryPath);
-
-            if (!Repository.IsValid(path ?? ""))
-            {
-                var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                notify?.SuccessToast($"Начато клонирование репозитория из {settings.git.RemoteUrl} в {path}");
-
-                var cloneOptions = new CloneOptions
-                {
-                    BranchName = settings.git.Branch,
-                    FetchOptions =
-                    {
-                        CredentialsProvider = GetCredentials(settings.git)
-                    }
-                };
-
-                var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
-
-                dbwatcher?.SetEnable(false);
-                taskRepository?.SetPause(true);
-                try
-                {
-                    Repository.Clone(settings.git.RemoteUrl, path, cloneOptions);
-                    notify?.SuccessToast($"Клонирование репозитория из {settings.git.RemoteUrl} в {path} успешно завершено");
-                }
-                finally
-                {
-                    dbwatcher?.SetEnable(true);
-                    taskRepository?.SetPause(false);
-                }
-            }
-            else
-            {
-                Pull();
-            }
-        }
-        catch (Exception ex)
-        {
-            ShowUiError("Ошибка при клонировании или обновлении репозитория:\n" + ex.Message);
-        }
-    }
-    
     public CredentialsHandler GetCredentials(GitSettings gitSettings)
     {
         return (_url, _user, _cred) =>
@@ -166,27 +117,16 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
-
-    public CredentialsHandler GetCredentials(GitSettings gitSettings)
-    {
-        return (_url, _user, _cred) =>
-            new UsernamePasswordCredentials
-            {
-                Username = gitSettings.UserName,
-                Password = gitSettings.Password
-            };
-    }
-
     public void Push(string msg)
     {
         lock (LockObject)
         {
-            var settings = GetSettings(); 
-            if (!Repository.IsValid(settings.repositoryPath ?? ""))
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
             {
                 return;
             }
-
             CheckGitSettings(settings.git.UserName, settings.git.Password);
 
             using var repo = new Repository(path);
@@ -254,12 +194,12 @@ public class BackupViaGitService : IRemoteBackupService
     {
         lock (LockObject)
         {
-            var settings = GetSettings(); 
-            if (!Repository.IsValid(settings.repositoryPath ?? ""))
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
             {
                 return;
             }
-
             CheckGitSettings(settings.git.UserName, settings.git.Password);
 
             using var repo = new Repository(path);
@@ -360,8 +300,6 @@ public class BackupViaGitService : IRemoteBackupService
             }
         }
     }
-
-    public static Func<string, string> GetAbsolutePath;
 
     private static string GetRepositoryPath(string? pathFromSettings)
     {
