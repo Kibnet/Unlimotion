@@ -12,8 +12,6 @@ using Unlimotion.Views;
 using Xunit;
 using Unlimotion.Domain;
 
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
-
 namespace Unlimotion.Test
 {
     public class MainWindowViewModelTests : IDisposable
