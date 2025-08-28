@@ -1,5 +1,6 @@
 {
   "Id": "0d8726d4-ea55-491e-9f52-6215ccb1ef19",
+  "UserId": null,
   "Title": "deadlock blocked task 6",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,14 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [
+    "6a34c1cc-5283-4f60-9138-aee91bf6a6cb"
+  ],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

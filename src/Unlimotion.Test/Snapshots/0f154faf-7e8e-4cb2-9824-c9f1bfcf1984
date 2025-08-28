@@ -1,5 +1,6 @@
 {
   "Id": "0f154faf-7e8e-4cb2-9824-c9f1bfcf1984",
+  "UserId": null,
   "Title": "Archive 1",
   "Description": null,
   "IsCompleted": false,
@@ -13,8 +14,12 @@
   "ContainsTasks": [
     "c136273b-99c9-4157-a8f2-5a128cb8b6de"
   ],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

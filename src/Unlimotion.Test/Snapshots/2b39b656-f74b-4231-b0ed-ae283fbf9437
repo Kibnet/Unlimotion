@@ -1,5 +1,6 @@
 {
   "Id": "2b39b656-f74b-4231-b0ed-ae283fbf9437",
+  "UserId": null,
   "Title": "cloned task 8",
   "Description": null,
   "IsCompleted": false,
@@ -13,8 +14,12 @@
   "ContainsTasks": [
     "2eef36b4-b557-4fd7-a202-1fa414f5e41f"
   ],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

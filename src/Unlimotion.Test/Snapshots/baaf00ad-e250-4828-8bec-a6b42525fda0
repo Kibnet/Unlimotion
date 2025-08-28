@@ -1,5 +1,6 @@
 {
   "Id": "baaf00ad-e250-4828-8bec-a6b42525fda0",
+  "UserId": null,
   "Title": "Root Task 1",
   "Description": "Root Task 1 Description",
   "IsCompleted": false,
@@ -11,8 +12,12 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

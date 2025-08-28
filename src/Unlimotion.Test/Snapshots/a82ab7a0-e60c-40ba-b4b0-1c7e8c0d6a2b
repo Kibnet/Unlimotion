@@ -1,5 +1,6 @@
 {
   "Id": "a82ab7a0-e60c-40ba-b4b0-1c7e8c0d6a2b",
+  "UserId": null,
   "Title": "destination task 8",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,12 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

@@ -1,5 +1,6 @@
 {
   "Id": "b5a0c236-e738-4619-8f2a-d9454414fe6f",
+  "UserId": null,
   "Title": "Task 4.1",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,14 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [
+    "c119a20a-6b75-40df-97c2-d2ca3822085f"
+  ],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

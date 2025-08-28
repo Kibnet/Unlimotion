@@ -1,5 +1,6 @@
 {
   "Id": "f41774af-38f6-486c-9c5d-e4ba3300438c",
+  "UserId": null,
   "Title": "Blocked task 7",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,12 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

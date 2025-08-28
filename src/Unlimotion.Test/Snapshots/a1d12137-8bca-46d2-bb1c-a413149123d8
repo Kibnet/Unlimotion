@@ -1,5 +1,6 @@
 {
   "Id": "a1d12137-8bca-46d2-bb1c-a413149123d8",
+  "UserId": null,
   "Title": "Blocked Task 2",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,14 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [
+    "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf"
+  ],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

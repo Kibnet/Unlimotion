@@ -1,5 +1,6 @@
 {
   "Id": "4bdbac51-11f8-4629-b592-4641dd387867",
+  "UserId": null,
   "Title": "deadlock blocked task 7",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,14 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [
+    "9b4b876e-6d4f-47f4-8007-f36fc291ed72"
+  ],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

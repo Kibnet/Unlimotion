@@ -1,5 +1,6 @@
 {
   "Id": "5c06d648-9c04-47f4-8d5a-12f936bcd883",
+  "UserId": null,
   "Title": "Blocked task 6",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,12 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }

@@ -1,5 +1,6 @@
 {
   "Id": "2eef36b4-b557-4fd7-a202-1fa414f5e41f",
+  "UserId": null,
   "Title": "clonned sub task  8.1",
   "Description": null,
   "IsCompleted": false,
@@ -11,8 +12,14 @@
   "PlannedEndDateTime": null,
   "PlannedDuration": null,
   "ContainsTasks": [],
+  "ParentTasks": [
+    "2b39b656-f74b-4231-b0ed-ae283fbf9437"
+  ],
   "BlocksTasks": [],
+  "BlockedByTasks": [],
   "Repeater": null,
   "Importance": 0,
-  "Wanted": false
+  "Wanted": false,
+  "PrevVersion": false,
+  "SortOrder": null
 }
