@@ -17,6 +17,7 @@ public interface ITaskStorage
     Task<bool> Connect();
     Task Disconnect();
     public event EventHandler<TaskStorageUpdateEventArgs> Updating;
+    public event Action<Exception?>? OnConnectionError;
     public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
     public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);
     public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage  = true);

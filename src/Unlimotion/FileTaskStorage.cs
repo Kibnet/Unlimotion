@@ -33,6 +33,7 @@ namespace Unlimotion
         private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
 
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
+        public event Action<Exception?>? OnConnectionError;
         public event EventHandler<EventArgs> Initiated;
         private IMapper mapper;
 

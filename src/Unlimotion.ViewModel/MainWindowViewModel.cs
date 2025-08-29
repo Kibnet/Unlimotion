@@ -57,17 +57,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
                 .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
-                .AddToDispose(this);
-
-            try
-            {
-                Connect().Wait();
-            }
-            catch (Exception e)
-            {
-                //ManagerWrapper.Ask("Error",
-                //    $"{e.Message}", null);
-            }
+                .AddToDispose(this);       
         }
 
         private void RegisterCommands()
@@ -223,6 +213,16 @@ namespace Unlimotion.ViewModel
                 });
 
             var taskStorage = Locator.Current.GetService<ITaskStorage>();
+
+            if (Settings.IsServerMode)
+            {
+                taskStorage.OnConnectionError += ex =>
+                {
+                    var notify = Locator.Current.GetService<INotificationManagerWrapper>();
+                    notify?.ErrorToast($"Ошибка подключения к серверу.");
+                };
+            }
+
             await taskStorage.Connect();
             await taskStorage.Init();
 
