@@ -228,8 +228,11 @@ public class TaskTreeManager : ITaskTreeManager
 
                 if (stepParents?.Count > 0)
                 {
-                    stepParents.ForEach(async parent => result.AddOrUpdateRange(
-                    (await CreateParentChildRelation(parent, change)).Dict));
+                    foreach (var parent in stepParents)
+                    {
+                        var dict = await CreateParentChildRelation(parent, change);
+                        result.AddOrUpdateRange(dict.Dict);
+                    }
                 }
                 else
                 {
@@ -247,6 +250,7 @@ public class TaskTreeManager : ITaskTreeManager
 
         return result.Dict.Values.ToList();
     }
+
     public async Task<List<TaskItem>> AddNewParentToTask(TaskItem change, TaskItem additionalParent)
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();

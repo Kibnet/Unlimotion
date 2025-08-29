@@ -469,7 +469,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             try
             {
                 var hubTask = mapper.Map<TaskItemHubMold>(item);
-                item.Id = await _hub.SaveTask(hubTask).ConfigureAwait(false);
+                item.Id = await _hub.SaveTask(hubTask);
                 return true;
             }
             catch (Exception e)
