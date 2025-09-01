@@ -318,7 +318,23 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs { Type = UpdateType.Saved, Id = data.Id });
+                var taskItem = mapper.Map<TaskItem>(data);
+
+                var viewModel = new TaskItemViewModel(taskItem, this);
+
+                if (taskItem != null) 
+                {
+                    var existedTask = Tasks.Lookup(taskItem.Id);
+
+                    if(existedTask != null)
+                    {
+                        await this.Update(viewModel.Model);
+                    }
+                    else
+                    {
+                        await this.Add(viewModel);
+                    }
+                }
             }
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
         });
@@ -588,13 +604,14 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     public async Task<bool> Update(TaskItemViewModel change)
     {
         await TaskTreeManager.UpdateTask(change.Model);
-        //Tasks.AddOrUpdate(change);
+        UpdateCache(change.Model);
         return true;
     }
+
     public async Task<bool> Update(TaskItem change)
     {
         await TaskTreeManager.UpdateTask(change);
-        //Tasks.AddOrUpdate(new TaskItemViewModel(change, this));
+        UpdateCache(change);
         return true;
     }
 
