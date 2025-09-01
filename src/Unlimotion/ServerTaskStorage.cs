@@ -525,10 +525,15 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             change.Model,
             currentTask?.Model,
             isBlocked);
-        foreach (var task in taskItemList)
+
+        var newTask = taskItemList.Last();
+        change.Id = newTask.Id;
+        change.Update(newTask);
+        Tasks.AddOrUpdate(change);
+
+        foreach (var task in taskItemList.SkipLast(1))
         {
             UpdateCache(task);
-            change.Id = task.Id;
         }
         return true;
     }
@@ -555,6 +560,17 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         }
         Tasks.Remove(change);
 
+        return true;
+    }
+
+    public async Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent)
+    {
+        var connItemList = await TaskTreeManager.DeleteParentChildRelation(parent.Model, change.Model);
+
+        foreach (var task in connItemList)
+        {
+            UpdateCache(task);
+        }
         return true;
     }
 
@@ -613,7 +629,12 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     }
     private void UpdateCache(TaskItem task)
     {
-        Tasks.AddOrUpdate(new TaskItemViewModel(task, this));
+        var vm = Tasks.Lookup(task.Id);
+
+        if (vm.HasValue)
+            vm.Value.Update(task);
+        // else
+        // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
     }
 
     public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)

@@ -817,7 +817,7 @@ namespace Unlimotion.ViewModel
                     $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
                     async () =>
                     {
-                        if (await task.TaskItem.RemoveFunc.Invoke())
+                        if (await task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
                         {
                             CurrentTaskItem = null;
                         }
@@ -825,7 +825,7 @@ namespace Unlimotion.ViewModel
             }
             else
             {
-                if (await task.TaskItem.RemoveFunc.Invoke())
+                if (await task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
                 {
                     CurrentTaskItem = null;
                 }
@@ -838,7 +838,16 @@ namespace Unlimotion.ViewModel
                 $"Are you sure you want to remove the task \"{task.Title}\" from disk?",
                 async () =>
                 {
-                    await task.RemoveFunc.Invoke();
+                    if (task.Parents?.Count > 0)
+                    {
+                        foreach (var parent in task.ParentsTasks.ToList())
+                        {
+                            await task.RemoveFunc.Invoke(parent);
+                        }
+                    }
+                    else
+                        await task.RemoveFunc.Invoke(null);
+
                     CurrentTaskItem = null;
                 });
         }

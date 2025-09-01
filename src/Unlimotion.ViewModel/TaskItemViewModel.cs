@@ -251,7 +251,13 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            RemoveFunc = async () => await (taskStorage.Delete(this));
+            RemoveFunc = async (parent) => 
+            {
+                if (parent != null && this.Parents.Count > 1)
+                    return await taskStorage.Delete(this, parent);
+                else
+                    return await taskStorage.Delete(this);
+            };
 
             CloneFunc = async destination =>
             {
@@ -433,7 +439,7 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; }
-        public Func<Task<bool>> RemoveFunc { get; set; }
+        public Func<TaskItemViewModel, Task<bool>> RemoveFunc { get; set; }
         public Func<TaskItemViewModel, Task<TaskItemViewModel>> CloneFunc { get; set; }
 
         public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId) ? Parents.Count == 1 : Parents.Count == 0);

@@ -276,6 +276,17 @@ namespace Unlimotion
             return true;
         }
 
+        public async Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent)
+        {
+            var connItemList = await TaskTreeManager.DeleteParentChildRelation(parent.Model, change.Model);
+
+            foreach (var task in connItemList)
+            {
+                UpdateCache(task);
+            }
+            return true;
+        }
+
         public async Task<bool> Update(TaskItemViewModel change)
         {
             await Update(change.Model);

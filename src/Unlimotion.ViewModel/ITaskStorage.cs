@@ -21,6 +21,7 @@ public interface ITaskStorage
     public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
     public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);
     public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage  = true);
+    public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent);
     public Task<bool> Update(TaskItemViewModel change);
     public Task<bool> Update(TaskItem change);
     public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents);
