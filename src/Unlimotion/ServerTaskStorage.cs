@@ -327,7 +327,12 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs { Type = UpdateType.Removed, Id = data.Id });
+                var task = this.Tasks.Lookup(data.Id);
+
+                if (task != null) 
+                {
+                    await this.Delete(task.Value, false);
+                }
             }
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
         });
@@ -559,7 +564,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
     {
-        var parentsItemList = await TaskTreeManager.DeleteTask(change.Model);
+        var parentsItemList = await TaskTreeManager.DeleteTask(change.Model, deleteInStorage);
         foreach (var parent in parentsItemList)
         {
             UpdateCache(parent);
