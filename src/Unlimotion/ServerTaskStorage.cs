@@ -186,15 +186,15 @@ public class ServerTaskStorage : ITaskStorage, IStorage
                 })
                 .Build();
 
+            RegisterHandlers();
+
             _hub = _connection.CreateHub<IChatHub>();
 
             _connection.Closed += ConnectionOnClosed;
 
-            RegisterHandlers();
-
             try
             {
-                await Task.Run(() => _connection.StartAsync(_connectCts.Token)).ConfigureAwait(false);
+                await _connection.StartAsync(_connectCts.Token).ConfigureAwait(false);
             }
             catch (Exception startEx)
             {
@@ -285,7 +285,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     private void RegisterHandlers()
     {
-        _connection.Subscribe<LogOn>(async data =>
+        _connection.On<LogOn>("LogOn", async data =>
         {
             try
             {
@@ -314,7 +314,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             }
         });
 
-        _connection.Subscribe<ReceiveTaskItem>(async data =>
+        _connection.On<ReceiveTaskItem>("ReceiveTaskItem", async data =>
         {
             try
             {
@@ -323,7 +323,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
         });
 
-        _connection.Subscribe<DeleteTaskItem>(async data =>
+        _connection.On<DeleteTaskItem>("DeleteTaskItem", async data =>
         {
             try
             {
@@ -543,11 +543,17 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         var taskItemList = await TaskTreeManager.AddChildTask(
             change.Model,
             currentTask.Model);
-        foreach (var task in taskItemList)
+
+        var newTask = taskItemList.Last();
+        change.Id = newTask.Id;
+        change.Update(newTask);
+        Tasks.AddOrUpdate(change);
+
+        foreach (var task in taskItemList.SkipLast(1))
         {
             UpdateCache(task);
         }
-        change.Id = taskItemList.OrderByDescending(item => item.Id).First().Id;
+
         return true;
     }
 

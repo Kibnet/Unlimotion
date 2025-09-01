@@ -62,7 +62,7 @@ namespace Unlimotion.Server.Hubs
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
 
-                    await Clients.Users(uid).SendAsync(receiveTask);
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("ReceiveTaskItem", receiveTask);
 
                     var logMessage = $"User {Context.Items["nickname"]}({Context.Items["login"]}) save task {taskItem.Id}";
                     Log.Information(logMessage);
@@ -78,7 +78,7 @@ namespace Unlimotion.Server.Hubs
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
 
-                    await Clients.Users(uid).SendAsync(receiveTask);
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("ReceiveTaskItem", receiveTask);
 
                     Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) update task {taskItem.Id}");
 
@@ -125,13 +125,26 @@ namespace Unlimotion.Server.Hubs
                         Id = item.Id,
                         UserId = uid
                     };
-                    await Clients.Users(uid).SendAsync(deleteTask);
+
+                    var users = Clients.Users;
+
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("DeleteTaskItem", deleteTask);
                 }
             }
             catch
             {
                 throw;
             }
+        }
+        public override async Task OnDisconnectedAsync(Exception exception)
+        {
+            string uid = Context.Items["uid"]?.ToString();
+            if (!string.IsNullOrEmpty(uid))
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"User_{uid}");
+                Log.Information($"Removed connection {Context.ConnectionId} from group User_{uid}");
+            }
+            await base.OnDisconnectedAsync(exception);
         }
 
         public async Task Login(string token, string operatingSystem, string ipAddress, string nameVersionClient)
@@ -142,10 +155,11 @@ namespace Unlimotion.Server.Hubs
             {
                 var jwtPayload = jwtAuthProviderReader.GetVerifiedJwtPayload(new BasicHttpRequest(), token.Split('.'));
                 await Groups.AddToGroupAsync(this.Context.ConnectionId, _loginedGroup);
+                var uid = Context.Items["uid"] = jwtPayload["sub"];
+                await Groups.AddToGroupAsync(this.Context.ConnectionId, $"User_{uid}");
                 Context.Items["login"] = jwtPayload["name"];
-                Context.Items["uid"] = jwtPayload["sub"];
+                Context.Items["uid"] = uid;
                 Context.Items["session"] = jwtPayload["session"];
-
 
                 var logOn = new LogOn
                 {
@@ -183,7 +197,7 @@ namespace Unlimotion.Server.Hubs
                     }
                 }
 
-                await Clients.Caller.SendAsync(logOn);
+                await Clients.Caller.SendAsync("LogOn", logOn);
                 var userLoginAudit = await _ravenSession.LoadAsync<LoginAudit>(jwtPayload["sub"] + "/LoginAudit");
                 if (userLoginAudit != null)
                 {
