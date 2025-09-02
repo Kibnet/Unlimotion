@@ -62,7 +62,7 @@ namespace Unlimotion.Server.Hubs
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
 
-                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("ReceiveTaskItem", receiveTask);
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync(receiveTask);
 
                     var logMessage = $"User {Context.Items["nickname"]}({Context.Items["login"]}) save task {taskItem.Id}";
                     Log.Information(logMessage);
@@ -78,7 +78,7 @@ namespace Unlimotion.Server.Hubs
 
                     var receiveTask = Mapper.Map<ReceiveTaskItem>(taskItem);
 
-                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("ReceiveTaskItem", receiveTask);
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync(receiveTask);
 
                     Log.Information($"User {Context.Items["nickname"]}({Context.Items["login"]}) update task {taskItem.Id}");
 
@@ -128,7 +128,7 @@ namespace Unlimotion.Server.Hubs
 
                     var users = Clients.Users;
 
-                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync("DeleteTaskItem", deleteTask);
+                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync(deleteTask);
                 }
             }
             catch
@@ -197,7 +197,7 @@ namespace Unlimotion.Server.Hubs
                     }
                 }
 
-                await Clients.Caller.SendAsync("LogOn", logOn);
+                await Clients.Caller.SendAsync(logOn);
                 var userLoginAudit = await _ravenSession.LoadAsync<LoginAudit>(jwtPayload["sub"] + "/LoginAudit");
                 if (userLoginAudit != null)
                 {

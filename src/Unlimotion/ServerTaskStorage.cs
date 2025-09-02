@@ -285,7 +285,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     private void RegisterHandlers()
     {
-        _connection.On<LogOn>("LogOn", async data =>
+        _connection.Subscribe<LogOn>(async data =>
         {
             try
             {
@@ -314,7 +314,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             }
         });
 
-        _connection.On<ReceiveTaskItem>("ReceiveTaskItem", async data =>
+        _connection.Subscribe<ReceiveTaskItem>(async data =>
         {
             try
             {
@@ -339,7 +339,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
         });
 
-        _connection.On<DeleteTaskItem>("DeleteTaskItem", async data =>
+        _connection.Subscribe<DeleteTaskItem>(async data =>
         {
             try
             {
