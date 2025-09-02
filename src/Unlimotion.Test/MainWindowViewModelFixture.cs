@@ -83,7 +83,23 @@ namespace Unlimotion.Test
             {
                 var fileInfo = new FileInfo(file);
                 var newFilePath = Path.Combine(DefaultTasksFolderPath, fileInfo.Name);
-                fileInfo.CopyTo(newFilePath, true);
+                Try(() => fileInfo.CopyTo(newFilePath, true));
+            }
+        }
+
+        public void Try(Action action, int attempts = 3)
+        {
+            for (int i = 0; i < attempts; i++)
+            {
+                try
+                {
+                    action.Invoke();
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Thread.Sleep(100);
+                }
             }
         }
 
@@ -91,9 +107,9 @@ namespace Unlimotion.Test
         {
             if (File.Exists(_uniqueConfigName))
             {
-                File.Delete(_uniqueConfigName);
+                Try(() => File.Delete(_uniqueConfigName));
             }
-            Directory.Delete(DefaultTasksFolderPath, true);
+            Try(() => Directory.Delete(DefaultTasksFolderPath, true)); ;
         }
     }
 }
