@@ -28,6 +28,7 @@ namespace Unlimotion.Test
             TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(10);
             fixture = new MainWindowViewModelFixture();
             mainWindowVM = fixture.MainWindowViewModelTest;
+            mainWindowVM.Connect().GetAwaiter().GetResult();
             taskRepository = mainWindowVM.taskRepository;
         }
 
@@ -869,7 +870,7 @@ namespace Unlimotion.Test
             string path = Path.Combine(fixture.DefaultTasksFolderPath, task.Id);
             File.Exists(path).Should().BeTrue();
 
-            task.RemoveFunc.Invoke();
+            task.RemoveFunc.Invoke(null);
             File.Exists(path).Should().BeFalse();
             return Task.CompletedTask;
         }
@@ -882,7 +883,7 @@ namespace Unlimotion.Test
             string path = Path.Combine(fixture.DefaultTasksFolderPath, child.Id);
             File.Exists(path).Should().BeTrue();
 
-            child.RemoveFunc.Invoke();
+            child.RemoveFunc.Invoke(parent);
             File.Exists(path).Should().BeTrue();
             return Task.CompletedTask;
         }
