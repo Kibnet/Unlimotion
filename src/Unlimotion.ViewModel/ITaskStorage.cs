@@ -11,7 +11,7 @@ namespace Unlimotion.ViewModel;
 public interface ITaskStorage
 {
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
-    public ITaskTreeManager TaskTreeManager { get; set; }
+    public ITaskTreeManager TaskTreeManager { get; }
     public Task Init();    
     public IAsyncEnumerable<TaskItem> GetAll();
     Task<bool> Connect();

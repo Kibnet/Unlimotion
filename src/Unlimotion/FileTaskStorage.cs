@@ -25,7 +25,8 @@ namespace Unlimotion
     public class FileTaskStorage : ITaskStorage, IStorage
     {
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
-        public ITaskTreeManager TaskTreeManager { get; set; }
+
+        public ITaskTreeManager TaskTreeManager { get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); } }
 
         public string Path { get; private set; }
         private IDatabaseWatcher? dbWatcher;
@@ -36,6 +37,7 @@ namespace Unlimotion
         public event Action<Exception?>? OnConnectionError;
         public event EventHandler<EventArgs> Initiated;
         private IMapper mapper;
+        private ITaskTreeManager taskTreeManager;
 
         public FileTaskStorage(string path)
         {
@@ -56,7 +58,7 @@ namespace Unlimotion
                 else throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
             }
         }
-        public async Task Init() 
+        public async Task Init()
         {
             Tasks = new(item => item.Id);
 
@@ -86,8 +88,8 @@ namespace Unlimotion
             dbWatcher.OnUpdated += DbWatcherOnUpdated;
 
             OnInited();
-        }        
-        
+        }
+
         private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
         {
             dbWatcher?.AddIgnoredTask(e.Id);
@@ -143,7 +145,7 @@ namespace Unlimotion
                 Thread.SpinWait(1);
             }
             var item = taskItem;
-            
+
             item.Id ??= Guid.NewGuid().ToString();
 
             var directoryInfo = new DirectoryInfo(Path);
@@ -193,8 +195,8 @@ namespace Unlimotion
             {
                 return false;
             }
-        }        
- 
+        }
+
         public async Task<TaskItem?> Load(string itemId)
         {
             var jsonSerializer = new JsonSerializer();
@@ -253,26 +255,26 @@ namespace Unlimotion
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
             change.Update(newTask);
-            Tasks.AddOrUpdate(change); 
+            Tasks.AddOrUpdate(change);
 
             foreach (var task in taskItemList.SkipLast(1))
             {
                 UpdateCache(task);
             }
-            
+
             return true;
         }
 
         public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
         {
             var connectedItemList = await TaskTreeManager.DeleteTask(change.Model);
-            
+
             foreach (var task in connectedItemList)
             {
                 UpdateCache(task);
             }
             Tasks.Remove(change);
-            
+
             return true;
         }
 
@@ -314,12 +316,12 @@ namespace Unlimotion
             change.Id = newTask.Id;
             change.Update(newTask);
             Tasks.AddOrUpdate(change);
-            
+
             foreach (var task in taskItemList.SkipLast(1))
             {
                 UpdateCache(task);
             }
-            
+
             return change;
         }
 
@@ -346,9 +348,9 @@ namespace Unlimotion
                 change.Model,
                 additionalParents[0].Model,
                 currentTask?.Model);
-            
+
             taskItemList.ForEach(UpdateCache);
-            
+
             return true;
         }
 
@@ -356,10 +358,10 @@ namespace Unlimotion
         {
             var taskItemList = await TaskTreeManager.UnblockTask(
                 taskToUnblock.Model,
-                blockingTask.Model);          
+                blockingTask.Model);
 
             taskItemList.ForEach(UpdateCache);
-            
+
             return true;
         }
 
@@ -370,7 +372,7 @@ namespace Unlimotion
                 currentTask.Model);
 
             taskItemList.ForEach(UpdateCache);
-            
+
             return true;
         }
 
@@ -390,7 +392,7 @@ namespace Unlimotion
             if (vm.HasValue)
                 vm.Value.Update(task);
             // else
-                // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
+            // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
         }
     }
 }

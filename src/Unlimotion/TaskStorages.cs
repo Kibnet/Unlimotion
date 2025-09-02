@@ -171,8 +171,6 @@ namespace Unlimotion
             taskStorage = new ServerTaskStorage(settingsUrl);
             Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            var taskTreeManager = new TaskTreeManager((IStorage)taskStorage);
-            taskStorage.TaskTreeManager = taskTreeManager;
             //taskStorage.Connect().GetAwaiter().GetResult();
             return taskStorage;
         }
@@ -193,8 +191,6 @@ namespace Unlimotion
                 dbWatcher = null;
                 Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             }
-            var taskTreeManager = new TaskTreeManager((IStorage)taskStorage);
-            taskStorage.TaskTreeManager = taskTreeManager;
             return taskStorage;
         }
 

@@ -69,7 +69,11 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     //TODO Проверить что не создаёт проблем при закрытии
     public bool IsActive = true;
 
-    public ITaskTreeManager TaskTreeManager { get; set; }
+
+    public ITaskTreeManager TaskTreeManager
+    {
+        get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); }
+    }
 
     public async Task SignOut()
     {
@@ -454,6 +458,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     private readonly IJsonServiceClient serviceClient;
     private IChatHub _hub;
+    private ITaskTreeManager taskTreeManager;
 
     public bool IsConnected { get; set; }
 
