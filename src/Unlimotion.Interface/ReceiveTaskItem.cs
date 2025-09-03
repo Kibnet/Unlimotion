@@ -32,6 +32,6 @@ namespace Unlimotion.Interface
         public int Importance { get; set; }
         public bool Wanted { get; set; }
 
-        public bool PrevVersion { get; set; } = true;
+        public int Version { get; set; } = 0;
     }
 }

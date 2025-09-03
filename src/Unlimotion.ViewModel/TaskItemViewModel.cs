@@ -462,7 +462,7 @@ namespace Unlimotion.ViewModel
                     Importance = Importance,
                     Wanted = Wanted,
                     IsCompleted = IsCompleted,
-                    PrevVersion = PrevVersion,
+                    Version = Version,
                     BlocksTasks = Blocks.ToList(),
                     BlockedByTasks = BlockedBy.ToList(),
                     ContainsTasks = Contains.ToList(),
@@ -481,7 +481,7 @@ namespace Unlimotion.ViewModel
         public string Description { get; set; }
         public bool IsCanBeCompleted { get; private set; }
         public bool? IsCompleted { get; set; }
-        public bool PrevVersion { get; set; }
+        public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
@@ -672,7 +672,7 @@ namespace Unlimotion.ViewModel
             if (Importance != taskItem.Importance) Importance = taskItem.Importance;
             if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
             if (IsCompleted != taskItem.IsCompleted) IsCompleted = taskItem.IsCompleted;
-            if (PrevVersion != taskItem.PrevVersion) PrevVersion = taskItem.PrevVersion;
+            if (Version != taskItem.Version) Version = taskItem.Version;
 
 
             SynchronizeCollections(Blocks, taskItem.BlocksTasks);

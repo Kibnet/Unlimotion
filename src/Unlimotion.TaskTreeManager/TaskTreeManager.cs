@@ -25,7 +25,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 try
                 {
-                    change.PrevVersion = false;
+                    change.Version = 1;
                     change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
                     result.AddOrUpdate(change.Id, change);
@@ -51,7 +51,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     if (newTaskId is null)
                     {
-                        change.PrevVersion = false;
+                        change.Version = 1;
                         await Storage.Save(change);
                         newTaskId = change.Id;
                         result.AddOrUpdate(change.Id, change);
@@ -100,7 +100,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 if (newTaskId is null)
                 {
-                    change.PrevVersion = false;
+                    change.Version = 1;
                     await Storage.Save(change);
                     newTaskId = change.Id;
                 }
@@ -221,7 +221,7 @@ public class TaskTreeManager : ITaskTreeManager
             {
                 if (newTaskId is null)
                 {
-                    change.PrevVersion = false;
+                    change.Version = 1;
                     await Storage.Save(change);
                     newTaskId = change.Id;
                 }
@@ -291,7 +291,7 @@ public class TaskTreeManager : ITaskTreeManager
     {
         var task = await Storage.Load(taskId);
 
-        if (task?.PrevVersion != true)
+        if (task?.Version != 0)
             return task;
 
         if (task.ContainsTasks is not null)
@@ -328,7 +328,7 @@ public class TaskTreeManager : ITaskTreeManager
             }
         }
 
-        task.PrevVersion = false;
+        task.Version = 1;
         await Storage.Save(task);
 
         return task;
