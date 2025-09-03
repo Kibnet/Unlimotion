@@ -235,7 +235,7 @@ namespace Unlimotion.Test
             var rootTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
             var subTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
             
-            var rootTaskWrapper = mainWindowVM.CurrentTaskItem
+            var rootTaskWrapper = mainWindowVM
                 .CurrentItemParents
                 .SubTasks
                 .First(st => st.TaskItem.Id == rootTask.Id);
@@ -255,7 +255,7 @@ namespace Unlimotion.Test
             var rootTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
-            var wrapper = mainWindowVM.CurrentTaskItem
+            var wrapper = mainWindowVM
                 .CurrentItemContains
                 .SubTasks
                 .First(st => st.TaskItem.Id == subTask.Id);
@@ -277,7 +277,7 @@ namespace Unlimotion.Test
             var rootTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
             var blocked = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask2Id);
             
-            var wrapper = mainWindowVM.CurrentTaskItem
+            var wrapper = mainWindowVM
                 .CurrentItemBlockedBy
                 .SubTasks
                 .First(st => st.TaskItem.Id == rootTask.Id);
@@ -298,7 +298,7 @@ namespace Unlimotion.Test
             var rootTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
             var blocked = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask2Id);
             
-            var wrapper = mainWindowVM.CurrentTaskItem
+            var wrapper = mainWindowVM
                 .CurrentItemBlocks
                 .SubTasks
                 .First(st => st.TaskItem.Id == blocked.Id);

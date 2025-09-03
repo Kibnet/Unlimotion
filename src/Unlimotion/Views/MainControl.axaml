@@ -444,7 +444,7 @@ Command="{Binding RemoveCommand}"/>
                                     </StackPanel>
 
                                     <Label>Parents Tasks:</Label>
-                                    <TreeView ItemsSource="{Binding CurrentItemParents.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemParents.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -453,7 +453,7 @@ Command="{Binding RemoveCommand}"/>
                                     </TreeView>
 
                                     <Label>Blocking Tasks:</Label>
-                                    <TreeView ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -462,7 +462,7 @@ Command="{Binding RemoveCommand}"/>
                                     </TreeView>
 
                                     <Label>Containing Tasks:</Label>
-                                    <TreeView ItemsSource="{Binding CurrentItemContains.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemContains.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -471,7 +471,7 @@ Command="{Binding RemoveCommand}"/>
                                     </TreeView>
 
                                     <Label>Blocked Tasks:</Label>
-                                    <TreeView ItemsSource="{Binding CurrentItemBlocks.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlocks.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
