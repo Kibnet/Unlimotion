@@ -48,14 +48,22 @@ namespace Unlimotion
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).OrderBy(info => info.CreationTime))
+            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Where(info => info.Length>0).OrderBy(info => info.CreationTime))
             {
                 var task = await TaskTreeManager.LoadTask(fileInfo.Name);
                 if (task != null)
                 {
                     yield return task;
                 }
-                else throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
+                else
+                {
+                    try
+                    {
+                        fileInfo.Delete();
+                    }
+                    catch (Exception e) { }
+                    //throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
+                }
             }
         }
         public async Task Init()
@@ -202,9 +210,8 @@ namespace Unlimotion
             var jsonSerializer = new JsonSerializer();
             try
             {
-                using var reader = File.OpenText(System.IO.Path.Combine(Path, itemId));
-                using var jsonReader = new JsonTextReader(reader);
-                return jsonSerializer.Deserialize<TaskItem>(jsonReader);
+                var fullPath = System.IO.Path.Combine(Path, itemId);
+                return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
             }
             catch (Exception e)
             {
