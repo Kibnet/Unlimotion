@@ -289,49 +289,7 @@ public class TaskTreeManager : ITaskTreeManager
 
     public async Task<TaskItem> LoadTask(string taskId)
     {
-        var task = await Storage.Load(taskId);
-
-        if (task?.Version != 0)
-            return task;
-
-        if (task.ContainsTasks is not null)
-        {
-            foreach (var childTask in task.ContainsTasks)
-            {
-                var childItem = await Storage.Load(childTask);
-
-                if (childItem != null
-                    && !(childItem.ParentTasks ?? new List<string>()).Contains(task.Id))
-                {
-                    if (childItem.ParentTasks is null)
-                        childItem.ParentTasks = new List<string>();
-                    childItem.ParentTasks!.Add(task.Id);
-                    await Storage.Save(childItem);
-                }
-            }
-        }
-
-        if (task.BlocksTasks is not null)
-        {
-            foreach (var blockedTask in task.BlocksTasks)
-            {
-                var blockedItem = await Storage.Load(blockedTask);
-
-                if (blockedItem != null
-                    && !(blockedItem.BlockedByTasks ?? new List<string>()).Contains(task.Id))
-                {
-                    if (blockedItem.BlockedByTasks is null)
-                        blockedItem.BlockedByTasks = new List<string>();
-                    blockedItem.BlockedByTasks!.Add(task.Id);
-                    await Storage.Save(blockedItem);
-                }
-            }
-        }
-
-        task.Version = 1;
-        await Storage.Save(task);
-
-        return task;
+        return await Storage.Load(taskId);
     }
 
     public async Task<List<TaskItem>> DeleteParentChildRelation(TaskItem parent, TaskItem child)

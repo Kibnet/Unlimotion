@@ -1,28 +1,32 @@
-﻿using System;
+﻿using AutoMapper;
+using DynamicData;
+using DynamicData.Binding;
+using LibGit2Sharp;
+using Microsoft.Msagl.Core.Geometry.Curves;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Splat;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using DynamicData;
-using DynamicData.Binding;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Splat;
+using Unlimotion.Domain;
 using Unlimotion.TaskTree;
+using Unlimotion.Test;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
-using LibGit2Sharp;
-using Microsoft.Msagl.Core.Geometry.Curves;
-using Unlimotion.Domain;
 
 namespace Unlimotion
 {
-    public class FileTaskStorage : ITaskStorage, IStorage
+    public partial class FileTaskStorage : ITaskStorage, IStorage
     {
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
 
@@ -48,11 +52,15 @@ namespace Unlimotion
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
             var directoryInfo = new DirectoryInfo(Path);
-            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Where(info => info.Length>0).OrderBy(info => info.CreationTime))
+            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Where(info => info.Length > 0).OrderBy(info => info.CreationTime))
             {
-                var task = await TaskTreeManager.LoadTask(fileInfo.Name);
+                var task = await Load(fileInfo.Name);
                 if (task != null)
                 {
+                    if (task.Id == null)
+                    {
+                        continue;
+                    }
                     yield return task;
                 }
                 else
@@ -69,6 +77,12 @@ namespace Unlimotion
         public async Task Init()
         {
             Tasks = new(item => item.Id);
+
+            await FileTaskMigrator.Migrate(GetAll(), new Dictionary<string, (string getChild, string getParent)>
+            {
+                {"Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks))},
+                {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
+            }, Save, Path);
 
             await foreach (var task in GetAll())
             {
@@ -127,7 +141,8 @@ namespace Unlimotion
                 case UpdateType.Removed:
                     var fileInfo = new FileInfo(e.Id);
                     var deletedItem = Tasks.Lookup(fileInfo.Name);
-                    await Delete(deletedItem.Value, false);
+                    if(deletedItem.HasValue)
+                        await Delete(deletedItem.Value, false);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
