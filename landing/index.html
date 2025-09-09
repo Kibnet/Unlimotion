@@ -55,8 +55,7 @@
     @keyframes dash{ to { stroke-dashoffset:-2000; } }
     /* HERO */
     .hero{padding:72px 0 36px;}
-    .hero-wrap{display:grid; grid-template-columns:1.1fr .9fr; gap:36px; align-items:center;}    
-    .kicker{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-size:12px; letter-spacing:.3px; text-transform:uppercase; color:var(--muted); background:rgba(110,168,255,.08); border:1px solid var(--stroke);} 
+    .hero-wrap{display:grid; grid-template-columns:1.1fr .9fr; gap:36px; align-items:center;}
     h1{font-size:clamp(28px, 5vw, 56px); line-height:1.05; margin:14px 0 16px; letter-spacing:-.3px;}
     .lead{font-size:clamp(16px, 2vw, 20px); color:var(--muted); margin-bottom:24px;}
     .cta{display:flex; gap:12px; flex-wrap:wrap;}
@@ -70,6 +69,7 @@
     .section-lead{margin:0 0 18px; color:var(--muted);}    
     .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
     .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:18px;}
+    .grid-2{display:grid; grid-template-columns:repeat(2,1fr); gap:18px;}
     .card{background:var(--card); border:1px solid var(--stroke); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow);}    
     .card h3{margin:0 0 8px; font-size:18px;}
     .card p{margin:0; color:var(--muted);}    
@@ -85,7 +85,7 @@
     .msg.err{color:var(--err)}
     footer{padding:36px 0 56px; border-top:1px solid var(--stroke); color:var(--muted);} 
     /* Responsive */
-    @media (max-width: 960px){ .hero-wrap{grid-template-columns:1fr;}.grid-3{grid-template-columns:1fr 1fr;} .grid-4{grid-template-columns:1fr 1fr;} }
+    @media (max-width: 960px){ .hero-wrap{grid-template-columns:1fr;}.grid-3{grid-template-columns:1fr 1fr;} .grid-4{grid-template-columns:1fr 1fr;} .grid-2{grid-template-columns:1fr;} }
     @media (max-width: 640px){ .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:1fr;} .nav-cta .btn-ghost{display:none;} }
   </style>
 </head>
@@ -124,8 +124,7 @@
           <button id="btn-ru" class="active" data-lang="ru">RU</button>
           <button id="btn-en" data-lang="en">EN</button>
         </div>
-        <button class="btn btn-ghost" onclick="document.getElementById('mission').scrollIntoView({behavior:'smooth'})" id="navMission">Миссия</button>
-        <button class="btn btn-primary" onclick="document.getElementById('cta').scrollIntoView({behavior:'smooth'})" id="navTry">Попробовать</button>
+        <a class="btn btn-primary" href="https://github.com/Kibnet/Unlimotion/releases/latest" target="_blank" rel="noopener" id="navTryLink">Скачать</a>
       </div>
     </div>
   </header>
@@ -134,11 +133,10 @@
   <section class="hero">
     <div class="container hero-wrap">
       <div>
-        <span class="kicker" id="kicker">Слоган</span>
         <h1 id="heroSlogan">Карта твоих дорог к будущему</h1>
         <p class="lead" id="heroLead">Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям.</p>
         <div class="cta" id="cta">
-          <a class="btn btn-primary" href="#subscribe" aria-label="Начать бесплатно" id="btnStart">Начать бесплатно</a>
+          <a class="btn btn-primary" href="https://github.com/Kibnet/Unlimotion/releases/latest" target="_blank" rel="noopener" id="btnStart">Скачать</a>
           <a class="btn btn-ghost" href="#mission" aria-label="Узнать больше" id="btnLearn">Узнать больше</a>
         </div>
       </div>
@@ -242,10 +240,37 @@
     </div>
   </section>
 
+  <!-- COMMUNITY -->
+  <section id="community">
+    <div class="container">
+      <h2 class="section-title" id="comTitle">Сообщество</h2>
+      <p class="section-lead" id="comLead">Присоединяйся к комьюнити и следи за разработкой.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 id="comGroupTitle">Группа в Telegram</h3>
+          <p id="comGroupText">Обсуждение продукта, инсайты, ранние сборки.</p>
+          <h3></h3>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://t.me/+PP1rxiJIhY40YjJi" target="_blank" rel="noopener" id="comGroupBtn">Открыть группу</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3 id="comAuthorTitle">Автор</h3>
+          <p id="comAuthorText">Напиши автору личное сообщение, чтобы выразить благодарность или предложить сотрудничество.</p>
+          <h3></h3>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://t.me/kibnet" target="_blank" rel="noopener" id="comAuthorBtn">Профиль автора</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
   <!-- FOOTER -->
   <footer>
     <div class="container" role="contentinfo">
-      <small id="footerCopy">© <span id="year"></span> Unlimotion. Все права защищены.</small>
+      <small id="footerCopy">© 2025 Unlimotion.</small>
     </div>
   </footer>
 
@@ -253,10 +278,10 @@
     // ---- i18n ----
     const i18n = {
       ru: {
-        navMission: 'Миссия', navTry:'Попробовать', kicker:'Слоган',
+        navMission: 'Миссия', navTry:'Скачать',
         heroSlogan:'Карта твоих дорог к будущему',
         heroLead:'Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям.',
-        btnStart:'Начать бесплатно', btnLearn:'Узнать больше',
+        btnStart:'Скачать', btnLearn:'Узнать больше',
         f1Title:'Фокус «что важно сейчас»', f1Text:'Окно открытых возможностей вместо бесконечных списков.',
         f2Title:'Отложенная декомпозиция', f2Text:'Раскрывай задачи по мере снижения неопределённости.',
         f3Title:'Снижение штрафа многозадачности', f3Text:'Экономь время и мыслетопливо при переключении контекста.',
@@ -276,13 +301,16 @@
         i4Title:'Сообщество инсайтов', i4Text:'Место обмена опытом амбициозных людей, стремящихся к росту.',
         i5Title:'Уникальный продуктовый опыт', i5Text:'Кроссплатформенный инструмент с философией «карты дорог» и устойчивым кодом.',
         i6Title:'Фокус «что важно сейчас»', i6Text:'Приоритеты по окну возможностей — меньше отвлечений, больше результата.',
+        comTitle:'Сообщество', comLead:'Присоединяйся к комьюнити и следи за разработкой.',
+        comGroupTitle:'Группа в Telegram', comGroupText:'Обсуждение продукта, инсайты, ранние сборки.', comGroupBtn:'Открыть группу',
+        comAuthorTitle:'Автор', comAuthorText:'Напиши автору личное сообщение, чтобы выразить благодарность или предложить сотрудничество.', comAuthorBtn:'Профиль @kibnet',
         footerCopy:'© {{year}} Unlimotion. Все права защищены.'
       },
       en: {
-        navMission: 'Mission', navTry:'Try now', kicker:'Tagline',
+        navMission: 'Mission', navTry:'Download',
         heroSlogan:'A map of your roads to the future',
         heroLead:'Unlimotion turns task chaos into a clear map where every goal leads to future achievements.',
-        btnStart:'Get started', btnLearn:'Learn more',
+        btnStart:'Download', btnLearn:'Learn more',
         f1Title:'Focus on “what matters now”', f1Text:'An open‑opportunity window instead of endless lists.',
         f2Title:'Deferred decomposition', f2Text:'Unfold tasks as uncertainty goes down.',
         f3Title:'Lower multitasking penalty', f3Text:'Save time and mental energy when switching context.',
@@ -302,6 +330,9 @@
         i4Title:'Community of insights', i4Text:'A place to exchange experience among people striving for growth.',
         i5Title:'Distinct product experience', i5Text:'A cross‑platform tool with a “road‑map” philosophy and robust code.',
         i6Title:'“What matters now” focus', i6Text:'Opportunity‑window priorities — fewer distractions, more results.',
+        comTitle:'Community', comLead:'Join the community and follow development.',
+        comGroupTitle:'Telegram group', comGroupText:'Product discussions, insights, early builds.', comGroupBtn:'Open group',
+        comAuthorTitle:'Author', comAuthorText:'Write the author a personal message to express gratitude or offer cooperation.', comAuthorBtn:'Profile @kibnet',
         footerCopy:'© {{year}} Unlimotion. All rights reserved.'
       }
     };
@@ -312,13 +343,14 @@
       document.documentElement.setAttribute('lang', lang);
       document.documentElement.dataset.lang = lang;
       // nav
-      navMission.textContent = t.navMission; navTry.textContent = t.navTry; kicker.textContent=t.kicker;
+      navMission.textContent = t.navMission; navTryLink.textContent = t.navTry;
       heroSlogan.textContent = t.heroSlogan; heroLead.textContent = t.heroLead; btnStart.textContent = t.btnStart; btnLearn.textContent = t.btnLearn;
       f1Title.textContent=t.f1Title; f1Text.textContent=t.f1Text; f2Title.textContent=t.f2Title; f2Text.textContent=t.f2Text; f3Title.textContent=t.f3Title; f3Text.textContent=t.f3Text;
-      howTitle.textContent=t.howTitle; howLead.textContent=t.howLead; s1Title.textContent=t.s1Title; s1Text.textContent=t.s1Text; s2Title.textContent=t.s2Title; s2Text.textContent=t.s2Text; s3Title.textContent=t.s3Title; s3Text.textContent=t.s3Text; s4Title.textContent=t.s4Title; s4Text.textContent=t.s4Text;
+      howTitle.textContent=t.howTitle; howLead.textContent=t.howLead; s1Title.textContent=t.s1Title; s1Text.textContent=t.s1Text; s2Title.textContent=t.s2Text; s2Text.textContent=t.s2Text; s3Title.textContent=t.s3Text; s3Text.textContent=t.s3Text; s4Title.textContent=t.s4Text; s4Text.textContent=t.s4Text;
       missionTitle.textContent=t.missionTitle; missionLead.textContent=t.missionLead; missionP1.innerHTML=t.missionP1; missionP2.textContent=t.missionP2;
       impactTitle.textContent=t.impactTitle; impactLead.textContent=t.impactLead;
       i1Title.textContent=t.i1Title; i1Text.textContent=t.i1Text; i2Title.textContent=t.i2Title; i2Text.textContent=t.i2Text; i3Title.textContent=t.i3Title; i3Text.textContent=t.i3Text; i4Title.textContent=t.i4Title; i4Text.textContent=t.i4Text; i5Title.textContent=t.i5Title; i5Text.textContent=t.i5Text; i6Title.textContent=t.i6Title; i6Text.textContent=t.i6Text;
+      comTitle.textContent=t.comTitle; comLead.textContent=t.comLead; comGroupTitle.textContent=t.comGroupTitle; comGroupText.textContent=t.comGroupText; comGroupBtn.textContent=t.comGroupBtn; comAuthorTitle.textContent=t.comAuthorTitle; comAuthorText.textContent=t.comAuthorText; comAuthorBtn.textContent=t.comAuthorBtn;
       subTitle.textContent=t.subTitle; subLead.textContent=t.subLead; emailLabel.textContent=t.emailLabel; tgLabel.textContent=t.tgLabel; subBtn.textContent=t.subBtn; exportBtn.textContent=t.exportBtn; clearBtn.textContent=t.clearBtn; privacy.textContent=t.privacy;
       const year = new Date().getFullYear(); footerCopy.innerHTML = t.footerCopy.replace('{{year}}', year);
       document.title = lang==='ru' ? 'Unlimotion — Карта твоих дорог к будущему' : 'Unlimotion — A map of your roads to the future';
@@ -334,9 +366,6 @@
 
     // init lang
     setLang(localStorage.getItem('unlimotion_lang') || ((navigator.language||'ru').startsWith('ru') ? 'ru' : 'en'));
-
-    // ---- footer year ----
-    document.getElementById('year').textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
