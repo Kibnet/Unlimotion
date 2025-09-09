@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ru" data-lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unlimotion — Карта твоих дорог к будущему</title>
+  <meta name="description" content="Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям." />
+  <!-- Favicon / Logo -->
+  <link rel="icon" href="https://raw.githubusercontent.com/Kibnet/Unlimotion/refs/heads/main/src/Unlimotion.Desktop/Assets/Unlimotion.ico" type="image/x-icon" />
+  <!-- Open Graph -->
+  <meta property="og:title" content="Unlimotion — Карта твоих дорог к будущему" />
+  <meta property="og:description" content="Живая карта целей: от быстрых заметок и текущих приоритетов — до стратегических маршрутов и долгосрочных целей." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    :root{
+      --bg: #0b1020;
+      --card: #121831;
+      --text: #e6ecff;
+      --muted: #b6c2ff;
+      --accent: #6ea8ff;
+      --accent-2: #7ee787;
+      --stroke: #233052;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --container: clamp(16px, 4vw, 40px);
+      --ok: #7ee787;
+      --warn: #ffd166;
+      --err: #ff6b6b;
+    }
+    @media (prefers-color-scheme: light){
+      :root{ --bg:#f6f8ff; --card:#ffffff; --text:#0b1020; --muted:#4258a0; --stroke:#e8ecff; --shadow:0 10px 30px rgba(8,16,40,.08);} }
+    html,body{height:100%;}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:radial-gradient(1000px 700px at 80% -10%, rgba(110,168,255,.15), transparent 60%), radial-gradient(900px 600px at 10% 20%, rgba(126,231,135,.10), transparent 60%), var(--bg); color:var(--text);}
+    .container{max-width:1120px; margin-inline:auto; padding-inline:var(--container);}    
+    header{position:sticky; top:0; backdrop-filter:saturate(120%) blur(8px); background:linear-gradient(to bottom, rgba(11,16,32,.75), rgba(11,16,32,.35)); border-bottom:1px solid var(--stroke); z-index:50;}
+    .nav{display:flex; align-items:center; justify-content:space-between; height:64px;}
+    .logo{display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--text); font-weight:700; letter-spacing:.2px;}
+    .logo img{width:28px; height:28px; border-radius:6px; box-shadow:var(--shadow);} 
+    .nav-cta{display:flex; gap:10px; align-items:center;}
+    .btn{appearance:none; border:none; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; transition:transform .15s ease, box-shadow .2s ease, background .2s ease, color .2s ease;}
+    .btn-primary{background:linear-gradient(135deg, var(--accent), #7aa7ff 55%); color:#071229; box-shadow:0 12px 30px rgba(110,168,255,.35);} 
+    .btn-primary:hover{transform:translateY(-1px);} 
+    .btn-ghost{background:transparent; color:var(--text); border:1px solid var(--stroke);}    
+    .lang-switch{display:flex; gap:6px; border:1px solid var(--stroke); border-radius:10px; padding:2px;}
+    .lang-switch button{padding:6px 10px; border-radius:8px; background:transparent; color:var(--muted); border:none; font-weight:700; cursor:pointer}
+    .lang-switch button.active{background:var(--card); color:var(--text);}
+    /* Animated Roads Background */
+    .roads{position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.35}
+    @media (prefers-color-scheme: light){ .roads{opacity:.25} }
+    .stroke{fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; filter:url(#glow)}
+    .s1{stroke:url(#g1); animation:dash 22s linear infinite;}
+    .s2{stroke:url(#g2); animation:dash 28s linear infinite reverse;}
+    .s3{stroke:url(#g3); animation:dash 26s linear infinite;}
+    @keyframes dash{ to { stroke-dashoffset:-2000; } }
+    /* HERO */
+    .hero{padding:72px 0 36px;}
+    .hero-wrap{display:grid; grid-template-columns:1.1fr .9fr; gap:36px; align-items:center;}    
+    .kicker{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-size:12px; letter-spacing:.3px; text-transform:uppercase; color:var(--muted); background:rgba(110,168,255,.08); border:1px solid var(--stroke);} 
+    h1{font-size:clamp(28px, 5vw, 56px); line-height:1.05; margin:14px 0 16px; letter-spacing:-.3px;}
+    .lead{font-size:clamp(16px, 2vw, 20px); color:var(--muted); margin-bottom:24px;}
+    .cta{display:flex; gap:12px; flex-wrap:wrap;}
+    .hero-card{background:linear-gradient(180deg, rgba(255,255,255,.05), transparent 60%), var(--card); border:1px solid var(--stroke); border-radius:var(--radius); padding:22px; box-shadow:var(--shadow);}    
+    .mini-list{display:grid; gap:12px;}
+    .mini-list li{list-style:none; display:flex; gap:12px; align-items:flex-start;}
+    .mini-list svg{flex:0 0 22px;}
+    /* Section */
+    section{padding:48px 0;}
+    .section-title{font-size:clamp(22px, 3vw, 32px); margin:0 0 12px;}
+    .section-lead{margin:0 0 18px; color:var(--muted);}    
+    .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+    .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:18px;}
+    .card{background:var(--card); border:1px solid var(--stroke); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow);}    
+    .card h3{margin:0 0 8px; font-size:18px;}
+    .card p{margin:0; color:var(--muted);}    
+    .footnote{color:var(--muted); font-size:13px; margin-top:8px;}
+    /* Subscribe */
+    .form{display:grid; gap:12px; max-width:560px}
+    .field{display:grid; gap:6px}
+    label{font-weight:600}
+    input{padding:12px 14px; border-radius:10px; border:1px solid var(--stroke); background:transparent; color:var(--text)}
+    .note{font-size:12px; color:var(--muted)}
+    .msg{margin-top:8px; font-size:14px}
+    .msg.ok{color:var(--ok)}
+    .msg.err{color:var(--err)}
+    footer{padding:36px 0 56px; border-top:1px solid var(--stroke); color:var(--muted);} 
+    /* Responsive */
+    @media (max-width: 960px){ .hero-wrap{grid-template-columns:1fr;}.grid-3{grid-template-columns:1fr 1fr;} .grid-4{grid-template-columns:1fr 1fr;} }
+    @media (max-width: 640px){ .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:1fr;} .nav-cta .btn-ghost{display:none;} }
+  </style>
+</head>
+<body>
+  <!-- Animated Roads Background (SVG) -->
+  <svg class="roads" viewBox="0 0 1440 900" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#6ea8ff"/>
+        <stop offset="100%" stop-color="#7ee787"/>
+      </linearGradient>
+      <linearGradient id="g2" x1="1" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#7ee787"/>
+        <stop offset="100%" stop-color="#6ea8ff"/>
+      </linearGradient>
+      <linearGradient id="g3" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#6ea8ff"/>
+        <stop offset="100%" stop-color="#7ee787"/>
+      </linearGradient>
+      <filter id="glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <path class="stroke s1" pathLength="2000" stroke-dasharray="12 14" d="M-50 150 C 200 120, 320 220, 520 200 S 840 140, 1080 200 1320 340, 1500 260"/>
+    <path class="stroke s2" pathLength="2000" stroke-dasharray="10 16" d="M-60 420 C 220 380, 420 520, 640 500 S 940 420, 1160 520 1380 640, 1520 560"/>
+    <path class="stroke s3" pathLength="2000" stroke-dasharray="8 18" d="M-40 720 C 240 700, 440 760, 700 740 S 1060 660, 1280 740 1500 860, 1600 820"/>
+  </svg>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container nav" role="navigation" aria-label="Главная навигация">
+      <a class="logo" href="#" aria-label="Unlimotion">
+        <img src="https://raw.githubusercontent.com/Kibnet/Unlimotion/refs/heads/main/src/Unlimotion.Desktop/Assets/Unlimotion.ico" alt="Логотип Unlimotion" loading="eager" />
+        <span>Unlimotion</span>
+      </a>
+      <div class="nav-cta">
+        <div class="lang-switch" role="group" aria-label="Language switch">
+          <button id="btn-ru" class="active" data-lang="ru">RU</button>
+          <button id="btn-en" data-lang="en">EN</button>
+        </div>
+        <button class="btn btn-ghost" onclick="document.getElementById('mission').scrollIntoView({behavior:'smooth'})" id="navMission">Миссия</button>
+        <button class="btn btn-primary" onclick="document.getElementById('cta').scrollIntoView({behavior:'smooth'})" id="navTry">Попробовать</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container hero-wrap">
+      <div>
+        <span class="kicker" id="kicker">Слоган</span>
+        <h1 id="heroSlogan">Карта твоих дорог к будущему</h1>
+        <p class="lead" id="heroLead">Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям.</p>
+        <div class="cta" id="cta">
+          <a class="btn btn-primary" href="#subscribe" aria-label="Начать бесплатно" id="btnStart">Начать бесплатно</a>
+          <a class="btn btn-ghost" href="#mission" aria-label="Узнать больше" id="btnLearn">Узнать больше</a>
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="Ключевые преимущества">
+        <ul class="mini-list">
+          <li>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3l3.09 6.26L22 10.27l-5 4.87L18.18 22 12 18.77 5.82 22 7 15.14l-5-4.87 6.91-1.01L12 3Z" fill="currentColor"/></svg>
+            <div>
+              <strong id="f1Title">Фокус «что важно сейчас»</strong>
+              <div class="footnote" id="f1Text">Окно открытых возможностей вместо бесконечных списков.</div>
+            </div>
+          </li>
+          <li>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12a9 9 0 1 1 18 0v6a3 3 0 0 1-3 3h-2a2 2 0 0 1-2-2v-4H10v4a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3v-6Z" fill="currentColor"/></svg>
+            <div>
+              <strong id="f2Title">Отложенная декомпозиция</strong>
+              <div class="footnote" id="f2Text">Раскрывай задачи по мере снижения неопределённости.</div>
+            </div>
+          </li>
+          <li>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5h16v2H4V5Zm0 6h16v2H4v-2Zm0 6h10v2H4v-2Z" fill="currentColor"/></svg>
+            <div>
+              <strong id="f3Title">Снижение штрафа многозадачности</strong>
+              <div class="footnote" id="f3Text">Экономь время и мыслетопливо при переключении контекста.</div>
+            </div>
+          </li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="container">
+      <h2 class="section-title" id="howTitle">Как это работает</h2>
+      <p class="section-lead" id="howLead">Четыре шага от идеи до действия.</p>
+      <div class="grid-4">
+        <div class="card">
+          <h3 id="s1Title">Быстрый захват</h3>
+          <p id="s1Text">Фиксируй мысли и задачи мгновенно — без трения и лишних форм.</p>
+        </div>
+        <div class="card">
+          <h3 id="s2Title">Окно возможностей</h3>
+          <p id="s2Text">Система подсказывает, что важно прямо сейчас, учитывая контекст.</p>
+        </div>
+        <div class="card">
+          <h3 id="s3Title">Отложенная детализация</h3>
+          <p id="s3Text">Декомпозируй по мере снижения неопределённости — ровно тогда, когда надо.</p>
+        </div>
+        <div class="card">
+          <h3 id="s4Title">Карта маршрутов</h3>
+          <p id="s4Text">Связывай цели и области жизни в единую живую карту дорог.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MISSION -->
+  <section id="mission">
+    <div class="container">
+      <h2 class="section-title" id="missionTitle">Миссия</h2>
+      <p class="section-lead" id="missionLead">Мы создаём живую карту пересекающихся дорог — от быстрых заметок и текущих приоритетов до стратегических маршрутов и долгосрочных целей.</p>
+      <div class="card">
+        <p id="missionP1"><strong>Unlimotion</strong> — это среда для людей с амбициями и ответственностью, которым важно видеть не просто список дел, а взаимосвязанную систему. Мы превращаем хаос идей и задач в ясную структуру и помогаем всегда понимать, куда двигаться прямо сейчас.</p>
+        <p id="missionP2">Наша цель — дать вторую систему мышления: инструмент, который снижает когнитивные издержки многозадачности, экономит усилия и превращает замыслы в действия.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPACT -->
+  <section id="impact">
+    <div class="container">
+      <h2 class="section-title" id="impactTitle">Эффекты</h2>
+      <p class="section-lead" id="impactLead">Что меняется с Unlimotion — для людей и индустрии.</p>
+      <div class="grid-3">
+        <div class="card">
+          <h3 id="i1Title">Личная ясность и энергия</h3>
+          <p id="i1Text">Экономия времени, разгрузка головы и уверенность в следующих шагах.</p>
+        </div>
+        <div class="card">
+          <h3 id="i2Title">Новый стандарт планирования</h3>
+          <p id="i2Text">От «тудушек» к живым картам целей. Мы задаём планку для будущих инструментов.</p>
+        </div>
+        <div class="card">
+          <h3 id="i3Title">Системное мышление</h3>
+          <p id="i3Text">Культура стратегического планирования: от личных проектов до бизнеса.</p>
+        </div>
+        <div class="card">
+          <h3 id="i4Title">Сообщество инсайтов</h3>
+          <p id="i4Text">Место обмена опытом амбициозных людей, стремящихся к росту.</p>
+        </div>
+        <div class="card">
+          <h3 id="i5Title">Уникальный продуктовый опыт</h3>
+          <p id="i5Text">Кроссплатформенный инструмент с философией «карты дорог» и устойчивым кодом.</p>
+        </div>
+        <div class="card">
+          <h3 id="i6Title">Фокус «что важно сейчас»</h3>
+          <p id="i6Text">Приоритеты по окну возможностей — меньше отвлечений, больше результата.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container" role="contentinfo">
+      <small id="footerCopy">© <span id="year"></span> Unlimotion. Все права защищены.</small>
+    </div>
+  </footer>
+
+  <script>
+    // ---- i18n ----
+    const i18n = {
+      ru: {
+        navMission: 'Миссия', navTry:'Попробовать', kicker:'Слоган',
+        heroSlogan:'Карта твоих дорог к будущему',
+        heroLead:'Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям.',
+        btnStart:'Начать бесплатно', btnLearn:'Узнать больше',
+        f1Title:'Фокус «что важно сейчас»', f1Text:'Окно открытых возможностей вместо бесконечных списков.',
+        f2Title:'Отложенная декомпозиция', f2Text:'Раскрывай задачи по мере снижения неопределённости.',
+        f3Title:'Снижение штрафа многозадачности', f3Text:'Экономь время и мыслетопливо при переключении контекста.',
+        howTitle:'Как это работает', howLead:'Четыре шага от идеи до действия.',
+        s1Title:'Быстрый захват', s1Text:'Фиксируй мысли и задачи мгновенно — без трения и лишних форм.',
+        s2Title:'Окно возможностей', s2Text:'Система подсказывает, что важно прямо сейчас, учитывая контекст.',
+        s3Title:'Отложенная детализация', s3Text:'Декомпозируй по мере снижения неопределённости — ровно тогда, когда надо.',
+        s4Title:'Карта маршрутов', s4Text:'Связывай цели и области жизни в единую живую карту дорог.',
+        missionTitle:'Миссия',
+        missionLead:'Мы создаём живую карту пересекающихся дорог — от быстрых заметок и текущих приоритетов до стратегических маршрутов и долгосрочных целей.',
+        missionP1:'<strong>Unlimotion</strong> — это среда для людей с амбициями и ответственностью, которым важно видеть не просто список дел, а взаимосвязанную систему. Мы превращаем хаос идей и задач в ясную структуру и помогаем всегда понимать, куда двигаться прямо сейчас.',
+        missionP2:'Наша цель — дать вторую систему мышления: инструмент, который снижает когнитивные издержки многозадачности, экономит усилия и превращает замыслы в действия.',
+        impactTitle:'Эффекты', impactLead:'Что меняется с Unlimotion — для людей и индустрии.',
+        i1Title:'Личная ясность и энергия', i1Text:'Экономия времени, разгрузка головы и уверенность в следующих шагах.',
+        i2Title:'Новый стандарт планирования', i2Text:'От «тудушек» к живым картам целей. Мы задаём планку для будущих инструментов.',
+        i3Title:'Системное мышление', i3Text:'Культура стратегического планирования: от личных проектов до бизнеса.',
+        i4Title:'Сообщество инсайтов', i4Text:'Место обмена опытом амбициозных людей, стремящихся к росту.',
+        i5Title:'Уникальный продуктовый опыт', i5Text:'Кроссплатформенный инструмент с философией «карты дорог» и устойчивым кодом.',
+        i6Title:'Фокус «что важно сейчас»', i6Text:'Приоритеты по окну возможностей — меньше отвлечений, больше результата.',
+        footerCopy:'© {{year}} Unlimotion. Все права защищены.'
+      },
+      en: {
+        navMission: 'Mission', navTry:'Try now', kicker:'Tagline',
+        heroSlogan:'A map of your roads to the future',
+        heroLead:'Unlimotion turns task chaos into a clear map where every goal leads to future achievements.',
+        btnStart:'Get started', btnLearn:'Learn more',
+        f1Title:'Focus on “what matters now”', f1Text:'An open‑opportunity window instead of endless lists.',
+        f2Title:'Deferred decomposition', f2Text:'Unfold tasks as uncertainty goes down.',
+        f3Title:'Lower multitasking penalty', f3Text:'Save time and mental energy when switching context.',
+        howTitle:'How it works', howLead:'Four steps from idea to action.',
+        s1Title:'Quick capture', s1Text:'Capture thoughts and tasks instantly — with zero friction.',
+        s2Title:'Opportunity window', s2Text:'The system hints what matters right now, given the context.',
+        s3Title:'Deferred detailing', s3Text:'Decompose exactly when uncertainty drops.',
+        s4Title:'Route map', s4Text:'Link goals and life areas into a living road map.',
+        missionTitle:'Mission',
+        missionLead:'We create a living map of intersecting roads — from quick notes and current priorities to strategic routes and long‑term goals.',
+        missionP1:'<strong>Unlimotion</strong> is an environment for ambitious, responsible people who need more than a to‑do list — a connected system. We turn the chaos of ideas and tasks into a clear structure and help you always know where to move next.',
+        missionP2:'Our goal is to provide a second thinking system that reduces the multitasking tax, saves mental fuel, and turns intentions into actions.',
+        impactTitle:'Impact', impactLead:'What Unlimotion changes — for people and the industry.',
+        i1Title:'Clarity and energy', i1Text:'Save time, unload your mind, and act with confidence.',
+        i2Title:'New planning standard', i2Text:'From to‑dos to living maps of goals. We set the bar for what’s next.',
+        i3Title:'Systems thinking', i3Text:'A culture of strategic planning — from personal projects to business.',
+        i4Title:'Community of insights', i4Text:'A place to exchange experience among people striving for growth.',
+        i5Title:'Distinct product experience', i5Text:'A cross‑platform tool with a “road‑map” philosophy and robust code.',
+        i6Title:'“What matters now” focus', i6Text:'Opportunity‑window priorities — fewer distractions, more results.',
+        footerCopy:'© {{year}} Unlimotion. All rights reserved.'
+      }
+    };
+
+    function setLang(lang){
+      const t = i18n[lang];
+      if(!t) return;
+      document.documentElement.setAttribute('lang', lang);
+      document.documentElement.dataset.lang = lang;
+      // nav
+      navMission.textContent = t.navMission; navTry.textContent = t.navTry; kicker.textContent=t.kicker;
+      heroSlogan.textContent = t.heroSlogan; heroLead.textContent = t.heroLead; btnStart.textContent = t.btnStart; btnLearn.textContent = t.btnLearn;
+      f1Title.textContent=t.f1Title; f1Text.textContent=t.f1Text; f2Title.textContent=t.f2Title; f2Text.textContent=t.f2Text; f3Title.textContent=t.f3Title; f3Text.textContent=t.f3Text;
+      howTitle.textContent=t.howTitle; howLead.textContent=t.howLead; s1Title.textContent=t.s1Title; s1Text.textContent=t.s1Text; s2Title.textContent=t.s2Title; s2Text.textContent=t.s2Text; s3Title.textContent=t.s3Title; s3Text.textContent=t.s3Text; s4Title.textContent=t.s4Title; s4Text.textContent=t.s4Text;
+      missionTitle.textContent=t.missionTitle; missionLead.textContent=t.missionLead; missionP1.innerHTML=t.missionP1; missionP2.textContent=t.missionP2;
+      impactTitle.textContent=t.impactTitle; impactLead.textContent=t.impactLead;
+      i1Title.textContent=t.i1Title; i1Text.textContent=t.i1Text; i2Title.textContent=t.i2Title; i2Text.textContent=t.i2Text; i3Title.textContent=t.i3Title; i3Text.textContent=t.i3Text; i4Title.textContent=t.i4Title; i4Text.textContent=t.i4Text; i5Title.textContent=t.i5Title; i5Text.textContent=t.i5Text; i6Title.textContent=t.i6Title; i6Text.textContent=t.i6Text;
+      subTitle.textContent=t.subTitle; subLead.textContent=t.subLead; emailLabel.textContent=t.emailLabel; tgLabel.textContent=t.tgLabel; subBtn.textContent=t.subBtn; exportBtn.textContent=t.exportBtn; clearBtn.textContent=t.clearBtn; privacy.textContent=t.privacy;
+      const year = new Date().getFullYear(); footerCopy.innerHTML = t.footerCopy.replace('{{year}}', year);
+      document.title = lang==='ru' ? 'Unlimotion — Карта твоих дорог к будущему' : 'Unlimotion — A map of your roads to the future';
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if(metaDesc){ metaDesc.setAttribute('content', lang==='ru' ? i18n.ru.heroLead : i18n.en.heroLead); }
+      document.getElementById('btn-ru').classList.toggle('active', lang==='ru');
+      document.getElementById('btn-en').classList.toggle('active', lang==='en');
+      localStorage.setItem('unlimotion_lang', lang);
+    }
+
+    document.getElementById('btn-ru').addEventListener('click', ()=>setLang('ru'));
+    document.getElementById('btn-en').addEventListener('click', ()=>setLang('en'));
+
+    // init lang
+    setLang(localStorage.getItem('unlimotion_lang') || ((navigator.language||'ru').startsWith('ru') ? 'ru' : 'en'));
+
+    // ---- footer year ----
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
