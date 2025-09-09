@@ -278,7 +278,7 @@
     // ---- i18n ----
     const i18n = {
       ru: {
-        navMission: 'Миссия', navTry:'Скачать',
+        navTry:'Скачать',
         heroSlogan:'Карта твоих дорог к будущему',
         heroLead:'Unlimotion освобождает от хаоса задач и превращает жизнь в ясную карту, где каждая цель ведёт к будущим достижениям.',
         btnStart:'Скачать', btnLearn:'Узнать больше',
@@ -307,7 +307,7 @@
         footerCopy:'© {{year}} Unlimotion. Все права защищены.'
       },
       en: {
-        navMission: 'Mission', navTry:'Download',
+        navTry:'Download',
         heroSlogan:'A map of your roads to the future',
         heroLead:'Unlimotion turns task chaos into a clear map where every goal leads to future achievements.',
         btnStart:'Download', btnLearn:'Learn more',
@@ -343,7 +343,7 @@
       document.documentElement.setAttribute('lang', lang);
       document.documentElement.dataset.lang = lang;
       // nav
-      navMission.textContent = t.navMission; navTryLink.textContent = t.navTry;
+      navTryLink.textContent = t.navTry;
       heroSlogan.textContent = t.heroSlogan; heroLead.textContent = t.heroLead; btnStart.textContent = t.btnStart; btnLearn.textContent = t.btnLearn;
       f1Title.textContent=t.f1Title; f1Text.textContent=t.f1Text; f2Title.textContent=t.f2Title; f2Text.textContent=t.f2Text; f3Title.textContent=t.f3Title; f3Text.textContent=t.f3Text;
       howTitle.textContent=t.howTitle; howLead.textContent=t.howLead; s1Title.textContent=t.s1Title; s1Text.textContent=t.s1Text; s2Title.textContent=t.s2Text; s2Text.textContent=t.s2Text; s3Title.textContent=t.s3Text; s3Text.textContent=t.s3Text; s4Title.textContent=t.s4Text; s4Text.textContent=t.s4Text;
@@ -351,7 +351,6 @@
       impactTitle.textContent=t.impactTitle; impactLead.textContent=t.impactLead;
       i1Title.textContent=t.i1Title; i1Text.textContent=t.i1Text; i2Title.textContent=t.i2Title; i2Text.textContent=t.i2Text; i3Title.textContent=t.i3Title; i3Text.textContent=t.i3Text; i4Title.textContent=t.i4Title; i4Text.textContent=t.i4Text; i5Title.textContent=t.i5Title; i5Text.textContent=t.i5Text; i6Title.textContent=t.i6Title; i6Text.textContent=t.i6Text;
       comTitle.textContent=t.comTitle; comLead.textContent=t.comLead; comGroupTitle.textContent=t.comGroupTitle; comGroupText.textContent=t.comGroupText; comGroupBtn.textContent=t.comGroupBtn; comAuthorTitle.textContent=t.comAuthorTitle; comAuthorText.textContent=t.comAuthorText; comAuthorBtn.textContent=t.comAuthorBtn;
-      subTitle.textContent=t.subTitle; subLead.textContent=t.subLead; emailLabel.textContent=t.emailLabel; tgLabel.textContent=t.tgLabel; subBtn.textContent=t.subBtn; exportBtn.textContent=t.exportBtn; clearBtn.textContent=t.clearBtn; privacy.textContent=t.privacy;
       const year = new Date().getFullYear(); footerCopy.innerHTML = t.footerCopy.replace('{{year}}', year);
       document.title = lang==='ru' ? 'Unlimotion — Карта твоих дорог к будущему' : 'Unlimotion — A map of your roads to the future';
       const metaDesc = document.querySelector('meta[name="description"]');
