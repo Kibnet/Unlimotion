@@ -31,9 +31,9 @@
     @media (prefers-color-scheme: light){
       :root{ --bg:#f6f8ff; --card:#ffffff; --text:#0b1020; --muted:#4258a0; --stroke:#e8ecff; --shadow:0 10px 30px rgba(8,16,40,.08);} }
     html,body{height:100%;}
-    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:radial-gradient(1000px 700px at 80% -10%, rgba(110,168,255,.15), transparent 60%), radial-gradient(900px 600px at 10% 20%, rgba(126,231,135,.10), transparent 60%), var(--bg); color:var(--text);}
+    body{margin:0; padding-top:64px;  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:radial-gradient(1000px 700px at 80% -10%, rgba(110,168,255,.15), transparent 60%), radial-gradient(900px 600px at 10% 20%, rgba(126,231,135,.10), transparent 60%), var(--bg); color:var(--text);}
     .container{max-width:1120px; margin-inline:auto; padding-inline:var(--container);}    
-    header{position:sticky; top:0; backdrop-filter:saturate(120%) blur(8px); background:linear-gradient(to bottom, rgba(11,16,32,.75), rgba(11,16,32,.35)); border-bottom:1px solid var(--stroke); z-index:50;}
+    header{position:fixed; top:0; left:0; right:0; backdrop-filter:saturate(120%) blur(8px); background:linear-gradient(to bottom, rgba(11,16,32,.85), rgba(11,16,32,.45)); border-bottom:1px solid var(--stroke); z-index:999;}
     .nav{display:flex; align-items:center; justify-content:space-between; height:64px;}
     .logo{display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--text); font-weight:700; letter-spacing:.2px;}
     .logo img{width:28px; height:28px; border-radius:6px; box-shadow:var(--shadow);} 
@@ -64,7 +64,7 @@
     .mini-list li{list-style:none; display:flex; gap:12px; align-items:flex-start;}
     .mini-list svg{flex:0 0 22px;}
     /* Section */
-    section{padding:48px 0;}
+    section{padding:48px 0; scroll-margin-top: 80px;}
     .section-title{font-size:clamp(22px, 3vw, 32px); margin:0 0 12px;}
     .section-lead{margin:0 0 18px; color:var(--muted);}    
     .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
