@@ -49,7 +49,7 @@ public class MigrateTests
     private string GetReportPath()
     {
         // выбираем самый свежий отчёт
-        var path = Directory.GetFiles(_tempDir, "migration-report-*.json")
+        var path = Directory.GetFiles(_tempDir, "migration.report")
                             .OrderByDescending(f => f)
                             .FirstOrDefault();
         Assert.False(path is null, "Report file not found");
