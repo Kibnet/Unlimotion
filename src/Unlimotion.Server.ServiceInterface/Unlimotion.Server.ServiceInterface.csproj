@@ -7,12 +7,12 @@
 
 	<ItemGroup>
 		<PackageReference Include="AutoMapper" Version="13.0.1" />
-		<PackageReference Include="RavenDB.Client" Version="5.4.4" />
+		<PackageReference Include="RavenDB.Client" Version="7.1.2" />
 		<PackageReference Include="ServiceStack.Server" Version="6.4.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Unlimotion.Server.Domain\Unlimotion.Server.Domain.csproj" />
+		<ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
 	</ItemGroup>
 

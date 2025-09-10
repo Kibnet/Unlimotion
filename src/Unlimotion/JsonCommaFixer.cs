@@ -107,13 +107,18 @@ public static class JsonRepairingReader
             }
             else // Obj
             {
-                var top = stack.Pop();
-                if (top.ObjSt == ObjState.ExpectValue)
-                    top.ObjSt = ObjState.ExpectCommaOrEnd;
-                stack.Push(top);
-
                 // В объекте: после значения, если далее начинается новый ключ (кавычка) — вставить запятую.
-                if (nn == '"') sb.Append(',');
+                if (nn == '"')
+                {
+                    sb.Append(',');
+                }
+                else
+                {
+                    var top = stack.Pop();
+                    if (top.ObjSt == ObjState.ExpectValue)
+                        top.ObjSt = ObjState.ExpectCommaOrEnd;
+                    stack.Push(top);
+                }
             }
         }
 
@@ -147,14 +152,20 @@ public static class JsonRepairingReader
                             {
                                 t.ObjSt = ObjState.ExpectCommaOrEnd;
                                 var nn = NextNonWsChar(i);
-                                if (nn == '"') sb.Append(','); // новый ключ без запятой
+                                if (nn == '"') {
+                                    sb.Append(','); // новый ключ без запятой
+                                    continue;
+                                }
                             }
                             stack.Push(t);
                         }
                         else // массив: строковое значение закончилось — возможно, дальше ещё одно значение
                         {
                             var nn = NextNonWsChar(i);
-                            if (IsValueStart(nn)) sb.Append(',');
+                            if (IsValueStart(nn))
+                            {
+                                sb.Append(',');
+                            }
                         }
                     }
                 }

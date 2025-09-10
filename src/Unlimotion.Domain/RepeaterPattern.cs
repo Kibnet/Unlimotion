@@ -1,8 +1,7 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace Unlimotion.ViewModel;
+namespace Unlimotion.Domain;
 
 public class RepeaterPattern
 {
@@ -10,6 +9,7 @@ public class RepeaterPattern
     public int Period { get; set; } = 1;
     public bool AfterComplete { get; set; }
     public List<int> Pattern { get; set; }
+
     public override bool Equals(object obj)
     {
         if (ReferenceEquals(this, obj)) return true;

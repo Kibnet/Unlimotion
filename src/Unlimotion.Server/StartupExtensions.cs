@@ -44,7 +44,9 @@ namespace Unlimotion.Server
                 var configuration = serviceProvider.GetRequiredService<IConfiguration>();
                 var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
                 var serverOptions = configuration.GetSection("RavenDb:ServerOptions").Get<ServerOptions>();
-                
+
+                serverOptions.Licensing = new ServerOptions.LicensingOptions { LicensePath = "../RavenDBLicense.json" };
+
                 //Получаем путь запуска приложения, так как RavenDB в Embeddeed режиме запускается через командную строку
                 //Следовательно при упаковке в единый файл, данные будут лежать в папке Temp
                 //Чтобы этого избежать используем исправления ниже

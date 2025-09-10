@@ -11,17 +11,29 @@ using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using SignalR.EasyUse.Client;
 using Splat;
+using Unlimotion.TaskTree;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
+using DynamicData;
+using Unlimotion.Domain;
+using System.Threading;
 
 namespace Unlimotion;
 
-public class ServerTaskStorage : ITaskStorage
+public class ServerTaskStorage : ITaskStorage, IStorage
 {
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+    public event Action<Exception?>? OnConnectionError;
+    public event Action? OnConnected;
+    public event Action? OnDisconnected;
+    private readonly SemaphoreSlim _connectGate = new(1, 1);
+    private CancellationTokenSource? _connectCts;
+
+    //public event EventHandler<EventArgs> Initiated;
+    public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
 
     public ServerTaskStorage(string url)
     {
@@ -57,30 +69,10 @@ public class ServerTaskStorage : ITaskStorage
     //TODO Проверить что не создаёт проблем при закрытии
     public bool IsActive = true;
 
-    private Func<Exception, Task> connectionOnClosed()
+
+    public ITaskTreeManager TaskTreeManager
     {
-        return async (error) =>
-        {
-            while (IsActive)
-            {
-                await Task.Delay(new Random().Next(0, 5) * 1000);
-                try
-                {
-                    bool connected = await Connect();
-                    if (connected)
-                        return;
-                }
-                catch (Exception e)
-                {
-                    //TODO показывать ошибку пользователю
-                    //IsShowingLoginPage = true;
-                    //User.ErrorMessageLoginPage.IsError = true;
-                    //User.ErrorMessageLoginPage.GetErrorMessage(e.ToStatusCode().ToString());
-                    //RegisterUser.ErrorMessageRegisterPage.IsError = true;
-                    //RegisterUser.ErrorMessageRegisterPage.GetErrorMessage(e.ToStatusCode().ToString());
-                }
-            }
-        };
+        get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); }
     }
 
     public async Task SignOut()
@@ -94,8 +86,16 @@ public class ServerTaskStorage : ITaskStorage
             serviceClient.BearerToken = null;
             if (_connection != null)
             {
-                _connection.Closed -= connectionOnClosed();
-                await _connection.StopAsync();
+                _connection.Closed -= ConnectionOnClosed;
+                try
+                {
+                    await _connection.StopAsync().ConfigureAwait(false);
+                    await _connection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    //ничего не делаем
+                }
             }
 
             _connection = null;
@@ -122,11 +122,22 @@ public class ServerTaskStorage : ITaskStorage
         await SignOut();
     }
 
+    public async Task Init()
+    {
+        Tasks = new(item => item.Id);
+
+        await foreach (var task in GetAll())
+        {
+            var vm = new TaskItemViewModel(task, this);
+            Tasks.AddOrUpdate(vm);
+        }
+    }
+
     public async Task<TaskItem> Load(string itemId)
     {
         try
         {
-            var task = serviceClient.GetAsync(new GetTask()).Result;
+            var task = await serviceClient.GetAsync(new GetTask() { Id = itemId });
             var mapped = mapper.Map<TaskItem>(task);
             return mapped;
         }
@@ -139,98 +150,82 @@ public class ServerTaskStorage : ITaskStorage
 
     public async Task<bool> Connect()
     {
+        await _connectGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (_connection != null &&
+                (_connection.State == HubConnectionState.Connected || _connection.State == HubConnectionState.Connecting))
+                return _connection.State == HubConnectionState.Connected;
+
+            if (_connection != null)
+            {
+                try 
+                { 
+                    await _connection.StopAsync().ConfigureAwait(false);
+                    await _connection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    //ничего не делаем
+                }
+                _connection = null;
+                _hub = null;
+            }
+
+            _connectCts?.Cancel();
+            _connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
             _connection = new HubConnectionBuilder()
-                .WithUrl(Url + "/ChatHub", (opts) =>
+                .WithUrl(Url + "/ChatHub", opts =>
+                {
+                    opts.HttpMessageHandlerFactory = message =>
                     {
-                        opts.HttpMessageHandlerFactory = (message) =>
+                        if (message is HttpClientHandler clientHandler)
                         {
-                            if (message is HttpClientHandler clientHandler)
-                                // always verify the SSL certificate
-                                clientHandler.ServerCertificateCustomValidationCallback +=
-                                    (sender, certificate, chain, sslPolicyErrors) => { return true; };
-                            return message;
-                        };
-                    })
+                            clientHandler.ServerCertificateCustomValidationCallback +=
+                                (sender, certificate, chain, sslPolicyErrors) => true;
+                        }
+                        return message;
+                    };
+                })
                 .Build();
+
+            RegisterHandlers();
 
             _hub = _connection.CreateHub<IChatHub>();
 
-            serviceClient.BearerToken = settings.AccessToken;
+            _connection.Closed += ConnectionOnClosed;
 
-            _connection.Subscribe<LogOn>(async data =>
+            try
             {
-                LogOn.LogOnStatus error = data.Error;
-                switch (error)
+                await _connection.StartAsync(_connectCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception startEx)
+            {
+                OnConnectionError?.Invoke(startEx);
+                return false;
+            }
+
+            // После старта — проверяем/обновляем токен асинхронно
+            try
+            {
+                serviceClient.BearerToken = settings.AccessToken;
+
+                if (!string.IsNullOrEmpty(settings.RefreshToken) && settings.ExpireTime < DateTimeOffset.Now)
                 {
-                    case LogOn.LogOnStatus.ErrorUserNotFound: //Пользователь не найден
-                        {
-                            await RegisterUser();
-                            return;
-                        }
-                    case LogOn.LogOnStatus.ErrorExpiredToken: //Срок действия токена истек
-                        {
-                            await RefreshToken(settings, configuration);
-                            break;
-                        }
-                    case LogOn.LogOnStatus.Ok: //Автовход по токену
-                        {
-                            settings.UserId = data.Id;
-                            settings.Login = data.UserLogin;
-                            settings.ExpireTime = data.ExpireTime;
-                            //TODO получаем нужные данные 
-                            IsSignedIn = true;
-                            OnSignIn?.Invoke(this, EventArgs.Empty);
-                            break;
-                        }
-                    default:
-                        {
-                            //TODO показывать ошибку пользователю
-                            //User.ErrorMessageLoginPage.GetErrorMessage(((int)error).ToString());
-                            break;
-                        }
+                    await RefreshToken(settings, configuration).ConfigureAwait(false);
                 }
 
-            });
-
-            _connection.Subscribe<ReceiveTaskItem>(async data =>
-            {
-                //обновление задачи в реалтайме
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs
-                {
-                    Type = UpdateType.Saved,
-                    Id = data.Id,
-                });
-            });
-
-            _connection.Subscribe<DeleteTaskItem>(async data =>
-            {
-                //удаление задачи в реалтайме
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs
-                {
-                    Type = UpdateType.Removed,
-                    Id = data.Id,
-                });
-            });
-
-            _connection.Closed += connectionOnClosed();
-            await _connection.StartAsync();
-
-            if (_connection.State == HubConnectionState.Connected)
-            {
-                if (!settings.RefreshToken.IsNullOrEmpty() && settings.ExpireTime < DateTimeOffset.Now)
-                {
-                    await RefreshToken(settings, configuration);
-                }
-
-                if (settings.AccessToken.IsNullOrEmpty())
+                if (string.IsNullOrEmpty(settings.AccessToken))
                 {
                     var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
                     try
                     {
-                        var tokens = serviceClient.Post(new AuthViaPassword
-                        { Login = storageSettings.Login, Password = storageSettings.Password });
+                        var tokens = await serviceClient.PostAsync(new AuthViaPassword
+                        {
+                            Login = storageSettings.Login,
+                            Password = storageSettings.Password
+                        }).ConfigureAwait(false);
 
                         settings.AccessToken = tokens.AccessToken;
                         settings.RefreshToken = tokens.RefreshToken;
@@ -238,32 +233,131 @@ public class ServerTaskStorage : ITaskStorage
                         serviceClient.BearerToken = tokens.AccessToken;
                         configuration.Set("ClientSettings", settings);
                     }
-                    catch (Exception e)
+                    catch (Exception authEx)
                     {
-                        await RegisterUser();
+                        OnConnectionError?.Invoke(authEx);
+                        await RegisterUser().ConfigureAwait(false);
                         return _connection.State == HubConnectionState.Connected;
                     }
                 }
 
-                await Login();
-                //IsShowingLoginPage = false;
-                //IsShowingRegisterPage = false;
-                //User.ErrorMessageLoginPage.ResetDisplayErrorMessage();
-                IsConnected = _connection.State == HubConnectionState.Connected;
-                //User.Password = "";
+                await Login().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                OnConnectionError?.Invoke(ex);
             }
 
-            return _connection.State == HubConnectionState.Connected;
+            IsConnected = _connection.State == HubConnectionState.Connected;
+            if (IsConnected)
+                OnConnected?.Invoke();
+
+            return IsConnected;
         }
-        catch (Exception e)
+        finally
         {
-            //TODO показывать ошибку пользователю
-            //User.ErrorMessageLoginPage.GetErrorMessage(e.ToStatusCode().ToString());
-            //User.ErrorMessageLoginPage.IsError = true;
-            //IsShowingLoginPage = _connection.State != HubConnectionState.Connected;
-            return false;
+            _connectGate.Release();
         }
     }
+
+    private async Task ConnectionOnClosed(Exception exception)
+    {
+        OnConnectionError?.Invoke(exception);
+
+        var rnd = new Random();
+        while (IsActive)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(rnd.Next(2, 6))).ConfigureAwait(false);
+            try
+            {
+                var ok = await Connect().ConfigureAwait(false); // защищено семафором
+                if (ok)
+                {
+                    OnConnected?.Invoke();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnConnectionError?.Invoke(ex);
+            }
+        }
+
+        IsConnected = false;
+        OnDisconnected?.Invoke();
+    }
+
+    private void RegisterHandlers()
+    {
+        _connection.Subscribe<LogOn>(async data =>
+        {
+            try
+            {
+                switch (data.Error)
+                {
+                    case LogOn.LogOnStatus.ErrorUserNotFound:
+                        await RegisterUser().ConfigureAwait(false);
+                        return;
+                    case LogOn.LogOnStatus.ErrorExpiredToken:
+                        await RefreshToken(settings, configuration).ConfigureAwait(false);
+                        break;
+                    case LogOn.LogOnStatus.Ok:
+                        settings.UserId = data.Id;
+                        settings.Login = data.UserLogin;
+                        settings.ExpireTime = data.ExpireTime;
+
+                        OnConnected?.Invoke();
+                        break;
+                    default:
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                OnConnectionError?.Invoke(ex);
+            }
+        });
+
+        _connection.Subscribe<ReceiveTaskItem>(async data =>
+        {
+            try
+            {
+                var taskItem = mapper.Map<TaskItem>(data);
+
+                var viewModel = new TaskItemViewModel(taskItem, this);
+
+                if (taskItem != null) 
+                {
+                    var existedTask = Tasks.Lookup(taskItem.Id);
+
+                    if(existedTask != null)
+                    {
+                        await this.Update(viewModel.Model);
+                    }
+                    else
+                    {
+                        await this.Add(viewModel);
+                    }
+                }
+            }
+            catch (Exception ex) { OnConnectionError?.Invoke(ex); }
+        });
+
+        _connection.Subscribe<DeleteTaskItem>(async data =>
+        {
+            try
+            {
+                var task = this.Tasks.Lookup(data.Id);
+
+                if (task != null) 
+                {
+                    await this.Delete(task.Value, false);
+                }
+            }
+            catch (Exception ex) { OnConnectionError?.Invoke(ex); }
+        });
+    }
+
 
     private async Task RegisterUser()
     {
@@ -364,20 +458,23 @@ public class ServerTaskStorage : ITaskStorage
 
     private readonly IJsonServiceClient serviceClient;
     private IChatHub _hub;
+    private ITaskTreeManager taskTreeManager;
 
     public bool IsConnected { get; set; }
 
     public bool IsSignedIn { get; set; }
 
-    public IEnumerable<TaskItem> GetAll()
+    public async IAsyncEnumerable<TaskItem> GetAll()
     {
         TaskItemPage? tasks = null;
         try
         {
-            tasks = serviceClient.GetAsync(new GetAllTasks()).Result;
+            //var task = serviceClient.Get(new GetAllTasks());;
+            tasks = await serviceClient.GetAsync(new GetAllTasks());
         }
         catch (Exception e)
         {
+            var a = 0;
             //TODO пробросить ошибку пользователю
         }
 
@@ -403,8 +500,9 @@ public class ServerTaskStorage : ITaskStorage
             }
             catch (Exception e)
             {
-                await Task.Delay(new Random().Next(0, 5) * 100);
+                //await Task.Delay(new Random().Next(0, 5) * 100);
                 //TODO пробросить ошибку пользователю
+                throw new Exception(e.Message);
             }
         }
 
@@ -422,8 +520,9 @@ public class ServerTaskStorage : ITaskStorage
             }
             catch (Exception e)
             {
-                await Task.Delay(new Random().Next(0, 5) * 100);
+                //await Task.Delay(new Random().Next(0, 5) * 100);
                 //TODO пробросить ошибку пользователю
+                throw new Exception(e.Message);
             }
         }
 
@@ -440,5 +539,177 @@ public class ServerTaskStorage : ITaskStorage
         {
             //TODO пробросить ошибку пользователю
         }
+    }
+
+    /*protected virtual void OnInited()
+    {
+        Initiated?.Invoke(this, EventArgs.Empty);
+    }*/
+    public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)
+    {
+        var taskItemList = await TaskTreeManager.AddTask(
+            change.Model,
+            currentTask?.Model,
+            isBlocked);
+
+        var newTask = taskItemList.Last();
+        change.Id = newTask.Id;
+        change.Update(newTask);
+        Tasks.AddOrUpdate(change);
+
+        foreach (var task in taskItemList.SkipLast(1))
+        {
+            UpdateCache(task);
+        }
+        return true;
+    }
+
+    public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
+    {
+        var taskItemList = await TaskTreeManager.AddChildTask(
+            change.Model,
+            currentTask.Model);
+
+        var newTask = taskItemList.Last();
+        change.Id = newTask.Id;
+        change.Update(newTask);
+        Tasks.AddOrUpdate(change);
+
+        foreach (var task in taskItemList.SkipLast(1))
+        {
+            UpdateCache(task);
+        }
+
+        return true;
+    }
+
+    public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
+    {
+        var parentsItemList = await TaskTreeManager.DeleteTask(change.Model, deleteInStorage);
+        foreach (var parent in parentsItemList)
+        {
+            UpdateCache(parent);
+        }
+        Tasks.Remove(change);
+
+        return true;
+    }
+
+    public async Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent)
+    {
+        var connItemList = await TaskTreeManager.DeleteParentChildRelation(parent.Model, change.Model);
+
+        foreach (var task in connItemList)
+        {
+            UpdateCache(task);
+        }
+        return true;
+    }
+
+    public async Task<bool> Update(TaskItemViewModel change)
+    {
+        await TaskTreeManager.UpdateTask(change.Model);
+        UpdateCache(change.Model);
+        return true;
+    }
+
+    public async Task<bool> Update(TaskItem change)
+    {
+        await TaskTreeManager.UpdateTask(change);
+        UpdateCache(change);
+        return true;
+    }
+
+    public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
+    {
+        var additionalItemParents = new List<TaskItem>();
+        foreach (var newParent in additionalParents)
+        {
+            additionalItemParents.Add(newParent.Model);
+        }
+        var taskItemList = await TaskTreeManager.CloneTask(
+            change.Model,
+            additionalItemParents);
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+        }
+
+        var clone = taskItemList.OrderByDescending(item => item.Id).First();
+        change.Id = clone.Id;
+        change.Parents.Add(clone.ParentTasks);
+
+        return change;
+    }
+
+    public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
+    {
+        var additionalItemParents = new List<TaskItem>();
+        foreach (var newParent in additionalParents)
+        {
+            additionalItemParents.Add(newParent.Model);
+        }
+
+        var taskItemList = await TaskTreeManager.AddNewParentToTask(
+                change.Model,
+                additionalParents[0].Model);
+
+        foreach (var task in taskItemList)
+        {
+            UpdateCache(task);
+        }
+        return true;
+    }
+    private void UpdateCache(TaskItem task)
+    {
+        var vm = Tasks.Lookup(task.Id);
+
+        if (vm.HasValue)
+            vm.Value.Update(task);
+        // else
+        // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
+    }
+
+    public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents, TaskItemViewModel? currentTask)
+    {
+        var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
+                change.Model,
+                additionalParents?.FirstOrDefault()?.Model,
+                currentTask?.Model);
+
+        taskItemList.ForEach(UpdateCache);
+
+        return true;
+    }
+
+    public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
+    {
+        var taskItemList = await TaskTreeManager.UnblockTask(
+            taskToUnblock.Model,
+            blockingTask.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
+
+        return true;
+    }
+
+    public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
+    {
+        var taskItemList = await TaskTreeManager.BlockTask(
+            change.Model,
+            currentTask.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
+
+        return true;
+    }
+
+    public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
+    {
+        var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
+            parent.Model,
+            child.Model);
+
+        taskItemList.ForEach(item => UpdateCache(item));
     }
 }

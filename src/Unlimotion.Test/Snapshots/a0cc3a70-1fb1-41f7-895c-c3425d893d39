@@ -1,0 +1,23 @@
+{
+  "Id": "a0cc3a70-1fb1-41f7-895c-c3425d893d39",
+  "UserId": null,
+  "Title": "CompletedTask",
+  "Description": null,
+  "IsCompleted": true,
+  "CreatedDateTime": "2025-07-29T15:01:11.735+00:00",
+  "UnlockedDateTime": "2025-07-29T15:01:11.736+00:00",
+  "CompletedDateTime": "2025-07-29T15:01:20.262+00:00",
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "ParentTasks": [],
+  "BlocksTasks": [],
+  "BlockedByTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false,
+  "Version": 1,
+  "SortOrder": null
+}

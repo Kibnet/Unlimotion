@@ -1,0 +1,25 @@
+{
+  "Id": "35250eba-d745-4928-ae1c-740601a71b58",
+  "UserId": null,
+  "Title": "Archived 1.1",
+  "Description": null,
+  "IsCompleted": null,
+  "CreatedDateTime": "2025-07-29T14:28:32.938+00:00",
+  "UnlockedDateTime": "2025-07-29T14:28:32.940+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": "2025-07-29T14:28:42.096+00:00",
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "ParentTasks": [
+    "f6c3c536-217a-4190-b548-4d41a5c88bc2"
+  ],
+  "BlocksTasks": [],
+  "BlockedByTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false,
+  "Version": 1,
+  "SortOrder": null
+}

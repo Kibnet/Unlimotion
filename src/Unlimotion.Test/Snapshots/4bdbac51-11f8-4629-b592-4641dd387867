@@ -1,0 +1,25 @@
+{
+  "Id": "4bdbac51-11f8-4629-b592-4641dd387867",
+  "UserId": null,
+  "Title": "deadlock blocked task 7",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-31T08:54:49.872+00:00",
+  "UnlockedDateTime": "2025-07-31T08:54:49.873+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "ParentTasks": [],
+  "BlocksTasks": [],
+  "BlockedByTasks": [
+    "9b4b876e-6d4f-47f4-8007-f36fc291ed72"
+  ],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false,
+  "Version": 1,
+  "SortOrder": null
+}

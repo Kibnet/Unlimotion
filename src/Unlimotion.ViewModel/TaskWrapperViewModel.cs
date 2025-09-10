@@ -79,13 +79,15 @@ public class TaskWrapperViewModel : DisposableList
         _actions = actions;
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _actions.RemoveAction.Invoke(this);
+            if (_actions.RemoveAction != null) 
+                _actions.RemoveAction?.Invoke(this);
         });
     }
 
     public ICommand RemoveCommand { get; }
 
     public TaskItemViewModel TaskItem { get; set; }
+    public string Id => TaskItem?.Id;
     public TaskWrapperViewModel Parent { get; set; }
     public DateTimeOffset? SpecialDateTime { get; set; }
 

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
+using static SkiaSharp.HarfBuzz.SKShaper;
 
 namespace Unlimotion.Services;
 
@@ -16,6 +17,7 @@ public class BackupViaGitService : IRemoteBackupService
 {
     private const string TasksFolderName = "Tasks";
     private static readonly object LockObject = new();
+    public static Func<string, string> GetAbsolutePath;
 
     public List<string> Refs()
     {
@@ -46,7 +48,7 @@ public class BackupViaGitService : IRemoteBackupService
 
         return result;
     }
-
+    
     public List<string> Remotes()
     {
         var result = new List<string>();
@@ -58,8 +60,8 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 return result;
             }
-
             using var repo = new Repository(path);
+
             var remotes = repo.Network.Remotes;
             foreach (var remote in remotes)
             {
@@ -73,19 +75,25 @@ public class BackupViaGitService : IRemoteBackupService
 
         return result;
     }
-   
+
+    public CredentialsHandler GetCredentials(GitSettings gitSettings)
+    {
+        return (_url, _user, _cred) =>
+            new UsernamePasswordCredentials
+            {
+                Username = gitSettings.UserName,
+                Password = gitSettings.Password
+            };
+    }
+
     public void CloneOrUpdateRepo()
     {
         try
         {
             var settings = GetSettings();
-
-            var path = GetRepositoryPath(settings.repositoryPath);
-
-            if (!Repository.IsValid(path ?? ""))
+            if (!Repository.IsValid(settings.repositoryPath ?? ""))
             {
-                var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                notify?.SuccessToast($"Начато клонирование репозитория из {settings.git.RemoteUrl} в {path}");
+                ShowUiError($"Клонирование репозитория из {settings.git.RemoteUrl} в {settings.repositoryPath}");
 
                 var cloneOptions = new CloneOptions
                 {
@@ -96,21 +104,7 @@ public class BackupViaGitService : IRemoteBackupService
                     }
                 };
 
-                var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
-
-                dbwatcher?.SetEnable(false);
-                taskRepository?.SetPause(true);
-                try
-                {
-                    Repository.Clone(settings.git.RemoteUrl, path, cloneOptions);
-                    notify?.SuccessToast($"Клонирование репозитория из {settings.git.RemoteUrl} в {path} успешно завершено");
-                }
-                finally
-                {
-                    dbwatcher?.SetEnable(true);
-                    taskRepository?.SetPause(false);
-                }
+                Repository.Clone(settings.git.RemoteUrl, settings.repositoryPath, cloneOptions);
             }
             else
             {
@@ -119,18 +113,8 @@ public class BackupViaGitService : IRemoteBackupService
         }
         catch (Exception ex)
         {
-            ShowUiError("Ошибка при клонировании или обновлении репозитория:\n" + ex.Message);
+            ShowUiError("Ошибка при клонировании или обновлении репозитория:\n" +ex.Message);
         }
-    }
-    
-    public CredentialsHandler GetCredentials(GitSettings gitSettings)
-    {
-        return (_url, _user, _cred) =>
-            new UsernamePasswordCredentials
-            {
-                Username = gitSettings.UserName,
-                Password = gitSettings.Password
-            };
     }
 
     public void Push(string msg)
@@ -225,11 +209,12 @@ public class BackupViaGitService : IRemoteBackupService
             ShowUiMessage("Start Git Pull");
 
             var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
+            var taskstorage = Locator.Current.GetService<FileTaskStorage>();
             try
             {
                 dbwatcher?.SetEnable(false);
-                taskRepository?.SetPause(true);
+                //taskRepository?.SetPause(true);
+                taskstorage?.SetPause(true);
                 Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
                 {
                     CredentialsProvider = (_, _, _) =>
@@ -310,12 +295,11 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 dbwatcher?.SetEnable(true);
 
-                taskRepository?.SetPause(false);
+                //taskRepository?.SetPause(false);
+                taskstorage?.SetPause(false);
             }
         }
     }
-
-    public static Func<string, string> GetAbsolutePath;
 
     private static string GetRepositoryPath(string? pathFromSettings)
     {
