@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Unlimotion.Test;
+namespace Unlimotion;
 
 using System;
 using System.IO;

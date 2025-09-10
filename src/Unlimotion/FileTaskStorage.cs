@@ -223,13 +223,14 @@ namespace Unlimotion
         public async Task<TaskItem?> Load(string itemId)
         {
             var jsonSerializer = new JsonSerializer();
+            var fullPath = System.IO.Path.Combine(Path, itemId);
             try
             {
-                var fullPath = System.IO.Path.Combine(Path, itemId);
                 return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
             }
             catch (Exception e)
             {
+                File.Delete(fullPath);
                 return null;
             }
         }
