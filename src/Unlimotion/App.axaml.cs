@@ -2,9 +2,12 @@
 
 using System;
 using System.Reactive;
+using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
 using Microsoft.Extensions.Configuration;
@@ -83,7 +86,7 @@ namespace Unlimotion
                         }
                         catch (Exception ex)
                         {
-                           //TODO: Уведомить пользователя
+                            //TODO: Уведомить пользователя
                         }
                     };
                 }
@@ -92,10 +95,12 @@ namespace Unlimotion
             }
             else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
             {
+                var vm = GetMainWindowViewModel();
                 singleViewPlatform.MainView = new MainScreen()
                 {
-                    DataContext = GetMainWindowViewModel(),
+                    DataContext = vm,
                 };
+                singleViewPlatform.MainView.Loaded += MainViewOnLoaded;
             }
 
             TaskStorages.SetSettingsCommands();
@@ -103,6 +108,23 @@ namespace Unlimotion
             base.OnFrameworkInitializationCompleted();
         }
 
+        private async void MainViewOnLoaded(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Control mw)
+                {
+                    mw.Loaded -= MainViewOnLoaded;
+                    if (mw.DataContext is MainWindowViewModel vm) 
+                        await vm.Connect();
+                }
+            }
+            catch (Exception ex)
+            {
+                //TODO: Уведомить пользователя
+            }
+        }
+        
         public App()
         {
             DataContext = new ApplicationViewModel();
