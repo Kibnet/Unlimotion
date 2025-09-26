@@ -22,6 +22,7 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
+        public static bool _isInited = false; 
         private DisposableList connectionDisposableList = new DisposableListRealization();
 
         public ITaskStorage? taskRepository;
@@ -772,6 +773,8 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
             RegisterCommands();
+
+            _isInited = true;
         }
 
         public void SelectCurrentTask()

@@ -34,7 +34,6 @@ namespace Unlimotion.ViewModel
 
         public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
-        private bool _isInited;
         public bool NotHaveUncompletedContains { get; private set; }
         public bool NotHaveUncompletedBlockedBy { get; private set; }
         private ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
@@ -294,6 +293,7 @@ namespace Unlimotion.ViewModel
             if (this is INotifyPropertyChanged inpc)
             {
                 Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
+                    //.DelaySubscription(TimeSpan.FromSeconds(5))
                     .Where(changed =>
                     {
                         var args = changed.EventArgs as PropertyChangedEventArgs;
@@ -315,11 +315,11 @@ namespace Unlimotion.ViewModel
 
                         return false;
                     })
-                    .Skip(1) //Пропускаем первое "паразитное" обновление от создания связей между задачами при инициализации
+                    //.Skip(1) //Пропускаем первое "паразитное" обновление от создания связей между задачами при инициализации
                     .Throttle(PropertyChangedThrottleTimeSpanDefault)
                     .Subscribe(x =>
                     {
-                        if (_isInited) SaveItemCommand.Execute();                                                                        
+                        if (MainWindowViewModel._isInited) SaveItemCommand.Execute();                                                                        
                     }
                     )
                     .AddToDispose(this);
@@ -409,15 +409,13 @@ namespace Unlimotion.ViewModel
                             .Throttle(TimeSpan.FromSeconds(2))
                             .Subscribe(x =>
                             {
-                                if (_isInited) SaveItemCommand.Execute();
+                                if (MainWindowViewModel._isInited) SaveItemCommand.Execute();
                             }
                             )
                             .AddToDispose(this);
                     }
                 })
                 .AddToDispose(this);
-
-            _isInited = true;
         }
 
         private IEnumerable<TaskItemViewModel> GetChildrenTasks(Func<TaskItemViewModel, bool> predicate)
