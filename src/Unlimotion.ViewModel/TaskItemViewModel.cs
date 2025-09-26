@@ -293,7 +293,6 @@ namespace Unlimotion.ViewModel
             if (this is INotifyPropertyChanged inpc)
             {
                 Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
-                    //.DelaySubscription(TimeSpan.FromSeconds(5))
                     .Where(changed =>
                     {
                         var args = changed.EventArgs as PropertyChangedEventArgs;
@@ -315,7 +314,6 @@ namespace Unlimotion.ViewModel
 
                         return false;
                     })
-                    //.Skip(1) //Пропускаем первое "паразитное" обновление от создания связей между задачами при инициализации
                     .Throttle(PropertyChangedThrottleTimeSpanDefault)
                     .Subscribe(x =>
                     {
