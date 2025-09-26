@@ -315,6 +315,7 @@ namespace Unlimotion.ViewModel
 
                         return false;
                     })
+                    .Skip(1) //Пропускаем первое "паразитное" обновление от создания связей между задачами при инициализации
                     .Throttle(PropertyChangedThrottleTimeSpanDefault)
                     .Subscribe(x =>
                     {
