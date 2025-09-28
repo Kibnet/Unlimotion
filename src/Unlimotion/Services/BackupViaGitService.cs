@@ -56,9 +56,6 @@ public class BackupViaGitService : IRemoteBackupService
         {
             var settings = GetSettings();
             var path = GetRepositoryPath(settings.repositoryPath);
-            #if Android
-                return result
-            #endif
             if (!Repository.IsValid(path))
             {
                 return result;

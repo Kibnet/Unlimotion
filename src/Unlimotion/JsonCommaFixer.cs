@@ -10,6 +10,85 @@ using Newtonsoft.Json;
 public static class JsonRepairingReader
 {
     /// <summary>
+    /// Безопасная загрузка из TextReader: сначала обычный парсинг, при ошибке — авто-ремонт и повтор.
+    /// </summary>
+    public static T DeserializeWithRepair<T>(TextReader reader, JsonSerializer jsonSerializer, Action<string>? saveRepaired = null)
+    {
+        if (jsonSerializer == null) throw new ArgumentNullException(nameof(jsonSerializer));
+        if (reader == null) throw new ArgumentNullException(nameof(reader));
+
+        // Попытка 1: прямой потоковый парсинг
+        try
+        {
+            using var jsonReader = new JsonTextReader(reader);
+            return jsonSerializer.Deserialize<T>(jsonReader);
+        }
+        catch (JsonReaderException)
+        {
+            // пойдём в ремонт — но reader уже прочитан;
+            // поэтому вызывающий должен передать текст повторно (см. перегрузку для Stream ниже).
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Безопасная загрузка из Stream. Поток будет целиком прочитан в память.
+    /// Сначала обычный парсинг, при ошибке — авто-ремонт запятых и повторная попытка.
+    /// </summary>
+    public static T DeserializeWithRepair<T>(Stream input, JsonSerializer jsonSerializer, bool saveRepairedSidecar = false, string? sidecarPath = null)
+    {
+        if (jsonSerializer == null) throw new ArgumentNullException(nameof(jsonSerializer));
+        if (input == null) throw new ArgumentNullException(nameof(input));
+
+        // Скопируем в память, чтобы можно было делать несколько попыток
+        using var ms = new MemoryStream();
+        input.CopyTo(ms);
+
+        // Попытка 1: обычный разбор
+        try
+        {
+            ms.Position = 0;
+            using var sr1 = new StreamReader(ms, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            using var jr1 = new JsonTextReader(sr1);
+            var ok = jsonSerializer.Deserialize<T>(jr1);
+            return ok!;
+        }
+        catch (JsonReaderException)
+        {
+            // Попытка 2: ремонт и повтор
+            ms.Position = 0;
+            using var sr2 = new StreamReader(ms, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            var original = sr2.ReadToEnd();
+            var repaired = FixMissingCommas(original);
+
+            try
+            {
+                using var sr3 = new StringReader(repaired);
+                using var jr3 = new JsonTextReader(sr3);
+                var result = jsonSerializer.Deserialize<T>(jr3);
+
+                if (saveRepairedSidecar && !string.IsNullOrEmpty(sidecarPath))
+                {
+                    // На Android SAF обычно нет прямого пути — просто не сохраняем sidecar.
+                    try
+                    {
+                        File.WriteAllText(sidecarPath!, repaired, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                    }
+                    catch { /* ignore sidecar errors */ }
+                }
+
+                return result!;
+            }
+            catch (JsonReaderException ex2)
+            {
+                throw new JsonReaderException(
+                    $"Не удалось распарсить JSON даже после авто-ремонта запятых. " +
+                    $"Первые 200 символов после ремонта: {Preview(repaired, 200)}", ex2);
+            }
+        }
+    }
+
+    /// <summary>
     /// Безопасная загрузка JSON-файла: сначала обычный парсинг, при ошибке — авто-ремонт запятых и повторная попытка.
     /// </summary>
     public static T DeserializeWithRepair<T>(string fullPath, JsonSerializer jsonSerializer, bool saveRepairedSidecar = false)

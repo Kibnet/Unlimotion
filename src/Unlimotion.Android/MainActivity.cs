@@ -1,10 +1,9 @@
 ﻿#define Android
 
-using System;
-using System.IO;
 using Android;
 using Android.App;
 using Android.Content.PM;
+using Android.OS;
 using Android.Util;
 using Android.Views;
 using Android.Widget;
@@ -16,6 +15,7 @@ using Avalonia.Android;
 using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
 using Splat;
+using System.IO;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
@@ -74,11 +74,11 @@ namespace Unlimotion.Android
                 stream.Close();
             }
             
-            App.Init(configPath);
+            
 
             return base.CustomizeAppBuilder(builder)
                 .WithInterFont()
-                .UseReactiveUI();
+                .UseReactiveUI().AfterSetup(appBuilder => App.Init(configPath));
         }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
@@ -105,6 +105,25 @@ namespace Unlimotion.Android
             // Здесь ваш код для доступа к внешнему хранилищу
             var externalDataDir = GetExternalFilesDir(null)?.AbsolutePath;
             Toast.MakeText(this, $"Путь внешнего хранилища: {externalDataDir}", ToastLength.Long).Show();
+        }
+
+        protected override void OnCreate(Bundle? savedInstanceState)
+        {
+            base.OnCreate(savedInstanceState);
+            // … обычная инициализация Avalonia …
+
+            Locator.CurrentMutable.RegisterConstant<IAndroidSafPermission>(
+                new AndroidSafPermission(this));
+            Dialogs.AfterPick = (path) =>
+            {
+                {
+                    var saf = Locator.Current.GetService<IAndroidSafPermission>();
+                    if (saf != null && path != null)
+                    {
+                        saf.TakePersistableUriPermission(path);
+                    }
+                }
+            };
         }
     }
 }
