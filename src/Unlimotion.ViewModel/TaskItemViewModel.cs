@@ -292,11 +292,13 @@ namespace Unlimotion.ViewModel
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
             {
-                Observable.FromEventPattern(inpc, nameof(INotifyPropertyChanged.PropertyChanged))
+                var propertyChanged = Observable
+                    .FromEventPattern<PropertyChangedEventHandler, PropertyChangedEventArgs>(
+                        h => inpc.PropertyChanged += h,
+                        h => inpc.PropertyChanged -= h)
                     .Where(changed =>
                     {
-                        var args = changed.EventArgs as PropertyChangedEventArgs;
-                        switch (args.PropertyName)
+                        switch (changed.EventArgs.PropertyName)
                         {
                             case nameof(Title):
                             case nameof(IsCompleted):
@@ -310,16 +312,24 @@ namespace Unlimotion.ViewModel
                             case nameof(Importance):
                             case nameof(Wanted):
                                 return true;
+                            default:
+                                return false;
                         }
-
-                        return false;
                     })
-                    .Throttle(PropertyChangedThrottleTimeSpanDefault)
-                    .Subscribe(x =>
+                    .Publish(shared =>
+                        shared.Where(_ => !MainWindowViewModel._isInited)
+                              .Merge(
+                                  shared.Where(_ => MainWindowViewModel._isInited)
+                                        .Throttle(PropertyChangedThrottleTimeSpanDefault)
+                              )
+                    );
+
+                propertyChanged
+                    .Subscribe(_ =>
                     {
-                        if (MainWindowViewModel._isInited) SaveItemCommand.Execute();                                                                        
-                    }
-                    )
+                        if (MainWindowViewModel._isInited)
+                            SaveItemCommand.Execute();
+                    })
                     .AddToDispose(this);
             }
 
