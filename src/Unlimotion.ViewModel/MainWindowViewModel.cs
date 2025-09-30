@@ -193,6 +193,7 @@ namespace Unlimotion.ViewModel
 
         public async Task Connect()
         {
+            _isInited = false;
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();
 
