@@ -18,6 +18,7 @@ using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
+using Unlimotion.TaskTree;
 
 namespace Unlimotion.Desktop
 {
@@ -41,6 +42,7 @@ namespace Unlimotion.Desktop
 #endif
 
             //Получение адреса конфига
+
             var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
             
 #if DEBUG

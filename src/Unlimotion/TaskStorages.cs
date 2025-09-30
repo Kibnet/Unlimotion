@@ -5,8 +5,12 @@ using ReactiveUI;
 using Unlimotion.ViewModel;
 using System.Linq;
 using Quartz;
+using AutoMapper;
 using ITrigger = Quartz.ITrigger;
- 
+using Unlimotion.TaskTree;
+using System.Collections.Generic;
+using Unlimotion.Domain;
+
 namespace Unlimotion
 {
     public static class TaskStorages
@@ -17,6 +21,7 @@ namespace Unlimotion
         {
             var configuration = Locator.Current.GetService<IConfiguration>();
             var settingsViewModel = Locator.Current.GetService<SettingsViewModel>();
+            var mapper = Locator.Current.GetService<IMapper>();
             settingsViewModel.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 RegisterStorage(settingsViewModel.IsServerMode, configuration);
@@ -62,7 +67,10 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                await serverTaskStorage.BulkInsert(fileTaskStorage.GetAll());
+                var tasks = new List<TaskItem>();
+                await foreach (var task in fileTaskStorage.GetAll())
+                    tasks.Add(task);
+                await serverTaskStorage.BulkInsert(tasks);
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -73,29 +81,27 @@ namespace Unlimotion
                 }
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = serverTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in serverTaskStorage.GetAll())
                 {
-                    task.Id = task.Id.Replace("TaskItem/", "");
-                    if (task.BlocksTasks != null)
-                    {
+                      task.Id = task.Id.Replace("TaskItem/", "");
+                      if (task.BlocksTasks != null)
+                      {
                         task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    if (task.ContainsTasks != null)
-                    {
+                      }
+                      if (task.ContainsTasks != null)
+                      {
                         task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                    }
-                    await fileTaskStorage.Save(task);
+                      }
+                      await fileTaskStorage.Save(task);
                 }
             });
             settingsViewModel.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var storagePath = configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
                 var fileTaskStorage = CreateFileTaskStorage(storagePath);
-                var tasks = fileTaskStorage.GetAll();
-                foreach (var task in tasks)
+                await foreach (var task in fileTaskStorage.GetAll())
                 {
-                    await fileTaskStorage.Save(task);
+                      await fileTaskStorage.Save(task);
                 }
             });
             settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
@@ -107,6 +113,21 @@ namespace Unlimotion
                     settingsViewModel.TaskStoragePath = path;
                     //TODO сделать относительный путь
                 }
+            });
+            settingsViewModel.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.CloneOrUpdateRepo();
+            });
+            settingsViewModel.PullCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Pull();
+            });
+            settingsViewModel.PushCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                var gitService = Locator.Current.GetService<IRemoteBackupService>();
+                gitService?.Push("Manual backup");
             });
             settingsViewModel.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -142,18 +163,6 @@ namespace Unlimotion
             {
                 RegisterFileTaskStorage(settings?.Path);
             }
-
-            RegisterTaskRepository();
-        }
-
-        public static ITaskRepository RegisterTaskRepository()
-        {
-            var taskStorage = Locator.Current.GetService<ITaskStorage>();
-            var dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
-
-            var taskRepository = new TaskRepository(taskStorage, dbWatcher);
-            Locator.CurrentMutable.RegisterConstant<ITaskRepository>(taskRepository);
-            return taskRepository;
         }
 
         public static ITaskStorage RegisterServerTaskStorage(string? settingsUrl)
@@ -162,6 +171,7 @@ namespace Unlimotion
             taskStorage = new ServerTaskStorage(settingsUrl);
             Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            //taskStorage.Connect().GetAwaiter().GetResult();
             return taskStorage;
         }
 
@@ -188,6 +198,7 @@ namespace Unlimotion
         {
             var storagePath = GetStoragePath(path);
             var taskStorage = new FileTaskStorage(storagePath);
+            Locator.CurrentMutable.RegisterConstant(taskStorage, typeof(FileTaskStorage));
             return taskStorage;
         }
 

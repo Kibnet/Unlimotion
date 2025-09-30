@@ -1,0 +1,25 @@
+{
+  "Id": "6a34c1cc-5283-4f60-9138-aee91bf6a6cb",
+  "UserId": null,
+  "Title": "deadlock task 6",
+  "Description": null,
+  "IsCompleted": false,
+  "CreatedDateTime": "2025-07-31T07:35:37.451+00:00",
+  "UnlockedDateTime": "2025-07-31T07:35:37.453+00:00",
+  "CompletedDateTime": null,
+  "ArchiveDateTime": null,
+  "PlannedBeginDateTime": null,
+  "PlannedEndDateTime": null,
+  "PlannedDuration": null,
+  "ContainsTasks": [],
+  "ParentTasks": [],
+  "BlocksTasks": [
+    "0d8726d4-ea55-491e-9f52-6215ccb1ef19"
+  ],
+  "BlockedByTasks": [],
+  "Repeater": null,
+  "Importance": 0,
+  "Wanted": false,
+  "Version": 1,
+  "SortOrder": null
+}

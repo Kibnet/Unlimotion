@@ -8,6 +8,7 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Timer = System.Timers.Timer;
 
@@ -207,8 +208,8 @@ namespace Unlimotion.TelegramBot
                     Title = title,
                     Description = "",
                 };
-                var taskRepository = Locator.Current.GetService<ITaskRepository>();
-                var newTaskViewModel = new TaskItemViewModel(newTask, taskRepository);
+                var taskStorage = Locator.Current.GetService<ITaskStorage>();
+                var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
                 await newTaskViewModel.SaveItemCommand.Execute();
 
                 parentTask.Contains.Add(newTask.Id);
@@ -234,15 +235,15 @@ namespace Unlimotion.TelegramBot
                         Title = title,
                         Description = "",
                     };
-                    var taskRepository = Locator.Current.GetService<ITaskRepository>();
-                    var newTaskViewModel = new TaskItemViewModel(newTask, taskRepository);
+                    var taskStorage = Locator.Current.GetService<ITaskStorage>();
+                    var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
                     await newTaskViewModel.SaveItemCommand.Execute();
                     if (siblingTask is { ParentsTasks.Count: > 0 })
                     {
                         siblingTask.ParentsTasks.First().Contains.Add(newTaskViewModel.Id);
                     }
 
-                    taskRepository.Tasks.AddOrUpdate(newTaskViewModel);
+                    taskStorage.Tasks.AddOrUpdate(newTaskViewModel);
 
                     //_gitService.CommitAndPushChanges($"Создана соседняя задача {title}");
 

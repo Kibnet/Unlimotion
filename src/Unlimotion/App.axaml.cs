@@ -65,9 +65,26 @@ namespace Unlimotion
                 else
 #endif
                 {
-                    desktop.MainWindow = new MainWindow
+                    var vm = GetMainWindowViewModel();
+
+                    var window = new MainWindow
                     {
-                        DataContext = GetMainWindowViewModel(),
+                        DataContext = vm
+                    };
+
+                    desktop.MainWindow = window;
+
+                    // Когда окно загрузится — вызовем инициализацию
+                    window.Opened += async (_, __) =>
+                    {
+                        try
+                        {
+                            await vm.Connect();
+                        }
+                        catch (Exception ex)
+                        {
+                           //TODO: Уведомить пользователя
+                        }
                     };
                 }
 
@@ -89,15 +106,6 @@ namespace Unlimotion
         public App()
         {
             DataContext = new ApplicationViewModel();
-        }
-
-        private static bool IsProduction()
-        {
-#if DEBUG
-            return false;
-#else
-        return true;
-#endif
         }
 
         public static void Init(string configPath)
@@ -165,27 +173,30 @@ namespace Unlimotion
             }
 
             //Инициализация планировщика
-            var taskRepository = Locator.Current.GetService<ITaskRepository>();
-            taskRepository.Initiated += (sender, eventArgs) =>
+            if (!isServerMode)
             {
-                var pullJob = JobBuilder.Create<GitPullJob>()
-                    .WithIdentity("GitPullJob", "Git")
-                    .Build();
-                var pushJob = JobBuilder.Create<GitPushJob>()
-                    .WithIdentity("GitPushJob", "Git")
-                    .Build();
+                var taskRepository = Locator.Current.GetService<FileTaskStorage>();
+                taskRepository.Initiated += (sender, eventArgs) =>
+                {
+                    var pullJob = JobBuilder.Create<GitPullJob>()
+                        .WithIdentity("GitPullJob", "Git")
+                        .Build();
+                    var pushJob = JobBuilder.Create<GitPushJob>()
+                        .WithIdentity("GitPushJob", "Git")
+                        .Build();
 
-                var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                    gitSettings.PullIntervalSeconds);
-                var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                    gitSettings.PushIntervalSeconds);
+                    var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
+                        gitSettings.PullIntervalSeconds);
+                    var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
+                        gitSettings.PushIntervalSeconds);
 
-                scheduler.ScheduleJob(pullJob, pullTrigger);
-                scheduler.ScheduleJob(pushJob, pushTrigger);
+                    scheduler.ScheduleJob(pullJob, pullTrigger);
+                    scheduler.ScheduleJob(pushJob, pushTrigger);
 
-                if (gitSettings.BackupEnabled)
-                    scheduler.Start();
-            };
+                    if (gitSettings.BackupEnabled)
+                        scheduler.Start();
+                };
+            }
         }
         private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds)
         {
@@ -195,6 +206,15 @@ namespace Unlimotion
                     .WithIntervalInSeconds(seconds)
                     .RepeatForever())
                 .Build();
+        }
+
+        private static bool IsProduction()
+        {
+#if DEBUG
+            return false;
+#else
+        return true;
+#endif
         }
     }
 }

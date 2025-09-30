@@ -50,9 +50,25 @@
                 <Label Content="Git Push Interval Seconds"/>
                 <TextBox Text="{Binding GitPushIntervalSeconds}"></TextBox>
                 <Label Content="Git Remote Name"/>
-                <ComboBox SelectedItem="{Binding GitRemoteName}" ItemsSource="{Binding Remotes}" HorizontalAlignment="Stretch"/>
+                <AutoCompleteBox SelectedItem="{Binding GitRemoteName}" 
+                                 ItemsSource="{Binding Remotes}" 
+                                 IsTextCompletionEnabled="True"
+                                 FilterMode="Contains"
+                                 HorizontalAlignment="Stretch">
+                    <Interaction.Behaviors>
+                        <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour/>
+                    </Interaction.Behaviors>
+                </AutoCompleteBox>
                 <Label Content="Git PushRefSpec"/>
-                <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}" HorizontalAlignment="Stretch"/>
+                <AutoCompleteBox SelectedItem="{Binding GitPushRefSpec}"  
+                                 ItemsSource="{Binding Refs}"
+                                 IsTextCompletionEnabled="True"
+                                 FilterMode="Contains"
+                                 HorizontalAlignment="Stretch">
+                    <Interaction.Behaviors>
+                        <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour/>
+                    </Interaction.Behaviors>
+                </AutoCompleteBox>
                 <Label Content="Git Committer Name"/>
                 <TextBox Text="{Binding GitCommitterName}"></TextBox>
                 <Label Content="Git Committer Email"/>

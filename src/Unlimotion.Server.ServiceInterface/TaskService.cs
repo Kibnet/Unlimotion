@@ -3,12 +3,13 @@ using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using ServiceStack;
-using Unlimotion.Server.Domain;
 using Unlimotion.Server.ServiceModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Raven.Client.Documents.BulkInsert;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
+using System.Net;
+using Unlimotion.Domain;
 
 namespace Unlimotion.Server.ServiceInterface
 {
@@ -34,11 +35,12 @@ namespace Unlimotion.Server.ServiceInterface
         }
 
         [Authenticate]
-        public async Task<TaskItemMold> Get(GetTask request)
+        public async Task<TaskItemMold> GetAsync(GetTask request)
         {
             var session = Request.ThrowIfUnauthorized();
+            var decodedId = WebUtility.UrlDecode(request.Id);
             var task = await RavenSession.Query<TaskItem>()
-                .Where(chat => chat.Id == request.Id)
+                .Where(chat => chat.Id == decodedId)
                 .FirstAsync();
             return Mapper.Map<TaskItemMold>(task);
         }
