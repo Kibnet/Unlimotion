@@ -1,7 +1,5 @@
 ﻿#define Android
 
-using System;
-using System.IO;
 using Android;
 using Android.App;
 using Android.Content.PM;
@@ -13,9 +11,12 @@ using AndroidX.Core.Content;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Android;
+using Avalonia.Media;
 using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
 using Splat;
+using System;
+using System.IO;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
@@ -73,11 +74,11 @@ namespace Unlimotion.Android
                 stream.Write(@"{}");
                 stream.Close();
             }
-            
+
             App.Init(configPath);
 
             return base.CustomizeAppBuilder(builder)
-                .WithInterFont()
+                .WithCustomFont()                
                 .UseReactiveUI();
         }
 

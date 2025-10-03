@@ -25,7 +25,7 @@ x:Class="Unlimotion.Views.MainControl">
         <DataTemplate DataType="viewModel:TaskItemViewModel">
             <Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
                 <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-                <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -41,7 +41,7 @@ Command="{Binding RemoveCommand}"/>
         <DataTemplate DataType="viewModel:EmojiFilter">
             <Grid ColumnDefinitions="Auto, Auto" >
                 <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
-                <Label Grid.Column="1" Content="{Binding Title}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:UnlockedTimeFilter">

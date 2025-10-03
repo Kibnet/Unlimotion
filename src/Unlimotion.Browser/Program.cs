@@ -16,7 +16,7 @@ using WritableJsonConfiguration;
 internal partial class Program
 {
     private static async Task Main(string[] args) => await BuildAvaloniaApp()
-            .WithInterFont()
+            .WithCustomFont()
             .UseReactiveUI()
             .StartBrowserAppAsync("out");
 

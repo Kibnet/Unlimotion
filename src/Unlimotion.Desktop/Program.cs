@@ -1,24 +1,25 @@
-﻿using System;
+﻿using AutoMapper;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Logging;
+using Avalonia.Media;
+using Avalonia.ReactiveUI;
+using Microsoft.Extensions.Configuration;
+using Quartz;
+using Quartz.Impl;
+using ReactiveUI;
+using ServiceStack;
+using Splat;
+using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.ReactiveUI;
-using ReactiveUI;
-using AutoMapper;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Logging;
-using Microsoft.Extensions.Configuration;
-using Quartz;
-using Quartz.Impl;
-using ServiceStack;
-using Splat;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
-using Unlimotion.TaskTree;
 
 namespace Unlimotion.Desktop
 {
@@ -27,7 +28,7 @@ namespace Unlimotion.Desktop
         private const string DefaultConfigName = "Settings.json";
         private const string TasksFolderName = "Tasks";
         private const string UnlimotionFolderName = "Unlimotion";
-        
+
         // Initialization code. Don't use any Avalonia, third-party APIs or any
         // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
         // yet and stuff might break.
@@ -44,7 +45,7 @@ namespace Unlimotion.Desktop
             //Получение адреса конфига
 
             var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
-            
+
 #if DEBUG
             var configPath = DefaultConfigName;
 #else
@@ -66,7 +67,7 @@ namespace Unlimotion.Desktop
                 Directory.CreateDirectory(unlimotionFolder);
 #endif
             }
-            
+
             BackupViaGitService.GetAbsolutePath = path => new DirectoryInfo(path).FullName;
 
             App.Init(configPath);
@@ -77,9 +78,9 @@ namespace Unlimotion.Desktop
 
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
-            => AppBuilder.Configure<App>()            
-                .UsePlatformDetect()
-                .WithInterFont()
+            => AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .WithCustomFont()
 #if DEBUG
                 .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
 #else
