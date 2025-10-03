@@ -1,0 +1,70 @@
+<Project>
+    <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management -->
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- Avalonia packages -->
+        <!-- Important: keep version in sync! -->
+        <PackageVersion Include="Avalonia" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Desktop" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.iOS" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Browser" Version="11.3.7" />
+        <PackageVersion Include="Avalonia.Android" Version="11.3.7" />
+		<PackageVersion Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
+		<PackageVersion Include="Avalonia.Controls.PanAndZoom" Version="11.3.0" />
+		<PackageVersion Include="Avalonia.ReactiveUI" Version="11.3.7" />
+
+        <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+
+		<PackageVersion Include="Polly" Version="8.4.0" />
+		<PackageVersion Include="Polly.Core" Version="8.4.0" />
+
+		<PackageVersion Include="PropertyChanged.Fody" Version="4.1.0" />
+		<PackageVersion Include="ReactiveUI" Version="20.1.63" />
+		<PackageVersion Include="System.Runtime.Caching" Version="8.0.0" />
+		<PackageVersion Include="WritableJsonConfiguration" Version="8.0.0" />
+
+		<PackageVersion Include="CompareNETObjects" Version="4.84.0" />
+		<PackageVersion Include="FluentAssertions.Json" Version="8.0.0" />
+		<PackageVersion Include="JustMock" Version="2025.2.520.440" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.3" />
+		<PackageVersion Include="xunit.v3" Version="3.0.0" />
+
+		<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
+		<PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />
+		<PackageVersion Include="Telegram.Bot" Version="16.0.2" />
+
+		<PackageVersion Include="ServiceStack.Interfaces" Version="6.4.0" />
+		<PackageVersion Include="ServiceStack.Server" Version="6.4.0" />
+
+		<PackageVersion Include="AutoMapper" Version="13.0.1" />
+		<PackageVersion Include="RavenDB.Client" Version="7.1.2" />
+
+		<PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
+		<PackageVersion Include="RavenDB.Embedded" Version="7.1.2" />
+		<PackageVersion Include="Serilog.AspNetCore" Version="6.0.1" />
+		
+		<PackageVersion Include="ServiceStack.Api.OpenApi" Version="6.4.0" />
+		<PackageVersion Include="ServiceStack.Api.Swagger" Version="5.14.0" />
+		<PackageVersion Include="ServiceStack.Client" Version="6.4.0" />
+		
+		<PackageVersion Include="SignalR.EasyUse.Server" Version="0.2.1" />
+		<PackageVersion Include="SignalR.EasyUse.Interface" Version="0.2.1" />
+		<PackageVersion Include="SignalR.EasyUse.Client" Version="0.2.1" />
+
+		<PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
+		<PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" />
+
+		<PackageVersion Include="AvaloniaGraphControl" Version="0.6.1" />
+		<PackageVersion Include="LibGit2Sharp" Version="0.31.0" />
+		<PackageVersion Include="Mileeena.Notification.Avalonia" Version="2.1.2" />
+		<PackageVersion Include="Quartz" Version="3.8.1" />
+		<PackageVersion Include="DialogHost.Avalonia" Version="0.8.1" />
+    </ItemGroup>
+</Project>

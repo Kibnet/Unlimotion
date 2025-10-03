@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="PropertyChanged.Fody" Version="4.1.0" />
-		<PackageReference Include="ReactiveUI" Version="20.1.63" />
-		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
-		<PackageReference Include="WritableJsonConfiguration" Version="8.0.0" />
+		<PackageReference Include="PropertyChanged.Fody" />
+		<PackageReference Include="ReactiveUI" />
+		<PackageReference Include="System.Runtime.Caching" />
+		<PackageReference Include="WritableJsonConfiguration" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -1,35 +1,35 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>
 		<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 	</PropertyGroup>
+
 	<ItemGroup>
 		<AvaloniaResource Include="Assets\**" />
-		<TrimmerRootDescriptor Include="Roots.xml" />
-		<None Remove=".gitignore" />
 	</ItemGroup>
+
 	<ItemGroup>
-		<Watch Include="**\*.axaml" />
-	</ItemGroup>
-	<ItemGroup>
-		<PackageReference Include="AutoMapper" Version="13.0.1" />
-		<PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="Avalonia.Xaml.Behaviors" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="Avalonia.Controls.PanAndZoom" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="DialogHost.Avalonia" Version="0.8.1" />
-		<PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="Avalonia.ReactiveUI" Version="$(AvaloniaVersion)" />
+		<PackageReference Include="AutoMapper" />
+		<PackageReference Include="Avalonia" />
+		<PackageReference Include="Avalonia.Xaml.Behaviors" />
+		<PackageReference Include="Avalonia.Controls.PanAndZoom" />
+		<PackageReference Include="DialogHost.Avalonia" />
+		<PackageReference Include="Avalonia.Themes.Fluent" />
+		<PackageReference Include="Avalonia.Fonts.Inter" />
+		<PackageReference Include="Avalonia.ReactiveUI" />
 		<!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-		<PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="$(AvaloniaVersion)" />
-		<PackageReference Include="AvaloniaGraphControl" Version="0.6.1" />
-		<PackageReference Include="LibGit2Sharp" Version="0.31.0" />
-		<PackageReference Include="Mileeena.Notification.Avalonia" Version="2.1.2" />
-		<PackageReference Include="Quartz" Version="3.8.1" />
-		<PackageReference Include="ServiceStack.Client" Version="6.4.0" />
-		<PackageReference Include="SignalR.EasyUse.Client" Version="0.2.1" />
+		<PackageReference Include="Avalonia.Diagnostics">
+			<IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+			<PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+		</PackageReference>
+		<PackageReference Include="AvaloniaGraphControl" />
+		<PackageReference Include="LibGit2Sharp" />
+		<PackageReference Include="Mileeena.Notification.Avalonia" />
+		<PackageReference Include="Quartz" />
+		<PackageReference Include="ServiceStack.Client" />
+		<PackageReference Include="SignalR.EasyUse.Client" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
