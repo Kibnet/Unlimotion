@@ -39,7 +39,7 @@ namespace Unlimotion.Desktop
 #if DEBUG
             TaskStorages.DefaultStoragePath = TasksFolderName;
 #else
-            TaskStorages.DefaultStoragePath = Path.GetDirectoryName(configPath).CombineWith(TasksFolderName);
+            TaskStorages.DefaultStoragePath = Path.GetDirectoryName(DefaultConfigName).CombineWith(TasksFolderName);
 #endif
 
             //Получение адреса конфига
