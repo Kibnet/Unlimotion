@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 APP_NAME="./Unlimotion.app"
-PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net8.0/osx-x64/publish/."
+PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net9.0/osx-x64/publish/."
 
 # PUBLISH_OUTPUT_DIRECTORY should point to the output directory of your dotnet publish command.
 # One example is /bin/Release/net8.0/osx-x64/publish/.
