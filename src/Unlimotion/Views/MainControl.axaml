@@ -44,6 +44,12 @@ Command="{Binding RemoveCommand}"/>
                 <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
+        <DataTemplate DataType="viewModel:EmojiExcludeFilter">
+            <Grid ColumnDefinitions="Auto, Auto" >
+                <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
         <DataTemplate DataType="viewModel:UnlockedTimeFilter">
             <CheckBox Content="{Binding Title}" IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
         </DataTemplate>
@@ -90,6 +96,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
@@ -112,6 +119,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <Label Content="From" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
@@ -156,6 +164,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
@@ -189,6 +198,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
@@ -232,6 +242,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
                                 <Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"

@@ -17,6 +17,7 @@ public class GraphViewModel
     public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedTasks { get; set; }
 
     public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
+    public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; }
 
     public bool UpdateGraph { get; set; }
 
