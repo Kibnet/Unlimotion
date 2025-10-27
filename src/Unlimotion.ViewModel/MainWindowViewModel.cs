@@ -275,6 +275,34 @@ namespace Unlimotion.ViewModel
             EmojiFilters = _emojiFilters;
             Graph.EmojiFilters = _emojiFilters;
 
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .Group(m => m.Emoji)
+                .Transform(m =>
+                {
+                    if (m.Key == "")
+                    {
+                        return AllEmojiExcludeFilter;
+                    }
+
+                    var first = m.Cache.Items.First();
+                    var filter = new EmojiFilter();
+                    filter.Source = first;
+                    filter.ShowTasks = false;
+                    filter.Title = first.Title;
+                    filter.Emoji = first.Emoji;
+                    filter.SortText = (first.Title ?? "").Replace(first.Emoji, "").Trim();
+                    return filter;
+                })
+                .SortBy(f => f.SortText)
+                .Bind(out _emojiExcludeFilters)
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+
+            EmojiExcludeFilters = _emojiExcludeFilters;
+            Graph.EmojiExcludeFilters = _emojiExcludeFilters;
+
             var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
                 .Select(filter =>
                 {
@@ -291,6 +319,32 @@ namespace Unlimotion.ViewModel
                         }
 
                         return !task.Wanted;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
+            var emojiExcludeFilter = _emojiExcludeFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.All(e => e.ShowTasks == false))
+                        {
+                            return true;
+                        }
+
+                        foreach (var item in filter.Where(e => e.ShowTasks))
+                        {
+                            if (string.IsNullOrEmpty(item?.Emoji)) continue;
+
+                            if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title ?? "").Contains(item.Emoji))
+                                return false;
+                        }
+
+                        return true;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
@@ -413,6 +467,7 @@ namespace Unlimotion.ViewModel
                     m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                 .Filter(taskFilter)
                 .Filter(emojiRootFilter)
+                .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -421,7 +476,7 @@ namespace Unlimotion.ViewModel
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
-                        Filter = new() { taskFilter },
+                        Filter = new() { taskFilter, emojiExcludeFilter },
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -453,6 +508,7 @@ namespace Unlimotion.ViewModel
                 .Filter(unlockedTimeFilter)
                 .Filter(durationFilter)
                 .Filter(emojiFilter)
+                .Filter(emojiExcludeFilter)
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
@@ -477,6 +533,7 @@ namespace Unlimotion.ViewModel
                 .Connect()
                 .Filter(taskFilter)
                 .Filter(emojiFilter)
+                .Filter(emojiExcludeFilter)
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
@@ -485,7 +542,7 @@ namespace Unlimotion.ViewModel
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        Filter = new() { taskFilter },
+                        Filter = new() { taskFilter, emojiExcludeFilter },
                     };
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -530,6 +587,7 @@ namespace Unlimotion.ViewModel
                 .Filter(m => m.IsCompleted == true)
                 .Filter(completedDateFilter)
                 .Filter(emojiFilter)
+                .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions()
@@ -560,6 +618,7 @@ namespace Unlimotion.ViewModel
                 .Filter(m => m.IsCompleted == null)
                 .Filter(archiveDateFilter)
                 .Filter(emojiFilter)
+                .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -615,6 +674,7 @@ namespace Unlimotion.ViewModel
                 .Filter(taskFilter)
                 .Filter(lastCreatedDateFilter)
                 .Filter(emojiFilter)
+                .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -963,6 +1023,11 @@ namespace Unlimotion.ViewModel
 
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 
+        private ReadOnlyObservableCollection<EmojiFilter> _emojiExcludeFilters;
+        public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; }
+
+        public EmojiFilter AllEmojiExcludeFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
+
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public ReadOnlyObservableCollection<DurationFilter> DurationFilters { get; set; } = DurationFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
@@ -978,6 +1043,16 @@ namespace Unlimotion.ViewModel
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
+    {
+        public string Title { get; set; }
+        public string Emoji { get; set; }
+        public bool ShowTasks { get; set; }
+        public string SortText { get; set; }
+        public TaskItemViewModel Source { get; set; }
+    }
+
+    [AddINotifyPropertyChangedInterface]
+    public class EmojiExcludeFilter
     {
         public string Title { get; set; }
         public string Emoji { get; set; }
