@@ -93,6 +93,8 @@ public class TaskWrapperViewModel : DisposableList
 
     public string BreadScrumbs => _actions.GetBreadScrumbs?.Invoke(this);
 
+    public bool IsExpanded { get; set; }
+
     public ReadOnlyObservableCollection<TaskWrapperViewModel> SubTasks
     {
         get

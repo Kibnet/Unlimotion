@@ -107,13 +107,26 @@ namespace Unlimotion.ViewModel
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
 
+                var parent = CurrentTaskItem;
                 var task = new TaskItemViewModel(new TaskItem(), taskRepository);
 
-                await taskRepository?.AddChild(task, CurrentTaskItem);
+                await taskRepository?.AddChild(task, parent);
 
 
                 CurrentTaskItem = task;
                 SelectCurrentTask();
+
+                var wrapper = FindTaskWrapperViewModel(parent, CurrentItems);
+                if (wrapper != null)
+                {
+                    wrapper.IsExpanded = true;
+                    var p = wrapper.Parent;
+                    while (p != null)
+                    {
+                        p.IsExpanded = true;
+                        p = p.Parent;
+                    }
+                }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));

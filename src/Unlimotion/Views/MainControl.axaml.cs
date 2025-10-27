@@ -29,19 +29,6 @@ namespace Unlimotion.Views
         {
             if (DataContext is MainWindowViewModel vm)
             {
-                if (vm.CreateInner is ReactiveCommand<Unit, Unit> innerCommand)
-                {
-                    var subscription = innerCommand.Subscribe(unit =>
-                    {
-                        var toExpand = vm.CurrentItem;
-                        if (toExpand != null)
-                        {
-                            Expand(toExpand);
-                        }
-                    });
-                    disposables.Add(subscription);
-                }
-
                 vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
                 {
                     if (vm.CurrentTaskItem == null)
@@ -78,8 +65,6 @@ namespace Unlimotion.Views
                 });
             }
         }
-
-        private List<IDisposable> disposables = new();
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
 
@@ -248,19 +233,6 @@ namespace Unlimotion.Views
             {
                 e.DragEffects = DragDropEffects.None;
             }
-        }
-
-        public void Expand(TaskWrapperViewModel task)
-        {
-            if (task == null) return;
-            //TODO сломано
-            //var treeView = this.Get<TreeView>("CurrentTree");
-            //var treeItem = treeView.ItemContainerGenerator.Containers.FirstOrDefault(info => info.Item == task.Parent);
-            //if (treeItem == null) return;
-            //if (treeItem.ContainerControl is TreeViewItem item)
-            //{
-            //    treeView.ExpandSubTree(item);
-            //}
         }
 
         private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
