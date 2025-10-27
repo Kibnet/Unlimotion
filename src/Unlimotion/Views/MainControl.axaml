@@ -111,6 +111,17 @@ Command="{Binding RemoveCommand}"/>
                                         <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped"/>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
+                                <TreeView.Styles>
+                                    <Style Selector="TreeViewItem">
+                                        <Setter Property="IsExpanded">
+                                            <Setter.Value>
+                                                <Binding Path="((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
+                                                         Mode="TwoWay" 
+                                                         RelativeSource="{RelativeSource Mode=Self}" />
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </TreeView.Styles>
                             </TreeView>
                         </Grid>
                     </TabItem>
