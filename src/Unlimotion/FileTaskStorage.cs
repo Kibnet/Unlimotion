@@ -83,6 +83,9 @@ namespace Unlimotion
                 {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
             }, Save, Path);
 
+            // Migrate IsCanBeCompleted for all existing tasks
+            await MigrateIsCanBeCompleted();
+
             await foreach (var task in GetAll())
             {
                 var vm = new TaskItemViewModel(task, this);
@@ -109,6 +112,41 @@ namespace Unlimotion
             dbWatcher.OnUpdated += DbWatcherOnUpdated;
 
             OnInited();
+        }
+
+        private async Task MigrateIsCanBeCompleted()
+        {
+            var migrationReportPath = System.IO.Path.Combine(Path, "availability.migration.report");
+            
+            // Check if migration has already been run
+            if (File.Exists(migrationReportPath))
+            {
+                return;
+            }
+
+            var tasksToMigrate = new List<TaskItem>();
+            await foreach (var task in GetAll())
+            {
+                tasksToMigrate.Add(task);
+            }
+
+            // Calculate availability for all tasks
+            foreach (var task in tasksToMigrate)
+            {
+                await TaskTreeManager.CalculateAndUpdateAvailability(task);
+            }
+
+            // Create migration report
+            var report = new
+            {
+                Version = 1,
+                Timestamp = DateTimeOffset.UtcNow,
+                TasksProcessed = tasksToMigrate.Count,
+                Message = "IsCanBeCompleted field calculated for all tasks"
+            };
+
+            await File.WriteAllTextAsync(migrationReportPath,
+                JsonConvert.SerializeObject(report, Formatting.Indented));
         }
 
         private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)

@@ -107,6 +107,13 @@ public class TaskTreeManager : ITaskTreeManager
 
                 result.AddOrUpdateRange((await CreateParentChildRelation(currentTask, change)).Dict);
 
+                // Recalculate availability for the parent task
+                var affectedTasks = await CalculateAndUpdateAvailability(currentTask);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
                 return true;
             }
             catch
@@ -121,11 +128,37 @@ public class TaskTreeManager : ITaskTreeManager
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();
+        var tasksToRecalculate = new List<TaskItem>();
 
         await IsCompletedAsync(async () =>
         {
             try
             {
+                // Collect tasks that need recalculation before breaking relations
+                if (change.ParentTasks?.Any() == true)
+                {
+                    foreach (var parentId in change.ParentTasks)
+                    {
+                        var parentItem = await Storage.Load(parentId);
+                        if (parentItem != null)
+                        {
+                            tasksToRecalculate.Add(parentItem);
+                        }
+                    }
+                }
+
+                if (change.BlocksTasks?.Any() == true)
+                {
+                    foreach (var blockedId in change.BlocksTasks)
+                    {
+                        var blockedItem = await Storage.Load(blockedId);
+                        if (blockedItem != null)
+                        {
+                            tasksToRecalculate.Add(blockedItem);
+                        }
+                    }
+                }
+
                 // Удаление связей с детьми
                 if (change.ContainsTasks.Any())
                 {
@@ -174,6 +207,16 @@ public class TaskTreeManager : ITaskTreeManager
                     }
                 }
 
+                // Recalculate availability for affected tasks
+                foreach (var taskToRecalc in tasksToRecalculate)
+                {
+                    var affectedTasks = await CalculateAndUpdateAvailability(taskToRecalc);
+                    foreach (var task in affectedTasks)
+                    {
+                        result.AddOrUpdate(task.Id, task);
+                    }
+                }
+
                 // Удаление самой задачи
                 if (deleteInStorage)
                 {
@@ -201,7 +244,18 @@ public class TaskTreeManager : ITaskTreeManager
         {
             try
             {
+                // Load the existing task to check if IsCompleted changed
+                var existingTask = await Storage.Load(change.Id);
+                bool isCompletedChanged = existingTask?.IsCompleted != change.IsCompleted;
+
                 await Storage.Save(change);
+
+                // If IsCompleted changed, recalculate availability for affected tasks
+                if (isCompletedChanged)
+                {
+                    await CalculateAndUpdateAvailability(change);
+                }
+
                 return true;
             }
             catch
@@ -323,6 +377,13 @@ public class TaskTreeManager : ITaskTreeManager
                     result.AddOrUpdate(child.Id, child);
                 }
 
+                // Recalculate availability for the parent task
+                var affectedTasks = await CalculateAndUpdateAvailability(parent);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
                 return true;
             }
             catch
@@ -393,6 +454,13 @@ public class TaskTreeManager : ITaskTreeManager
                     result.AddOrUpdate(taskToBlock.Id, taskToBlock);
                 }
 
+                // Recalculate availability for the blocked task only
+                var affectedTasks = await CalculateAndUpdateAvailability(taskToBlock);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
                 return true;
             }
             catch
@@ -426,6 +494,13 @@ public class TaskTreeManager : ITaskTreeManager
                     result.AddOrUpdate(taskToUnblock.Id, taskToUnblock);
                 }
 
+                // Recalculate availability for the unblocked task only
+                var affectedTasks = await CalculateAndUpdateAvailability(taskToUnblock);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
                 return true;
             }
             catch
@@ -455,5 +530,141 @@ public class TaskTreeManager : ITaskTreeManager
             throw new TimeoutException(
                 $"Операция не была корректно завершена за заданный таймаут {timeout}");
         return (res);
+    }
+
+    public async Task<List<TaskItem>> CalculateAndUpdateAvailability(TaskItem task)
+    {
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+
+        await IsCompletedAsync(async () =>
+        {
+            try
+            {
+                // Calculate availability for the given task
+                var updatedTasks = await CalculateAvailabilityForTask(task);
+                result.AddOrUpdateRange(updatedTasks);
+
+                // Collect and recalculate affected tasks
+                var affectedTasks = await GetAffectedTasks(task);
+                foreach (var affectedTask in affectedTasks)
+                {
+                    var affectedUpdatedTasks = await CalculateAvailabilityForTask(affectedTask);
+                    result.AddOrUpdateRange(affectedUpdatedTasks);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+
+        return result.Dict.Values.ToList();
+    }
+
+    private async Task<Dictionary<string, TaskItem>> CalculateAvailabilityForTask(TaskItem task)
+    {
+        var result = new Dictionary<string, TaskItem>();
+
+        // Calculate IsCanBeCompleted based on business rules:
+        // 1. All contained tasks must be completed (IsCompleted != false)
+        // 2. All blocking tasks must be completed (IsCompleted != false)
+        bool allContainsCompleted = true;
+        bool allBlockersCompleted = true;
+
+        // Check all contained tasks
+        if (task.ContainsTasks?.Any() == true)
+        {
+            foreach (var childId in task.ContainsTasks)
+            {
+                var childTask = await Storage.Load(childId);
+                if (childTask != null && childTask.IsCompleted == false)
+                {
+                    allContainsCompleted = false;
+                    break;
+                }
+            }
+        }
+
+        // Check all blocking tasks
+        if (task.BlockedByTasks?.Any() == true)
+        {
+            foreach (var blockerId in task.BlockedByTasks)
+            {
+                var blockerTask = await Storage.Load(blockerId);
+                if (blockerTask != null && blockerTask.IsCompleted == false)
+                {
+                    allBlockersCompleted = false;
+                    break;
+                }
+            }
+        }
+
+        bool newIsCanBeCompleted = allContainsCompleted && allBlockersCompleted;
+        bool previousIsCanBeCompleted = task.IsCanBeCompleted;
+
+        // Update IsCanBeCompleted
+        task.IsCanBeCompleted = newIsCanBeCompleted;
+
+        // Manage UnlockedDateTime based on availability changes
+        if (newIsCanBeCompleted && !previousIsCanBeCompleted)
+        {
+            // Task became available - set UnlockedDateTime
+            task.UnlockedDateTime = DateTimeOffset.UtcNow;
+        }
+        else if (!newIsCanBeCompleted && previousIsCanBeCompleted)
+        {
+            // Task became blocked - clear UnlockedDateTime
+            task.UnlockedDateTime = null;
+        }
+
+        // Save the updated task
+        await Storage.Save(task);
+        result.Add(task.Id, task);
+
+        return result;
+    }
+
+    private async Task<List<TaskItem>> GetAffectedTasks(TaskItem task)
+    {
+        var affectedTasks = new List<TaskItem>();
+        var processedIds = new HashSet<string>();
+
+        // Collect all parent tasks (because their availability depends on this task)
+        if (task.ParentTasks?.Any() == true)
+        {
+            foreach (var parentId in task.ParentTasks)
+            {
+                if (!processedIds.Contains(parentId))
+                {
+                    var parentTask = await Storage.Load(parentId);
+                    if (parentTask != null)
+                    {
+                        affectedTasks.Add(parentTask);
+                        processedIds.Add(parentId);
+                    }
+                }
+            }
+        }
+
+        // Collect all tasks blocked by this task (because their availability depends on this task)
+        if (task.BlocksTasks?.Any() == true)
+        {
+            foreach (var blockedId in task.BlocksTasks)
+            {
+                if (!processedIds.Contains(blockedId))
+                {
+                    var blockedTask = await Storage.Load(blockedId);
+                    if (blockedTask != null)
+                    {
+                        affectedTasks.Add(blockedTask);
+                        processedIds.Add(blockedId);
+                    }
+                }
+            }
+        }
+
+        return affectedTasks;
     }
 }

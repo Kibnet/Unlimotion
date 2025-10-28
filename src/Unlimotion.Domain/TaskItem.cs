@@ -10,6 +10,7 @@ namespace Unlimotion.Domain
         public string Title { get; set; }
         public string Description { get; set; }
         public bool? IsCompleted { get; set; } = false;
+        public bool IsCanBeCompleted { get; set; } = true;
         public DateTimeOffset CreatedDateTime { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }

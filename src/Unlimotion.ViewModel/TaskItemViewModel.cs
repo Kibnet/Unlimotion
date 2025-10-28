@@ -29,13 +29,10 @@ namespace Unlimotion.ViewModel
         }
 
         private ITaskStorage _taskStorage;
-        private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
-                                            (BlockedByTasks.All(m => m.IsCompleted != false));
+        private TaskItem _model = new TaskItem();
 
         public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
-        public bool NotHaveUncompletedContains { get; private set; }
-        public bool NotHaveUncompletedBlockedBy { get; private set; }
         private ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
@@ -172,53 +169,6 @@ namespace Unlimotion.ViewModel
                     ArchiveDateTime ??= DateTimeOffset.UtcNow;
                 }
             });
-
-            //Subscribe NotHaveUncompletedContains
-            ContainsTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
-                .StartWithEmpty()
-                .ToCollection()
-                .Select(items =>
-                {
-                    return items.All(i => i.IsCompleted != false);
-
-                }).Subscribe(result =>
-                {
-                    NotHaveUncompletedContains = result;
-                })
-                .AddToDispose(this);
-
-            //Subscribe NotHaveUncompletedBlockedBy
-            BlockedByTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
-                .StartWithEmpty()
-                .ToCollection()
-                .Select(items =>
-                {
-                    return items.All(i => i.IsCompleted != false);
-
-                }).Subscribe(result =>
-                {
-                    NotHaveUncompletedBlockedBy = result;
-                })
-                .AddToDispose(this);
-
-            //Set IsCanBeCompleted
-            this.WhenAnyValue(m => m.NotHaveUncompletedContains, m => m.NotHaveUncompletedBlockedBy)
-                .Subscribe(tuple =>
-                {
-                    IsCanBeCompleted = tuple.Item1 && tuple.Item2;
-                    if (IsCanBeCompleted && UnlockedDateTime == null)
-                    {
-                        UnlockedDateTime = DateTimeOffset.UtcNow;
-                    }
-
-                    if (!IsCanBeCompleted && UnlockedDateTime != null)
-                    {
-                        UnlockedDateTime = null;
-                    }
-                })
-                .AddToDispose(this);
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
@@ -454,40 +404,42 @@ namespace Unlimotion.ViewModel
 
         public TaskItem Model
         {
-            get =>
-                new TaskItem
-                {
-                    Id = Id,
-                    Title = Title,
-                    Description = Description,
-                    CreatedDateTime = CreatedDateTime,
-                    UnlockedDateTime = UnlockedDateTime,
-                    CompletedDateTime = CompletedDateTime,
-                    ArchiveDateTime = ArchiveDateTime,
-                    PlannedBeginDateTime = PlannedBeginDateTime,
-                    PlannedEndDateTime = PlannedEndDateTime,
-                    PlannedDuration = PlannedDuration,
-                    Importance = Importance,
-                    Wanted = Wanted,
-                    IsCompleted = IsCompleted,
-                    Version = Version,
-                    BlocksTasks = Blocks.ToList(),
-                    BlockedByTasks = BlockedBy.ToList(),
-                    ContainsTasks = Contains.ToList(),
-                    ParentTasks = Parents.ToList(),
-                    Repeater = Repeater?.Model,
-                };
+            get
+            {
+                _model.Id = Id;
+                _model.Title = Title;
+                _model.Description = Description;
+                _model.CreatedDateTime = CreatedDateTime;
+                _model.UnlockedDateTime = UnlockedDateTime;
+                _model.CompletedDateTime = CompletedDateTime;
+                _model.ArchiveDateTime = ArchiveDateTime;
+                _model.PlannedBeginDateTime = PlannedBeginDateTime;
+                _model.PlannedEndDateTime = PlannedEndDateTime;
+                _model.PlannedDuration = PlannedDuration;
+                _model.Importance = Importance;
+                _model.Wanted = Wanted;
+                _model.IsCompleted = IsCompleted;
+                _model.Version = Version;
+                _model.BlocksTasks = Blocks.ToList();
+                _model.BlockedByTasks = BlockedBy.ToList();
+                _model.ContainsTasks = Contains.ToList();
+                _model.ParentTasks = Parents.ToList();
+                _model.Repeater = Repeater?.Model;
+                // IsCanBeCompleted is now managed by TaskTreeManager, not by ViewModel
+                return _model;
+            }
             set
             {
-                Id = value.Id;
-                Update(value);
+                _model = value ?? new TaskItem();
+                Id = _model.Id;
+                Update(_model);
             }
         }
 
         public string Id { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
-        public bool IsCanBeCompleted { get; private set; }
+        public bool IsCanBeCompleted => _model.IsCanBeCompleted;
         public bool? IsCompleted { get; set; }
         public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
@@ -665,6 +617,9 @@ namespace Unlimotion.ViewModel
         {
             if (taskItem == null) throw new ArgumentNullException(nameof(taskItem));
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
+
+            // Update the backing model
+            _model.IsCanBeCompleted = taskItem.IsCanBeCompleted;
 
             if (Title != taskItem.Title) Title = taskItem.Title;
             if (Description != taskItem.Description) Description = taskItem.Description;

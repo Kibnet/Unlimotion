@@ -27,5 +27,6 @@ public interface ITaskTreeManager
 
     public Task<List<TaskItem>> DeleteParentChildRelation(TaskItem parent, TaskItem child);
 
+    public Task<List<TaskItem>> CalculateAndUpdateAvailability(TaskItem task);
 }
 
