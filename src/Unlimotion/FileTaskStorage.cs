@@ -122,7 +122,7 @@ namespace Unlimotion
             {
                 case UpdateType.Saved:
                     var taskItem = await Load(e.Id);
-                    if (taskItem != null)
+                    if (taskItem?.Id != null)
                     {
                         var vml = Tasks.Lookup(taskItem.Id);
                         if (vml.HasValue)

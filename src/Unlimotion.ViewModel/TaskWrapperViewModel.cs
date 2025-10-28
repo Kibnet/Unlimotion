@@ -91,7 +91,7 @@ public class TaskWrapperViewModel : DisposableList
     public TaskWrapperViewModel Parent { get; set; }
     public DateTimeOffset? SpecialDateTime { get; set; }
 
-    public string BreadScrumbs => _actions.GetBreadScrumbs?.Invoke(this);
+    public string BreadScrumbs => _actions?.GetBreadScrumbs?.Invoke(this);
 
     public bool IsExpanded { get; set; }
 
