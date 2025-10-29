@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -608,15 +608,21 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     public async Task<bool> Update(TaskItemViewModel change)
     {
-        await TaskTreeManager.UpdateTask(change.Model);
-        UpdateCache(change.Model);
+        var connItemList = await TaskTreeManager.UpdateTask(change.Model);
+        foreach (var task in connItemList)
+        {
+            UpdateCache(task);
+        }
         return true;
     }
 
     public async Task<bool> Update(TaskItem change)
     {
-        await TaskTreeManager.UpdateTask(change);
-        UpdateCache(change);
+        var connItemList = await TaskTreeManager.UpdateTask(change);
+        foreach (var task in connItemList)
+        {
+            UpdateCache(task);
+        }
         return true;
     }
 

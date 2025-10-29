@@ -21,7 +21,6 @@ namespace Unlimotion.Test
 
             public Task<bool> Save(TaskItem taskItem)
             {
-                //Сделать полный клон чтобы не было проблем со ссылками
                 var clone = taskItem with { };
                 _tasks[taskItem.Id] = clone;
 

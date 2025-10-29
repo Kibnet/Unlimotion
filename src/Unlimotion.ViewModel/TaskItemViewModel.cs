@@ -131,42 +131,25 @@ namespace Unlimotion.ViewModel
             //Subscribe IsCompleted
             this.WhenAnyValue(m => m.IsCompleted).Subscribe(async b =>
             {
-                if (b == true && CompletedDateTime == null)
+                // Use TaskTreeManager to handle IsCompleted changes
+                if (MainWindowViewModel._isInited)
                 {
-                    CompletedDateTime ??= DateTimeOffset.UtcNow;
-                    ArchiveDateTime = null;
-                    if (Repeater != null && Repeater.Type != RepeaterType.None && PlannedBeginDateTime.HasValue)
+                    // Get the previous value before updating
+                    var existingTask = _taskStorage.Tasks.Lookup(Id);
+                    bool? previousIsCompleted = existingTask.HasValue ? existingTask.Value.IsCompleted : null;
+                    
+                    // Call the TaskTreeManager to handle the completion change
+                    var affectedTasks = await _taskStorage.TaskTreeManager.HandleTaskCompletionChange(Model, previousIsCompleted);
+                    
+                    // Update the cache with any affected tasks
+                    foreach (var task in affectedTasks)
                     {
-                        var clone = new TaskItem
+                        var vm = _taskStorage.Tasks.Lookup(task.Id);
+                        if (vm.HasValue)
                         {
-                            BlocksTasks = Model.BlocksTasks.ToList(),
-                            BlockedByTasks = Model.BlockedByTasks.ToList(),
-                            ContainsTasks = Model.ContainsTasks.ToList(),
-                            Description = Model.Description,
-                            Title = Model.Title,
-                            PlannedDuration = Model.PlannedDuration,
-                            Repeater = Model.Repeater,
-                            Wanted = Model.Wanted,
-                        };
-                        clone.PlannedBeginDateTime = Repeater.GetNextOccurrence(PlannedBeginDateTime.Value);
-                        if (PlannedEndDateTime.HasValue)
-                        {
-                            clone.PlannedEndDateTime =
-                                clone.PlannedBeginDateTime.Value.Add(PlannedEndDateTime.Value - PlannedBeginDateTime.Value);
+                            vm.Value.Update(task);
                         }
-                        var cloned = await taskStorage.Clone(new TaskItemViewModel(clone, taskStorage), ParentsTasks.ToArray());
                     }
-                }
-
-                if (b == false)
-                {
-                    ArchiveDateTime = null;
-                    CompletedDateTime = null;
-                }
-
-                if (b == null && ArchiveDateTime == null)
-                {
-                    ArchiveDateTime ??= DateTimeOffset.UtcNow;
                 }
             });
 

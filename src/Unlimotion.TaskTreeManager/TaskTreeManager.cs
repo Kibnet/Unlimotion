@@ -2,6 +2,7 @@
 using Polly.Retry;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
@@ -249,18 +250,21 @@ public class TaskTreeManager : ITaskTreeManager
                 var existingTask = await Storage.Load(change.Id);
                 bool isCompletedChanged = existingTask?.IsCompleted != change.IsCompleted;
 
-                await Storage.Save(change);
-
-                // If IsCompleted changed, recalculate availability for affected tasks
                 if (isCompletedChanged)
                 {
-                    var affectedTasks = await CalculateAndUpdateAvailability(change);
-                    foreach (var task in affectedTasks)
+                    // Handle IsCompleted changes with the dedicated method
+                    var completionTasks = await HandleTaskCompletionChange(change, existingTask?.IsCompleted);
+                    foreach (var task in completionTasks)
                     {
                         result.AddOrUpdate(task.Id, task);
                     }
                 }
-
+                else
+                {
+                    // Regular update without IsCompleted change
+                    await Storage.Save(change);
+                    result.AddOrUpdate(change.Id, change);
+                }
                 return true;
             }
             catch
@@ -696,5 +700,85 @@ public class TaskTreeManager : ITaskTreeManager
         }
 
         return affectedTasks;
+    }
+    
+    /// <summary>
+    /// Handles logic when a task's IsCompleted property changes
+    /// </summary>
+    /// <param name="task">The task that has changed</param>
+    /// <param name="previousIsCompleted">The previous value of IsCompleted</param>
+    /// <returns>List of affected tasks</returns>
+    public async Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task, bool? previousIsCompleted)
+    {
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
+
+        await IsCompletedAsync(async () =>
+        {
+            try
+            {
+                // Handle completion state changes
+                if (task.IsCompleted == true && task.CompletedDateTime == null)
+                {
+                    task.CompletedDateTime ??= DateTimeOffset.UtcNow;
+                    task.ArchiveDateTime = null;
+                    
+                    // Handle repeater logic
+                    if (previousIsCompleted != true && task.Repeater != null && task.Repeater.Type != RepeaterType.None && task.PlannedBeginDateTime.HasValue)
+                    {
+                        var clone = new TaskItem
+                        {
+                            BlocksTasks = task.BlocksTasks.ToList(),
+                            BlockedByTasks = task.BlockedByTasks.ToList(),
+                            ContainsTasks = task.ContainsTasks.ToList(),
+                            Description = task.Description,
+                            Title = task.Title,
+                            PlannedDuration = task.PlannedDuration,
+                            Repeater = task.Repeater,
+                            Wanted = task.Wanted,
+                        };
+                        clone.PlannedBeginDateTime = task.Repeater.GetNextOccurrence(task.PlannedBeginDateTime.Value);
+                        if (task.PlannedEndDateTime.HasValue)
+                        {
+                            clone.PlannedEndDateTime =
+                                clone.PlannedBeginDateTime.Value.Add(task.PlannedEndDateTime.Value - task.PlannedBeginDateTime.Value);
+                        }
+                        
+                        // Save the cloned task
+                        clone.Version = 1;
+                        await Storage.Save(clone);
+                        result.AddOrUpdate(clone.Id, clone);
+                    }
+                }
+
+                if (task.IsCompleted == false)
+                {
+                    task.ArchiveDateTime = null;
+                    task.CompletedDateTime = null;
+                }
+
+                if (task.IsCompleted == null && task.ArchiveDateTime == null)
+                {
+                    task.ArchiveDateTime ??= DateTimeOffset.UtcNow;
+                }
+
+                // Save the updated task
+                await Storage.Save(task);
+                result.AddOrUpdate(task.Id, task);
+
+                var affectedTasks = await CalculateAndUpdateAvailability(task);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+
+        return result.Dict.Values.ToList();
     }
 }

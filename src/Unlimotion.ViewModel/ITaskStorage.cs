@@ -30,5 +30,4 @@ public interface ITaskStorage
     public Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask);
     public Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask);
     public Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child);
-
 }
