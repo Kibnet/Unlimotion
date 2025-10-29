@@ -1,5 +1,5 @@
-﻿	<Project Sdk="Microsoft.NET.Sdk">
-		<PropertyGroup>
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
 		<AssemblyName>Unlimotion.Desktop</AssemblyName>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net9.0</TargetFramework>
