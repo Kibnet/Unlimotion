@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Newtonsoft.Json.Linq;
 using ServiceStack.OrmLite;
 using System;

@@ -1,5 +1,4 @@
-﻿using ExCSS;
-using FluentAssertions;
+using ExCSS;
 using KellermanSoftware.CompareNetObjects;
 using System;
 using System.IO;
@@ -47,7 +46,7 @@ namespace Unlimotion.Test
             var task = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create,
                 taskRepository);
 
-            task.Parents.Should().BeEmpty();
+            Assert.Empty(task.Parents);
             TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, task.Id);
         }
 
@@ -88,7 +87,7 @@ namespace Unlimotion.Test
             var result = TestHelpers.CompareStorageVersions(before, after);
 
             TestHelpers.ShouldContainOnlyDifference(result, nameof(after.ContainsTasks));
-            after.ContainsTasks.Should().Contain(newTask.Id);
+            Assert.Contains(newTask.Id, after.ContainsTasks);
         }
 
         /// <summary>
@@ -103,7 +102,7 @@ namespace Unlimotion.Test
             var countBefore = taskRepository.Tasks.Count;
             mainWindowVM.CreateInner.Execute(null);
             TestHelpers.WaitThrottleTime();
-            taskRepository.Tasks.Count.Should().Be(countBefore);
+            Assert.Equal(countBefore, taskRepository.Tasks.Count);
 
             return Task.CompletedTask;
         }
@@ -127,10 +126,10 @@ namespace Unlimotion.Test
             if (parent.Parents.Count > 0)
             {
                 var sharedParent = sibling.Parents.FirstOrDefault();
-                sharedParent.Should().NotBeNull();
-                parent.Parents.Should().Contain(sharedParent);
-                TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, sharedParent)
-                    .ContainsTasks.Should().Contain(sibling.Id);
+                Assert.NotNull(sharedParent);
+                Assert.Contains(sharedParent, parent.Parents);
+                Assert.Contains(sibling.Id, TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, sharedParent)
+                    .ContainsTasks);
             }
         }
         
@@ -155,8 +154,8 @@ namespace Unlimotion.Test
             var result = TestHelpers.CompareStorageVersions(before, after);
 
             TestHelpers.ShouldContainOnlyDifference(result, nameof(after.BlocksTasks));
-            parent.Blocks.Should().Contain(blocked.Id);
-            after.BlocksTasks.Should().Contain(blocked.Id);
+            Assert.Contains(blocked.Id, parent.Blocks);
+            Assert.Contains(blocked.Id, after.BlocksTasks);
         }
 
         /// <summary>
@@ -175,8 +174,8 @@ namespace Unlimotion.Test
             var storedTo = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, to.Id);
             var storedFrom = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, from.Id);
 
-            storedFrom.ContainsTasks.Should().NotContain(subTask.Id);
-            storedTo.ContainsTasks.Should().Contain(subTask.Id);
+            Assert.DoesNotContain(subTask.Id, storedFrom.ContainsTasks);
+            Assert.Contains(subTask.Id, storedTo.ContainsTasks);
         }
 
         /// <summary>
@@ -195,10 +194,10 @@ namespace Unlimotion.Test
             TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, clone.Id);
 
             var destItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, destination.Id);
-            destItem.ContainsTasks.Should().Contain(clone.Id);
+            Assert.Contains(clone.Id, destItem.ContainsTasks);
 
-            destination.Contains.Should().Contain(clone.Id);
-            destination.Contains.Should().NotContain(subTask.Id); // так как Clone, не Move
+            Assert.Contains(clone.Id, destination.Contains);
+            Assert.DoesNotContain(subTask.Id, destination.Contains); // так как Clone, не Move
         }
         
         /// <summary>
@@ -220,9 +219,9 @@ namespace Unlimotion.Test
             var fromStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, from.Id);
             var otherStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
 
-            toStored.ContainsTasks.Should().Contain(subTask.Id);
-            fromStored.ContainsTasks.Should().NotContain(subTask.Id);
-            otherStored.ContainsTasks.Should().Contain(subTask.Id);
+            Assert.Contains(subTask.Id, toStored.ContainsTasks);
+            Assert.DoesNotContain(subTask.Id, fromStored.ContainsTasks);
+            Assert.Contains(subTask.Id, otherStored.ContainsTasks);
         }
 
         /// <summary>
@@ -242,7 +241,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => rootTaskWrapper.RemoveCommand.Execute(null), taskRepository);
             
             var stored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            stored.ContainsTasks.Should().NotContain(subTask.Id);
+            Assert.DoesNotContain(subTask.Id, stored.ContainsTasks);
         }
 
         /// <summary>
@@ -263,7 +262,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var stored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            stored.ContainsTasks.Should().NotContain(subTask.Id);
+            Assert.DoesNotContain(subTask.Id, stored.ContainsTasks);
         }
 
 
@@ -285,7 +284,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var blockerStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            blockerStored.BlocksTasks.Should().NotContain(blocked.Id);
+            Assert.DoesNotContain(blocked.Id, blockerStored.BlocksTasks);
         }
         
         /// <summary>
@@ -306,7 +305,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            rootStored.BlocksTasks.Should().NotContain(blocked.Id);
+            Assert.DoesNotContain(blocked.Id, rootStored.BlocksTasks);
         }
 
         /// <summary>
@@ -327,7 +326,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository, -1);
 
             var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
-            subStored.Should().BeNull();
+            Assert.Null(subStored);
         }
 
         /// <summary>
@@ -350,9 +349,9 @@ namespace Unlimotion.Test
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
             var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
 
-            rootStored.Should().NotBeNull();
-            subStored.Should().NotBeNull();
-            rootStored.ContainsTasks.Should().Contain(subWrapper.TaskItem.Id);
+            Assert.NotNull(rootStored);
+            Assert.NotNull(subStored);
+            Assert.Contains(subWrapper.TaskItem.Id, rootStored.ContainsTasks);
         }
 
         /// <summary>
@@ -369,8 +368,8 @@ namespace Unlimotion.Test
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, -1);
             
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id).Should().BeNull();
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id).Should().NotBeNull();
+            Assert.Null(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id));
+            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id));
         }
 
         /// <summary>
@@ -387,8 +386,8 @@ namespace Unlimotion.Test
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
             await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, 0);
 
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id).Should().NotBeNull();
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id).Should().NotBeNull();
+            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id));
+            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id));
         }
 
         /// <summary>
@@ -404,8 +403,8 @@ namespace Unlimotion.Test
             
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -1);
             
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id).Should().BeNull();
-            TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id).Should().NotBeNull();
+            Assert.Null(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id));
+            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id));
         }
 
         /// <summary>
@@ -421,8 +420,8 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
             
             var archived = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            archived.ArchiveDateTime.Should().NotBeNull();
-            archived.IsCompleted.Should().BeNull();
+            Assert.NotNull(archived.ArchiveDateTime);
+            Assert.Null(archived.IsCompleted);
         }
 
         /// <summary>
@@ -438,13 +437,13 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            taskItem.ArchiveDateTime.Should().NotBeNull();
-            taskItem.IsCompleted.Should().BeNull();
+            Assert.NotNull(taskItem.ArchiveDateTime);
+            Assert.Null(taskItem.IsCompleted);
 
             var subItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath,
                 MainWindowViewModelFixture.ArchiveTask11Id);
-            subItem.ArchiveDateTime.Should().NotBeNull();
-            subItem.IsCompleted.Should().BeNull();
+            Assert.NotNull(subItem.ArchiveDateTime);
+            Assert.Null(subItem.IsCompleted);
         }
 
         /// <summary>
@@ -460,8 +459,8 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            taskItem.ArchiveDateTime.Should().BeNull();
-            taskItem.IsCompleted.Should().BeFalse();
+            Assert.Null(taskItem.ArchiveDateTime);
+            Assert.False(taskItem.IsCompleted);
         }
 
         /// <summary>
@@ -478,12 +477,12 @@ namespace Unlimotion.Test
                 mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            taskItem.ArchiveDateTime.Should().BeNull();
-            taskItem.IsCompleted.Should().BeFalse();
+            Assert.Null(taskItem.ArchiveDateTime);
+            Assert.False(taskItem.IsCompleted);
 
             var subitem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id);
-            subitem.ArchiveDateTime.Should().BeNull();
-            subitem.IsCompleted.Should().BeFalse();
+            Assert.Null(subitem.ArchiveDateTime);
+            Assert.False(subitem.IsCompleted);
         }
 
         /// <summary>
@@ -838,7 +837,7 @@ namespace Unlimotion.Test
             mainWindowVM.CurrentTaskItem = task;
             mainWindowVM.CreateInner.Execute(null);
 
-            taskRepository.Tasks.Count.Should().Be(taskCountBefore);
+            Assert.Equal(taskCountBefore, taskRepository.Tasks.Count);
             return Task.CompletedTask;
         }
 
@@ -856,11 +855,11 @@ namespace Unlimotion.Test
             await subTask.MoveInto(destination, null);
 
             var stored = GetStorageTaskItem(destination.Id);
-            stored.ContainsTasks.Should().Contain(subTask.Id);
+            Assert.Contains(subTask.Id, stored.ContainsTasks);
 
 
             var stored2 = GetStorageTaskItem(firstParent.Id);
-            stored2.ContainsTasks.Should().Contain(subTask.Id);
+            Assert.Contains(subTask.Id, stored2.ContainsTasks);
         }
 
         [Fact]
@@ -868,10 +867,10 @@ namespace Unlimotion.Test
         {
             var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
             string path = Path.Combine(fixture.DefaultTasksFolderPath, task.Id);
-            File.Exists(path).Should().BeTrue();
+            Assert.True(File.Exists(path));
 
             task.RemoveFunc.Invoke(null);
-            File.Exists(path).Should().BeFalse();
+            Assert.False(File.Exists(path));
             return Task.CompletedTask;
         }
 
@@ -881,10 +880,10 @@ namespace Unlimotion.Test
             var parent = GetTask(MainWindowViewModelFixture.RootTask2Id);
             var child = GetTask(MainWindowViewModelFixture.SubTask22Id);
             string path = Path.Combine(fixture.DefaultTasksFolderPath, child.Id);
-            File.Exists(path).Should().BeTrue();
+            Assert.True(File.Exists(path));
 
             child.RemoveFunc.Invoke(parent);
-            File.Exists(path).Should().BeTrue();
+            Assert.True(File.Exists(path));
             return Task.CompletedTask;
         }
 
@@ -894,15 +893,15 @@ namespace Unlimotion.Test
             var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
             mainWindowVM.CurrentTaskItem = task;
 
-            mainWindowVM.AllTasksMode.Should().BeFalse();
-            mainWindowVM.CurrentItem.Should().BeNull();
+            Assert.False(mainWindowVM.AllTasksMode);
+            Assert.Null(mainWindowVM.CurrentItem);
             mainWindowVM.AllTasksMode = true;
-            mainWindowVM.CurrentItem.TaskItem.Should().Be(task);
+            Assert.Equal(task, mainWindowVM.CurrentItem.TaskItem);
 
             mainWindowVM.AllTasksMode = false;
-            mainWindowVM.CurrentUnlockedItem.Should().BeNull();
+            Assert.Null(mainWindowVM.CurrentUnlockedItem);
             mainWindowVM.UnlockedMode = true;
-            mainWindowVM.CurrentUnlockedItem.TaskItem.Should().Be(task);
+            Assert.Equal(task, mainWindowVM.CurrentUnlockedItem.TaskItem);
 
             return Task.CompletedTask;
         }
@@ -911,7 +910,7 @@ namespace Unlimotion.Test
         public Task BlockedTask_CompletionIsPrevented()
         {
             var blocked = GetTask(MainWindowViewModelFixture.BlockedTask5Id);
-            blocked.IsCanBeCompleted.Should().BeFalse();
+            Assert.False(blocked.IsCanBeCompleted);
             return Task.CompletedTask;
         }
 
@@ -925,9 +924,9 @@ namespace Unlimotion.Test
 
             var clone = await src.CloneInto(dest1);
 
-            clone.Parents.Count.Should().Be(1);
-            clone.Parents.Should().Contain(dest1.Id);
-            clone.Parents.Should().NotContain(dest2.Id);
+            Assert.Equal(1, clone.Parents.Count);
+            Assert.Contains(dest1.Id, clone.Parents);
+            Assert.DoesNotContain(dest2.Id, clone.Parents);
         }
 
         private TaskItemViewModel? GetTask(string taskId, bool DontAssertNull = false)
