@@ -11,7 +11,7 @@ public interface ITaskTreeManager
 
     public Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true);
 
-    public Task UpdateTask(TaskItem change);
+    public Task<List<TaskItem>> UpdateTask(TaskItem change);
 
     public Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents);
 

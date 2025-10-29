@@ -545,7 +545,7 @@ namespace Unlimotion.Test
             Assert.NotNull(blockedTask5AfterTest.UnlockedDateTime);
             var result = compareLogic.Compare(blockedTask5BeforeTest, blockedTask5AfterTest);
             //Должно быть одно различие: проставлена дата разблокировки
-            Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [null,DateTimeOffset], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime, Values ((null)",
+            Assert.StartsWith("\r\nBegin Differences (2 differences):\r\nTypes [Boolean,Boolean], Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (False,True)\r\nTypes [null,DateTimeOffset], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime, Values ((null),",
                 result.DifferencesString);
 
             var blockedTask5ViewModel = taskRepository.Tasks.Items.First(i => i.Id == MainWindowViewModelFixture.BlockedTask5Id);
@@ -611,11 +611,15 @@ namespace Unlimotion.Test
 
                 result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
                 //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (2 differences):",
+                Assert.StartsWith("\r\nBegin Differences (4 differences):",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
+                    result.DifferencesString);
+                Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
+                    result.DifferencesString);
+                Assert.Contains("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
                     result.DifferencesString);
 
                 Assert.NotNull(rootTaskAfterTest);
@@ -667,11 +671,15 @@ namespace Unlimotion.Test
 
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
                 //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (2 differences):",
+                Assert.StartsWith("\r\nBegin Differences (4 differences):",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
+                    result.DifferencesString);
+                Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
+                    result.DifferencesString);
+                Assert.Contains("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
                     result.DifferencesString);
 
                 Assert.NotNull(draggableAfterTest);

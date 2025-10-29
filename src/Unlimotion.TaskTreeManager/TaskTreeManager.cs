@@ -238,8 +238,9 @@ public class TaskTreeManager : ITaskTreeManager
         return result.Dict.Values.ToList(); // Явное преобразование в список
     }
 
-    public async Task UpdateTask(TaskItem change)
+    public async Task<List<TaskItem>> UpdateTask(TaskItem change)
     {
+        var result = new AutoUpdatingDictionary<string, TaskItem>();
         await IsCompletedAsync(async Task<bool> () =>
         {
             try
@@ -253,7 +254,11 @@ public class TaskTreeManager : ITaskTreeManager
                 // If IsCompleted changed, recalculate availability for affected tasks
                 if (isCompletedChanged)
                 {
-                    await CalculateAndUpdateAvailability(change);
+                    var affectedTasks = await CalculateAndUpdateAvailability(change);
+                    foreach (var task in affectedTasks)
+                    {
+                        result.AddOrUpdate(task.Id, task);
+                    }
                 }
 
                 return true;
@@ -263,6 +268,8 @@ public class TaskTreeManager : ITaskTreeManager
                 return false;
             }
         });
+
+        return result.Dict.Values.ToList(); // Явное преобразование в список
     }
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
@@ -284,8 +291,27 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     foreach (var parent in stepParents)
                     {
-                        var dict = await CreateParentChildRelation(parent, change);
-                        result.AddOrUpdateRange(dict.Dict);
+                        try
+                        {
+                            if (!(change.ParentTasks ?? new List<string>()).Contains(parent.Id))
+                            {
+                                change.ParentTasks!.Add(parent.Id);
+                                change.SortOrder = DateTime.Now;
+                                await Storage.Save(change);
+                                result.AddOrUpdate(change.Id, change);
+                            }
+
+                            if (!parent.ContainsTasks.Contains(newTaskId))
+                            {
+                                parent.ContainsTasks.Add(newTaskId);
+                                parent.SortOrder = DateTime.Now;
+                                await Storage.Save(parent);
+                                result.AddOrUpdate(parent.Id, parent);
+                            }
+                        }
+                        catch
+                        {
+                        }
                     }
                 }
                 else
@@ -389,7 +415,8 @@ public class TaskTreeManager : ITaskTreeManager
             catch
             {
                 return false;
-            };
+            }
+            ;
         });
 
         return result;
@@ -424,7 +451,8 @@ public class TaskTreeManager : ITaskTreeManager
             catch
             {
                 return false;
-            };
+            }
+            ;
         });
 
         return result;
@@ -466,7 +494,8 @@ public class TaskTreeManager : ITaskTreeManager
             catch
             {
                 return false;
-            };
+            }
+            ;
         });
 
         return result;
@@ -506,7 +535,8 @@ public class TaskTreeManager : ITaskTreeManager
             catch
             {
                 return false;
-            };
+            }
+            ;
         });
 
         return result;
@@ -608,7 +638,7 @@ public class TaskTreeManager : ITaskTreeManager
         task.IsCanBeCompleted = newIsCanBeCompleted;
 
         // Manage UnlockedDateTime based on availability changes
-        if (newIsCanBeCompleted && !previousIsCanBeCompleted)
+        if (newIsCanBeCompleted && (!previousIsCanBeCompleted || task.UnlockedDateTime == null))
         {
             // Task became available - set UnlockedDateTime
             task.UnlockedDateTime = DateTimeOffset.UtcNow;

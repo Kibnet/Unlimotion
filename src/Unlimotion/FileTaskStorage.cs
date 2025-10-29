@@ -350,13 +350,17 @@ namespace Unlimotion
 
         public async Task<bool> Update(TaskItemViewModel change)
         {
-            await Update(change.Model);
+            Update(change.Model); 
             return true;
         }
 
         public async Task<bool> Update(TaskItem change)
         {
-            await TaskTreeManager.UpdateTask(change);
+            var connItemList = await TaskTreeManager.UpdateTask(change);
+            foreach (var task in connItemList)
+            {
+                UpdateCache(task);
+            }
             return true;
         }
 
@@ -371,12 +375,12 @@ namespace Unlimotion
                 change.Model,
                 additionalItemParents)).OrderBy(t => t.SortOrder);
 
-            var newTask = taskItemList.Last();
+            var newTask = taskItemList.First();
             change.Id = newTask.Id;
             change.Update(newTask);
             Tasks.AddOrUpdate(change);
 
-            foreach (var task in taskItemList.SkipLast(1))
+            foreach (var task in taskItemList.Skip(1))
             {
                 UpdateCache(task);
             }
