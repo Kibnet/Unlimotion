@@ -149,6 +149,7 @@ namespace Unlimotion.ViewModel
                             Title = Model.Title,
                             PlannedDuration = Model.PlannedDuration,
                             Repeater = Model.Repeater,
+                            Wanted = Model.Wanted,
                         };
                         clone.PlannedBeginDateTime = Repeater.GetNextOccurrence(PlannedBeginDateTime.Value);
                         if (PlannedEndDateTime.HasValue)
