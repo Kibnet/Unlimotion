@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
@@ -122,7 +122,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="CompareNETObjects" />
-		<PackageReference Include="FluentAssertions.Json" />
 		<PackageReference Include="JustMock" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
 		<PackageReference Include="xunit.runner.visualstudio" >

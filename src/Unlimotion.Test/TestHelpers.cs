@@ -4,11 +4,11 @@ using System.Linq;
 using System.Threading;
 using System.Text.Json;
 using System.Windows.Input;
-using FluentAssertions;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.ViewModel;
 using Unlimotion.Domain;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Unlimotion.Test
 {
@@ -27,7 +27,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
-            taskRepository.Tasks.Count.Should().Be(taskCountBefore + changeCount);
+            Assert.Equal(taskCountBefore + changeCount, taskRepository.Tasks.Count);
         }
 
         public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(Action action,
@@ -37,7 +37,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
-            taskRepository.Tasks.Count.Should().Be(taskCountBefore + expectedNewTasks);
+            Assert.Equal(taskCountBefore + expectedNewTasks, taskRepository.Tasks.Count);
             return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
         }
 
@@ -85,19 +85,19 @@ namespace Unlimotion.Test
 
         public static void ShouldHaveOnlyTitleChanged(ComparisonResult result, string oldTitle, string newTitle)
         {
-            result.Differences.Should().HaveCount(1);
-            result.Differences[0].PropertyName.Should().Be(nameof(TaskItem.Title));
-            result.DifferencesString.Should().StartWith($"\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Title != Actual.Title, Values ({oldTitle},{newTitle})");
+            Assert.Single(result.Differences);
+            Assert.Equal(nameof(TaskItem.Title), result.Differences[0].PropertyName);
+            Assert.StartsWith($"\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Title != Actual.Title, Values ({oldTitle},{newTitle})", result.DifferencesString);
         }
 
         public static void ShouldContainOnlyDifference(ComparisonResult result, string propertyName)
         {
-            result.Differences.Should().ContainSingle(d => d.PropertyName == propertyName);
+            Assert.Single(result.Differences, d => d.PropertyName == propertyName);
         }
 
         public static void AssertTaskLink(TaskItem task, string expectedId)
         {
-            task.ContainsTasks.Should().Contain(expectedId);
+            Assert.Contains(expectedId, task.ContainsTasks);
         }
 
         public static async Task<TaskItemViewModel> CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskStorage repository, int expectedNewTasks = 1)
@@ -110,13 +110,13 @@ namespace Unlimotion.Test
         public static void AssertTaskExistsOnDisk(string folderPath, string taskId)
         {
             var path = Path.Combine(folderPath, taskId);
-            File.Exists(path).Should().BeTrue($"Task file not found: {path}");
+            Assert.True(File.Exists(path), $"Task file not found: {path}");
         }
 
         public static void AssertTaskNotExistsOnDisk(string folderPath, string taskId)
         {
             var path = Path.Combine(folderPath, taskId);
-            File.Exists(path).Should().BeFalse($"Task file still exists: {path}");
+            Assert.False(File.Exists(path), $"Task file still exists: {path}");
         }
     }
 }

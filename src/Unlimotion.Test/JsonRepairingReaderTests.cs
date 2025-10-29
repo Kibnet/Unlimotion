@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Xunit;
 
 namespace Unlimotion.Test;
@@ -16,10 +15,10 @@ public class JsonRepairingReaderTests
     ""Title"": ""Task 1""
 }";
         var repair = JsonRepairingReader.FixMissingCommas(broken);
-        repair.Should().Be(@"{
+        Assert.Equal(@"{
     ""Id"": ""1"",
     ""Title"": ""Task 1""
-}");
+}", repair);
     }
 
     [Fact]
@@ -35,7 +34,7 @@ public class JsonRepairingReaderTests
     ]
 }";
         var repair = JsonRepairingReader.FixMissingCommas(broken);
-        repair.Should().Be(@"{
+        Assert.Equal(@"{
     ""Id"": ""1"",
     ""Title"": ""Task 1"",
     ""Contains"": [
@@ -43,7 +42,7 @@ public class JsonRepairingReaderTests
         ""Item 2"",
         ""Item 3""
     ]
-}");
+}", repair);
     }
 
     [Fact]
@@ -59,7 +58,7 @@ public class JsonRepairingReaderTests
     ]
 }";
         var repair = JsonRepairingReader.FixMissingCommas(broken);
-        repair.Should().Be(@"{
+        Assert.Equal(@"{
     ""Id"": ""1"",
     ""Title"": ""Task 1"",
     ""Contains"": [
@@ -67,7 +66,7 @@ public class JsonRepairingReaderTests
         ""Item 2"",
         ""Item 3""
     ]
-}");
+}", repair);
     }
 
     [Fact]
@@ -83,7 +82,7 @@ public class JsonRepairingReaderTests
     ""Title"": ""Task 1""
 }";
         var repair = JsonRepairingReader.FixMissingCommas(broken);
-        repair.Should().Be(@"{
+        Assert.Equal(@"{
     ""Id"": ""1"",
     ""Contains"": [
         ""Item 1"",
@@ -91,7 +90,7 @@ public class JsonRepairingReaderTests
         ""Item 3""
     ],
     ""Title"": ""Task 1""
-}");
+}", repair);
     }
 
     [Fact]
@@ -107,7 +106,7 @@ public class JsonRepairingReaderTests
     ]
 }";
         var repair = JsonRepairingReader.FixMissingCommas(broken);
-        repair.Should().Be(@"{
+        Assert.Equal(@"{
     ""Id"": ""1"",
     ""Title"": ""Task 1"",
     ""Contains"": [
@@ -115,6 +114,6 @@ public class JsonRepairingReaderTests
         ""Item 2"",
         ""Item 3""
     ]
-}");
+}", repair);
     }
 }

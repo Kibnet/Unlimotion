@@ -33,11 +33,15 @@
 		<PackageReference Include="Avalonia.Desktop" />
 		<!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
 		<PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" />
+		<PackageReference Include="Dotnet.Bundle" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="Dotnet.Bundle" Version="*" />
+		<AvaloniaResource Include="Assets\**" />
+		<None Remove=".gitignore" />
+		<None Remove="Assets\Unlimotion.icns" />
+		<None Remove="Assets\Unlimotion.ico" />
 	</ItemGroup>
 </Project>
