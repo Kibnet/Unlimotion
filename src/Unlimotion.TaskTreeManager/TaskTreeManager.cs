@@ -490,6 +490,13 @@ public class TaskTreeManager : ITaskTreeManager
                     result.AddOrUpdate(child.Id, child);
                 }
 
+                // Recalculate availability for the parent task
+                var affectedTasks = await CalculateAndUpdateAvailability(parent);
+                foreach (var task in affectedTasks)
+                {
+                    result.AddOrUpdate(task.Id, task);
+                }
+
                 return true;
             }
             catch

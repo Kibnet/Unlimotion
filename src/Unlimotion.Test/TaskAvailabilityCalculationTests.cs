@@ -430,5 +430,81 @@ namespace Unlimotion.Test
             var updatedParent = await storage.Load("parent1");
             Assert.True(updatedParent.IsCanBeCompleted);
         }
+
+        [Fact]
+        public async Task MoveTaskWithChildToParent_ShouldMaintainBlockedState()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            // Create a child task that is not completed (blocking its parent)
+            var childTask = new TaskItem
+            {
+                Id = "child1",
+                Title = "Child Task",
+                IsCompleted = false // Not completed, so it blocks its parent
+            };
+            await storage.Save(childTask);
+
+            // Create original parent task
+            var originalParentTask = new TaskItem
+            {
+                Id = "originalParent",
+                Title = "Original Parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true, // Initially available
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string>()
+            };
+            await storage.Save(originalParentTask);
+
+            // Create new parent task that will receive the child
+            var newParentTask = new TaskItem
+            {
+                Id = "newParent",
+                Title = "New Parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true, // Initially available
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string>()
+            };
+            await storage.Save(newParentTask);
+
+            // First, add child to original parent
+            await manager.AddChildTask(childTask, originalParentTask);
+            
+            // Reload tasks to get updated state after adding child
+            var updatedChild = await storage.Load("child1");
+            var updatedOriginalParent = await storage.Load("originalParent");
+            
+            // Verify initial state - original parent should be blocked because child is not completed
+            Assert.False(updatedOriginalParent.IsCanBeCompleted);
+            Assert.Null(updatedOriginalParent.UnlockedDateTime);
+
+            // Act - Move child from original parent to new parent
+            var moveResult = await manager.MoveTaskToNewParent(updatedChild, newParentTask, updatedOriginalParent);
+
+            // Reload tasks to get updated state after move
+            updatedChild = await storage.Load("child1");
+            updatedOriginalParent = await storage.Load("originalParent");
+            var updatedNewParent = await storage.Load("newParent");
+
+            // Assert - Both parents should maintain correct blocked state
+            // Original parent should now be unblocked (no children)
+            Assert.True(updatedOriginalParent.IsCanBeCompleted);
+            Assert.NotNull(updatedOriginalParent.UnlockedDateTime);
+
+            // New parent should be blocked (has incomplete child)
+            // THIS IS THE BUG - this assertion should fail because the bug exists
+            Assert.False(updatedNewParent.IsCanBeCompleted);
+            Assert.Null(updatedNewParent.UnlockedDateTime);
+
+            // Child relationships should be correct
+            Assert.DoesNotContain("originalParent", updatedChild.ParentTasks);
+            Assert.Contains("newParent", updatedChild.ParentTasks);
+            Assert.DoesNotContain("child1", updatedOriginalParent.ContainsTasks);
+            Assert.Contains("child1", updatedNewParent.ContainsTasks);
+        }
     }
 }
