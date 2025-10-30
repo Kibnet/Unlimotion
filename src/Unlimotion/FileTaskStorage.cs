@@ -1,20 +1,15 @@
 ﻿using AutoMapper;
 using DynamicData;
 using DynamicData.Binding;
-using LibGit2Sharp;
-using Microsoft.Msagl.Core.Geometry.Curves;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Splat;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
@@ -83,6 +78,9 @@ namespace Unlimotion
                 {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
             }, Save, Path);
 
+            // Migrate IsCanBeCompleted for all existing tasks
+            await MigrateIsCanBeCompleted();
+
             await foreach (var task in GetAll())
             {
                 var vm = new TaskItemViewModel(task, this);
@@ -109,6 +107,41 @@ namespace Unlimotion
             dbWatcher.OnUpdated += DbWatcherOnUpdated;
 
             OnInited();
+        }
+
+        private async Task MigrateIsCanBeCompleted()
+        {
+            var migrationReportPath = System.IO.Path.Combine(Path, "availability.migration.report");
+            
+            // Check if migration has already been run
+            if (File.Exists(migrationReportPath))
+            {
+                return;
+            }
+
+            var tasksToMigrate = new List<TaskItem>();
+            await foreach (var task in GetAll())
+            {
+                tasksToMigrate.Add(task);
+            }
+
+            // Calculate availability for all tasks
+            foreach (var task in tasksToMigrate)
+            {
+                await TaskTreeManager.CalculateAndUpdateAvailability(task);
+            }
+
+            // Create migration report
+            var report = new
+            {
+                Version = 1,
+                Timestamp = DateTimeOffset.UtcNow,
+                TasksProcessed = tasksToMigrate.Count,
+                Message = "IsCanBeCompleted field calculated for all tasks"
+            };
+
+            await File.WriteAllTextAsync(migrationReportPath,
+                JsonConvert.SerializeObject(report, Formatting.Indented));
         }
 
         private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
@@ -211,6 +244,7 @@ namespace Unlimotion
                     Type = UpdateType.Removed,
                 });
                 fileInfo.Delete();
+                Tasks.Remove(itemId);
                 return true;
             }
             catch (Exception e)
@@ -312,13 +346,17 @@ namespace Unlimotion
 
         public async Task<bool> Update(TaskItemViewModel change)
         {
-            await Update(change.Model);
+            Update(change.Model); 
             return true;
         }
 
         public async Task<bool> Update(TaskItem change)
         {
-            await TaskTreeManager.UpdateTask(change);
+            var connItemList = await TaskTreeManager.UpdateTask(change);
+            foreach (var task in connItemList)
+            {
+                UpdateCache(task);
+            }
             return true;
         }
 
@@ -329,21 +367,18 @@ namespace Unlimotion
             {
                 additionalItemParents.Add(newParent.Model);
             }
-            var taskItemList = (await TaskTreeManager.CloneTask(
-                change.Model,
-                additionalItemParents)).OrderBy(t => t.SortOrder);
+            var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.SortOrder).ToList();
 
-            var newTask = taskItemList.Last();
-            change.Id = newTask.Id;
-            change.Update(newTask);
-            Tasks.AddOrUpdate(change);
+            var clone = taskItemList.Last();
+            var vm = new TaskItemViewModel(clone, this);
+            Tasks.AddOrUpdate(vm);
 
             foreach (var task in taskItemList.SkipLast(1))
             {
                 UpdateCache(task);
             }
 
-            return change;
+            return vm;
         }
 
         public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
@@ -412,7 +447,11 @@ namespace Unlimotion
 
             if (vm.HasValue)
                 vm.Value.Update(task);
-            // else
+            else if (task.SortOrder != null)
+            {
+                vm = new TaskItemViewModel(task, this);
+                Tasks.AddOrUpdate(vm.Value);
+            }
             // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
         }
     }

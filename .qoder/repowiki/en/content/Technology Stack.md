@@ -2,446 +2,262 @@
 
 <cite>
 **Referenced Files in This Document**   
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [AppModelMapping.cs](file://src/Unlimotion/AppModelMapping.cs)
-- [Directory.Build.props](file://src/Directory.Build.props)
 - [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
 - [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
 - [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj)
+- [Unlimotion.Browser.csproj](file://src/Unlimotion.Browser/Unlimotion.Browser.csproj)
+- [Unlimotion.Android.csproj](file://src/Unlimotion.Android/Unlimotion.Android.csproj)
+- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
+- [ApplicationViewModel.cs](file://src/Unlimotion/ApplicationViewModel.cs)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs)
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs)
 - [Program.cs](file://src/Unlimotion.Server/Program.cs)
 - [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs)
-- [Startup.cs](file://src/Unlimotion.Server/Startup.cs)
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
-- [BackupViaGitService.cs](file://src/Unlimotion.Services/BackupViaGitService.cs)
-- [GitPullJob.cs](file://src/Unlimotion.Scheduling/Jobs/GitPullJob.cs)
-- [nuget.config](file://src/nuget.config)
+- [Dockerfile](file://src/Unlimotion.Server/Dockerfile)
 </cite>
 
 ## Table of Contents
-1. [Core Technology Overview](#core-technology-overview)
-2. [Primary Programming Language and Framework](#primary-programming-language-and-framework)
-3. [Cross-Platform UI with AvaloniaUI](#cross-platform-ui-with-avaloniaui)
-4. [Server API with ServiceStack](#server-api-with-servicestack)
-5. [Document Database with RavenDB](#document-database-with-ravendb)
-6. [Job Scheduling with Quartz.NET](#job-scheduling-with-quartznet)
-7. [Object Mapping with AutoMapper](#object-mapping-with-automapper)
-8. [Reactive Collections with DynamicData](#reactive-collections-with-dynamicdata)
-9. [Dependency Management via NuGet](#dependency-management-via-nuget)
-10. [Build Configuration through Directory.Build.props](#build-configuration-through-directorybuildprops)
-11. [Integration Patterns and Practical Examples](#integration-patterns-and-practical-examples)
-12. [Performance Considerations](#performance-considerations)
-13. [Best Practices](#best-practices)
+1. [C# and .NET 9.0](#c-and-net-90)
+2. [Avalonia UI Framework](#avalonia-ui-framework)
+3. [ReactiveUI and MVVM Architecture](#reactiveui-and-mvvm-architecture)
+4. [Quartz.NET for Task Scheduling](#quartznet-for-task-scheduling)
+5. [RavenDB and ServiceStack Server Stack](#ravendb-and-servicestack-server-stack)
+6. [Data Mapping and Serialization](#data-mapping-and-serialization)
+7. [Git Integration for Data Synchronization](#git-integration-for-data-synchronization)
+8. [Containerized Deployment with Docker](#containerized-deployment-with-docker)
 
-## Core Technology Overview
+## C# and .NET 9.0
 
-The Unlimotion application is built on a modern C#/.NET technology stack designed for cross-platform functionality, reactive UI patterns, and robust server-client architecture. The system leverages several key frameworks and libraries to achieve its goals of flexibility, maintainability, and performance across desktop, mobile, and web platforms.
+Unlimotion is built on C# as its primary programming language, leveraging the modern .NET 9.0 runtime environment. The project targets `net9.0` across multiple platforms, as evidenced by the TargetFramework specification in all core project files. This choice provides access to the latest language features, performance improvements, and cross-platform capabilities. The codebase utilizes modern C# features including nullable reference types (enabled via `<Nullable>enable</Nullable>`), latest language version (`<LangVersion>latest</LangVersion>`), and reactive programming patterns. The .NET 9.0 SDK serves as the foundational development tooling requirement, enabling compilation and execution across Windows, Linux, and macOS platforms.
 
 **Section sources**
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
-- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
+- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L3-L5)
+- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj#L4-L6)
+- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj#L5-L7)
 
-## Primary Programming Language and Framework
+## Avalonia UI Framework
 
-Unlimotion is built using C# as the primary programming language, targeting .NET 9.0 across all components of the application. This choice provides access to modern language features, strong typing, and the extensive .NET ecosystem. The application consists of multiple projects targeting different platforms:
-
-- **Unlimotion**: Core application logic (net9.0)
-- **Unlimotion.Desktop**: Desktop application (net9.0)
-- **Unlimotion.Android**: Android application (net9.0)
-- **Unlimotion.iOS**: iOS application (net9.0)
-- **Unlimotion.Browser**: Web application (net9.0)
-- **Unlimotion.Server**: Server application (net9.0)
-
-The use of .NET 9.0 ensures access to the latest performance improvements, language features, and security updates. The consistent target framework across projects simplifies development and maintenance while enabling code sharing through shared projects and libraries.
-
-**Section sources**
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
-- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj)
-- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
-
-## Cross-Platform UI with AvaloniaUI
-
-Unlimotion utilizes AvaloniaUI as its primary UI framework, enabling true cross-platform development with a single codebase. AvaloniaUI is a modern, flexible framework that supports Windows, macOS, Linux, Android, iOS, and WebAssembly, making it ideal for Unlimotion's multi-platform requirements.
-
-Key features of AvaloniaUI implementation in Unlimotion include:
-
-- **XAML-based UI definition**: Views are defined in .axaml files with code-behind in .axaml.cs files
-- **ReactiveUI integration**: The application uses ReactiveUI for MVVM pattern implementation and reactive programming
-- **Fluent theme**: The application uses Avalonia.Themes.Fluent for a modern, consistent UI appearance
-- **Compiled bindings**: Enabled by default for improved performance
-- **Custom behaviors**: Implementation of custom behaviors like AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour and PlannedDurationBehavior
-
-The UI architecture follows the MVVM pattern with clear separation between views (in the Views folder), view models (in Unlimotion.ViewModel project), and domain models (in Unlimotion.Domain project).
+Unlimotion employs Avalonia UI as its cross-platform user interface framework, enabling consistent desktop and mobile experiences. The framework is referenced via the `Avalonia` package and platform-specific extensions like `Avalonia.Desktop`, `Avalonia.Browser`, and `Avalonia.Android`. The application structure includes `.axaml` files (such as `MainWindow.axaml.cs` and `MainScreen.axaml.cs`) that define UI components using XAML-based markup. Avalonia's compiled bindings (enabled via `<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>`) enhance performance by generating efficient binding code at compile time. The UI layer supports theming through `Avalonia.Themes.Fluent` and font rendering via `Avalonia.Fonts.Inter`, providing a polished user experience across different form factors.
 
 ```mermaid
-classDiagram
-class MainWindow {
-+Initialize() void
-+OnFrameworkInitializationCompleted() void
-}
-class MainWindowViewModel {
-+Connect() Task
-+ToastNotificationManager INotificationMessageManager
-}
-class ApplicationViewModel {
-+AppName string
-}
-class ViewLocator {
-+ResolveView() IViewFor
-}
-MainWindow --> MainWindowViewModel : "DataContext"
-MainWindowViewModel --> ApplicationViewModel : "References"
-ViewLocator --> MainWindowViewModel : "Resolves"
+graph TD
+A[Avalonia UI Framework] --> B[XAML-based Markup]
+A --> C[Cross-Platform Rendering]
+A --> D[Compiled Bindings]
+A --> E[Fluent Design Theme]
+B --> F[MainWindow.axaml]
+B --> G[MainScreen.axaml]
+C --> H[Desktop]
+C --> I[Browser]
+C --> J[Android]
+D --> K[Performance Optimization]
 ```
 
 **Diagram sources**
+- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L10-L18)
 - [MainWindow.axaml.cs](file://src/Unlimotion/Views/MainWindow.axaml.cs)
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs)
-- [ApplicationViewModel.cs](file://src/Unlimotion/ApplicationViewModel.cs)
-- [ViewLocator.cs](file://src/Unlimotion/ViewLocator.cs)
+- [MainScreen.axaml.cs](file://src/Unlimotion/Views/MainScreen.axaml.cs)
 
 **Section sources**
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [MainWindow.axaml.cs](file://src/Unlimotion/Views/MainWindow.axaml.cs)
+- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L10-L18)
+- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj#L15-L18)
+- [Unlimotion.Browser.csproj](file://src/Unlimotion.Browser/Unlimotion.Browser.csproj#L9-L11)
+- [Unlimotion.Android.csproj](file://src/Unlimotion.Android/Unlimotion.Android.csproj#L15-L17)
 
-## Server API with ServiceStack
+## ReactiveUI and MVVM Architecture
 
-The server component of Unlimotion uses ServiceStack to provide a robust, high-performance API layer. ServiceStack is chosen for its simplicity, performance, and rich feature set including authentication, validation, and API documentation.
+The application implements the Model-View-ViewModel (MVVM) pattern using ReactiveUI and DynamicData libraries to enable reactive programming. ViewModel classes like `MainWindowViewModel` and `ApplicationViewModel` inherit from ReactiveUI's reactive types and utilize `ReactiveCommand` for UI interactions. The architecture establishes automatic data flow from models to views through observable properties and reactive bindings. In `ApplicationViewModel`, commands such as `ExitCommand` and `ShowWindowCommand` are implemented as `ReactiveCommand` instances, ensuring thread-safe execution and automatic UI updates. The integration with DynamicData enables sophisticated collection handling, with observable change sets that automatically update UI components when underlying data changes, eliminating the need for manual event handling.
 
-Key aspects of the ServiceStack implementation:
+```mermaid
+classDiagram
+class MainWindowViewModel {
++IObservableCollection~TaskWrapperViewModel~ CurrentItems
++IObservableCollection~TaskWrapperViewModel~ UnlockedItems
++ReactiveCommand~Unit, Unit~ Create
++ReactiveCommand~bool, Unit~ CreateSibling
++ReactiveCommand~Unit, Unit~ Remove
++Connect() Task
+}
+class ApplicationViewModel {
++ICommand ExitCommand
++ICommand ShowWindowCommand
+}
+class TaskWrapperViewModel {
++TaskItemViewModel TaskItem
++bool IsExpanded
++IObservableCollection~TaskWrapperViewModel~ Children
+}
+class TaskItemViewModel {
++string Title
++string Emoji
++DateTimeOffset? UnlockedDateTime
++ReactiveCommand~Unit, Unit~ DeleteParentChildRelationCommand
+}
+MainWindowViewModel --> TaskWrapperViewModel : "contains"
+TaskWrapperViewModel --> TaskItemViewModel : "wraps"
+ApplicationViewModel --> MainWindowViewModel : "controls"
+```
 
-- **AppHost configuration**: The AppHost class configures the ServiceStack application with custom settings
-- **JWT authentication**: Implementation of JWT-based authentication with RS512 encryption
-- **OpenAPI/Swagger support**: API documentation through OpenApiFeature
-- **CORS configuration**: Properly configured CORS to allow cross-origin requests
-- **Exception handling**: Custom exception handlers for consistent error responses
+**Diagram sources**
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L1-L1076)
+- [ApplicationViewModel.cs](file://src/Unlimotion/ApplicationViewModel.cs#L1-L49)
+- [TaskWrapperViewModel.cs](file://src/Unlimotion.ViewModel/TaskWrapperViewModel.cs)
 
-The server API follows a clean architecture with service interfaces in Unlimotion.Server.ServiceInterface and service models in Unlimotion.Server.ServiceModel, providing a clear separation between API contracts and implementation.
+**Section sources**
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L1-L1076)
+- [ApplicationViewModel.cs](file://src/Unlimotion/ApplicationViewModel.cs#L1-L49)
+- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L16)
+
+## Quartz.NET for Task Scheduling
+
+Unlimotion utilizes Quartz.NET for scheduling periodic Git operations, specifically pull and push synchronization tasks. The scheduling infrastructure is initialized in the `App` class where a `StdSchedulerFactory` creates a scheduler instance registered with Splat's dependency injection container. Two dedicated job classes, `GitPullJob` and `GitPushJob`, implement the `IJob` interface and contain the logic for Git synchronization. These jobs are configured with triggers based on user-defined intervals (`PullIntervalSeconds` and `PushIntervalSeconds`) from the application settings. The scheduler activates only in client mode (when `IsServerMode` is false) and starts automatically when the task repository is initiated, ensuring background synchronization without interfering with the main application flow.
 
 ```mermaid
 sequenceDiagram
-participant Client
-participant ServiceStack
-participant AuthService
-participant TaskService
-Client->>ServiceStack : HTTP Request
-ServiceStack->>ServiceStack : Authentication (JWT)
-alt Valid Token
-ServiceStack->>AuthService : Validate Token
-AuthService-->>ServiceStack : Success
-ServiceStack->>TaskService : Route Request
-TaskService-->>ServiceStack : Process Request
-ServiceStack-->>Client : JSON Response
-else Invalid Token
-ServiceStack-->>Client : 401 Unauthorized
-end
+participant App as App.cs
+participant Scheduler as Quartz Scheduler
+participant GitPullJob as GitPullJob
+participant GitPushJob as GitPushJob
+participant BackupService as BackupViaGitService
+App->>App : Init(configPath)
+App->>Scheduler : Create StdSchedulerFactory
+App->>Scheduler : GetScheduler()
+App->>App : Register scheduler with Locator
+App->>App : taskRepository.Initiated event
+App->>Scheduler : Create GitPullJob
+App->>Scheduler : Create GitPushJob
+App->>Scheduler : ScheduleJob(pullJob, pullTrigger)
+App->>Scheduler : ScheduleJob(pushJob, pushTrigger)
+App->>Scheduler : scheduler.Start()
+Scheduler->>GitPullJob : Execute(context)
+GitPullJob->>BackupService : Pull()
+Scheduler->>GitPushJob : Execute(context)
+GitPushJob->>BackupService : Push("Backup created")
 ```
 
 **Diagram sources**
-- [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs)
-- [AuthService.cs](file://src/Unlimotion.Server.ServiceInterface/AuthService.cs)
-- [TaskService.cs](file://src/Unlimotion.Server.ServiceInterface/TaskService.cs)
+- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs#L1-L233)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs#L1-L20)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs#L1-L21)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
 
 **Section sources**
-- [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs)
-- [Startup.cs](file://src/Unlimotion.Server/Startup.cs)
-- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
+- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs#L1-L233)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs#L1-L20)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs#L1-L21)
 
-## Document Database with RavenDB
+## RavenDB and ServiceStack Server Stack
 
-Unlimotion uses RavenDB as its document database for server-side storage. RavenDB is an ACID-compliant, NoSQL document database that provides excellent performance and scalability for the application's data storage needs.
-
-The implementation uses RavenDB.Embedded, which allows the database to be embedded within the application, simplifying deployment and reducing infrastructure requirements. Key features of the RavenDB integration:
-
-- **Embedded deployment**: RavenDB runs within the same process as the application
-- **Automatic service registration**: The AddRavenDbServices extension method registers RavenDB services
-- **Async document session**: Use of IAsyncDocumentSession for non-blocking database operations
-- **Configuration through WritableJsonConfiguration**: Settings are managed through a custom configuration system
-
-The database schema is designed around the domain models in Unlimotion.Domain, with collections for TaskItem, User, and other entities. RavenDB's document-oriented nature aligns well with the application's data model, allowing for flexible schema evolution.
-
-**Section sources**
-- [Program.cs](file://src/Unlimotion.Server/Program.cs)
-- [Startup.cs](file://src/Unlimotion.Server/Startup.cs)
-- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
-
-## Job Scheduling with Quartz.NET
-
-Unlimotion implements job scheduling functionality using Quartz.NET, a full-featured, open-source job scheduling system. Quartz.NET is used to automate background tasks such as Git synchronization for backup purposes.
-
-Key components of the Quartz.NET implementation:
-
-- **Scheduler initialization**: Created in App.axaml.cs using StdSchedulerFactory
-- **Job definitions**: GitPullJob and GitPushJob classes implement IJob interface
-- **Trigger configuration**: Jobs are scheduled based on configurable intervals
-- **Dynamic rescheduling**: Ability to modify job schedules at runtime through SettingsViewModel
-
-The job scheduling system is integrated with the application's configuration system, allowing users to control backup intervals and enable/disable automatic backups through the UI. Jobs are only scheduled when the application is in client mode (not server mode).
+The server component of Unlimotion leverages RavenDB as its document database and ServiceStack as its web services framework. RavenDB is integrated via the `RavenDB.Embedded` package, providing a lightweight, high-performance NoSQL database for server-side storage. The server application is structured as an ASP.NET Core web application that uses ServiceStack to expose API endpoints, with configuration handled through the `AppHost` class. ServiceStack features such as `OpenApiFeature` and `CorsFeature` enable API documentation and cross-origin resource sharing. Authentication is implemented using JWT tokens with RS512 encryption, and the server configuration allows for secure connections while disabling unnecessary formats like XML and CSV in metadata. The integration with Serilog provides comprehensive logging for monitoring and debugging.
 
 ```mermaid
-classDiagram
-class IScheduler {
-+ScheduleJob() Task
-+Start() Task
-+PauseAll() Task
-+ResumeAll() Task
-}
-class IJob {
-+Execute() Task
-}
-class ITrigger {
-+WithIntervalInSeconds() ITrigger
-+RepeatForever() ITrigger
-}
-class GitPullJob {
-+Execute() Task
-}
-class GitPushJob {
-+Execute() Task
-}
-IScheduler --> ITrigger : "Uses"
-IScheduler --> IJob : "Executes"
-IJob <|-- GitPullJob
-IJob <|-- GitPushJob
+graph TD
+A[Unlimotion Server] --> B[RavenDB Embedded]
+A --> C[ServiceStack]
+A --> D[Serilog]
+C --> E[API Endpoints]
+C --> F[JWT Authentication]
+C --> G[OpenAPI/Swagger]
+C --> H[CORS Support]
+E --> I[TaskService]
+E --> J[AuthService]
+E --> K[ProfileService]
+F --> L[RS512 Encryption]
+L --> M[PrivateKeyXml]
+B --> N[Document Storage]
+D --> O[Request Logging]
+O --> P[Error Tracking]
 ```
 
 **Diagram sources**
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [GitPullJob.cs](file://src/Unlimotion.Scheduling/Jobs/GitPullJob.cs)
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
+- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj#L19-L23)
+- [Program.cs](file://src/Unlimotion.Server/Program.cs#L1-L50)
+- [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs#L1-L122)
 
 **Section sources**
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [GitPullJob.cs](file://src/Unlimotion.Scheduling/Jobs/GitPullJob.cs)
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
+- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj#L19-L23)
+- [Program.cs](file://src/Unlimotion.Server/Program.cs#L1-L50)
+- [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs#L1-L122)
 
-## Object Mapping with AutoMapper
+## Data Mapping and Serialization
 
-Unlimotion uses AutoMapper to handle object-to-object mapping between different layers of the application. This is particularly important in the application's architecture, which has distinct models for different concerns:
-
-- **Domain models**: In Unlimotion.Domain project (e.g., TaskItem, User)
-- **Service models**: In Unlimotion.Server.ServiceModel (e.g., TaskItemMold, UserProfileMold)
-- **Hub models**: In Unlimotion.Interface (e.g., TaskItemHubMold, ReceiveTaskItem)
-
-AutoMapper is configured in the AppModelMapping class, which defines the mapping profiles between these different model types. The configuration includes:
-
-- **Two-way mappings**: Using ReverseMap() for bidirectional conversions
-- **Property ignoring**: Selectively ignoring properties that should not be mapped
-- **Member configuration**: Customizing how specific members are mapped
-
-The mapper instance is registered with the Splat dependency injection container and made available throughout the application via Locator.Current.GetService<IMapper>().
-
-```mermaid
-classDiagram
-class AppModelMapping {
-+ConfigureMapping() Mapper
-+ConfigureModelMapping() void
-}
-class Mapper {
-+Map() object
-+AssertConfigurationIsValid() void
-}
-class TaskItem {
-+Id string
-+Title string
-+UserId string
-}
-class TaskItemMold {
-+Id string
-+Title string
-}
-class TaskItemHubMold {
-+Id string
-+Title string
-}
-AppModelMapping --> Mapper : "Creates"
-Mapper --> TaskItem : "Maps from/to"
-Mapper --> TaskItemMold : "Maps from/to"
-Mapper --> TaskItemHubMold : "Maps from/to"
-```
-
-**Diagram sources**
-- [AppModelMapping.cs](file://src/Unlimotion/AppModelMapping.cs)
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs)
-- [TaskItemMold.cs](file://src/Unlimotion.Server.ServiceModel/Molds/Tasks/TaskItemPage.cs)
+Unlimotion employs AutoMapper for object mapping between domain models and view models, and Newtonsoft.Json for JSON serialization in file-based storage. AutoMapper is referenced as a package dependency and configured through the `AppModelMapping.ConfigureMapping()` method called during application initialization. This enables seamless transformation between different data representations across the application layers. For JSON serialization, the `WritableJsonConfiguration` package provides configuration management with JSON persistence, allowing settings to be read from and written to JSON files. The combination of these libraries ensures type-safe data transformation and reliable configuration storage. The use of `Newtonsoft.Json` (implied by the configuration approach) enables flexible JSON handling for both configuration files and data persistence, supporting complex object graphs and custom serialization requirements.
 
 **Section sources**
-- [AppModelMapping.cs](file://src/Unlimotion/AppModelMapping.cs)
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
+- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L11)
+- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs#L1-L233)
+- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj#L22)
 
-## Reactive Collections with DynamicData
+## Git Integration for Data Synchronization
 
-While not explicitly referenced in the project files, Unlimotion's use of ReactiveUI implies the use of reactive programming patterns and likely DynamicData for managing collections. ReactiveUI is a MVVM framework that provides reactive extensions for UI development, enabling:
-
-- **Reactive commands**: Commands that can observe changes and update their execution state
-- **Observable properties**: Properties that emit change notifications
-- **WhenAnyValue**: Observing changes to properties across objects
-- **BindTo**: Reactive binding between properties
-
-The application uses these patterns extensively, particularly in the view models which inherit from ReactiveObject. This enables a responsive UI that automatically updates when underlying data changes, without the need for manual event handling.
-
-**Section sources**
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs)
-- [SettingsViewModel.cs](file://src/Unlimotion.ViewModel/SettingsViewModel.cs)
-- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs)
-
-## Dependency Management via NuGet
-
-Unlimotion uses NuGet as its package manager for third-party dependencies. The dependency management strategy includes:
-
-- **Centralized version management**: Using Directory.Build.props to define common package versions
-- **Project-specific dependencies**: Each project references only the packages it needs
-- **Version ranges**: Using version ranges (e.g., 11.*) for some packages to allow patch updates
-- **Configuration file**: nuget.config specifies the package sources
-
-The Directory.Build.props file defines common properties for all projects, including the Avalonia version, which is set to 11.* for all projects. This ensures consistency across the solution while allowing for patch updates without modifying each project file.
-
-Package references are organized by project type:
-- **Client projects**: Reference Avalonia packages, ReactiveUI, and client-specific packages
-- **Server projects**: Reference ServiceStack, RavenDB, and server-specific packages
-- **Shared projects**: Reference only core packages like AutoMapper
-
-**Section sources**
-- [Directory.Build.props](file://src/Directory.Build.props)
-- [nuget.config](file://src/nuget.config)
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
-- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj)
-
-## Build Configuration through Directory.Build.props
-
-The Unlimotion solution uses Directory.Build.props for centralized build configuration. This MSBuild feature allows common properties to be defined once and applied to all projects in the directory tree.
-
-Key configurations in Directory.Build.props:
-- **Nullable context**: Enabled globally for better null safety
-- **Avalonia version**: Defined as 11.* for consistent versioning
-- **Avalonia Android version**: Also set to 11.*
-
-This approach reduces duplication and ensures consistency across the solution. When a package version needs to be updated, it can be changed in a single location rather than in each project file.
-
-The use of Directory.Build.props is a best practice for multi-project solutions, making maintenance easier and reducing the risk of version inconsistencies.
-
-**Section sources**
-- [Directory.Build.props](file://src/Directory.Build.props)
-
-## Integration Patterns and Practical Examples
-
-The Unlimotion technology stack components work together through well-defined integration patterns. These patterns ensure loose coupling, testability, and maintainability across the application.
-
-### Configuration and Initialization Pattern
-
-The application follows a consistent pattern for configuration and initialization, particularly evident in the App class:
-
-1. **Configuration loading**: Using WritableJsonConfigurationFabric to load settings
-2. **Service registration**: Registering services with the Splat dependency container
-3. **Mapper configuration**: Setting up AutoMapper with the required mappings
-4. **Scheduler initialization**: Creating and configuring the Quartz.NET scheduler
-
-This pattern ensures that all dependencies are available before the application starts processing user requests.
-
-### Git Backup Integration
-
-A practical example of technology integration is the Git backup functionality:
+The application implements Git-based data backup and synchronization through the `BackupViaGitService` class, which uses LibGit2Sharp to interface with Git repositories. This service provides methods for cloning, pulling, and pushing changes to remote repositories, enabling distributed data synchronization and versioning. The `BackupViaGitService` implements the `IRemoteBackupService` interface and handles authentication via username and password credentials. The pull operation includes sophisticated merge logic with stashing to handle concurrent modifications, while the push operation stages all changes and creates commits with configurable messages. Git operations are triggered by Quartz.NET scheduled jobs at user-defined intervals, and the service integrates with the UI through notification mechanisms to inform users of synchronization status. This approach transforms Git into a robust data synchronization mechanism, providing both backup capabilities and multi-device data consistency.
 
 ```mermaid
 flowchart TD
-A[User Changes Settings] --> B[SettingsViewModel]
-B --> C[Observe Git Settings Changes]
-C --> D[Update Quartz.NET Scheduler]
-D --> E[Schedule GitPullJob/GitPushJob]
-E --> F[Execute BackupViaGitService]
-F --> G[Use LibGit2Sharp for Git Operations]
-G --> H[Update RavenDB/Files]
-H --> I[Show Notifications]
+A[Git Integration] --> B[BackupViaGitService]
+B --> C[Clone Repository]
+B --> D[Pull Changes]
+B --> E[Push Changes]
+D --> F[Fetch from Remote]
+D --> G[Stash Local Changes]
+D --> H[Merge Remote]
+D --> I[Apply Stash]
+E --> J[Stage All Files]
+E --> K[Create Commit]
+E --> L[Push to Remote]
+B --> M[Credentials Handling]
+M --> N[Username/Password]
+B --> O[Conflict Detection]
+B --> P[UI Notifications]
+Q[Quartz.NET] --> B
+R[User Settings] --> S[PullIntervalSeconds]
+R --> T[PushIntervalSeconds]
+R --> U[RemoteUrl]
+R --> V[Branch]
 ```
 
 **Diagram sources**
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
-- [BackupViaGitService.cs](file://src/Unlimotion.Services/BackupViaGitService.cs)
-- [GitPullJob.cs](file://src/Unlimotion.Scheduling/Jobs/GitPullJob.cs)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs#L1-L20)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs#L1-L21)
 
 **Section sources**
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
-- [BackupViaGitService.cs](file://src/Unlimotion.Services/BackupViaGitService.cs)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs#L1-L20)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs#L1-L21)
 
-### Data Flow Pattern
+## Containerized Deployment with Docker
 
-The application follows a consistent data flow pattern from server to client:
+Unlimotion Server is designed for containerized deployment using Docker, with a comprehensive `Dockerfile` that defines the build and runtime environment. The Docker configuration follows a multi-stage build process, starting with the .NET SDK image for compilation and ending with the smaller ASP.NET runtime image for production. The container exposes multiple ports (5004, 5005, 5006) to support different application endpoints. The build process copies project files individually before the full solution to leverage Docker layer caching, improving build efficiency. The final image is based on `mcr.microsoft.com/dotnet/aspnet:8.0`, indicating compatibility with .NET 8.0 despite the development targeting .NET 9.0, suggesting a production stability consideration. The docker-compose files in the root directory enable orchestrated deployment of the complete application stack, including both client and server components.
 
-1. **Server receives request** via ServiceStack endpoint
-2. **Data retrieved** from RavenDB document database
-3. **Data transformed** using AutoMapper from domain models to service models
-4. **Response sent** to client
-5. **Client receives data** and maps to view models using AutoMapper
-6. **UI updated** through reactive bindings
+```mermaid
+graph TD
+A[Docker Deployment] --> B[Multi-Stage Build]
+B --> C[Build Stage]
+B --> D[Publish Stage]
+B --> E[Final Stage]
+C --> F[.NET SDK:8.0]
+C --> G[Restore Packages]
+C --> H[Build Project]
+D --> I[dotnet publish]
+E --> J[ASP.NET Runtime:8.0]
+E --> K[COPY published artifacts]
+E --> L[ENTRYPOINT dotnet]
+A --> M[Port Exposure]
+M --> N[5004]
+M --> O[5005]
+M --> P[5006]
+A --> Q[docker-compose.yml]
+Q --> R[Orchestrated Deployment]
+```
 
-This pattern ensures data consistency and type safety throughout the application.
-
-**Section sources**
-- [AppModelMapping.cs](file://src/Unlimotion/AppModelMapping.cs)
-- [TaskService.cs](file://src/Unlimotion.Server.ServiceInterface/TaskService.cs)
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs)
-
-## Performance Considerations
-
-The Unlimotion technology stack has been selected with performance considerations in mind:
-
-- **AvaloniaUI**: Compiled bindings and efficient rendering pipeline minimize UI overhead
-- **ServiceStack**: High-performance API framework with minimal overhead
-- **RavenDB**: Embedded document database with excellent read/write performance
-- **Quartz.NET**: Efficient job scheduling with minimal resource usage
-- **AutoMapper**: Compiled mappings for fast object-to-object conversion
-
-Additional performance optimizations include:
-- **Lazy loading**: Data is loaded only when needed
-- **Background processing**: Long-running operations are performed on background threads
-- **Caching**: Strategic use of in-memory caching for frequently accessed data
-- **Batch operations**: Database operations are batched when possible
-
-The use of reactive programming patterns also contributes to performance by eliminating unnecessary UI updates and ensuring that computations are only performed when data changes.
+**Diagram sources**
+- [Dockerfile](file://src/Unlimotion.Server/Dockerfile#L1-L28)
+- [docker-compose.yml](file://docker-compose.yml)
+- [docker-compose.override.yml](file://docker-compose.override.yml)
 
 **Section sources**
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
-- [BackupViaGitService.cs](file://src/Unlimotion.Services/BackupViaGitService.cs)
-
-## Best Practices
-
-The Unlimotion codebase demonstrates several best practices in modern C#/.NET development:
-
-### Separation of Concerns
-
-The application follows a clean architecture with clear separation between:
-- **UI layer**: Avalonia views and ReactiveUI view models
-- **Business logic**: Domain models and services
-- **Data access**: RavenDB and file storage
-- **Infrastructure**: Configuration, logging, and utilities
-
-### Dependency Injection
-
-Extensive use of the Splat dependency injection framework ensures loose coupling and testability. Services are registered in the App class and retrieved using Locator.Current.GetService<T>().
-
-### Configuration Management
-
-The use of WritableJsonConfiguration allows for runtime configuration changes that are persisted to disk, providing a better user experience.
-
-### Error Handling
-
-Comprehensive error handling is implemented at multiple levels:
-- **ServiceStack exception handlers**: Global handling of service exceptions
-- **Quartz.NET job error handling**: Robust error handling in scheduled jobs
-- **UI error notifications**: User-friendly error messages through the notification system
-
-### Testing
-
-While not directly visible in the provided code, the architecture supports testing through:
-- **Dependency injection**: Easy mocking of services
-- **Separation of concerns**: Isolated components that can be tested independently
-- **Reactive programming**: Deterministic behavior that is easier to test
-
-These best practices contribute to a maintainable, scalable, and robust application architecture.
-
-**Section sources**
-- [App.axaml.cs](file://src/Unlimotion/App.axaml.cs)
-- [AppHost.cs](file://src/Unlimotion.Server/AppHost.cs)
-- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
-- [BackupViaGitService.cs](file://src/Unlimotion.Services/BackupViaGitService.cs)
+- [Dockerfile](file://src/Unlimotion.Server/Dockerfile#L1-L28)
+- [Unlimotion.Server.csproj](file://src/Unlimotion.Server/Unlimotion.Server.csproj#L7-L8)

@@ -29,13 +29,9 @@ namespace Unlimotion.ViewModel
         }
 
         private ITaskStorage _taskStorage;
-        private bool GetCanBeCompleted() => (ContainsTasks.All(m => m.IsCompleted != false)) &&
-                                            (BlockedByTasks.All(m => m.IsCompleted != false));
 
         public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
-        public bool NotHaveUncompletedContains { get; private set; }
-        public bool NotHaveUncompletedBlockedBy { get; private set; }
         private ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
@@ -134,91 +130,12 @@ namespace Unlimotion.ViewModel
             //Subscribe IsCompleted
             this.WhenAnyValue(m => m.IsCompleted).Subscribe(async b =>
             {
-                if (b == true && CompletedDateTime == null)
+                // Use TaskTreeManager to handle IsCompleted changes
+                if (MainWindowViewModel._isInited)
                 {
-                    CompletedDateTime ??= DateTimeOffset.UtcNow;
-                    ArchiveDateTime = null;
-                    if (Repeater != null && Repeater.Type != RepeaterType.None && PlannedBeginDateTime.HasValue)
-                    {
-                        var clone = new TaskItem
-                        {
-                            BlocksTasks = Model.BlocksTasks.ToList(),
-                            BlockedByTasks = Model.BlockedByTasks.ToList(),
-                            ContainsTasks = Model.ContainsTasks.ToList(),
-                            Description = Model.Description,
-                            Title = Model.Title,
-                            PlannedDuration = Model.PlannedDuration,
-                            Repeater = Model.Repeater,
-                            Wanted = Model.Wanted,
-                        };
-                        clone.PlannedBeginDateTime = Repeater.GetNextOccurrence(PlannedBeginDateTime.Value);
-                        if (PlannedEndDateTime.HasValue)
-                        {
-                            clone.PlannedEndDateTime =
-                                clone.PlannedBeginDateTime.Value.Add(PlannedEndDateTime.Value - PlannedBeginDateTime.Value);
-                        }
-                        var cloned = await taskStorage.Clone(new TaskItemViewModel(clone, taskStorage), ParentsTasks.ToArray());
-                    }
-                }
-
-                if (b == false)
-                {
-                    ArchiveDateTime = null;
-                    CompletedDateTime = null;
-                }
-
-                if (b == null && ArchiveDateTime == null)
-                {
-                    ArchiveDateTime ??= DateTimeOffset.UtcNow;
+                    SaveItemCommand.Execute();
                 }
             });
-
-            //Subscribe NotHaveUncompletedContains
-            ContainsTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
-                .StartWithEmpty()
-                .ToCollection()
-                .Select(items =>
-                {
-                    return items.All(i => i.IsCompleted != false);
-
-                }).Subscribe(result =>
-                {
-                    NotHaveUncompletedContains = result;
-                })
-                .AddToDispose(this);
-
-            //Subscribe NotHaveUncompletedBlockedBy
-            BlockedByTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.IsCompleted))
-                .StartWithEmpty()
-                .ToCollection()
-                .Select(items =>
-                {
-                    return items.All(i => i.IsCompleted != false);
-
-                }).Subscribe(result =>
-                {
-                    NotHaveUncompletedBlockedBy = result;
-                })
-                .AddToDispose(this);
-
-            //Set IsCanBeCompleted
-            this.WhenAnyValue(m => m.NotHaveUncompletedContains, m => m.NotHaveUncompletedBlockedBy)
-                .Subscribe(tuple =>
-                {
-                    IsCanBeCompleted = tuple.Item1 && tuple.Item2;
-                    if (IsCanBeCompleted && UnlockedDateTime == null)
-                    {
-                        UnlockedDateTime = DateTimeOffset.UtcNow;
-                    }
-
-                    if (!IsCanBeCompleted && UnlockedDateTime != null)
-                    {
-                        UnlockedDateTime = null;
-                    }
-                })
-                .AddToDispose(this);
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
@@ -261,19 +178,8 @@ namespace Unlimotion.ViewModel
 
             CloneFunc = async destination =>
             {
-                var clone = new TaskItem
-                {
-                    BlocksTasks = Model.BlocksTasks.ToList(),
-                    BlockedByTasks = Model.BlockedByTasks.ToList(),
-                    ContainsTasks = Model.ContainsTasks.ToList(),
-                    Description = Model.Description,
-                    Title = Model.Title,
-                    PlannedDuration = Model.PlannedDuration,
-                    Repeater = Model.Repeater,
-                    Wanted = Model.Wanted,
-                };
-                var vm = new TaskItemViewModel(clone, taskStorage);
-                return await taskStorage.Clone(vm, destination);
+                var clone = await taskStorage.Clone(this, destination);
+                return clone;
             };
 
             UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
@@ -302,10 +208,7 @@ namespace Unlimotion.ViewModel
                         switch (changed.EventArgs.PropertyName)
                         {
                             case nameof(Title):
-                            case nameof(IsCompleted):
                             case nameof(Description):
-                            case nameof(ArchiveDateTime):
-                            case nameof(UnlockedDateTime):
                             case nameof(PlannedBeginDateTime):
                             case nameof(PlannedEndDateTime):
                             case nameof(PlannedDuration):
@@ -454,8 +357,9 @@ namespace Unlimotion.ViewModel
 
         public TaskItem Model
         {
-            get =>
-                new TaskItem
+            get
+            {
+                return new TaskItem
                 {
                     Id = Id,
                     Title = Title,
@@ -477,6 +381,7 @@ namespace Unlimotion.ViewModel
                     ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model,
                 };
+            }
             set
             {
                 Id = value.Id;
@@ -487,7 +392,7 @@ namespace Unlimotion.ViewModel
         public string Id { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
-        public bool IsCanBeCompleted { get; private set; }
+        public bool IsCanBeCompleted { get; set; }
         public bool? IsCompleted { get; set; }
         public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
@@ -665,6 +570,9 @@ namespace Unlimotion.ViewModel
         {
             if (taskItem == null) throw new ArgumentNullException(nameof(taskItem));
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
+
+            // Update the backing model
+            IsCanBeCompleted = taskItem.IsCanBeCompleted;
 
             if (Title != taskItem.Title) Title = taskItem.Title;
             if (Description != taskItem.Description) Description = taskItem.Description;

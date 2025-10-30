@@ -1,4 +1,6 @@
 ﻿
+using System.Collections.Generic;
+
 namespace Unlimotion.TaskTree;
 
 public class AutoUpdatingDictionary<TKey, TValue>

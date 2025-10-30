@@ -2,374 +2,208 @@
 
 <cite>
 **Referenced Files in This Document**   
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs) - *Updated in recent commit*
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs) - *Updated in recent commit*
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs) - *Updated in recent commit*
-- [ITaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/ITaskTreeManager.cs)
-- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs) - *Updated in recent commit*
-- [MainControl.axaml.cs](file://src/Unlimotion/Views/MainControl.axaml.cs)
+- [README.md](file://README.md)
+- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs)
+- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs)
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs)
+- [SettingsViewModel.cs](file://src/Unlimotion.ViewModel/SettingsViewModel.cs)
 - [GraphControl.axaml.cs](file://src/Unlimotion/Views/GraphControl.axaml.cs)
-- [ContainEdge.cs](file://src/Unlimotion/Views/Graph/ContainEdge.cs)
-- [BlockEdge.cs](file://src/Unlimotion/Views/Graph/BlockEdge.cs)
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs) - *Updated in recent commit*
+- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs)
 </cite>
 
-## Update Summary
-**Changes Made**   
-- Updated the "Unlimited Task Nesting" section to include new automatic parent hierarchy expansion behavior
-- Added implementation details from MainWindowViewModel.cs showing the expansion logic
-- Updated section sources to reflect the new file reference
-- Maintained all existing documentation structure while enhancing accuracy
-
 ## Table of Contents
-1. [Domain Model Relationships](#domain-model-relationships)
-2. [Unlimited Task Nesting](#unlimited-task-nesting)
-3. [Multi-Parent Relationships](#multi-parent-relationships)
-4. [Task Blocking and Unblocking Logic](#task-blocking-and-unblocking-logic)
-5. [Roadmap Visualization](#roadmap-visualization)
-6. [Task Completion Eligibility](#task-completion-eligibility)
-7. [Common Issues and Solutions](#common-issues-and-solutions)
+1. [Task Management System](#task-management-system)
+2. [Task States and Transitions](#task-states-and-transitions)
+3. [Task Relationships](#task-relationships)
+4. [Blocking Logic and Availability](#blocking-logic-and-availability)
+5. [Application Views](#application-views)
+6. [Settings Configuration](#settings-configuration)
+7. [Emoji-Based Grouping](#emoji-based-grouping)
 
-## Domain Model Relationships
+## Task Management System
 
-The Unlimotion task management system is built around a rich domain model that enables complex task relationships through four key relationship types defined in the `TaskItem` class. These relationships form the foundation for advanced task organization and dependency management.
+Unlimotion features a sophisticated task management system with unlimited nesting levels and support for tasks having multiple parents. This allows for cross-project task organization and flexible hierarchical structures. The system is built around the `TaskItem` class which contains properties that enable these advanced features.
 
-The `TaskItem` class contains four primary relationship collections that define how tasks can be interconnected:
+The `TaskItem` class includes collections for `ContainsTasks` (child tasks), `ParentTasks` (parent tasks), `BlocksTasks` (tasks that block this task), and `BlockedByTasks` (tasks that this task blocks). This structure enables the implementation of complex task relationships and dependencies.
 
-- **ContainsTasks**: A list of task IDs that this task contains as subtasks
-- **ParentTasks**: A list of task IDs that are parents of this task
-- **BlocksTasks**: A list of task IDs that this task blocks
-- **BlockedByTasks**: A list of task IDs that block this task
-
-These relationships enable a flexible, non-hierarchical task structure where tasks can have multiple parents and participate in complex blocking relationships. The implementation supports transitive relationships, allowing for sophisticated dependency chains.
-
-```mermaid
-classDiagram
-class TaskItem {
-+string Id
-+string UserId
-+string Title
-+string Description
-+bool? IsCompleted
-+DateTimeOffset CreatedDateTime
-+DateTimeOffset? UnlockedDateTime
-+DateTimeOffset? CompletedDateTime
-+DateTimeOffset? ArchiveDateTime
-+DateTimeOffset? PlannedBeginDateTime
-+DateTimeOffset? PlannedEndDateTime
-+TimeSpan? PlannedDuration
-+string[] ContainsTasks
-+string[] ParentTasks
-+string[] BlocksTasks
-+string[] BlockedByTasks
-+RepeaterPattern Repeater
-+int Importance
-+bool Wanted
-+int Version
-+DateTime? SortOrder
-}
-TaskItem "1" *-- "0..*" TaskItem : ContainsTasks
-TaskItem "0..*" --* "1" TaskItem : ParentTasks
-TaskItem "1" *-- "0..*" TaskItem : BlocksTasks
-TaskItem "0..*" --* "1" TaskItem : BlockedByTasks
-```
-
-**Diagram sources**
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
+The system supports creating tasks at the same level as the selected task (sibling), creating blocked siblings, and creating nested tasks inside the selected task. These operations are facilitated through the `TaskTreeManager` which handles all business logic related to task relationships and availability calculations.
 
 **Section sources**
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
+- [README.md](file://README.md#L79-L95)
+- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L1-L33)
+- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L1-L830)
 
-## Unlimited Task Nesting
+## Task States and Transitions
 
-Unlimotion supports unlimited task nesting through the parent-child relationship system implemented in the `TaskTreeManager` and `FileTaskStorage` classes. This allows users to create deeply nested task hierarchies without artificial depth limitations.
+Unlimotion implements a comprehensive state management system for tasks, with four distinct states that govern task lifecycle and visibility:
 
-The nesting functionality is implemented through the `ContainsTasks` and `ParentTasks` collections in the `TaskItem` class. When a task is added as a child to another task, both collections are updated to maintain bidirectional references. This ensures data consistency and enables efficient traversal in both directions.
+1. **Not Completed** - represented by an empty checkbox
+2. **In Progress** - represented by an empty checkbox with a clock icon
+3. **Completed** - represented by a checkbox with a check mark
+4. **Archived** - represented by a checkbox with a square
 
-The `AddChildTask` method in `TaskTreeManager` handles the creation of parent-child relationships:
+The valid state transitions are defined by a state diagram that specifies the allowed changes between states. Tasks can be created in the "Not Completed" state and can transition to any of the other three states. From "In Progress," tasks can return to "Not Completed" or move to "Completed." "Completed" tasks can revert to "Not Completed," and "Archived" tasks can also be restored to "Not Completed." All states support deletion, which removes the task entirely.
+
+The state transitions are enforced through the application's business logic, ensuring data integrity and consistent user experience across different views and operations.
 
 ```mermaid
-sequenceDiagram
-participant UI as User Interface
-participant ViewModel as TaskItemViewModel
-participant Storage as FileTaskStorage
-participant Manager as TaskTreeManager
-UI->>ViewModel : Request to add child task
-ViewModel->>Storage : AddChild(task, parent)
-Storage->>Manager : AddChildTask(task.Model, parent.Model)
-Manager->>Manager : CreateParentChildRelation(parent, child)
-Manager->>Storage : Save updated parent and child
-Manager-->>Storage : Return updated tasks
-Storage-->>ViewModel : Confirm success
-ViewModel-->>UI : Update UI
+stateDiagram-v2
+uncomplited : Not completed
+inprogress : In progress
+archieved : Archieved
+completed : Completed
+[*] --> uncomplited : Creation
+uncomplited --> [*] : Deleting
+completed --> [*] : Deleting
+archieved --> [*] : Deleting
+uncomplited --> completed
+uncomplited --> archieved
+uncomplited --> inprogress
+inprogress --> uncomplited
+inprogress --> completed
+completed --> uncomplited
+archieved --> uncomplited
 ```
 
-The implementation uses an `AutoUpdatingDictionary` to track all tasks that need to be updated during a single operation, ensuring atomicity and consistency. When a child task is added, both the parent's `ContainsTasks` collection and the child's `ParentTasks` collection are updated, and both tasks are saved to storage.
+**Diagram sources **
+- [README.md](file://README.md#L28-L48)
 
-A recent enhancement improves user experience by automatically expanding the entire parent hierarchy when creating a nested task. This ensures the new task is immediately visible to the user in the "AllTasks" tab. The implementation in `MainWindowViewModel.CreateInner` command not only creates the child task but also sets the `IsExpanded` property to true for all parent wrappers in the hierarchy:
+**Section sources**
+- [README.md](file://README.md#L28-L48)
+- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L15-L19)
 
-```csharp
-CreateInner = ReactiveCommand.CreateFromTask(async () =>
-{
-    if (CurrentTaskItem == null)
-        return;
-    if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-        return;
+## Task Relationships
 
-    var parent = CurrentTaskItem;
-    var task = new TaskItemViewModel(new TaskItem(), taskRepository);
+Unlimotion implements four types of task relationships that enable complex task organization and dependency management:
 
-    await taskRepository?.AddChild(task, parent);
+### Parents (Containment)
+Parent tasks contain other tasks as integral parts necessary for execution. A task can have multiple parents simultaneously, enabling cross-project organization. This relationship is stored in the `ParentTasks` collection of the `TaskItem` class and is visualized as hierarchical nesting in the task tree.
 
-    CurrentTaskItem = task;
-    SelectCurrentTask();
+### Containing (Children)
+Containing tasks represent child tasks that are part of or steps within a parent task. This relationship arises during task decomposition and is stored in the `ContainsTasks` collection. The parent-child relationship creates a hierarchical structure that can be navigated in various views.
 
-    var wrapper = FindTaskWrapperViewModel(parent, CurrentItems);
-    if (wrapper != null)
-    {
-        wrapper.IsExpanded = true;
-        var p = wrapper.Parent;
-        while (p != null)
-        {
-            p.IsExpanded = true;
-            p = p.Parent;
-        }
-    }
-}).AddToDisposeAndReturn(connectionDisposableList);
-```
+### Blocking By (Prerequisites)
+Blocking tasks are prerequisites that must be completed to unlock the current task. This relationship is stored in the `BlockedByTasks` collection, indicating which tasks must be completed before the current task can be completed. The blocking task itself contains a reference to the blocked task in its `BlocksTasks` collection.
 
-This enhancement significantly improves usability by eliminating the need for users to manually expand multiple levels of the task tree to locate newly created nested tasks.
+### Blocked (Dependent Tasks)
+Blocked tasks are dependent tasks that cannot be completed while the current task remains incomplete. This represents the inverse of the blocking relationship and is automatically maintained by the system to ensure consistency.
 
-**Diagram sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L21-L799)
+These relationships are managed by the `TaskTreeManager` which ensures referential integrity and updates related tasks when relationships change. Operations like adding a new parent to a task, moving a task to a new parent, or creating blocking relationships are handled through dedicated methods that maintain data consistency.
 
-**Section sources**   
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
-- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L21-L799) - *Updated in recent commit*
+**Section sources**
+- [README.md](file://README.md#L57-L79)
+- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L24-L31)
+- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L379-L414)
 
-## Multi-Parent Relationships
+## Blocking Logic and Availability
 
-Unlimotion implements a sophisticated multi-parent relationship system that allows a single task to belong to multiple parent tasks simultaneously. This feature enables tasks to be shared across different contexts or projects without duplication.
+Unlimotion implements sophisticated blocking logic that prevents task completion when certain conditions are not met. A task is considered blocked and cannot be completed if any of the following conditions are true:
 
-The multi-parent functionality is built on the bidirectional relationship between `ContainsTasks` and `ParentTasks` collections. When a task is added to multiple parents, each parent's `ContainsTasks` collection is updated to include the child task ID, and the child's `ParentTasks` collection is updated to include all parent task IDs.
+1. It has uncompleted tasks inside (uncompleted child tasks)
+2. It has uncompleted blocking tasks (prerequisites not fulfilled)
+3. It has uncompleted blocking tasks for any of its parent tasks
 
-Key operations for multi-parent relationships include:
+The blocking status is visually represented by a more transparent color for both the checkbox and task description text. The system automatically calculates availability through the `CalculateAndUpdateAvailability` method in the `TaskTreeManager`, which evaluates the `IsCanBeCompleted` property based on business rules.
 
-- **Adding a new parent**: The `AddNewParentToTask` method creates a new parent-child relationship while preserving existing relationships
-- **Moving between parents**: The `MoveTaskToNewParent` method breaks an existing parent-child relationship and creates a new one
-- **Removing a parent**: The `DeleteParentChildRelation` method removes a specific parent-child relationship while preserving others
+When a task becomes available (unblocked), its `UnlockedDateTime` is set to the current UTC time. When it becomes blocked, the `UnlockedDateTime` is cleared. This mechanism enables the "Unlocked" view to display only tasks that are currently available for execution.
+
+The availability calculation is triggered by various operations including:
+- Adding or removing child tasks
+- Creating or breaking blocking relationships
+- Completing or uncompleting tasks
+- Moving tasks between parents
+
+This ensures that the availability status is always up-to-date across the entire task hierarchy.
 
 ```mermaid
 flowchart TD
-Start([Add Task to Multiple Parents]) --> CheckExisting{"Task has existing parents?"}
-CheckExisting --> |No| CreateNewTask["Create task with first parent"]
-CheckExisting --> |Yes| AddToAdditional["Add to additional parent"]
-CreateNewTask --> UpdateParent["Update parent.ContainsTasks"]
-AddToAdditional --> UpdateParent
-UpdateParent --> UpdateChild["Update child.ParentTasks"]
-UpdateChild --> SaveBoth["Save both parent and child"]
-SaveBoth --> Complete([Relationship established])
-style CreateNewTask fill:#f9f,stroke:#333
-style AddToAdditional fill:#f9f,stroke:#333
+Start([Task Status Check]) --> CheckChildren["Check all contained tasks<br/>Are all completed?"]
+CheckChildren --> |No| Blocked["Task is blocked<br/>IsCanBeCompleted = false"]
+CheckChildren --> |Yes| CheckBlockers["Check all blocking tasks<br/>Are all completed?"]
+CheckBlockers --> |No| Blocked
+CheckBlockers --> |Yes| CheckParentBlockers["Check blocking tasks<br/>for any parent task"]
+CheckParentBlockers --> |No| Available["Task is available<br/>IsCanBeCompleted = true"]
+CheckParentBlockers --> |Yes| Blocked
+Blocked --> SetUnlockedNull["Clear UnlockedDateTime"]
+Available --> SetUnlockedNow["Set UnlockedDateTime to current time"]
+SetUnlockedNull --> End([Status Updated])
+SetUnlockedNow --> End
 ```
 
-The system handles edge cases such as circular references and ensures data consistency through transaction-like operations using the `AutoUpdatingDictionary` class, which collects all changes before committing them to storage.
-
-**Diagram sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
+**Diagram sources **
+- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L626-L663)
 
 **Section sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
+- [README.md](file://README.md#L79-L95)
+- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L16)
+- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L626-L663)
 
-## Task Blocking and Unblocking Logic
+## Application Views
 
-The task blocking system in Unlimotion provides a powerful mechanism for managing task dependencies through explicit blocking relationships. This allows users to define which tasks must be completed before others can be unlocked.
+Unlimotion provides multiple views to organize and access tasks based on different criteria and use cases:
 
-Blocking relationships are implemented using two collections in the `TaskItem` class:
-- **BlocksTasks**: Contains IDs of tasks that this task blocks
-- **BlockedByTasks**: Contains IDs of tasks that block this task
+### All Tasks
+The hierarchical representation of all tasks, organized by parent-child relationships. Root-level tasks (those without parents) appear at the top level, and child tasks are nested beneath their parents. This view provides a comprehensive overview of the entire task hierarchy.
 
-These collections maintain a bidirectional relationship, ensuring that when Task A blocks Task B, Task A's `BlocksTasks` collection contains B's ID, and Task B's `BlockedByTasks` collection contains A's ID.
+### Last Created
+Displays all tasks in chronological order by creation date, with the most recently created tasks at the top. This view helps users quickly access recently added tasks regardless of their hierarchical position.
 
-The blocking logic is managed through the `BlockTask` and `UnblockTask` methods in `TaskTreeManager`:
+### Unlocked
+Shows only tasks that are currently available for execution (unblocked tasks). A task appears in this view when all its contained tasks and blocking tasks are completed. This view serves as a "window of opportunity" for focused work on actionable items.
 
-```mermaid
-sequenceDiagram
-participant User as User
-participant UI as UI Control
-participant ViewModel as TaskItemViewModel
-participant Storage as FileTaskStorage
-participant Manager as TaskTreeManager
-User->>UI : Drag task A onto task B with Alt key
-UI->>ViewModel : Call BlockBy(taskB)
-ViewModel->>Storage : Block(taskA, taskB)
-Storage->>Manager : BlockTask(taskA.Model, taskB.Model)
-Manager->>Manager : CreateBlockingBlockedByRelation(taskA, taskB)
-Manager->>Storage : Save updated tasks
-Manager-->>Storage : Return updated tasks
-Storage-->>ViewModel : Update cache
-ViewModel-->>UI : Refresh display
-UI-->>User : Show updated blocking relationship
-```
+### Completed
+Lists completed tasks in reverse chronological order by completion date, with the most recently completed tasks at the top. This provides a record of accomplished work.
 
-The implementation ensures atomic updates to both tasks involved in the blocking relationship. When a task is blocked, the system automatically recalculates the unlock status of the blocked task based on its blocking dependencies.
+### Archived
+Displays archived tasks in reverse chronological order by archiving date. Archived tasks are those that are no longer needed but are preserved for reference.
 
-**Diagram sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [MainControl.axaml.cs](file://src/Unlimotion/Views/MainControl.axaml.cs#L16-L280)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
+### Roadmap
+A graph-based visualization that displays tasks as nodes in a directed graph. This view uses green arrows to represent parent-child relationships and red arrows to show blocking relationships. Inspired by development trees in games, this view helps users visualize the sequence of tasks needed to reach goals.
+
+### Settings
+The configuration interface where users can modify application settings, including task storage paths and Git integration options.
+
+Each view is implemented as a separate tab in the application interface, allowing users to switch between different organizational perspectives based on their current needs.
 
 **Section sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [MainControl.axaml.cs](file://src/Unlimotion/Views/MainControl.axaml.cs#L16-L280)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
+- [README.md](file://README.md#L100-L150)
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L280-L475)
 
-## Roadmap Visualization
+## Settings Configuration
 
-Unlimotion provides a visual roadmap representation of task relationships through the `GraphControl` component, which renders task dependencies as a directed graph. This visualization helps users understand complex task hierarchies and dependencies at a glance.
+The Settings interface allows users to configure task storage paths and Git integration for backup and synchronization. Key configuration options include:
 
-The graph visualization system uses the MSAGL (Microsoft Automatic Graph Layout) library to automatically arrange tasks and their relationships. The `GraphControl` class builds the graph by:
+- **TaskStorage Path**: Specifies the directory where task files are saved in JSON format. Users can specify an absolute or relative path. If not specified, tasks are saved in a "Tasks" directory created in the application's working directory.
 
-1. Processing all tasks in the current view
-2. Creating edges for containment relationships using `ContainEdge`
-3. Creating edges for blocking relationships using `BlockEdge`
-4. Arranging the graph with optimal layout
+- **Git Integration**: Enables backup and synchronization through Git with configurable options including:
+  - Git backup enable/disable
+  - Remote repository URL
+  - Branch name
+  - Push and pull intervals
+  - Authentication credentials
+  - Committer information
 
-```mermaid
-graph TD
-A[Task A] --> B[Task B]
-A --> C[Task C]
-B --> D[Task D]
-C --> D
-E[Task E] -.-> D
-F[Task F] -.-> A
-style A fill:#4CAF50,stroke:#388E3C
-style B fill:#2196F3,stroke:#1976D2
-style C fill:#2196F3,stroke:#1976D2
-style D fill:#FF9800,stroke:#F57C00
-style E fill:#F44336,stroke:#D32F2F
-style F fill:#F44336,stroke:#D32F2F
-subgraph "Containment Relationships"
-A --> B
-A --> C
-B --> D
-C --> D
-end
-subgraph "Blocking Relationships"
-E -.-> D
-F -.-> A
-end
-classDef containment fill:#E8F5E8,stroke:#4CAF50
-classDef blocking fill:#FFEBEE,stroke:#F44336
-```
+The settings are managed through the `SettingsViewModel` class, which provides properties that bind to the configuration settings in the application. These settings are persisted and can be modified through the user interface.
 
-The visualization distinguishes between containment (solid lines) and blocking (dashed lines) relationships, providing clear visual feedback about task dependencies. Users can interact with the graph through drag-and-drop operations to modify relationships.
-
-**Diagram sources**
-- [GraphControl.axaml.cs](file://src/Unlimotion/Views/GraphControl.axaml.cs#L18-L227)
-- [ContainEdge.cs](file://src/Unlimotion/Views/Graph/ContainEdge.cs#L4-L9)
-- [BlockEdge.cs](file://src/Unlimotion/Views/Graph/BlockEdge.cs#L4-L9)
+The Git integration features automated push and pull operations at configurable intervals, allowing for seamless backup and synchronization of task data across devices. Status notifications can be enabled to provide feedback on Git operations.
 
 **Section sources**
-- [GraphControl.axaml.cs](file://src/Unlimotion/Views/GraphControl.axaml.cs#L18-L227)
-- [ContainEdge.cs](file://src/Unlimotion/Views/Graph/ContainEdge.cs#L4-L9)
-- [BlockEdge.cs](file://src/Unlimotion/Views/Graph/BlockEdge.cs#L4-L9)
+- [README.md](file://README.md#L150-L165)
+- [SettingsViewModel.cs](file://src/Unlimotion.ViewModel/SettingsViewModel.cs#L1-L153)
 
-## Task Completion Eligibility
+## Emoji-Based Grouping
 
-The system determines task completion eligibility through a comprehensive algorithm that evaluates both structural and dependency-based conditions. A task can only be completed when all prerequisites are satisfied.
+Unlimotion implements an emoji-based grouping feature that enables visual filtering and organization of tasks. When an emoji is present in a task name, it becomes a filterable attribute that can be used to quickly find related tasks.
 
-The eligibility calculation is implemented in the `TaskItemViewModel` class through reactive subscriptions that monitor relevant task properties:
+The system automatically extracts emojis from task titles using a regular expression pattern that matches a comprehensive set of emoji characters. The emoji symbol is inherited by all subtasks, allowing for visual filtering across the entire task hierarchy.
 
-```mermaid
-flowchart TD
-Start([Task State Change]) --> CheckSubtasks{"All subtasks completed?"}
-CheckSubtasks --> |No| CannotComplete["Set IsCanBeCompleted = false"]
-CheckSubtasks --> |Yes| CheckBlocked{"All blocking tasks completed?"}
-CheckBlocked --> |No| CannotComplete
-CheckBlocked --> |Yes| CanComplete["Set IsCanBeCompleted = true"]
-CanComplete --> UpdateStatus["Update UnlockedDateTime"]
-CannotComplete --> UpdateStatus
-UpdateStatus --> Persist["Save state changes"]
-Persist --> Complete([Eligibility determined])
-style CanComplete fill:#c8e6c9,stroke:#4caf50
-style CannotComplete fill:#ffcdd2,stroke:#f44336
-```
+In non-hierarchical views, emojis from parent tasks are displayed to the left of each task name, providing immediate visual context about the task's origin and categorization. This inheritance mechanism allows users to understand task relationships at a glance, even when viewing tasks in flat lists.
 
-The key factors in determining completion eligibility are:
+Users can enable or disable emoji filters to show or hide tasks containing specific emojis. This feature effectively serves as a visual tagging system, allowing users to create meaningful categories and perspectives on their task data.
 
-1. **Subtask completion**: All tasks in the `ContainsTasks` collection must be completed (IsCompleted = true)
-2. **Blocking dependencies**: All tasks in the `BlockedByTasks` collection must be completed
-3. **Task state**: The task itself must not be archived (IsCompleted = null) or already completed
-
-When a task becomes eligible for completion, the system automatically sets the `UnlockedDateTime` to the current timestamp. When a task becomes ineligible, the `UnlockedDateTime` is cleared.
-
-The implementation uses reactive programming patterns with `ObservableCollection` change tracking to efficiently respond to changes in task relationships and states without requiring manual recalculation.
-
-**Diagram sources**
-- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs#L20-L567)
-- [TaskItem.cs](file://src/Unlimotion.Domain/TaskItem.cs#L5-L29)
+The emoji filtering is implemented in the `MainWindowViewModel` through observable collections and reactive filters that update in real-time as users interact with the interface.
 
 **Section sources**
-- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs#L20-L567)
-
-## Common Issues and Solutions
-
-The complex task relationship system in Unlimotion can encounter several common issues, which are addressed through specific implementation patterns and safeguards.
-
-### Circular Dependencies
-Circular dependencies can occur when tasks form a loop in their relationships. The system prevents infinite loops through careful traversal algorithms that track visited nodes using `HashSet<string>` collections.
-
-### Data Consistency
-To ensure data consistency during complex operations, the system uses the `AutoUpdatingDictionary` class to collect all changes before committing them to storage. This provides a transaction-like behavior that prevents partial updates.
-
-### Performance Optimization
-For large task hierarchies, the system implements several performance optimizations:
-
-- **Lazy loading**: Tasks are loaded on-demand rather than all at once
-- **Change tracking**: Only modified tasks are saved to storage
-- **Batch operations**: Related changes are grouped to minimize storage operations
-
-### Error Handling
-The system includes robust error handling through:
-
-- **Retry policies**: Operations are retried with exponential backoff using Polly library
-- **Timeouts**: Operations that take too long are terminated to prevent hangs
-- **Fallback mechanisms**: When operations fail, the system attempts to restore previous state
-
-```mermaid
-flowchart TD
-Operation[Operation Start] --> Try["Execute operation"]
-Try --> Success{"Success?"}
-Success --> |Yes| Complete[Operation complete]
-Success --> |No| Retry{"Retries remaining?"}
-Retry --> |Yes| Wait["Wait 1 second"]
-Wait --> Try
-Retry --> |No| Timeout["Throw TimeoutException"]
-Timeout --> Handle[Error handling]
-Handle --> Log["Log error details"]
-Log --> Notify["Notify user"]
-Notify --> End
-style Try fill:#2196F3,stroke:#1976D2
-style Complete fill:#4CAF50,stroke:#388E3C
-style Timeout fill:#F44336,stroke:#D32F2F
-```
-
-These mechanisms ensure that the task management system remains responsive and reliable even under challenging conditions.
-
-**Diagram sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [AutoUpdatingDictionary.cs](file://src/Unlimotion.TaskTreeManager/AutoUpdatingDictionary.cs#L1-L26)
-
-**Section sources**
-- [TaskTreeManager.cs](file://src/Unlimotion.TaskTreeManager/TaskTreeManager.cs#L8-L458)
-- [AutoUpdatingDictionary.cs](file://src/Unlimotion.TaskTreeManager/AutoUpdatingDictionary.cs#L1-L26)
-- [FileTaskStorage.cs](file://src/Unlimotion/FileTaskStorage.cs#L27-L417)
+- [README.md](file://README.md#L165-L186)
+- [TaskItemViewModel.cs](file://src/Unlimotion.ViewModel/TaskItemViewModel.cs#L580-L585)
+- [MainWindowViewModel.cs](file://src/Unlimotion.ViewModel/MainWindowViewModel.cs#L280-L315)
