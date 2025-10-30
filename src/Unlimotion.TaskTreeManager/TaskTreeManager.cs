@@ -387,11 +387,18 @@ public class TaskTreeManager : ITaskTreeManager
     public async Task<List<TaskItem>> MoveTaskToNewParent(TaskItem change, TaskItem newParent, TaskItem? prevParent)
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();
+        
+        result.AddOrUpdateRange((await CreateParentChildRelation(newParent, change)).Dict); 
         if (prevParent is not null)
         {
             result.AddOrUpdateRange((await BreakParentChildRelation(prevParent, change)).Dict);
         }
-        result.AddOrUpdateRange((await CreateParentChildRelation(newParent, change)).Dict);
+        // Recalculate availability for the parent task
+        var affectedTasks = await CalculateAndUpdateAvailability(change);
+        foreach (var task in affectedTasks)
+        {
+            result.AddOrUpdate(task.Id, task);
+        }
 
         return result.Dict.Values.ToList();
     }
