@@ -2,282 +2,379 @@
 
 <cite>
 **Referenced Files in This Document**   
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj)
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs)
-- [TestHelpers.cs](file://src/Unlimotion.Test/TestHelpers.cs)
-- [MainWindowViewModelFixture.cs](file://src/Unlimotion.Test/MainWindowViewModelFixture.cs)
-- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json)
-- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj)
-- [Unlimotion.Desktop.ForMacBuild.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.ForMacBuild.csproj)
-- [Unlimotion.Desktop.ForDebianBuild.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj)
-- [Program.cs](file://src/Unlimotion.Desktop/Program.cs)
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
-- [Directory.Build.props](file://src/Directory.Build.props)
+- [README.md](file://README.md)
 - [run.windows.cmd](file://run.windows.cmd)
 - [run.macos.sh](file://run.macos.sh)
 - [run.linux.sh](file://run.linux.sh)
+- [.env](file://src/.env)
 - [Unlimotion.sln.startup.json](file://src/Unlimotion.sln.startup.json)
-- [CODE_OF_CONDUCT.md](file://CODE_OF_CONDUCT.md)
+- [Directory.Build.props](file://src/Directory.Build.props)
+- [nuget.config](file://src/nuget.config)
+- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj)
+- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json)
+- [appsettings.Development.json](file://src/Unlimotion.Server/appsettings.Development.json)
+- [Program.cs](file://src/Unlimotion.Desktop/Program.cs)
+- [launchSettings.json](file://src/Unlimotion.Desktop/Properties/launchSettings.json)
+- [start-client.cmd](file://src/start-client.cmd)
+- [start-server.cmd](file://src/start-server.cmd)
 </cite>
 
 ## Table of Contents
-1. [Development Environment Setup](#development-environment-setup)
-2. [Building the Solution](#building-the-solution)
-3. [Testing Strategy](#testing-strategy)
-4. [Contribution Guidelines](#contribution-guidelines)
-5. [Code Organization Principles](#code-organization-principles)
-6. [Branching Strategy](#branching-strategy)
-7. [Adding New Features](#adding-new-features)
-8. [Writing Unit Tests](#writing-unit-tests)
-9. [Debugging Common Issues](#debugging-common-issues)
-10. [Cross-Platform Development](#cross-platform-development)
+1. [Prerequisites](#prerequisites)
+2. [Repository Setup](#repository-setup)
+3. [Build and Run Process](#build-and-run-process)
+4. [Configuration Management](#configuration-management)
+5. [Testing Strategy](#testing-strategy)
+6. [Debugging Common Issues](#debugging-common-issues)
+7. [Contribution Workflow](#contribution-workflow)
+8. [Performance Profiling](#performance-profiling)
+9. [Mobile Development Considerations](#mobile-development-considerations)
 
-## Development Environment Setup
+## Prerequisites
 
-To set up the development environment for Unlimotion, you need to install the .NET 9.0 SDK for your operating system. The application uses Avalonia UI framework for cross-platform development, which is configured in the Directory.Build.props file with version 11.*. The solution contains multiple projects targeting different platforms including Desktop, Android, iOS, and Browser clients. Development dependencies include AutoMapper, LibGit2Sharp, Quartz, ServiceStack.Client, and SignalR.EasyUse.Client as specified in the Unlimotion.csproj file. Configuration files such as Settings.json and TestSettings.json manage application settings and paths for task storage.
+Before setting up the Unlimotion development environment, ensure the following prerequisites are installed:
+
+- **.NET 9.0 SDK**: Required for building and running the application. Available for Windows, macOS, and Linux from the official [.NET downloads page](https://dotnet.microsoft.com/en-us/download).
+- **Git**: Version control system for cloning the repository and managing source code. Install from [git-scm.com](https://git-scm.com/).
+- **Platform-specific tools**:
+  - **Android**: Android SDK and Android Studio for mobile development and debugging.
+  - **iOS**: Xcode and Apple Developer account for iOS builds and device testing.
+  - **Desktop**: No additional tools required beyond .NET SDK for Windows, macOS, and Linux platforms.
+
+The project uses Avalonia UI framework with ReactiveUI for cross-platform desktop and mobile applications, requiring the .NET 9.0 runtime for all platforms.
 
 **Section sources**
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L1-L45)
-- [Directory.Build.props](file://src/Directory.Build.props#L1-L7)
-- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json#L1-L30)
+- [README.md](file://README.md#L1-L186)
+- [Directory.Build.props](file://src/Directory.Build.props#L1-L5)
 
-## Building the Solution
+## Repository Setup
 
-The Unlimotion solution (Unlimotion.sln) can be built using the .NET CLI or Visual Studio. The solution contains multiple platform-specific projects that share core functionality through common libraries. For desktop development, use the Unlimotion.Desktop project, while platform-specific builds use specialized project files: Unlimotion.Desktop.ForDebianBuild.csproj for Linux, Unlimotion.Desktop.ForMacBuild.csproj for macOS, and the standard Unlimotion.Desktop.csproj for Windows. The build process is facilitated by platform-specific run scripts (run.windows.cmd, run.macos.sh, run.linux.sh) that execute the appropriate project file using "dotnet run". The solution startup configuration in Unlimotion.sln.startup.json defines a "Server + Client" multi-project configuration that launches both the server and desktop client simultaneously for integrated development and testing.
+To set up the Unlimotion repository for development:
 
-```mermaid
-graph TD
-A[Unlimotion.sln] --> B[Unlimotion.Desktop]
-A --> C[Unlimotion.Android]
-A --> D[Unlimotion.iOS]
-A --> E[Unlimotion.Browser]
-A --> F[Unlimotion.Server]
-B --> G[Unlimotion]
-G --> H[Unlimotion.ViewModel]
-G --> I[Unlimotion.Domain]
-G --> J[Unlimotion.TaskTree]
-F --> K[Unlimotion.Server.ServiceInterface]
-F --> L[Unlimotion.Server.ServiceModel]
+1. Clone the repository using Git:
+```bash
+git clone https://github.com/Kibnet/Unlimotion.git
 ```
 
-**Diagram sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj)
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj)
+2. Alternatively, download the source code as a ZIP archive from the GitHub repository and extract it to a local directory.
+
+3. Navigate to the root directory of the extracted/cloned repository.
+
+4. Restore NuGet packages automatically through the build process. The solution uses standard NuGet package management with dependencies defined in individual project files.
+
+The repository structure follows a modular architecture with separate projects for desktop, mobile, server, and shared components, enabling independent development and testing.
 
 **Section sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [run.windows.cmd](file://run.windows.cmd#L1)
-- [run.macos.sh](file://run.macos.sh#L1)
-- [run.linux.sh](file://run.linux.sh#L1)
-- [Unlimotion.sln.startup.json](file://src/Unlimotion.sln.startup.json#L1-L63)
+- [README.md](file://README.md#L1-L186)
+- [nuget.config](file://src/nuget.config#L1-L11)
 
-## Testing Strategy
+## Build and Run Process
 
-The Unlimotion application employs a comprehensive testing strategy centered around the Unlimotion.Test project, which uses xUnit as the testing framework with FluentAssertions for assertions and CompareNETObjects for object comparison. The testing architecture includes fixture classes like MainWindowViewModelFixture that set up test environments with predefined task data from snapshot files. TestHelpers provides utility methods for common testing operations such as creating tasks, waiting for throttle times, and comparing storage versions. The test suite validates core functionality including task creation, modification, deletion, archiving, completion, and complex operations like cloning and blocking relationships between tasks.
+The Unlimotion application can be built and run using platform-specific startup scripts or through Visual Studio:
 
-```mermaid
-classDiagram
-class MainWindowViewModelTests {
-+MainWindowViewModelFixture fixture
-+MainWindowViewModel mainWindowVM
-+CompareLogic compareLogic
-+ITaskStorage taskRepository
-+CreateRootTask_Success()
-+RenameTask_Success()
-+CreateInnerTask_Success()
-+CreateSiblingTask_Success()
-+CreateBlockedSibling_Success()
-+MovingToRootTask_Success()
-+CloneToRootTask_Success()
-+ArchiveCommand_Success()
-+IsCompletedTask_Success()
-}
-class MainWindowViewModelFixture {
-+string DefaultTasksFolderPath
-+string DefaultSnapshotsFolderPath
-+MainWindowViewModel MainWindowViewModelTest
-+const string RootTask1Id
-+const string SubTask22Id
-+const string BlockedTask2Id
-+MainWindowViewModelFixture()
-+CleanTasks()
-+Try()
-+CopyTaskFromSnapshotsFolder()
-}
-class TestHelpers {
-+SetCurrentTask()
-+ActionNotCreateItems()
-+CreateAndReturnNewTaskItem()
-+WaitThrottleTime()
-+GetTask()
-+GetStorageTaskItem()
-+CompareStorageVersions()
-+ShouldHaveOnlyTitleChanged()
-+ShouldContainOnlyDifference()
-+AssertTaskExistsOnDisk()
-}
-MainWindowViewModelTests --> MainWindowViewModelFixture : "uses"
-MainWindowViewModelTests --> TestHelpers : "uses"
-MainWindowViewModelFixture --> MainWindowViewModel : "creates"
+### Using Startup Scripts
+- **Windows**: Execute `run.windows.cmd` which runs:
+```bash
+dotnet run --project src\Unlimotion.Desktop\Unlimotion.Desktop.csproj
 ```
 
-**Diagram sources**
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs#L1-L956)
-- [MainWindowViewModelFixture.cs](file://src/Unlimotion.Test/MainWindowViewModelFixture.cs#L1-L116)
-- [TestHelpers.cs](file://src/Unlimotion.Test/TestHelpers.cs#L1-L123)
-
-**Section sources**
-- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj#L1-L142)
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs#L1-L956)
-- [TestHelpers.cs](file://src/Unlimotion.Test/TestHelpers.cs#L1-L123)
-- [MainWindowViewModelFixture.cs](file://src/Unlimotion.Test/MainWindowViewModelFixture.cs#L1-L116)
-
-## Contribution Guidelines
-
-Contributors to the Unlimotion project must adhere to the Contributor Covenant Code of Conduct, which establishes standards for respectful and inclusive behavior. The code of conduct prohibits harassment, discrimination, and unprofessional conduct while promoting empathy, respect for differing viewpoints, and constructive feedback. Community leaders have the authority to enforce these standards through corrective actions ranging from private warnings to permanent bans based on the severity of violations. All contributions should align with the project's architecture and coding standards, with particular attention to the MVVM pattern implemented in the application. Contributors are expected to write comprehensive tests for new features and ensure backward compatibility where applicable.
-
-**Section sources**
-- [CODE_OF_CONDUCT.md](file://CODE_OF_CONDUCT.md#L1-L129)
-
-## Code Organization Principles
-
-The Unlimotion application follows a well-structured code organization with clear separation of concerns. The solution is divided into multiple projects based on functionality and platform targets. The core logic resides in shared projects like Unlimotion.Domain (data models), Unlimotion.ViewModel (presentation logic), and Unlimotion.TaskTreeManager (task tree operations). Platform-specific UI implementations are separated into Unlimotion.Desktop, Unlimotion.Android, Unlimotion.iOS, and Unlimotion.Browser projects. The application uses the MVVM pattern extensively, with ViewModels in the Unlimotion.ViewModel project containing the bulk of the business logic. Configuration is managed through JSON files, and dependency injection is implemented using Splat. The codebase leverages AutoMapper for object mapping and ReactiveUI for reactive programming patterns.
-
-```mermaid
-graph TD
-A[Unlimotion Solution] --> B[Core Projects]
-A --> C[Platform Projects]
-A --> D[Test Projects]
-B --> E[Unlimotion.Domain]
-B --> F[Unlimotion.ViewModel]
-B --> G[Unlimotion.TaskTreeManager]
-B --> H[Unlimotion.Interface]
-C --> I[Unlimotion.Desktop]
-C --> J[Unlimotion.Android]
-C --> K[Unlimotion.iOS]
-C --> L[Unlimotion.Browser]
-C --> M[Unlimotion.Server]
-D --> N[Unlimotion.Test]
-E --> O[TaskItem.cs]
-E --> P[User.cs]
-E --> Q[Attachment.cs]
-F --> R[MainWindowViewModel.cs]
-F --> S[TaskItemViewModel.cs]
-F --> T[SettingsViewModel.cs]
-I --> U[Program.cs]
-M --> V[Program.cs]
-N --> W[MainWindowViewModelTests.cs]
-N --> X[TestHelpers.cs]
-N --> Y[MainWindowViewModelFixture.cs]
+- **macOS**: Execute `run.macos.sh` which runs:
+```bash
+dotnet run --project src/Unlimotion.Desktop/Unlimotion.Desktop.ForMacBuild.csproj
 ```
 
-**Diagram sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Domain.csproj](file://src/Unlimotion.Domain/Unlimotion.Domain.csproj)
-- [Unlimotion.ViewModel.csproj](file://src/Unlimotion.ViewModel/Unlimotion.ViewModel.csproj)
+- **Linux**: Execute `run.linux.sh` which runs:
+```bash
+dotnet run --project src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj
+```
 
-**Section sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Domain](file://src/Unlimotion.Domain)
-- [Unlimotion.ViewModel](file://src/Unlimotion.ViewModel)
-- [Unlimotion.TaskTreeManager](file://src/Unlimotion.TaskTreeManager)
+### Using Visual Studio
+1. Open the solution file in Visual Studio.
+2. Set startup projects using the SwitchStartupProject extension configuration in `Unlimotion.sln.startup.json`.
+3. The "Server + Client" configuration allows running both `Unlimotion.Server` and `Unlimotion.Desktop` projects simultaneously.
 
-## Branching Strategy
+### Alternative Commands
+- Start client only: `dotnet run -p Unlimotion.Desktop\Unlimotion.Desktop.csproj`
+- Start server only: `dotnet run -p Unlimotion.Server\Unlimotion.Server.csproj`
 
-The Unlimotion project follows a standard Git branching model with the main branch serving as the primary development branch. Feature development should be conducted on feature branches created from main, with regular synchronization to avoid merge conflicts. The repository includes a GitPullJob and GitPushJob in the Scheduling/Jobs directory, indicating automated Git operations for backup purposes. The TestSettings.json file contains Git configuration options such as backup intervals, remote URLs, and branch names, suggesting a development workflow that incorporates regular Git synchronization. Pull requests should be created for all feature branches, with thorough code review before merging into main. The project's run scripts and solution configuration support a development workflow that emphasizes frequent testing and integration.
-
-**Section sources**
-- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs)
-- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs)
-- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json#L1-L30)
-
-## Adding New Features
-
-When adding new features to Unlimotion, developers should follow the existing architectural patterns and code organization. New functionality should be implemented in the appropriate project based on its scope: core features in Unlimotion.ViewModel or Unlimotion.Domain, platform-specific features in the respective platform project. The MVVM pattern should be maintained, with UI logic in ViewModels rather than code-behind files. New features require corresponding unit tests in the Unlimotion.Test project, following the existing testing patterns established in MainWindowViewModelTests. Configuration options for new features should be added to the Settings.json schema, with default values provided. The implementation should consider cross-platform compatibility, especially for features that interact with system resources or have platform-specific behaviors.
-
-**Section sources**
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L1-L45)
-- [Unlimotion.ViewModel](file://src/Unlimotion.ViewModel)
-- [Unlimotion.Domain](file://src/Unlimotion.Domain)
-
-## Writing Unit Tests
-
-Unit tests in Unlimotion are written using xUnit and should follow the patterns established in the MainWindowViewModelTests class. Each test method should be clearly named to describe the scenario being tested, using the naming convention "MethodName_StateUnderTest_ExpectedBehavior". The MainWindowViewModelFixture provides a consistent test environment with predefined test data, and TestHelpers offers utility methods for common testing operations. Tests should be isolated and deterministic, using the fixture's cleanup mechanisms to ensure test independence. When testing asynchronous operations, use the appropriate async/await patterns and ensure proper timing with WaitThrottleTime. Assertions should be comprehensive but focused, verifying only the expected outcomes of the specific test scenario.
+The build process automatically restores NuGet packages and compiles all required components.
 
 ```mermaid
 flowchart TD
-A[Start Test] --> B[Initialize Fixture]
-B --> C[Set Up Test State]
-C --> D[Execute Operation]
-D --> E[Wait for Throttle Time]
-E --> F[Verify Results]
-F --> G[Assert Expected Outcomes]
-G --> H[Clean Up]
-H --> I[End Test]
-style A fill:#f9f,stroke:#333
-style I fill:#f9f,stroke:#333
+A["User Action"] --> B{"Platform?"}
+B --> |Windows| C["run.windows.cmd"]
+B --> |macOS| D["run.macos.sh"]
+B --> |Linux| E["run.linux.sh"]
+C --> F["dotnet run --project Unlimotion.Desktop.csproj"]
+D --> F
+E --> F
+F --> G["Application Starts"]
+H["Visual Studio"] --> I["Load Unlimotion.sln"]
+I --> J["Set Startup Project"]
+J --> K["Run Server + Client"]
+K --> G
 ```
 
 **Diagram sources**
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs#L1-L956)
-- [TestHelpers.cs](file://src/Unlimotion.Test/TestHelpers.cs#L1-L123)
-- [MainWindowViewModelFixture.cs](file://src/Unlimotion.Test/MainWindowViewModelFixture.cs#L1-L116)
+- [run.windows.cmd](file://run.windows.cmd#L1)
+- [run.macos.sh](file://run.macos.sh#L1)
+- [run.linux.sh](file://run.linux.sh#L1)
+- [Unlimotion.sln.startup.json](file://src/Unlimotion.sln.startup.json#L1-L62)
+- [start-client.cmd](file://src/start-client.cmd#L1)
+- [start-server.cmd](file://src/start-server.cmd#L1)
 
 **Section sources**
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs#L1-L956)
-- [TestHelpers.cs](file://src/Unlimotion.Test/TestHelpers.cs#L1-L123)
+- [run.windows.cmd](file://run.windows.cmd#L1)
+- [run.macos.sh](file://run.macos.sh#L1)
+- [run.linux.sh](file://run.linux.sh#L1)
+- [Unlimotion.sln.startup.json](file://src/Unlimotion.sln.startup.json#L1-L62)
+
+## Configuration Management
+
+Unlimotion uses multiple configuration files for different environments and components:
+
+### Environment Configuration
+The `.env` file in the src directory contains environment variables:
+```
+COMPOSE_PROJECT_NAME=unlimotion
+```
+
+### Application Settings
+- **Client Configuration**: Managed through `Settings.json` (not included in repository, created at runtime).
+- **Server Configuration**: 
+  - `appsettings.json`: Main configuration file with Serilog logging, RavenDB settings, ServiceStack license, and file paths.
+  - `appsettings.Development.json`: Development-specific logging configuration with Debug level logging.
+
+### Test Configuration
+The `TestSettings.json` file in the test project contains configuration for testing environments:
+- TaskStorage settings (path, URL, authentication)
+- Git backup settings (intervals, credentials, repository information)
+- UI display preferences for testing
+
+### Launch Settings
+The `launchSettings.json` file in the Unlimotion.Desktop project specifies:
+- Command line arguments (e.g., `-config=Settings.Refactor.json`)
+- Profile configurations for different execution environments
+
+Configuration is loaded at application startup in `Program.cs`, with different paths used for DEBUG and release builds.
+
+**Section sources**
+- [.env](file://src/.env#L1)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json#L1-L44)
+- [appsettings.Development.json](file://src/Unlimotion.Server/appsettings.Development.json#L1-L9)
+- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json#L1-L29)
+- [launchSettings.json](file://src/Unlimotion.Desktop/Properties/launchSettings.json#L1-L11)
+- [Program.cs](file://src/Unlimotion.Desktop/Program.cs#L1-L93)
+
+## Testing Strategy
+
+The Unlimotion project uses xUnit as the primary testing framework with Moq for mocking dependencies.
+
+### Test Project Structure
+The `Unlimotion.Test` project (Unlimotion.Test.csproj) contains:
+- Unit tests for core functionality
+- Integration tests for service components
+- ViewModel tests with mocking
+- Snapshot testing for UI state verification
+
+### Testing Dependencies
+The test project references:
+- **xunit.v3**: Core testing framework
+- **xunit.runner.visualstudio**: Test runner integration
+- **Microsoft.NET.Test.Sdk**: .NET test SDK
+- **Moq**: Mocking framework (via JustMock package)
+- **CompareNETObjects**: Object comparison for assertions
+
+### Running Tests
+Tests can be executed through:
+1. Visual Studio Test Explorer
+2. Command line: `dotnet test`
+3. IDE integrated test runners
+
+### Test Organization
+Key test files include:
+- `MainWindowViewModelTests.cs`: Tests for main window functionality
+- `TaskAvailabilityCalculationTests.cs`: Business logic for task availability
+- `TaskCompletionChangeTests.cs`: State transition logic
+- `JsonRepairingReaderTests.cs`: Data persistence and repair functionality
+
+The test project references core projects including Unlimotion.ViewModel, Unlimotion.Server.ServiceInterface, and the main Unlimotion project for comprehensive testing coverage.
+
+```mermaid
+classDiagram
+class UnlimotionTest {
++TestSettings.json
++Snapshots/
+}
+class TestingFramework {
++xunit.v3
++Microsoft.NET.Test.Sdk
++xunit.runner.visualstudio
+}
+class MockingFramework {
++JustMock (Moq)
++CompareNETObjects
+}
+class TestCategories {
++MainWindowViewModelTests
++TaskAvailabilityCalculationTests
++TaskCompletionChangeTests
++JsonRepairingReaderTests
++TaskMigratorTests
+}
+class ProjectReferences {
++Unlimotion.ViewModel
++Unlimotion.Server.ServiceInterface
++Unlimotion
+}
+UnlimotionTest --> TestingFramework : "uses"
+UnlimotionTest --> MockingFramework : "uses"
+UnlimotionTest --> TestCategories : "contains"
+UnlimotionTest --> ProjectReferences : "references"
+```
+
+**Diagram sources**
+- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj#L1-L140)
+- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json#L1-L29)
+
+**Section sources**
+- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj#L1-L140)
+- [TestSettings.json](file://src/Unlimotion.Test/TestSettings.json#L1-L29)
 
 ## Debugging Common Issues
 
-Common issues in Unlimotion development often relate to data binding, asynchronous operations, and cross-platform compatibility. The application uses Avalonia's compiled bindings, which can be debugged using the built-in logging capabilities enabled in the BuildAvaloniaApp method. For issues with task state changes or property updates, verify that INotifyPropertyChanged is properly implemented and that property change notifications are being raised. Throttling is implemented in TaskItemViewModel with a DefaultThrottleTime, which may affect the timing of operations and should be considered when debugging. The NotificationManagerWrapperMock in tests can be used to simulate user interactions during debugging. When encountering issues with file operations or task persistence, check the task storage path configuration and file permissions, especially on macOS where additional permission steps may be required.
+### Dependency Injection Failures
+- Ensure all services are properly registered in the application startup.
+- Verify interface implementations are correctly mapped.
+- Check for circular dependencies in service registrations.
+- Use the built-in logging to trace service resolution issues.
 
-**Section sources**
-- [Program.cs](file://src/Unlimotion.Desktop/Program.cs#L1-L94)
-- [Unlimotion.csproj](file://src/Unlimotion/Unlimotion.csproj#L1-L45)
-- [MainWindowViewModelTests.cs](file://src/Unlimotion.Test/MainWindowViewModelTests.cs#L1-L956)
-
-## Cross-Platform Development
-
-Unlimotion is designed as a cross-platform application supporting Desktop (Windows, macOS, Linux), Android, iOS, and Browser clients. The core application logic is shared across platforms through the Unlimotion, Unlimotion.ViewModel, and Unlimotion.Domain projects, while platform-specific implementations are handled in separate projects. The Avalonia UI framework enables consistent UI rendering across platforms, with platform-specific adaptations as needed. The build system uses different project files for different platforms (Unlimotion.Desktop.ForDebianBuild.csproj, Unlimotion.Desktop.ForMacBuild.csproj) to handle platform-specific requirements. Configuration is managed through JSON files that can be customized for different environments. Developers should test new features on all target platforms and be aware of platform-specific limitations or requirements, such as the additional permission step needed on macOS for unsigned applications.
-
-```mermaid
-graph TD
-A[Core Logic] --> B[Desktop Client]
-A --> C[Android Client]
-A --> D[iOS Client]
-A --> E[Browser Client]
-A --> F[Unlimotion]
-A --> G[Unlimotion.ViewModel]
-A --> H[Unlimotion.Domain]
-B --> I[Unlimotion.Desktop]
-C --> J[Unlimotion.Android]
-D --> K[Unlimotion.iOS]
-E --> L[Unlimotion.Browser]
-F --> M[Task Management]
-F --> N[Scheduling]
-F --> O[Data Storage]
-I --> P[Windows]
-I --> Q[macOS]
-I --> R[Linux]
-style A fill:#4CAF50,stroke:#333
-style B fill:#2196F3,stroke:#333
-style C fill:#FF9800,stroke:#333
-style D fill:#F44336,stroke:#333
-style E fill:#9C27B0,stroke:#333
+### UI Binding Errors
+- Enable binding diagnostics in DEBUG mode:
+```csharp
+#if DEBUG
+.LogToTrace(LogEventLevel.Debug, LogArea.Binding)
+#endif
 ```
+- Verify DataContext is properly set for views.
+- Check property names in bindings match ViewModel properties.
+- Ensure INotifyPropertyChanged is properly implemented.
 
-**Diagram sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Desktop.csproj](file://src/Unlimotion.Desktop/Unlimotion.Desktop.csproj)
-- [Unlimotion.Android.csproj](file://src/Unlimotion.Android/Unlimotion.Android.csproj)
-- [Unlimotion.iOS.csproj](file://src/Unlimotion.iOS/Unlimotion.iOS.csproj)
-- [Unlimotion.Browser.csproj](file://src/Unlimotion.Browser/Unlimotion.Browser.csproj)
+### Database Connection Problems
+- Verify RavenDB server is running on `http://localhost:8080`.
+- Check `appsettings.json` for correct ServerUrl and DataDirectory.
+- Ensure the `RavenDB` directory exists and is writable.
+- Validate database name is set to "Unlimotion" in configuration.
+
+### General Debugging Tips
+- Use the DEBUG build configuration for enhanced logging.
+- Check the `Log` directory for application and RavenDB logs.
+- Verify file permissions, especially on macOS where unsigned applications have restricted access.
+- Ensure the Tasks directory exists and is accessible.
 
 **Section sources**
-- [Unlimotion.sln](file://src/Unlimotion.sln)
-- [Unlimotion.Desktop](file://src/Unlimotion.Desktop)
+- [Program.cs](file://src/Unlimotion.Desktop/Program.cs#L1-L93)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json#L1-L44)
+- [Unlimotion.sln.startup.json](file://src/Unlimotion.sln.startup.json#L1-L62)
+
+## Contribution Workflow
+
+### Branching Strategy
+- Main development occurs on the `main` branch.
+- Feature branches should be created for new functionality.
+- Bug fixes should use hotfix branches from main.
+- Pull requests require review before merging.
+
+### Code Formatting Rules
+- Follow .NET naming conventions.
+- Use nullable reference types (enabled in Directory.Build.props).
+- Maintain consistent code style with existing codebase.
+- Include unit tests for new functionality.
+
+### Pull Request Requirements
+- Clear description of changes and motivation.
+- Reference related issues when applicable.
+- Pass all automated tests.
+- Include appropriate documentation updates.
+- Minimal, focused changes (avoid large, sweeping changes).
+
+### Development Practices
+- Write tests for all new functionality.
+- Use descriptive commit messages.
+- Keep pull requests small and focused.
+- Address review feedback promptly.
+
+The project uses standard .NET development practices with a focus on test-driven development and maintainable code structure.
+
+**Section sources**
+- [Directory.Build.props](file://src/Directory.Build.props#L1-L5)
+- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj#L1-L140)
+
+## Performance Profiling
+
+### Avalonia-Specific Profiling
+- Monitor UI thread performance to avoid blocking operations.
+- Use Avalonia's built-in performance tracing for layout and rendering.
+- Minimize unnecessary property change notifications.
+- Optimize data templates for large collections.
+
+### Memory Leak Detection
+- Monitor for event handler leaks, especially with ReactiveUI components.
+- Check for proper disposal of subscriptions and observables.
+- Use weak event patterns where appropriate.
+- Profile memory usage during long-running operations.
+
+### ReactiveUI Optimization
+- Avoid excessive reactive chains that can impact performance.
+- Use Throttle and Sample operators to limit update frequency.
+- Implement proper error handling in reactive streams.
+- Monitor for memory retention in observable sequences.
+
+### General Performance Techniques
+- Profile startup time and optimize initialization sequences.
+- Monitor garbage collection patterns and memory allocation.
+- Use asynchronous operations for I/O bound tasks.
+- Cache expensive computations when appropriate.
+
+Performance should be regularly monitored, especially when implementing new features that affect UI rendering or data processing.
+
+**Section sources**
+- [Program.cs](file://src/Unlimotion.Desktop/Program.cs#L1-L93)
+- [Unlimotion.Test.csproj](file://src/Unlimotion.Test/Unlimotion.Test.csproj#L1-L140)
+
+## Mobile Development Considerations
+
+### Android Development
+- The `Unlimotion.Android` project contains platform-specific code.
+- Requires Android SDK and compatible emulator or device.
+- Pay attention to file system permissions on Android.
+- Test on multiple screen sizes and densities.
+- Optimize for touch interactions and mobile navigation.
+
+### iOS Development
+- The `Unlimotion.iOS` project contains platform-specific code.
+- Requires Xcode and Apple Developer account.
+- Test on actual devices when possible, not just simulators.
+- Consider iOS-specific UI guidelines and navigation patterns.
+- Pay attention to memory constraints on mobile devices.
+
+### Cross-Platform Mobile Issues
+- Ensure consistent behavior across platforms.
+- Test orientation changes and different screen sizes.
+- Handle platform-specific back button/navigation.
+- Optimize for battery usage and network connectivity.
+- Consider offline functionality and data synchronization.
+
+### Debugging Mobile Builds
+- Use platform-specific debugging tools (Android Studio, Xcode).
+- Monitor log output from both .NET and native layers.
+- Test on physical devices to catch platform-specific issues.
+- Pay attention to startup time and memory usage on mobile devices.
+
+The mobile projects integrate with the shared codebase while providing platform-specific implementations where necessary.
+
+**Section sources**
+- [README.md](file://README.md#L1-L186)
 - [Unlimotion.Android](file://src/Unlimotion.Android)
 - [Unlimotion.iOS](file://src/Unlimotion.iOS)
-- [Unlimotion.Browser](file://src/Unlimotion.Browser)

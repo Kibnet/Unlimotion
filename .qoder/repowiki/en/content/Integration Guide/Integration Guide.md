@@ -2,253 +2,104 @@
 
 <cite>
 **Referenced Files in This Document**   
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs)
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs)
 - [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs)
-- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs)
-- [Program.cs](file://src/Unlimotion.TelegramBot/Program.cs)
 - [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json)
 - [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs)
 - [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs)
 - [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json)
+- [RavenDBLicense.json](file://src/Unlimotion.Server/RavenDBLicense.json)
+- [MainActivity.cs](file://src/Unlimotion.Android/MainActivity.cs)
+- [AppDelegate.cs](file://src/Unlimotion.iOS/AppDelegate.cs)
+- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs)
+- [ChatHub.cs](file://src/Unlimotion.Server/hubs/ChatHub.cs)
+- [ClientSettings.cs](file://src/Unlimotion/ClientSettings.cs)
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs)
+- [TaskStorages.cs](file://src/Unlimotion/TaskStorages.cs)
 </cite>
 
 ## Table of Contents
-1. [Telegram Bot Integration](#telegram-bot-integration)
-2. [Git Synchronization](#git-synchronization)
-3. [Configuration Options](#configuration-options)
-4. [Integration Workflows](#integration-workflows)
-5. [Common Issues and Solutions](#common-issues-and-solutions)
+1. [Introduction](#introduction)
+2. [Git Repository Integration](#git-repository-integration)
+3. [Telegram Bot Integration](#telegram-bot-integration)
+4. [Server Configuration with RavenDB](#server-configuration-with-ravendb)
+5. [Mobile App Configuration](#mobile-app-configuration)
+6. [Multi-Client Collaboration](#multi-client-collaboration)
+7. [Troubleshooting Guide](#troubleshooting-guide)
+8. [Performance Optimization](#performance-optimization)
 
-## Telegram Bot Integration
+## Introduction
+This integration guide provides comprehensive documentation for connecting Unlimotion's external services. The system enables task management synchronization across multiple platforms through Git repository backups, Telegram bot integration, centralized RavenDB storage, and mobile application support. This document details the configuration process for each integration point, including step-by-step setup instructions, configuration examples, and troubleshooting guidance for common issues.
 
-The Telegram Bot integration enables users to interact with the Unlimotion task management system through Telegram commands and interactive messages. The core functionality is implemented in the `Bot` class, which handles message processing, command execution, callback queries, and user state management.
+## Git Repository Integration
 
-### Command Handling
+Unlimotion supports automated Git repository integration for task backup and synchronization. The system uses GitPullJob and GitPushJob to automate synchronization at configurable intervals.
 
-The bot supports several commands for task interaction:
-- `/search [query]`: Searches tasks by title or description
-- `/task [ID]`: Displays detailed information about a specific task
-- `/root`: Lists all root-level tasks (tasks without parents)
+### Git Settings Configuration
+The Git integration is configured through the GitSettings class which contains properties for repository connection and authentication:
 
-The command processing is implemented in the `OnMessageReceived` method of the `Bot` class. When a message is received, the bot first validates user access, then routes the command to the appropriate handler. The `TaskService` is used to retrieve and search tasks from the local storage.
+- RepositoryPath: Local path for Git repository (default: "GitTasks")
+- RemoteUrl: URL of the remote Git repository
+- Branch: Target branch name (default: "master")
+- UserName: Git username or email for authentication
+- Password: Git personal access token or password
+- PullIntervalSeconds: Interval between pull operations (default: 30 seconds)
+- PushIntervalSeconds: Interval between push operations (default: 60 seconds)
+- RemoteName: Remote repository name (default: "origin")
+- PushRefSpec: Reference specification for push operations (default: "refs/heads/main")
+- CommitterName and CommitterEmail: Identity for Git commits
 
-```mermaid
-sequenceDiagram
-participant User as Telegram User
-participant Bot as Telegram Bot
-participant TaskService as TaskService
-participant Storage as ITaskStorage
-User->>Bot : Send command (/search query)
-Bot->>Bot : Validate user access
-Bot->>TaskService : SearchTasks("query")
-TaskService->>Storage : Query tasks by title/description
-Storage-->>TaskService : Return matching tasks
-TaskService-->>Bot : Return task list
-Bot->>User : Display results with inline buttons
-```
+Configuration is typically stored in appsettings.json under the "Git" section, allowing for environment-specific settings.
 
-**Diagram sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L100-L150)
-- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs#L45-L65)
-
-### Callback Query Processing
-
-The bot uses inline keyboard buttons to provide interactive task management. When a user interacts with these buttons, callback queries are sent to the bot. The `OnCallbackQueryReceived` method handles these interactions, supporting operations such as:
-- Toggling task completion status
-- Deleting tasks
-- Creating subtasks and sibling tasks
-- Navigating task relationships (parents, children, blockers)
-
-Each callback data is prefixed with identifiers like `toggle_`, `delete_`, or `createSub_` followed by the task ID, enabling the bot to route the callback to the appropriate handler.
+### Automated Backup Scheduling
+The system implements automated backups through two Quartz.NET jobs:
 
 ```mermaid
 flowchart TD
-Start([Callback Received]) --> ExtractData["Extract callback data"]
-ExtractData --> ParseAction["Parse action type and task ID"]
-ParseAction --> ValidateAccess["Validate user access"]
-ValidateAccess --> HandleAction{"Action Type?"}
-HandleAction --> |Toggle| UpdateStatus["Toggle task completion status"]
-HandleAction --> |Delete| RemoveTask["Delete task"]
-HandleAction --> |CreateSub| SetState["Set user state for subtask creation"]
-HandleAction --> |Open| ShowTask["Display task details"]
-UpdateStatus --> RefreshUI["Refresh task display"]
-RemoveTask --> Confirm["Send deletion confirmation"]
-SetState --> Prompt["Prompt user for subtask name"]
-ShowTask --> Display["Show task with inline keyboard"]
-RefreshUI --> End([Response sent])
-Confirm --> End
-Prompt --> End
-Display --> End
+A[GitPullJob] --> B{BackupEnabled?}
+B --> |Yes| C[Execute Pull Operation]
+C --> D[Check Repository Status]
+D --> E[Fetch Changes]
+E --> F[Merge Remote Changes]
+F --> G[Apply Stashed Changes]
+H[GitPushJob] --> I{BackupEnabled?}
+I --> |Yes| J[Execute Push Operation]
+J --> K[Stage All Changes]
+K --> L[Create Commit]
+L --> M[Push to Remote]
 ```
 
 **Diagram sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L300-L450)
+- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs#L1-L20)
+- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs#L1-L21)
 
-### Message Processing and User State Management
+The jobs are triggered based on the configured intervals and only execute when BackupEnabled is set to true in the Git settings. The BackupViaGitService handles the actual Git operations, implementing proper locking mechanisms to prevent race conditions during concurrent access.
 
-The bot maintains user states to handle multi-step interactions, such as creating new subtasks. When a user selects "Create subtask" from a task's inline keyboard, the bot stores the parent task ID in `_userStates` and waits for the user to provide a title for the new subtask.
+### BackupViaGitService Implementation
+The BackupViaGitService class implements the IRemoteBackupService interface and provides the core functionality for Git operations:
 
-The `HandleUserState` method processes these intermediate states, creating new tasks with the provided title and establishing the parent-child relationship in the task hierarchy.
+- CloneOrUpdateRepo: Initializes the repository by cloning from remote or updating existing repository
+- Push: Commits local changes and pushes to the remote repository
+- Pull: Fetches remote changes and merges them with local changes
+- Refs and Remotes: Utility methods to retrieve repository references and remote configurations
+
+The service implements conflict resolution by stashing local changes before merging, then reapplying them afterward. It also integrates with the application's notification system to provide status updates and error reporting.
 
 **Section sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L150-L250)
-- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs#L15-L30)
+- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs#L1-L19)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
 
-## Git Synchronization
+## Telegram Bot Integration
 
-The Git synchronization system provides automatic backup and synchronization of task data through Git operations. Two implementations exist: one for the Telegram Bot service and another for the main application, both using similar patterns but different scheduling mechanisms.
+The Telegram bot integration enables remote task management through Telegram commands and interactive messages.
 
-### GitPullJob and GitPushJob Implementation
+### Bot Configuration
+The bot is configured through appsettings.json with the following key settings:
 
-The Quartz.NET job scheduler powers the Git synchronization in the main application. Two jobs handle the synchronization:
-
-**GitPullJob**: Executes periodic pull operations to synchronize with the remote repository.
-
-```mermaid
-classDiagram
-class GitPullJob {
-+Execute(context) Task
-}
-class IJob {
-<<interface>>
-+Execute(context) Task
-}
-GitPullJob --> IJob : implements
-GitPullJob --> IConfiguration : uses
-GitPullJob --> GitSettings : reads
-GitPullJob --> IRemoteBackupService : calls Pull()
-```
-
-**Diagram sources**
-- [GitPullJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPullJob.cs)
-
-**GitPushJob**: Executes periodic commit and push operations to back up local changes.
-
-```mermaid
-classDiagram
-class GitPushJob {
-+Execute(context) Task
-}
-class IJob {
-<<interface>>
-+Execute(context) Task
-}
-GitPushJob --> IJob : implements
-GitPushJob --> IConfiguration : uses
-GitPushJob --> GitSettings : reads
-GitPushJob --> IRemoteBackupService : calls Push()
-```
-
-**Diagram sources**
-- [GitPushJob.cs](file://src/Unlimotion/Scheduling/Jobs/GitPushJob.cs)
-
-Both jobs check if Git backup is enabled via the `BackupEnabled` configuration flag before executing their operations, ensuring that synchronization only occurs when properly configured.
-
-### GitService Implementation
-
-The `GitService` class in the Telegram Bot project provides the core Git functionality, including repository cloning, pulling, and committing/pushing changes.
-
-```mermaid
-sequenceDiagram
-participant Timer as Timer
-participant GitService as GitService
-participant LibGit2Sharp as LibGit2Sharp
-participant Remote as Remote Repository
-Timer->>GitService : PullTimer Elapsed
-GitService->>LibGit2Sharp : Checkout branch
-GitService->>LibGit2Sharp : Pull with credentials
-LibGit2Sharp-->>GitService : Pull result
-GitService->>Remote : Fetch updates
-Remote-->>LibGit2Sharp : Send updates
-LibGit2Sharp-->>GitService : Merged changes
-GitService->>Timer : Operation complete
-Timer->>GitService : PushTimer Elapsed
-GitService->>LibGit2Sharp : Check repository status
-LibGit2Sharp-->>GitService : IsDirty status
-alt Changes detected
-GitService->>LibGit2Sharp : Stage all files
-GitService->>LibGit2Sharp : Create commit
-GitService->>LibGit2Sharp : Push to remote
-LibGit2Sharp-->>Remote : Send commit
-Remote-->>LibGit2Sharp : Acknowledge
-LibGit2Sharp-->>GitService : Push successful
-else No changes
-GitService->>Timer : No changes to commit
-end
-```
-
-**Diagram sources**
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs)
-- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs)
-
-The service uses LibGit2Sharp for all Git operations and handles authentication through username and password credentials stored in the configuration.
-
-### Automatic Commit/Push Intervals
-
-The synchronization intervals are configurable through the `GitSettings` class, which defines:
-
-- `PullIntervalSeconds`: Interval between automatic pull operations (default: 30 seconds)
-- `PushIntervalSeconds`: Interval between automatic commit/push operations (default: 60 seconds)
-
-These intervals are used by the timer-based synchronization system in the Telegram Bot, which starts two timers in the `StartTimers` method:
-
-```mermaid
-flowchart LR
-A[Application Start] --> B[Read GitSettings]
-B --> C[Create Pull Timer]
-B --> D[Create Push Timer]
-C --> E[Every PullIntervalSeconds]
-D --> F[Every PushIntervalSeconds]
-E --> G[Execute PullLatestChanges]
-F --> H[Execute CommitAndPushChanges]
-G --> I[Update local repository]
-H --> J[Commit and push changes]
-```
-
-**Section sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L80-L100)
-- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs#L10-L12)
-
-## Configuration Options
-
-The integration features are configured through JSON configuration files and settings classes that define behavior, access control, and synchronization parameters.
-
-### GitSettings Configuration
-
-The `GitSettings` class defines all configurable parameters for Git synchronization:
-
-```mermaid
-classDiagram
-class GitSettings {
-+string RepositoryPath
-+string RemoteUrl
-+string Branch
-+string UserName
-+string Password
-+int PullIntervalSeconds
-+int PushIntervalSeconds
-+string RemoteName
-+string PushRefSpec
-+string CommitterName
-+string CommitterEmail
-}
-```
-
-**Diagram sources**
-- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs)
-
-Key configuration options include:
-- **RepositoryPath**: Local path where the Git repository is cloned (default: "GitTasks")
-- **RemoteUrl**: URL of the remote Git repository
-- **Branch**: Git branch to work with (default: "master")
-- **PullIntervalSeconds**: Frequency of pull operations in seconds
-- **PushIntervalSeconds**: Frequency of commit/push operations in seconds
-- **CommitterName/Email**: Identity used for Git commits
-
-### Telegram Bot Configuration
-
-The `appsettings.json` file configures the Telegram Bot with essential parameters:
+- BotToken: Authentication token for the Telegram bot
+- AllowedUsers: List of user IDs permitted to interact with the bot
+- Git: Git repository configuration (same as GitSettings)
+- Logging: Configuration for log file output
 
 ```json
 {
@@ -260,144 +111,369 @@ The `appsettings.json` file configures the Telegram Bot with essential parameter
     "Branch": "master",
     "UserName": "",
     "Password": ""
+  },
+  "Logging": {
+    "LogFilePath": "logs/log-.txt",
+    "RollingInterval": "Day"
   }
 }
 ```
 
-The configuration includes:
-- **BotToken**: Telegram Bot API token for authentication
-- **AllowedUsers**: List of Telegram user IDs permitted to access the bot
-- **Git**: Nested Git configuration object with repository settings
+### Command Handling
+The bot supports several commands for task management:
 
-Access control is enforced in the `CheckAccess` method, which verifies that the user ID is in the `AllowedUsers` list before processing any requests.
+- /start: Displays welcome message
+- /help: Shows available commands
+- /search [query]: Searches tasks by title or content
+- /task [ID]: Displays detailed information about a specific task
+- /root: Lists root-level tasks
 
-**Section sources**
-- [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json)
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L400-L420)
+The bot also supports interactive operations through callback queries, allowing users to:
+- Toggle task completion status
+- Delete tasks
+- Create subtasks and sibling tasks
+- Navigate task relationships (parents, blocking tasks, etc.)
 
-## Integration Workflows
-
-### Telegram Bot Interaction Workflow
-
-The complete workflow for interacting with tasks through the Telegram Bot:
+### Synchronization Process
+The bot automatically synchronizes with the task database through periodic timers:
 
 ```mermaid
 sequenceDiagram
-participant User as Telegram User
 participant Bot as Telegram Bot
-participant TaskService as TaskService
 participant GitService as GitService
-participant Storage as FileTaskStorage
-User->>Bot : /search "important"
-Bot->>Bot : Validate access
-Bot->>TaskService : SearchTasks("important")
-TaskService->>Storage : Query tasks
-Storage-->>TaskService : Return results
-TaskService-->>Bot : Return task list
-Bot->>User : Display results with inline buttons
-User->>Bot : Click "Create subtask"
-Bot->>Bot : Set user state
-Bot->>User : Prompt for subtask name
-User->>Bot : "Follow up meeting"
-Bot->>Bot : Handle user state
-Bot->>TaskService : Create new task
-TaskService->>Storage : Save new task
-Storage-->>TaskService : Success
-TaskService->>GitService : Stage and commit changes
-GitService->>Remote : Push to repository
-GitService-->>Bot : Operation complete
-Bot->>User : Confirm subtask creation
+participant TaskService as TaskService
+participant LocalStorage as Local Task Storage
+Bot->>Bot : StartTimers()
+loop Pull Interval
+Bot->>GitService : PullLatestChanges()
+GitService->>GitService : Fetch from remote
+GitService->>GitService : Merge changes
+GitService->>LocalStorage : Update tasks
+end
+loop Push Interval
+Bot->>GitService : CommitAndPushChanges()
+GitService->>GitService : Stage all changes
+GitService->>GitService : Create commit
+GitService->>GitService : Push to remote
+end
+Bot->>TaskService : Handle user commands
+TaskService->>LocalStorage : Read/Write tasks
+LocalStorage->>GitService : Changes trigger auto-push
 ```
 
 **Diagram sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs)
-- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs)
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs)
+- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L1-L479)
+- [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json#L1-L15)
 
-### Git Synchronization Workflow
+The synchronization process ensures that all changes made through the Telegram interface are automatically pushed to the Git repository, while incoming changes from other sources are pulled at regular intervals.
 
-The automatic synchronization workflow between local changes and remote repository:
+**Section sources**
+- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L1-L479)
+- [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json#L1-L15)
+
+## Server Configuration with RavenDB
+
+Unlimotion uses RavenDB as its centralized task storage solution, providing robust document database capabilities for task management.
+
+### Connection String Setup
+The RavenDB connection is configured in appsettings.json under the "RavenDb" section:
+
+```json
+{
+  "RavenDb": {
+    "DatabaseRecord": {
+      "DatabaseName": "Unlimotion"
+    },
+    "ServerOptions": {
+      "ServerUrl": "http://localhost:8080",
+      "DataDirectory": "RavenDB",
+      "LogsPath": "Log\\RavenDB"
+    }
+  }
+}
+```
+
+Key configuration parameters include:
+- DatabaseName: Name of the RavenDB database
+- ServerUrl: Address of the RavenDB server
+- DataDirectory: Local path for database files
+- LogsPath: Directory for server logs
+
+### User Authentication
+User authentication is implemented through JWT tokens and SignalR hubs. The ChatHub class handles client connections and authentication:
+
+- Clients authenticate using JWT tokens obtained during login
+- The hub validates tokens and extracts user information (UID, login, session)
+- Connection-specific user data is stored in Context.Items
+- Login audit information is recorded in the database
+- SignalR groups are used to manage user-specific message routing
+
+The ServerTaskStorage class manages the client-side connection to the server, handling:
+- Connection establishment and reconnection logic
+- Token refresh and authentication renewal
+- Error handling and connection state management
+- Task synchronization between client and server
 
 ```mermaid
-flowchart TD
-A[Start Application] --> B[Clone or Update Repository]
-B --> C[Start Pull Timer]
-B --> D[Start Push Timer]
-C --> E[Every 30 seconds]
-E --> F[Pull Latest Changes]
-F --> G[Checkout Branch]
-G --> H[Pull with Credentials]
-H --> I[Merge Remote Changes]
-I --> J[Update Local Tasks]
-D --> K[Every 60 seconds]
-K --> L[Check for Changes]
-L --> M{Changes Detected?}
-M --> |Yes| N[Stage All Files]
-M --> |No| O[Log "No changes"]
-N --> P[Create Commit]
-P --> Q[Push to Remote]
-Q --> R[Log Success]
-O --> R
-R --> K
+classDiagram
+class ServerTaskStorage {
++string Url
++bool IsConnected
++bool IsSignedIn
++Connect() Task~bool~
++Disconnect() Task
++SignOut() Task
++Save(TaskItem) Task~bool~
++Remove(string) Task~bool~
++GetAll() IAsyncEnumerable~TaskItem~
+}
+class ChatHub {
++SaveTask(TaskItemHubMold) Task~string~
++DeleteTasks(string[]) Task
++Login(string, string, string, string) Task
++UpdateMyDisplayName(string) Task
+}
+class ClientSettings {
++string AccessToken
++string RefreshToken
++DateTimeOffset ExpireTime
++string UserId
++string Login
+}
+ServerTaskStorage --> ClientSettings : "uses"
+ServerTaskStorage --> ChatHub : "communicates via SignalR"
+ChatHub --> RavenDB : "persists data"
 ```
 
 **Diagram sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L80-L100)
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json#L1-L45)
+- [ChatHub.cs](file://src/Unlimotion.Server/hubs/ChatHub.cs#L1-L239)
+- [ClientSettings.cs](file://src/Unlimotion/ClientSettings.cs#L1-L16)
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
 
-## Common Issues and Solutions
-
-### Access Control Issues
-
-**Problem**: Users cannot access the Telegram Bot despite correct configuration.
-
-**Solution**: Verify that:
-1. The user's Telegram ID is included in the `AllowedUsers` array in `appsettings.json`
-2. The BotToken is correctly configured
-3. The user has started a conversation with the bot on Telegram
-
-The access control mechanism in `CheckAccess` method only allows users whose IDs are explicitly listed in the configuration.
+The RavenDB license is provided in RavenDBLicense.json, containing the license ID, name, and encryption keys required for server operation.
 
 **Section sources**
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs#L400-L420)
+- [appsettings.json](file://src/Unlimotion.Server/appsettings.json#L1-L45)
+- [RavenDBLicense.json](file://src/Unlimotion.Server/RavenDBLicense.json#L1-L24)
 
-### Synchronization Timing Conflicts
+## Mobile App Configuration
 
-**Problem**: Conflicts occur when multiple instances try to synchronize simultaneously.
+Unlimotion provides native mobile applications for both Android and iOS platforms, with platform-specific configuration requirements.
 
-**Solution**: The system implements several safeguards:
-1. **Locking mechanism**: The `BackupViaGitService` uses a static lock object to prevent concurrent operations
-2. **Database watcher coordination**: The service temporarily disables the database watcher during synchronization to prevent race conditions
-3. **Stash before merge**: Changes are stashed before pulling to protect local modifications
+### Android Configuration
+The Android application is configured in MainActivity.cs with the following key aspects:
 
-For the Telegram Bot implementation, the simpler timer-based approach relies on the atomicity of Git operations and proper error handling.
+- Storage permissions: The app requests WRITE_EXTERNAL_STORAGE permission at runtime
+- Data directory configuration: Uses external files directory when permission is granted, otherwise falls back to internal storage
+- Path resolution: Configures BackupViaGitService.GetAbsolutePath to resolve relative paths against the data directory
+- Task storage path: Sets the default storage path to "Tasks" folder within the data directory
+- Configuration file: Initializes settings in "Settings.json" within the data directory
 
-### Git Authentication Failures
+The application handles permission requests through the OnRequestPermissionsResult callback, providing appropriate user feedback when permissions are denied.
 
-**Problem**: Push/pull operations fail due to authentication errors.
+### iOS Configuration
+The iOS application configuration in AppDelegate.cs is more minimal, primarily focusing on:
 
-**Solution**: Ensure that:
-1. The Git username and password/token are correctly configured
-2. For GitHub repositories, use a personal access token instead of password
-3. The repository URL is accessible from the deployment environment
+- Platform initialization: Inherits from AvaloniaAppDelegate to initialize the Avalonia UI framework
+- App builder customization: Configures custom fonts and ReactiveUI support
+- Lifecycle management: Handles application startup and shutdown through standard iOS lifecycle methods
 
-The `GitService` uses basic authentication with username and password, which should be stored securely in the configuration.
+Both mobile platforms use the same core Unlimotion functionality but adapt the storage and permission models to their respective platform requirements.
+
+```mermaid
+graph TD
+A[Mobile App] --> B{Platform}
+B --> |Android| C[Request Storage Permission]
+B --> |iOS| D[Use Sandbox Storage]
+C --> E[Configure External Storage Path]
+D --> F[Configure App Group Container]
+E --> G[Initialize Task Storage]
+F --> G
+G --> H[Load Settings.json]
+H --> I[Start Application]
+```
+
+**Diagram sources**
+- [MainActivity.cs](file://src/Unlimotion.Android/MainActivity.cs#L1-L113)
+- [AppDelegate.cs](file://src/Unlimotion.iOS/AppDelegate.cs#L1-L26)
 
 **Section sources**
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs#L15-L25)
-- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L50-L70)
+- [MainActivity.cs](file://src/Unlimotion.Android/MainActivity.cs#L1-L113)
+- [AppDelegate.cs](file://src/Unlimotion.iOS/AppDelegate.cs#L1-L26)
 
-### Repository Initialization Issues
+## Multi-Client Collaboration
 
-**Problem**: The application fails to initialize the Git repository.
+Unlimotion supports multiple clients connecting to the same server instance for collaborative task management.
 
-**Solution**: The `CloneOrUpdateRepo` method handles both cloning new repositories and updating existing ones:
-1. Check if the repository path is valid using `Repository.IsValid`
-2. If invalid, clone from the remote URL
-3. If valid, perform a pull operation to update
+### Connection Architecture
+The system uses SignalR hubs to facilitate real-time communication between clients and the server:
 
-Ensure that the `RepositoryPath` points to a writable directory and that the application has sufficient permissions.
+- ChatHub provides the primary communication channel
+- Clients connect via WebSocket connections
+- Each client is assigned to user-specific groups (User_{uid})
+- The "Logined" group tracks all connected clients
+- Message broadcasting ensures all clients receive updates
+
+When a task is modified by one client, the change is:
+1. Sent to the server via SaveTask method
+2. Persisted in RavenDB
+3. Broadcast to all other connected clients via SignalR
+4. Applied locally by each client's ServerTaskStorage
+
+### Synchronization Mechanism
+The ServerTaskStorage class implements a robust synchronization mechanism:
+
+- Maintains a local cache of tasks using SourceCache
+- Subscribes to server events (ReceiveTaskItem, DeleteTaskItem)
+- Updates the local cache when changes are received
+- Handles connection interruptions with automatic reconnection
+- Implements retry logic for failed operations
+- Manages task relationships (parents, children, blocking) through the TaskTreeManager
+
+Clients can operate in both online and offline modes, with changes queued for synchronization when connectivity is restored.
+
+```mermaid
+sequenceDiagram
+participant ClientA
+participant ClientB
+participant Server
+participant Database
+ClientA->>Server : SaveTask(changes)
+Server->>Database : Store task
+Server->>ClientB : ReceiveTaskItem(update)
+ClientB->>ClientB : Update local cache
+Server->>ClientA : Return task ID
+ClientA->>ClientA : Update local cache
+ClientB->>Server : DeleteTasks([id])
+Server->>Database : Delete tasks
+Server->>ClientA : DeleteTaskItem(notification)
+ClientA->>ClientA : Remove from local cache
+```
+
+**Diagram sources**
+- [ChatHub.cs](file://src/Unlimotion.Server/hubs/ChatHub.cs#L1-L239)
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
 
 **Section sources**
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs#L30-L50)
-- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L75-L95)
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
+- [ChatHub.cs](file://src/Unlimotion.Server/hubs/ChatHub.cs#L1-L239)
+
+## Troubleshooting Guide
+
+This section addresses common integration issues and provides solutions for each integration point.
+
+### Authentication Failures
+**Git Authentication Issues:**
+- Ensure the username and password/token are correctly configured
+- Verify the personal access token has the required permissions
+- Check that the repository URL uses the correct protocol (HTTPS/SSH)
+- Confirm the credentials are not expired
+
+**Server Authentication Issues:**
+- Verify the JWT token is valid and not expired
+- Check that the user exists in the database
+- Ensure the ServiceStack license key is valid
+- Confirm the client is using the correct server URL
+
+### Network Connectivity Problems
+**General Connectivity Issues:**
+- Verify the server is running and accessible at the configured URL
+- Check firewall settings to ensure the required ports are open
+- Test network connectivity using ping or telnet
+- Ensure SSL/TLS certificates are properly configured
+
+**Mobile-Specific Issues:**
+- Android: Ensure the app has network permissions in AndroidManifest.xml
+- iOS: Verify App Transport Security settings allow connections to the server
+- Both platforms: Implement proper error handling for network interruptions
+
+### Data Synchronization Conflicts
+**Git Merge Conflicts:**
+- The system automatically detects conflicts after merge operations
+- Conflicting files must be resolved manually before committing
+- Use the stash mechanism to preserve local changes during conflict resolution
+- Pull changes before making local modifications to minimize conflicts
+
+**Task Synchronization Conflicts:**
+- The server uses optimistic concurrency control
+- When conflicts occur, the latest change overwrites previous ones
+- Clients receive updates to ensure consistency
+- Implement client-side conflict detection for critical operations
+
+**Common Error Messages and Solutions:**
+- "Can't push the remote repository": Check credentials and network connectivity
+- "Can't merge remote branch": Resolve merge conflicts manually
+- "User not found": Register the user on the server
+- "Token is expired": Refresh the authentication token
+- "Connection closed": Implement reconnection logic with exponential backoff
+
+**Section sources**
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
+- [ChatHub.cs](file://src/Unlimotion.Server/hubs/ChatHub.cs#L1-L239)
+
+## Performance Optimization
+
+This section provides recommendations for optimizing performance, particularly for high-latency connections.
+
+### Connection Optimization
+**For High-Latency Networks:**
+- Increase the heartbeat interval to reduce unnecessary traffic
+- Implement connection pooling where possible
+- Use compression for data transfer
+- Batch multiple operations into single requests
+- Implement intelligent reconnection with exponential backoff
+
+**SignalR Configuration:**
+- Adjust the transport fallback order based on network conditions
+- Configure appropriate timeout values for operations
+- Implement client-side caching to reduce server requests
+- Use message filtering to receive only relevant updates
+
+### Data Synchronization Optimization
+**Git Synchronization:**
+- Adjust pull and push intervals based on usage patterns
+- For low-activity periods, increase intervals to reduce network traffic
+- For high-activity periods, decrease intervals to ensure timely synchronization
+- Consider using shallow clones for large repositories
+- Implement selective synchronization for specific task categories
+
+**Task Management:**
+- Implement pagination for large task lists
+- Use filtering and searching on the server side
+- Cache frequently accessed tasks locally
+- Implement lazy loading for task relationships
+- Optimize database queries through proper indexing
+
+### Mobile Performance
+**Android and iOS:**
+- Minimize background network operations to conserve battery
+- Implement efficient data serialization
+- Use local storage effectively to reduce network dependency
+- Optimize UI rendering for smooth performance
+- Implement proper memory management to prevent leaks
+
+**Caching Strategy:**
+```mermaid
+flowchart TD
+A[Client Request] --> B{In Local Cache?}
+B --> |Yes| C[Return Cached Data]
+B --> |No| D{Network Available?}
+D --> |Yes| E[Fetch from Server]
+E --> F[Update Cache]
+F --> G[Return Data]
+D --> |No| H[Return Offline Data]
+H --> I[Queue Changes]
+I --> J[Sync When Online]
+```
+
+**Diagram sources**
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
+
+The system's architecture supports various optimization strategies that can be configured based on specific deployment requirements and network conditions.
+
+**Section sources**
+- [ServerTaskStorage.cs](file://src/Unlimotion/ServerTaskStorage.cs#L1-L722)
+- [BackupViaGitService.cs](file://src/Unlimotion/Services/BackupViaGitService.cs#L1-L357)
