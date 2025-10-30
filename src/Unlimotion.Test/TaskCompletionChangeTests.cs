@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Telerik.JustMock;
 using Unlimotion.Domain;
@@ -14,9 +15,9 @@ namespace Unlimotion.Test
         public async Task HandleTaskCompletionChange_CompletedTask_SetsCompletedDateTime()
         {
             // Arrange
-            var storageMock = Mock.Create<IStorage>();
-            var taskTreeManager = new TaskTreeManager(storageMock);
-            
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
             var task = new TaskItem
             {
                 Id = "test-task",
@@ -24,17 +25,8 @@ namespace Unlimotion.Test
                 CompletedDateTime = null
             };
             
-            // Setup storage mock to return the task when saved
-            Mock.Arrange(() => storageMock.Save(Arg.IsAny<TaskItem>()))
-                .DoInstead<TaskItem>(t => {
-                    // Update the task with the saved values
-                    task.CompletedDateTime = t.CompletedDateTime;
-                    task.ArchiveDateTime = t.ArchiveDateTime;
-                })
-                .Returns(Task.FromResult(true));
-
             // Act
-            var result = await taskTreeManager.HandleTaskCompletionChange(task, false);
+            var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
             Assert.NotNull(task.CompletedDateTime);
@@ -46,9 +38,9 @@ namespace Unlimotion.Test
         public async Task HandleTaskCompletionChange_UncompletedTask_ClearsDates()
         {
             // Arrange
-            var storageMock = Mock.Create<IStorage>();
-            var taskTreeManager = new TaskTreeManager(storageMock);
-            
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
             var task = new TaskItem
             {
                 Id = "test-task",
@@ -57,17 +49,8 @@ namespace Unlimotion.Test
                 ArchiveDateTime = DateTimeOffset.UtcNow
             };
             
-            // Setup storage mock to return the task when saved
-            Mock.Arrange(() => storageMock.Save(Arg.IsAny<TaskItem>()))
-                .DoInstead<TaskItem>(t => {
-                    // Update the task with the saved values
-                    task.CompletedDateTime = t.CompletedDateTime;
-                    task.ArchiveDateTime = t.ArchiveDateTime;
-                })
-                .Returns(Task.FromResult(true));
-
             // Act
-            var result = await taskTreeManager.HandleTaskCompletionChange(task, true);
+            var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
             Assert.Null(task.CompletedDateTime);
@@ -79,9 +62,9 @@ namespace Unlimotion.Test
         public async Task HandleTaskCompletionChange_ArchivedTask_SetsArchiveDateTime()
         {
             // Arrange
-            var storageMock = Mock.Create<IStorage>();
-            var taskTreeManager = new TaskTreeManager(storageMock);
-            
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
             var task = new TaskItem
             {
                 Id = "test-task",
@@ -89,17 +72,8 @@ namespace Unlimotion.Test
                 ArchiveDateTime = null
             };
             
-            // Setup storage mock to return the task when saved
-            Mock.Arrange(() => storageMock.Save(Arg.IsAny<TaskItem>()))
-                .DoInstead<TaskItem>(t => {
-                    // Update the task with the saved values
-                    task.CompletedDateTime = t.CompletedDateTime;
-                    task.ArchiveDateTime = t.ArchiveDateTime;
-                })
-                .Returns(Task.FromResult(true));
-
             // Act
-            var result = await taskTreeManager.HandleTaskCompletionChange(task, false);
+            var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
             Assert.NotNull(task.ArchiveDateTime);
@@ -111,9 +85,9 @@ namespace Unlimotion.Test
         public async Task HandleTaskCompletionChange_CompletedTaskWithRepeater_CreatesClone()
         {
             // Arrange
-            var storageMock = Mock.Create<IStorage>();
-            var taskTreeManager = new TaskTreeManager(storageMock);
-            
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
             var task = new TaskItem
             {
                 Id = "test-task",
@@ -133,28 +107,10 @@ namespace Unlimotion.Test
                 Title = "Test Task"
             };
             
-            var clonedTask = new TaskItem();
-            
-            // Setup storage mock to capture the cloned task
-            Mock.Arrange(() => storageMock.Save(Arg.IsAny<TaskItem>()))
-                .DoInstead<TaskItem>(t => {
-                    if (t.Id != task.Id)
-                    {
-                        // This is the cloned task
-                        clonedTask = t;
-                        clonedTask.Id = "cloned-task";
-                    }
-                    else
-                    {
-                        // This is the original task
-                        task.CompletedDateTime = t.CompletedDateTime;
-                        task.ArchiveDateTime = t.ArchiveDateTime;
-                    }
-                })
-                .Returns(Task.FromResult(true));
-
             // Act
-            var result = await taskTreeManager.HandleTaskCompletionChange(task, false);
+            var result = await manager.HandleTaskCompletionChange(task);
+
+            var clonedTask = result.Last();
 
             // Assert
             Assert.NotNull(task.CompletedDateTime);

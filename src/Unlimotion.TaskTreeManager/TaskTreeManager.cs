@@ -1,7 +1,8 @@
-﻿using Polly;
+﻿using System;
+using Polly;
 using Polly.Retry;
-using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 
@@ -27,8 +28,8 @@ public class TaskTreeManager : ITaskTreeManager
                 try
                 {
                     change.Version = 1;
-                    change.SortOrder = DateTime.Now;
                     await Storage.Save(change);
+                    change.SortOrder = DateTime.Now;
                     result.AddOrUpdate(change.Id, change);
 
                     return true;
@@ -54,6 +55,7 @@ public class TaskTreeManager : ITaskTreeManager
                     {
                         change.Version = 1;
                         await Storage.Save(change);
+                        change.SortOrder = DateTime.Now;
                         newTaskId = change.Id;
                         result.AddOrUpdate(change.Id, change);
                     }
@@ -103,6 +105,7 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
+                    change.SortOrder = DateTime.Now;
                     newTaskId = change.Id;
                 }
 
@@ -253,7 +256,7 @@ public class TaskTreeManager : ITaskTreeManager
                 if (isCompletedChanged)
                 {
                     // Handle IsCompleted changes with the dedicated method
-                    var completionTasks = await HandleTaskCompletionChange(change, existingTask?.IsCompleted);
+                    var completionTasks = await HandleTaskCompletionChange(change);
                     foreach (var task in completionTasks)
                     {
                         result.AddOrUpdate(task.Id, task);
@@ -284,45 +287,83 @@ public class TaskTreeManager : ITaskTreeManager
         {
             try
             {
-                if (newTaskId is null)
+                var clone = new TaskItem
                 {
-                    change.Version = 1;
-                    await Storage.Save(change);
-                    newTaskId = change.Id;
+                    Description = change.Description,
+                    Title = change.Title,
+                    PlannedDuration = change.PlannedDuration,
+                    Repeater = change.Repeater,
+                    Wanted = change.Wanted,
+                    Version = 1,
+                };
+
+                await Storage.Save(clone);
+
+                if (change.ContainsTasks?.Count > 0)
+                {
+                    foreach (var containsId in change.ContainsTasks)
+                    {
+                        var child = await Storage.Load(containsId);
+                        var childRelation = await this.CreateParentChildRelation(clone, child);
+                        result.AddOrUpdateRange(childRelation.Dict);
+                    }
+
+                    var affectedTasks = await CalculateAndUpdateAvailability(clone);
+                    foreach (var task in affectedTasks)
+                    {
+                        result.AddOrUpdate(task.Id, task);
+                    }
                 }
 
                 if (stepParents?.Count > 0)
                 {
                     foreach (var parent in stepParents)
                     {
-                        try
-                        {
-                            if (!(change.ParentTasks ?? new List<string>()).Contains(parent.Id))
-                            {
-                                change.ParentTasks!.Add(parent.Id);
-                                change.SortOrder = DateTime.Now;
-                                await Storage.Save(change);
-                                result.AddOrUpdate(change.Id, change);
-                            }
+                        var childRelation = await this.CreateParentChildRelation(parent, clone);
+                        result.AddOrUpdateRange(childRelation.Dict);
 
-                            if (!parent.ContainsTasks.Contains(newTaskId))
-                            {
-                                parent.ContainsTasks.Add(newTaskId);
-                                parent.SortOrder = DateTime.Now;
-                                await Storage.Save(parent);
-                                result.AddOrUpdate(parent.Id, parent);
-                            }
-                        }
-                        catch
+                        var affectedTasks = await CalculateAndUpdateAvailability(parent);
+                        foreach (var task in affectedTasks)
                         {
+                            result.AddOrUpdate(task.Id, task);
                         }
                     }
                 }
-                else
+
+                if (change.BlockedByTasks?.Count > 0)
                 {
-                    change.SortOrder = DateTime.Now;
-                    result.AddOrUpdate(change.Id, change);
+                    foreach (var blockedById in change.BlockedByTasks)
+                    {
+                        var blockedBy = await Storage.Load(blockedById);
+                        var blockedByRelation = await this.CreateBlockingBlockedByRelation(clone, blockedBy);
+                        result.AddOrUpdateRange(blockedByRelation.Dict);
+                    }
+
+                    var affectedTasks = await CalculateAndUpdateAvailability(clone);
+                    foreach (var task in affectedTasks)
+                    {
+                        result.AddOrUpdate(task.Id, task);
+                    }
                 }
+
+                if (change.BlocksTasks?.Count > 0)
+                {
+                    foreach (var blocksId in change.BlocksTasks)
+                    {
+                        var blockTask = await Storage.Load(blocksId);
+                        var blockedByRelation = await this.CreateBlockingBlockedByRelation(blockTask, clone);
+                        result.AddOrUpdateRange(blockedByRelation.Dict);
+                        
+                        var affectedTasks = await CalculateAndUpdateAvailability(blockTask);
+                        foreach (var task in affectedTasks)
+                        {
+                            result.AddOrUpdate(task.Id, task);
+                        }
+                    }
+                }
+
+                clone.SortOrder = DateTime.Now;
+                result.AddOrUpdate(clone.Id, clone);
 
                 return true;
             }
@@ -342,6 +383,7 @@ public class TaskTreeManager : ITaskTreeManager
 
         return result.Dict.Values.ToList();
     }
+
     public async Task<List<TaskItem>> MoveTaskToNewParent(TaskItem change, TaskItem newParent, TaskItem? prevParent)
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();
@@ -437,7 +479,6 @@ public class TaskTreeManager : ITaskTreeManager
                 if (!parent.ContainsTasks.Contains(child.Id))
                 {
                     parent.ContainsTasks.Add(child.Id);
-                    parent.SortOrder = DateTime.Now;
                     await Storage.Save(parent);
                     result.AddOrUpdate(parent.Id, parent);
                 }
@@ -445,7 +486,6 @@ public class TaskTreeManager : ITaskTreeManager
                 if (!(child.ParentTasks ?? new List<string>()).Contains(parent.Id))
                 {
                     child.ParentTasks!.Add(parent.Id);
-                    child.SortOrder = DateTime.Now;
                     await Storage.Save(child);
                     result.AddOrUpdate(child.Id, child);
                 }
@@ -473,7 +513,6 @@ public class TaskTreeManager : ITaskTreeManager
                 if (!blockingTask.BlocksTasks.Contains(taskToBlock.Id))
                 {
                     blockingTask.BlocksTasks.Add(taskToBlock.Id);
-                    blockingTask.SortOrder = DateTime.Now;
                     await Storage.Save(blockingTask);
                     result.AddOrUpdate(blockingTask.Id, blockingTask);
                 }
@@ -481,7 +520,6 @@ public class TaskTreeManager : ITaskTreeManager
                 if (!taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToBlock.BlockedByTasks.Add(blockingTask.Id);
-                    taskToBlock.SortOrder = DateTime.Now;
                     await Storage.Save(taskToBlock);
                     result.AddOrUpdate(taskToBlock.Id, taskToBlock);
                 }
@@ -701,14 +739,14 @@ public class TaskTreeManager : ITaskTreeManager
 
         return affectedTasks;
     }
-    
+
     /// <summary>
     /// Handles logic when a task's IsCompleted property changes
     /// </summary>
     /// <param name="task">The task that has changed</param>
     /// <param name="previousIsCompleted">The previous value of IsCompleted</param>
     /// <returns>List of affected tasks</returns>
-    public async Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task, bool? previousIsCompleted)
+    public async Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task)
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();
 
@@ -721,9 +759,9 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     task.CompletedDateTime ??= DateTimeOffset.UtcNow;
                     task.ArchiveDateTime = null;
-                    
+
                     // Handle repeater logic
-                    if (previousIsCompleted != true && task.Repeater != null && task.Repeater.Type != RepeaterType.None && task.PlannedBeginDateTime.HasValue)
+                    if (task.Repeater != null && task.Repeater.Type != RepeaterType.None && task.PlannedBeginDateTime.HasValue)
                     {
                         var clone = new TaskItem
                         {
@@ -742,10 +780,11 @@ public class TaskTreeManager : ITaskTreeManager
                             clone.PlannedEndDateTime =
                                 clone.PlannedBeginDateTime.Value.Add(task.PlannedEndDateTime.Value - task.PlannedBeginDateTime.Value);
                         }
-                        
+
                         // Save the cloned task
                         clone.Version = 1;
                         await Storage.Save(clone);
+                        clone.SortOrder = DateTime.Now;
                         result.AddOrUpdate(clone.Id, clone);
                     }
                 }

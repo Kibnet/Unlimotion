@@ -29,7 +29,6 @@ namespace Unlimotion.ViewModel
         }
 
         private ITaskStorage _taskStorage;
-        private TaskItem _model = new TaskItem();
 
         public ReactiveCommand<Unit, Unit> SaveItemCommand;        
 
@@ -134,22 +133,7 @@ namespace Unlimotion.ViewModel
                 // Use TaskTreeManager to handle IsCompleted changes
                 if (MainWindowViewModel._isInited)
                 {
-                    // Get the previous value before updating
-                    var existingTask = _taskStorage.Tasks.Lookup(Id);
-                    bool? previousIsCompleted = existingTask.HasValue ? existingTask.Value.IsCompleted : null;
-                    
-                    // Call the TaskTreeManager to handle the completion change
-                    var affectedTasks = await _taskStorage.TaskTreeManager.HandleTaskCompletionChange(Model, previousIsCompleted);
-                    
-                    // Update the cache with any affected tasks
-                    foreach (var task in affectedTasks)
-                    {
-                        var vm = _taskStorage.Tasks.Lookup(task.Id);
-                        if (vm.HasValue)
-                        {
-                            vm.Value.Update(task);
-                        }
-                    }
+                    SaveItemCommand.Execute();
                 }
             });
 
@@ -194,19 +178,8 @@ namespace Unlimotion.ViewModel
 
             CloneFunc = async destination =>
             {
-                var clone = new TaskItem
-                {
-                    BlocksTasks = Model.BlocksTasks.ToList(),
-                    BlockedByTasks = Model.BlockedByTasks.ToList(),
-                    ContainsTasks = Model.ContainsTasks.ToList(),
-                    Description = Model.Description,
-                    Title = Model.Title,
-                    PlannedDuration = Model.PlannedDuration,
-                    Repeater = Model.Repeater,
-                    Wanted = Model.Wanted,
-                };
-                var vm = new TaskItemViewModel(clone, taskStorage);
-                return await taskStorage.Clone(vm, destination);
+                var clone = await taskStorage.Clone(this, destination);
+                return clone;
             };
 
             UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
@@ -235,10 +208,7 @@ namespace Unlimotion.ViewModel
                         switch (changed.EventArgs.PropertyName)
                         {
                             case nameof(Title):
-                            case nameof(IsCompleted):
                             case nameof(Description):
-                            case nameof(ArchiveDateTime):
-                            case nameof(UnlockedDateTime):
                             case nameof(PlannedBeginDateTime):
                             case nameof(PlannedEndDateTime):
                             case nameof(PlannedDuration):
@@ -389,40 +359,40 @@ namespace Unlimotion.ViewModel
         {
             get
             {
-                _model.Id = Id;
-                _model.Title = Title;
-                _model.Description = Description;
-                _model.CreatedDateTime = CreatedDateTime;
-                _model.UnlockedDateTime = UnlockedDateTime;
-                _model.CompletedDateTime = CompletedDateTime;
-                _model.ArchiveDateTime = ArchiveDateTime;
-                _model.PlannedBeginDateTime = PlannedBeginDateTime;
-                _model.PlannedEndDateTime = PlannedEndDateTime;
-                _model.PlannedDuration = PlannedDuration;
-                _model.Importance = Importance;
-                _model.Wanted = Wanted;
-                _model.IsCompleted = IsCompleted;
-                _model.Version = Version;
-                _model.BlocksTasks = Blocks.ToList();
-                _model.BlockedByTasks = BlockedBy.ToList();
-                _model.ContainsTasks = Contains.ToList();
-                _model.ParentTasks = Parents.ToList();
-                _model.Repeater = Repeater?.Model;
-                // IsCanBeCompleted is now managed by TaskTreeManager, not by ViewModel
-                return _model;
+                return new TaskItem
+                {
+                    Id = Id,
+                    Title = Title,
+                    Description = Description,
+                    CreatedDateTime = CreatedDateTime,
+                    UnlockedDateTime = UnlockedDateTime,
+                    CompletedDateTime = CompletedDateTime,
+                    ArchiveDateTime = ArchiveDateTime,
+                    PlannedBeginDateTime = PlannedBeginDateTime,
+                    PlannedEndDateTime = PlannedEndDateTime,
+                    PlannedDuration = PlannedDuration,
+                    Importance = Importance,
+                    Wanted = Wanted,
+                    IsCompleted = IsCompleted,
+                    Version = Version,
+                    BlocksTasks = Blocks.ToList(),
+                    BlockedByTasks = BlockedBy.ToList(),
+                    ContainsTasks = Contains.ToList(),
+                    ParentTasks = Parents.ToList(),
+                    Repeater = Repeater?.Model,
+                };
             }
             set
             {
-                _model = value ?? new TaskItem();
-                Id = _model.Id;
-                Update(_model);
+                Id = value.Id;
+                Update(value);
             }
         }
 
         public string Id { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
-        public bool IsCanBeCompleted => _model.IsCanBeCompleted;
+        public bool IsCanBeCompleted { get; set; }
         public bool? IsCompleted { get; set; }
         public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
@@ -602,7 +572,7 @@ namespace Unlimotion.ViewModel
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
 
             // Update the backing model
-            _model.IsCanBeCompleted = taskItem.IsCanBeCompleted;
+            IsCanBeCompleted = taskItem.IsCanBeCompleted;
 
             if (Title != taskItem.Title) Title = taskItem.Title;
             if (Description != taskItem.Description) Description = taskItem.Description;

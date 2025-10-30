@@ -10,31 +10,7 @@ namespace Unlimotion.Test
 {
     public class TaskAvailabilityCalculationTests
     {
-        private class InMemoryStorage : IStorage
-        {
-            private readonly Dictionary<string, TaskItem> _tasks = new();
-
-            public Task<TaskItem> Load(string id)
-            {
-                return Task.FromResult(_tasks.TryGetValue(id, out var task) ? task : null);
-            }
-
-            public Task<bool> Save(TaskItem taskItem)
-            {
-                var clone = taskItem with { };
-                _tasks[taskItem.Id] = clone;
-
-                return Task.FromResult(true);
-            }
-
-            public Task<bool> Remove(string id)
-            {
-                _tasks.Remove(id);
-                return Task.FromResult(true);
-            }
-
-            public void Clear() => _tasks.Clear();
-        }
+        
 
         [Fact]
         public async Task TaskWithNoDependencies_ShouldBeAvailable()

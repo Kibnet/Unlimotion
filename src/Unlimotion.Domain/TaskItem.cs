@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Unlimotion.Domain
 {
-    public record TaskItem
+    public class TaskItem
     {
         public string Id { get; set; }
         public string UserId { get; set; }

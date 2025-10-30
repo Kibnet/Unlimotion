@@ -244,6 +244,7 @@ namespace Unlimotion
                     Type = UpdateType.Removed,
                 });
                 fileInfo.Delete();
+                Tasks.Remove(itemId);
                 return true;
             }
             catch (Exception e)
@@ -366,21 +367,18 @@ namespace Unlimotion
             {
                 additionalItemParents.Add(newParent.Model);
             }
-            var taskItemList = (await TaskTreeManager.CloneTask(
-                change.Model,
-                additionalItemParents)).OrderBy(t => t.SortOrder);
+            var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.SortOrder).ToList();
 
-            var newTask = taskItemList.First();
-            change.Id = newTask.Id;
-            change.Update(newTask);
-            Tasks.AddOrUpdate(change);
+            var clone = taskItemList.Last();
+            var vm = new TaskItemViewModel(clone, this);
+            Tasks.AddOrUpdate(vm);
 
-            foreach (var task in taskItemList.Skip(1))
+            foreach (var task in taskItemList.SkipLast(1))
             {
                 UpdateCache(task);
             }
 
-            return change;
+            return vm;
         }
 
         public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
@@ -449,7 +447,11 @@ namespace Unlimotion
 
             if (vm.HasValue)
                 vm.Value.Update(task);
-            // else
+            else if (task.SortOrder != null)
+            {
+                vm = new TaskItemViewModel(task, this);
+                Tasks.AddOrUpdate(vm.Value);
+            }
             // throw new NotFoundException($"No task with id = {task.Id} is found in cache");
         }
     }

@@ -1,4 +1,6 @@
-﻿using Unlimotion.Domain;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 
@@ -35,6 +37,6 @@ public interface ITaskTreeManager
     /// <param name="task">The task that has changed</param>
     /// <param name="previousIsCompleted">The previous value of IsCompleted</param>
     /// <returns>List of affected tasks</returns>
-    public Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task, bool? previousIsCompleted);
+    public Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task);
 }
 

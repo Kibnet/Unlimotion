@@ -604,18 +604,14 @@ namespace Unlimotion.Test
             //Должно быть одно различие: проставлен id блокируемой задачи "Blocked task 6"
             if (isdestinationNotBlockedByDraggable)
             {
-                Assert.StartsWith("\r\nBegin Differences (2 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
+                Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
                 result.DifferencesString);
-                Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
-                    result.DifferencesString);
-
+                
                 result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
                 //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (4 differences):",
+                Assert.StartsWith("\r\nBegin Differences (3 differences):",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
                     result.DifferencesString);
@@ -671,11 +667,9 @@ namespace Unlimotion.Test
 
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
                 //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (4 differences):",
+                Assert.StartsWith("\r\nBegin Differences (3 differences):",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
                     result.DifferencesString);
                 Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
                     result.DifferencesString);
@@ -711,7 +705,7 @@ namespace Unlimotion.Test
             //"cloned task 8" задача содержит "clonned sub task  8.1"
             var clonedViewModel = taskRepository.Tasks.Items.FirstOrDefault(m => m.Id == MainWindowViewModelFixture.ClonedTask8Id);
             var destinationViewModel = taskRepository.Tasks.Items.FirstOrDefault(m => m.Id == MainWindowViewModelFixture.DestinationTask8Id);
-            clonedViewModel.CloneInto(destinationViewModel);
+            var cloned = await clonedViewModel.CloneInto(destinationViewModel);
             await TestHelpers.WaitThrottleTime();
 
             //Assert
@@ -719,7 +713,7 @@ namespace Unlimotion.Test
             Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
 
             //Находим созданную склонированную задачу в репозитории
-            var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
+            var newTaskItemViewModel = taskRepository.Tasks.Lookup(cloned.Id).Value;
             Assert.NotNull(newTaskItemViewModel);
 
             //Загружаем новую задачу из файла
@@ -730,6 +724,7 @@ namespace Unlimotion.Test
             Assert.NotEmpty(destinationTask8ItemAfterTest.ContainsTasks);
             Assert.Contains(newTaskItemViewModel.Id, destinationTask8ItemAfterTest.ContainsTasks);
             //Теперь у целевой задачи есть невыполненные задачи внутри. Она заблокирована
+            Assert.False(destinationTask8ItemAfterTest.IsCanBeCompleted);
             Assert.Null(destinationTask8ItemAfterTest.UnlockedDateTime);
 
             //Сравниваем старую и новую версию целевой задачи
@@ -753,12 +748,12 @@ namespace Unlimotion.Test
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
             //Должны отличаться id, дата создания, кол-во родителей и sortOrder
-            Assert.StartsWith($"\r\nBegin Differences (4 differences):\r\nTypes [String,String], Item Expected.Id != Actual.Id, Values ({MainWindowViewModelFixture.ClonedTask8Id},{newTaskItemViewModel.Id})",
-                result.DifferencesString);
-            Assert.Contains("Types [DateTimeOffset,DateTimeOffset], Item Expected.CreatedDateTime != Actual.CreatedDateTime", result.DifferencesString);
+            Assert.Equal(4, result.Differences.Count);
+            Assert.Contains(nameof(TaskItem.Id), result.Differences.Select(d => d.PropertyName));
+            Assert.Contains(nameof(TaskItem.IsCanBeCompleted), result.Differences.Select(d => d.PropertyName));
+            Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
+            Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
             Assert.Contains("Types [List`1,List`1], Item Expected.ParentTasks.Count != Actual.ParentTasks.Count",
-                result.DifferencesString);
-            Assert.Contains("Item Expected.SortOrder != Actual.SortOrder",
                 result.DifferencesString);
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
         }
@@ -768,7 +763,7 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Fact]
-        public async Task CopleteRepeatableTaskTask_Success()
+        public async Task CompleteRepeatableTaskTask_Success()
         {
             //Запоминаем сколько задач было
             var taskCount = taskRepository.Tasks.Count;
@@ -813,6 +808,7 @@ namespace Unlimotion.Test
             result = compareLogic.Compare(repeateTask9BeforeTest, newTask9);
 
             //Должно быть только 5 различия: Id, CreatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
+            Assert.Equal(5, result.Differences.Count);
             var idDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.Id));
             var createdDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CreatedDateTime));
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UnlockedDateTime));
@@ -928,7 +924,7 @@ namespace Unlimotion.Test
             var src = GetTask(MainWindowViewModelFixture.ClonedTask8Id);
             var dest1 = GetTask(MainWindowViewModelFixture.RootTask1Id);
             var dest2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
-            await dest2.CopyInto(dest2);
+            await dest1.CopyInto(dest2);
 
             var clone = await src.CloneInto(dest1);
 
