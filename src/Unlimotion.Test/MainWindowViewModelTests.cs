@@ -426,6 +426,59 @@ namespace Unlimotion.Test
         }
 
         /// <summary>
+        /// Перемещение заблокированной задачи к новому родителю должно блокировать нового родителя
+        /// </summary>
+        /// <returns></returns>
+        [Fact]
+        public async Task CopyBlockedTaskToNewParent_WithFileStorage_ShouldBlockNewParent()
+        {
+            // Arrange - Создаем задачу-ребенка, которая блокирует своего родителя
+            var childTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+
+            // Убедимся, что ребенок не завершен, чтобы он блокировал родителя
+            if (childTask.IsCompleted == true)
+            {
+                childTask.IsCompleted = false;
+                await TestHelpers.WaitThrottleTime();
+            }
+
+            // Получаем оригинального родителя
+            var originalParent = childTask.ParentsTasks.First();
+
+            // Создаем новую задачу, которая станет новым родителем
+            var newParent = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+
+            // Проверяем начальное состояние - оригинальный родитель должен быть заблокирован из-за незавершенного ребенка
+            var originalParentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
+            Assert.False(originalParentStored.IsCanBeCompleted);
+
+            // Act - Перемещаем задачу с ребенком к новому родителю
+            await originalParent.CopyInto(newParent);
+
+            // Ждем сохранения
+            await TestHelpers.WaitThrottleTime();
+
+            // Reload tasks from file storage to get updated state
+            var updatedOriginalParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
+            var updatedNewParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, newParent.Id);
+            var updatedChild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, childTask.Id);
+
+            // Assert - Новый родитель должен быть заблокирован, потому что он теперь содержит задачу с незавершенным ребенком
+            Assert.False(updatedNewParent.IsCanBeCompleted);
+            Assert.Null(updatedNewParent.UnlockedDateTime);
+
+            // Оригинальный родитель должен быть заблокирован, потому что у него есть дети
+            Assert.False(updatedOriginalParent.IsCanBeCompleted);
+            Assert.Null(updatedOriginalParent.UnlockedDateTime);
+
+            // Отношения должны быть корректными
+            Assert.Contains(childTask.Id, updatedOriginalParent.ContainsTasks);
+            Assert.Contains(updatedOriginalParent.Id, updatedNewParent.ContainsTasks);
+            Assert.Contains(newParent.Id, updatedOriginalParent.ParentTasks);
+            Assert.Contains(updatedOriginalParent.Id, updatedChild.ParentTasks);
+        }
+
+        /// <summary>
         /// Отказ от удаление задачи из дерева задач
         /// </summary>
         /// <returns></returns>

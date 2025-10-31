@@ -9,7 +9,6 @@ using Microsoft.Extensions.Configuration;
 using Splat;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Models;
-using static SkiaSharp.HarfBuzz.SKShaper;
 
 namespace Unlimotion.Services;
 
