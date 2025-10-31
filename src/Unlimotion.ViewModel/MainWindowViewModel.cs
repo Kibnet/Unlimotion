@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Configuration;
@@ -28,11 +28,11 @@ namespace Unlimotion.ViewModel
         public ITaskStorage? taskRepository;
         public MainWindowViewModel()
         {
-            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName();
+            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName() ?? "";
             Locator.CurrentMutable.RegisterConstant(this);
             connectionDisposableList.AddToDispose(this);
-            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
-            _configuration = Locator.Current.GetService<IConfiguration>();
+            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>()!;
+            _configuration = Locator.Current.GetService<IConfiguration>()!;
             Settings = new SettingsViewModel(_configuration);
             Graph = new GraphViewModel();
             Locator.CurrentMutable.RegisterConstant(Settings);
@@ -234,7 +234,10 @@ namespace Unlimotion.ViewModel
                 taskStorage.OnConnectionError += ex =>
                 {
                     var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                    notify?.ErrorToast($"Ошибка подключения к серверу.");
+                    if (notify != null)
+                    {
+                        notify.ErrorToast($"Ошибка подключения к серверу.");
+                    }
                 };
             }
 
@@ -989,20 +992,20 @@ namespace Unlimotion.ViewModel
 
         public SourceList<TaskWrapperViewModel> LastOpenedSource { get; set; } = new SourceList<TaskWrapperViewModel>();
 
-        public TaskItemViewModel CurrentTaskItem { get; set; }
-        public TaskItemViewModel LastTaskItem { get; set; }
-        public TaskWrapperViewModel CurrentItem { get; set; }
-        public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
-        public TaskWrapperViewModel CurrentCompletedItem { get; set; }
-        public TaskWrapperViewModel CurrentArchivedItem { get; set; }
-        public TaskWrapperViewModel CurrentLastCreated { get; set; }
-        public TaskWrapperViewModel CurrentGraphItem { get; set; }
-        public TaskWrapperViewModel CurrentLastOpenedItem { get; set; }
+        public TaskItemViewModel CurrentTaskItem { get; set; } = null!;
+        public TaskItemViewModel LastTaskItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentCompletedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentArchivedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentLastCreated { get; set; } = null!;
+        public TaskWrapperViewModel CurrentGraphItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentLastOpenedItem { get; set; } = null!;
 
-        public TaskWrapperViewModel CurrentItemContains { get; private set; }
-        public TaskWrapperViewModel CurrentItemParents { get; private set; }
-        public TaskWrapperViewModel CurrentItemBlocks { get; private set; }
-        public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; }
+        public TaskWrapperViewModel CurrentItemContains { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemParents { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemBlocks { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; } = null!;
 
         public ICommand Create { get; set; }
 
@@ -1016,7 +1019,7 @@ namespace Unlimotion.ViewModel
 
         public ICommand Remove { get; set; }
 
-        private IConfiguration _configuration;
+        private IConfiguration _configuration = null!;
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
         public SortDefinition CurrentSortDefinition { get; set; }
@@ -1050,27 +1053,27 @@ namespace Unlimotion.ViewModel
         public DateFilter LastCreatedDateFilter { get; set; } = new();
 
         public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
-        public object TabItems { get; }
-        public object ToastNotificationManager { get; set; }
+        public object TabItems { get; } = null!;
+        public object ToastNotificationManager { get; set; } = null!;
     }
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
     {
-        public string Title { get; set; }
-        public string Emoji { get; set; }
+        public string Title { get; set; } = "";
+        public string Emoji { get; set; } = "";
         public bool ShowTasks { get; set; }
-        public string SortText { get; set; }
-        public TaskItemViewModel Source { get; set; }
+        public string SortText { get; set; } = "";
+        public TaskItemViewModel Source { get; set; } = null!;
     }
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiExcludeFilter
     {
-        public string Title { get; set; }
-        public string Emoji { get; set; }
+        public string Title { get; set; } = "";
+        public string Emoji { get; set; } = "";
         public bool ShowTasks { get; set; }
-        public string SortText { get; set; }
-        public TaskItemViewModel Source { get; set; }
+        public string SortText { get; set; } = "";
+        public TaskItemViewModel Source { get; set; } = null!;
     }
 }
