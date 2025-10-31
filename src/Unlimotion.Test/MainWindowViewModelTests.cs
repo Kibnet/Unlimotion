@@ -650,9 +650,17 @@ namespace Unlimotion.Test
             //У нее проставлено время разблокировки
             Assert.NotNull(blockedTask5AfterTest.UnlockedDateTime);
             var result = compareLogic.Compare(blockedTask5BeforeTest, blockedTask5AfterTest);
-            //Должно быть одно различие: проставлена дата разблокировки
-            Assert.StartsWith("\r\nBegin Differences (2 differences):\r\nTypes [Boolean,Boolean], Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (False,True)\r\nTypes [null,DateTimeOffset], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime, Values ((null),",
-                result.DifferencesString);
+            //Должно быть два различия: IsCanBeCompleted и UnlockedDateTime
+            Assert.Equal(2, result.Differences.Count);
+            var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.IsCanBeCompleted));
+            var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.UnlockedDateTime));
+
+            Assert.NotNull(isCanBeCompletedDifference);
+            Assert.Equal(false, isCanBeCompletedDifference.Object1);
+            Assert.Equal(true, isCanBeCompletedDifference.Object2);
+            Assert.NotNull(unlockedDateTimeDifference);
+            Assert.Null(unlockedDateTimeDifference.Object1);
+            Assert.NotNull(unlockedDateTimeDifference.Object2);
 
             var blockedTask5ViewModel = taskRepository.Tasks.Items.First(i => i.Id == MainWindowViewModelFixture.BlockedTask5Id);
             Assert.NotNull(blockedTask5ViewModel);
@@ -663,17 +671,16 @@ namespace Unlimotion.Test
             //Проверяем, что в блокирующем таске изменилось
             result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
             //Должно быть 2 различия поля IsCompleted и CompletedDateTime
-            var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(rootTask5AfterTest.IsCompleted));
-            var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(rootTask5AfterTest.CompletedDateTime));
+            Assert.Equal(2, result.Differences.Count);
+            var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCompleted));
+            var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.CompletedDateTime));
 
             Assert.NotNull(isCompletedDifference);
             Assert.NotNull(completedDateTimeDifference);
-            Assert.StartsWith("Types [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted, Values (False,True)",
-               isCompletedDifference.ToString());
-            Assert.StartsWith("Types [null,DateTimeOffset], Item Expected.CompletedDateTime != Actual.CompletedDateTime",
-               completedDateTimeDifference.ToString());
-            Assert.True(rootTask5AfterTest.IsCompleted);
-            Assert.NotNull(rootTask5AfterTest.CompletedDateTime);
+            Assert.Equal(false, isCompletedDifference.Object1);
+            Assert.Equal(true, isCompletedDifference.Object2);
+            Assert.Null(completedDateTimeDifference.Object1);
+            Assert.NotNull(completedDateTimeDifference.Object2);
         }
 
         /// <summary>
@@ -710,19 +717,26 @@ namespace Unlimotion.Test
             //Должно быть одно различие: проставлен id блокируемой задачи "Blocked task 6"
             if (isdestinationNotBlockedByDraggable)
             {
-                Assert.StartsWith("\r\nBegin Differences (1 differences):\r\nTypes [List`1,List`1], Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
-                result.DifferencesString);
-                
+                Assert.Equal(1, result.Differences.Count);
+                // Проверяем, что количество блокируемых задач изменилось
+                var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
+                Assert.NotNull(blocksTasksDifference);
+
                 result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
-                //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (3 differences):",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
-                    result.DifferencesString);
-                Assert.Contains("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
-                    result.DifferencesString);
+                //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
+                Assert.Equal(3, result.Differences.Count);
+                var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
+                var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
+                var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
+
+                Assert.NotNull(blockedByTasksDifference);
+                Assert.NotNull(isCanBeCompletedDifference);
+                Assert.NotNull(unlockedDateTimeDifference);
+                
+                Assert.Equal(true, isCanBeCompletedDifference.Object1);
+                Assert.Equal(false, isCanBeCompletedDifference.Object2);
+                Assert.NotNull(unlockedDateTimeDifference.Object1);
+                Assert.Null(unlockedDateTimeDifference.Object2);
 
                 Assert.NotNull(rootTaskAfterTest);
 
@@ -768,19 +782,24 @@ namespace Unlimotion.Test
             if (isDraggableNotBlockedBydestination)
             {
                 //Должно быть три различия: проставлен id блокируемой задачи "Blocked taask 6"
-                Assert.Contains("Item Expected.BlocksTasks.Count != Actual.BlocksTasks.Count",
-                result.DifferencesString);
+                var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
+                Assert.NotNull(blocksTasksDifference);
 
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
-                //Должно быть 2 различия: id задач которые блокируют и sortOrder
-                Assert.StartsWith("\r\nBegin Differences (3 differences):",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.BlockedByTasks.Count != Actual.BlockedByTasks.Count",
-                    result.DifferencesString);
-                Assert.Contains("Item Expected.IsCanBeCompleted != Actual.IsCanBeCompleted, Values (True,False)",
-                    result.DifferencesString);
-                Assert.Contains("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
-                    result.DifferencesString);
+                //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
+                Assert.Equal(3, result.Differences.Count);
+                var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
+                var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
+                var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
+
+                Assert.NotNull(blockedByTasksDifference);
+                Assert.NotNull(isCanBeCompletedDifference);
+                Assert.NotNull(unlockedDateTimeDifference);
+                
+                Assert.Equal(true, isCanBeCompletedDifference.Object1);
+                Assert.Equal(false, isCanBeCompletedDifference.Object2);
+                Assert.NotNull(unlockedDateTimeDifference.Object1);
+                Assert.Null(unlockedDateTimeDifference.Object2);
 
                 Assert.NotNull(draggableAfterTest);
 
@@ -837,15 +856,15 @@ namespace Unlimotion.Test
             var result = compareLogic.Compare(destination8BeforeTest, destinationTask8ItemAfterTest);
 
             //Должно быть 2 различия в количестве ContainsTasks и UnlockedDateTime
-            var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.UnlockedDateTime));
-            var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(destinationTask8ItemAfterTest.ContainsTasks));
+            var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
+            var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ContainsTasks));
 
             Assert.NotNull(unlockedDateTimeDifference);
             Assert.NotNull(containsTasksDifference);
-            Assert.StartsWith("Types [DateTimeOffset,null], Item Expected.UnlockedDateTime != Actual.UnlockedDateTime",
-                unlockedDateTimeDifference.ToString());
-            Assert.Equal("Types [List`1,List`1], Item Expected.ContainsTasks.Count != Actual.ContainsTasks.Count, Values (0,1)",
-                containsTasksDifference.ToString());
+            Assert.NotNull(unlockedDateTimeDifference.Object1);
+            Assert.Null(unlockedDateTimeDifference.Object2);
+            Assert.Equal(0, ((System.Collections.IList)containsTasksDifference.Object1).Count);
+            Assert.Equal(1, ((System.Collections.IList)containsTasksDifference.Object2).Count);
             //Новая задача должна быть в Contains во вьюмодели целевой задачи
             Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
 
@@ -859,8 +878,9 @@ namespace Unlimotion.Test
             Assert.Contains(nameof(TaskItem.IsCanBeCompleted), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
-            Assert.Contains("Types [List`1,List`1], Item Expected.ParentTasks.Count != Actual.ParentTasks.Count",
-                result.DifferencesString);
+            var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));
+            Assert.Equal(0, ((System.Collections.IList)parentTasksDifference.Object1).Count);
+            Assert.Equal(1, ((System.Collections.IList)parentTasksDifference.Object2).Count);
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
         }
 
@@ -892,7 +912,6 @@ namespace Unlimotion.Test
             Assert.Equal(true, repeateTask9AfterTest.IsCompleted);
             Assert.NotNull(repeateTask9AfterTest.CompletedDateTime);
 
-            //Сравниваем старую и новую версию задачи
             var result = compareLogic.Compare(repeateTask9BeforeTest, repeateTask9AfterTest);
 
             //Должно быть только 2 различия: IsCompleted и CompletedDateTime
@@ -901,10 +920,10 @@ namespace Unlimotion.Test
 
             Assert.NotNull(isCompletedDifference);
             Assert.NotNull(completedDateTimeDifference);
-            Assert.Equal("Types [Boolean,Boolean], Item Expected.IsCompleted != Actual.IsCompleted, Values (False,True)",
-                isCompletedDifference.ToString());
-            Assert.StartsWith("Types [null,DateTimeOffset], Item Expected.CompletedDateTime != Actual.CompletedDateTime",
-                completedDateTimeDifference.ToString());
+            Assert.Equal(false, isCompletedDifference.Object1);
+            Assert.Equal(true, isCompletedDifference.Object2);
+            Assert.Null(completedDateTimeDifference.Object1);
+            Assert.NotNull(completedDateTimeDifference.Object2);
 
             //Находим созданную склонированную повторяющейся "Repeate task 9" задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();

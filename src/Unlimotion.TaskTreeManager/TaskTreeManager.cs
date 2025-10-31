@@ -694,18 +694,17 @@ public class TaskTreeManager : ITaskTreeManager
         }
 
         bool newIsCanBeCompleted = allContainsCompleted && allBlockersCompleted;
-        bool previousIsCanBeCompleted = task.IsCanBeCompleted;
 
         // Update IsCanBeCompleted
         task.IsCanBeCompleted = newIsCanBeCompleted;
 
         // Manage UnlockedDateTime based on availability changes
-        if (newIsCanBeCompleted && (!previousIsCanBeCompleted || task.UnlockedDateTime == null))
+        if (newIsCanBeCompleted && task.UnlockedDateTime == null)
         {
             // Task became available - set UnlockedDateTime
             task.UnlockedDateTime = DateTimeOffset.UtcNow;
         }
-        else if (!newIsCanBeCompleted && previousIsCanBeCompleted)
+        else if (!newIsCanBeCompleted)
         {
             // Task became blocked - clear UnlockedDateTime
             task.UnlockedDateTime = null;
