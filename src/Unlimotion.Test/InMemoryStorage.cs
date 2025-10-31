@@ -41,7 +41,6 @@ public class InMemoryStorage : IStorage
             Importance = taskItem.Importance,
             Wanted = taskItem.Wanted,
             Version = taskItem.Version,
-            SortOrder = taskItem.SortOrder
         };
         taskItem.Id = clone.Id;
         _tasks[clone.Id] = clone;

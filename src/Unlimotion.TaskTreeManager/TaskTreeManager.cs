@@ -29,7 +29,6 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     result.AddOrUpdate(change.Id, change);
 
                     return true;
@@ -55,7 +54,6 @@ public class TaskTreeManager : ITaskTreeManager
                     {
                         change.Version = 1;
                         await Storage.Save(change);
-                        change.SortOrder = DateTime.Now;
                         newTaskId = change.Id;
                         result.AddOrUpdate(change.Id, change);
                     }
@@ -105,7 +103,6 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     newTaskId = change.Id;
                 }
 
@@ -362,7 +359,6 @@ public class TaskTreeManager : ITaskTreeManager
                     }
                 }
 
-                clone.SortOrder = DateTime.Now;
                 result.AddOrUpdate(clone.Id, clone);
 
                 return true;
@@ -804,7 +800,6 @@ public class TaskTreeManager : ITaskTreeManager
                         // Save the cloned task
                         clone.Version = 1;
                         await Storage.Save(clone);
-                        clone.SortOrder = DateTime.Now;
                         result.AddOrUpdate(clone.Id, clone);
                     }
                 }

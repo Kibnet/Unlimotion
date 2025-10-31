@@ -286,7 +286,7 @@ namespace Unlimotion
             var taskItemList = (await TaskTreeManager.AddTask(
                 change.Model,
                 currentTask?.Model,
-                isBlocked)).OrderBy(t => t.SortOrder);
+                isBlocked)).OrderBy(t => t.CreatedDateTime);
 
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
@@ -305,7 +305,7 @@ namespace Unlimotion
             var taskItemList = (await TaskTreeManager.AddChildTask(
                 change.Model,
                 currentTask.Model))
-                .OrderBy(t => t.SortOrder);
+                .OrderBy(t => t.CreatedDateTime);
 
             var newTask = taskItemList.Last();
             change.Id = newTask.Id;
@@ -367,7 +367,7 @@ namespace Unlimotion
             {
                 additionalItemParents.Add(newParent.Model);
             }
-            var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.SortOrder).ToList();
+            var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.CreatedDateTime).ToList();
 
             var clone = taskItemList.Last();
             var vm = new TaskItemViewModel(clone, this);
@@ -447,7 +447,7 @@ namespace Unlimotion
 
             if (vm.HasValue)
                 vm.Value.Update(task);
-            else if (task.SortOrder != null)
+            else if (task.CreatedDateTime != null)
             {
                 vm = new TaskItemViewModel(task, this);
                 Tasks.AddOrUpdate(vm.Value);
