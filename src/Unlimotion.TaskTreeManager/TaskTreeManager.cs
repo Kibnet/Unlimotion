@@ -60,14 +60,17 @@ public class TaskTreeManager : ITaskTreeManager
                         result.AddOrUpdate(change.Id, change);
                     }
 
-                    if ((currentTask.ParentTasks ?? new List<string>()).Count > 0)
+                    if (currentTask != null && (currentTask.ParentTasks ?? new List<string>()).Count > 0)
                     {
                         foreach (var parent in currentTask.ParentTasks)
                         {
                             var parentModel = await Storage.Load(parent);
-                            result.AddOrUpdateRange(
-                                (await CreateParentChildRelation(parentModel, change)).Dict
-                            );
+                            if (parentModel != null)
+                            {
+                                result.AddOrUpdateRange(
+                                    (await CreateParentChildRelation(parentModel, change)).Dict
+                                );
+                            }
                         }
                     }
 
@@ -164,38 +167,47 @@ public class TaskTreeManager : ITaskTreeManager
                 }
 
                 // Удаление связей с детьми
-                if (change.ContainsTasks.Any())
+                if (change.ContainsTasks?.Any() == true)
                 {
                     foreach (var child in change.ContainsTasks)
                     {
                         var childItem = await Storage.Load(child);
-                        result.AddOrUpdateRange(
-                            (await BreakParentChildRelation(change, childItem)).Dict
-                        );
+                        if (childItem != null)
+                        {
+                            result.AddOrUpdateRange(
+                                (await BreakParentChildRelation(change, childItem)).Dict
+                            );
+                        }
                     }
                 }
 
                 // Удаление связей с родителями
-                if (change.ParentTasks.Any())
+                if (change.ParentTasks?.Any() == true)
                 {
                     foreach (var parent in change.ParentTasks)
                     {
                         var parentItem = await Storage.Load(parent);
-                        result.AddOrUpdateRange(
-                            (await BreakParentChildRelation(parentItem, change)).Dict
-                        );
+                        if (parentItem != null)
+                        {
+                            result.AddOrUpdateRange(
+                                (await BreakParentChildRelation(parentItem, change)).Dict
+                            );
+                        }
                     }
                 }
 
                 // Удаление блокирующих связей
-                if (change.BlockedByTasks.Any())
+                if (change.BlockedByTasks?.Any() == true)
                 {
                     foreach (var blocker in change.BlockedByTasks)
                     {
                         var blockerItem = await Storage.Load(blocker);
-                        result.AddOrUpdateRange(
-                            (await BreakBlockingBlockedByRelation(change, blockerItem)).Dict
-                        );
+                        if (blockerItem != null)
+                        {
+                            result.AddOrUpdateRange(
+                                (await BreakBlockingBlockedByRelation(change, blockerItem)).Dict
+                            );
+                        }
                     }
                 }
 
@@ -530,14 +542,14 @@ public class TaskTreeManager : ITaskTreeManager
         {
             try
             {
-                if (!blockingTask.BlocksTasks.Contains(taskToBlock.Id))
+                if (blockingTask != null && !blockingTask.BlocksTasks.Contains(taskToBlock.Id))
                 {
                     blockingTask.BlocksTasks.Add(taskToBlock.Id);
                     await Storage.Save(blockingTask);
                     result.AddOrUpdate(blockingTask.Id, blockingTask);
                 }
 
-                if (!taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
+                if (taskToBlock != null && !taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToBlock.BlockedByTasks.Add(blockingTask.Id);
                     await Storage.Save(taskToBlock);
@@ -571,14 +583,14 @@ public class TaskTreeManager : ITaskTreeManager
         {
             try
             {
-                if (blockingTask.BlocksTasks.Contains(taskToUnblock.Id))
+                if (blockingTask != null && blockingTask.BlocksTasks.Contains(taskToUnblock.Id))
                 {
                     blockingTask.BlocksTasks.Remove(taskToUnblock.Id);
                     await Storage.Save(blockingTask);
                     result.AddOrUpdate(blockingTask.Id, blockingTask);
                 }
 
-                if (taskToUnblock.BlockedByTasks.Contains(blockingTask.Id))
+                if (taskToUnblock != null && taskToUnblock.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToUnblock.BlockedByTasks.Remove(blockingTask.Id);
                     await Storage.Save(taskToUnblock);

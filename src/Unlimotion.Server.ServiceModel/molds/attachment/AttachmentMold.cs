@@ -6,6 +6,14 @@ namespace Unlimotion.Server.ServiceModel.Molds.Attachment
     [Description("Файл")]
     public class AttachmentMold
     {
+        public AttachmentMold()
+        {
+            Id = string.Empty;
+            SenderId = string.Empty;
+            FileName = string.Empty;
+            Hash = string.Empty;
+        }
+
         [Description("Идентификатор файла")]
         public string Id { get; set; }
 

@@ -5,6 +5,14 @@ namespace Unlimotion.Server.ServiceModel.Molds
     [Description("Профиль пользователя")]
     public class UserProfileMold
     {
+        public UserProfileMold()
+        {
+            Id = string.Empty;
+            Login = string.Empty;
+            DisplayName = string.Empty;
+            AboutMe = string.Empty;
+        }
+
         [Description("Идентификатор пользователя")]
         public string Id { get; set; }
 
