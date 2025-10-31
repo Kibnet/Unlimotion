@@ -380,7 +380,13 @@ public class TaskTreeManager : ITaskTreeManager
     {
         var result = new AutoUpdatingDictionary<string, TaskItem>();
         result.AddOrUpdateRange((await CreateParentChildRelation(additionalParent, change)).Dict);
-
+        
+        // Recalculate availability for the parent task
+        var affectedTasks = await CalculateAndUpdateAvailability(change);
+        foreach (var task in affectedTasks)
+        {
+            result.AddOrUpdate(task.Id, task);
+        }
         return result.Dict.Values.ToList();
     }
 
