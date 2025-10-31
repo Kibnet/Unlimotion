@@ -5,7 +5,7 @@ namespace Unlimotion;
 
 public static class ControlExtensions
 {
-    public static T FindParentDataContext<T>(this Control control)
+    public static T? FindParentDataContext<T>(this Control control)
     {
         foreach (var descendant in control.GetVisualAncestors())
         {
@@ -17,7 +17,7 @@ public static class ControlExtensions
         return default;
     }
 
-    public static T FindParent<T>(this Control control)
+    public static T? FindParent<T>(this Control control)
     {
         foreach (var descendant in control.GetVisualAncestors())
         {

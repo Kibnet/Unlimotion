@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Splat;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
@@ -15,7 +15,7 @@ namespace Unlimotion
 {
     public static class TaskStorages
     {
-        public static string DefaultStoragePath;
+        public static string DefaultStoragePath = string.Empty;
 
         public static void SetSettingsCommands()
         {
@@ -186,9 +186,9 @@ namespace Unlimotion
                 dbWatcher = new FileDbWatcher(GetStoragePath(storagePath));
                 Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                dbWatcher = null;
+                // FileDbWatcher initialization failed, proceeding without database watching
                 Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             }
             return taskStorage;
@@ -207,7 +207,7 @@ namespace Unlimotion
             var storagePath = path;
             if (string.IsNullOrEmpty(path))
                 storagePath = DefaultStoragePath;
-            return storagePath;
+            return storagePath ?? string.Empty;
         }
         
         private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds) 
