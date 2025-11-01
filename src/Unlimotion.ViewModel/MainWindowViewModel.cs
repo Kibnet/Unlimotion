@@ -992,7 +992,7 @@ namespace Unlimotion.ViewModel
 
         public SourceList<TaskWrapperViewModel> LastOpenedSource { get; set; } = new SourceList<TaskWrapperViewModel>();
 
-        public TaskItemViewModel CurrentTaskItem { get; set; } = null!;
+        public TaskItemViewModel? CurrentTaskItem { get; set; } = null!;
         public TaskItemViewModel LastTaskItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;

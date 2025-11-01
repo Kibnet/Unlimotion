@@ -9,15 +9,14 @@ namespace Unlimotion.Test
 {
     public class MainWindowViewModelFixture
     {
-        private const string _defaultConfigName = "TestSettings.json";
-        public string _uniquiID => _guid.ToString();
-        private ThreadLocal<Guid> _guid;
+        private const string DefaultConfigName = "TestSettings.json";
+        private string UniquiId => guid.ToString()!;
+        private readonly ThreadLocal<Guid> guid;
 
-        private string _uniqueConfigName;
-        private string _defaultTasksFolderName;
+        private readonly string uniqueConfigName;
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
-        public string DefaultTasksFolderPath;
-        public string DefaultSnapshotsFolderPath;
+        public readonly string DefaultTasksFolderPath;
+        private readonly string defaultSnapshotsFolderPath;
         public string DefaultRootTaskPath;
         public const string RootTask1Id = "baaf00ad-e250-4828-8bec-a6b42525fda0";
         public const string RootTask2Id = "10c107c1-a6f0-41fe-9b44-1f2fc5ff0fcf";
@@ -53,21 +52,21 @@ namespace Unlimotion.Test
 
         public MainWindowViewModelFixture()
         {
-            _guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
-            _uniqueConfigName = $"TestSettings_{_uniquiID}.json";
-            _defaultTasksFolderName = $"Tasks_{_uniquiID}";
-            DefaultTasksFolderPath = Path.Combine(Environment.CurrentDirectory, _defaultTasksFolderName);
-            DefaultSnapshotsFolderPath = Path.Combine(Environment.CurrentDirectory, "Snapshots");
-            DefaultRootTaskPath = Path.Combine(DefaultSnapshotsFolderPath, RootTask1Id);
+            guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
+            uniqueConfigName = $"TestSettings_{UniquiId}.json";
+            var defaultTasksFolderName = $"Tasks_{UniquiId}";
+            DefaultTasksFolderPath = Path.Combine(Environment.CurrentDirectory, defaultTasksFolderName);
+            defaultSnapshotsFolderPath = Path.Combine(Environment.CurrentDirectory, "Snapshots");
+            DefaultRootTaskPath = Path.Combine(defaultSnapshotsFolderPath, RootTask1Id);
             Directory.CreateDirectory(DefaultTasksFolderPath);
             CopyTaskFromSnapshotsFolder();
-            var fileInfo = new FileInfo(_defaultConfigName);
+            var fileInfo = new FileInfo(DefaultConfigName);
             var content = fileInfo.ReadAllText();
-            content = content.Replace("Tasks", _defaultTasksFolderName);
-            var configFile = File.Create(_uniqueConfigName);
+            content = content.Replace("Tasks", defaultTasksFolderName);
+            var configFile = File.Create(uniqueConfigName);
             configFile.Write(content);
             configFile.Close();
-            App.Init(_uniqueConfigName);
+            App.Init(uniqueConfigName);
 
             var notificationMessageManagerMock = new NotificationManagerWrapperMock();
             Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationMessageManagerMock);
@@ -77,7 +76,7 @@ namespace Unlimotion.Test
 
         private void CopyTaskFromSnapshotsFolder()
         {
-            string[] files = Directory.GetFiles(DefaultSnapshotsFolderPath);
+            string[] files = Directory.GetFiles(defaultSnapshotsFolderPath);
 
             foreach (string file in files)
             {
@@ -87,7 +86,7 @@ namespace Unlimotion.Test
             }
         }
 
-        public void Try(Action action, int attempts = 3)
+        private static void Try(Action action, int attempts = 3)
         {
             for (int i = 0; i < attempts; i++)
             {
@@ -96,7 +95,7 @@ namespace Unlimotion.Test
                     action.Invoke();
                     return;
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     Thread.Sleep(100);
                 }
@@ -105,11 +104,11 @@ namespace Unlimotion.Test
 
         public void CleanTasks()
         {
-            if (File.Exists(_uniqueConfigName))
+            if (File.Exists(uniqueConfigName))
             {
-                Try(() => File.Delete(_uniqueConfigName));
+                Try(() => File.Delete(uniqueConfigName));
             }
-            Try(() => Directory.Delete(DefaultTasksFolderPath, true)); ;
+            Try(() => Directory.Delete(DefaultTasksFolderPath, true));
         }
     }
 }

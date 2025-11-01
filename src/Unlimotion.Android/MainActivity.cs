@@ -97,7 +97,7 @@ public class MainActivity : AvaloniaMainActivity<App>
             else
             {
                 // Разрешение не предоставлено, уведомляем пользователя
-                Toast.MakeText(this, "Разрешение на доступ к внешнему хранилищу не предоставлено", ToastLength.Short).Show();
+                Toast.MakeText(this, "Разрешение на доступ к внешнему хранилищу не предоставлено", ToastLength.Short)?.Show();
             }
         }
     }
@@ -106,7 +106,7 @@ public class MainActivity : AvaloniaMainActivity<App>
     {
         // Здесь ваш код для доступа к внешнему хранилищу
         var externalDataDir = GetExternalFilesDir(null)?.AbsolutePath;
-        Toast.MakeText(this, $"Путь внешнего хранилища: {externalDataDir}", ToastLength.Long).Show();
+        Toast.MakeText(this, $"Путь внешнего хранилища: {externalDataDir}", ToastLength.Long)?.Show();
     }
 }
 

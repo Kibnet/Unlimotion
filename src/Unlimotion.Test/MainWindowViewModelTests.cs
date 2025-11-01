@@ -1,13 +1,10 @@
-using ExCSS;
 using KellermanSoftware.CompareNetObjects;
 using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.ViewModel;
-using Unlimotion.Views;
 using Xunit;
 using Unlimotion.Domain;
 
@@ -28,7 +25,7 @@ namespace Unlimotion.Test
             fixture = new MainWindowViewModelFixture();
             mainWindowVM = fixture.MainWindowViewModelTest;
             mainWindowVM.Connect().GetAwaiter().GetResult();
-            taskRepository = mainWindowVM.taskRepository;
+            taskRepository = mainWindowVM.taskRepository!;
         }
 
         /// <summary>
@@ -58,13 +55,13 @@ namespace Unlimotion.Test
         public async Task RenameTask_Success()
         {
             var task = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
-            var before = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            var before = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task!.Id);
 
             task.Title = "Changed task title";
             await TestHelpers.WaitThrottleTime();
 
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            var result = TestHelpers.CompareStorageVersions(before, after);
+            var result = TestHelpers.CompareStorageVersions(before!, after!);
             TestHelpers.ShouldHaveOnlyTitleChanged(result, "Root Task 1", "Changed task title");
         }
 
@@ -84,10 +81,10 @@ namespace Unlimotion.Test
                 taskRepository);
 
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, taskId);
-            var result = TestHelpers.CompareStorageVersions(before, after);
+            var result = TestHelpers.CompareStorageVersions(before!, after!);
 
             TestHelpers.ShouldContainOnlyDifference(result, nameof(after.ContainsTasks));
-            Assert.Contains(newTask.Id, after.ContainsTasks);
+            Assert.Contains(newTask.Id, after!.ContainsTasks);
         }
 
         /// <summary>
@@ -95,16 +92,14 @@ namespace Unlimotion.Test
         /// </summary>
         /// <returns></returns>
         [Fact]
-        public Task CreateInnerTask_Fail()
+        public async Task CreateInnerTask_Fail()
         {
             mainWindowVM.CurrentTaskItem = null;
 
             var countBefore = taskRepository.Tasks.Count;
             mainWindowVM.CreateInner.Execute(null);
-            TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitThrottleTime();
             Assert.Equal(countBefore, taskRepository.Tasks.Count);
-
-            return Task.CompletedTask;
         }
 
         /// <summary>

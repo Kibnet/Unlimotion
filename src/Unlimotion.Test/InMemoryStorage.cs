@@ -11,7 +11,7 @@ public class InMemoryStorage : IStorage
 {
     private readonly Dictionary<string, TaskItem> _tasks = new();
 
-    public Task<TaskItem> Load(string id)
+    public Task<TaskItem?> Load(string id)
     {
         return Task.FromResult(_tasks.TryGetValue(id, out var task) ? task : null);
     }
@@ -33,10 +33,10 @@ public class InMemoryStorage : IStorage
             PlannedBeginDateTime = taskItem.PlannedBeginDateTime,
             PlannedEndDateTime = taskItem.PlannedEndDateTime,
             PlannedDuration = taskItem.PlannedDuration,
-            ContainsTasks = taskItem.ContainsTasks?.ToList(),
-            ParentTasks = taskItem.ParentTasks?.ToList(),
-            BlocksTasks = taskItem.BlocksTasks?.ToList(),
-            BlockedByTasks = taskItem.BlockedByTasks?.ToList(),
+            ContainsTasks = taskItem.ContainsTasks?.ToList() ?? new(),
+            ParentTasks = taskItem.ParentTasks?.ToList() ?? new(),
+            BlocksTasks = taskItem.BlocksTasks?.ToList() ?? new(),
+            BlockedByTasks = taskItem.BlockedByTasks?.ToList() ?? new(),
             Repeater = taskItem.Repeater,
             Importance = taskItem.Importance,
             Wanted = taskItem.Wanted,
