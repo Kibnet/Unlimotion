@@ -1,15 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Reactive.Linq;
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
 using DynamicData.Binding;
 using ReactiveUI;
 using Splat;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reactive.Linq;
+using System.Text;
 using Unlimotion.ViewModel;
 using Unlimotion.Views.Graph;
 
@@ -62,6 +63,15 @@ namespace Unlimotion.Views
                         .AddToDispose(disposableList);
                     dc.WhenAnyValue(m => m.UpdateGraph)
                         .Subscribe(t => { UpdateGraph(); })
+                        .AddToDispose(disposableList);
+
+                    // Поиск с подсветкой
+                    dc.WhenAnyValue(m => m.Search.SearchText)
+                        .Throttle(TimeSpan.FromMilliseconds(300))
+                        .Select(t => (t ?? "").Trim())
+                        .DistinctUntilChanged()
+                        .ObserveOn(RxApp.MainThreadScheduler)
+                        .Subscribe(_ => UpdateHighlights())
                         .AddToDispose(disposableList);
                 }
             }
@@ -223,6 +233,45 @@ namespace Unlimotion.Views
             {
                 mwm.DetailsAreOpen = !mwm.DetailsAreOpen;
             }
+        }
+
+        private static string Normalize(string s) =>
+            (s ?? "").ToLowerInvariant().Normalize(NormalizationForm.FormKC);
+
+        private bool Matches(TaskItemViewModel task, string normalizedQuery)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedQuery)) return false;
+            var hay = Normalize($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+            var words = normalizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return words.Length == 0 ? false : words.All(w => hay.Contains(w));
+        }
+
+        private IEnumerable<TaskItemViewModel> EnumerateTasks(ReadOnlyObservableCollection<TaskWrapperViewModel> roots)
+        {
+            var q = new Queue<TaskWrapperViewModel>(roots);
+            while (q.Count > 0)
+            {
+                var w = q.Dequeue();
+                yield return w.TaskItem;
+                foreach (var c in w.SubTasks) q.Enqueue(c);
+            }
+        }
+
+        private void UpdateHighlights()
+        {
+            if (dc == null) return;
+            var normalized = Normalize(dc.Search?.SearchText ?? "");
+            var roots = dc.OnlyUnlocked ? dc.UnlockedTasks : dc.Tasks;
+
+            if (string.IsNullOrEmpty(normalized))
+            {
+                foreach (var t in EnumerateTasks(roots))
+                    t.IsHighlighted = false;
+                return;
+            }
+
+            foreach (var t in EnumerateTasks(roots))
+                t.IsHighlighted = Matches(t, normalized);
         }
     }
 }
