@@ -163,11 +163,19 @@ public class TaskTreeManager : ITaskTreeManager
                     foreach (var child in change.ContainsTasks)
                     {
                         var childItem = await Storage.Load(child);
-                        if (childItem != null)
+                        if (childItem == null) continue;
+                        try
                         {
-                            result.AddOrUpdateRange(
-                                await BreakParentChildRelation(change, childItem)
-                            );
+                            if (childItem.ParentTasks.Contains(change.Id))
+                            {
+                                childItem.ParentTasks!.Remove(change.Id);
+                                await Storage.Save(childItem);
+                                result.AddOrUpdate(childItem);
+                            }
+                        }
+                        catch
+                        {
+                            // ignored
                         }
                     }
                 }
@@ -178,11 +186,19 @@ public class TaskTreeManager : ITaskTreeManager
                     foreach (var parent in change.ParentTasks)
                     {
                         var parentItem = await Storage.Load(parent);
-                        if (parentItem != null)
+                        if (parentItem == null) continue;
+                        try
                         {
-                            result.AddOrUpdateRange(
-                                await BreakParentChildRelation(parentItem, change)
-                            );
+                            if (parentItem.ContainsTasks.Contains(change.Id))
+                            {
+                                parentItem.ContainsTasks.Remove(change.Id);
+                                await Storage.Save(parentItem);
+                                result.AddOrUpdate(parentItem);
+                            }
+                        }
+                        catch
+                        {
+                            // ignored
                         }
                     }
                 }
@@ -193,11 +209,19 @@ public class TaskTreeManager : ITaskTreeManager
                     foreach (var blocker in change.BlockedByTasks)
                     {
                         var blockerItem = await Storage.Load(blocker);
-                        if (blockerItem != null)
+                        if (blockerItem == null) continue;
+                        try
                         {
-                            result.AddOrUpdateRange(
-                                await BreakBlockingBlockedByRelation(change, blockerItem)
-                            );
+                            if (blockerItem.BlocksTasks.Contains(change.Id))
+                            {
+                                blockerItem.BlocksTasks.Remove(change.Id);
+                                await Storage.Save(blockerItem);
+                                result.AddOrUpdate(blockerItem);
+                            }
+                        }
+                        catch
+                        {
+                            // ignored
                         }
                     }
                 }
@@ -208,11 +232,19 @@ public class TaskTreeManager : ITaskTreeManager
                     foreach (var blocked in change.BlocksTasks)
                     {
                         var blockedItem = await Storage.Load(blocked);
-                        if (blockedItem != null)
+                        if (blockedItem == null) continue;
+                        try
                         {
-                            result.AddOrUpdateRange(
-                                await BreakBlockingBlockedByRelation(blockedItem, change)
-                            );
+                            if (blockedItem.BlockedByTasks.Contains(change.Id))
+                            {
+                                blockedItem.BlockedByTasks.Remove(change.Id);
+                                await Storage.Save(blockedItem);
+                                result.AddOrUpdate(blockedItem);
+                            }
+                        }
+                        catch
+                        {
+                            // ignored
                         }
                     }
                 }
@@ -317,7 +349,7 @@ public class TaskTreeManager : ITaskTreeManager
                     }
 
                     result.AddOrUpdateRange(
-                        await CalculateAndUpdateAvailability(clone));                    
+                        await CalculateAndUpdateAvailability(clone));
                 }
 
                 if (stepParents?.Count > 0)
@@ -380,13 +412,13 @@ public class TaskTreeManager : ITaskTreeManager
     public async Task<List<TaskItem>> AddNewParentToTask(TaskItem change, TaskItem additionalParent)
     {
         var result = new Dictionary<string, TaskItem>();
-        
+
         result.AddOrUpdateRange(
             await CreateParentChildRelation(additionalParent, change));
 
         result.AddOrUpdateRange(
             await CalculateAndUpdateAvailability(change));
-        
+
         return result.Values.ToList();
     }
 
@@ -396,7 +428,7 @@ public class TaskTreeManager : ITaskTreeManager
 
         result.AddOrUpdateRange(
             await CreateParentChildRelation(newParent, change));
-        
+
         if (prevParent is not null)
         {
             result.AddOrUpdateRange(
@@ -468,7 +500,7 @@ public class TaskTreeManager : ITaskTreeManager
 
                 result.AddOrUpdateRange(
                     await CalculateAndUpdateAvailability(parent));
-                
+
                 return true;
             }
             catch
@@ -504,7 +536,7 @@ public class TaskTreeManager : ITaskTreeManager
 
                 result.AddOrUpdateRange(
                     await CalculateAndUpdateAvailability(parent));
-                
+
                 return true;
             }
             catch
@@ -780,7 +812,8 @@ public class TaskTreeManager : ITaskTreeManager
                         var clone = new TaskItem
                         {
                             BlocksTasks = task.BlocksTasks.ToList(),
-                            BlockedByTasks = task.BlockedByTasks.ToList(),//TODO добавить тест на срабатывание блокировки
+                            BlockedByTasks =
+                                task.BlockedByTasks.ToList(), //TODO добавить тест на срабатывание блокировки
                             ContainsTasks = task.ContainsTasks.ToList(),
                             Description = task.Description,
                             Title = task.Title,
@@ -821,7 +854,7 @@ public class TaskTreeManager : ITaskTreeManager
 
                 result.AddOrUpdateRange(
                     await CalculateAndUpdateAvailability(task));
-                
+
                 return true;
             }
             catch

@@ -50,7 +50,7 @@ namespace Unlimotion.Test
 
         public static async Task WaitThrottleTime()
         {
-            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1.5));
+            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(0.5));
             await Task.Delay(sleepTime);
         }
 
