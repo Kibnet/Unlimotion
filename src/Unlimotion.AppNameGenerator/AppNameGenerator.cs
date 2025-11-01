@@ -11,7 +11,7 @@ namespace Unlimotion.AppGenerator;
 public class AppNameGenerator : ISourceGenerator
 {
     private const string DefaultAppName = "Unlimotion";
-    private static string _callingProjectPath;
+    private static string _callingProjectPath = null!;
 
     public void Execute(GeneratorExecutionContext context)
     {
