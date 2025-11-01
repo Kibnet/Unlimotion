@@ -28,4 +28,5 @@ public class GraphViewModel
     public bool ShowCompleted { get=> mwm.ShowCompleted; set=> mwm.ShowCompleted=value; }
 
     public bool ShowArchived { get => mwm.ShowArchived; set => mwm.ShowArchived = value; }
+    public SearchDefinition Search { get; set; }
 }

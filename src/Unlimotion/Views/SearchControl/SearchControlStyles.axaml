@@ -1,0 +1,14 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl">
+    <!--Button-->
+    <Style Selector="Label.LayoutItem">
+        <Setter Property="Margin" Value="5"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="searchControl|SearchControl">
+        <Setter Property="MinWidth" Value="400"/>
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="Margin" Value="0 0 5 0"/>
+    </Style>
+</Styles>
