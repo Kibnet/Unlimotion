@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reactive;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
 using ReactiveUI;
 using Splat;
-using Unlimotion.Domain;
-using Unlimotion.ViewModel;
 using Unlimotion.TaskTree;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
 {
@@ -238,7 +236,7 @@ namespace Unlimotion.Views
         private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var dragData = new DataObject();
-            var dc = (this.DataContext as MainWindowViewModel)?.CurrentTaskItem;
+            var dc = (DataContext as MainWindowViewModel)?.CurrentTaskItem;
             if (dc == null)
             {
                 return;

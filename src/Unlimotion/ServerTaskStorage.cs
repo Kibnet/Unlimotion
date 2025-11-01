@@ -4,22 +4,21 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
+using DynamicData;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using SignalR.EasyUse.Client;
 using Splat;
-using Unlimotion.TaskTree;
+using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
-using Unlimotion.ViewModel.Models;
-using DynamicData;
-using Unlimotion.Domain;
-using System.Threading;
 
 namespace Unlimotion;
 
@@ -72,7 +71,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     public ITaskTreeManager TaskTreeManager
     {
-        get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); }
+        get { return taskTreeManager ??= new TaskTreeManager(this); }
     }
 
     public async Task SignOut()
@@ -115,10 +114,6 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             // Exception during sign out, continuing cleanup
         }
-        finally
-        {
-            //IsShowingLoginPage = true;
-        }
     }
 
     public async Task Disconnect()
@@ -141,7 +136,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     {
         try
         {
-            var task = await serviceClient.GetAsync(new GetTask() { Id = itemId });
+            var task = await serviceClient.GetAsync(new GetTask { Id = itemId });
             var mapped = mapper.Map<TaskItem>(task);
             return mapped;
         }
@@ -315,8 +310,6 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
                         OnConnected?.Invoke();
                         break;
-                    default:
-                        break;
                 }
             }
             catch (Exception ex)
@@ -338,11 +331,11 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
                     if(existedTask.HasValue)
                     {
-                        await this.Update(viewModel.Model);
+                        await Update(viewModel.Model);
                     }
                     else
                     {
-                        await this.Add(viewModel);
+                        await Add(viewModel);
                     }
                 }
             }
@@ -353,11 +346,11 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                var task = this.Tasks.Lookup(data.Id);
+                var task = Tasks.Lookup(data.Id);
 
                 if (task.HasValue) 
                 {
-                    await this.Delete(task.Value, false);
+                    await Delete(task.Value, false);
                 }
             }
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
@@ -405,8 +398,6 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             //RegisterUser.ErrorMessageRegisterPage.GetErrorMessage(e.ToStatusCode().ToString());
             //RegisterUser.ErrorMessageRegisterPage.IsError = true;
         }
-
-        return;
     }
 
     private async Task RefreshToken(ClientSettings settings, IConfiguration configuration)

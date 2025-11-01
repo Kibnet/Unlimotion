@@ -1,17 +1,17 @@
-﻿using AutoMapper;
+﻿using System;
+using System.IO;
+using System.Threading.Tasks;
+using AutoMapper;
 using Avalonia;
 using Avalonia.Browser;
 using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
 using Splat;
-using System.IO;
-using System.Runtime.Versioning;
-using System.Threading.Tasks;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
 
-internal sealed partial class Program
+internal sealed class Program
 {
     private static async Task Main(string[] args) => await BuildAvaloniaApp()
             .WithCustomFont()
@@ -20,9 +20,9 @@ internal sealed partial class Program
 
     public static AppBuilder BuildAvaloniaApp()
     {
-        TaskStorages.DefaultStoragePath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "Tasks");
+        TaskStorages.DefaultStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tasks");
 
-        var settingsPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "Settings.json");
+        var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Settings.json");
         if (!File.Exists(settingsPath))
         {
             var stream = File.CreateText(settingsPath);

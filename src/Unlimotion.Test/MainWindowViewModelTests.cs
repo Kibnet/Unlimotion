@@ -1,12 +1,13 @@
-using KellermanSoftware.CompareNetObjects;
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using KellermanSoftware.CompareNetObjects;
+using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Xunit;
-using Unlimotion.Domain;
 
 namespace Unlimotion.Test
 {
@@ -339,7 +340,7 @@ namespace Unlimotion.Test
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
             
-            await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository, 0);
+            await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository);
             
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
             var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
@@ -485,7 +486,7 @@ namespace Unlimotion.Test
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
-            await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, 0);
+            await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository);
 
             Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id));
             Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id));
@@ -858,8 +859,8 @@ namespace Unlimotion.Test
             Assert.NotNull(containsTasksDifference);
             Assert.NotNull(unlockedDateTimeDifference.Object1);
             Assert.Null(unlockedDateTimeDifference.Object2);
-            Assert.Empty((System.Collections.IList)containsTasksDifference.Object1);
-            Assert.Single((System.Collections.IList)containsTasksDifference.Object2);
+            Assert.Empty((IList)containsTasksDifference.Object1);
+            Assert.Single((IList)containsTasksDifference.Object2);
             //Новая задача должна быть в Contains во вьюмодели целевой задачи
             Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
 
@@ -874,8 +875,8 @@ namespace Unlimotion.Test
             Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
             var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));
-            Assert.Empty(((System.Collections.IList)parentTasksDifference.Object1));
-            Assert.Single(((System.Collections.IList)parentTasksDifference.Object2));
+            Assert.Empty(((IList)parentTasksDifference.Object1));
+            Assert.Single(((IList)parentTasksDifference.Object2));
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
         }
 

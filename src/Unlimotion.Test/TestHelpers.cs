@@ -2,11 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using KellermanSoftware.CompareNetObjects;
-using Unlimotion.ViewModel;
 using Unlimotion.Domain;
-using System.Threading.Tasks;
+using Unlimotion.ViewModel;
 using Xunit;
 
 namespace Unlimotion.Test

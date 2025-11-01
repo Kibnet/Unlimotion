@@ -1,8 +1,8 @@
-﻿using ServiceStack;
-using Splat;
-using System;
+﻿using System;
 using System.IO;
 using System.Threading;
+using ServiceStack;
+using Splat;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Test

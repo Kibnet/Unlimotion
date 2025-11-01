@@ -1,9 +1,12 @@
-﻿using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Xaml.Interactivity;
-using System;
-using System.Threading;
+﻿using System;
+using System.ComponentModel;
+using System.Reflection;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.Xaml.Interactivity;
 
 namespace TestAutoCompleteBehaviour.Behaviours
 {
@@ -22,7 +25,7 @@ namespace TestAutoCompleteBehaviour.Behaviours
                 AssociatedObject.GotFocus += OnGotFocus;
                 AssociatedObject.PointerReleased += PointerReleased;
 
-                Task.Delay(500).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Invoke(() => { CreateDropdownButton(); }));
+                Task.Delay(500).ContinueWith(_ => Dispatcher.UIThread.Invoke(() => { CreateDropdownButton(); }));
             }
 
             base.OnAttached();
@@ -42,9 +45,9 @@ namespace TestAutoCompleteBehaviour.Behaviours
         }
 
         //have to use KeyUp as AutoCompleteBox eats some of the KeyDown events
-        private void OnKeyUp(object? sender, Avalonia.Input.KeyEventArgs e)
+        private void OnKeyUp(object? sender, KeyEventArgs e)
         {
-            if ((e.Key == Avalonia.Input.Key.Down || e.Key == Avalonia.Input.Key.F4))
+            if ((e.Key == Key.Down || e.Key == Key.F4))
             {
                 if (string.IsNullOrEmpty(AssociatedObject?.Text))
                 {
@@ -53,18 +56,17 @@ namespace TestAutoCompleteBehaviour.Behaviours
             }
         }
 
-        private void DropDownOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+        private void DropDownOpening(object? sender, CancelEventArgs e)
         {
-            var prop = AssociatedObject?.GetType().GetProperty("TextBox", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var prop = AssociatedObject?.GetType().GetProperty("TextBox", BindingFlags.Instance | BindingFlags.NonPublic);
             var tb = (TextBox?)prop?.GetValue(AssociatedObject);
             if (tb is not null && tb.IsReadOnly)
             {
                 e.Cancel = true;
-                return;
             }
         }
 
-        private void PointerReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
+        private void PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             if (string.IsNullOrEmpty(AssociatedObject?.Text))
             {
@@ -76,17 +78,17 @@ namespace TestAutoCompleteBehaviour.Behaviours
         {
             if (AssociatedObject is not null && !AssociatedObject.IsDropDownOpen)
             {
-                typeof(AutoCompleteBox).GetMethod("PopulateDropDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(AssociatedObject, new object[] { AssociatedObject, EventArgs.Empty });
-                typeof(AutoCompleteBox).GetMethod("OpeningDropDown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(AssociatedObject, new object[] { false });
+                typeof(AutoCompleteBox).GetMethod("PopulateDropDown", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(AssociatedObject, new object[] { AssociatedObject, EventArgs.Empty });
+                typeof(AutoCompleteBox).GetMethod("OpeningDropDown", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(AssociatedObject, new object[] { false });
 
                 if (!AssociatedObject.IsDropDownOpen)
                 {
                     //We *must* set the field and not the property as we need to avoid the changed event being raised (which prevents the dropdown opening).
-                    var ipc = typeof(AutoCompleteBox).GetField("_ignorePropertyChange", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if ((bool)ipc?.GetValue(AssociatedObject) == false)
+                    var ipc = typeof(AutoCompleteBox).GetField("_ignorePropertyChange", BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (!(bool)ipc?.GetValue(AssociatedObject))
                         ipc?.SetValue(AssociatedObject, true);
 
-                    AssociatedObject.SetCurrentValue<bool>(AutoCompleteBox.IsDropDownOpenProperty, true);
+                    AssociatedObject.SetCurrentValue(AutoCompleteBox.IsDropDownOpenProperty, true);
                 }
             }
         }
@@ -95,11 +97,11 @@ namespace TestAutoCompleteBehaviour.Behaviours
         {
             if (AssociatedObject != null)
             {
-                var prop = AssociatedObject.GetType().GetProperty("TextBox", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                var prop = AssociatedObject.GetType().GetProperty("TextBox", BindingFlags.Instance | BindingFlags.NonPublic);
                 var tb = (TextBox?)prop?.GetValue(AssociatedObject);
                 if (tb is not null && tb.InnerRightContent is not Button)
                 {
-                    var btn = new Button()
+                    var btn = new Button
                     {
                         /* grab symbol from https://www.amp-what.com/unicode/search/down */
                         Content = "⯆",

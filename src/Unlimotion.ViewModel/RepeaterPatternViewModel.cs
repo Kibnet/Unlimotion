@@ -144,10 +144,8 @@ public class RepeaterPatternViewModel
                     }
                     throw new NotImplementedException();
                 }
-                else
-                {
-                    return prev.AddDays(7 * Period);
-                }
+
+                return prev.AddDays(7 * Period);
                 break;
             case RepeaterType.Monthly:
                 return prev.AddMonths(Period);

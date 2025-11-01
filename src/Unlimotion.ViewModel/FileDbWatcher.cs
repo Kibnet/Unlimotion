@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading.Tasks;
 using System.Runtime.Caching;
+using System.Threading.Tasks;
 using Splat;
 using Unlimotion.ViewModel.Models;
 
@@ -84,7 +84,7 @@ namespace Unlimotion.ViewModel
         {
             return (s, e) =>
             {
-                if (isEnable == false)
+                if (!isEnable)
                     return;
 
                 var fullPath = e.FullPath;
@@ -104,7 +104,7 @@ namespace Unlimotion.ViewModel
 
         private void OnChanged(object sender, FileSystemEventArgs e)
         {
-            if (isEnable == false)
+            if (!isEnable)
                 return;
 
             lock (itLock)

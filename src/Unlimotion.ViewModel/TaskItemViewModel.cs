@@ -37,7 +37,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
         private TimeSpan? plannedPeriod;
-        private DateCommands commands = null;
+        private DateCommands commands;
         public SetDurationCommands SetDurationCommands { get; set; } = null!;
         public static TimeSpan DefaultThrottleTime = TimeSpan.FromSeconds(10);
         public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = DefaultThrottleTime;
@@ -168,12 +168,11 @@ namespace Unlimotion.ViewModel
                 }
             }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
 
-            RemoveFunc = async (parent) => 
+            RemoveFunc = async parent =>
             {
-                if (parent != null && this.Parents.Count > 1)
+                if (parent != null && Parents.Count > 1)
                     return await taskStorage.Delete(this, parent);
-                else
-                    return await taskStorage.Delete(this);
+                return await taskStorage.Delete(this);
             };
 
             CloneFunc = async destination =>
@@ -183,14 +182,14 @@ namespace Unlimotion.ViewModel
             };
 
             UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                (m) =>
+                m =>
                 {
                     taskStorage.Unblock(this, m);
                     return Unit.Default;
                 });
 
             DeleteParentChildRelationCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
-                (m) =>
+                m =>
                 {
                     taskStorage.RemoveParentChildConnection(this, m);
                     return Unit.Default;

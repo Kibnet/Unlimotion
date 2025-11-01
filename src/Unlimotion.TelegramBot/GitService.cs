@@ -2,7 +2,6 @@
 using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
 using Serilog;
-using Telegram.Bot.Types;
 
 namespace Unlimotion.TelegramBot
 {

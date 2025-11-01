@@ -1,6 +1,6 @@
-﻿using SignalR.EasyUse.Interface;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using SignalR.EasyUse.Interface;
 
 namespace Unlimotion.Interface
 {

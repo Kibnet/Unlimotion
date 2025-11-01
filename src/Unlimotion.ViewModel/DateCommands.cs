@@ -17,18 +17,18 @@ public class DateCommands
         SetBeginNextMonday = ReactiveCommand.Create(() => item.PlannedBeginDateTime = DateEx.NextMonday);
         SetBegin1DayNextMonth = ReactiveCommand.Create(() => item.PlannedBeginDateTime = DateEx.FirstDayNextMonth);
 
-        var hasBegin = item.WhenAny(m => m.PlannedBeginDateTime, (time) => time.Value != null);
+        var hasBegin = item.WhenAny(m => m.PlannedBeginDateTime, time => time.Value != null);
         SetBeginNone = ReactiveCommand.Create(() => item.PlannedBeginDateTime = null, hasBegin);
 
         //End
         SetEndToday = ReactiveCommand.Create(() => item.PlannedEndDateTime = DateTime.Today,
-            item.WhenAny(m => m.PlannedBeginDateTime, (time) => time.Value == null || time.Value <= DateTime.Today));
+            item.WhenAny(m => m.PlannedBeginDateTime, time => time.Value == null || time.Value <= DateTime.Today));
         SetEndTomorrow = ReactiveCommand.Create(() => item.PlannedEndDateTime = DateEx.Tomorrow,
-            item.WhenAny(m => m.PlannedBeginDateTime, (time) => time.Value == null || time.Value <= DateEx.Tomorrow));
+            item.WhenAny(m => m.PlannedBeginDateTime, time => time.Value == null || time.Value <= DateEx.Tomorrow));
         SetEndNextFriday = ReactiveCommand.Create(() => item.PlannedEndDateTime = DateEx.NextFriday,
-            item.WhenAny(m => m.PlannedBeginDateTime, (time) => time.Value == null || time.Value <= DateEx.NextFriday));
+            item.WhenAny(m => m.PlannedBeginDateTime, time => time.Value == null || time.Value <= DateEx.NextFriday));
 
-        var hasEnd = item.WhenAny(m => m.PlannedEndDateTime, (time) => time.Value != null);
+        var hasEnd = item.WhenAny(m => m.PlannedEndDateTime, time => time.Value != null);
         SetEnd1Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime, hasBegin);
         SetEnd5Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddDays(4), hasBegin);
         SetEnd7Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddDays(6), hasBegin);

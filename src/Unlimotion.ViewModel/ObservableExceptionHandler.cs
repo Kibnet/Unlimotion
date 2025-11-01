@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using Splat;
+
 //using ILogger = Serilog.ILogger;
 
 namespace Unlimotion.ViewModel;

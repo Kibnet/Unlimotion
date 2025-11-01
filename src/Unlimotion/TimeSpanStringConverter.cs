@@ -73,7 +73,7 @@ namespace Unlimotion
             
             // Helper using a regular expression to find the integer value from one
             // of the comma-seperated parts for a particular time unit type
-            Func<string, int> extractPart = (unit) =>
+            Func<string, int> extractPart = unit =>
             {
                 int result = 0;
 

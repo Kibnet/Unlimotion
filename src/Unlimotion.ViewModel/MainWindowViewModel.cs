@@ -1,10 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Configuration;
-using System.Diagnostics;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -15,14 +11,13 @@ using PropertyChanged;
 using ReactiveUI;
 using Splat;
 using Unlimotion.Domain;
-using Unlimotion.ViewModel;
 
 namespace Unlimotion.ViewModel
 {
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
-        public static bool _isInited = false; 
+        public static bool _isInited; 
         private DisposableList connectionDisposableList = new DisposableListRealization();
 
         public ITaskStorage? taskRepository;
@@ -189,7 +184,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode, m => m.GraphMode, m => m.LastCreatedMode, m => m.LastOpenedMode)
-                .Subscribe((a) => { SelectCurrentTask(); })
+                .Subscribe(a => { SelectCurrentTask(); })
                 .AddToDispose(connectionDisposableList);
 
             AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
@@ -236,7 +231,7 @@ namespace Unlimotion.ViewModel
                     var notify = Locator.Current.GetService<INotificationManagerWrapper>();
                     if (notify != null)
                     {
-                        notify.ErrorToast($"Ошибка подключения к серверу.");
+                        notify.ErrorToast("Ошибка подключения к серверу.");
                     }
                 };
             }
@@ -265,7 +260,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -293,7 +288,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -347,7 +342,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return true;
                         }
@@ -373,7 +368,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return true;
                         }
@@ -400,7 +395,7 @@ namespace Unlimotion.ViewModel
                     bool Predicate(TaskItemViewModel task)
                     {
                         return UnlockedTimeFilter.IsUnlocked(task) &&
-                               (filter.All(e => e.ShowTasks == false) ||
+                               (filter.All(e => !e.ShowTasks) ||
                                 filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
 
@@ -414,7 +409,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return (filter.All(e => e.ShowTasks == false) ||
+                        return (filter.All(e => !e.ShowTasks) ||
                                 filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
 
@@ -457,7 +452,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return task.Parents.Count == 0;
                         }
@@ -486,7 +481,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -528,7 +523,7 @@ namespace Unlimotion.ViewModel
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -553,7 +548,7 @@ namespace Unlimotion.ViewModel
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -599,14 +594,14 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, c => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
                 .Filter(completedDateFilter)
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -630,7 +625,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, c => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
                 .Filter(archiveDateFilter)
                 .Filter(emojiFilter)
@@ -753,10 +748,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
 
                                 m.Parent.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
@@ -780,10 +775,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
 
                                 m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);
@@ -806,10 +801,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
@@ -831,7 +826,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
@@ -992,7 +987,7 @@ namespace Unlimotion.ViewModel
 
         public SourceList<TaskWrapperViewModel> LastOpenedSource { get; set; } = new SourceList<TaskWrapperViewModel>();
 
-        public TaskItemViewModel? CurrentTaskItem { get; set; } = null!;
+        public TaskItemViewModel? CurrentTaskItem { get; set; }
         public TaskItemViewModel LastTaskItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;

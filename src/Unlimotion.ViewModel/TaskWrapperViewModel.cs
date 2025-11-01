@@ -56,7 +56,7 @@ public static class BredScrumbsAlgorithms
 public static class Comparers
 {
     public static IObservable<IComparer<TaskWrapperViewModel>> Default = Observable.Return(
-        new SortExpressionComparer<TaskWrapperViewModel>()
+        new SortExpressionComparer<TaskWrapperViewModel>
             { new SortExpression<TaskWrapperViewModel>(m => m.TaskItem.CreatedDateTime) });
 }
 

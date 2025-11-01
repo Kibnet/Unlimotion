@@ -36,13 +36,12 @@ public class TaskTreeManager : ITaskTreeManager
                     return false;
                 }
             });
-
-            return result.Values.ToList(); // Явное преобразование в список
+            // Явное преобразование в список
         }
         // CreateSibling, CreateBlockedSibling
         else
         {
-            string newTaskId = null;
+            string? newTaskId = null;
 
             await IsCompletedAsync(async Task<bool> () =>
             {
@@ -57,7 +56,7 @@ public class TaskTreeManager : ITaskTreeManager
                         result.AddOrUpdate(change);
                     }
 
-                    if (currentTask != null && (currentTask.ParentTasks ?? new List<string>()).Count > 0)
+                    if (currentTask.ParentTasks.Count > 0)
                     {
                         foreach (var parent in currentTask.ParentTasks)
                         {
@@ -70,7 +69,7 @@ public class TaskTreeManager : ITaskTreeManager
                         }
                     }
 
-                    if (isBlocked && currentTask != null)
+                    if (isBlocked)
                     {
                         result.AddOrUpdateRange(
                             await CreateBlockingBlockedByRelation(change, currentTask));
@@ -83,16 +82,17 @@ public class TaskTreeManager : ITaskTreeManager
                     return false;
                 }
             });
-
-            return result.Values.ToList(); // Явное преобразование в список
+            // Явное преобразование в список
         }
+
+        return result.Values.ToList(); // Явное преобразование в список
     }
 
 
     public async Task<List<TaskItem>> AddChildTask(TaskItem change, TaskItem currentTask)
     {
         var result = new Dictionary<string, TaskItem>();
-        string newTaskId = null;
+        string? newTaskId = null;
 
         //CreateInner
         await IsCompletedAsync(async Task<bool> () =>
@@ -133,7 +133,7 @@ public class TaskTreeManager : ITaskTreeManager
             try
             {
                 // Collect tasks that need recalculation before breaking relations
-                if (change.ParentTasks?.Any() == true)
+                if (change.ParentTasks.Any())
                 {
                     foreach (var parentId in change.ParentTasks)
                     {
@@ -145,7 +145,7 @@ public class TaskTreeManager : ITaskTreeManager
                     }
                 }
 
-                if (change.BlocksTasks?.Any() == true)
+                if (change.BlocksTasks.Any())
                 {
                     foreach (var blockedId in change.BlocksTasks)
                     {
@@ -371,7 +371,7 @@ public class TaskTreeManager : ITaskTreeManager
                         if (blockedBy != null)
                         {
                             result.AddOrUpdateRange(
-                                await this.CreateBlockingBlockedByRelation(clone, blockedBy));
+                                await CreateBlockingBlockedByRelation(clone, blockedBy));
                         }
                     }
 
@@ -387,7 +387,7 @@ public class TaskTreeManager : ITaskTreeManager
                         if (blockTask != null)
                         {
                             result.AddOrUpdateRange(
-                                await this.CreateBlockingBlockedByRelation(blockTask, clone));
+                                await CreateBlockingBlockedByRelation(blockTask, clone));
 
                             result.AddOrUpdateRange(
                                 await CalculateAndUpdateAvailability(blockTask));
@@ -644,7 +644,7 @@ public class TaskTreeManager : ITaskTreeManager
 
         var res = await retryPolicy.ExecuteAsync(() => task.Invoke());
 
-        if (res == false)
+        if (!res)
             throw new TimeoutException(
                 $"Операция не была корректно завершена за заданный таймаут {timeout}");
         return (res);

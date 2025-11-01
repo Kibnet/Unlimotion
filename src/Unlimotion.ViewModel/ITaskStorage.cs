@@ -1,10 +1,9 @@
-﻿using DynamicData;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DynamicData;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
-
 
 namespace Unlimotion.ViewModel;
 

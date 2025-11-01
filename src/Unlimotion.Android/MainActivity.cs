@@ -1,25 +1,17 @@
 ﻿#define Android
 
+using System.IO;
 using Android;
 using Android.App;
 using Android.Content.PM;
-using Android.Util;
 using Android.Views;
 using Android.Widget;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
-using AutoMapper;
 using Avalonia;
 using Avalonia.Android;
-using Avalonia.Media;
 using Avalonia.ReactiveUI;
-using Microsoft.Extensions.Configuration;
-using Splat;
-using System;
-using System.IO;
 using Unlimotion.Services;
-using Unlimotion.ViewModel;
-using WritableJsonConfiguration;
 
 namespace Unlimotion.Android;
 
@@ -44,7 +36,7 @@ public class MainActivity : AvaloniaMainActivity<App>
         if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.WriteExternalStorage) != Permission.Granted)
         {
             // Если разрешение не предоставлено, запрашиваем его
-            ActivityCompat.RequestPermissions(this, new string[] { Manifest.Permission.WriteExternalStorage }, RequestStorageId);
+            ActivityCompat.RequestPermissions(this, new[] { Manifest.Permission.WriteExternalStorage }, RequestStorageId);
         }
         else
         {

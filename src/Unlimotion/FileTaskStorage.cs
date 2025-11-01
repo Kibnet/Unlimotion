@@ -1,10 +1,4 @@
-﻿using AutoMapper;
-using DynamicData;
-using DynamicData.Binding;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Splat;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -12,6 +6,12 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AutoMapper;
+using DynamicData;
+using DynamicData.Binding;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Splat;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -20,11 +20,11 @@ using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
-    public partial class FileTaskStorage : ITaskStorage, IStorage
+    public class FileTaskStorage : ITaskStorage, IStorage
     {
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
 
-        public ITaskTreeManager TaskTreeManager { get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); } }
+        public ITaskTreeManager TaskTreeManager { get { return taskTreeManager ??= new TaskTreeManager(this); } }
 
         public string Path { get; private set; }
         private IDatabaseWatcher? dbWatcher;
@@ -205,7 +205,7 @@ namespace Unlimotion
 
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
-            var converter = new IsoDateTimeConverter()
+            var converter = new IsoDateTimeConverter
             {
                 DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
                 Culture = CultureInfo.InvariantCulture,

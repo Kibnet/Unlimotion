@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Unlimotion.Domain;
 
@@ -69,10 +67,8 @@ public static class RepeaterPatternExtensions
                     }
                     throw new NotImplementedException();
                 }
-                else
-                {
-                    return prev.AddDays(7 * repeater.Period);
-                }
+
+                return prev.AddDays(7 * repeater.Period);
             case RepeaterType.Monthly:
                 return prev.AddMonths(repeater.Period);
             case RepeaterType.Yearly:

@@ -6,6 +6,7 @@ using ServiceStack;
 using Splat;
 using Telegram.Bot;
 using Telegram.Bot.Args;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using Unlimotion.Domain;
@@ -187,7 +188,7 @@ namespace Unlimotion.TelegramBot
                 replyMarkup: keyboard);
         }
 
-        private static async Task<bool> HandleUserState(Telegram.Bot.Types.Message message)
+        private static async Task<bool> HandleUserState(Message message)
         {
             long userId = message.From.Id;
             string state = _userStates[userId];
@@ -221,37 +222,35 @@ namespace Unlimotion.TelegramBot
                 await ShowTask(message.Chat.Id, newTaskViewModel);
                 return true;
             }
-            else
+
+            if (state.StartsWith($"{CreateSib}"))
             {
-                if (state.StartsWith($"{CreateSib}"))
+                string siblingId = state.SplitOnFirst('_')[1];
+                string title = message.Text;
+                var siblingTask = _taskService.GetTask(siblingId);
+
+                var newTask = new TaskItem
                 {
-                    string siblingId = state.SplitOnFirst('_')[1];
-                    string title = message.Text;
-                    var siblingTask = _taskService.GetTask(siblingId);
-
-                    var newTask = new TaskItem
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        Title = title,
-                        Description = "",
-                    };
-                    var taskStorage = Locator.Current.GetService<ITaskStorage>();
-                    var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
-                    await newTaskViewModel.SaveItemCommand.Execute();
-                    if (siblingTask is { ParentsTasks.Count: > 0 })
-                    {
-                        siblingTask.ParentsTasks.First().Contains.Add(newTaskViewModel.Id);
-                    }
-
-                    taskStorage.Tasks.AddOrUpdate(newTaskViewModel);
-
-                    //_gitService.CommitAndPushChanges($"Создана соседняя задача {title}");
-
-                    await _client.SendTextMessageAsync(message.Chat.Id, $"Соседняя задача '{title}' создана.");
-                    _userStates.Remove(userId);
-                    await ShowTask(message.Chat.Id, newTaskViewModel);
-                    return true;
+                    Id = Guid.NewGuid().ToString(),
+                    Title = title,
+                    Description = "",
+                };
+                var taskStorage = Locator.Current.GetService<ITaskStorage>();
+                var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
+                await newTaskViewModel.SaveItemCommand.Execute();
+                if (siblingTask is { ParentsTasks.Count: > 0 })
+                {
+                    siblingTask.ParentsTasks.First().Contains.Add(newTaskViewModel.Id);
                 }
+
+                taskStorage.Tasks.AddOrUpdate(newTaskViewModel);
+
+                //_gitService.CommitAndPushChanges($"Создана соседняя задача {title}");
+
+                await _client.SendTextMessageAsync(message.Chat.Id, $"Соседняя задача '{title}' создана.");
+                _userStates.Remove(userId);
+                await ShowTask(message.Chat.Id, newTaskViewModel);
+                return true;
             }
 
             return false;

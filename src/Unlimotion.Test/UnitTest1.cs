@@ -1,13 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Reactive.Linq;
-using System.Threading.Tasks;
-using DynamicData;
-using DynamicData.Aggregation;
-using DynamicData.PLinq;
-using Telerik.JustMock;
 using Unlimotion.Domain;
-using Unlimotion.ViewModel;
 using Xunit;
 
 namespace Unlimotion.Test
