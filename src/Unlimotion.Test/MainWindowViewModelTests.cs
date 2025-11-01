@@ -717,7 +717,7 @@ namespace Unlimotion.Test
             //Должно быть одно различие: проставлен id блокируемой задачи "Blocked task 6"
             if (isdestinationNotBlockedByDraggable)
             {
-                Assert.Equal(1, result.Differences.Count);
+                Assert.Single(result.Differences);
                 // Проверяем, что количество блокируемых задач изменилось
                 var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
                 Assert.NotNull(blocksTasksDifference);
@@ -863,8 +863,8 @@ namespace Unlimotion.Test
             Assert.NotNull(containsTasksDifference);
             Assert.NotNull(unlockedDateTimeDifference.Object1);
             Assert.Null(unlockedDateTimeDifference.Object2);
-            Assert.Equal(0, ((System.Collections.IList)containsTasksDifference.Object1).Count);
-            Assert.Equal(1, ((System.Collections.IList)containsTasksDifference.Object2).Count);
+            Assert.Empty((System.Collections.IList)containsTasksDifference.Object1);
+            Assert.Single((System.Collections.IList)containsTasksDifference.Object2);
             //Новая задача должна быть в Contains во вьюмодели целевой задачи
             Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
 
@@ -879,8 +879,8 @@ namespace Unlimotion.Test
             Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
             var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));
-            Assert.Equal(0, ((System.Collections.IList)parentTasksDifference.Object1).Count);
-            Assert.Equal(1, ((System.Collections.IList)parentTasksDifference.Object2).Count);
+            Assert.Empty(((System.Collections.IList)parentTasksDifference.Object1));
+            Assert.Single(((System.Collections.IList)parentTasksDifference.Object2));
             Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
         }
 
@@ -1049,24 +1049,24 @@ namespace Unlimotion.Test
             var src = GetTask(MainWindowViewModelFixture.ClonedTask8Id);
             var dest1 = GetTask(MainWindowViewModelFixture.RootTask1Id);
             var dest2 = GetTask(MainWindowViewModelFixture.RootTask2Id);
-            await dest1.CopyInto(dest2);
+            await dest1!.CopyInto(dest2!);
 
-            var clone = await src.CloneInto(dest1);
+            var clone = await src!.CloneInto(dest1);
 
-            Assert.Equal(1, clone.Parents.Count);
+            Assert.Single(clone.Parents);
             Assert.Contains(dest1.Id, clone.Parents);
-            Assert.DoesNotContain(dest2.Id, clone.Parents);
+            Assert.DoesNotContain(dest2!.Id, clone.Parents);
         }
 
-        private TaskItemViewModel? GetTask(string taskId, bool DontAssertNull = false)
+        private TaskItemViewModel? GetTask(string taskId, bool dontAssertNull = false)
         {
-            var result = mainWindowVM.taskRepository.Tasks.Lookup(taskId);
+            var result = mainWindowVM.taskRepository!.Tasks.Lookup(taskId);
             if (result.HasValue)
             {
                 return result.Value;
             }
 
-            if (!DontAssertNull)
+            if (!dontAssertNull)
                 Assert.Fail("Задача не найдена");
 
             return null;

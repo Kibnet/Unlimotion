@@ -11,7 +11,7 @@ namespace Unlimotion.AppGenerator;
 public class AppNameGenerator : ISourceGenerator
 {
     private const string DefaultAppName = "Unlimotion";
-    private static string callingProjectPath;
+    private static string _callingProjectPath;
 
     public void Execute(GeneratorExecutionContext context)
     {
@@ -26,7 +26,7 @@ public class AppNameGenerator : ISourceGenerator
         
         if (directoryPath != null)
         {
-            callingProjectPath = directoryPath;
+            _callingProjectPath = directoryPath;
 
             var branchName = RunGitCommand("symbolic-ref --short HEAD");
             var shortCommitHash = RunGitCommand("rev-parse HEAD");
@@ -80,7 +80,7 @@ public class AppNameGenerator : ISourceGenerator
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = callingProjectPath
+            WorkingDirectory = _callingProjectPath
         };
 
         using var process = Process.Start(startInfo);
@@ -97,7 +97,7 @@ public class AppNameGenerator : ISourceGenerator
             UseShellExecute = false,
             RedirectStandardOutput = true,
             CreateNoWindow = true,
-            WorkingDirectory = callingProjectPath
+            WorkingDirectory = _callingProjectPath
         };
 
         using var process = Process.Start(startInfo);

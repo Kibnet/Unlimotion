@@ -28,7 +28,7 @@ public class MigrateTests
         };
     }
 
-    public void Dispose()
+    internal void Dispose()
     {
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* ignore */ }
     }
