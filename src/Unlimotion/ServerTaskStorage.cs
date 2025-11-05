@@ -4,22 +4,21 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
+using DynamicData;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using SignalR.EasyUse.Client;
 using Splat;
-using Unlimotion.TaskTree;
+using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
-using Unlimotion.ViewModel.Models;
-using DynamicData;
-using Unlimotion.Domain;
-using System.Threading;
 
 namespace Unlimotion;
 
@@ -72,7 +71,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     public ITaskTreeManager TaskTreeManager
     {
-        get { return taskTreeManager ??= new TaskTreeManager((IStorage)this); }
+        get { return taskTreeManager ??= new TaskTreeManager(this); }
     }
 
     public async Task SignOut()
@@ -103,17 +102,17 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
             settings.AccessToken = null;
             settings.RefreshToken = null;
-            configuration.Set("ClientSettings", settings);
+            if (configuration != null)
+            {
+                configuration.Set("ClientSettings", settings);
+            }
 
             //WindowStates(WindowState.SignOut);
             OnSignOut?.Invoke(this, EventArgs.Empty);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-        }
-        finally
-        {
-            //IsShowingLoginPage = true;
+            // Exception during sign out, continuing cleanup
         }
     }
 
@@ -137,15 +136,15 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     {
         try
         {
-            var task = await serviceClient.GetAsync(new GetTask() { Id = itemId });
+            var task = await serviceClient.GetAsync(new GetTask { Id = itemId });
             var mapped = mapper.Map<TaskItem>(task);
             return mapped;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             //TODO пробросить ошибку пользователю
         }
-        return null;
+        return null!;
     }
 
     public async Task<bool> Connect()
@@ -213,25 +212,28 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
                 if (!string.IsNullOrEmpty(settings.RefreshToken) && settings.ExpireTime < DateTimeOffset.Now)
                 {
-                    await RefreshToken(settings, configuration).ConfigureAwait(false);
+                    await RefreshToken(settings, configuration!).ConfigureAwait(false);
                 }
 
                 if (string.IsNullOrEmpty(settings.AccessToken))
                 {
-                    var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+                    var storageSettings = configuration?.Get<TaskStorageSettings>("TaskStorage");
                     try
                     {
                         var tokens = await serviceClient.PostAsync(new AuthViaPassword
                         {
-                            Login = storageSettings.Login,
-                            Password = storageSettings.Password
+                            Login = storageSettings?.Login ?? string.Empty,
+                            Password = storageSettings?.Password ?? string.Empty
                         }).ConfigureAwait(false);
 
                         settings.AccessToken = tokens.AccessToken;
                         settings.RefreshToken = tokens.RefreshToken;
-                        settings.Login = storageSettings.Login;
+                        settings.Login = storageSettings?.Login;
                         serviceClient.BearerToken = tokens.AccessToken;
-                        configuration.Set("ClientSettings", settings);
+                        if (configuration != null)
+                        {
+                            configuration.Set("ClientSettings", settings);
+                        }
                     }
                     catch (Exception authEx)
                     {
@@ -299,7 +301,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
                         await RegisterUser().ConfigureAwait(false);
                         return;
                     case LogOn.LogOnStatus.ErrorExpiredToken:
-                        await RefreshToken(settings, configuration).ConfigureAwait(false);
+                        await RefreshToken(settings, configuration!).ConfigureAwait(false);
                         break;
                     case LogOn.LogOnStatus.Ok:
                         settings.UserId = data.Id;
@@ -307,8 +309,6 @@ public class ServerTaskStorage : ITaskStorage, IStorage
                         settings.ExpireTime = data.ExpireTime;
 
                         OnConnected?.Invoke();
-                        break;
-                    default:
                         break;
                 }
             }
@@ -322,21 +322,20 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                var taskItem = mapper.Map<TaskItem>(data);
-
-                var viewModel = new TaskItemViewModel(taskItem, this);
+                var taskItem = mapper?.Map<TaskItem>(data);
 
                 if (taskItem != null) 
                 {
+                    var viewModel = new TaskItemViewModel(taskItem, this);
                     var existedTask = Tasks.Lookup(taskItem.Id);
 
-                    if(existedTask != null)
+                    if(existedTask.HasValue)
                     {
-                        await this.Update(viewModel.Model);
+                        await Update(viewModel.Model);
                     }
                     else
                     {
-                        await this.Add(viewModel);
+                        await Add(viewModel);
                     }
                 }
             }
@@ -347,11 +346,11 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                var task = this.Tasks.Lookup(data.Id);
+                var task = Tasks.Lookup(data.Id);
 
-                if (task != null) 
+                if (task.HasValue) 
                 {
-                    await this.Delete(task.Value, false);
+                    await Delete(task.Value, false);
                 }
             }
             catch (Exception ex) { OnConnectionError?.Invoke(ex); }
@@ -365,9 +364,9 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         var request = new RegisterNewUser();
         try
         {
-            var storageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-            var login = storageSettings.Login;
-            var password = storageSettings.Password;
+            var storageSettings = configuration?.Get<TaskStorageSettings>("TaskStorage");
+            var login = storageSettings?.Login;
+            var password = storageSettings?.Password;
             if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
             {
                 //TODO показать ошибку пользователю
@@ -385,10 +384,13 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.Login = login;
-            configuration.Set("ClientSettings", settings);
+            if (configuration != null)
+            {
+                configuration.Set("ClientSettings", settings);
+            }
             await Connect();
         }
-        catch (Exception e)
+        catch (Exception)
         {
             //TODO показывать ошибку пользователю
             //Debug.WriteLine($"Ошибка регистрации {e.Message}");
@@ -396,8 +398,6 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             //RegisterUser.ErrorMessageRegisterPage.GetErrorMessage(e.ToStatusCode().ToString());
             //RegisterUser.ErrorMessageRegisterPage.IsError = true;
         }
-
-        return;
     }
 
     private async Task RefreshToken(ClientSettings settings, IConfiguration configuration)
@@ -414,7 +414,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             await Login();
             IsSignedIn = true;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             //TODO вывести ошибку пользователю
             //User.ErrorMessageLoginPage.GetErrorMessage("419");
@@ -430,9 +430,10 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         string ipAddress = "";
         try
         {
-            ipAddress = new WebClient().DownloadString("https://api.ipify.org");
+            using var httpClient = new HttpClient();
+            ipAddress = await httpClient.GetStringAsync("https://api.ipify.org").ConfigureAwait(false);
         }
-        catch (Exception e)
+        catch (Exception)
         {
             try
             {
@@ -442,8 +443,9 @@ public class ServerTaskStorage : ITaskStorage, IStorage
                     ipAddress = ipHost.AddressList.Last().ToString();
                 }
             }
-            catch (Exception exception)
+            catch (Exception)
             {
+                // Use empty string if all attempts fail
             }
         }
 
@@ -472,9 +474,9 @@ public class ServerTaskStorage : ITaskStorage, IStorage
             //var task = serviceClient.Get(new GetAllTasks());;
             tasks = await serviceClient.GetAsync(new GetAllTasks());
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            var a = 0;
+            // Failed to fetch external IP, using placeholder
             //TODO пробросить ошибку пользователю
         }
 
@@ -494,8 +496,11 @@ public class ServerTaskStorage : ITaskStorage, IStorage
         {
             try
             {
-                var hubTask = mapper.Map<TaskItemHubMold>(item);
-                item.Id = await _hub.SaveTask(hubTask);
+                var hubTask = mapper?.Map<TaskItemHubMold>(item);
+                if (hubTask != null)
+                {
+                    item.Id = await _hub.SaveTask(hubTask);
+                }
                 return true;
             }
             catch (Exception e)
@@ -533,9 +538,9 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     {
         try
         {
-            await serviceClient.PostAsync(new BulkInsertTasks { Tasks = taskItems.Select(i => mapper.Map<TaskItemMold>(i)).ToList() });
+            await serviceClient.PostAsync(new BulkInsertTasks { Tasks = taskItems.Select(i => mapper?.Map<TaskItemMold>(i)!).ToList() });
         }
-        catch (Exception e)
+        catch (Exception)
         {
             //TODO пробросить ошибку пользователю
         }
@@ -629,9 +634,12 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
     {
         var additionalItemParents = new List<TaskItem>();
-        foreach (var newParent in additionalParents)
+        if (additionalParents != null)
         {
-            additionalItemParents.Add(newParent.Model);
+            foreach (var newParent in additionalParents)
+            {
+                additionalItemParents.Add(newParent.Model);
+            }
         }
         var taskItemList = await TaskTreeManager.CloneTask(
             change.Model,
@@ -651,18 +659,24 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
     {
         var additionalItemParents = new List<TaskItem>();
-        foreach (var newParent in additionalParents)
+        if (additionalParents != null)
         {
-            additionalItemParents.Add(newParent.Model);
+            foreach (var newParent in additionalParents)
+            {
+                additionalItemParents.Add(newParent.Model);
+            }
         }
 
-        var taskItemList = await TaskTreeManager.AddNewParentToTask(
-                change.Model,
-                additionalParents[0].Model);
-
-        foreach (var task in taskItemList)
+        if (additionalParents != null && additionalParents.Length > 0)
         {
-            UpdateCache(task);
+            var taskItemList = await TaskTreeManager.AddNewParentToTask(
+                    change.Model,
+                    additionalParents[0].Model);
+
+            foreach (var task in taskItemList)
+            {
+                UpdateCache(task);
+            }
         }
         return true;
     }
@@ -680,7 +694,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     {
         var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
                 change.Model,
-                additionalParents?.FirstOrDefault()?.Model,
+                additionalParents?.FirstOrDefault()?.Model!,
                 currentTask?.Model);
 
         taskItemList.ForEach(UpdateCache);

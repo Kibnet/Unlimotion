@@ -22,10 +22,10 @@ public class SortDefinition
             Name = "Comfort",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.CompletedDateTime, SortDirection.Ascending),
-                new(w => w.TaskItem.ArchiveDateTime, SortDirection.Ascending),
-                new(w => w.TaskItem.UnlockedDateTime, SortDirection.Ascending),
-                new(w => w.TaskItem.CreatedDateTime, SortDirection.Ascending),
+                new(w => w.TaskItem.CompletedDateTime),
+                new(w => w.TaskItem.ArchiveDateTime),
+                new(w => w.TaskItem.UnlockedDateTime),
+                new(w => w.TaskItem.CreatedDateTime),
             }
         };
         //Эмодзи
@@ -34,7 +34,7 @@ public class SortDefinition
             Name = "Emodji",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.GetAllEmoji, SortDirection.Ascending),
+                new(w => w.TaskItem.GetAllEmoji),
             },
         };
         //По дате создания Asc
@@ -43,7 +43,7 @@ public class SortDefinition
             Name = "Created Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.CreatedDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.CreatedDateTime)
             }
         };
         //По дате создания Des
@@ -61,7 +61,7 @@ public class SortDefinition
             Name = "Unlocked Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.UnlockedDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.UnlockedDateTime)
             }
         };
         //По дате разблокировки Des
@@ -79,7 +79,7 @@ public class SortDefinition
             Name = "Archive Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.ArchiveDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.ArchiveDateTime)
             }
         };
         //По дате архивации Des
@@ -97,7 +97,7 @@ public class SortDefinition
             Name = "Completed Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.CompletedDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.CompletedDateTime)
             }
         };
         //По дате выполнения Des
@@ -115,7 +115,7 @@ public class SortDefinition
             Name = "IsCompleted Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.IsCompleted, SortDirection.Ascending)
+                new(w => w.TaskItem.IsCompleted)
             }
         };
         //По готовности Des
@@ -133,7 +133,7 @@ public class SortDefinition
             Name = "IsCanBeCompleted Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.IsCanBeCompleted, SortDirection.Ascending)
+                new(w => w.TaskItem.IsCanBeCompleted)
             }
         };
         //It can be compited Des
@@ -151,7 +151,7 @@ public class SortDefinition
             Name = "Title Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.OnlyTextTitle, SortDirection.Ascending)
+                new(w => w.TaskItem.OnlyTextTitle)
             }
         };
         //По названию Des
@@ -169,7 +169,7 @@ public class SortDefinition
             Name = "Importance Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.Importance, SortDirection.Ascending)
+                new(w => w.TaskItem.Importance)
             }
         };
         //По приоритету (важности) Des
@@ -187,7 +187,7 @@ public class SortDefinition
             Name = "Planned Begin Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.PlannedBeginDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.PlannedBeginDateTime)
             }
         };
         //По дате планируемого начала выполнения Des
@@ -205,7 +205,7 @@ public class SortDefinition
             Name = "Planned Duration Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.PlannedDuration, SortDirection.Ascending)
+                new(w => w.TaskItem.PlannedDuration)
             }
         };
         //По планируемой длительности Des
@@ -223,7 +223,7 @@ public class SortDefinition
             Name = "Planned Finish Ascending",
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
-                new(w => w.TaskItem.PlannedEndDateTime, SortDirection.Ascending)
+                new(w => w.TaskItem.PlannedEndDateTime)
             }
         };
         //По дате планируемого окончания выполнения Des

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Collections.ObjectModel;
-using System.Configuration;
-using System.Diagnostics;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -15,24 +11,23 @@ using PropertyChanged;
 using ReactiveUI;
 using Splat;
 using Unlimotion.Domain;
-using Unlimotion.ViewModel;
 
 namespace Unlimotion.ViewModel
 {
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
-        public static bool _isInited = false; 
+        public static bool _isInited; 
         private DisposableList connectionDisposableList = new DisposableListRealization();
 
         public ITaskStorage? taskRepository;
         public MainWindowViewModel()
         {
-            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName();
+            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName() ?? "";
             Locator.CurrentMutable.RegisterConstant(this);
             connectionDisposableList.AddToDispose(this);
-            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>();
-            _configuration = Locator.Current.GetService<IConfiguration>();
+            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>()!;
+            _configuration = Locator.Current.GetService<IConfiguration>()!;
             Settings = new SettingsViewModel(_configuration);
             Graph = new GraphViewModel();
             Locator.CurrentMutable.RegisterConstant(Settings);
@@ -189,7 +184,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             this.WhenAnyValue(m => m.AllTasksMode, m => m.UnlockedMode, m => m.CompletedMode, m => m.ArchivedMode, m => m.GraphMode, m => m.LastCreatedMode, m => m.LastOpenedMode)
-                .Subscribe((a) => { SelectCurrentTask(); })
+                .Subscribe(a => { SelectCurrentTask(); })
                 .AddToDispose(connectionDisposableList);
 
             AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
@@ -234,7 +229,10 @@ namespace Unlimotion.ViewModel
                 taskStorage.OnConnectionError += ex =>
                 {
                     var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                    notify?.ErrorToast($"Ошибка подключения к серверу.");
+                    if (notify != null)
+                    {
+                        notify.ErrorToast("Ошибка подключения к серверу.");
+                    }
                 };
             }
 
@@ -262,7 +260,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -290,7 +288,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -344,7 +342,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return true;
                         }
@@ -370,7 +368,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return true;
                         }
@@ -397,7 +395,7 @@ namespace Unlimotion.ViewModel
                     bool Predicate(TaskItemViewModel task)
                     {
                         return UnlockedTimeFilter.IsUnlocked(task) &&
-                               (filter.All(e => e.ShowTasks == false) ||
+                               (filter.All(e => !e.ShowTasks) ||
                                 filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
 
@@ -411,7 +409,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        return (filter.All(e => e.ShowTasks == false) ||
+                        return (filter.All(e => !e.ShowTasks) ||
                                 filter.Where(e => e.ShowTasks).Any(item => item.Predicate(task)));
                     }
 
@@ -454,7 +452,7 @@ namespace Unlimotion.ViewModel
                 {
                     bool Predicate(TaskItemViewModel task)
                     {
-                        if (filter.All(e => e.ShowTasks == false))
+                        if (filter.All(e => !e.ShowTasks))
                         {
                             return task.Parents.Count == 0;
                         }
@@ -483,7 +481,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -525,7 +523,7 @@ namespace Unlimotion.ViewModel
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -550,7 +548,7 @@ namespace Unlimotion.ViewModel
                 .Filter(wantedFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -596,14 +594,14 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, c => c.Value == true))
                 .Filter(m => m.IsCompleted == true)
                 .Filter(completedDateFilter)
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions()
+                    var actions = new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
@@ -627,7 +625,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, c => c.Value == null))
                 .Filter(m => m.IsCompleted == null)
                 .Filter(archiveDateFilter)
                 .Filter(emojiFilter)
@@ -750,10 +748,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
 
                                 m.Parent.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
@@ -777,10 +775,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ParentsTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
 
                                 m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);
@@ -803,10 +801,10 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
-                            RemoveAction = (m) =>
+                            RemoveAction = m =>
                             {
                                 m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
                             },
@@ -828,7 +826,7 @@ namespace Unlimotion.ViewModel
                 {
                     if (item != null)
                     {
-                        var actions = new TaskWrapperActions()
+                        var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
@@ -989,20 +987,20 @@ namespace Unlimotion.ViewModel
 
         public SourceList<TaskWrapperViewModel> LastOpenedSource { get; set; } = new SourceList<TaskWrapperViewModel>();
 
-        public TaskItemViewModel CurrentTaskItem { get; set; }
-        public TaskItemViewModel LastTaskItem { get; set; }
-        public TaskWrapperViewModel CurrentItem { get; set; }
-        public TaskWrapperViewModel CurrentUnlockedItem { get; set; }
-        public TaskWrapperViewModel CurrentCompletedItem { get; set; }
-        public TaskWrapperViewModel CurrentArchivedItem { get; set; }
-        public TaskWrapperViewModel CurrentLastCreated { get; set; }
-        public TaskWrapperViewModel CurrentGraphItem { get; set; }
-        public TaskWrapperViewModel CurrentLastOpenedItem { get; set; }
+        public TaskItemViewModel? CurrentTaskItem { get; set; }
+        public TaskItemViewModel LastTaskItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentCompletedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentArchivedItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentLastCreated { get; set; } = null!;
+        public TaskWrapperViewModel CurrentGraphItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentLastOpenedItem { get; set; } = null!;
 
-        public TaskWrapperViewModel CurrentItemContains { get; private set; }
-        public TaskWrapperViewModel CurrentItemParents { get; private set; }
-        public TaskWrapperViewModel CurrentItemBlocks { get; private set; }
-        public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; }
+        public TaskWrapperViewModel CurrentItemContains { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemParents { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemBlocks { get; private set; } = null!;
+        public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; } = null!;
 
         public ICommand Create { get; set; }
 
@@ -1016,7 +1014,7 @@ namespace Unlimotion.ViewModel
 
         public ICommand Remove { get; set; }
 
-        private IConfiguration _configuration;
+        private IConfiguration _configuration = null!;
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
         public SortDefinition CurrentSortDefinition { get; set; }
@@ -1050,27 +1048,27 @@ namespace Unlimotion.ViewModel
         public DateFilter LastCreatedDateFilter { get; set; } = new();
 
         public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
-        public object TabItems { get; }
-        public object ToastNotificationManager { get; set; }
+        public object TabItems { get; } = null!;
+        public object ToastNotificationManager { get; set; } = null!;
     }
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
     {
-        public string Title { get; set; }
-        public string Emoji { get; set; }
+        public string Title { get; set; } = "";
+        public string Emoji { get; set; } = "";
         public bool ShowTasks { get; set; }
-        public string SortText { get; set; }
-        public TaskItemViewModel Source { get; set; }
+        public string SortText { get; set; } = "";
+        public TaskItemViewModel Source { get; set; } = null!;
     }
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiExcludeFilter
     {
-        public string Title { get; set; }
-        public string Emoji { get; set; }
+        public string Title { get; set; } = "";
+        public string Emoji { get; set; } = "";
         public bool ShowTasks { get; set; }
-        public string SortText { get; set; }
-        public TaskItemViewModel Source { get; set; }
+        public string SortText { get; set; } = "";
+        public TaskItemViewModel Source { get; set; } = null!;
     }
 }

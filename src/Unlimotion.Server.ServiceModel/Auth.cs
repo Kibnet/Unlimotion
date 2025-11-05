@@ -11,6 +11,12 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/password/login", "POST", Summary = "Логин с паролем", Notes = "Получение JWT токена через логин и пароль. Если пароля нет, то не пустит.")]
     public class AuthViaPassword : IReturn<TokenResult>
     {
+        public AuthViaPassword()
+        {
+            Login = string.Empty;
+            Password = string.Empty;
+        }
+
         [ApiMember(IsRequired = true, Description = "Логин")]
         public string Login { get; set; }
 
@@ -32,6 +38,11 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/password", "POST", Summary = "Задать пароль", Notes = "Задание пароля если он не задан.")]
     public class CreatePassword : IReturn<PasswordChangeResult>
     {
+        public CreatePassword()
+        {
+            NewPassword = string.Empty;
+        }
+
         [ApiMember(IsRequired = true, Description = "Новый пароль")]
         public string NewPassword { get; set; }
     }
@@ -63,6 +74,13 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/register", "POST", Summary = "Создать пользователя", Notes = "Получение JWT токена через регистрацию нового пользователя.")]
     public class RegisterNewUser : IReturn<TokenResult>
     {
+        public RegisterNewUser()
+        {
+            Login = string.Empty;
+            Password = string.Empty;
+            UserName = string.Empty;
+        }
+
         [ApiMember(IsRequired = true, Description = "Логин")]
         public string Login { get; set; }
 

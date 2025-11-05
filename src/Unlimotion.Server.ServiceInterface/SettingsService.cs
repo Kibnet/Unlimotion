@@ -1,7 +1,4 @@
-﻿using System.Net;
-using System.Threading.Tasks;
-using AutoMapper;
-using Raven.Client.Documents;
+﻿using System.Threading.Tasks;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using Unlimotion.Server.ServiceModel;

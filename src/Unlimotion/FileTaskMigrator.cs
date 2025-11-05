@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 
 namespace Unlimotion;
@@ -42,13 +43,13 @@ public class FileTaskMigrator
         Dictionary<string, (string getChild, string getParent)> links, Func<TaskItem, Task<bool>> saveFunc,
         string storagePath, bool dryRun = false, CancellationToken ct = default)
     {
-        var reportPath = Path.Combine(storagePath, $"migration.report");
+        var reportPath = Path.Combine(storagePath, "migration.report");
         if (File.Exists(reportPath))
         {
             //Открываем файл отчёта и получаем версию
             var reportJson = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(reportPath));
             var version = reportJson?.Version ?? 0;
-            var valueVersion = ((Newtonsoft.Json.Linq.JValue)version).Value;
+            var valueVersion = ((JValue)version).Value;
             if (valueVersion is long _version && version >= Version)
                 return;
         }
@@ -57,7 +58,7 @@ public class FileTaskMigrator
 
         ConcurrentDictionary<string, TaskItem> idToPath = new();
 
-        var linkDict = links.Select(pair => new LinkInfo()
+        var linkDict = links.Select(pair => new LinkInfo
         {
             Id = pair.Key,
             ChildProp = pair.Value.getChild,

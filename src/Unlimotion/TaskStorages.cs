@@ -1,21 +1,20 @@
-﻿using System;
-using Splat;
-using Microsoft.Extensions.Configuration;
-using ReactiveUI;
-using Unlimotion.ViewModel;
-using System.Linq;
-using Quartz;
-using AutoMapper;
-using ITrigger = Quartz.ITrigger;
-using Unlimotion.TaskTree;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using AutoMapper;
+using Microsoft.Extensions.Configuration;
+using Quartz;
+using ReactiveUI;
+using Splat;
 using Unlimotion.Domain;
+using Unlimotion.ViewModel;
+using ITrigger = Quartz.ITrigger;
 
 namespace Unlimotion
 {
     public static class TaskStorages
     {
-        public static string DefaultStoragePath;
+        public static string DefaultStoragePath = string.Empty;
 
         public static void SetSettingsCommands()
         {
@@ -28,7 +27,7 @@ namespace Unlimotion
                 var mainWindowViewModel = Locator.Current.GetService<MainWindowViewModel>();
                 await mainWindowViewModel.Connect();
                 var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                notify?.SuccessToast($"Хранилище задач подключено и все задачи из него загружены");
+                notify?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
             });
             settingsViewModel.ObservableForProperty(m => m.GitBackupEnabled, true)
                 .Subscribe(c =>
@@ -104,7 +103,7 @@ namespace Unlimotion
                       await fileTaskStorage.Save(task);
                 }
             });
-            settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async (param) =>
+            settingsViewModel.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
             {
                 var dialogs = Locator.Current.GetService<IDialogs>();
                 var path = await dialogs?.ShowOpenFolderDialogAsync("Task Storage Path")!;
@@ -186,9 +185,9 @@ namespace Unlimotion
                 dbWatcher = new FileDbWatcher(GetStoragePath(storagePath));
                 Locator.CurrentMutable.RegisterConstant<IDatabaseWatcher>(dbWatcher);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                dbWatcher = null;
+                // FileDbWatcher initialization failed, proceeding without database watching
                 Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             }
             return taskStorage;
@@ -207,7 +206,7 @@ namespace Unlimotion
             var storagePath = path;
             if (string.IsNullOrEmpty(path))
                 storagePath = DefaultStoragePath;
-            return storagePath;
+            return storagePath ?? string.Empty;
         }
         
         private static ITrigger GenerateTriggerBySecondsInterval(string name, string group, int seconds) 

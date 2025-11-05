@@ -1,7 +1,8 @@
-﻿using Avalonia;
+﻿using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using ReactiveUI;
-using System.Windows.Input;
 
 namespace Unlimotion
 {
@@ -23,17 +24,17 @@ namespace Unlimotion
                 {
                     switch (lifetime.MainWindow.WindowState)
                     {
-                        case Avalonia.Controls.WindowState.Normal:
-                            lifetime.MainWindow.WindowState = Avalonia.Controls.WindowState.Minimized;
+                        case WindowState.Normal:
+                            lifetime.MainWindow.WindowState = WindowState.Minimized;
                             break;
-                        case Avalonia.Controls.WindowState.Minimized:
-                            lifetime.MainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
+                        case WindowState.Minimized:
+                            lifetime.MainWindow.WindowState = WindowState.Normal;
                             break;
-                        case Avalonia.Controls.WindowState.Maximized:
-                            lifetime.MainWindow.WindowState = Avalonia.Controls.WindowState.Minimized;
+                        case WindowState.Maximized:
+                            lifetime.MainWindow.WindowState = WindowState.Minimized;
                             break;
-                        case Avalonia.Controls.WindowState.FullScreen:
-                            lifetime.MainWindow.WindowState = Avalonia.Controls.WindowState.Minimized;
+                        case WindowState.FullScreen:
+                            lifetime.MainWindow.WindowState = WindowState.Minimized;
                             break;
                     }
                 }

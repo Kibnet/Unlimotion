@@ -1,4 +1,8 @@
-﻿using AutoMapper;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using AutoMapper;
 using Microsoft.AspNetCore.SignalR;
 using Raven.Client.Documents.Session;
 using Serilog;
@@ -6,12 +10,8 @@ using ServiceStack;
 using ServiceStack.Auth;
 using ServiceStack.Host;
 using SignalR.EasyUse.Server;
-using Unlimotion.Interface;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Unlimotion.Domain;
+using Unlimotion.Interface;
 
 namespace Unlimotion.Server.Hubs
 {
@@ -55,7 +55,7 @@ namespace Unlimotion.Server.Hubs
                 {
                     var taskItem = Mapper.Map<TaskItem>(hubTask);
                     taskItem.CreatedDateTime = DateTimeOffset.UtcNow;
-                    taskItem.UserId = (uid is not null) ? uid : throw new Exception("Не передан uid");
+                    taskItem.UserId = uid is not null ? uid : throw new Exception("Не передан uid");
 
                     await _ravenSession.StoreAsync(taskItem);
                     await _ravenSession.SaveChangesAsync();
@@ -69,7 +69,8 @@ namespace Unlimotion.Server.Hubs
 
                     return taskItem.Id;
                 }
-                else if (task.UserId == uid)
+
+                if (task.UserId == uid)
                 {
                     var taskItem = Mapper.Map(hubTask, task);
 
@@ -101,39 +102,32 @@ namespace Unlimotion.Server.Hubs
         /// <returns></returns>
         public async Task DeleteTasks(List<string> idTasks)
         {
-            try
+            string uid = Context.Items["uid"].ToString();
+
+            //Получение своих задач для удаления
+            var tasks = await _ravenSession.LoadAsync<TaskItem>(idTasks);
+            var listMessages = uid != null ? tasks.Values.Where(item => item.UserId == uid).ToList()
+                : throw new Exception("Не найден uid");
+
+            //Удаление из БД
+            foreach (var item in listMessages)
             {
-                string uid = Context.Items["uid"].ToString();
-
-                //Получение своих задач для удаления
-                var tasks = await _ravenSession.LoadAsync<TaskItem>(idTasks);
-                var listMessages = (uid != null) ? tasks.Values.Where(item => item.UserId == uid).ToList()
-                                                 : throw new Exception("Не найден uid");
-
-                //Удаление из БД
-                foreach (var item in listMessages)
-                {
-                    _ravenSession.Delete(item);
-                }
-                await _ravenSession.SaveChangesAsync();
-
-                //Отправка сообщения об удалении задачи
-                foreach (var item in listMessages)
-                {
-                    var deleteTask = new DeleteTaskItem
-                    {
-                        Id = item.Id,
-                        UserId = uid
-                    };
-
-                    var users = Clients.Users;
-
-                    await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync(deleteTask);
-                }
+                _ravenSession.Delete(item);
             }
-            catch
+            await _ravenSession.SaveChangesAsync();
+
+            //Отправка сообщения об удалении задачи
+            foreach (var item in listMessages)
             {
-                throw;
+                var deleteTask = new DeleteTaskItem
+                {
+                    Id = item.Id,
+                    UserId = uid
+                };
+
+                var users = Clients.Users;
+
+                await Clients.GroupExcept($"User_{uid}", Context.ConnectionId).SendAsync(deleteTask);
             }
         }
         public override async Task OnDisconnectedAsync(Exception exception)
@@ -154,9 +148,9 @@ namespace Unlimotion.Server.Hubs
             try
             {
                 var jwtPayload = jwtAuthProviderReader.GetVerifiedJwtPayload(new BasicHttpRequest(), token.Split('.'));
-                await Groups.AddToGroupAsync(this.Context.ConnectionId, _loginedGroup);
+                await Groups.AddToGroupAsync(Context.ConnectionId, _loginedGroup);
                 var uid = Context.Items["uid"] = jwtPayload["sub"];
-                await Groups.AddToGroupAsync(this.Context.ConnectionId, $"User_{uid}");
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{uid}");
                 Context.Items["login"] = jwtPayload["name"];
                 Context.Items["uid"] = uid;
                 Context.Items["session"] = jwtPayload["session"];

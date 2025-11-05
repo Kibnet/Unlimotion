@@ -6,6 +6,11 @@ namespace Unlimotion.Server.ServiceModel.Molds.Tasks;
 [Description("Шаблон повторения")]
 public class RepeaterPatternMold
 {
+    public RepeaterPatternMold()
+    {
+        Pattern = new List<int>();
+    }
+
     [Description("Тип повторения")]
     public RepeaterTypeMold Type { get; set; }
 

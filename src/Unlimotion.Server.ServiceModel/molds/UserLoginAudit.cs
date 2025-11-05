@@ -6,6 +6,15 @@ namespace Unlimotion.Server.ServiceModel.Molds
     [Description("Аудит входа")]
     public class UserLoginAudit
     {
+        public UserLoginAudit()
+        {
+            Id = string.Empty;
+            IpAddress = string.Empty;
+            SessionId = string.Empty;
+            NameVersionClient = string.Empty;
+            OperatingSystem = string.Empty;
+        }
+
         [Description("Идентификатор пользователя")]
         public string Id { get; set; }
         [Description("IP-адрес")]

@@ -13,8 +13,8 @@ public class SetDurationCommands
     public SetDurationCommands(TaskItemViewModel item)
     {
         taskItemViewModel = item;
-        var hasDuration = taskItemViewModel.WhenAny(m => m.PlannedDuration, (time) => time.Value != null);
-        var any = taskItemViewModel.WhenAny(m => m.PlannedDuration, (time) => true);
+        var hasDuration = taskItemViewModel.WhenAny(m => m.PlannedDuration, time => time.Value != null);
+        var any = taskItemViewModel.WhenAny(m => m.PlannedDuration, time => true);
 
         OneMinCommand = ReactiveCommand.Create(() => taskItemViewModel.PlannedDuration = TimeSpan.FromMinutes(1), any);
         FiveMinutesCommand = ReactiveCommand.Create(() => taskItemViewModel.PlannedDuration = TimeSpan.FromMinutes(5), any);

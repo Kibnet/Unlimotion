@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using ServiceStack;
 using ServiceStack.Api.OpenApi;
-using ServiceStack.Api.Swagger;
 using ServiceStack.Auth;
 using ServiceStack.Configuration;
 using ServiceStack.Validation;
@@ -34,7 +33,7 @@ namespace Unlimotion.Server
         /// </summary>
         public override void Configure(Container container)
         {
-            this.ServiceExceptionHandlers.Add((httpReq, request, exception) =>
+            ServiceExceptionHandlers.Add((httpReq, request, exception) =>
             {
                 httpReq.Items["__exception"] = exception;
                 return new HttpError { Status = exception.ToStatusCode() };
@@ -42,7 +41,7 @@ namespace Unlimotion.Server
 
             //Handle Unhandled Exceptions occurring outside of Services
             //E.g. Exceptions during Request binding or in filters:
-            this.UncaughtExceptionHandlers.Add((httpReq, res, operationName, exception) =>
+            UncaughtExceptionHandlers.Add((httpReq, res, operationName, exception) =>
             {
                 //var logger = NLog.LogManager.GetCurrentClassLogger();
                 //var builder = logger.Error().Exception(exception);
@@ -67,11 +66,11 @@ namespace Unlimotion.Server
             hostConfig.MapExceptionToStatusCode.Add(typeof(CryptographicException), 401);
             SetConfig(hostConfig);
 
-            this.Plugins.Add(new PostmanFeature()
+            Plugins.Add(new PostmanFeature
             {
                 DefaultLabelFmt = new List<string> { "route", " - ", "type:english" },
             });
-            this.Plugins.Add(new CorsFeature(allowedHeaders: "Content-Type,Authorization,x-client-version"));
+            Plugins.Add(new CorsFeature(allowedHeaders: "Content-Type,Authorization,x-client-version"));
             
             var privateKey = _settings.GetString("Security:PrivateKeyXml");//Получение закрытого ассиметричного ключа из конфига
 

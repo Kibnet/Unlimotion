@@ -1,14 +1,14 @@
-﻿using AutoMapper;
-using Microsoft.Extensions.Configuration;
-using Raven.Client.Documents.Session;
-using ServiceStack;
-using Unlimotion.Server.ServiceModel;
-using Unlimotion.Server.ServiceModel.Molds.Attachment;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
+using Microsoft.Extensions.Configuration;
+using Raven.Client.Documents.Session;
+using ServiceStack;
 using Unlimotion.Domain;
+using Unlimotion.Server.ServiceModel;
+using Unlimotion.Server.ServiceModel.Molds.Attachment;
 
 namespace Unlimotion.Server.ServiceInterface
 {
@@ -49,7 +49,7 @@ namespace Unlimotion.Server.ServiceInterface
             var stream = file?.InputStream;
             var fileId = $"{pref}{Guid.NewGuid()}";
 
-            var fileUpload = new Attachment()
+            var fileUpload = new Attachment
             {
                 Id = fileId,
                 FileName = file?.FileName,

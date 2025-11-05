@@ -1,20 +1,19 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using KellermanSoftware.CompareNetObjects;
-using Unlimotion.ViewModel;
 using Unlimotion.Domain;
-using System.Threading.Tasks;
+using Unlimotion.ViewModel;
 using Xunit;
 
 namespace Unlimotion.Test
 {
     public static class TestHelpers
     {
-        public static TaskItemViewModel SetCurrentTask(MainWindowViewModel viewModel, string taskId)
+        public static TaskItemViewModel? SetCurrentTask(MainWindowViewModel viewModel, string taskId)
         {
             var task = GetTask(viewModel, taskId);
             viewModel.CurrentTaskItem = task;
@@ -50,16 +49,19 @@ namespace Unlimotion.Test
 
         public static async Task WaitThrottleTime()
         {
-            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(1.5));
+            var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(0.5));
             await Task.Delay(sleepTime);
         }
 
-        public static TaskItemViewModel GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing = true)
+        public static TaskItemViewModel? GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing = true)
         {
-            var result = viewModel.taskRepository.Tasks.Lookup(taskId);
-            if (result.HasValue)
+            if (viewModel.taskRepository != null)
             {
-                return result.Value;
+                var result = viewModel.taskRepository.Tasks.Lookup(taskId);
+                if (result.HasValue)
+                {
+                    return result.Value;
+                }
             }
 
             if (assertIfMissing)
@@ -68,7 +70,7 @@ namespace Unlimotion.Test
             return null;
         }
 
-        public static TaskItem GetStorageTaskItem(string folderPath, string taskId)
+        public static TaskItem? GetStorageTaskItem(string folderPath, string taskId)
         {
             var path = Path.Combine(folderPath, taskId);
             if (!File.Exists(path)) return null;
@@ -78,8 +80,13 @@ namespace Unlimotion.Test
 
         public static ComparisonResult CompareStorageVersions(TaskItem before, TaskItem after)
         {
-            var compareLogic = new CompareLogic();
-            compareLogic.Config.MaxDifferences = 10;
+            var compareLogic = new CompareLogic
+            {
+                Config =
+                {
+                    MaxDifferences = 10
+                }
+            };
             return compareLogic.Compare(before, after);
         }
 
@@ -92,31 +99,17 @@ namespace Unlimotion.Test
 
         public static void ShouldContainOnlyDifference(ComparisonResult result, string propertyName)
         {
-            Assert.Single(result.Differences, d => d.PropertyName == propertyName);
-        }
-
-        public static void AssertTaskLink(TaskItem task, string expectedId)
-        {
-            Assert.Contains(expectedId, task.ContainsTasks);
-        }
-
-        public static async Task<TaskItemViewModel> CreateAndSetCurrent(MainWindowViewModel viewModel, Action action, ITaskStorage repository, int expectedNewTasks = 1)
-        {
-            var created = await CreateAndReturnNewTaskItem(action, repository, expectedNewTasks);
-            viewModel.CurrentTaskItem = created;
-            return created;
+            Assert.Single(result.Differences, d =>
+            {
+                if (d == null) throw new ArgumentNullException(nameof(d));
+                return d.PropertyName == propertyName;
+            });
         }
 
         public static void AssertTaskExistsOnDisk(string folderPath, string taskId)
         {
             var path = Path.Combine(folderPath, taskId);
             Assert.True(File.Exists(path), $"Task file not found: {path}");
-        }
-
-        public static void AssertTaskNotExistsOnDisk(string folderPath, string taskId)
-        {
-            var path = Path.Combine(folderPath, taskId);
-            Assert.False(File.Exists(path), $"Task file still exists: {path}");
         }
     }
 }

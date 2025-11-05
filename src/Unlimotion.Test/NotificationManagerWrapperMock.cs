@@ -6,7 +6,7 @@ namespace Unlimotion.Test
     public class NotificationManagerWrapperMock : INotificationManagerWrapper
     {
         public bool AskResult { get; set; }
-        public void Ask(string header, string message, Action yesAction, Action noAction = null)
+        public void Ask(string header, string message, Action yesAction, Action? noAction = null)
         {
             if (AskResult)
             {

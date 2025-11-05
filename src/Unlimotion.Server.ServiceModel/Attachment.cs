@@ -1,7 +1,7 @@
 ﻿using System.IO;
+using System.Net;
 using ServiceStack;
 using Unlimotion.Server.ServiceModel.Molds.Attachment;
-using System.Net;
 
 namespace Unlimotion.Server.ServiceModel
 {
@@ -16,6 +16,11 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/attachments/{id}", "GET", Summary = "Получение файла с сервера", Notes = "Получение файла с сервера")]
     public class GetAttachment : IReturn<Stream>
     {
+        public GetAttachment()
+        {
+            Id = string.Empty;
+        }
+
         [ApiMember(IsRequired = true, Description = "Идентификатор файла")]
         public string Id { get; set; }
     }

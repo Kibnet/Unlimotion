@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Splat;
-using Unlimotion.Services;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Scheduling.Jobs;

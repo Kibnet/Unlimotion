@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using Splat;
+
 //using ILogger = Serilog.ILogger;
 
 namespace Unlimotion.ViewModel;
@@ -27,8 +28,8 @@ public class ObservableExceptionHandler : IObserver<Exception>
         //_logger.Error($"ObservableExceptionHandler: Type: {value.GetType()}, Message: {value.Message}, StackTrace: {value.StackTrace}");
        
         _notifyManager.ErrorToast($"Exception: {value.Message} " +
-                                   $"File: {Path.GetFileName(stackFrame.GetFileName())}. " +
-                                   $"RowNumber: {stackFrame.GetFileLineNumber()}");
+                                   $"File: {(stackFrame != null ? Path.GetFileName(stackFrame.GetFileName()) : "Unknown")}. " +
+                                   $"RowNumber: {(stackFrame != null ? stackFrame.GetFileLineNumber() : 0)}");
         
         // RxApp.MainThreadScheduler.Schedule(() => { throw value; }) ;
     }

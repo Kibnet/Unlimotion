@@ -23,6 +23,11 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/tasks/{Id}", "GET", Summary = "Получение задачи", Notes = "Подгрузка задачи по идентификатору")]
     public class GetTask : IReturn<TaskItemMold>
     {
+        public GetTask()
+        {
+            Id = string.Empty;
+        }
+
         [ApiMember(IsRequired = true, Description = "Идентификатор задачи")]
         public string Id { get; set; }
     }
@@ -38,6 +43,11 @@ namespace Unlimotion.Server.ServiceModel
     [Route("/tasks/bulk", "POST", Summary = "Массовая загрузка списка задач", Notes = "Массовая загрузка списка задач")]
     public class BulkInsertTasks : IReturnVoid
     {
+        public BulkInsertTasks()
+        {
+            Tasks = new List<TaskItemMold>();
+        }
+
         [ApiMember(IsRequired = true, Description = "Список задач")]
         public List<TaskItemMold> Tasks { get; set; }
     }

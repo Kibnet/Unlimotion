@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
 using DynamicData.Binding;
@@ -24,16 +23,16 @@ namespace Unlimotion.Views
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
-            if (this.ZoomBorder != null)
+            if (ZoomBorder != null)
             {
-                this.ZoomBorder.KeyDown += ZoomBorder_KeyDown;
+                ZoomBorder.KeyDown += ZoomBorder_KeyDown;
             }
         }
 
         private GraphViewModel? dc;
         private DisposableList disposableList = new DisposableListRealization();
 
-        private void GraphControl_DataContextChanged(object sender, System.EventArgs e)
+        private void GraphControl_DataContextChanged(object sender, EventArgs e)
         {
             var newdc = DataContext as GraphViewModel;
             if (dc != newdc)
@@ -177,17 +176,17 @@ namespace Unlimotion.Views
             switch (e.Key)
             {
                 case Key.F:
-                    this.ZoomBorder?.Fill();
+                    ZoomBorder?.Fill();
                     break;
                 case Key.U:
-                    this.ZoomBorder?.Uniform();
+                    ZoomBorder?.Uniform();
                     break;
                 case Key.R:
-                    this.ZoomBorder?.ResetMatrix();
+                    ZoomBorder?.ResetMatrix();
                     break;
                 case Key.T:
-                    this.ZoomBorder?.ToggleStretchMode();
-                    this.ZoomBorder?.AutoFit();
+                    ZoomBorder?.ToggleStretchMode();
+                    ZoomBorder?.AutoFit();
                     break;
             }
         }

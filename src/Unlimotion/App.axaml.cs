@@ -1,21 +1,17 @@
 ﻿//#define LIVE
 
 using System;
+using System.Linq;
 using System.Reactive;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
-#if LIVE
-using Live.Avalonia;
-#endif
 using ReactiveUI;
 using Splat;
 using Unlimotion.Scheduling.Jobs;
@@ -23,10 +19,13 @@ using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using WritableJsonConfiguration;
+#if LIVE
+using Live.Avalonia;
+#endif
 
 namespace Unlimotion;
 
-public partial class App : Application
+public class App : Application
 {
     public override void Initialize()
     {
@@ -92,7 +91,7 @@ public partial class App : Application
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
-            singleViewPlatform.MainView = new MainScreen()
+            singleViewPlatform.MainView = new MainScreen
             {
                 DataContext = GetMainWindowViewModel(),
             };

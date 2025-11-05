@@ -2,6 +2,7 @@
 
 using Avalonia;
 using Avalonia.Media;
+
 namespace Unlimotion
 {
     public static class AppExtensions

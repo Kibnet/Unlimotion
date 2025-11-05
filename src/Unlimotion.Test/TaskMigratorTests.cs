@@ -1,12 +1,10 @@
-using Newtonsoft.Json.Linq;
-using ServiceStack.OrmLite;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Unlimotion;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Xunit;
 
@@ -28,7 +26,7 @@ public class MigrateTests
         };
     }
 
-    public void Dispose()
+    internal void Dispose()
     {
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* ignore */ }
     }
@@ -52,7 +50,7 @@ public class MigrateTests
                             .OrderByDescending(f => f)
                             .FirstOrDefault();
         Assert.False(path is null, "Report file not found");
-        return path!;
+        return path;
     }
 
     private static List<string> ReadIssues(string reportPath)

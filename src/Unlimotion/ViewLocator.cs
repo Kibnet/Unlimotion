@@ -1,8 +1,7 @@
-using Avalonia.Controls;
-using Avalonia.Controls.Templates;
 using System;
 using System.ComponentModel;
-using Unlimotion.ViewModel;
+using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 
 namespace Unlimotion;
 

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading.Tasks;
-using Unlimotion.Domain;
+﻿using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 
@@ -25,17 +23,16 @@ public interface ITaskTreeManager
 
     public Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask);
 
-    public Task<TaskItem> LoadTask(string taskId);
+    public Task<TaskItem?> LoadTask(string taskId);
 
     public Task<List<TaskItem>> DeleteParentChildRelation(TaskItem parent, TaskItem child);
 
     public Task<List<TaskItem>> CalculateAndUpdateAvailability(TaskItem task);
-    
+
     /// <summary>
     /// Handles logic when a task's IsCompleted property changes
     /// </summary>
     /// <param name="task">The task that has changed</param>
-    /// <param name="previousIsCompleted">The previous value of IsCompleted</param>
     /// <returns>List of affected tasks</returns>
     public Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task);
 }

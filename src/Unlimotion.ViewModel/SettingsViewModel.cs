@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Collections.Generic;
+using System.Windows.Input;
+using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using Splat;
-using System.Collections.Generic;
-using System.Windows.Input;
 
 namespace Unlimotion.ViewModel;
 

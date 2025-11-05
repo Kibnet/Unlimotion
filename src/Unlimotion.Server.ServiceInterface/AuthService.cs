@@ -57,9 +57,9 @@ namespace Unlimotion.Server.ServiceInterface
             if (secret.Password != Hashing.CreateHashPassword(request.Password, secret.Salt))
                 throw new HttpError(HttpStatusCode.NotFound, "Password is wrong");
 
-            var customAccessExpire = (request.AccessTokenExpirationPeriod.HasValue && request.AccessTokenExpirationPeriod >= 0)
+            var customAccessExpire = request.AccessTokenExpirationPeriod.HasValue && request.AccessTokenExpirationPeriod >= 0
                 ? TimeSpan.FromSeconds(request.AccessTokenExpirationPeriod.Value) : (TimeSpan?)null;
-            var customRefreshExpire = (request.RefreshTokenExpirationPeriod.HasValue && request.RefreshTokenExpirationPeriod >= 0)
+            var customRefreshExpire = request.RefreshTokenExpirationPeriod.HasValue && request.RefreshTokenExpirationPeriod >= 0
                 ? TimeSpan.FromSeconds(request.RefreshTokenExpirationPeriod.Value) : (TimeSpan?)null;
 
             var tokenResult = await GenerateToken(user, customAccessExpire, customRefreshExpire);
@@ -79,12 +79,12 @@ namespace Unlimotion.Server.ServiceInterface
                 throw new HttpError(HttpStatusCode.NotFound, $"User {uid} is not found");
 
             var customAccessExpire =
-                (request.AccessTokenExpirationPeriod.HasValue && request.AccessTokenExpirationPeriod >= 0)
+                request.AccessTokenExpirationPeriod.HasValue && request.AccessTokenExpirationPeriod >= 0
                     ? TimeSpan.FromSeconds(request.AccessTokenExpirationPeriod.Value)
                     : (TimeSpan?)null;
 
             var customRefreshExpire =
-                (request.RefreshTokenExpirationPeriod.HasValue && request.RefreshTokenExpirationPeriod >= 0)
+                request.RefreshTokenExpirationPeriod.HasValue && request.RefreshTokenExpirationPeriod >= 0
                     ? TimeSpan.FromSeconds(request.RefreshTokenExpirationPeriod.Value)
                     : (TimeSpan?)null;
 

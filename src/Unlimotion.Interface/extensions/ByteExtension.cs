@@ -4,7 +4,7 @@
     {
         public static string SizeCalculating(this long size)
         {
-            var sizes = new string[] { "B", "KB", "MB", "GB", "TB" };
+            var sizes = new[] { "B", "KB", "MB", "GB", "TB" };
             var order = 0;
             var result = string.Empty;
 

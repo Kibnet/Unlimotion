@@ -16,9 +16,9 @@ public class RepeaterPattern
         var y = obj as RepeaterPattern;
         if (this is null || y is null) return false;
 
-        return this.Type == y.Type &&
-               this.Period == y.Period &&
-               this.AfterComplete == y.AfterComplete &&
-               (this.Pattern == y.Pattern || (this.Pattern != null && y.Pattern != null && this.Pattern.SequenceEqual(y.Pattern)));
+        return Type == y.Type &&
+               Period == y.Period &&
+               AfterComplete == y.AfterComplete &&
+               (Pattern == y.Pattern || (Pattern != null && y.Pattern != null && Pattern.SequenceEqual(y.Pattern)));
     }
 }

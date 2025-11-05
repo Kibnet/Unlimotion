@@ -1,25 +1,11 @@
-﻿using AutoMapper;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Logging;
-using Avalonia.Media;
-using Avalonia.ReactiveUI;
-using Microsoft.Extensions.Configuration;
-using Quartz;
-using Quartz.Impl;
-using ReactiveUI;
-using ServiceStack;
-using Splat;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-using Unlimotion.Scheduling.Jobs;
+using Avalonia;
+using Avalonia.Logging;
+using Avalonia.ReactiveUI;
+using ServiceStack;
 using Unlimotion.Services;
-using Unlimotion.TaskTree;
-using Unlimotion.ViewModel;
-using WritableJsonConfiguration;
 
 namespace Unlimotion.Desktop
 {

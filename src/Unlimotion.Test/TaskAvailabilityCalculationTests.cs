@@ -506,5 +506,58 @@ namespace Unlimotion.Test
             Assert.DoesNotContain("child1", updatedOriginalParent.ContainsTasks);
             Assert.Contains("child1", updatedNewParent.ContainsTasks);
         }
+
+        [Fact]
+        public async Task ParentTaskWithIncompleteChildAndBlocked_ShouldRemainNotAvailable()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+            
+            // Create a parent task with the incomplete child
+            var parentTask = new TaskItem
+            {
+                Id = "parent1",
+                Title = "Parent Task",
+                IsCompleted = false,
+            };
+            
+            // Create an incomplete child task
+            var childTask = new TaskItem
+            {
+                Id = "child1",
+                Title = "Child Task",
+                IsCompleted = false
+            };
+
+            await manager.AddTask(parentTask);
+            await manager.AddChildTask(childTask, parentTask);
+            var newParent = await storage.Load(parentTask.Id);
+            Assert.False(newParent.IsCanBeCompleted);
+            Assert.Null(newParent.UnlockedDateTime);
+            
+            await manager.AddChildTask(parentTask, childTask);
+            var linkedParent = await storage.Load(parentTask.Id);
+            Assert.False(linkedParent.IsCanBeCompleted);
+            Assert.Null(linkedParent.UnlockedDateTime);
+            
+            // Create a blocker task
+            var blockerTask = new TaskItem
+            {
+                Id = "blocker1",
+                Title = "Blocker Task",
+                IsCompleted = false
+            };
+            await storage.Save(blockerTask);
+
+            // Act - Create blocking relation
+            var results = await manager.BlockTask(parentTask, blockerTask);
+
+            // Assert - Parent task should remain not available
+            var updatedParent = results.FirstOrDefault(t => t.Id == "parent1");
+            Assert.NotNull(updatedParent);
+            Assert.False(updatedParent.IsCanBeCompleted);
+            Assert.Null(updatedParent.UnlockedDateTime);
+        }
     }
 }

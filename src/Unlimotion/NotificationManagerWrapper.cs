@@ -1,14 +1,15 @@
-using DialogHostAvalonia;
 using System;
 using System.Windows.Input;
 using Avalonia.Notification;
 using Avalonia.Threading;
+using DialogHostAvalonia;
 using ReactiveUI;
 using Splat;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion;
 
-public class NotificationManagerWrapper : ViewModel.INotificationManagerWrapper
+public class NotificationManagerWrapper : INotificationManagerWrapper
 {
     public void Ask(string header, string message, Action yesAction, Action noAction = null)
     {

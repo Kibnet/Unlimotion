@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Serilog;
-using Telegram.Bot.Types;
 using WritableJsonConfiguration;
 
 namespace Unlimotion.TelegramBot
