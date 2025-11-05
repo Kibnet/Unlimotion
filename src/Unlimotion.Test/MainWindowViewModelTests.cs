@@ -1032,6 +1032,38 @@ namespace Unlimotion.Test
         }
 
         [Fact]
+        public async Task ParentTaskWithIncompleteChildAndBlocked_ShouldRemainNotAvailable()
+        {
+            // Arrange - Get a parent task with an incomplete child task
+            var parentTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+            var childTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            
+            // Ensure the child task is not completed to block the parent
+            if (childTask.IsCompleted == true)
+            {
+                childTask.IsCompleted = false;
+                await TestHelpers.WaitThrottleTime();
+            }
+            
+            // Verify initial state - parent should be blocked by incomplete child
+            var parentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parentTask.Id);
+            Assert.False(parentStored.IsCanBeCompleted);
+            Assert.Null(parentStored.UnlockedDateTime);
+            
+            // Get a task to use as blocker
+            var blockerTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+
+            // Act - Create blocking relation (blockerTask blocks parentTask)
+            parentTask.BlockBy(blockerTask);
+            await TestHelpers.WaitThrottleTime();
+
+            // Assert - Parent task should remain not available
+            var updatedParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parentTask.Id);
+            Assert.False(updatedParent.IsCanBeCompleted);
+            Assert.Null(updatedParent.UnlockedDateTime);
+        }
+
+        [Fact]
         public Task BlockedTask_CompletionIsPrevented()
         {
             var blocked = GetTask(MainWindowViewModelFixture.BlockedTask5Id);
