@@ -38,7 +38,7 @@ namespace Unlimotion
             {
                 Action<int, string> addTimeValue = (timeValue, description) =>
                 {
-                    if ((timeValue > 0))
+                    if (timeValue > 0)
                     {
                         list.Add($"{timeValue}{description}");
                     }
@@ -99,7 +99,7 @@ namespace Unlimotion
             var minutes = extractPart("m");
             var seconds = extractPart("s");
             var milliseconds = extractPart("ms");
-            var daysString = (parts.Length == 5) ? parts[0] : "0";
+            var daysString = parts.Length == 5 ? parts[0] : "0";
 
             var newTimeSpan = new TimeSpan(days, hours, minutes, seconds, milliseconds);
             return newTimeSpan;

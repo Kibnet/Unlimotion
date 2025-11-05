@@ -50,7 +50,7 @@ public class MigrateTests
                             .OrderByDescending(f => f)
                             .FirstOrDefault();
         Assert.False(path is null, "Report file not found");
-        return path!;
+        return path;
     }
 
     private static List<string> ReadIssues(string reportPath)
