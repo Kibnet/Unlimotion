@@ -12,9 +12,6 @@ public interface ITaskStorage
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
     public TaskTreeManager TaskTreeManager { get; }
     public Task Init();
-    Task<bool> Connect();
-    Task Disconnect();
-    public event Action<Exception?>? OnConnectionError;
     public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
     public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);
     public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage  = true);

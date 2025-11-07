@@ -27,7 +27,6 @@ namespace Unlimotion
 
         private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
 
-        public event Action<Exception?>? OnConnectionError;
         public event EventHandler<EventArgs> Initiated;
         private IMapper mapper;
 
@@ -41,17 +40,9 @@ namespace Unlimotion
         {
             Tasks = new(item => item.Id);
 
-            if (TaskTreeManager.Storage is FileStorage fileStorage)
-            {
-                await FileTaskMigrator.Migrate(TaskTreeManager.Storage.GetAll(), new Dictionary<string, (string getChild, string getParent)>
-                {
-                    {"Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks))},
-                    {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
-                }, TaskTreeManager.Storage.Save, fileStorage.Path);
-            }
+            await MigrateReverseLinks(TaskTreeManager);
 
-            // Migrate IsCanBeCompleted for all existing tasks
-            await MigrateIsCanBeCompleted();
+            await MigrateIsCanBeCompleted(TaskTreeManager);
 
             await foreach (var task in TaskTreeManager.Storage.GetAll())
             {
@@ -79,9 +70,21 @@ namespace Unlimotion
             OnInited();
         }
 
-        private async Task MigrateIsCanBeCompleted()
+        public static async Task MigrateReverseLinks(TaskTreeManager taskTreeManager)
         {
-            if (TaskTreeManager.Storage is not FileStorage fileStorage)
+            if (taskTreeManager.Storage is FileStorage fileStorage)
+            {
+                await FileTaskMigrator.Migrate(taskTreeManager.Storage.GetAll(), new Dictionary<string, (string getChild, string getParent)>
+                {
+                    {"Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks))},
+                    {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
+                }, taskTreeManager.Storage.Save, fileStorage.Path);
+            }
+        }
+
+        public static async Task MigrateIsCanBeCompleted(TaskTreeManager taskTreeManager)
+        {
+            if (taskTreeManager.Storage is not FileStorage fileStorage)
             {
                 return;
             }
@@ -94,7 +97,7 @@ namespace Unlimotion
             }
 
             var tasksToMigrate = new List<TaskItem>();
-            await foreach (var task in TaskTreeManager.Storage.GetAll())
+            await foreach (var task in taskTreeManager.Storage.GetAll())
             {
                 tasksToMigrate.Add(task);
             }
@@ -102,7 +105,7 @@ namespace Unlimotion
             // Calculate availability for all tasks
             foreach (var task in tasksToMigrate)
             {
-                await TaskTreeManager.CalculateAndUpdateAvailability(task);
+                await taskTreeManager.CalculateAndUpdateAvailability(task);
             }
 
             // Create migration report
@@ -160,15 +163,6 @@ namespace Unlimotion
         protected virtual void OnInited()
         {
             Initiated?.Invoke(this, EventArgs.Empty);
-        }
-
-        public async Task<bool> Connect()
-        {
-            return await Task.FromResult(true);
-        }
-
-        public async Task Disconnect()
-        {
         }
 
         public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)

@@ -152,7 +152,7 @@ namespace Unlimotion
             var prevStorage = Locator.Current.GetService<ITaskStorage>();
             if (prevStorage != null)
             {
-                prevStorage.Disconnect();
+                prevStorage.TaskTreeManager.Storage.Disconnect();
             }
 
             if (isServerMode)

@@ -19,6 +19,7 @@ namespace Unlimotion
         private IDatabaseWatcher? dbWatcher;
         
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
+        public event Action<Exception?>? OnConnectionError;
 
         public FileStorage(string path, bool watcher = false)
         {
@@ -141,6 +142,15 @@ namespace Unlimotion
             {
                 await Save(taskItem);
             }
+        }
+        
+        public async Task<bool> Connect()
+        {
+            return await Task.FromResult(true);
+        }
+
+        public async Task Disconnect()
+        {
         }
     }
 }

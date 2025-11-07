@@ -226,7 +226,7 @@ namespace Unlimotion.ViewModel
 
             if (Settings.IsServerMode)
             {
-                taskStorage.OnConnectionError += ex =>
+                taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
                 {
                     var notify = Locator.Current.GetService<INotificationManagerWrapper>();
                     if (notify != null)
@@ -236,7 +236,7 @@ namespace Unlimotion.ViewModel
                 };
             }
 
-            await taskStorage.Connect();
+            await taskStorage.TaskTreeManager.Storage.Connect();
             await taskStorage.Init();
 
             taskRepository = taskStorage;

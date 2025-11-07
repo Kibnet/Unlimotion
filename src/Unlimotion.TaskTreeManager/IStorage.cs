@@ -11,4 +11,7 @@ public interface IStorage
     IAsyncEnumerable<TaskItem> GetAll();
     Task BulkInsert(IEnumerable<TaskItem> taskItems);
     public event EventHandler<TaskStorageUpdateEventArgs> Updating;
+    Task<bool> Connect();
+    Task Disconnect();
+    public event Action<Exception?>? OnConnectionError;
 }

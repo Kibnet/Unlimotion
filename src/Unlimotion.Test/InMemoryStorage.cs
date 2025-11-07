@@ -33,6 +33,16 @@ public class InMemoryStorage : IStorage
     }
 
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+    public async Task<bool> Connect()
+    {
+        return true;
+    }
+
+    public async Task Disconnect()
+    {
+    }
+
+    public event Action<Exception?>? OnConnectionError;
 
     public Task<bool> Save(TaskItem taskItem)
     {
