@@ -1,21 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using DynamicData;
 using DynamicData.Binding;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Splat;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
-using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
