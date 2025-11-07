@@ -1,4 +1,4 @@
-namespace Unlimotion.ViewModel.Models
+namespace Unlimotion.TaskTree
 {
     public enum UpdateType
     {

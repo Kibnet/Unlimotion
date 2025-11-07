@@ -15,73 +15,45 @@ using Splat;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
-using Unlimotion.ViewModel.Models;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Unlimotion
 {
-    public class FileTaskStorage : ITaskStorage, IStorage
+    public class FileTaskStorage : ITaskStorage
     {
         public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
 
-        public ITaskTreeManager TaskTreeManager { get { return taskTreeManager ??= new TaskTreeManager(this); } }
+        public TaskTreeManager TaskTreeManager { get; private set; }
 
-        public string Path { get; private set; }
-        private IDatabaseWatcher? dbWatcher;
-        public bool isPause;
         private IObservable<Func<TaskItemViewModel, bool>> rootFilter;
 
-        public event EventHandler<TaskStorageUpdateEventArgs> Updating;
         public event Action<Exception?>? OnConnectionError;
         public event EventHandler<EventArgs> Initiated;
         private IMapper mapper;
-        private ITaskTreeManager taskTreeManager;
 
-        public FileTaskStorage(string path)
+        public FileTaskStorage(TaskTreeManager taskTreeManager)
         {
-            Path = path;
             mapper = Locator.Current.GetService<IMapper>();
+            TaskTreeManager = taskTreeManager;
         }
 
-        public async IAsyncEnumerable<TaskItem> GetAll()
-        {
-            var directoryInfo = new DirectoryInfo(Path);
-            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly).Where(info => info.Length > 0).OrderBy(info => info.CreationTime))
-            {
-                var task = await Load(fileInfo.Name);
-                if (task != null)
-                {
-                    if (task.Id == null)
-                    {
-                        continue;
-                    }
-                    yield return task;
-                }
-                else
-                {
-                    try
-                    {
-                        fileInfo.Delete();
-                    }
-                    catch (Exception e) { }
-                    //throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
-                }
-            }
-        }
         public async Task Init()
         {
             Tasks = new(item => item.Id);
 
-            await FileTaskMigrator.Migrate(GetAll(), new Dictionary<string, (string getChild, string getParent)>
+            if (TaskTreeManager.Storage is FileStorage fileStorage)
             {
-                {"Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks))},
-                {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
-            }, Save, Path);
+                await FileTaskMigrator.Migrate(TaskTreeManager.Storage.GetAll(), new Dictionary<string, (string getChild, string getParent)>
+                {
+                    {"Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks))},
+                    {"Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks))},
+                }, TaskTreeManager.Storage.Save, fileStorage.Path);
+            }
 
             // Migrate IsCanBeCompleted for all existing tasks
             await MigrateIsCanBeCompleted();
 
-            await foreach (var task in GetAll())
+            await foreach (var task in TaskTreeManager.Storage.GetAll())
             {
                 var vm = new TaskItemViewModel(task, this);
                 Tasks.AddOrUpdate(vm);
@@ -102,17 +74,19 @@ namespace Unlimotion
                    return (Func<TaskItemViewModel, bool>)Predicate;
                });
 
-            dbWatcher = Locator.Current.GetService<IDatabaseWatcher>();
-            Updating += TaskStorageOnUpdating;
-            dbWatcher.OnUpdated += DbWatcherOnUpdated;
+            TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
             OnInited();
         }
 
         private async Task MigrateIsCanBeCompleted()
         {
-            var migrationReportPath = System.IO.Path.Combine(Path, "availability.migration.report");
-            
+            if (TaskTreeManager.Storage is not FileStorage fileStorage)
+            {
+                return;
+            }
+            var migrationReportPath = System.IO.Path.Combine(fileStorage.Path, "availability.migration.report");
+
             // Check if migration has already been run
             if (File.Exists(migrationReportPath))
             {
@@ -120,7 +94,7 @@ namespace Unlimotion
             }
 
             var tasksToMigrate = new List<TaskItem>();
-            await foreach (var task in GetAll())
+            await foreach (var task in TaskTreeManager.Storage.GetAll())
             {
                 tasksToMigrate.Add(task);
             }
@@ -144,17 +118,12 @@ namespace Unlimotion
                 JsonConvert.SerializeObject(report, Formatting.Indented));
         }
 
-        private void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
-        {
-            dbWatcher?.AddIgnoredTask(e.Id);
-        }
-
-        private async void DbWatcherOnUpdated(object sender, DbUpdatedEventArgs e)
+        private async void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
         {
             switch (e.Type)
             {
                 case UpdateType.Saved:
-                    var taskItem = await Load(e.Id);
+                    var taskItem = await TaskTreeManager.Storage.Load(e.Id);
                     if (taskItem?.Id != null)
                     {
                         var vml = Tasks.Lookup(taskItem.Id);
@@ -193,80 +162,6 @@ namespace Unlimotion
             Initiated?.Invoke(this, EventArgs.Empty);
         }
 
-        public async Task<bool> Save(TaskItem taskItem)
-        {
-            while (isPause)
-            {
-                Thread.SpinWait(1);
-            }
-            var item = taskItem;
-
-            item.Id ??= Guid.NewGuid().ToString();
-
-            var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
-            var converter = new IsoDateTimeConverter
-            {
-                DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
-                Culture = CultureInfo.InvariantCulture,
-                DateTimeStyles = DateTimeStyles.None
-            };
-            try
-            {
-                var updateEventArgs = new TaskStorageUpdateEventArgs
-                {
-                    Id = fileInfo.FullName,
-                    Type = UpdateType.Saved,
-                };
-                Updating?.Invoke(this, updateEventArgs);
-                using var writer = fileInfo.CreateText();
-                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
-                await writer.WriteAsync(json);
-                taskItem.Id = item.Id;
-
-                return true;
-            }
-            catch (Exception e)
-            {
-                return false;
-            }
-        }
-
-        public async Task<bool> Remove(string itemId)
-        {
-            var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
-            try
-            {
-                Updating?.Invoke(this, new TaskStorageUpdateEventArgs
-                {
-                    Id = fileInfo.FullName,
-                    Type = UpdateType.Removed,
-                });
-                fileInfo.Delete();
-                Tasks.Remove(itemId);
-                return true;
-            }
-            catch (Exception e)
-            {
-                return false;
-            }
-        }
-
-        public async Task<TaskItem?> Load(string itemId)
-        {
-            var jsonSerializer = new JsonSerializer();
-            try
-            {
-                var fullPath = System.IO.Path.Combine(Path, itemId);
-                return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
-            }
-            catch (Exception e)
-            {
-                return null;
-            }
-        }
-
         public async Task<bool> Connect()
         {
             return await Task.FromResult(true);
@@ -274,11 +169,6 @@ namespace Unlimotion
 
         public async Task Disconnect()
         {
-        }
-
-        public void SetPause(bool pause)
-        {
-            isPause = pause;
         }
 
         public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false)

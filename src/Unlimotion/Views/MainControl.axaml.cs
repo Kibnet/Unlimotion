@@ -36,7 +36,7 @@ namespace Unlimotion.Views
 
                     if (!string.IsNullOrWhiteSpace(path))
                     {
-                        var taskStorage = new FileTaskStorage(path);
+                        var fileStorage = new FileStorage(path);
                         var set = new HashSet<string>();
                         var queue = new Queue<TaskItemViewModel>();
                         queue.Enqueue(vm.CurrentTaskItem);
@@ -46,7 +46,7 @@ namespace Unlimotion.Views
                             if (!set.Contains(task.Id))
                             {
                                 set.Add(task.Id);
-                                await taskStorage.Save(task.Model);
+                                await fileStorage.Save(task.Model);
                                 foreach (var item in task.ContainsTasks)
                                 {
                                     queue.Enqueue(item);

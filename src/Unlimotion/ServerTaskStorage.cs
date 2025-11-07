@@ -69,7 +69,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
     public bool IsActive = true;
 
 
-    public ITaskTreeManager TaskTreeManager
+    public TaskTreeManager TaskTreeManager
     {
         get { return taskTreeManager ??= new TaskTreeManager(this); }
     }
@@ -460,7 +460,7 @@ public class ServerTaskStorage : ITaskStorage, IStorage
 
     private readonly IJsonServiceClient serviceClient;
     private IChatHub _hub;
-    private ITaskTreeManager taskTreeManager;
+    private TaskTreeManager taskTreeManager;
 
     public bool IsConnected { get; set; }
 

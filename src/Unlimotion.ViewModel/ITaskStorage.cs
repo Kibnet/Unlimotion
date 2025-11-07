@@ -10,12 +10,10 @@ namespace Unlimotion.ViewModel;
 public interface ITaskStorage
 {
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
-    public ITaskTreeManager TaskTreeManager { get; }
-    public Task Init();    
-    public IAsyncEnumerable<TaskItem> GetAll();
+    public TaskTreeManager TaskTreeManager { get; }
+    public Task Init();
     Task<bool> Connect();
     Task Disconnect();
-    public event EventHandler<TaskStorageUpdateEventArgs> Updating;
     public event Action<Exception?>? OnConnectionError;
     public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
     public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);

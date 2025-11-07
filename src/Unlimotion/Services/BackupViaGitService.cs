@@ -7,8 +7,8 @@ using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
 using Splat;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
-using Unlimotion.ViewModel.Models;
 
 namespace Unlimotion.Services;
 
@@ -213,7 +213,6 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 dbwatcher?.SetEnable(false);
                 //taskRepository?.SetPause(true);
-                taskstorage?.SetPause(true);
                 Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
                 {
                     CredentialsProvider = (_, _, _) =>
@@ -262,7 +261,7 @@ public class BackupViaGitService : IRemoteBackupService
                                 default:
                                     continue;
                             }
-                            dbwatcher.ForceUpdateFile(fullPath, mode);
+                            dbwatcher.ForceUpdateFile(change.Path, mode);
                         }
                         ShowUiMessage("Merge Successful");
                     }
@@ -293,9 +292,6 @@ public class BackupViaGitService : IRemoteBackupService
             finally
             {
                 dbwatcher?.SetEnable(true);
-
-                //taskRepository?.SetPause(false);
-                taskstorage?.SetPause(false);
             }
         }
     }

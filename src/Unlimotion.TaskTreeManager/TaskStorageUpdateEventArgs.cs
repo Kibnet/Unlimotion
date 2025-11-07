@@ -1,7 +1,4 @@
-using System;
-using Unlimotion.ViewModel.Models;
-
-namespace Unlimotion.ViewModel;
+namespace Unlimotion.TaskTree;
 
 public class TaskStorageUpdateEventArgs : EventArgs
 {

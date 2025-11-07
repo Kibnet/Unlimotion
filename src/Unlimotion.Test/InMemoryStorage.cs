@@ -16,6 +16,24 @@ public class InMemoryStorage : IStorage
         return Task.FromResult(_tasks.TryGetValue(id, out var task) ? task : null);
     }
 
+    public async IAsyncEnumerable<TaskItem> GetAll()
+    {
+        foreach (var tasksValue in _tasks.Values)
+        {
+            yield return tasksValue;
+        }
+    }
+
+    public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
+    {
+        foreach (var taskItem in taskItems)
+        {
+            await Save(taskItem);
+        }
+    }
+
+    public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+
     public Task<bool> Save(TaskItem taskItem)
     {
         var clone = new TaskItem

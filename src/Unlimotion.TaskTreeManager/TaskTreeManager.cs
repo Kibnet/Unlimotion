@@ -4,9 +4,9 @@ using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 
-public class TaskTreeManager : ITaskTreeManager
+public class TaskTreeManager
 {
-    private IStorage Storage { get; init; }
+    public IStorage Storage { get; init; }
 
     public TaskTreeManager(IStorage storage)
     {
