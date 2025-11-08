@@ -60,8 +60,8 @@ namespace Unlimotion
                 });
             settingsViewModel.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var serverTaskStorage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
-                if (serverTaskStorage == null)
+                var serverTaskStorage = Locator.Current.GetService<ITaskStorage>();
+                if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
                 {
                     return;
                 }
@@ -74,8 +74,8 @@ namespace Unlimotion
             });
             settingsViewModel.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var serverTaskStorage = Locator.Current.GetService<ITaskStorage>() as ServerTaskStorage;
-                if (serverTaskStorage == null)
+                var serverTaskStorage = Locator.Current.GetService<ITaskStorage>();
+                if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
                 {
                     return;
                 }
@@ -169,10 +169,10 @@ namespace Unlimotion
         {
             var serverStorage = new ServerStorage(settingsUrl ?? string.Empty);
             var taskTreeManager = new TaskTreeManager(serverStorage);
-            var taskStorage = new ServerTaskStorage(serverStorage);
+            var taskStorage = new UnifiedTaskStorage(taskTreeManager);
             Locator.CurrentMutable.UnregisterAll<IDatabaseWatcher>();
             Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
-            Locator.CurrentMutable.RegisterConstant(taskStorage, typeof(ServerTaskStorage));
+            Locator.CurrentMutable.RegisterConstant(taskStorage);
             //taskStorage.Connect().GetAwaiter().GetResult();
             return taskStorage;
         }
@@ -181,7 +181,7 @@ namespace Unlimotion
         {
             ITaskStorage taskStorage;
             taskStorage = CreateFileTaskStorage(storagePath);
-            Locator.CurrentMutable.RegisterConstant<ITaskStorage>(taskStorage);
+            Locator.CurrentMutable.RegisterConstant(taskStorage);
             return taskStorage;
         }
 
@@ -192,12 +192,12 @@ namespace Unlimotion
             return fileStorage;
         }
 
-        private static FileTaskStorage CreateFileTaskStorage(string? path)
+        private static UnifiedTaskStorage CreateFileTaskStorage(string? path)
         {
             var fileStorage = CreateFileStorage(path);
             var taskTreeManager = new TaskTreeManager(fileStorage);
-            var taskStorage = new FileTaskStorage(taskTreeManager);
-            Locator.CurrentMutable.RegisterConstant(taskStorage, typeof(FileTaskStorage));
+            var taskStorage = new UnifiedTaskStorage(taskTreeManager);
+            Locator.CurrentMutable.RegisterConstant(taskStorage);
             return taskStorage;
         }
 
