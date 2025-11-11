@@ -60,10 +60,7 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-
-                await taskRepository?.Add(task);
-                CurrentTaskItem = task;
+                CurrentTaskItem = await taskRepository?.Add();
                 SelectCurrentTask();
 
             }).AddToDisposeAndReturn(connectionDisposableList);
@@ -72,17 +69,14 @@ namespace Unlimotion.ViewModel
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
 
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-
                 if (CurrentTaskItem != null)
                 {
                     if (AllTasksMode)
                     {
-                        await taskRepository?.Add(task, CurrentTaskItem, isBlocked);
+                        CurrentTaskItem = await taskRepository?.Add(CurrentTaskItem, isBlocked);
                     }
                 }
-
-                CurrentTaskItem = task;
+                
                 SelectCurrentTask();
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -103,12 +97,8 @@ namespace Unlimotion.ViewModel
                     return;
 
                 var parent = CurrentTaskItem;
-                var task = new TaskItemViewModel(new TaskItem(), taskRepository);
-
-                await taskRepository?.AddChild(task, parent);
-
-
-                CurrentTaskItem = task;
+                
+                CurrentTaskItem = await taskRepository?.AddChild(parent);
                 SelectCurrentTask();
 
                 var wrapper = FindTaskWrapperViewModel(parent, CurrentItems);

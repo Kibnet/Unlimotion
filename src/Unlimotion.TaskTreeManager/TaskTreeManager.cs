@@ -1,4 +1,8 @@
-﻿using Polly;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Polly;
 using Polly.Retry;
 using Unlimotion.Domain;
 
@@ -26,7 +30,6 @@ public class TaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     result.AddOrUpdate(change);
 
                     return true;
@@ -51,7 +54,6 @@ public class TaskTreeManager
                     {
                         change.Version = 1;
                         await Storage.Save(change);
-                        change.SortOrder = DateTime.Now;
                         newTaskId = change.Id;
                         result.AddOrUpdate(change);
                     }
@@ -103,7 +105,6 @@ public class TaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     newTaskId = change.Id;
                     result.AddOrUpdate(change);
                 }
@@ -395,7 +396,6 @@ public class TaskTreeManager
                     }
                 }
 
-                clone.SortOrder = DateTime.Now;
                 result.AddOrUpdate(clone);
 
                 return true;
@@ -832,7 +832,6 @@ public class TaskTreeManager
                         // Save the cloned task
                         clone.Version = 1;
                         await Storage.Save(clone);
-                        clone.SortOrder = DateTime.Now;
                         result.AddOrUpdate(clone);
                     }
                 }

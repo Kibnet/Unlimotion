@@ -40,7 +40,7 @@ public class FileTaskMigrator
     public static readonly int Version = 1;
 
     public static async Task Migrate(IAsyncEnumerable<TaskItem> tasks,
-        Dictionary<string, (string getChild, string getParent)> links, Func<TaskItem, Task<bool>> saveFunc,
+        Dictionary<string, (string getChild, string getParent)> links, Func<TaskItem, Task<TaskItem>> saveFunc,
         string storagePath, bool dryRun = false, CancellationToken ct = default)
     {
         var reportPath = Path.Combine(storagePath, "migration.report");

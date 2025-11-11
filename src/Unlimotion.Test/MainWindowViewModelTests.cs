@@ -11,14 +11,14 @@ using Xunit;
 
 namespace Unlimotion.Test
 {
-    public class MainWindowViewModelTests : IDisposable
+    public class BaseModelTests : IDisposable
     {
-        private readonly MainWindowViewModelFixture fixture;
-        private readonly MainWindowViewModel mainWindowVM;
-        private readonly CompareLogic compareLogic;
-        private readonly ITaskStorage taskRepository;
+        protected readonly MainWindowViewModelFixture fixture;
+        protected readonly MainWindowViewModel mainWindowVM;
+        protected readonly CompareLogic compareLogic;
+        protected readonly ITaskStorage taskRepository;
 
-        public MainWindowViewModelTests()
+        public BaseModelTests()
         {
             compareLogic = new CompareLogic();
             compareLogic.Config.MaxDifferences = 10;
@@ -34,6 +34,33 @@ namespace Unlimotion.Test
         /// </summary>
         public void Dispose() => fixture.CleanTasks();
 
+        protected TaskItemViewModel? GetTask(string taskId, bool dontAssertNull = false)
+        {
+            var result = mainWindowVM.taskRepository!.Tasks.Lookup(taskId);
+            if (result.HasValue)
+            {
+                return result.Value;
+            }
+
+            if (!dontAssertNull)
+                Assert.Fail("Задача не найдена");
+
+            return null;
+        }
+
+        protected TaskItem? GetStorageTaskItem(string taskId)
+        {
+            var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
+            if (!File.Exists(path))
+                return null;
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<TaskItem>(json);
+        }
+    }
+
+
+    public class MainWindowViewModelTests : BaseModelTests
+    {
         /// <summary>
         /// Создание задачи в корне
         /// </summary>
@@ -845,6 +872,7 @@ namespace Unlimotion.Test
             Assert.NotEmpty(destinationTask8ItemAfterTest.ContainsTasks);
             Assert.Contains(newTaskItemViewModel.Id, destinationTask8ItemAfterTest.ContainsTasks);
             //Теперь у целевой задачи есть невыполненные задачи внутри. Она заблокирована
+
             Assert.False(destinationTask8ItemAfterTest.IsCanBeCompleted);
             Assert.Null(destinationTask8ItemAfterTest.UnlockedDateTime);
 
@@ -894,6 +922,7 @@ namespace Unlimotion.Test
 
             //Берем задачу "Repeate task 9" и делаем ее выполненной
             var repeateTask9ViewModel = GetTask(MainWindowViewModelFixture.RepeateTask9Id);
+            Assert.NotNull(repeateTask9ViewModel.Repeater);
             repeateTask9ViewModel.IsCompleted = true;
             await TestHelpers.WaitThrottleTime();
 
@@ -1084,29 +1113,6 @@ namespace Unlimotion.Test
             Assert.Single(clone.Parents);
             Assert.Contains(dest1.Id, clone.Parents);
             Assert.DoesNotContain(dest2!.Id, clone.Parents);
-        }
-
-        private TaskItemViewModel? GetTask(string taskId, bool dontAssertNull = false)
-        {
-            var result = mainWindowVM.taskRepository!.Tasks.Lookup(taskId);
-            if (result.HasValue)
-            {
-                return result.Value;
-            }
-
-            if (!dontAssertNull)
-                Assert.Fail("Задача не найдена");
-
-            return null;
-        }
-
-        private TaskItem? GetStorageTaskItem(string taskId)
-        {
-            var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
-            if (!File.Exists(path))
-                return null;
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TaskItem>(json);
         }
     }
 }

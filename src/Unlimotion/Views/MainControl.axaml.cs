@@ -22,7 +22,6 @@ namespace Unlimotion.Views
             DataContextChanged += MainWindow_DataContextChanged;
         }
 
-        private IMapper _mapper;
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
             if (DataContext is MainWindowViewModel vm)

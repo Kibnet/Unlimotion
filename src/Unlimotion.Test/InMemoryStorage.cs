@@ -44,7 +44,7 @@ public class InMemoryStorage : IStorage
 
     public event Action<Exception?>? OnConnectionError;
 
-    public Task<bool> Save(TaskItem taskItem)
+    public async Task<TaskItem> Save(TaskItem taskItem)
     {
         var clone = new TaskItem
         {
@@ -69,12 +69,11 @@ public class InMemoryStorage : IStorage
             Importance = taskItem.Importance,
             Wanted = taskItem.Wanted,
             Version = taskItem.Version,
-            SortOrder = taskItem.SortOrder
         };
         taskItem.Id = clone.Id;
         _tasks[clone.Id] = clone;
 
-        return Task.FromResult(true);
+        return taskItem;
     }
 
     public Task<bool> Remove(string id)

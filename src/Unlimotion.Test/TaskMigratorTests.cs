@@ -78,7 +78,7 @@ public class MigrateTests
         var c = new TaskItem { Id = "C" };
 
         var saveCount = 0;
-        Task<bool> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(true); }
+        Task<TaskItem> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(t); }
 
         await FileTaskMigrator.Migrate(AsAsync(a, b, c), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
@@ -112,7 +112,7 @@ public class MigrateTests
         var c = new TaskItem { Id = "C" };
 
         var saveCount = 0;
-        Task<bool> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(true); }
+        Task<TaskItem> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(t); }
 
         await FileTaskMigrator.Migrate(AsAsync(a, b, c), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
@@ -145,7 +145,7 @@ public class MigrateTests
         var b = new TaskItem { Id = "B" };
 
         var saveCount = 0;
-        Task<bool> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(true); }
+        Task<TaskItem> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(t); }
 
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
@@ -167,7 +167,7 @@ public class MigrateTests
         var a = new TaskItem { Id = "A", ContainsTasks = new List<string> { "A" } };
 
         var calls = 0;
-        Task<bool> Save(TaskItem t) { Interlocked.Increment(ref calls); return Task.FromResult(true); }
+        Task<TaskItem> Save(TaskItem t) { Interlocked.Increment(ref calls); return Task.FromResult(t); }
 
         await FileTaskMigrator.Migrate(AsAsync(a), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
@@ -187,7 +187,7 @@ public class MigrateTests
         var b = new TaskItem { Id = "B", ContainsTasks = new List<string> { "A" } };
 
         var saveCount = 0;
-        Task<bool> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(true); }
+        Task<TaskItem> Save(TaskItem t) { Interlocked.Increment(ref saveCount); return Task.FromResult(t); }
 
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: true, CancellationToken.None);
 
@@ -209,11 +209,11 @@ public class MigrateTests
         var b = new TaskItem { Id = "B" };
 
         var saved = new List<string>();
-        Task<bool> Save(TaskItem t)
+        Task<TaskItem> Save(TaskItem t)
         {
             if (t.Id == "B") throw new InvalidOperationException("boom");
             saved.Add(t.Id);
-            return Task.FromResult(true);
+            return Task.FromResult(t);
         }
 
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: false, CancellationToken.None);

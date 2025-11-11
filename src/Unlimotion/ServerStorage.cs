@@ -66,7 +66,8 @@ public class ServerStorage : IStorage
         {
             settings = new ClientSettings();
         }
-        mapper = Locator.Current.GetService<IMapper>();
+        //Создание маппера
+        mapper = AppModelMapping.ConfigureMapping();
     }
 
     public async Task<bool> Connect()
@@ -231,7 +232,7 @@ public class ServerStorage : IStorage
         }
     }
 
-    public async Task<bool> Save(TaskItem item)
+    public async Task<TaskItem> Save(TaskItem item)
     {
         while (IsActive)
         {
@@ -242,7 +243,7 @@ public class ServerStorage : IStorage
                 {
                     item.Id = await _hub!.SaveTask(hubTask);
                 }
-                return true;
+                return item;
             }
             catch (Exception e)
             {
@@ -252,7 +253,7 @@ public class ServerStorage : IStorage
             }
         }
 
-        return false;
+        return null;
     }
 
     public async Task<bool> Remove(string itemId)

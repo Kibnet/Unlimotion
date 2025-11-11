@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 using DynamicData;
-using DynamicData.Binding;
 using Newtonsoft.Json;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
@@ -32,7 +30,7 @@ public class UnifiedTaskStorage : ITaskStorage
     public async Task Init()
     {
         Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
-
+        
         // Perform migrations only for file storage
         if (isFileStorage)
         {
@@ -51,37 +49,36 @@ public class UnifiedTaskStorage : ITaskStorage
         OnInited();
     }
 
-    public async Task<bool> Add(TaskItemViewModel change, TaskItemViewModel currentTask = null, bool isBlocked = false)
+    public async Task<TaskItemViewModel> Add(TaskItemViewModel currentTask = null, bool isBlocked = false)
     {
         var taskItemList = (await TaskTreeManager.AddTask(
-            change.Model,
+            new TaskItem(),
             currentTask?.Model,
-            isBlocked)).OrderBy(t => t.SortOrder);
+            isBlocked)).OrderBy(t => t.CreatedDateTime).ToList();
 
         var newTask = taskItemList.Last();
-        change.Id = newTask.Id;
-        change.Update(newTask);
-        Tasks.AddOrUpdate(change);
+        var vm = new TaskItemViewModel(newTask, this);
+        Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
-        return true;
+        
+        return vm;
     }
 
-    public async Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask)
+    public async Task<TaskItemViewModel> AddChild(TaskItemViewModel currentTask)
     {
         var taskItemList = (await TaskTreeManager.AddChildTask(
-                change.Model,
+                new TaskItem(),
                 currentTask.Model))
-            .OrderBy(t => t.SortOrder);
+            .OrderBy(t => t.CreatedDateTime).ToList();
 
         var newTask = taskItemList.Last();
-        change.Id = newTask.Id;
-        change.Update(newTask);
-        Tasks.AddOrUpdate(change);
+        var vm = new TaskItemViewModel(newTask, this);
+        Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
-
-        return true;
+        
+        return vm;
     }
 
     public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
@@ -102,17 +99,29 @@ public class UnifiedTaskStorage : ITaskStorage
         return true;
     }
 
-    public async Task<bool> Update(TaskItemViewModel change)
-    {
-        Update(change.Model);
-        return true;
+    public async Task<TaskItemViewModel> Update(TaskItemViewModel change)
+    { 
+        return await Update(change.Model);
     }
 
-    public async Task<bool> Update(TaskItem change)
+    public async Task<TaskItemViewModel> Update(TaskItem change)
     {
-        var connItemList = await TaskTreeManager.UpdateTask(change);
-        foreach (var task in connItemList) UpdateCache(task);
-        return true;
+        var connItemList = (await TaskTreeManager.UpdateTask(change)).OrderBy(t => t.CreatedDateTime).ToList();
+        
+        var last = connItemList.Last();
+        if (connItemList.Count>1)
+        {
+            var vm = new TaskItemViewModel(last, this);
+            Tasks.AddOrUpdate(vm);
+
+            foreach (var task in connItemList.SkipLast(1)) UpdateCache(task);
+            return vm;
+        }
+        else
+        {
+            UpdateCache(last);
+            return null;
+        }
     }
 
     public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[] additionalParents)
@@ -120,7 +129,7 @@ public class UnifiedTaskStorage : ITaskStorage
         var additionalItemParents = new List<TaskItem>();
         foreach (var newParent in additionalParents) additionalItemParents.Add(newParent.Model);
 
-        var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.SortOrder).ToList();
+        var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.CreatedDateTime).ToList();
 
         var clone = taskItemList.Last();
         var vm = new TaskItemViewModel(clone, this);
@@ -232,19 +241,8 @@ public class UnifiedTaskStorage : ITaskStorage
                 var taskItem = await TaskTreeManager.Storage.Load(e.Id);
                 if (taskItem?.Id != null)
                 {
-                    var vml = Tasks.Lookup(taskItem.Id);
-                    if (vml.HasValue)
-                    {
-                        var vm = vml.Value;
-                        vm.Update(taskItem);
-                    }
-                    else
-                    {
-                        var vm = new TaskItemViewModel(taskItem, this);
-                        Tasks.AddOrUpdate(vm);
-                    }
+                    UpdateCache(taskItem, true);
                 }
-
                 break;
             case UpdateType.Removed:
                 // Handle file storage ID mapping
@@ -265,11 +263,18 @@ public class UnifiedTaskStorage : ITaskStorage
 
     private void UpdateCache(TaskItem task)
     {
+        UpdateCache(task, false);
+    }
+
+    private void UpdateCache(TaskItem task, bool create)
+    {
         var vm = Tasks.Lookup(task.Id);
 
         if (vm.HasValue)
+        {
             vm.Value.Update(task);
-        else if (task.SortOrder != null)
+        }
+        else if(create) 
         {
             vm = new TaskItemViewModel(task, this);
             Tasks.AddOrUpdate(vm.Value);

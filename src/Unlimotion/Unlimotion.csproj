@@ -13,6 +13,7 @@
 	<ItemGroup>
 		<PackageReference Include="AutoMapper" />
 		<PackageReference Include="Avalonia" />
+		<PackageReference Include="CompareNETObjects" />
 		<PackageReference Include="Avalonia.Xaml.Behaviors" />
 		<PackageReference Include="Avalonia.Controls.PanAndZoom" />
 		<PackageReference Include="DialogHost.Avalonia" />

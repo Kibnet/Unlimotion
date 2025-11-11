@@ -1,11 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 
 public interface IStorage
 {
-    Task<bool> Save(TaskItem item);
+    Task<TaskItem> Save(TaskItem item);
     Task<bool> Remove(string itemId);
     Task<TaskItem?> Load(string itemId);
     IAsyncEnumerable<TaskItem> GetAll();

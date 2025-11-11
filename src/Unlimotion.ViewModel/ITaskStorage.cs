@@ -13,12 +13,12 @@ public interface ITaskStorage
     public TaskTreeManager TaskTreeManager { get; }
     public Task Init();
     public event EventHandler<EventArgs> Initiated;
-    public Task<bool> Add(TaskItemViewModel change, TaskItemViewModel? currentTask = null, bool isBlocked = false);
-    public Task<bool> AddChild(TaskItemViewModel change, TaskItemViewModel currentTask);
+    public Task<TaskItemViewModel> Add(TaskItemViewModel? currentTask = null, bool isBlocked = false);
+    public Task<TaskItemViewModel> AddChild(TaskItemViewModel currentTask);
     public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage  = true);
     public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent);
-    public Task<bool> Update(TaskItemViewModel change);
-    public Task<bool> Update(TaskItem change);
+    public Task<TaskItemViewModel> Update(TaskItemViewModel change);
+    public Task<TaskItemViewModel> Update(TaskItem change);
     public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents);
     public Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents);
     public Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask);

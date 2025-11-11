@@ -23,6 +23,5 @@ namespace Unlimotion.Interface
         public int Importance { get; set; }
         public bool Wanted { get; set; }
         public int Version { get; set; } = 0;
-        public DateTime SortOrder { get; set; }
     }
 }

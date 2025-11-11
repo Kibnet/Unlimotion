@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Unlimotion.Domain
 {
-    public class TaskItem
+    public record TaskItem
     {
         public string Id { get; set; }
         public string UserId { get; set; }
@@ -26,7 +26,5 @@ namespace Unlimotion.Domain
         public int Importance { get; set; }
         public bool Wanted { get; set; }
         public int Version { get; set; } = 0;
-        public DateTime? SortOrder { get; set; }
-
     }
 }

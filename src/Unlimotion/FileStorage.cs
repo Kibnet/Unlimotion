@@ -1,11 +1,14 @@
+using DynamicData;
+using KellermanSoftware.CompareNetObjects;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -16,14 +19,18 @@ namespace Unlimotion
     {
         public string Path { get; private set; }
 
+        private ConcurrentDictionary<string, TaskItem> tasks;
+
         private IDatabaseWatcher? dbWatcher;
-        
+        private CompareLogic compareLogic;
+
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
         public event Action<Exception?>? OnConnectionError;
 
         public FileStorage(string path, bool watcher = false)
         {
             Path = path;
+            tasks = new();
             if (watcher)
             {
                 dbWatcher = new FileDbWatcher(path);
@@ -33,18 +40,32 @@ namespace Unlimotion
                     Type = args.Type,
                 });
             }
+
+            compareLogic = new CompareLogic
+            {
+                Config =
+                {
+                    MaxDifferences = 1
+                }
+            };
         }
 
-        public async Task<bool> Save(TaskItem taskItem)
+        public async Task<TaskItem> Save(TaskItem taskItem)
         {
-            // while (isPause)
-            // {
-            //     Thread.SpinWait(1);
-            // }
+            if (taskItem.Id != null)
+            {
+                var exist = await Load(taskItem.Id, true);
+                var result = compareLogic.Compare(exist, taskItem);
+                if (result.AreEqual)
+                {
+                    return exist!;
+                }
+            }
+            var item = taskItem with {};
 
-            var item = taskItem;
-
-            item.Id ??= Guid.NewGuid().ToString();
+            var id = item.Id ?? Guid.NewGuid().ToString();
+            dbWatcher?.AddIgnoredTask(id);
+            item.Id ??= id;
 
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
@@ -56,17 +77,17 @@ namespace Unlimotion
             };
             try
             {
-                dbWatcher?.AddIgnoredTask(item.Id);
                 using var writer = fileInfo.CreateText();
                 var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
                 await writer.WriteAsync(json);
                 taskItem.Id = item.Id;
 
-                return true;
+                tasks.AddOrUpdate(taskItem.Id, item, (key, oldValue) => item);
+                return item;
             }
             catch (Exception e)
             {
-                return false;
+                return null;
             }
         }
 
@@ -76,6 +97,7 @@ namespace Unlimotion
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
             try
             {
+                tasks.TryRemove(itemId, out _);
                 dbWatcher?.AddIgnoredTask(itemId);
                 fileInfo.Delete();
                 // Tasks.Remove(itemId);
@@ -89,11 +111,22 @@ namespace Unlimotion
 
         public async Task<TaskItem?> Load(string itemId)
         {
+            return await Load(itemId, false);
+        }
+
+        public async Task<TaskItem?> Load(string itemId, bool forced)
+        {
+            if (!forced && tasks.TryGetValue(itemId, out var value))
+            {
+                return value;
+            }
             var jsonSerializer = new JsonSerializer();
             try
             {
                 var fullPath = System.IO.Path.Combine(Path, itemId);
-                return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
+                var item = JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
+                tasks.AddOrUpdate(item.Id, item, (s, oldValue) => item); 
+                return item;
             }
             catch (Exception e)
             {
@@ -103,6 +136,7 @@ namespace Unlimotion
 
         protected virtual void OnUpdating(TaskStorageUpdateEventArgs e)
         {
+            Load(e.Id, true);
             Updating?.Invoke(this, e);
         }
 

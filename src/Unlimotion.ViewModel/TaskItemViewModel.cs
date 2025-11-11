@@ -571,8 +571,7 @@ namespace Unlimotion.ViewModel
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
 
             // Update the backing model
-            IsCanBeCompleted = taskItem.IsCanBeCompleted;
-
+            if (IsCanBeCompleted != taskItem.IsCanBeCompleted) IsCanBeCompleted = taskItem.IsCanBeCompleted;
             if (Title != taskItem.Title) Title = taskItem.Title;
             if (Description != taskItem.Description) Description = taskItem.Description;
             if (CreatedDateTime != taskItem.CreatedDateTime) CreatedDateTime = taskItem.CreatedDateTime;
