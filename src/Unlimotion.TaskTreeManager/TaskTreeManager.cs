@@ -1,12 +1,16 @@
-﻿using Polly;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Polly;
 using Polly.Retry;
 using Unlimotion.Domain;
 
 namespace Unlimotion.TaskTree;
 
-public class TaskTreeManager : ITaskTreeManager
+public class TaskTreeManager
 {
-    private IStorage Storage { get; init; }
+    public IStorage Storage { get; init; }
 
     public TaskTreeManager(IStorage storage)
     {
@@ -26,7 +30,6 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     result.AddOrUpdate(change);
 
                     return true;
@@ -51,7 +54,6 @@ public class TaskTreeManager : ITaskTreeManager
                     {
                         change.Version = 1;
                         await Storage.Save(change);
-                        change.SortOrder = DateTime.Now;
                         newTaskId = change.Id;
                         result.AddOrUpdate(change);
                     }
@@ -103,7 +105,6 @@ public class TaskTreeManager : ITaskTreeManager
                 {
                     change.Version = 1;
                     await Storage.Save(change);
-                    change.SortOrder = DateTime.Now;
                     newTaskId = change.Id;
                     result.AddOrUpdate(change);
                 }
@@ -395,7 +396,6 @@ public class TaskTreeManager : ITaskTreeManager
                     }
                 }
 
-                clone.SortOrder = DateTime.Now;
                 result.AddOrUpdate(clone);
 
                 return true;
@@ -832,7 +832,6 @@ public class TaskTreeManager : ITaskTreeManager
                         // Save the cloned task
                         clone.Version = 1;
                         await Storage.Save(clone);
-                        clone.SortOrder = DateTime.Now;
                         result.AddOrUpdate(clone);
                     }
                 }

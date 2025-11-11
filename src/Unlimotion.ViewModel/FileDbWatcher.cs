@@ -4,7 +4,7 @@ using System.IO;
 using System.Runtime.Caching;
 using System.Threading.Tasks;
 using Splat;
-using Unlimotion.ViewModel.Models;
+using Unlimotion.TaskTree;
 
 namespace Unlimotion.ViewModel
 {
@@ -122,14 +122,14 @@ namespace Unlimotion.ViewModel
                 case WatcherChangeTypes.Changed:
                     OnUpdated?.Invoke(this, new DbUpdatedEventArgs
                     {
-                        Id = e.FullPath,
+                        Id = e.Name,
                         Type = UpdateType.Saved
                     });
                     break;
                 case WatcherChangeTypes.Deleted:
                     OnUpdated?.Invoke(this, new DbUpdatedEventArgs
                     {
-                        Id = e.FullPath,
+                        Id = e.Name,
                         Type = UpdateType.Removed
                     });
                     break;

@@ -16,7 +16,35 @@ public class InMemoryStorage : IStorage
         return Task.FromResult(_tasks.TryGetValue(id, out var task) ? task : null);
     }
 
-    public Task<bool> Save(TaskItem taskItem)
+    public async IAsyncEnumerable<TaskItem> GetAll()
+    {
+        foreach (var tasksValue in _tasks.Values)
+        {
+            yield return tasksValue;
+        }
+    }
+
+    public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
+    {
+        foreach (var taskItem in taskItems)
+        {
+            await Save(taskItem);
+        }
+    }
+
+    public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+    public async Task<bool> Connect()
+    {
+        return true;
+    }
+
+    public async Task Disconnect()
+    {
+    }
+
+    public event Action<Exception?>? OnConnectionError;
+
+    public async Task<TaskItem> Save(TaskItem taskItem)
     {
         var clone = new TaskItem
         {
@@ -41,12 +69,11 @@ public class InMemoryStorage : IStorage
             Importance = taskItem.Importance,
             Wanted = taskItem.Wanted,
             Version = taskItem.Version,
-            SortOrder = taskItem.SortOrder
         };
         taskItem.Id = clone.Id;
         _tasks[clone.Id] = clone;
 
-        return Task.FromResult(true);
+        return taskItem;
     }
 
     public Task<bool> Remove(string id)

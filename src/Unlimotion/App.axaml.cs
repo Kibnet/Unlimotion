@@ -150,7 +150,7 @@ public class App : Application
         //Регистрация хранилища
         TaskStorages.RegisterStorage(isServerMode, configuration);
 
-        //Регистрация менеджера уведомлений
+        //Регистрация менеджера уведомлений
         var notificationManager = new NotificationManagerWrapper();
         Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
 
@@ -187,7 +187,7 @@ public class App : Application
         //Инициализация планировщика
         if (!isServerMode)
         {
-            var taskRepository = Locator.Current.GetService<FileTaskStorage>();
+            var taskRepository = Locator.Current.GetService<ITaskStorage>();
             taskRepository.Initiated += (sender, eventArgs) =>
             {
                 var pullJob = JobBuilder.Create<GitPullJob>()
