@@ -19,7 +19,9 @@
                 Text="{Binding $parent[searchControl:SearchControl].SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                 Watermark="{Binding $parent[searchControl:SearchControl].Watermark}"
                 VerticalAlignment="Center"
-                Height="36"/>
+                VerticalContentAlignment="Center"
+                Height="36"
+                Padding="10,0,36,0"/>
             <!-- Кнопка очистки -->
             <Button
                 Grid.Column="0"

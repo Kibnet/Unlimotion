@@ -93,78 +93,34 @@ Command="{Binding RemoveCommand}"/>
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
-                    <TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
-                        <Grid RowDefinitions="Auto,*"> <WrapPanel Orientation="Horizontal">
-                            <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                            <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                            <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" Margin="0,0,10,0"/>
-                            <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                            <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
-                            <!--Поиск-->
-                            <searchControl:SearchBar />
-                        </WrapPanel>
-                            <!-- Плоские результаты для поиска -->
-                            <ListBox Grid.Row="1"
-                                     IsVisible="{Binding ShowSearchResults}"
-                                     ItemsSource="{Binding SearchResults}"
-                                     SelectedItem="{Binding CurrentSearchItem, Mode=TwoWay}"
-                                     Background="Transparent"
-                                     BorderThickness="0" Padding="0">
-                                <ListBox.Styles>
-                                    <Style Selector="ListBoxItem">
-                                        <Setter Property="Padding" Value="5,3"/>
-                                        <Setter Property="Margin" Value="0,2"/>
-                                        <Setter Property="MinHeight" Value="22"/>
-                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
-                                    </Style>
-                                    <Style Selector="ListBox /template/ ScrollViewer#PART_ScrollViewer">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                    </Style>
-                                </ListBox.Styles>
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate DataType="viewModel:TaskWrapperViewModel">
-                                        <Grid Background="Transparent"
-                                              PointerPressed="InputElement_OnPointerPressed"
-                                              DoubleTapped="TaskTree_OnDoubleTapped">
-
-                                            <Grid ColumnDefinitions="Auto,*">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}"
-                                                          IsEnabled="{Binding TaskItem.IsCanBeCompleted}"
-                                                          VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding TaskItem.Title}"
-                                                           VerticalAlignment="Center"/>
-                                            </Grid>
-
-                                            <Button Background="#00000000"
-                                                    Content="❌"
-                                                    BorderThickness="0"
-                                                    HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        <!-- Исходное дерево -->
-                        <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                  IsVisible="{Binding !ShowSearchResults}"
-                                  ItemsSource="{Binding CurrentItems}" 
-                                  SelectedItem="{Binding CurrentItem}" 
-                                  SelectionMode="Single" 
-                                  x:Name="CurrentTree">
-                             <TreeView.ItemTemplate>
-                                  <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                       <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped"/>
-                                  </TreeDataTemplate>
-                             </TreeView.ItemTemplate> 
-                            <TreeView.Styles>
-                                 <Style Selector="TreeViewItem">
-                                      <Setter Property="IsExpanded">
-                                           <Setter.Value>
-                                                <Binding Path="((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded" 
-                                                         Mode="TwoWay" 
-                                                         RelativeSource="{RelativeSource Mode=Self}" />
+                    <TabItem Header = "All Tasks" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
+                        <Grid RowDefinitions= "Auto,*">
+                            <WrapPanel Orientation= "Horizontal">
+                                <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
+                                <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
+                                <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
+                                <CheckBox Content= "Completed" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
+                                <CheckBox Content= "Archived" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
+                                <!--Поиск-->
+                                <searchControl:SearchBar/>
+                            </WrapPanel>
+                            <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
+                                       ItemsSource="{Binding AllTasksTreeItems}"
+                                       SelectedItem="{Binding SelectedAllTasksItem}"
+                                       SelectionMode= "Single"
+                                       x:Name="AllTasksTree">
+                                <TreeView.ItemTemplate>
+                                    <TreeDataTemplate DataType= "viewModel:TaskWrapperViewModel" ItemsSource= "{Binding SubTasks}">
+                                        <ContentControl Content= "{Binding .}" PointerPressed= "InputElement_OnPointerPressed" DoubleTapped= "TaskTree_OnDoubleTapped"/>
+                                    </TreeDataTemplate>
+                                </TreeView.ItemTemplate>
+                                <TreeView.Styles>
+                                    <Style Selector= "TreeViewItem">
+                                        <Setter Property= "IsExpanded">
+                                            <Setter.Value>
+                                                <Binding Path= "((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
+                                                          Mode= "TwoWay"
+                                                          RelativeSource= "{RelativeSource Mode=Self}"/>
                                             </Setter.Value>
                                         </Setter>
                                     </Style>
@@ -351,6 +307,8 @@ Command="{Binding RemoveCommand}"/>
                     <TabItem Header="Last Opened" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
+                                <!--Поиск-->
+                                <searchControl:SearchBar/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"

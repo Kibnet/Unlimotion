@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
-using Unlimotion.Domain;
 
 namespace Unlimotion.ViewModel
 {
@@ -120,6 +119,7 @@ namespace Unlimotion.ViewModel
 
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentItem)
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(m =>
                 {
                     if (m != null || CurrentTaskItem == null)
@@ -191,10 +191,30 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
 
-            this.WhenAnyValue(vm => vm.CurrentSearchItem)
-                .Where(item => ShowSearchResults)
-                .Subscribe(item => CurrentItem = item)
-                .AddToDispose(this);
+            this.WhenAnyValue(m => m.ShowSearchResults, m => m.CurrentItems, m => m.SearchResults)
+                .Select(t => t.Item1 ? t.Item3 : t.Item2)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(m => AllTasksTreeItems = m)
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.SelectedAllTasksItem, m => m.ShowSearchResults)
+                .Where(t => t.Item1 != null)
+                .DistinctUntilChanged(t => t.Item1)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(m =>
+                {
+                    if (m.Item2)
+                        CurrentSearchItem = m.Item1;
+                    else
+                        CurrentItem = m.Item1;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.ShowSearchResults, m => m.CurrentItem, m => m.CurrentSearchItem)
+                .Select(t => t.Item1 ? t.Item3 : t.Item2)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(m => CurrentTaskItem = m?.TaskItem)
+                .AddToDispose(connectionDisposableList);
 
             AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
                 .Subscribe(b =>
@@ -262,69 +282,6 @@ namespace Unlimotion.ViewModel
                 })
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
-
-            //
-            // Поиск
-            //
-            #region Поиск
-            IObservable<Func<TaskItemViewModel, bool>> BuildSearchFilter(bool emptyMatchesAll)
-                => this.WhenAnyValue(vm => vm.Search.SearchText)
-                .Throttle(TimeSpan.FromMilliseconds(120))
-                .DistinctUntilChanged()
-                .Select(searchText =>
-                {
-                    var userText = (searchText ?? "").Trim();
-
-                    if (string.IsNullOrEmpty(userText))
-                        return new Func<TaskItemViewModel, bool>(_ => emptyMatchesAll);
-
-                    // разбиваем запрос на слова по пробелам
-                    var words = Normalize(userText)
-                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-                    if (words.Length == 0)
-                        return (_ => emptyMatchesAll);
-
-                    return task =>
-                    {
-                        // Ищем по тексту, описанию, всем эмодзи и Id
-                        var source = Normalize($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
-                        foreach (var w in words) if (!source.Contains(w)) return false;
-                        return true;
-                    };
-                });
-
-            var searchFilterStrict = BuildSearchFilter(emptyMatchesAll: false); // для All Tasks (для древовидной отрисовки)
-            var searchFilterLenient = BuildSearchFilter(emptyMatchesAll: true);  // для Unlocked/Completed/etc.
-
-            // Приводим текст к нижнему регистру и убираем лишние символы
-            static string Normalize(string s)
-                => (s ?? string.Empty).ToLowerInvariant().Normalize(NormalizationForm.FormKC);
-
-            //Bind Поиск для All Tasks 
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Title, x => x.Description, x => x.GetAllEmoji))
-                .Filter(searchFilterStrict)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions()
-                    {
-                        ChildSelector = _ => Observable.Empty<IChangeSet<TaskItemViewModel>>(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    return new TaskWrapperViewModel(null, item, actions);
-                })
-                .SortBy(w => w.TaskItem.Title)
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Bind(out _searchResults)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
-
-            SearchResults = _searchResults;
-
-            #endregion Поиск
 
             //Bind Emoji
 
@@ -435,6 +392,8 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
+            var emojiExcludeFilterObservable = emojiExcludeFilter;
+
             var emojiFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
@@ -515,6 +474,84 @@ namespace Unlimotion.ViewModel
 
             #endregion Emoji
 
+            //
+            // Поиск
+            //
+            #region Поиск
+            IObservable<Func<TaskItemViewModel, bool>> BuildSearchFilter(bool emptyMatchesAll)
+                => this.WhenAnyValue(vm => vm.Search.SearchText)
+                    .Throttle(TimeSpan.FromMilliseconds(120))
+                    .DistinctUntilChanged()
+                    .Select(searchText =>
+                    {
+                        var userText = (searchText ?? "").Trim();
+                        if (string.IsNullOrEmpty(userText))
+                            return new Func<TaskItemViewModel, bool>(_ => emptyMatchesAll);
+
+                        var words = Normalize(userText)
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                        if (words.Length == 0)
+                            return (_ => emptyMatchesAll);
+
+                        return task =>
+                        {
+                            var source = Normalize($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+                            foreach (var w in words) if (!source.Contains(w)) return false;
+                            return true;
+                        };
+                    });
+
+            var searchTopFilter = BuildSearchFilter(emptyMatchesAll: false); // для All Tasks (для древовидной отрисовки)
+            var searchFilterLenient = BuildSearchFilter(emptyMatchesAll: true);  // для Unlocked/Completed/etc.
+
+            static string Normalize(string s)
+                => (s ?? string.Empty).ToLowerInvariant().Normalize(NormalizationForm.FormKC);
+
+            //Bind Поиск для All Tasks 
+            var taskFilterObservable = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
+                .Select(filters =>
+                {
+                    bool Predicate(TaskItemViewModel task) =>
+                        task.IsCompleted == false ||
+                        ((task.IsCompleted == true) && filters.Item1) ||
+                        ((task.IsCompleted == null) && filters.Item2);
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
+            taskRepository.Tasks
+                .Connect()
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                    x => x.Title,
+                    x => x.Description,
+                    x => x.GetAllEmoji))
+                .Filter(taskFilterObservable)
+                .Filter(searchTopFilter)
+                .Transform(item =>
+                {
+                    var actions = new TaskWrapperActions
+                    {
+                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                        RemoveAction = RemoveTask,
+                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        Filter = new() { taskFilterObservable, emojiExcludeFilterObservable }
+                    };
+                    var wrapper = new TaskWrapperViewModel(null, item, actions)
+                    {
+                        IsExpanded = true
+                    };
+                    return wrapper;
+                })
+                .SortBy(w => w.TaskItem.Title)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Bind(out _searchResults)
+                .Subscribe()
+                .AddToDispose(connectionDisposableList);
+
+            SearchResults = _searchResults;
+
+            #endregion Поиск
+
             //Bind Roots
 
             #region Roots
@@ -574,6 +611,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             CurrentItems = _currentItems;
+            AllTasksTreeItems = CurrentItems;
 
             #endregion Roots
 
@@ -810,8 +848,20 @@ namespace Unlimotion.ViewModel
 
             #region LastOpened
 
+            var lastOpenedStatusFilter =
+                taskFilterObservable.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
+
+            var lastOpenedSearchFilter =
+                searchFilterLenient.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
+
             LastOpenedSource
                 .Connect()
+                .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
+                    x => x.IsCompleted,
+                    x => x.CompletedDateTime,
+                    x => x.ArchiveDateTime))
+                .Filter(lastOpenedStatusFilter)
+                .Filter(lastOpenedSearchFilter)
                 .Reverse()
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _lastOpenedItems)
@@ -1107,6 +1157,8 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _searchResults;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> SearchResults { get; set; }
         public TaskWrapperViewModel CurrentSearchItem { get; set; }
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> AllTasksTreeItems { get; private set; }
+        public TaskWrapperViewModel SelectedAllTasksItem { get; set; }
 
         public ICommand Create { get; set; }
 
