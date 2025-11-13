@@ -42,4 +42,12 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
+	<ItemGroup>
+	  <Compile Update="Views\SearchControl\SearchBar.axaml.cs">
+	    <DependentUpon>SearchBar.axaml</DependentUpon>
+	  </Compile>
+	  <Compile Update="Views\SearchControl\SearchControl.axaml.cs">
+	    <DependentUpon>SearchControl.axaml</DependentUpon>
+	  </Compile>
+	</ItemGroup>
 </Project>

@@ -1,0 +1,38 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="Unlimotion.Views.SearchControl.SearchControl" >
+    
+    <UserControl.Styles>
+        <StyleInclude Source="SearchControlStyles.axaml"></StyleInclude>
+    </UserControl.Styles>
+    
+    <Grid RowDefinitions="Auto,Auto">
+        <!-- Строка поиска -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0">
+            <TextBox
+                x:Name="SearchEditor"
+                Grid.Column="0"
+                Text="{Binding $parent[searchControl:SearchControl].SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                Watermark="{Binding $parent[searchControl:SearchControl].Watermark}"
+                VerticalAlignment="Center"
+                VerticalContentAlignment="Center"
+                Height="36"
+                Padding="10,0,36,0"/>
+            <!-- Кнопка очистки -->
+            <Button
+                Grid.Column="0"
+                Width="30" Height="30"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Margin="0"
+                Background="Transparent"
+                Click="OnClearClick">
+                <TextBlock Text="✕" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>
