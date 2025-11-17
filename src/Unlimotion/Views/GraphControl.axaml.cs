@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+﻿﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using AvaloniaGraphControl;
@@ -67,7 +67,7 @@ namespace Unlimotion.Views
 
                     // Поиск с подсветкой
                     dc.WhenAnyValue(m => m.Search.SearchText)
-                        .Throttle(TimeSpan.FromMilliseconds(300))
+                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
                         .Select(t => (t ?? "").Trim())
                         .DistinctUntilChanged()
                         .ObserveOn(RxApp.MainThreadScheduler)
@@ -235,13 +235,11 @@ namespace Unlimotion.Views
             }
         }
 
-        private static string Normalize(string s) =>
-            (s ?? "").ToLowerInvariant().Normalize(NormalizationForm.FormKC);
 
         private bool Matches(TaskItemViewModel task, string normalizedQuery)
         {
             if (string.IsNullOrWhiteSpace(normalizedQuery)) return false;
-            var hay = Normalize($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+            var hay = SearchDefinition.NormalizeText($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
             var words = normalizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             return words.Length == 0 ? false : words.All(w => hay.Contains(w));
         }
@@ -259,19 +257,30 @@ namespace Unlimotion.Views
 
         private void UpdateHighlights()
         {
-            if (dc == null) return;
-            var normalized = Normalize(dc.Search?.SearchText ?? "");
-            var roots = dc.OnlyUnlocked ? dc.UnlockedTasks : dc.Tasks;
-
-            if (string.IsNullOrEmpty(normalized))
+            try
             {
-                foreach (var t in EnumerateTasks(roots))
-                    t.IsHighlighted = false;
-                return;
-            }
+                var localDc = dc;
+                if (localDc == null) return;
 
-            foreach (var t in EnumerateTasks(roots))
-                t.IsHighlighted = Matches(t, normalized);
+                var normalized = SearchDefinition.NormalizeText(localDc.Search?.SearchText ?? "");
+                var roots = localDc.OnlyUnlocked ? localDc.UnlockedTasks : localDc.Tasks;
+
+                var items = EnumerateTasks(roots).ToList();
+
+                if (string.IsNullOrEmpty(normalized))
+                {
+                    foreach (var t in items)
+                        t.IsHighlighted = false;
+                    return;
+                }
+
+                foreach (var t in items)
+                    t.IsHighlighted = Matches(t, normalized);
+            }
+            catch (Exception ex)
+            {
+                LogHost.Default?.Error(ex, "UpdateHighlights failed");
+            }
         }
     }
 }

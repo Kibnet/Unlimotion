@@ -189,10 +189,10 @@ namespace Unlimotion.ViewModel
                     if (!show)
                         CurrentSearchItem = null;
                 })
-                .AddToDispose(this);
+                .AddToDispose(connectionDisposableList);
 
             this.WhenAnyValue(m => m.ShowSearchResults, m => m.CurrentItems, m => m.SearchResults)
-                .Select(t => t.Item1 ? t.Item3 : t.Item2)
+                .Select(t => { var (show, currentItems, searchResults) = t; return show ? searchResults : currentItems; })
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(m => AllTasksTreeItems = m)
                 .AddToDispose(connectionDisposableList);
@@ -201,17 +201,18 @@ namespace Unlimotion.ViewModel
                 .Where(t => t.Item1 != null)
                 .DistinctUntilChanged(t => t.Item1)
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(m =>
+                .Subscribe(tuple =>
                 {
-                    if (m.Item2)
-                        CurrentSearchItem = m.Item1;
+                    var (selected, show) = tuple;
+                    if (show)
+                        CurrentSearchItem = selected;
                     else
-                        CurrentItem = m.Item1;
+                        CurrentItem = selected;
                 })
                 .AddToDispose(connectionDisposableList);
 
             this.WhenAnyValue(m => m.ShowSearchResults, m => m.CurrentItem, m => m.CurrentSearchItem)
-                .Select(t => t.Item1 ? t.Item3 : t.Item2)
+                .Select(t => { var (show, currentItem, currentSearchItem) = t; return show ? currentSearchItem : currentItem; })
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(m => CurrentTaskItem = m?.TaskItem)
                 .AddToDispose(connectionDisposableList);
@@ -480,7 +481,7 @@ namespace Unlimotion.ViewModel
             #region Поиск
             IObservable<Func<TaskItemViewModel, bool>> BuildSearchFilter(bool emptyMatchesAll)
                 => this.WhenAnyValue(vm => vm.Search.SearchText)
-                    .Throttle(TimeSpan.FromMilliseconds(120))
+                    .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
                     .DistinctUntilChanged()
                     .Select(searchText =>
                     {
@@ -488,7 +489,7 @@ namespace Unlimotion.ViewModel
                         if (string.IsNullOrEmpty(userText))
                             return new Func<TaskItemViewModel, bool>(_ => emptyMatchesAll);
 
-                        var words = Normalize(userText)
+                        var words = SearchDefinition.NormalizeText(userText)
                             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
                         if (words.Length == 0)
@@ -496,7 +497,7 @@ namespace Unlimotion.ViewModel
 
                         return task =>
                         {
-                            var source = Normalize($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+                            var source = SearchDefinition.NormalizeText($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
                             foreach (var w in words) if (!source.Contains(w)) return false;
                             return true;
                         };
@@ -505,8 +506,6 @@ namespace Unlimotion.ViewModel
             var searchTopFilter = BuildSearchFilter(emptyMatchesAll: false); // для All Tasks (для древовидной отрисовки)
             var searchFilterLenient = BuildSearchFilter(emptyMatchesAll: true);  // для Unlocked/Completed/etc.
 
-            static string Normalize(string s)
-                => (s ?? string.Empty).ToLowerInvariant().Normalize(NormalizationForm.FormKC);
 
             //Bind Поиск для All Tasks 
             var taskFilterObservable = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)

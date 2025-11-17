@@ -32,11 +32,6 @@ namespace Unlimotion.Views.SearchControl
 
         public static readonly StyledProperty<string> WatermarkProperty = AvaloniaProperty.Register<SearchControl, string>(nameof(Watermark));
 
-        public static readonly DirectProperty<SearchControl, bool> IsModalVisibleProperty = AvaloniaProperty.RegisterDirect<SearchControl, bool>(
-            nameof(IsModalVisible),
-            o => o.IsModalVisible,
-            (o, v) => o.IsModalVisible = v
-        );
 
         #endregion
 
@@ -53,11 +48,5 @@ namespace Unlimotion.Views.SearchControl
             set => SetValue(WatermarkProperty, value);
         }
 
-        public bool IsModalVisible
-        {
-            get => _isModalVisible;
-            set => SetAndRaise(IsModalVisibleProperty, ref _isModalVisible, value);
-        }
-        private bool _isModalVisible;
     }
 }

@@ -102,7 +102,7 @@ Command="{Binding RemoveCommand}"/>
                                 <CheckBox Content= "Completed" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
                                 <CheckBox Content= "Archived" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
                                        ItemsSource="{Binding AllTasksTreeItems}"
@@ -149,7 +149,7 @@ Command="{Binding RemoveCommand}"/>
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
@@ -186,7 +186,7 @@ Command="{Binding RemoveCommand}"/>
                                 <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
@@ -230,7 +230,7 @@ Command="{Binding RemoveCommand}"/>
                                                     DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
@@ -276,7 +276,7 @@ Command="{Binding RemoveCommand}"/>
                                                     DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
@@ -308,7 +308,7 @@ Command="{Binding RemoveCommand}"/>
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
                                 <!--Поиск-->
-                                <searchControl:SearchBar/>
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"

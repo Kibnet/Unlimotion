@@ -2,9 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:search="clr-namespace:Unlimotion.Views.SearchControl"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-             x:DataType="viewModel:MainWindowViewModel"
+             x:DataType="viewModel:SearchDefinition"
              x:Class="Unlimotion.Views.SearchControl.SearchBar">
     <search:SearchControl
-        SearchText="{Binding Search.SearchText, Mode=TwoWay}"
+        SearchText="{Binding SearchText, Mode=TwoWay}"
         Watermark="Search"/>
 </UserControl>
