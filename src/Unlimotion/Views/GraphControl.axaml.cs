@@ -91,6 +91,8 @@ namespace Unlimotion.Views
             {
                 BuildFromTasks(dc.Tasks);
             }
+
+            UpdateHighlights();
         }
 
         /// <summary>
@@ -271,11 +273,13 @@ namespace Unlimotion.Views
                 {
                     foreach (var t in items)
                         t.IsHighlighted = false;
-                    return;
+                }
+                else
+                {
+                    foreach (var t in items)
+                        t.IsHighlighted = Matches(t, normalized);
                 }
 
-                foreach (var t in items)
-                    t.IsHighlighted = Matches(t, normalized);
             }
             catch (Exception ex)
             {

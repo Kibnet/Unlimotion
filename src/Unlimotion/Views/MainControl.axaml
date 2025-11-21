@@ -105,8 +105,8 @@ Command="{Binding RemoveCommand}"/>
                                 <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
-                                       ItemsSource="{Binding AllTasksTreeItems}"
-                                       SelectedItem="{Binding SelectedAllTasksItem}"
+                                       ItemsSource="{Binding CurrentItems}"
+                                       SelectedItem="{Binding CurrentItem}"
                                        SelectionMode= "Single"
                                        x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
