@@ -45,12 +45,6 @@ Command="{Binding RemoveCommand}"/>
                 <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
-        <DataTemplate DataType="viewModel:EmojiExcludeFilter">
-            <Grid ColumnDefinitions="Auto, Auto" >
-                <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
-            </Grid>
-        </DataTemplate>
         <DataTemplate DataType="viewModel:UnlockedTimeFilter">
             <CheckBox Content="{Binding Title}" IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
         </DataTemplate>
@@ -60,7 +54,7 @@ Command="{Binding RemoveCommand}"/>
     </UserControl.DataTemplates>
 
     <UserControl.KeyBindings>
-        <KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentItem.RemoveCommand}"/>
+        <KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentAllTasksItem.RemoveCommand}"/>
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
         <KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
@@ -105,8 +99,8 @@ Command="{Binding RemoveCommand}"/>
                                 <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
-                                       ItemsSource="{Binding CurrentItems}"
-                                       SelectedItem="{Binding CurrentItem}"
+                                       ItemsSource="{Binding CurrentAllTasksItems}"
+                                       SelectedItem="{Binding CurrentAllTasksItem}"
                                        SelectionMode= "Single"
                                        x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>

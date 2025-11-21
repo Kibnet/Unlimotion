@@ -102,7 +102,7 @@ namespace Unlimotion.ViewModel
                 CurrentTaskItem = await taskRepository?.AddChild(parent);
                 SelectCurrentTask();
 
-                var wrapper = FindTaskWrapperViewModel(parent, CurrentItems);
+                var wrapper = FindTaskWrapperViewModel(parent, CurrentAllTasksItems);
                 if (wrapper != null)
                 {
                     wrapper.IsExpanded = true;
@@ -118,8 +118,7 @@ namespace Unlimotion.ViewModel
             Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));
 
             //Select CurrentTaskItem from all tabs
-            this.WhenAnyValue(m => m.CurrentItem)
-                .ObserveOn(RxApp.MainThreadScheduler)
+            this.WhenAnyValue(m => m.CurrentAllTasksItem)
                 .Subscribe(m =>
                 {
                     if (m != null || CurrentTaskItem == null)
@@ -179,39 +178,6 @@ namespace Unlimotion.ViewModel
                 .Subscribe(a => 
                 { 
                     SelectCurrentTask();
-                })
-                .AddToDispose(connectionDisposableList);
-
-            // Expand parent nodes when search is cleared to reveal selected task
-            this.WhenAnyValue(vm => vm.Search.SearchText)
-                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
-                .DistinctUntilChanged()
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(searchText =>
-                {
-                    // Only proceed when search is cleared (becomes empty)
-                    if (!string.IsNullOrWhiteSpace(searchText))
-                        return;
-
-                    // Only expand in All Tasks mode
-                    if (!AllTasksMode)
-                        return;
-
-                    // Only expand if there's a selected task
-                    if (CurrentItem?.TaskItem == null)
-                        return;
-
-                    ExpandParentNodesForTask(CurrentItem.TaskItem);
-                })
-                .AddToDispose(connectionDisposableList);
-
-            this.WhenAnyValue(m => m.CurrentItem)
-                .Where(t => t != null)
-                .DistinctUntilChanged(t => t)
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(selected =>
-                {
-                    CurrentItem = selected;
                 })
                 .AddToDispose(connectionDisposableList);
 
@@ -307,7 +273,6 @@ namespace Unlimotion.ViewModel
                     return filter;
                 })
                 .SortBy(f => f.SortText)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _emojiFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -336,7 +301,6 @@ namespace Unlimotion.ViewModel
                     return filter;
                 })
                 .SortBy(f => f.SortText)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _emojiExcludeFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -575,12 +539,11 @@ namespace Unlimotion.ViewModel
                 })
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _currentItems)
                 .Subscribe(set => ExpandParentNodesForTask(CurrentTaskItem))
                 .AddToDispose(connectionDisposableList);
 
-            CurrentItems = _currentItems;
+            CurrentAllTasksItems = _currentItems;
 
             #endregion Roots
 
@@ -620,7 +583,6 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .Sort(sortObservableForUnlocked)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _unlockedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -645,7 +607,6 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _FilteredItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -704,7 +665,6 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _completedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -741,7 +701,6 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _archivedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -803,7 +762,6 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _lastCreatedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -827,7 +785,6 @@ namespace Unlimotion.ViewModel
                     x => x.ArchiveDateTime))
                 .Filter(lastOpenedSearchFilter)
                 .Reverse()
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _lastOpenedItems)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
@@ -880,7 +837,6 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .ObserveOn(RxApp.MainThreadScheduler)
                 .Bind(out _graphItems)
                 .Subscribe(set => ExpandParentNodesForTask(CurrentTaskItem))
                 .AddToDispose(connectionDisposableList);
@@ -888,6 +844,13 @@ namespace Unlimotion.ViewModel
             Graph.Tasks = _graphItems;
             
             #endregion Roadmap
+
+            this.WhenAnyValue(m => m.CurrentTaskItem)
+                .Subscribe(item =>
+                {
+                    SelectCurrentTask();
+                })
+                .AddToDispose(connectionDisposableList);
             
             //Bind Current Item Contains
             #region Current Item Contains
@@ -1003,35 +966,44 @@ namespace Unlimotion.ViewModel
             {
                 if (AllTasksMode)
                 {
-                    CurrentItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentItems);
-                    if (CurrentTaskItem != null)
+                    if (CurrentAllTasksItem?.TaskItem != CurrentTaskItem)
                     {
-                        ExpandParentNodesForTask(CurrentTaskItem);
+                        CurrentAllTasksItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentAllTasksItems);
+                        if (CurrentTaskItem != null)
+                        {
+                            ExpandParentNodesForTask(CurrentTaskItem);
+                        }
                     }
                 }
                 else if (UnlockedMode)
                 {
-                    CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
+                    if (CurrentUnlockedItem?.TaskItem != CurrentTaskItem)
+                        CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
                 }
                 else if (CompletedMode)
                 {
-                    CurrentCompletedItem = FindTaskWrapperViewModel(CurrentTaskItem, CompletedItems);
+                    if (CurrentCompletedItem?.TaskItem != CurrentTaskItem)
+                        CurrentCompletedItem = FindTaskWrapperViewModel(CurrentTaskItem, CompletedItems);
                 }
                 else if (ArchivedMode)
                 {
-                    CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
+                    if (CurrentArchivedItem?.TaskItem != CurrentTaskItem)
+                        CurrentArchivedItem = FindTaskWrapperViewModel(CurrentTaskItem, ArchivedItems);
                 }
                 else if (GraphMode)
                 {
-                    CurrentGraphItem = FindTaskWrapperViewModel(CurrentTaskItem, Graph.Tasks);
+                    if (CurrentGraphItem?.TaskItem != CurrentTaskItem)
+                        CurrentGraphItem = FindTaskWrapperViewModel(CurrentTaskItem, Graph.Tasks);
                 }
                 else if (LastCreatedMode)
                 {
-                    CurrentLastCreated = FindTaskWrapperViewModel(CurrentTaskItem, LastCreatedItems);
+                    if (CurrentLastCreated?.TaskItem != CurrentTaskItem)
+                        CurrentLastCreated = FindTaskWrapperViewModel(CurrentTaskItem, LastCreatedItems);
                 }
                 else if (LastOpenedMode)
                 {
-                    CurrentLastOpenedItem = FindTaskWrapperViewModel(CurrentTaskItem, LastOpenedItems);
+                    if (CurrentLastOpenedItem?.TaskItem != CurrentTaskItem)
+                        CurrentLastOpenedItem = FindTaskWrapperViewModel(CurrentTaskItem, LastOpenedItems);
                 }
             }
         }
@@ -1115,7 +1087,7 @@ namespace Unlimotion.ViewModel
             // Expand each parent in the chain
             foreach (var parentTask in parentChain)
             {
-                var parentWrapper = FindTaskWrapperViewModel(parentTask, CurrentItems);
+                var parentWrapper = FindTaskWrapperViewModel(parentTask, CurrentAllTasksItems);
                 if (parentWrapper != null)
                 {
                     parentWrapper.IsExpanded = true;
@@ -1123,11 +1095,11 @@ namespace Unlimotion.ViewModel
                     var _ = parentWrapper.SubTasks;
                 }
             }
-            var wrapper = FindTaskWrapperViewModel(taskItem, CurrentItems);
+            var wrapper = FindTaskWrapperViewModel(taskItem, CurrentAllTasksItems);
             // Ensure the selected item is refreshed for AutoScrollToSelectedItem
             if (wrapper != null)
             {
-                CurrentItem = wrapper;
+                CurrentAllTasksItem = wrapper;
             }
         }
         public string Title { get; set; }
@@ -1142,10 +1114,10 @@ namespace Unlimotion.ViewModel
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
-        public string BreadScrumbs => AllTasksMode ? CurrentItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
+        public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentItems { get; set; }
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
@@ -1170,7 +1142,7 @@ namespace Unlimotion.ViewModel
 
         public TaskItemViewModel? CurrentTaskItem { get; set; }
         public TaskItemViewModel LastTaskItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentItem { get; set; } = null!;
+        public TaskWrapperViewModel CurrentAllTasksItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentCompletedItem { get; set; } = null!;
         public TaskWrapperViewModel CurrentArchivedItem { get; set; } = null!;
@@ -1236,16 +1208,6 @@ namespace Unlimotion.ViewModel
 
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
-    {
-        public string Title { get; set; } = "";
-        public string Emoji { get; set; } = "";
-        public bool ShowTasks { get; set; }
-        public string SortText { get; set; } = "";
-        public TaskItemViewModel Source { get; set; } = null!;
-    }
-
-    [AddINotifyPropertyChangedInterface]
-    public class EmojiExcludeFilter
     {
         public string Title { get; set; } = "";
         public string Emoji { get; set; } = "";

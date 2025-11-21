@@ -26,6 +26,8 @@ namespace Unlimotion.Test
             fixture = new MainWindowViewModelFixture();
             mainWindowVM = fixture.MainWindowViewModelTest;
             mainWindowVM.Connect().GetAwaiter().GetResult();
+            mainWindowVM.AllTasksMode = true;
+            while (mainWindowVM.CurrentAllTasksItems.Count == 0){ }
             taskRepository = mainWindowVM.taskRepository!;
         }
 
@@ -338,7 +340,7 @@ namespace Unlimotion.Test
         [Fact]
         public async Task SubItemLinkRemoveCommand_Success()
         {
-            var rootWrapper = mainWindowVM.CurrentItems
+            var rootWrapper = mainWindowVM.CurrentAllTasksItems
                 .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
 
             var subWrapper = rootWrapper.SubTasks
@@ -359,7 +361,7 @@ namespace Unlimotion.Test
         [Fact]
         public async Task SubItemRemoveCommand_Success()
         {
-            var rootWrapper = mainWindowVM.CurrentItems
+            var rootWrapper = mainWindowVM.CurrentAllTasksItems
                 .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
 
             var subWrapper = rootWrapper.SubTasks
@@ -384,7 +386,7 @@ namespace Unlimotion.Test
         [Fact]
         public async Task ItemRemoveCommand_Success()
         {
-            var parent = mainWindowVM.CurrentItems
+            var parent = mainWindowVM.CurrentAllTasksItems
                 .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
@@ -423,7 +425,7 @@ namespace Unlimotion.Test
             Assert.False(originalParentStored.IsCanBeCompleted);
             
             // Act - Перемещаем задачу с ребенком к новому родителю
-            await originalParent.MoveInto(newParent, null );
+            await childTask.MoveInto(newParent, originalParent );
             
             // Ждем сохранения
             await TestHelpers.WaitThrottleTime();
@@ -437,19 +439,19 @@ namespace Unlimotion.Test
             Assert.False(updatedNewParent.IsCanBeCompleted);
             Assert.Null(updatedNewParent.UnlockedDateTime);
             
-            // Оригинальный родитель должен быть заблокирован, потому что у него есть дети
-            Assert.False(updatedOriginalParent.IsCanBeCompleted);
-            Assert.Null(updatedOriginalParent.UnlockedDateTime);
+            // Оригинальный родитель должен быть разблокирован, потому что у него больше нет детей
+            Assert.True(updatedOriginalParent.IsCanBeCompleted);
+            Assert.NotNull(updatedOriginalParent.UnlockedDateTime);
             
             // Отношения должны быть корректными
-            Assert.Contains(childTask.Id, updatedOriginalParent.ContainsTasks);
-            Assert.Contains(updatedOriginalParent.Id, updatedNewParent.ContainsTasks);
-            Assert.Contains(newParent.Id, updatedOriginalParent.ParentTasks);
-            Assert.Contains(updatedOriginalParent.Id, updatedChild.ParentTasks);
+            Assert.Contains(childTask.Id, updatedNewParent.ContainsTasks);
+            Assert.Contains(newParent.Id, updatedChild.ParentTasks);
+            Assert.DoesNotContain(childTask.Id, updatedOriginalParent.ContainsTasks);
+            Assert.DoesNotContain(updatedOriginalParent.Id, updatedChild.ParentTasks);
         }
 
         /// <summary>
-        /// Перемещение заблокированной задачи к новому родителю должно блокировать нового родителя
+        /// Копирование заблокированной задачи к новому родителю должно блокировать нового родителя
         /// </summary>
         /// <returns></returns>
         [Fact]
@@ -470,13 +472,14 @@ namespace Unlimotion.Test
 
             // Создаем новую задачу, которая станет новым родителем
             var newParent = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
-
+            Assert.True(newParent.IsCanBeCompleted);
+            
             // Проверяем начальное состояние - оригинальный родитель должен быть заблокирован из-за незавершенного ребенка
             var originalParentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
             Assert.False(originalParentStored.IsCanBeCompleted);
 
-            // Act - Перемещаем задачу с ребенком к новому родителю
-            await originalParent.CopyInto(newParent);
+            // Act - Копируем задачу с ребенком к новому родителю
+            await childTask.CopyInto(newParent);
 
             // Ждем сохранения
             await TestHelpers.WaitThrottleTime();
@@ -484,21 +487,18 @@ namespace Unlimotion.Test
             // Reload tasks from file storage to get updated state
             var updatedOriginalParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
             var updatedNewParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, newParent.Id);
-            var updatedChild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, childTask.Id);
 
             // Assert - Новый родитель должен быть заблокирован, потому что он теперь содержит задачу с незавершенным ребенком
             Assert.False(updatedNewParent.IsCanBeCompleted);
             Assert.Null(updatedNewParent.UnlockedDateTime);
 
-            // Оригинальный родитель должен быть заблокирован, потому что у него есть дети
+            // Оригинальный родитель должен оставаться заблокирован, потому что у него все еще есть дети
             Assert.False(updatedOriginalParent.IsCanBeCompleted);
             Assert.Null(updatedOriginalParent.UnlockedDateTime);
 
-            // Отношения должны быть корректными
+            // Отношения должны быть корректными - оба родителя содержат ребенка
             Assert.Contains(childTask.Id, updatedOriginalParent.ContainsTasks);
-            Assert.Contains(updatedOriginalParent.Id, updatedNewParent.ContainsTasks);
-            Assert.Contains(newParent.Id, updatedOriginalParent.ParentTasks);
-            Assert.Contains(updatedOriginalParent.Id, updatedChild.ParentTasks);
+            Assert.Contains(childTask.Id, updatedNewParent.ContainsTasks);
         }
 
         /// <summary>
@@ -508,7 +508,7 @@ namespace Unlimotion.Test
         [Fact]
         public async Task CancelItemRemoveCommand_Success()
         {
-            var parent = mainWindowVM.CurrentItems
+            var parent = mainWindowVM.CurrentAllTasksItems
                 .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
 
@@ -1045,12 +1045,14 @@ namespace Unlimotion.Test
         public Task SelectCurrentTaskMode_SyncsCorrectly()
         {
             var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
+            
+            Assert.True(mainWindowVM.AllTasksMode);
+            Assert.Null(mainWindowVM.CurrentAllTasksItem);
             mainWindowVM.CurrentTaskItem = task;
-
-            Assert.False(mainWindowVM.AllTasksMode);
-            Assert.Null(mainWindowVM.CurrentItem);
+            Assert.NotNull(mainWindowVM.CurrentAllTasksItem);
+            
             mainWindowVM.AllTasksMode = true;
-            Assert.Equal(task, mainWindowVM.CurrentItem.TaskItem);
+            Assert.Equal(task, mainWindowVM.CurrentAllTasksItem.TaskItem);
 
             mainWindowVM.AllTasksMode = false;
             Assert.Null(mainWindowVM.CurrentUnlockedItem);
