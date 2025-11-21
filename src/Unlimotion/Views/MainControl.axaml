@@ -8,6 +8,7 @@ xmlns:views="clr-namespace:Unlimotion.Views"
 xmlns:converters="clr-namespace:Unlimotion.Converters"
 xmlns:behavior="clr-namespace:Unlimotion.Behavior"
 xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
+xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 x:DataType="viewModel:MainWindowViewModel"
         Name="mainControl"
@@ -44,12 +45,6 @@ Command="{Binding RemoveCommand}"/>
                 <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
             </Grid>
         </DataTemplate>
-        <DataTemplate DataType="viewModel:EmojiExcludeFilter">
-            <Grid ColumnDefinitions="Auto, Auto" >
-                <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
-            </Grid>
-        </DataTemplate>
         <DataTemplate DataType="viewModel:UnlockedTimeFilter">
             <CheckBox Content="{Binding Title}" IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
         </DataTemplate>
@@ -59,7 +54,7 @@ Command="{Binding RemoveCommand}"/>
     </UserControl.DataTemplates>
 
     <UserControl.KeyBindings>
-        <KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentItem.RemoveCommand}"/>
+        <KeyBinding Gesture="Shift+Delete" Command="{Binding CurrentAllTasksItem.RemoveCommand}"/>
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
         <KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
@@ -92,32 +87,34 @@ Command="{Binding RemoveCommand}"/>
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
-                    <TabItem Header="All Tasks" IsSelected="{Binding AllTasksMode, Mode=OneWayToSource}">
-                        <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
-                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" Margin="0,0,10,0"/>
-                                <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                    <TabItem Header = "All Tasks" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
+                        <Grid RowDefinitions= "Auto,*">
+                            <WrapPanel Orientation= "Horizontal">
+                                <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
+                                <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
+                                <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
+                                <CheckBox Content= "Completed" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
+                                <CheckBox Content= "Archived" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
-                            <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
-                                      ItemsSource="{Binding CurrentItems}"
-                                      SelectedItem="{Binding CurrentItem}"
-                                      SelectionMode="Single"
-                                      x:Name="CurrentTree">
+                            <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
+                                       ItemsSource="{Binding CurrentAllTasksItems}"
+                                       SelectedItem="{Binding CurrentAllTasksItem}"
+                                       SelectionMode= "Single"
+                                       x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
-                                    <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                        <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped"/>
+                                    <TreeDataTemplate DataType= "viewModel:TaskWrapperViewModel" ItemsSource= "{Binding SubTasks}">
+                                        <ContentControl Content= "{Binding .}" PointerPressed= "InputElement_OnPointerPressed" DoubleTapped= "TaskTree_OnDoubleTapped"/>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
                                 <TreeView.Styles>
-                                    <Style Selector="TreeViewItem">
-                                        <Setter Property="IsExpanded">
+                                    <Style Selector= "TreeViewItem">
+                                        <Setter Property= "IsExpanded">
                                             <Setter.Value>
-                                                <Binding Path="((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
-                                                         Mode="TwoWay" 
-                                                         RelativeSource="{RelativeSource Mode=Self}" />
+                                                <Binding Path= "((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
+                                                          Mode= "TwoWay"
+                                                          RelativeSource= "{RelativeSource Mode=Self}"/>
                                             </Setter.Value>
                                         </Setter>
                                     </Style>
@@ -145,6 +142,8 @@ Command="{Binding RemoveCommand}"/>
                                 <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
@@ -180,6 +179,8 @@ Command="{Binding RemoveCommand}"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
@@ -222,6 +223,8 @@ Command="{Binding RemoveCommand}"/>
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
@@ -266,6 +269,8 @@ Command="{Binding RemoveCommand}"/>
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
@@ -296,6 +301,8 @@ Command="{Binding RemoveCommand}"/>
                     <TabItem Header="Last Opened" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <WrapPanel Orientation="Horizontal">
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
                             </WrapPanel>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"

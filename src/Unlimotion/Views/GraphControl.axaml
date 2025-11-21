@@ -3,12 +3,18 @@
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 			 xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-			 xmlns:unlimotion="clr-namespace:Unlimotion"
-			 xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
+             xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
 			 xmlns:local="clr-namespace:Unlimotion.Views.Graph"
+             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="Unlimotion.Views.GraphControl">
-	<Grid RowDefinitions="Auto,*">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.highlighted">
+            <Setter Property="Foreground" Value="#2F80ED"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*">
 		<WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
             <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
             <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
@@ -16,7 +22,11 @@
             <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
 			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
             <CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,10,0"/>
-		</WrapPanel>
+            <!--Поиск-->
+            <searchControl:SearchControl
+                SearchText="{Binding Search.SearchText, Mode=TwoWay}"
+                Watermark="Search"/>
+        </WrapPanel>
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
 					  HorizontalScrollBarVisibility="Auto">
 			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
@@ -35,7 +45,7 @@
 							<Grid ColumnDefinitions="Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped">
 								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
 								<Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
-								<TextBlock Grid.Column="2" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+                                <TextBlock Grid.Column="2" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.highlighted="{Binding IsHighlighted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"/>
 							</Grid>
 							<!--<Border BorderBrush="Gray" CornerRadius="4" BorderThickness="1" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
 								<Grid ColumnDefinitions="Auto, *" Margin="5,0">

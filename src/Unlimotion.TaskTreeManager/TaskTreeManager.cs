@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -437,6 +437,16 @@ public class TaskTreeManager
 
         result.AddOrUpdateRange(
             await CalculateAndUpdateAvailability(change));
+        
+        // Also recalculate availability for both parents
+        result.AddOrUpdateRange(
+            await CalculateAndUpdateAvailability(newParent));
+            
+        if (prevParent is not null)
+        {
+            result.AddOrUpdateRange(
+                await CalculateAndUpdateAvailability(prevParent));
+        }
 
         return result.Values.ToList();
     }

@@ -36,6 +36,7 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
+        public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands commands;
         public SetDurationCommands SetDurationCommands { get; set; } = null!;
