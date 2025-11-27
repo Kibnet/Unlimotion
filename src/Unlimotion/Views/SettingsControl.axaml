@@ -17,6 +17,7 @@
                     <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseTaskStoragePathCommand}"/>
                 </Grid>
                 <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
+                <CheckBox IsChecked="{Binding IsFuzzySearch}" Content="Fuzzy search"/>
                 <WrapPanel>
                     <Button Content="Connect" Command="{Binding ConnectCommand}"/>
                     <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
