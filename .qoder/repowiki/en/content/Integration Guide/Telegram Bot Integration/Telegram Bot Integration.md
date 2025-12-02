@@ -2,14 +2,24 @@
 
 <cite>
 **Referenced Files in This Document**   
-- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs)
-- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs)
-- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs)
-- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs)
-- [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json)
-- [Program.cs](file://src/Unlimotion.TelegramBot/Program.cs)
-- [Unlimotion.TelegramBot.csproj](file://src/Unlimotion.TelegramBot/Unlimotion.TelegramBot.csproj)
+- [Bot.cs](file://src/Unlimotion.TelegramBot/Bot.cs) - *Updated in recent commit*
+- [TaskService.cs](file://src/Unlimotion.TelegramBot/TaskService.cs) - *Added in recent commit*
+- [GitService.cs](file://src/Unlimotion.TelegramBot/GitService.cs) - *Added in recent commit*
+- [GitSettings.cs](file://src/Unlimotion.TelegramBot/GitSettings.cs) - *Added in recent commit*
+- [appsettings.json](file://src/Unlimotion.TelegramBot/appsettings.json) - *Updated in recent commit*
+- [Program.cs](file://src/Unlimotion.TelegramBot/Program.cs) - *Added in recent commit*
+- [Unlimotion.TelegramBot.csproj](file://src/Unlimotion.TelegramBot/Unlimotion.TelegramBot.csproj) - *Added in recent commit*
 </cite>
+
+## Update Summary
+**Changes Made**   
+- Updated documentation to reflect the new Telegram bot integration with remote task management capabilities
+- Added detailed information about command handlers for task creation, status updates, and list retrieval
+- Documented Git backup integration allowing synchronization via Telegram commands
+- Added authentication mechanism and user identification system details
+- Included setup instructions for bot deployment and webhook configuration
+- Added examples of supported commands and their syntax
+- Updated performance considerations for large task databases
 
 ## Table of Contents
 1. [Introduction](#introduction)
