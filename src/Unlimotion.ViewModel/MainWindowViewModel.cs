@@ -445,7 +445,7 @@ namespace Unlimotion.ViewModel
             #region Поиск
 
             var searchTopFilter = this.WhenAnyValue(vm => vm.Search.SearchText, vm => vm.Search.IsFuzzySearch)
-                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
+                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxApp.MainThreadScheduler)
                 .DistinctUntilChanged()
                 .Select(searchText =>
                 {
