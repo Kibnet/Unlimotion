@@ -125,7 +125,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentAllTasksItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -133,7 +133,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentUnlockedItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -141,7 +141,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentCompletedItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -149,7 +149,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentArchivedItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -157,7 +157,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentGraphItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -165,7 +165,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentLastCreated)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
@@ -173,7 +173,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentLastOpenedItem)
                 .Subscribe(m =>
                 {
-                    if (m != null || CurrentTaskItem == null)
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
                         CurrentTaskItem = m?.TaskItem;
                 })
                 .AddToDispose(connectionDisposableList);
