@@ -12,6 +12,7 @@ public class TaskStorageSettings
     public string Password { get; set; }
 
     public bool IsServerMode { get ; set ; }
+    public bool IsFuzzySearch { get; set; }
 }
 
 public class GitSettings

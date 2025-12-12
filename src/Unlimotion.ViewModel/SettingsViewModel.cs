@@ -51,6 +51,12 @@ public class SettingsViewModel
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsServerMode)).Set(value);
     }
 
+    public bool IsFuzzySearch
+    {
+        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsFuzzySearch)).Get<bool>();
+        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsFuzzySearch)).Set(value);
+    }
+
     public bool GitBackupEnabled
     {
         get => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Get<bool>();

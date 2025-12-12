@@ -1,16 +1,16 @@
-using System;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Reactive.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Input;
 using DynamicData;
 using DynamicData.Binding;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using Splat;
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reactive.Linq;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using Unlimotion.ViewModel.Search;
 
 namespace Unlimotion.ViewModel
 {
@@ -31,6 +31,7 @@ namespace Unlimotion.ViewModel
             Settings = new SettingsViewModel(_configuration);
             Graph = new GraphViewModel();
             Graph.Search = Search;
+            Search.IsFuzzySearch = Settings.IsFuzzySearch;
             Locator.CurrentMutable.RegisterConstant(Settings);
             ShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
@@ -54,7 +55,10 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
                 .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
-                .AddToDispose(this);       
+                .AddToDispose(this);
+            this.WhenAnyValue(m => m.Settings.IsFuzzySearch)
+                .Subscribe(b => Search.IsFuzzySearch = b)
+                .AddToDispose(this);
         }
 
         private void RegisterCommands()
@@ -440,12 +444,14 @@ namespace Unlimotion.ViewModel
             //
             #region Поиск
 
-            var searchTopFilter = this.WhenAnyValue(vm => vm.Search.SearchText)
-                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
+            var searchTopFilter = this.WhenAnyValue(vm => vm.Search.SearchText, vm => vm.Search.IsFuzzySearch)
+                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxApp.MainThreadScheduler)
                 .DistinctUntilChanged()
                 .Select(searchText =>
                 {
-                    var userText = (searchText ?? "").Trim();
+                    var userText = (searchText.Item1 ?? "").Trim();
+                    var fuzzyText = searchText.Item2;
+
                     if (string.IsNullOrEmpty(userText))
                         return new Func<TaskItemViewModel, bool>(_ => true);
 
@@ -455,10 +461,29 @@ namespace Unlimotion.ViewModel
                     if (words.Length == 0)
                         return (_ => true);
 
+                    if (fuzzyText)
+                    {
+                        return task =>
+                        {
+                            var source = SearchDefinition.NormalizeText($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+                            foreach (var w in words)
+                            {
+                                var maxDist = FuzzyMatcher.GetMaxDistanceForWord(w);
+                                if (!FuzzyMatcher.IsFuzzyMatch(source, w, maxDist))
+                                    return false;
+                            }
+                            return true;
+                        };
+                    }
+
                     return task =>
                     {
-                        var source = SearchDefinition.NormalizeText($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
-                        foreach (var w1 in words) if (!source.Contains(w1)) return false;
+                        var source = SearchDefinition.NormalizeText(
+                            $"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
+
+                        foreach (var w in words)
+                            if (!source.Contains(w))
+                                return false;
                         return true;
                     };
                 });
@@ -540,7 +565,7 @@ namespace Unlimotion.ViewModel
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
                 .Bind(out _currentItems)
-                .Subscribe(set => ExpandParentNodesForTask(CurrentTaskItem))
+                .Subscribe(/*set => ExpandParentNodesForTask(CurrentTaskItem)*/)
                 .AddToDispose(connectionDisposableList);
 
             CurrentAllTasksItems = _currentItems;

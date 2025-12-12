@@ -12,6 +12,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Search;
 using Unlimotion.Views.Graph;
 
 namespace Unlimotion.Views
@@ -238,12 +239,28 @@ namespace Unlimotion.Views
         }
 
 
-        private bool Matches(TaskItemViewModel task, string normalizedQuery)
+        private bool Matches(TaskItemViewModel task, string normalizedQuery, bool isFuzzy)
         {
             if (string.IsNullOrWhiteSpace(normalizedQuery)) return false;
             var hay = SearchDefinition.NormalizeText($"{task.OnlyTextTitle} {task.Description} {task.GetAllEmoji} {task.Id}");
             var words = normalizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            return words.Length == 0 ? false : words.All(w => hay.Contains(w));
+
+            if (words.Length == 0)
+                return false;
+
+            if (!isFuzzy)
+            {
+                return words.All(w => hay.Contains(w));
+            }
+
+            foreach (var w in words)
+            {
+                var maxDist = FuzzyMatcher.GetMaxDistanceForWord(w);
+                if (!FuzzyMatcher.IsFuzzyMatch(hay, w, maxDist))
+                    return false;
+            }
+
+            return true;
         }
 
         private IEnumerable<TaskItemViewModel> EnumerateTasks(ReadOnlyObservableCollection<TaskWrapperViewModel> roots)
@@ -266,6 +283,7 @@ namespace Unlimotion.Views
 
                 var normalized = SearchDefinition.NormalizeText(localDc.Search?.SearchText ?? "");
                 var roots = localDc.OnlyUnlocked ? localDc.UnlockedTasks : localDc.Tasks;
+                var isFuzzy = localDc.Search?.IsFuzzySearch == true;
 
                 var items = EnumerateTasks(roots).ToList();
 
@@ -277,7 +295,7 @@ namespace Unlimotion.Views
                 else
                 {
                     foreach (var t in items)
-                        t.IsHighlighted = Matches(t, normalized);
+                        t.IsHighlighted = Matches(t, normalized, isFuzzy);
                 }
 
             }
