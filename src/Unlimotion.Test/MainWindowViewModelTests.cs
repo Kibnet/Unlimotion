@@ -78,6 +78,32 @@ namespace Unlimotion.Test
         }
 
         /// <summary>
+        /// Проверка что заголовок задачи не сбрасывается после сохранения файла
+        /// Regression test for title reset bug
+        /// </summary>
+        [Fact]
+        public async Task NewTask_TitleNotResetAfterFileSave()
+        {
+            // Arrange: Create a new task
+            var task = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+            
+            // Act: Set title immediately after creation
+            var expectedTitle = "Test Title That Should Not Reset";
+            task.Title = expectedTitle;
+            
+            // Wait for file watcher to potentially trigger update (1 second throttle + buffer)
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            
+            // Assert: Title should still be what we set
+            Assert.Equal(expectedTitle, task.Title);
+            
+            // Also verify it eventually saves correctly
+            await TestHelpers.WaitThrottleTime();
+            var storedTask = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            Assert.Equal(expectedTitle, storedTask?.Title);
+        }
+
+        /// <summary>
         /// Переименование задачи
         /// </summary>
         /// <returns></returns>

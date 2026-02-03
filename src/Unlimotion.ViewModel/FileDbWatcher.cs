@@ -110,7 +110,7 @@ namespace Unlimotion.ViewModel
             lock (itLock)
             {
                 var fileInfo = new FileInfo(e.FullPath);
-                if (ignoredTasks.Contains(fileInfo.FullName))
+                if (ignoredTasks.Contains(fileInfo.Name))
                 {
                     return;
                 }
