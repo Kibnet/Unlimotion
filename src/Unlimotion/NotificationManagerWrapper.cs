@@ -4,13 +4,24 @@ using Avalonia.Notification;
 using Avalonia.Threading;
 using DialogHostAvalonia;
 using ReactiveUI;
-using Splat;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion;
 
 public class NotificationManagerWrapper : INotificationManagerWrapper
 {
+    private INotificationMessageManager? _notificationManager;
+
+    public NotificationManagerWrapper(INotificationMessageManager? notificationManager)
+    {
+        _notificationManager = notificationManager;
+    }
+
+    public void SetManager(INotificationMessageManager? notificationManager)
+    {
+        _notificationManager = notificationManager;
+    }
+
     public void Ask(string header, string message, Action yesAction, Action noAction = null)
     {
         var askViewModel = new AskViewModel
@@ -28,10 +39,9 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
 
     public void ErrorToast(string message)
     {
-        var notify = Locator.Current.GetService<INotificationMessageManager>();
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            notify?.CreateMessage()
+            _notificationManager?.CreateMessage()
             .Background("#DC483D")
             .HasMessage(message)
             .Dismiss().WithDelay(TimeSpan.FromSeconds(7))
@@ -42,10 +52,9 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
 
     public void SuccessToast(string message)
     {
-        var notify = Locator.Current.GetService<INotificationMessageManager>();
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            notify?.CreateMessage()
+            _notificationManager?.CreateMessage()
                 .Background("#008800")
                 .HasMessage(message)
                 .Dismiss().WithDelay(TimeSpan.FromSeconds(7))

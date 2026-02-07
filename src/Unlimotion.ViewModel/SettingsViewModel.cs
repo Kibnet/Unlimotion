@@ -2,7 +2,6 @@
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
-using Splat;
 
 namespace Unlimotion.ViewModel;
 
@@ -12,34 +11,52 @@ public class SettingsViewModel
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
     private readonly IConfiguration _gitSettings;
+    private readonly IRemoteBackupService? _backupService;
 
-    public SettingsViewModel(IConfiguration configuration)
+    public SettingsViewModel(IConfiguration configuration, IRemoteBackupService? backupService = null)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
         _gitSettings = configuration.GetSection("Git");
+        _backupService = backupService;
     }
 
-    public string TaskStoragePath
+    // Commands - set externally from App.axaml.cs
+    public ICommand? ConnectCommand { get; set; }
+    public ICommand? MigrateCommand { get; set; }
+    public ICommand? BackupCommand { get; set; }
+    public ICommand? ResaveCommand { get; set; }
+    public ICommand? BrowseTaskStoragePathCommand { get; set; }
+    public ICommand? CloneCommand { get; set; }
+    public ICommand? PullCommand { get; set; }
+    public ICommand? PushCommand { get; set; }
+
+    public string? TaskStoragePath
     {
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Path)).Get<string>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Path)).Set(value);
     }
 
-    public string ServerStorageUrl
+    public string? TaskStorageURL
     {
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.URL)).Get<string>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.URL)).Set(value);
     }
 
-    public string Login
+    // Alias for XAML binding compatibility
+    public string? ServerStorageUrl
+    {
+        get => TaskStorageURL;
+        set => TaskStorageURL = value;
+    }
+
+    public string? Login
     {
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Login)).Get<string>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Login)).Set(value);
     }
 
-    //TODO стоит подумать над шифрованным хранением
-    public string Password
+    public string? Password
     {
         get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Password)).Get<string>();
         set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Password)).Set(value);
@@ -53,8 +70,8 @@ public class SettingsViewModel
 
     public bool IsFuzzySearch
     {
-        get => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsFuzzySearch)).Get<bool>();
-        set => _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsFuzzySearch)).Set(value);
+        get => _configuration.GetSection(nameof(IsFuzzySearch)).Get<bool>();
+        set => _configuration.GetSection(nameof(IsFuzzySearch)).Set(value);
     }
 
     public bool GitBackupEnabled
@@ -69,34 +86,28 @@ public class SettingsViewModel
         set => _gitSettings.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(value);
     }
 
-    public string GitRemoteUrl
+    public string? GitRemoteUrl
     {
         get => _gitSettings.GetSection(nameof(GitSettings.RemoteUrl)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.RemoteUrl)).Set(value);
     }
 
-    public string GitBranch
+    public string? GitBranch
     {
         get => _gitSettings.GetSection(nameof(GitSettings.Branch)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.Branch)).Set(value);
     }
 
-    public string GitUserName
+    public string? GitUserName
     {
         get => _gitSettings.GetSection(nameof(GitSettings.UserName)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.UserName)).Set(value);
     }
 
-    public string GitPassword
+    public string? GitPassword
     {
         get => _gitSettings.GetSection(nameof(GitSettings.Password)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.Password)).Set(value);
-    }
-
-    public int GitPushIntervalSeconds
-    {
-        get => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Get<int>();
-        set => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(value);
     }
 
     public int GitPullIntervalSeconds
@@ -105,20 +116,19 @@ public class SettingsViewModel
         set => _gitSettings.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(value);
     }
 
-    public string GitRemoteName
+    public int GitPushIntervalSeconds
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Get<int>();
+        set => _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(value);
+    }
+
+    public string? GitRemoteName
     {
         get => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
     }
 
-    public List<string> Remotes
-    {
-        get
-        {
-            var service = Locator.Current.GetService<IRemoteBackupService>();
-            return service?.Remotes();
-        }
-    }
+    public List<string> Remotes => _backupService?.Remotes() ?? new List<string>();
 
     public string GitPushRefSpec
     {
@@ -126,34 +136,17 @@ public class SettingsViewModel
         set => _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Set(value);
     }
 
-    public List<string> Refs
-    {
-        get
-        {
-            var service = Locator.Current.GetService<IRemoteBackupService>();
-            return service?.Refs();
-        }
-    }
+    public List<string> Refs => _backupService?.Refs() ?? new List<string>();
 
-
-    public string GitCommitterName
+    public string? GitCommitterName
     {
         get => _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Set(value);
     }
 
-    public string GitCommitterEmail
+    public string? GitCommitterEmail
     {
         get => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Set(value);
     }
-
-    public ICommand ConnectCommand { get; set; }
-    public ICommand MigrateCommand { get; set; }
-    public ICommand BackupCommand { get; set; }
-    public ICommand ResaveCommand { get; set; }
-    public ICommand BrowseTaskStoragePathCommand { get; set; }
-    public ICommand CloneCommand { get; set; }
-    public ICommand PullCommand { get; set; }
-    public ICommand PushCommand { get; set; }
 }

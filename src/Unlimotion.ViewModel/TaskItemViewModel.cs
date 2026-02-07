@@ -13,7 +13,6 @@ using DynamicData;
 using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
-using Splat;
 using Unlimotion.Domain;
 
 namespace Unlimotion.ViewModel
@@ -21,6 +20,10 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class TaskItemViewModel : DisposableList
     {
+        // Static dependencies - set once during app initialization
+        public static INotificationManagerWrapper? NotificationManagerInstance { get; set; }
+        public static MainWindowViewModel? MainWindowInstance { get; set; }
+
         public TaskItemViewModel(TaskItem model, ITaskStorage taskStorage)
         {
             Model = model;
@@ -150,7 +153,7 @@ namespace Unlimotion.ViewModel
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
-                var notificationManager = Locator.Current.GetService<INotificationManagerWrapper>();
+                var notificationManager = NotificationManagerInstance;
 
                 switch (IsCompleted)
                 {
@@ -433,7 +436,7 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<TaskItemViewModel> BlockedByTasks => _blockedByTasks;
 
-        public MainWindowViewModel MainWindow => Locator.Current.GetService<MainWindowViewModel>();
+        public MainWindowViewModel? MainWindow => MainWindowInstance;
 
         public ObservableCollection<string> Contains { get; set; } = new();
         public ObservableCollection<string> Parents { get; set; } = new();

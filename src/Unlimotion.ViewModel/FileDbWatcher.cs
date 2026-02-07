@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.Caching;
 using System.Threading.Tasks;
-using Splat;
 using Unlimotion.TaskTree;
 
 namespace Unlimotion.ViewModel
@@ -19,8 +18,8 @@ namespace Unlimotion.ViewModel
         public event EventHandler<DbUpdatedEventArgs> OnUpdated;
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
-        private readonly DebugLogger logger = new();
         private bool isEnable;
+        private readonly INotificationManagerWrapper? _notificationManager;
 
         public void SetEnable(bool enable)
         {
@@ -36,8 +35,9 @@ namespace Unlimotion.ViewModel
             });
         }
 
-        public FileDbWatcher(string path)
+        public FileDbWatcher(string path, INotificationManagerWrapper? notificationManager = null)
         {
+            _notificationManager = notificationManager;
             if (string.IsNullOrEmpty(path))
             {
                 return;
@@ -67,15 +67,14 @@ namespace Unlimotion.ViewModel
             lock (itLock)
             {
                 ignoredTasks.Add(taskId, itLock,  new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(60) });
-                logger.Write($"{DateTimeOffset.Now}: ${taskId} is added to ignored", LogLevel.Debug);
+                Debug.WriteLine($"{DateTimeOffset.Now}: ${taskId} is added to ignored");
             }
         }
 
         private void OnError(object sender, ErrorEventArgs e)
         {
             Debug.WriteLine("Error in FileWatcher");
-            var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-            notify?.ErrorToast(e.GetException().Message);
+            _notificationManager?.ErrorToast(e.GetException().Message);
 
         }
 
@@ -134,7 +133,7 @@ namespace Unlimotion.ViewModel
                     });
                     break;
             }
-            logger.Write($"{DateTimeOffset.Now}: {e.FullPath} {e.ChangeType}.", LogLevel.Debug);
+            Debug.WriteLine($"{DateTimeOffset.Now}: {e.FullPath} {e.ChangeType}.");
         }
         
         private CacheItemPolicy GetCachePolicy(Action handler)

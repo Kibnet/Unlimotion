@@ -3,7 +3,6 @@ using DynamicData.Binding;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -21,18 +20,26 @@ namespace Unlimotion.ViewModel
         private DisposableList connectionDisposableList = new DisposableListRealization();
 
         public ITaskStorage? taskRepository;
-        public MainWindowViewModel()
+        private readonly Func<ITaskStorage?>? _getTaskStorage;
+
+        public MainWindowViewModel(
+            IAppNameDefinitionService? appNameService,
+            INotificationManagerWrapper managerWrapper,
+            IConfiguration configuration,
+            Func<ITaskStorage?>? getTaskStorage = null,
+            SettingsViewModel? settings = null,
+            GraphViewModel? graph = null)
         {
-            Title = Locator.Current.GetService<IAppNameDefinitionService>()?.GetAppName() ?? "";
-            Locator.CurrentMutable.RegisterConstant(this);
+            Title = appNameService?.GetAppName() ?? "";
             connectionDisposableList.AddToDispose(this);
-            ManagerWrapper = Locator.Current.GetService<INotificationManagerWrapper>()!;
-            _configuration = Locator.Current.GetService<IConfiguration>()!;
-            Settings = new SettingsViewModel(_configuration);
-            Graph = new GraphViewModel();
+            ManagerWrapper = managerWrapper;
+            _configuration = configuration;
+            _getTaskStorage = getTaskStorage;
+            Settings = settings ?? new SettingsViewModel(_configuration);
+            Graph = graph ?? new GraphViewModel();
+            Graph.SetMainWindowViewModel(this);
             Graph.Search = Search;
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
-            Locator.CurrentMutable.RegisterConstant(Settings);
             ShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
@@ -220,17 +227,19 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            var taskStorage = Locator.Current.GetService<ITaskStorage>();
+            var taskStorage = _getTaskStorage?.Invoke();
+
+            if (taskStorage == null)
+            {
+                ManagerWrapper?.ErrorToast("Task storage is not configured");
+                return;
+            }
 
             if (Settings.IsServerMode)
             {
                 taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
                 {
-                    var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-                    if (notify != null)
-                    {
-                        notify.ErrorToast("Ошибка подключения к серверу.");
-                    }
+                    ManagerWrapper?.ErrorToast("Ошибка подключения к серверу.");
                 };
             }
 

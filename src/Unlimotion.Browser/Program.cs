@@ -4,11 +4,13 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Browser;
+using Avalonia.Notification;
 using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
-using Splat;
 using Unlimotion;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.Views;
 using WritableJsonConfiguration;
 
 internal sealed class Program
@@ -20,7 +22,7 @@ internal sealed class Program
 
     public static AppBuilder BuildAvaloniaApp()
     {
-        TaskStorages.DefaultStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tasks");
+        TaskStorageFactory.DefaultStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tasks");
 
         var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Settings.json");
         if (!File.Exists(settingsPath))
@@ -29,13 +31,24 @@ internal sealed class Program
             stream.Write(@"{}");
             stream.Close();
         }
+        
+        // Create configuration
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(settingsPath);
-        Locator.CurrentMutable.RegisterConstant(configuration, typeof(IConfiguration));
-        Locator.CurrentMutable.RegisterConstant(new Dialogs(), typeof(IDialogs));
-
+        
+        // Create mapper
         var mapper = AppModelMapping.ConfigureMapping();
-        Locator.CurrentMutable.Register<IMapper>(() => mapper);
 
+        // Create dialogs
+        var dialogs = new Dialogs();
+
+        // Create notification services
+        var notificationMessageManager = new NotificationMessageManager();
+        var notificationManager = new NotificationManagerWrapper(notificationMessageManager);
+
+        // Create storage factory
+        var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManager);
+
+        // Get storage settings
         var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
         if (taskStorageSettings == null)
         {
@@ -43,10 +56,21 @@ internal sealed class Program
             configuration.Set("TaskStorage", taskStorageSettings);
         }
         var isServerMode = taskStorageSettings.IsServerMode;
-        TaskStorages.RegisterStorage(isServerMode, configuration);
+        
+        // Create storage
+        if (isServerMode)
+        {
+            storageFactory.CreateServerStorage(taskStorageSettings.URL);
+        }
+        else
+        {
+            storageFactory.CreateFileStorage(taskStorageSettings.Path);
+        }
 
-        var notificationManager = new NotificationManagerWrapper();
-        Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationManager);
+        // Set up static dependencies
+        TaskItemViewModel.NotificationManagerInstance = notificationManager;
+        MainControl.DialogsInstance = dialogs;
+
         return AppBuilder.Configure<App>();
     }
 }

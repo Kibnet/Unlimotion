@@ -1,16 +1,20 @@
 ﻿using System.Collections.ObjectModel;
 using PropertyChanged;
-using Splat;
 
 namespace Unlimotion.ViewModel;
 
 [AddINotifyPropertyChangedInterface]
 public class GraphViewModel
 {
-    MainWindowViewModel mwm;
+    private MainWindowViewModel? _mainWindowViewModel;
+
     public GraphViewModel()
     {
-        mwm = Locator.Current.GetService<MainWindowViewModel>();
+    }
+
+    public void SetMainWindowViewModel(MainWindowViewModel mainWindowViewModel)
+    {
+        _mainWindowViewModel = mainWindowViewModel;
     }
 
     public ReadOnlyObservableCollection<TaskWrapperViewModel> Tasks { get; set; }
@@ -23,10 +27,10 @@ public class GraphViewModel
 
     public bool OnlyUnlocked { get; set; }
     
-    public bool? ShowWanted { get=> mwm.ShowWanted; set=> mwm.ShowWanted = value; }
+    public bool? ShowWanted { get=> _mainWindowViewModel?.ShowWanted; set { if (_mainWindowViewModel != null) _mainWindowViewModel.ShowWanted = value; } }
 
-    public bool ShowCompleted { get=> mwm.ShowCompleted; set=> mwm.ShowCompleted=value; }
+    public bool ShowCompleted { get=> _mainWindowViewModel?.ShowCompleted ?? false; set { if (_mainWindowViewModel != null) _mainWindowViewModel.ShowCompleted = value; } }
 
-    public bool ShowArchived { get => mwm.ShowArchived; set => mwm.ShowArchived = value; }
+    public bool ShowArchived { get => _mainWindowViewModel?.ShowArchived ?? false; set { if (_mainWindowViewModel != null) _mainWindowViewModel.ShowArchived = value; } }
     public SearchDefinition Search { get; set; }
 }

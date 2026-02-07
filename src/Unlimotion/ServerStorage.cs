@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using SignalR.EasyUse.Client;
-using Splat;
 using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
@@ -45,13 +44,13 @@ public class ServerStorage : IStorage
     private IConfiguration? configuration;
     private IMapper? mapper;
 
-    public ServerStorage(string url)
+    public ServerStorage(string url, IConfiguration configuration)
     {
         Url = url;
         serviceClient = new JsonServiceClient(Url);
         ServicePointManager.ServerCertificateValidationCallback +=
             (sender, cert, chain, sslPolicyErrors) => true;
-        configuration = Locator.Current.GetService<IConfiguration>();
+        this.configuration = configuration;
 
         try
         {

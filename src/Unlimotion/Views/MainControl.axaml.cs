@@ -6,7 +6,6 @@ using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
 using ReactiveUI;
-using Splat;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 
@@ -14,6 +13,9 @@ namespace Unlimotion.Views
 {
     public partial class MainControl : UserControl
     {
+        // Static dependencies - set once during app initialization
+        public static IDialogs? DialogsInstance { get; set; }
+
         public MainControl()
         {
             InitializeComponent();
@@ -30,7 +32,9 @@ namespace Unlimotion.Views
                 {
                     if (vm.CurrentTaskItem == null)
                         return;
-                    var dialogs = Locator.Current.GetService<IDialogs>();
+                    var dialogs = DialogsInstance;
+                    if (dialogs == null) return;
+                    
                     var path = await dialogs.ShowOpenFolderDialogAsync("Task Storage Path");
 
                     if (!string.IsNullOrWhiteSpace(path))
@@ -53,10 +57,13 @@ namespace Unlimotion.Views
                             }
                         }
 
-                        var currentTaskStorage = Locator.Current.GetService<IStorage>();
-                        foreach (var id in set)
+                        var currentTaskStorage = vm.taskRepository?.TaskTreeManager.Storage;
+                        if (currentTaskStorage != null)
                         {
-                            await currentTaskStorage.Remove(id);
+                            foreach (var id in set)
+                            {
+                                await currentTaskStorage.Remove(id);
+                            }
                         }
                     }
                 });

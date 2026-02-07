@@ -3,13 +3,14 @@ using DynamicData;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using ServiceStack;
-using Splat;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using Unlimotion;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Timer = System.Timers.Timer;
 
@@ -33,6 +34,9 @@ namespace Unlimotion.TelegramBot
         private static IConfigurationRoot config;
         private static HashSet<long> AllowedUsers = new HashSet<long>();
 
+        // Static dependency - set during initialization
+        public static ITaskStorage? TaskStorageInstance { get; set; }
+
         public static async Task StartAsync(IConfigurationRoot configurationRoot)
         {
             config = configurationRoot;
@@ -41,7 +45,12 @@ namespace Unlimotion.TelegramBot
             string repoPath = config.Get<GitSettings>("Git").RepositoryPath;
 
             _client = new TelegramBotClient(token);
-            _taskService = new TaskService(repoPath);
+            
+            // Create task storage for the bot
+            var fileStorage = new FileStorage(repoPath);
+            var taskTreeManager = new TaskTreeManager(fileStorage);
+            var unifiedStorage = new UnifiedTaskStorage(taskTreeManager);
+            _taskService = new TaskService(unifiedStorage);
             _gitService = new GitService(config);
 
             _gitService.CloneOrUpdateRepo();
@@ -209,7 +218,12 @@ namespace Unlimotion.TelegramBot
                     Title = title,
                     Description = "",
                 };
-                var taskStorage = Locator.Current.GetService<ITaskStorage>();
+                var taskStorage = TaskStorageInstance;
+                if (taskStorage == null)
+                {
+                    await _client.SendTextMessageAsync(message.Chat.Id, "Хранилище задач не инициализировано.");
+                    return true;
+                }
                 var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
                 await newTaskViewModel.SaveItemCommand.Execute();
 
@@ -235,7 +249,12 @@ namespace Unlimotion.TelegramBot
                     Title = title,
                     Description = "",
                 };
-                var taskStorage = Locator.Current.GetService<ITaskStorage>();
+                var taskStorage = TaskStorageInstance;
+                if (taskStorage == null)
+                {
+                    await _client.SendTextMessageAsync(message.Chat.Id, "Хранилище задач не инициализировано.");
+                    return true;
+                }
                 var newTaskViewModel = new TaskItemViewModel(newTask, taskStorage);
                 await newTaskViewModel.SaveItemCommand.Execute();
                 if (siblingTask is { ParentsTasks.Count: > 0 })

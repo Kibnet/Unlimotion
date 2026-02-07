@@ -57,7 +57,7 @@ public class MainActivity : AvaloniaMainActivity<App>
         BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
 
         //Задание дефолтного пути для хранения задач
-        TaskStorages.DefaultStoragePath = Path.Combine(dataDir, TasksFolderName);
+        TaskStorageFactory.DefaultStoragePath = Path.Combine(dataDir, TasksFolderName);
 
         //Задание дефолтного пути для хранения настроек
         var configPath = Path.Combine(dataDir, DefaultConfigName);

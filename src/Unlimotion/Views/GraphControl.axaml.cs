@@ -4,10 +4,10 @@ using Avalonia.Threading;
 using AvaloniaGraphControl;
 using DynamicData.Binding;
 using ReactiveUI;
-using Splat;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
@@ -217,8 +217,11 @@ namespace Unlimotion.Views
                     return;
                 }
 
-                var mwm = Locator.Current.GetService<MainWindowViewModel>();
-                mwm.CurrentTaskItem = dc as TaskItemViewModel;
+                var mwm = TaskItemViewModel.MainWindowInstance;
+                if (mwm != null)
+                {
+                    mwm.CurrentTaskItem = dc as TaskItemViewModel;
+                }
 
                 dragData.Set(CustomFormat, dc);
 
@@ -231,7 +234,7 @@ namespace Unlimotion.Views
 
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
-            var mwm = Locator.Current.GetService<MainWindowViewModel>();
+            var mwm = TaskItemViewModel.MainWindowInstance;
             if (mwm != null)
             {
                 mwm.DetailsAreOpen = !mwm.DetailsAreOpen;
@@ -301,7 +304,7 @@ namespace Unlimotion.Views
             }
             catch (Exception ex)
             {
-                LogHost.Default?.Error(ex, "UpdateHighlights failed");
+                Debug.WriteLine($"UpdateHighlights failed: {ex.Message}");
             }
         }
     }

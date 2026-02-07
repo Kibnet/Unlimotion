@@ -1,9 +1,11 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using Microsoft.Extensions.Configuration;
 using ServiceStack;
-using Splat;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using WritableJsonConfiguration;
 
 namespace Unlimotion.Test
 {
@@ -66,12 +68,40 @@ namespace Unlimotion.Test
             var configFile = File.Create(uniqueConfigName);
             configFile.Write(content);
             configFile.Close();
-            App.Init(uniqueConfigName);
 
-            var notificationMessageManagerMock = new NotificationManagerWrapperMock();
-            Locator.CurrentMutable.RegisterConstant<INotificationManagerWrapper>(notificationMessageManagerMock);
-            MainWindowViewModelTest = new MainWindowViewModel();
+            // Create configuration
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(uniqueConfigName);
 
+            // Create mapper
+            var mapper = AppModelMapping.ConfigureMapping();
+
+            // Create mock notification manager
+            var notificationManagerMock = new NotificationManagerWrapperMock();
+
+            // Create storage factory
+            var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManagerMock);
+            TaskStorageFactory.DefaultStoragePath = DefaultTasksFolderPath;
+
+            // Create file storage
+            storageFactory.CreateFileStorage(DefaultTasksFolderPath);
+
+            // Set up static instances
+            TaskItemViewModel.NotificationManagerInstance = notificationManagerMock;
+
+            // Create SettingsViewModel
+            var settingsViewModel = new SettingsViewModel(configuration);
+
+            // Create MainWindowViewModel with constructor injection
+            MainWindowViewModelTest = new MainWindowViewModel(
+                new AppNameDefinitionService(),
+                notificationManagerMock,
+                configuration,
+                () => storageFactory.CurrentStorage,
+                settingsViewModel
+            );
+
+            // Set static MainWindow reference for TaskItemViewModel
+            TaskItemViewModel.MainWindowInstance = MainWindowViewModelTest;
         }
 
         private void CopyTaskFromSnapshotsFolder()

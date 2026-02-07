@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
+using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 
@@ -22,18 +23,26 @@ namespace Unlimotion
         private ConcurrentDictionary<string, TaskItem> tasks;
 
         private IDatabaseWatcher? dbWatcher;
+        public IDatabaseWatcher? Watcher => dbWatcher;
         private CompareLogic compareLogic;
 
         public event EventHandler<TaskStorageUpdateEventArgs> Updating;
         public event Action<Exception?>? OnConnectionError;
 
-        public FileStorage(string path, bool watcher = false)
+        public FileStorage(string path, bool watcher = false, INotificationManagerWrapper? notificationManager = null)
         {
-            Path = path;
+            var normalizedPath = string.IsNullOrWhiteSpace(path) ? TaskStorageFactory.DefaultStoragePath : path;
+            if (string.IsNullOrWhiteSpace(normalizedPath))
+            {
+                normalizedPath = "Tasks";
+            }
+
+            Path = normalizedPath;
+            Directory.CreateDirectory(Path);
             tasks = new();
             if (watcher)
             {
-                dbWatcher = new FileDbWatcher(path);
+                dbWatcher = new FileDbWatcher(Path, notificationManager);
                 dbWatcher.OnUpdated += (sender, args) => OnUpdating(new TaskStorageUpdateEventArgs()
                 {
                     Id = args.Id,

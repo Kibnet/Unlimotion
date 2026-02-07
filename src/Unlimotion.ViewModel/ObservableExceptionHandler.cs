@@ -1,21 +1,16 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using Splat;
-
-//using ILogger = Serilog.ILogger;
 
 namespace Unlimotion.ViewModel;
 
 public class ObservableExceptionHandler : IObserver<Exception>
 {
-    private ILogger _logger;
-    private INotificationManagerWrapper _notifyManager;
+    private readonly INotificationManagerWrapper? _notifyManager;
     
-    public ObservableExceptionHandler()
+    public ObservableExceptionHandler(INotificationManagerWrapper? notifyManager)
     {
-        _logger = Locator.Current.GetService<ILogger>();
-        _notifyManager = Locator.Current.GetService<INotificationManagerWrapper>();
+        _notifyManager = notifyManager;
     }
     
     // При перехвате Exception попадает сюда
@@ -24,10 +19,8 @@ public class ObservableExceptionHandler : IObserver<Exception>
         if (Debugger.IsAttached) Debugger.Break();
         
         var stackFrame = new StackTrace(value, true).GetFrame(0);
-     
-        //_logger.Error($"ObservableExceptionHandler: Type: {value.GetType()}, Message: {value.Message}, StackTrace: {value.StackTrace}");
        
-        _notifyManager.ErrorToast($"Exception: {value.Message} " +
+        _notifyManager?.ErrorToast($"Exception: {value.Message} " +
                                    $"File: {(stackFrame != null ? Path.GetFileName(stackFrame.GetFileName()) : "Unknown")}. " +
                                    $"RowNumber: {(stackFrame != null ? stackFrame.GetFileLineNumber() : 0)}");
         
@@ -37,8 +30,6 @@ public class ObservableExceptionHandler : IObserver<Exception>
     public void OnError(Exception error)
     {
         if (Debugger.IsAttached) Debugger.Break();
-
-        //_logger.Error($"ObservableExceptionHandler: Type: {error.GetType()}, Message: {error.Message}, StackTrace: {error.StackTrace}");
 
         // RxApp.MainThreadScheduler.Schedule(() => { throw error; });
     }

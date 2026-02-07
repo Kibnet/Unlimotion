@@ -6,7 +6,6 @@ using System.Linq;
 using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
-using Splat;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 
@@ -17,6 +16,17 @@ public class BackupViaGitService : IRemoteBackupService
     private const string TasksFolderName = "Tasks";
     private static readonly object LockObject = new();
     public static Func<string, string> GetAbsolutePath;
+
+    private readonly IConfiguration _configuration;
+    private readonly INotificationManagerWrapper? _notificationManager;
+    private readonly ITaskStorageFactory? _storageFactory;
+
+    public BackupViaGitService(IConfiguration configuration, INotificationManagerWrapper? notificationManager = null, ITaskStorageFactory? storageFactory = null)
+    {
+        _configuration = configuration;
+        _notificationManager = notificationManager;
+        _storageFactory = storageFactory;
+    }
 
     public List<string> Refs()
     {
@@ -130,7 +140,7 @@ public class BackupViaGitService : IRemoteBackupService
 
             using var repo = new Repository(path);
 
-            var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
+            var dbwatcher = _storageFactory?.CurrentWatcher;
 
             ShowUiMessage("Start Git Push");
             try
@@ -207,8 +217,7 @@ public class BackupViaGitService : IRemoteBackupService
 
             ShowUiMessage("Start Git Pull");
 
-            var dbwatcher = Locator.Current.GetService<IDatabaseWatcher>();
-            var taskstorage = Locator.Current.GetService<ITaskStorage>();
+            var dbwatcher = _storageFactory?.CurrentWatcher;
             try
             {
                 dbwatcher?.SetEnable(false);
@@ -240,8 +249,7 @@ public class BackupViaGitService : IRemoteBackupService
                     {
                         var results = repo.Merge(remoteBranch, signature, new MergeOptions());
 
-                        var configuration = Locator.Current.GetService<IConfiguration>();
-                        var mainSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
+                        var mainSettings = _configuration.Get<TaskStorageSettings>("TaskStorage");
                         // Выводим список измененных файлов
                         foreach (var change in changes)
                         {
@@ -326,27 +334,24 @@ public class BackupViaGitService : IRemoteBackupService
             Debug.WriteLine("Can't push to the remote repository, because username or password is empty");
     }
 
-    private static (GitSettings git, string? repositoryPath) GetSettings()
+    private (GitSettings git, string? repositoryPath) GetSettings()
     {
-        var configuration = Locator.Current.GetService<IConfiguration>();
-        return (configuration.Get<GitSettings>("Git"),
-            configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
+        return (_configuration.Get<GitSettings>("Git"),
+            _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
     }
 
-    private static void ShowUiError(string message)
+    private void ShowUiError(string message)
     {
         Debug.WriteLine($"Git error: {message} at {DateTime.Now}");
-        var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-        notify?.ErrorToast(message);
+        _notificationManager?.ErrorToast(message);
     }
 
-    private static void ShowUiMessage(string message)
+    private void ShowUiMessage(string message)
     {
         var settings = GetSettings();
         if (settings.git.ShowStatusToasts)
         {
-            var notify = Locator.Current.GetService<INotificationManagerWrapper>();
-            notify?.SuccessToast(message);
+            _notificationManager?.SuccessToast(message);
         }
     }
 }

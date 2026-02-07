@@ -23,13 +23,12 @@ namespace Unlimotion.Desktop
         {
             //Задание дефолтного пути для хранения задач
 #if DEBUG
-            TaskStorages.DefaultStoragePath = TasksFolderName;
+            TaskStorageFactory.DefaultStoragePath = TasksFolderName;
 #else
-            TaskStorages.DefaultStoragePath = Path.GetDirectoryName(DefaultConfigName).CombineWith(TasksFolderName);
+            TaskStorageFactory.DefaultStoragePath = Path.GetDirectoryName(DefaultConfigName).CombineWith(TasksFolderName);
 #endif
 
             //Получение адреса конфига
-
             var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
 
 #if DEBUG
@@ -57,23 +56,25 @@ namespace Unlimotion.Desktop
             BackupViaGitService.GetAbsolutePath = path => new DirectoryInfo(path).FullName;
 
             App.Init(configPath);
-
-            BuildAvaloniaApp()
-            .StartWithClassicDesktopLifetime(args);
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
 
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
-            => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
-            .WithCustomFont()
-#if DEBUG
-                .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
-#else
-                .LogToTrace()
-#endif
+        {
+            var builder = AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .WithCustomFont();
 
+#if DEBUG
+            return builder
+                .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
                 .UseReactiveUI();
+#else
+            return builder
+                .LogToTrace()
+                .UseReactiveUI();
+#endif
+        }
     }
 }
-

@@ -13,9 +13,9 @@ namespace Unlimotion.TelegramBot
     {
         ITaskStorage storage;
 
-        public TaskService(string repoPath)
+        public TaskService(ITaskStorage taskStorage)
         {
-            storage = TaskStorages.RegisterFileTaskStorage(repoPath);
+            storage = taskStorage;
             storage.Init();
         }
 
