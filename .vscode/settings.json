@@ -1,0 +1,6 @@
+{
+  "killerBug.autoStart": true,
+  "dotnet.useLegacyDotnetResolution": true,
+  "csharp.experimental.debug.hotReload": false,
+  "csharp.debug.hotReloadOnSave": false
+}
