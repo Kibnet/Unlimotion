@@ -668,16 +668,40 @@ public class TaskTreeManager
         {
             try
             {
-                // Calculate availability for the given task
-                result.AddOrUpdateRange(
-                    await CalculateAvailabilityForTask(task));
+                // Recalculate transitively:
+                // if task X changes, it may affect:
+                // - parents of X
+                // - tasks blocked by X
+                // and then their dependents recursively.
+                var queue = new Queue<TaskItem>();
+                var processedIds = new HashSet<string>();
+                queue.Enqueue(task);
 
-                // Collect and recalculate affected tasks
-                var affectedTasks = await GetAffectedTasks(task);
-                foreach (var affectedTask in affectedTasks)
+                while (queue.Count > 0)
                 {
+                    var current = queue.Dequeue();
+                    if (current == null || string.IsNullOrEmpty(current.Id))
+                        continue;
+                    if (!processedIds.Add(current.Id))
+                        continue;
+
+                    // Preserve reference identity for the entry task (some callers/tests
+                    // expect this exact instance to be returned with updated fields).
+                    var currentFromStorage = ReferenceEquals(current, task)
+                        ? current
+                        : await Storage.Load(current.Id) ?? current;
+
                     result.AddOrUpdateRange(
-                        await CalculateAvailabilityForTask(affectedTask));
+                        await CalculateAvailabilityForTask(currentFromStorage));
+
+                    var affectedTasks = await GetAffectedTasks(currentFromStorage);
+                    foreach (var affectedTask in affectedTasks)
+                    {
+                        if (affectedTask != null && !processedIds.Contains(affectedTask.Id))
+                        {
+                            queue.Enqueue(affectedTask);
+                        }
+                    }
                 }
 
                 return true;

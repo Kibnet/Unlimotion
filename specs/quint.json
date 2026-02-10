@@ -1,0 +1,12 @@
+{
+    "spec": "unlimotionFileMode",
+    "fileName": "unlimotion_file_mode.qnt",
+    "features": {
+        "modelChecking": {
+            "invariants": [
+                "invariantsHold"
+            ],
+            "maxDepth": 10
+        }
+    }
+}

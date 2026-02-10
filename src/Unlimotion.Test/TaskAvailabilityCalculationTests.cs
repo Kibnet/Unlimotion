@@ -560,5 +560,57 @@ namespace Unlimotion.Test
             Assert.False(updatedParentAfterBlock.IsCanBeCompleted);
             Assert.Null(updatedParentAfterBlock.UnlockedDateTime);
         }
+
+        [Fact]
+        public async Task CompletionImpact_ShouldPropagateTransitivelyThroughBlockingChain()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            // c blocks b, and b blocks a.
+            // If c is incomplete, both b and a must end up unavailable.
+            var taskC = new TaskItem
+            {
+                Id = "c",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "b" }
+            };
+            var taskB = new TaskItem
+            {
+                Id = "b",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                BlockedByTasks = new List<string> { "c" },
+                BlocksTasks = new List<string> { "a" }
+            };
+            var taskA = new TaskItem
+            {
+                Id = "a",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                BlockedByTasks = new List<string> { "b" }
+            };
+
+            await storage.Save(taskC);
+            await storage.Save(taskB);
+            await storage.Save(taskA);
+
+            // Act
+            await manager.CalculateAndUpdateAvailability(taskC);
+
+            // Assert
+            var updatedB = await storage.Load("b");
+            var updatedA = await storage.Load("a");
+
+            Assert.NotNull(updatedB);
+            Assert.NotNull(updatedA);
+            Assert.False(updatedB.IsCanBeCompleted);
+            Assert.Null(updatedB.UnlockedDateTime);
+            Assert.False(updatedA.IsCanBeCompleted);
+            Assert.Null(updatedA.UnlockedDateTime);
+        }
     }
 }
