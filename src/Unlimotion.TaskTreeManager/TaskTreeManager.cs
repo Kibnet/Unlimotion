@@ -526,6 +526,13 @@ public class TaskTreeManager
     {
         var result = new Dictionary<string, TaskItem>();
 
+        // Prevent invalid self-relations such as task -> itself.
+        if (parent == null || child == null || string.IsNullOrWhiteSpace(parent.Id) ||
+            string.IsNullOrWhiteSpace(child.Id) || parent.Id == child.Id)
+        {
+            return result.Values.ToList();
+        }
+
         await IsCompletedAsync(async () =>
         {
             try
@@ -562,6 +569,13 @@ public class TaskTreeManager
         TaskItem blockingTask)
     {
         var result = new Dictionary<string, TaskItem>();
+
+        // Prevent invalid self-relations such as task blocked by itself.
+        if (taskToBlock == null || blockingTask == null || string.IsNullOrWhiteSpace(taskToBlock.Id) ||
+            string.IsNullOrWhiteSpace(blockingTask.Id) || taskToBlock.Id == blockingTask.Id)
+        {
+            return result.Values.ToList();
+        }
 
         await IsCompletedAsync(async () =>
         {
@@ -867,6 +881,51 @@ public class TaskTreeManager
                         clone.Version = 1;
                         await Storage.Save(clone);
                         result.AddOrUpdate(clone);
+
+                        // Restore reverse links for cloned relations, so model stays symmetric:
+                        // child.ParentTasks, blocker.BlocksTasks, blocked.BlockedByTasks.
+                        if (clone.ContainsTasks?.Count > 0)
+                        {
+                            foreach (var containsId in clone.ContainsTasks)
+                            {
+                                var child = await Storage.Load(containsId);
+                                if (child != null)
+                                {
+                                    result.AddOrUpdateRange(
+                                        await CreateParentChildRelation(clone, child));
+                                }
+                            }
+                        }
+
+                        if (clone.BlockedByTasks?.Count > 0)
+                        {
+                            foreach (var blockerId in clone.BlockedByTasks)
+                            {
+                                var blocker = await Storage.Load(blockerId);
+                                if (blocker != null)
+                                {
+                                    result.AddOrUpdateRange(
+                                        await CreateBlockingBlockedByRelation(clone, blocker));
+                                }
+                            }
+                        }
+
+                        if (clone.BlocksTasks?.Count > 0)
+                        {
+                            foreach (var blockedId in clone.BlocksTasks)
+                            {
+                                var blocked = await Storage.Load(blockedId);
+                                if (blocked != null)
+                                {
+                                    result.AddOrUpdateRange(
+                                        await CreateBlockingBlockedByRelation(blocked, clone));
+                                }
+                            }
+                        }
+
+                        // Always normalize clone availability even if it has no relations.
+                        result.AddOrUpdateRange(
+                            await CalculateAndUpdateAvailability(clone));
                     }
                 }
 

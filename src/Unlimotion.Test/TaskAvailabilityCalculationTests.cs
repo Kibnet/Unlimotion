@@ -612,5 +612,59 @@ namespace Unlimotion.Test
             Assert.False(updatedA.IsCanBeCompleted);
             Assert.Null(updatedA.UnlockedDateTime);
         }
+
+        [Fact]
+        public async Task AddNewParentToTask_WithSameTask_ShouldNotCreateSelfParentRelation()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+            var task = new TaskItem
+            {
+                Id = "self-parent",
+                IsCompleted = false,
+                ContainsTasks = new List<string>(),
+                ParentTasks = new List<string>()
+            };
+            await storage.Save(task);
+
+            // Act
+            var results = await manager.AddNewParentToTask(task, task);
+            var stored = await storage.Load(task.Id);
+
+            // Assert
+            Assert.NotNull(stored);
+            Assert.Empty(stored.ContainsTasks);
+            Assert.Empty(stored.ParentTasks);
+            Assert.DoesNotContain(stored.Id, stored.ContainsTasks);
+            Assert.DoesNotContain(stored.Id, stored.ParentTasks);
+        }
+
+        [Fact]
+        public async Task BlockTask_WithSameTask_ShouldNotCreateSelfBlockingRelation()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+            var task = new TaskItem
+            {
+                Id = "self-block",
+                IsCompleted = false,
+                BlocksTasks = new List<string>(),
+                BlockedByTasks = new List<string>()
+            };
+            await storage.Save(task);
+
+            // Act
+            var results = await manager.BlockTask(task, task);
+            var stored = await storage.Load(task.Id);
+
+            // Assert
+            Assert.NotNull(stored);
+            Assert.Empty(stored.BlocksTasks);
+            Assert.Empty(stored.BlockedByTasks);
+            Assert.DoesNotContain(stored.Id, stored.BlocksTasks);
+            Assert.DoesNotContain(stored.Id, stored.BlockedByTasks);
+        }
     }
 }

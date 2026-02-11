@@ -5,7 +5,7 @@
             "name": ".NET Core Launch (Unlimotion Desktop)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "build-desktop",
             "program": "${workspaceFolder}/src/Unlimotion.Desktop/bin/Debug/net9.0/Unlimotion.Desktop.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/Unlimotion.Desktop",
@@ -19,7 +19,7 @@
             "name": ".NET Core Launch (console)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "build-test",
             // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/src/Unlimotion.Test/bin/Debug/net9.0/Unlimotion.Test.dll",
             "args": [],
