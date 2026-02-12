@@ -542,6 +542,7 @@ module unlimotion_desktop_integration {
 /// Desktop-интеграционная модель:
 /// - FileStorage + watcher/ignored ids;
 /// - UnifiedTaskStorage init/migrations/event processing;
+/// - TaskRelationsIndex rebuild после Init и мутаций задач;
 /// - FileTaskMigrator (нормализация связей + версия);
 /// - BackupViaGitService push/pull + ForceUpdateFile;
 /// - TaskStorageFactory switch/create (file/server, watcher wiring);
@@ -567,8 +568,15 @@ type DbUpdate = {
   kind: UpdateKind
 }
 
+type TaskMap = str -> Task
+type RelationMap = str -> Set[str]
+
 type SystemState = {
-  tasks: str -> Task,
+  tasks: TaskMap,
+  relationsContains: RelationMap,
+  relationsParents: RelationMap,
+  relationsBlocks: RelationMap,
+  relationsBlockedBy: RelationMap,
   storageMode: StorageMode,
   storageConnected: bool,
   watcherPresent: bool,
@@ -610,6 +618,10 @@ pure val RefIds: Set[str] = Set("a", "b", "c", "d", "e", "f", "ghost")
 
 pure val initialState: SystemState = {
   tasks: Map(),
+  relationsContains: Map(),
+  relationsParents: Map(),
+  relationsBlocks: Map(),
+  relationsBlockedBy: Map(),
   storageMode: FileMode,
   storageConnected: true,
   watcherPresent: true,
@@ -634,32 +646,58 @@ pure val initialState: SystemState = {
 
 var system: SystemState
 
-pure def hasTaskInState(s, id) = s.tasks.keys().contains(id)
+pure def hasTaskInState(s: SystemState, id: str): bool = s.tasks.keys().contains(id)
 
-pure def putTaskInState(s, id, t) =
-  s.with("tasks", s.tasks.put(id, t))
+pure def relationContainsMapFromTasks(m: TaskMap): RelationMap =
+  m.keys().fold(Map(), (acc, id) =>
+    acc.put(id, m.get(id).children.intersect(m.keys())))
 
-pure def setTaskInState(s, id, t) =
-  s.with("tasks", s.tasks.set(id, t))
+pure def relationParentsMapFromTasks(m: TaskMap): RelationMap =
+  m.keys().fold(Map(), (acc, id) =>
+    acc.put(id, m.get(id).parents.intersect(m.keys())))
 
-pure def ensureTaskInState(s, id) =
+pure def relationBlocksMapFromTasks(m: TaskMap): RelationMap =
+  m.keys().fold(Map(), (acc, id) =>
+    acc.put(id, m.get(id).blocks.intersect(m.keys())))
+
+pure def relationBlockedByMapFromTasks(m: TaskMap): RelationMap =
+  m.keys().fold(Map(), (acc, id) =>
+    acc.put(id, m.get(id).blockedBy.intersect(m.keys())))
+
+pure def rebuildRelationsInState(s: SystemState): SystemState =
+  s
+    .with("relationsContains", relationContainsMapFromTasks(s.tasks))
+    .with("relationsParents", relationParentsMapFromTasks(s.tasks))
+    .with("relationsBlocks", relationBlocksMapFromTasks(s.tasks))
+    .with("relationsBlockedBy", relationBlockedByMapFromTasks(s.tasks))
+
+pure def withTasksAndRebuiltRelations(s: SystemState, m: TaskMap): SystemState =
+  rebuildRelationsInState(s.with("tasks", m))
+
+pure def putTaskInState(s: SystemState, id: str, t: Task): SystemState =
+  withTasksAndRebuiltRelations(s, s.tasks.put(id, t))
+
+pure def setTaskInState(s: SystemState, id: str, t: Task): SystemState =
+  withTasksAndRebuiltRelations(s, s.tasks.set(id, t))
+
+pure def ensureTaskInState(s: SystemState, id: str): SystemState =
   if (hasTaskInState(s, id)) {
     s
   } else {
     putTaskInState(s, id, mkRawTask)
   }
 
-pure def ensureSavedTaskInState(s, id) =
+pure def ensureSavedTaskInState(s: SystemState, id: str): SystemState =
   if (hasTaskInState(s, id)) {
     s
   } else {
     putTaskInState(s, id, mkSavedTask)
   }
 
-pure def removeTaskMap(m, id) =
+pure def removeTaskMap(m: TaskMap, id: str): TaskMap =
   m.keys().exclude(Set(id)).fold(Map(), (acc, k) => acc.put(k, m.get(k)))
 
-pure def dropTaskAndReferencesMap(m, id) = {
+pure def dropTaskAndReferencesMap(m: TaskMap, id: str): TaskMap = {
   val remaining = m.keys().exclude(Set(id))
   remaining.fold(Map(), (acc, k) =>
     acc.put(
@@ -672,12 +710,12 @@ pure def dropTaskAndReferencesMap(m, id) = {
     ))
 }
 
-pure def savedUpdate(id) = { id: id, kind: Saved }
-pure def removedUpdate(id) = { id: id, kind: Removed }
+pure def savedUpdate(id: str): DbUpdate = { id: id, kind: Saved }
+pure def removedUpdate(id: str): DbUpdate = { id: id, kind: Removed }
 
 // ---------- Migration helpers (FileTaskMigrator + availability migration) ----------
 
-pure def cleanForwardMap(m) =
+pure def cleanForwardMap(m: TaskMap): TaskMap =
   m.keys().fold(m, (acc, id) =>
     acc.set(
       id,
@@ -686,7 +724,7 @@ pure def cleanForwardMap(m) =
         .with("blocks", acc.get(id).blocks.intersect(m.keys()).exclude(Set(id)))
     ))
 
-pure def rebuildParentsFromChildrenMap(m) = {
+pure def rebuildParentsFromChildrenMap(m: TaskMap): TaskMap = {
   val cleared = m.keys().fold(m, (acc, id) => acc.set(id, acc.get(id).with("parents", Set())))
   m.keys().fold(cleared, (acc, p) =>
     acc.get(p).children.fold(acc, (a, c) =>
@@ -694,7 +732,7 @@ pure def rebuildParentsFromChildrenMap(m) = {
   )
 }
 
-pure def rebuildBlockedByFromBlocksMap(m) = {
+pure def rebuildBlockedByFromBlocksMap(m: TaskMap): TaskMap = {
   val cleared = m.keys().fold(m, (acc, id) => acc.set(id, acc.get(id).with("blockedBy", Set())))
   m.keys().fold(cleared, (acc, b) =>
     acc.get(b).blocks.fold(acc, (a, d) =>
@@ -702,43 +740,63 @@ pure def rebuildBlockedByFromBlocksMap(m) = {
   )
 }
 
-pure def ensureVersionMap(m) =
+pure def ensureVersionMap(m: TaskMap): TaskMap =
   m.keys().fold(m, (acc, id) =>
     acc.set(id, acc.get(id).with("version", if (acc.get(id).version < 1) { 1 } else { acc.get(id).version })))
 
-pure def isDoneInMap(m, id) =
+pure def isDoneInMap(m: TaskMap, id: str): bool =
   m.get(id).state == Completed or m.get(id).state == Archived
 
-pure def expectedCanBeCompletedInMap(m, id) =
+pure def expectedCanBeCompletedInMap(m: TaskMap, id: str): bool =
   m.get(id).children.forall(c => not(m.keys().contains(c)) or isDoneInMap(m, c)) and
   m.get(id).blockedBy.forall(b => not(m.keys().contains(b)) or isDoneInMap(m, b))
 
-pure def applyAvailability(t, allowed) =
+pure def applyAvailability(t: Task, allowed: bool): Task =
   if (allowed) {
-    t.with("canBeCompleted", true).with("unlocked", true)
+    {
+      state: t.state,
+      canBeCompleted: true,
+      unlocked: true,
+      version: t.version,
+      children: t.children,
+      parents: t.parents,
+      blocks: t.blocks,
+      blockedBy: t.blockedBy
+    }
   } else {
-    t.with("canBeCompleted", false).with("unlocked", false)
+    {
+      state: t.state,
+      canBeCompleted: false,
+      unlocked: false,
+      version: t.version,
+      children: t.children,
+      parents: t.parents,
+      blocks: t.blocks,
+      blockedBy: t.blockedBy
+    }
   }
 
-pure def recalcAllMap(m) =
+pure def recalcAllMap(m: TaskMap): TaskMap =
   m.keys().fold(m, (acc, id) =>
     acc.set(id, applyAvailability(acc.get(id), expectedCanBeCompletedInMap(acc, id))))
 
-pure def normalizeReverseLinksMap(m) =
+pure def normalizeReverseLinksMap(m: TaskMap): TaskMap =
   rebuildBlockedByFromBlocksMap(rebuildParentsFromChildrenMap(cleanForwardMap(m)))
 
-pure def reverseAndVersionTasksMap(m) =
+pure def reverseAndVersionTasksMap(m: TaskMap): TaskMap =
   ensureVersionMap(normalizeReverseLinksMap(m))
 
-pure def migrateReverseAndVersionInState(s) =
-  s
-    .with("tasks", reverseAndVersionTasksMap(s.tasks))
-    .with("migrationVersion", 1)
+pure def migrateReverseAndVersionInState(s: SystemState): SystemState =
+  rebuildRelationsInState(
+    s
+      .with("tasks", reverseAndVersionTasksMap(s.tasks))
+      .with("migrationVersion", 1))
 
-pure def migrateAvailabilityInState(s) =
-  s
-    .with("tasks", recalcAllMap(s.tasks))
-    .with("availabilityReportCreated", true)
+pure def migrateAvailabilityInState(s: SystemState): SystemState =
+  rebuildRelationsInState(
+    s
+      .with("tasks", recalcAllMap(s.tasks))
+      .with("availabilityReportCreated", true))
 
 // ---------- Actions ----------
 
@@ -864,8 +922,7 @@ action fileRemove(id) = {
     system.storageMode == FileMode,
     system.storageConnected,
     hasTaskInState(system, id),
-    system' = system
-      .with("tasks", recalced)
+    system' = withTasksAndRebuiltRelations(system, recalced)
       .with("unifiedCache", system.unifiedCache.exclude(Set(id)))
       .with("ignoredIds", system.ignoredIds.union(Set(id)))
   }
@@ -939,8 +996,7 @@ action backupPullRemoved(id) = {
   all {
     system.storageMode == FileMode,
     system.watcherPresent,
-    system' = system
-      .with("tasks", t1)
+    system' = withTasksAndRebuiltRelations(system, t1)
       .with("watcherEnabled", true)
       .with("backupPullCount", system.backupPullCount + 1)
       .with("pendingUpdates", system.pendingUpdates.union(Set(removedUpdate(id))))
@@ -970,13 +1026,15 @@ action unifiedInit = {
       afterReverse
     }
 
+  val afterRelations = rebuildRelationsInState(afterAvailability)
+
   all {
-    afterAvailability.storageConnected,
-    not(afterAvailability.unifiedInitialized),
-    system' = afterAvailability
+    afterRelations.storageConnected,
+    not(afterRelations.unifiedInitialized),
+    system' = afterRelations
       .with("unifiedInitialized", true)
       .with("subscriptionsActive", true)
-      .with("unifiedCache", afterAvailability.tasks.keys())
+      .with("unifiedCache", afterRelations.tasks.keys())
   }
 }
 
@@ -1009,8 +1067,7 @@ action processRemovedUpdate(id) = {
   all {
     system.subscriptionsActive,
     system.pendingUpdates.contains(ev),
-    system' = system
-      .with("tasks", recalced)
+    system' = withTasksAndRebuiltRelations(system, recalced)
       .with("pendingUpdates", system.pendingUpdates.exclude(Set(ev)))
       .with("unifiedCache", system.unifiedCache.exclude(Set(id)))
   }
@@ -1115,6 +1172,24 @@ val versionsInitializedAfterInit =
   (not(stableFileStateAfterInit)) or
   system.tasks.keys().forall(i => system.tasks.get(i).version >= 1)
 
+val relationContainsMatchesTasks =
+  system.relationsContains == relationContainsMapFromTasks(system.tasks)
+
+val relationParentsMatchesTasks =
+  system.relationsParents == relationParentsMapFromTasks(system.tasks)
+
+val relationBlocksMatchesTasks =
+  system.relationsBlocks == relationBlocksMapFromTasks(system.tasks)
+
+val relationBlockedByMatchesTasks =
+  system.relationsBlockedBy == relationBlockedByMapFromTasks(system.tasks)
+
+val relationSnapshotConsistent =
+  relationContainsMatchesTasks and
+  relationParentsMatchesTasks and
+  relationBlocksMatchesTasks and
+  relationBlockedByMatchesTasks
+
 val cacheSubsetOfTasks =
   system.unifiedCache.forall(i =>
     system.tasks.keys().contains(i) or system.pendingUpdates.contains(removedUpdate(i)))
@@ -1148,6 +1223,7 @@ val desktopCoreInvariants =
   blockingReverseSymmetryAfterInit and
   availabilityMatchesRulesAfterInit and
   versionsInitializedAfterInit and
+  relationSnapshotConsistent and
   cacheSubsetOfTasks and
   subscriptionsRequireInit and
   watcherConsistentWithStorageMode and
