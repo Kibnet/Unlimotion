@@ -13,6 +13,8 @@ namespace Unlimotion;
 
 public class FileTaskMigrator
 {
+    public readonly record struct MigrationResult(bool SkippedByReport, bool AnyChanges, int UpdatedItems);
+
     private class LinkInfo
     {
         public string Id;
@@ -39,19 +41,14 @@ public class FileTaskMigrator
 
     public static readonly int Version = 1;
 
-    public static async Task Migrate(IAsyncEnumerable<TaskItem> tasks,
+    public static async Task<MigrationResult> Migrate(IAsyncEnumerable<TaskItem> tasks,
         Dictionary<string, (string getChild, string getParent)> links, Func<TaskItem, Task<TaskItem>> saveFunc,
-        string storagePath, bool dryRun = false, CancellationToken ct = default)
+        string storagePath, bool dryRun = false, CancellationToken ct = default, bool forceRecheck = false)
     {
         var reportPath = Path.Combine(storagePath, "migration.report");
-        if (File.Exists(reportPath))
+        if (!forceRecheck && IsCurrentReport(reportPath))
         {
-            //Открываем файл отчёта и получаем версию
-            var reportJson = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(reportPath));
-            var version = reportJson?.Version ?? 0;
-            var valueVersion = ((JValue)version).Value;
-            if (valueVersion is long _version && version >= Version)
-                return;
+            return new MigrationResult(SkippedByReport: true, AnyChanges: false, UpdatedItems: 0);
         }
 
         var files = tasks;
@@ -67,7 +64,7 @@ public class FileTaskMigrator
         var issues = new ConcurrentBag<string>();
 
         // ---------- ПАСС 1: Индексация ----------
-        await Parallel.ForEachAsync(files, ct, async (taskItem, token) =>
+        await Parallel.ForEachAsync(files, ct, (taskItem, token) =>
         {
             var fileId = taskItem.Id;
             idToPath[fileId] = taskItem;
@@ -100,6 +97,7 @@ public class FileTaskMigrator
                     issues.Add($"ReadError: {linkInfo.Id} {fileId} -> {ex.Message}");
                 }
             }
+            return ValueTask.CompletedTask;
         });
 
         foreach (var linkInfo in linkDict)
@@ -131,11 +129,15 @@ public class FileTaskMigrator
 
         // ---------- ПАСС 3: Обновление ----------
         var updates = new List<(string id, int oldParents, int newParents, int oldChild, int newChild)>();
+        var updatedItems = 0;
+        var anyRelationChanges = false;
 
         foreach (var (id, taskItem) in idToPath.OrderBy(k => k.Key))
         {
             try
             {
+                var changed = false;
+                var relationChanged = false;
                 foreach (var linkInfo in linkDict)
                 {
                     // Нормализация Child (оставляем только валидные и существующие — по политике)
@@ -143,25 +145,46 @@ public class FileTaskMigrator
                     var childList = childSet.Where(g => idToPath.ContainsKey(g)).Distinct().OrderBy(g => g)
                         .ToList();
 
+                    var existingChild = (linkInfo.GetChild(taskItem))?.ToList() ?? new List<string>();
+                    if (!existingChild.SequenceEqual(childList))
+                    {
+                        changed = true;
+                        relationChanged = true;
+                        linkInfo.SetChild(taskItem, childList.Select(g => g.ToString()).ToList());
+                    }
 
-                    var oldChildCount = (linkInfo.GetChild(taskItem))?.Count ?? 0;
-                    linkInfo.SetChild(taskItem, childList.Select(g => g.ToString()).ToList());
+                    var oldChildCount = existingChild.Count;
 
                     // Установка Parents
                     var pset = linkInfo.Parents[id];
                     var plist = pset.OrderBy(g => g).ToList();
 
-                    var oldParentsCount = (linkInfo.GetParent(taskItem))?.Count ?? 0;
-                    linkInfo.SetParent(taskItem, plist.Select(g => g.ToString()).ToList());
+                    var existingParents = (linkInfo.GetParent(taskItem))?.ToList() ?? new List<string>();
+                    if (!existingParents.SequenceEqual(plist))
+                    {
+                        changed = true;
+                        relationChanged = true;
+                        linkInfo.SetParent(taskItem, plist.Select(g => g.ToString()).ToList());
+                    }
+                    var oldParentsCount = existingParents.Count;
 
                     updates.Add((id, oldParentsCount, plist.Count, oldChildCount, childList.Count));
                 }
 
+                if (taskItem.Version < Version)
+                {
+                    taskItem.Version = Version;
+                    changed = true;
+                }
+
+                if (!changed) continue;
+
+                if (relationChanged)
+                    anyRelationChanges = true;
+                updatedItems++;
+
                 if (dryRun) continue;
 
-                var tmp = taskItem + ".__new";
-                var bak = taskItem + ".__bak";
-                taskItem.Version = 1;
                 await saveFunc(taskItem);
             }
             catch (Exception ex)
@@ -176,8 +199,9 @@ public class FileTaskMigrator
             Version = 1,
             Timestamp = DateTimeOffset.Now,
             DryRun = dryRun,
+            ForceRecheck = forceRecheck,
             FilesTotal = idToPath.Count,
-            Updated = updates.Count,
+            Updated = updatedItems,
             Summary = new
             {
                 ParentsAdded = updates.Sum(u => Math.Max(0, u.newParents - u.oldParents)),
@@ -192,5 +216,24 @@ public class FileTaskMigrator
         Console.WriteLine(dryRun
             ? $"[DRY-RUN] Готово. Отчёт: {reportPath}"
             : $"Готово. Отчёт: {reportPath}");
+
+        return new MigrationResult(SkippedByReport: false, AnyChanges: anyRelationChanges, UpdatedItems: updatedItems);
+    }
+
+    private static bool IsCurrentReport(string reportPath)
+    {
+        if (!File.Exists(reportPath))
+            return false;
+
+        try
+        {
+            var reportJson = JObject.Parse(File.ReadAllText(reportPath));
+            var reportVersion = reportJson["Version"]?.Value<int>() ?? 0;
+            return reportVersion >= Version;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

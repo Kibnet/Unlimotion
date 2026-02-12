@@ -225,4 +225,92 @@ public class MigrateTests
         var issues = ReadIssues(GetReportPath());
         Assert.Contains(issues, s => s.StartsWith("WriteError: ")); // конкретный текст включает ToString объекта
     }
+
+    [Fact]
+    public async Task FileTaskMigrator_Migrate_ShouldSkip_WhenReportIsCurrent_AndForceDisabled()
+    {
+        var a = new TaskItem
+        {
+            Id = "A",
+            Version = 0,
+            ContainsTasks = new List<string> { "B" }
+        };
+        var b = new TaskItem
+        {
+            Id = "B",
+            Version = 0,
+            ParentTasks = new List<string>()
+        };
+
+        var reportPath = Path.Combine(_tempDir, "migration.report");
+        await File.WriteAllTextAsync(reportPath, "{\"Version\":1}");
+
+        var saveCount = 0;
+        Task<TaskItem> Save(TaskItem t)
+        {
+            Interlocked.Increment(ref saveCount);
+            return Task.FromResult(t);
+        }
+
+        var result = await FileTaskMigrator.Migrate(
+            AsAsync(a, b),
+            props,
+            Save,
+            _tempDir,
+            dryRun: false,
+            ct: CancellationToken.None,
+            forceRecheck: false);
+
+        Assert.True(result.SkippedByReport);
+        Assert.False(result.AnyChanges);
+        Assert.Equal(0, result.UpdatedItems);
+        Assert.Equal(0, saveCount);
+        Assert.Empty(b.ParentTasks);
+        Assert.Equal(0, a.Version);
+        Assert.Equal(0, b.Version);
+    }
+
+    [Fact]
+    public async Task FileTaskMigrator_Migrate_ShouldRecheck_WhenForceEnabled_EvenIfReportExists()
+    {
+        var a = new TaskItem
+        {
+            Id = "A",
+            Version = 0,
+            ContainsTasks = new List<string> { "B" }
+        };
+        var b = new TaskItem
+        {
+            Id = "B",
+            Version = 0,
+            ParentTasks = new List<string>()
+        };
+
+        var reportPath = Path.Combine(_tempDir, "migration.report");
+        await File.WriteAllTextAsync(reportPath, "{\"Version\":1}");
+
+        var saveCount = 0;
+        Task<TaskItem> Save(TaskItem t)
+        {
+            Interlocked.Increment(ref saveCount);
+            return Task.FromResult(t);
+        }
+
+        var result = await FileTaskMigrator.Migrate(
+            AsAsync(a, b),
+            props,
+            Save,
+            _tempDir,
+            dryRun: false,
+            ct: CancellationToken.None,
+            forceRecheck: true);
+
+        Assert.False(result.SkippedByReport);
+        Assert.True(result.AnyChanges);
+        Assert.True(result.UpdatedItems >= 2);
+        Assert.Contains("A", b.ParentTasks);
+        Assert.Equal(1, a.Version);
+        Assert.Equal(1, b.Version);
+        Assert.True(saveCount >= 2);
+    }
 }

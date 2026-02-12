@@ -34,8 +34,8 @@ public class UnifiedTaskStorage : ITaskStorage
         // Perform migrations only for file storage
         if (isFileStorage)
         {
-            await MigrateReverseLinks(TaskTreeManager);
-            await MigrateIsCanBeCompleted(TaskTreeManager);
+            var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceRecheck: true);
+            await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
         }
 
         await foreach (var task in TaskTreeManager.Storage.GetAll())
@@ -195,24 +195,27 @@ public class UnifiedTaskStorage : ITaskStorage
         taskItemList.ForEach(UpdateCache);
     }
 
-    private static async Task MigrateReverseLinks(TaskTreeManager taskTreeManager)
+    private static async Task<FileTaskMigrator.MigrationResult> MigrateReverseLinks(TaskTreeManager taskTreeManager,
+        bool forceRecheck = false)
     {
         if (taskTreeManager.Storage is FileStorage fileStorage)
-            await FileTaskMigrator.Migrate(taskTreeManager.Storage.GetAll(),
+            return await FileTaskMigrator.Migrate(taskTreeManager.Storage.GetAll(),
                 new Dictionary<string, (string getChild, string getParent)>
                 {
                     { "Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks)) },
                     { "Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks)) }
-                }, taskTreeManager.Storage.Save, fileStorage.Path);
+                }, taskTreeManager.Storage.Save, fileStorage.Path, forceRecheck: forceRecheck);
+
+        return new FileTaskMigrator.MigrationResult(SkippedByReport: false, AnyChanges: false, UpdatedItems: 0);
     }
 
-    private static async Task MigrateIsCanBeCompleted(TaskTreeManager taskTreeManager)
+    private static async Task MigrateIsCanBeCompleted(TaskTreeManager taskTreeManager, bool forceRecheck = false)
     {
         if (taskTreeManager.Storage is not FileStorage fileStorage) return;
         var migrationReportPath = Path.Combine(fileStorage.Path, "availability.migration.report");
 
         // Check if migration has already been run
-        if (File.Exists(migrationReportPath)) return;
+        if (!forceRecheck && File.Exists(migrationReportPath)) return;
 
         var tasksToMigrate = new List<TaskItem>();
         await foreach (var task in taskTreeManager.Storage.GetAll()) tasksToMigrate.Add(task);
@@ -225,6 +228,7 @@ public class UnifiedTaskStorage : ITaskStorage
         {
             Version = 1,
             Timestamp = DateTimeOffset.UtcNow,
+            ForceRecheck = forceRecheck,
             TasksProcessed = tasksToMigrate.Count,
             Message = "IsCanBeCompleted field calculated for all tasks"
         };

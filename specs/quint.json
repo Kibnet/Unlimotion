@@ -1,21 +1,26 @@
 {
-    "spec": "unlimotionFileMode",
+    "spec": "unlimotionDesktopIntegration",
     "fileName": "unlimotion_file_mode.qnt",
     "features": {
         "modelChecking": {
             "invariants": [
-                "noSelfRelations",
-                "parentChildSymmetry",
-                "parentChildReverseSymmetry",
-                "blockingSymmetry",
-                "blockingReverseSymmetry",
-                "availabilityMatchesRules",
-                "completedDatesConsistency",
-                "archivedDatesConsistency",
-                "versionInitialized",
-                "coreInvariants"
+                "noSelfRelationsAfterInit",
+                "parentChildSymmetryAfterInit",
+                "parentChildReverseSymmetryAfterInit",
+                "blockingSymmetryAfterInit",
+                "blockingReverseSymmetryAfterInit",
+                "availabilityMatchesRulesAfterInit",
+                "versionsInitializedAfterInit",
+                "cacheSubsetOfTasks",
+                "subscriptionsRequireInit",
+                "watcherConsistentWithStorageMode",
+                "watcherEnabledWhenPresent",
+                "pendingUpdatesRequireWatcher",
+                "migrationsAppliedWhenUnifiedInitialized",
+                "jobFactoryContract",
+                "desktopCoreInvariants"
             ],
-            "maxDepth": 12
+            "maxDepth": 20
         }
     }
 }

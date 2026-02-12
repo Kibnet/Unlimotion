@@ -536,3 +536,626 @@ val coreInvariants =
 run exploration = init.then(12.reps(_ => step))
 
 }
+
+module unlimotion_desktop_integration {
+
+/// Desktop-интеграционная модель:
+/// - FileStorage + watcher/ignored ids;
+/// - UnifiedTaskStorage init/migrations/event processing;
+/// - FileTaskMigrator (нормализация связей + версия);
+/// - BackupViaGitService push/pull + ForceUpdateFile;
+/// - TaskStorageFactory switch/create (file/server, watcher wiring);
+/// - DependencyInjectionJobFactory contract (supported/unsupported jobs).
+
+type TaskState = Active | Completed | Archived
+type StorageMode = FileMode | ServerMode
+type UpdateKind = Saved | Removed
+
+type Task = {
+  state: TaskState,
+  canBeCompleted: bool,
+  unlocked: bool,
+  version: int,
+  children: Set[str],
+  parents: Set[str],
+  blocks: Set[str],
+  blockedBy: Set[str]
+}
+
+type DbUpdate = {
+  id: str,
+  kind: UpdateKind
+}
+
+type SystemState = {
+  tasks: str -> Task,
+  storageMode: StorageMode,
+  storageConnected: bool,
+  watcherPresent: bool,
+  watcherEnabled: bool,
+  ignoredIds: Set[str],
+  pendingUpdates: Set[DbUpdate],
+  unifiedInitialized: bool,
+  subscriptionsActive: bool,
+  unifiedCache: Set[str],
+  migrationVersion: int,
+  availabilityReportCreated: bool,
+  disconnectCount: int,
+  backupPullCount: int,
+  backupPushCount: int,
+  jobPullRequests: int,
+  jobPushRequests: int,
+  jobUnknownRequests: int,
+  jobPullCreated: int,
+  jobPushCreated: int,
+  jobUnknownThrows: int
+}
+
+pure val mkRawTask: Task = {
+  state: Active,
+  canBeCompleted: true,
+  unlocked: false,
+  version: 0,
+  children: Set(),
+  parents: Set(),
+  blocks: Set(),
+  blockedBy: Set()
+}
+
+pure val mkSavedTask: Task =
+  mkRawTask.with("version", 1)
+
+pure val RuntimeIds: Set[str] = Set("a", "b", "c", "d", "e", "f")
+pure val RefIds: Set[str] = Set("a", "b", "c", "d", "e", "f", "ghost")
+
+pure val initialState: SystemState = {
+  tasks: Map(),
+  storageMode: FileMode,
+  storageConnected: true,
+  watcherPresent: true,
+  watcherEnabled: true,
+  ignoredIds: Set(),
+  pendingUpdates: Set(),
+  unifiedInitialized: false,
+  subscriptionsActive: false,
+  unifiedCache: Set(),
+  migrationVersion: 0,
+  availabilityReportCreated: false,
+  disconnectCount: 0,
+  backupPullCount: 0,
+  backupPushCount: 0,
+  jobPullRequests: 0,
+  jobPushRequests: 0,
+  jobUnknownRequests: 0,
+  jobPullCreated: 0,
+  jobPushCreated: 0,
+  jobUnknownThrows: 0
+}
+
+var system: SystemState
+
+pure def hasTaskInState(s, id) = s.tasks.keys().contains(id)
+
+pure def putTaskInState(s, id, t) =
+  s.with("tasks", s.tasks.put(id, t))
+
+pure def setTaskInState(s, id, t) =
+  s.with("tasks", s.tasks.set(id, t))
+
+pure def ensureTaskInState(s, id) =
+  if (hasTaskInState(s, id)) {
+    s
+  } else {
+    putTaskInState(s, id, mkRawTask)
+  }
+
+pure def ensureSavedTaskInState(s, id) =
+  if (hasTaskInState(s, id)) {
+    s
+  } else {
+    putTaskInState(s, id, mkSavedTask)
+  }
+
+pure def removeTaskMap(m, id) =
+  m.keys().exclude(Set(id)).fold(Map(), (acc, k) => acc.put(k, m.get(k)))
+
+pure def dropTaskAndReferencesMap(m, id) = {
+  val remaining = m.keys().exclude(Set(id))
+  remaining.fold(Map(), (acc, k) =>
+    acc.put(
+      k,
+      m.get(k)
+        .with("children", m.get(k).children.exclude(Set(id)))
+        .with("parents", m.get(k).parents.exclude(Set(id)))
+        .with("blocks", m.get(k).blocks.exclude(Set(id)))
+        .with("blockedBy", m.get(k).blockedBy.exclude(Set(id)))
+    ))
+}
+
+pure def savedUpdate(id) = { id: id, kind: Saved }
+pure def removedUpdate(id) = { id: id, kind: Removed }
+
+// ---------- Migration helpers (FileTaskMigrator + availability migration) ----------
+
+pure def cleanForwardMap(m) =
+  m.keys().fold(m, (acc, id) =>
+    acc.set(
+      id,
+      acc.get(id)
+        .with("children", acc.get(id).children.intersect(m.keys()).exclude(Set(id)))
+        .with("blocks", acc.get(id).blocks.intersect(m.keys()).exclude(Set(id)))
+    ))
+
+pure def rebuildParentsFromChildrenMap(m) = {
+  val cleared = m.keys().fold(m, (acc, id) => acc.set(id, acc.get(id).with("parents", Set())))
+  m.keys().fold(cleared, (acc, p) =>
+    acc.get(p).children.fold(acc, (a, c) =>
+      a.set(c, a.get(c).with("parents", a.get(c).parents.union(Set(p)))))
+  )
+}
+
+pure def rebuildBlockedByFromBlocksMap(m) = {
+  val cleared = m.keys().fold(m, (acc, id) => acc.set(id, acc.get(id).with("blockedBy", Set())))
+  m.keys().fold(cleared, (acc, b) =>
+    acc.get(b).blocks.fold(acc, (a, d) =>
+      a.set(d, a.get(d).with("blockedBy", a.get(d).blockedBy.union(Set(b)))))
+  )
+}
+
+pure def ensureVersionMap(m) =
+  m.keys().fold(m, (acc, id) =>
+    acc.set(id, acc.get(id).with("version", if (acc.get(id).version < 1) { 1 } else { acc.get(id).version })))
+
+pure def isDoneInMap(m, id) =
+  m.get(id).state == Completed or m.get(id).state == Archived
+
+pure def expectedCanBeCompletedInMap(m, id) =
+  m.get(id).children.forall(c => not(m.keys().contains(c)) or isDoneInMap(m, c)) and
+  m.get(id).blockedBy.forall(b => not(m.keys().contains(b)) or isDoneInMap(m, b))
+
+pure def applyAvailability(t, allowed) =
+  if (allowed) {
+    t.with("canBeCompleted", true).with("unlocked", true)
+  } else {
+    t.with("canBeCompleted", false).with("unlocked", false)
+  }
+
+pure def recalcAllMap(m) =
+  m.keys().fold(m, (acc, id) =>
+    acc.set(id, applyAvailability(acc.get(id), expectedCanBeCompletedInMap(acc, id))))
+
+pure def normalizeReverseLinksMap(m) =
+  rebuildBlockedByFromBlocksMap(rebuildParentsFromChildrenMap(cleanForwardMap(m)))
+
+pure def reverseAndVersionTasksMap(m) =
+  ensureVersionMap(normalizeReverseLinksMap(m))
+
+pure def migrateReverseAndVersionInState(s) =
+  s
+    .with("tasks", reverseAndVersionTasksMap(s.tasks))
+    .with("migrationVersion", 1)
+
+pure def migrateAvailabilityInState(s) =
+  s
+    .with("tasks", recalcAllMap(s.tasks))
+    .with("availabilityReportCreated", true)
+
+// ---------- Actions ----------
+
+action init = system' = initialState
+
+// TaskStorageFactory create/switch
+action createFileStorage = {
+  val s1 =
+    system
+      .with("storageMode", FileMode)
+      .with("storageConnected", true)
+      .with("watcherPresent", true)
+      .with("watcherEnabled", true)
+      .with("ignoredIds", Set())
+      .with("pendingUpdates", Set())
+      .with("unifiedInitialized", false)
+      .with("subscriptionsActive", false)
+      .with("unifiedCache", Set())
+  system' = s1
+}
+
+action createServerStorage = {
+  val s1 =
+    system
+      .with("storageMode", ServerMode)
+      .with("storageConnected", true)
+      .with("watcherPresent", false)
+      .with("watcherEnabled", false)
+      .with("ignoredIds", Set())
+      .with("pendingUpdates", Set())
+      .with("unifiedInitialized", false)
+      .with("subscriptionsActive", false)
+      .with("unifiedCache", Set())
+  system' = s1
+}
+
+action switchToFileStorage = {
+  val base = system.with("disconnectCount", system.disconnectCount + 1)
+  val s1 =
+    base
+      .with("storageMode", FileMode)
+      .with("storageConnected", true)
+      .with("watcherPresent", true)
+      .with("watcherEnabled", true)
+      .with("ignoredIds", Set())
+      .with("pendingUpdates", Set())
+      .with("unifiedInitialized", false)
+      .with("subscriptionsActive", false)
+      .with("unifiedCache", Set())
+  system' = s1
+}
+
+action switchToServerStorage = {
+  val base = system.with("disconnectCount", system.disconnectCount + 1)
+  val s1 =
+    base
+      .with("storageMode", ServerMode)
+      .with("storageConnected", true)
+      .with("watcherPresent", false)
+      .with("watcherEnabled", false)
+      .with("ignoredIds", Set())
+      .with("pendingUpdates", Set())
+      .with("unifiedInitialized", false)
+      .with("subscriptionsActive", false)
+      .with("unifiedCache", Set())
+  system' = s1
+}
+
+// Raw file-level edits (pre-migration / external)
+action rawUpsert(id) = all {
+  not(system.unifiedInitialized),
+  system' = ensureTaskInState(system, id)
+}
+
+action rawSetState(id, st) = all {
+  not(system.unifiedInitialized),
+  hasTaskInState(system, id),
+  system' = setTaskInState(system, id, system.tasks.get(id).with("state", st))
+}
+
+action rawAddChildRef(parent, childRef) = all {
+  not(system.unifiedInitialized),
+  hasTaskInState(system, parent),
+  system' = setTaskInState(system, parent,
+    system.tasks.get(parent).with("children", system.tasks.get(parent).children.union(Set(childRef))))
+}
+
+action rawAddBlockRef(blocking, blockedRef) = all {
+  not(system.unifiedInitialized),
+  hasTaskInState(system, blocking),
+  system' = setTaskInState(system, blocking,
+    system.tasks.get(blocking).with("blocks", system.tasks.get(blocking).blocks.union(Set(blockedRef))))
+}
+
+action rawAddParentRef(child, parentRef) = all {
+  not(system.unifiedInitialized),
+  hasTaskInState(system, child),
+  system' = setTaskInState(system, child,
+    system.tasks.get(child).with("parents", system.tasks.get(child).parents.union(Set(parentRef))))
+}
+
+action rawAddBlockedByRef(blocked, blockerRef) = all {
+  not(system.unifiedInitialized),
+  hasTaskInState(system, blocked),
+  system' = setTaskInState(system, blocked,
+    system.tasks.get(blocked).with("blockedBy", system.tasks.get(blocked).blockedBy.union(Set(blockerRef))))
+}
+
+// FileStorage behavior (save/remove + ignored ids)
+action fileSave(id) = {
+  val s1 = ensureSavedTaskInState(system, id)
+  all {
+    system.storageMode == FileMode,
+    system.storageConnected,
+    system' = s1.with("ignoredIds", s1.ignoredIds.union(Set(id)))
+  }
+}
+
+action fileRemove(id) = {
+  val t1 = dropTaskAndReferencesMap(system.tasks, id)
+  val recalced = recalcAllMap(t1)
+  all {
+    system.storageMode == FileMode,
+    system.storageConnected,
+    hasTaskInState(system, id),
+    system' = system
+      .with("tasks", recalced)
+      .with("unifiedCache", system.unifiedCache.exclude(Set(id)))
+      .with("ignoredIds", system.ignoredIds.union(Set(id)))
+  }
+}
+
+action expireIgnored(id) = all {
+  system.ignoredIds.contains(id),
+  system' = system.with("ignoredIds", system.ignoredIds.exclude(Set(id)))
+}
+
+// FileDbWatcher behavior
+action watcherExternalSaved(id) = all {
+  system.storageMode == FileMode,
+  system.watcherPresent,
+  system.watcherEnabled,
+  not(system.ignoredIds.contains(id)),
+  system' = system.with("pendingUpdates", system.pendingUpdates.union(Set(savedUpdate(id))))
+}
+
+action watcherExternalRemoved(id) = all {
+  system.storageMode == FileMode,
+  system.watcherPresent,
+  system.watcherEnabled,
+  not(system.ignoredIds.contains(id)),
+  system' = system.with("pendingUpdates", system.pendingUpdates.union(Set(removedUpdate(id))))
+}
+
+// .lock file gets normalized to target id in FileDbWatcher
+action watcherExternalLockSaved(id) = all {
+  system.storageMode == FileMode,
+  system.watcherPresent,
+  system.watcherEnabled,
+  not(system.ignoredIds.contains(id)),
+  system' = system.with("pendingUpdates", system.pendingUpdates.union(Set(savedUpdate(id))))
+}
+
+// BackupViaGitService uses ForceUpdateFile after merge, bypassing watcher enabled flag
+action watcherForceSaved(id) = all {
+  system.watcherPresent,
+  system' = system.with("pendingUpdates", system.pendingUpdates.union(Set(savedUpdate(id))))
+}
+
+action watcherForceRemoved(id) = all {
+  system.watcherPresent,
+  system' = system.with("pendingUpdates", system.pendingUpdates.union(Set(removedUpdate(id))))
+}
+
+// BackupViaGitService push/pull wrappers
+action backupPush = all {
+  system.storageMode == FileMode,
+  system.watcherPresent,
+  system' = system
+    .with("watcherEnabled", true)
+    .with("backupPushCount", system.backupPushCount + 1)
+}
+
+action backupPullSaved(id) = {
+  val s1 = ensureSavedTaskInState(system, id)
+  all {
+    system.storageMode == FileMode,
+    system.watcherPresent,
+    system' = s1
+      .with("watcherEnabled", true)
+      .with("backupPullCount", s1.backupPullCount + 1)
+      .with("pendingUpdates", s1.pendingUpdates.union(Set(savedUpdate(id))))
+  }
+}
+
+action backupPullRemoved(id) = {
+  val t1 = dropTaskAndReferencesMap(system.tasks, id)
+  all {
+    system.storageMode == FileMode,
+    system.watcherPresent,
+    system' = system
+      .with("tasks", t1)
+      .with("watcherEnabled", true)
+      .with("backupPullCount", system.backupPullCount + 1)
+      .with("pendingUpdates", system.pendingUpdates.union(Set(removedUpdate(id))))
+  }
+}
+
+// UnifiedTaskStorage init and event handling
+action unifiedInit = {
+  val reverseWillChange =
+    system.storageMode == FileMode and reverseAndVersionTasksMap(system.tasks) != system.tasks
+
+  val afterReverse =
+    if (system.storageMode == FileMode) {
+      migrateReverseAndVersionInState(system)
+    } else {
+      system
+    }
+
+  val shouldRunAvailability =
+    afterReverse.storageMode == FileMode and
+    ((not(afterReverse.availabilityReportCreated)) or reverseWillChange)
+
+  val afterAvailability =
+    if (shouldRunAvailability) {
+      migrateAvailabilityInState(afterReverse)
+    } else {
+      afterReverse
+    }
+
+  all {
+    afterAvailability.storageConnected,
+    not(afterAvailability.unifiedInitialized),
+    system' = afterAvailability
+      .with("unifiedInitialized", true)
+      .with("subscriptionsActive", true)
+      .with("unifiedCache", afterAvailability.tasks.keys())
+  }
+}
+
+action processSavedUpdate(id) = {
+  val ev = savedUpdate(id)
+  val cache1 =
+    if (system.tasks.keys().contains(id)) {
+      system.unifiedCache.union(Set(id))
+    } else {
+      system.unifiedCache
+    }
+  all {
+    system.subscriptionsActive,
+    system.pendingUpdates.contains(ev),
+    system' = system
+      .with("pendingUpdates", system.pendingUpdates.exclude(Set(ev)))
+      .with("unifiedCache", cache1)
+  }
+}
+
+action processRemovedUpdate(id) = {
+  val ev = removedUpdate(id)
+  val dropped = dropTaskAndReferencesMap(system.tasks, id)
+  val recalced =
+    if (system.storageMode == FileMode) {
+      recalcAllMap(dropped)
+    } else {
+      dropped
+    }
+  all {
+    system.subscriptionsActive,
+    system.pendingUpdates.contains(ev),
+    system' = system
+      .with("tasks", recalced)
+      .with("pendingUpdates", system.pendingUpdates.exclude(Set(ev)))
+      .with("unifiedCache", system.unifiedCache.exclude(Set(id)))
+  }
+}
+
+// DependencyInjectionJobFactory contract
+action requestGitPullJob =
+  system' = system
+    .with("jobPullRequests", system.jobPullRequests + 1)
+    .with("jobPullCreated", system.jobPullCreated + 1)
+
+action requestGitPushJob =
+  system' = system
+    .with("jobPushRequests", system.jobPushRequests + 1)
+    .with("jobPushCreated", system.jobPushCreated + 1)
+
+action requestUnknownJob =
+  system' = system
+    .with("jobUnknownRequests", system.jobUnknownRequests + 1)
+    .with("jobUnknownThrows", system.jobUnknownThrows + 1)
+
+action step = any {
+  { createFileStorage },
+  { createServerStorage },
+  { switchToFileStorage },
+  { switchToServerStorage },
+
+  { unifiedInit },
+
+  { nondet i = oneOf(RuntimeIds) rawUpsert(i) },
+  { nondet i = oneOf(RuntimeIds) nondet st = oneOf(Set(Active, Completed, Archived)) rawSetState(i, st) },
+  { nondet p = oneOf(RuntimeIds) nondet c = oneOf(RefIds) rawAddChildRef(p, c) },
+  { nondet b = oneOf(RuntimeIds) nondet d = oneOf(RefIds) rawAddBlockRef(b, d) },
+  { nondet c = oneOf(RuntimeIds) nondet p = oneOf(RefIds) rawAddParentRef(c, p) },
+  { nondet d = oneOf(RuntimeIds) nondet b = oneOf(RefIds) rawAddBlockedByRef(d, b) },
+
+  { nondet i = oneOf(RuntimeIds) fileSave(i) },
+  { nondet i = oneOf(RuntimeIds) fileRemove(i) },
+  { nondet i = oneOf(RuntimeIds) expireIgnored(i) },
+
+  { nondet i = oneOf(RuntimeIds) watcherExternalSaved(i) },
+  { nondet i = oneOf(RuntimeIds) watcherExternalRemoved(i) },
+  { nondet i = oneOf(RuntimeIds) watcherExternalLockSaved(i) },
+  { nondet i = oneOf(RuntimeIds) watcherForceSaved(i) },
+  { nondet i = oneOf(RuntimeIds) watcherForceRemoved(i) },
+
+  { backupPush },
+  { nondet i = oneOf(RuntimeIds) backupPullSaved(i) },
+  { nondet i = oneOf(RuntimeIds) backupPullRemoved(i) },
+
+  { nondet i = oneOf(RuntimeIds) processSavedUpdate(i) },
+  { nondet i = oneOf(RuntimeIds) processRemovedUpdate(i) },
+
+  { requestGitPullJob },
+  { requestGitPushJob },
+  { requestUnknownJob }
+}
+
+// ---------- Invariants ----------
+
+val stableFileStateAfterInit =
+  system.unifiedInitialized and system.storageMode == FileMode and system.pendingUpdates == Set()
+
+val noSelfRelationsAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(i =>
+    not(system.tasks.get(i).children.contains(i)) and
+    not(system.tasks.get(i).parents.contains(i)) and
+    not(system.tasks.get(i).blocks.contains(i)) and
+    not(system.tasks.get(i).blockedBy.contains(i)))
+
+val parentChildSymmetryAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(p =>
+    system.tasks.get(p).children.forall(c =>
+      system.tasks.keys().contains(c) and system.tasks.get(c).parents.contains(p)))
+
+val parentChildReverseSymmetryAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(c =>
+    system.tasks.get(c).parents.forall(p =>
+      system.tasks.keys().contains(p) and system.tasks.get(p).children.contains(c)))
+
+val blockingSymmetryAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(b =>
+    system.tasks.get(b).blocks.forall(d =>
+      system.tasks.keys().contains(d) and system.tasks.get(d).blockedBy.contains(b)))
+
+val blockingReverseSymmetryAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(d =>
+    system.tasks.get(d).blockedBy.forall(b =>
+      system.tasks.keys().contains(b) and system.tasks.get(b).blocks.contains(d)))
+
+val availabilityMatchesRulesAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(i =>
+    system.tasks.get(i).canBeCompleted == expectedCanBeCompletedInMap(system.tasks, i))
+
+val versionsInitializedAfterInit =
+  (not(stableFileStateAfterInit)) or
+  system.tasks.keys().forall(i => system.tasks.get(i).version >= 1)
+
+val cacheSubsetOfTasks =
+  system.unifiedCache.forall(i =>
+    system.tasks.keys().contains(i) or system.pendingUpdates.contains(removedUpdate(i)))
+
+val subscriptionsRequireInit =
+  system.subscriptionsActive implies system.unifiedInitialized
+
+val watcherConsistentWithStorageMode =
+  (system.storageMode == FileMode) == system.watcherPresent
+
+val watcherEnabledWhenPresent =
+  (not(system.watcherPresent)) or system.watcherEnabled
+
+val pendingUpdatesRequireWatcher =
+  system.pendingUpdates.forall(_ => system.watcherPresent)
+
+val migrationsAppliedWhenUnifiedInitialized =
+  (system.storageMode == FileMode and system.unifiedInitialized) implies
+  (system.migrationVersion >= 1 and system.availabilityReportCreated)
+
+val jobFactoryContract =
+  system.jobUnknownRequests == system.jobUnknownThrows and
+  system.jobPullRequests == system.jobPullCreated and
+  system.jobPushRequests == system.jobPushCreated
+
+val desktopCoreInvariants =
+  noSelfRelationsAfterInit and
+  parentChildSymmetryAfterInit and
+  parentChildReverseSymmetryAfterInit and
+  blockingSymmetryAfterInit and
+  blockingReverseSymmetryAfterInit and
+  availabilityMatchesRulesAfterInit and
+  versionsInitializedAfterInit and
+  cacheSubsetOfTasks and
+  subscriptionsRequireInit and
+  watcherConsistentWithStorageMode and
+  watcherEnabledWhenPresent and
+  pendingUpdatesRequireWatcher and
+  migrationsAppliedWhenUnifiedInitialized and
+  jobFactoryContract
+
+run desktopExploration = init.then(20.reps(_ => step))
+
+}
