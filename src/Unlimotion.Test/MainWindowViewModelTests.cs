@@ -210,6 +210,53 @@ namespace Unlimotion.Test
         }
 
         /// <summary>
+        /// Regression: цепочка зависимых соседних задач на корневом уровне
+        /// не должна самопроизвольно разблокировать промежуточную/последнюю задачу.
+        /// </summary>
+        [Fact]
+        public async Task CreateBlockedSiblingChain_RootLevel_ShouldStayUnavailable()
+        {
+            mainWindowVM.AllTasksMode = true;
+
+            // 1) Создаём задачу 1 в корне.
+            var task1 = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+            task1.Title = "Task 1";
+            await TestHelpers.WaitThrottleTime();
+
+            // 2) Создаём зависимую задачу 2 на том же уровне от задачи 1.
+            mainWindowVM.CurrentTaskItem = task1;
+            var task2 = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateBlockedSibling, taskRepository);
+            task2.Title = "Task 2";
+            await TestHelpers.WaitThrottleTime();
+
+            // 3) Задача 2 должна быть недоступной.
+            Assert.False(task2.IsCanBeCompleted);
+
+            // 4) Создаём зависимую задачу 3 на том же уровне от задачи 2.
+            mainWindowVM.CurrentTaskItem = task2;
+            var task3 = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateBlockedSibling, taskRepository);
+            task3.Title = "Task 3";
+            await TestHelpers.WaitThrottleTime();
+
+            // 5-6) Ни сразу, ни через время задачи 2 и 3 не должны становиться доступными.
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            var vmTask2 = TestHelpers.GetTask(mainWindowVM, task2.Id);
+            var vmTask3 = TestHelpers.GetTask(mainWindowVM, task3.Id);
+            Assert.False(vmTask2!.IsCanBeCompleted);
+            Assert.False(vmTask3!.IsCanBeCompleted);
+
+            var storedTask2 = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task2.Id);
+            var storedTask3 = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task3.Id);
+            Assert.NotNull(storedTask2);
+            Assert.NotNull(storedTask3);
+            Assert.False(storedTask2!.IsCanBeCompleted);
+            Assert.False(storedTask3!.IsCanBeCompleted);
+            Assert.Contains(task1.Id, storedTask2.BlockedByTasks);
+            Assert.Contains(task2.Id, storedTask3.BlockedByTasks);
+        }
+
+        /// <summary>
         /// Перемещение задачи в другую родительскую задачу
         /// </summary>
         /// <returns></returns>
@@ -922,10 +969,9 @@ namespace Unlimotion.Test
             var clonedTask8ItemAfterTest = GetStorageTaskItem(clonedViewModel.Id);
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
-            //Должны отличаться id, дата создания, кол-во родителей и sortOrder
-            Assert.Equal(4, result.Differences.Count);
+            //Должны отличаться id, дата создания и кол-во родителей
+            Assert.Equal(3, result.Differences.Count);
             Assert.Contains(nameof(TaskItem.Id), result.Differences.Select(d => d.PropertyName));
-            Assert.Contains(nameof(TaskItem.IsCanBeCompleted), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
             Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
             var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));

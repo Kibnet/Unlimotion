@@ -386,6 +386,7 @@ namespace Unlimotion.ViewModel
                     PlannedDuration = PlannedDuration,
                     Importance = Importance,
                     Wanted = Wanted,
+                    IsCanBeCompleted = IsCanBeCompleted,
                     IsCompleted = IsCompleted,
                     Version = Version,
                     BlocksTasks = Blocks.ToList(),
