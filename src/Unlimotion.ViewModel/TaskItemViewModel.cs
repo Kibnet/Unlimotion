@@ -28,6 +28,10 @@ namespace Unlimotion.ViewModel
         {
             Model = model;
             _taskStorage = taskStorage;
+            _containsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_containsTasksSource);
+            _parentsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_parentsTasksSource);
+            _blocksTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_blocksTasksSource);
+            _blockedByTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_blockedByTasksSource);
             Init(taskStorage);
         }
 
@@ -35,10 +39,14 @@ namespace Unlimotion.ViewModel
 
         public ReactiveCommand<Unit, Unit> SaveItemCommand = null!;        
 
-        private ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
-        private ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
-        private ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
-        private ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
+        private readonly ObservableCollectionExtended<TaskItemViewModel> _containsTasksSource = new();
+        private readonly ObservableCollectionExtended<TaskItemViewModel> _parentsTasksSource = new();
+        private readonly ObservableCollectionExtended<TaskItemViewModel> _blocksTasksSource = new();
+        private readonly ObservableCollectionExtended<TaskItemViewModel> _blockedByTasksSource = new();
+        private readonly ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
+        private readonly ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
+        private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
+        private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands commands;
@@ -54,91 +62,9 @@ namespace Unlimotion.ViewModel
                  await taskStorage.Update(this);
             });
 
-            //Subscribe ContainsTasks
-            var containsFilter = Contains.ToObservableChangeSet()
-                .ToCollection()
-                .Select(items =>
-                {
-                    bool Predicate(TaskItemViewModel task) => items.Contains(task.Id);
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            taskStorage.Tasks.Connect()
-                .Filter(containsFilter)
-                .Bind(out _containsTasks)
-                .Subscribe()
-                .AddToDispose(this);            
-
-            //Subscribe ParentsTasks
-            var parentsFilter = Parents.ToObservableChangeSet()
-                .ToCollection()
-                .Select(items =>
-                {
-                    bool Predicate(TaskItemViewModel task) => items.Contains(task.Id);
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            taskStorage.Tasks.Connect()
-                .Filter(parentsFilter)
-                .Bind(out _parentsTasks)
-                .Subscribe()
-                .AddToDispose(this);
-
-            void RecalculateEmoji()
-            {
-                var parents = GetAllParents().ToList();
-
-                if (!parents.Any())
-                {
-                    GetAllEmoji = Emoji;
-                }
-                else
-                {
-                    GetAllEmoji = string.Concat(parents.Select(p => p.Emoji).Where(e => !string.IsNullOrEmpty(e)));
-                }
-            }
-
-            //GetAllParents Emoji
-            ParentsTasks.ToObservableChangeSet()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(m => m.Emoji, m => m.GetAllEmoji))
-                .StartWithEmpty()
-                .ToCollection()
-                .Subscribe(_ => RecalculateEmoji())
-                .AddToDispose(this);
-
-            // Subscribe title changes for root tasks
+            // Пересчитываем вычисляемые поля при локальном изменении заголовка.
             this.WhenAnyValue(t => t.Title)
                 .Subscribe(_ => RecalculateEmoji())
-                .AddToDispose(this);
-
-            //Subscribe BlocksTasks
-            var blocksFilter = Blocks.ToObservableChangeSet()
-                .ToCollection()
-                .Select(items =>
-                {
-                    bool Predicate(TaskItemViewModel task) => items.Contains(task.Id);
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            taskStorage.Tasks.Connect()
-                .Filter(blocksFilter)
-                .Bind(out _blocksTasks)
-                .Subscribe()
-                .AddToDispose(this);            
-
-            //Subscribe BlockedBy
-            var blockedByFilter = BlockedBy.ToObservableChangeSet()
-                .ToCollection()
-                .Select(items =>
-                {
-                    bool Predicate(TaskItemViewModel task) => items.Contains(task.Id);
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            taskStorage.Tasks.Connect()
-                .Filter(blockedByFilter)
-                .Bind(out _blockedByTasks)
-                .Subscribe()
                 .AddToDispose(this);
 
             //Subscribe IsCompleted
@@ -341,6 +267,104 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(this);
+        }
+
+        public void ApplyRelations(
+            IReadOnlyList<TaskItemViewModel> containsTasks,
+            IReadOnlyList<TaskItemViewModel> parentsTasks,
+            IReadOnlyList<TaskItemViewModel> blocksTasks,
+            IReadOnlyList<TaskItemViewModel> blockedByTasks,
+            bool refreshComputed = true)
+        {
+            SynchronizeTaskCollection(_containsTasksSource, containsTasks);
+            SynchronizeTaskCollection(_parentsTasksSource, parentsTasks);
+            SynchronizeTaskCollection(_blocksTasksSource, blocksTasks);
+            SynchronizeTaskCollection(_blockedByTasksSource, blockedByTasks);
+
+            if (refreshComputed)
+            {
+                RefreshComputedFields();
+            }
+        }
+
+        public void RefreshComputedFields()
+        {
+            RecalculateEmoji();
+        }
+
+        private void RecalculateEmoji()
+        {
+            var parents = GetAllParents().ToList();
+
+            if (!parents.Any())
+            {
+                GetAllEmoji = Emoji;
+                return;
+            }
+
+            GetAllEmoji = string.Concat(parents.Select(p => p.Emoji).Where(e => !string.IsNullOrEmpty(e)));
+        }
+
+        private static void SynchronizeTaskCollection(
+            ObservableCollectionExtended<TaskItemViewModel> source,
+            IReadOnlyList<TaskItemViewModel>? target)
+        {
+            if (target == null || target.Count == 0)
+            {
+                if (source.Count > 0)
+                {
+                    source.Clear();
+                }
+                return;
+            }
+
+            var orderedDistinct = target
+                .Where(item => item != null && !string.IsNullOrEmpty(item.Id))
+                .GroupBy(item => item.Id)
+                .Select(group => group.First())
+                .ToList();
+
+            var targetIds = new HashSet<string>(orderedDistinct.Select(item => item.Id));
+            for (var i = source.Count - 1; i >= 0; i--)
+            {
+                if (!targetIds.Contains(source[i].Id))
+                {
+                    source.RemoveAt(i);
+                }
+            }
+
+            for (var i = 0; i < orderedDistinct.Count; i++)
+            {
+                var desired = orderedDistinct[i];
+                if (i < source.Count && source[i].Id == desired.Id)
+                {
+                    continue;
+                }
+
+                var existingIndex = -1;
+                for (var j = 0; j < source.Count; j++)
+                {
+                    if (source[j].Id == desired.Id)
+                    {
+                        existingIndex = j;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    source.Move(existingIndex, i);
+                }
+                else
+                {
+                    source.Insert(i, desired);
+                }
+            }
+
+            while (source.Count > orderedDistinct.Count)
+            {
+                source.RemoveAt(source.Count - 1);
+            }
         }
 
         private IEnumerable<TaskItemViewModel> GetChildrenTasks(Func<TaskItemViewModel, bool> predicate)

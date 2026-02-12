@@ -499,6 +499,27 @@ namespace Unlimotion.ViewModel
 
             #endregion Поиск
 
+            // Ленивая активация тяжёлых проекций: до первого входа на вкладку коллекции остаются пустыми.
+            var completedProjectionFilter = this.WhenAnyValue(m => m.CompletedMode)
+                .Scan(false, (activated, mode) => activated || mode)
+                .DistinctUntilChanged()
+                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
+
+            var archivedProjectionFilter = this.WhenAnyValue(m => m.ArchivedMode)
+                .Scan(false, (activated, mode) => activated || mode)
+                .DistinctUntilChanged()
+                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
+
+            var lastCreatedProjectionFilter = this.WhenAnyValue(m => m.LastCreatedMode)
+                .Scan(false, (activated, mode) => activated || mode)
+                .DistinctUntilChanged()
+                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
+
+            var graphProjectionFilter = this.WhenAnyValue(m => m.GraphMode)
+                .Scan(false, (activated, mode) => activated || mode)
+                .DistinctUntilChanged()
+                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
+
             //Bind Roots
 
             #region Roots
@@ -629,6 +650,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Filter(wantedFilter)
+                .Filter(graphProjectionFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -687,6 +709,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Filter(searchTopFilter)
+                .Filter(completedProjectionFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -723,6 +746,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Filter(searchTopFilter)
+                .Filter(archivedProjectionFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -784,6 +808,7 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiFilter)
                 .Filter(emojiExcludeFilter)
                 .Filter(searchTopFilter)
+                .Filter(lastCreatedProjectionFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions
@@ -858,6 +883,7 @@ namespace Unlimotion.ViewModel
                 .Filter(taskFilter)
                 .Filter(emojiRootFilter)
                 .Filter(emojiExcludeFilter)
+                .Filter(graphProjectionFilter)
                 .Transform(item =>
                 {
                     var actions = new TaskWrapperActions

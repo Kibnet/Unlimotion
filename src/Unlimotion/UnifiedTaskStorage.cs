@@ -19,9 +19,11 @@ public class UnifiedTaskStorage : ITaskStorage
     {
         TaskTreeManager = taskTreeManager;
         isFileStorage = taskTreeManager.Storage is FileStorage;
+        Relations = new TaskRelationsIndex();
     }
 
     public SourceCache<TaskItemViewModel, string> Tasks { get; private set; }
+    public ITaskRelationsIndex Relations { get; }
 
     public TaskTreeManager TaskTreeManager { get; }
 
@@ -44,6 +46,8 @@ public class UnifiedTaskStorage : ITaskStorage
             Tasks.AddOrUpdate(vm);
         }
 
+        RefreshRelations();
+
         TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
         OnInited();
@@ -61,6 +65,7 @@ public class UnifiedTaskStorage : ITaskStorage
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
+        RefreshRelations();
         
         return vm;
     }
@@ -77,6 +82,7 @@ public class UnifiedTaskStorage : ITaskStorage
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
+        RefreshRelations();
         
         return vm;
     }
@@ -87,6 +93,7 @@ public class UnifiedTaskStorage : ITaskStorage
 
         foreach (var task in connectedItemList) UpdateCache(task);
         Tasks.Remove(change);
+        RefreshRelations();
 
         return true;
     }
@@ -96,6 +103,7 @@ public class UnifiedTaskStorage : ITaskStorage
         var connItemList = await TaskTreeManager.DeleteParentChildRelation(parent.Model, change.Model);
 
         foreach (var task in connItemList) UpdateCache(task);
+        RefreshRelations();
         return true;
     }
 
@@ -115,11 +123,13 @@ public class UnifiedTaskStorage : ITaskStorage
             Tasks.AddOrUpdate(vm);
 
             foreach (var task in connItemList.SkipLast(1)) UpdateCache(task);
+            RefreshRelations();
             return vm;
         }
         else
         {
             UpdateCache(last);
+            RefreshRelations();
             return null;
         }
     }
@@ -136,6 +146,7 @@ public class UnifiedTaskStorage : ITaskStorage
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
+        RefreshRelations();
 
         return vm;
     }
@@ -147,6 +158,7 @@ public class UnifiedTaskStorage : ITaskStorage
             additionalParents?.FirstOrDefault()?.Model);
 
         taskItemList.ForEach(UpdateCache);
+        RefreshRelations();
 
         return true;
     }
@@ -160,6 +172,7 @@ public class UnifiedTaskStorage : ITaskStorage
             currentTask?.Model);
 
         taskItemList.ForEach(UpdateCache);
+        RefreshRelations();
 
         return true;
     }
@@ -171,6 +184,7 @@ public class UnifiedTaskStorage : ITaskStorage
             blockingTask.Model);
 
         taskItemList.ForEach(UpdateCache);
+        RefreshRelations();
 
         return true;
     }
@@ -182,6 +196,7 @@ public class UnifiedTaskStorage : ITaskStorage
             currentTask.Model);
 
         taskItemList.ForEach(UpdateCache);
+        RefreshRelations();
 
         return true;
     }
@@ -193,6 +208,7 @@ public class UnifiedTaskStorage : ITaskStorage
             child.Model);
 
         taskItemList.ForEach(UpdateCache);
+        RefreshRelations();
     }
 
     private static async Task<FileTaskMigrator.MigrationResult> MigrateReverseLinks(TaskTreeManager taskTreeManager,
@@ -246,6 +262,7 @@ public class UnifiedTaskStorage : ITaskStorage
                 if (taskItem?.Id != null)
                 {
                     UpdateCache(taskItem, true);
+                    RefreshRelations();
                 }
                 break;
             case UpdateType.Removed:
@@ -268,6 +285,11 @@ public class UnifiedTaskStorage : ITaskStorage
     private void UpdateCache(TaskItem task)
     {
         UpdateCache(task, false);
+    }
+
+    private void RefreshRelations()
+    {
+        Relations.Rebuild(Tasks.Items);
     }
 
     private void UpdateCache(TaskItem task, bool create)

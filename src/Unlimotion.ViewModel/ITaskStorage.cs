@@ -10,6 +10,7 @@ namespace Unlimotion.ViewModel;
 public interface ITaskStorage
 {
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
+    public ITaskRelationsIndex Relations { get; }
     public TaskTreeManager TaskTreeManager { get; }
     public Task Init();
     public event EventHandler<EventArgs> Initiated;
