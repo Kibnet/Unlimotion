@@ -295,8 +295,20 @@ public class App : Application
 
     private static void Log(string message)
     {
-        var logPath = System.IO.Path.Combine(Environment.CurrentDirectory, "app_debug.log");
-        System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}\n");
+        try
+        {
+            var logDirectory = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Kibnet",
+                "Unlimotion");
+            System.IO.Directory.CreateDirectory(logDirectory);
+
+            var logPath = System.IO.Path.Combine(logDirectory, "app_debug.log");
+            System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}\n");
+        }
+        catch
+        {
+        }
     }
 
     public static void Init(string configPath)
