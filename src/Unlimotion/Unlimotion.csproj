@@ -9,17 +9,63 @@
 	<PropertyGroup Condition="'$(GitHubRefName)' == '' and '$(GITHUB_REF_NAME)' != ''">
 		<GitHubRefName>$(GITHUB_REF_NAME)</GitHubRefName>
 	</PropertyGroup>
+	<PropertyGroup>
+		<UnlimotionGeneratedAppNameFile>$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\Unlimotion.AppName.Generated.cs</UnlimotionGeneratedAppNameFile>
+		<UnlimotionAppNameSuffix Condition="'$(GitHubRefName)' != ''">$(GitHubRefName)</UnlimotionAppNameSuffix>
+	</PropertyGroup>
 
-	<ItemGroup>
-		<CompilerVisibleProperty Include="GITHUB_REF_NAME" />
-		<CompilerVisibleProperty Include="GitHubRefName" />
-	</ItemGroup>
+	<Target Name="GenerateUnlimotionAppNameDefinition" BeforeTargets="CoreCompile">
+		<Exec Command='git -C "$(MSBuildProjectDirectory)" rev-parse --abbrev-ref HEAD' IgnoreExitCode="true" ConsoleToMSBuild="true" StandardOutputImportance="Low" Condition="'$(UnlimotionAppNameSuffix)' == ''">
+			<Output TaskParameter="ExitCode" PropertyName="AppName_GitBranchExitCode" />
+			<Output TaskParameter="ConsoleOutput" PropertyName="AppName_GitBranchRaw" />
+		</Exec>
+		<PropertyGroup Condition="'$(AppName_GitBranchExitCode)' != ''">
+			<AppName_GitBranchExitCodeTrimmed>$([System.String]::Copy('$(AppName_GitBranchExitCode)').Trim())</AppName_GitBranchExitCodeTrimmed>
+		</PropertyGroup>
+		<Exec Condition="'$(UnlimotionAppNameSuffix)' == '' and '$(AppName_GitBranchExitCodeTrimmed)' == '0'" Command='git -C "$(MSBuildProjectDirectory)" rev-parse --short=7 HEAD' IgnoreExitCode="true" ConsoleToMSBuild="true" StandardOutputImportance="Low">
+			<Output TaskParameter="ExitCode" PropertyName="AppName_GitHashExitCode" />
+			<Output TaskParameter="ConsoleOutput" PropertyName="AppName_GitHashRaw" />
+		</Exec>
+		<Exec Condition="'$(UnlimotionAppNameSuffix)' == '' and '$(AppName_GitBranchExitCodeTrimmed)' == '0'" Command='git -C "$(MSBuildProjectDirectory)" diff --quiet HEAD --' IgnoreExitCode="true" StandardOutputImportance="Low">
+			<Output TaskParameter="ExitCode" PropertyName="AppName_GitDiffExitCode" />
+		</Exec>
+		<PropertyGroup Condition="'$(AppName_GitBranchExitCodeTrimmed)' == '0'">
+			<AppName_GitBranch>$([System.String]::Copy('$(AppName_GitBranchRaw)').Trim())</AppName_GitBranch>
+			<AppName_GitHash>$([System.String]::Copy('$(AppName_GitHashRaw)').Trim())</AppName_GitHash>
+			<AppName_GitDiffExitCodeTrimmed>$([System.String]::Copy('$(AppName_GitDiffExitCode)').Trim())</AppName_GitDiffExitCodeTrimmed>
+			<AppName_GitHashExitCodeTrimmed>$([System.String]::Copy('$(AppName_GitHashExitCode)').Trim())</AppName_GitHashExitCodeTrimmed>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(AppName_GitBranch)' != '' and '$(AppName_GitHash)' != '' and '$(AppName_GitDiffExitCodeTrimmed)' == '0'">
+			<UnlimotionAppNameSuffix>$(AppName_GitBranch) -> $(AppName_GitHash)</UnlimotionAppNameSuffix>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(AppName_GitBranch)' != '' and '$(AppName_GitHash)' != '' and '$(AppName_GitDiffExitCodeTrimmed)' != '0'">
+			<UnlimotionAppNameSuffix>$(AppName_GitBranch) -> $(AppName_GitHash)*</UnlimotionAppNameSuffix>
+		</PropertyGroup>
+		<PropertyGroup Condition="'$(UnlimotionAppNameSuffix)' == ''">
+			<UnlimotionAppNameSuffix></UnlimotionAppNameSuffix>
+		</PropertyGroup>
+			<PropertyGroup>
+				<AppNameSuffixForGeneratedCode>$(UnlimotionAppNameSuffix)</AppNameSuffixForGeneratedCode>
+				<AppNameSuffixEscaped>$([System.String]::Copy('$(AppNameSuffixForGeneratedCode)').Replace('"', '\"'))</AppNameSuffixEscaped>
+			</PropertyGroup>
+			<ItemGroup>
+				<AppNameGeneratedLines Include='[assembly: System.Reflection.AssemblyMetadata("UnlimotionAppNameSuffix", "$(AppNameSuffixEscaped)")]' />
+			</ItemGroup>
+			<WriteLinesToFile
+				File="$(UnlimotionGeneratedAppNameFile)"
+				Lines="@(AppNameGeneratedLines)"
+				Overwrite="true"
+				WriteOnlyWhenDifferent="true" />
+			<ItemGroup>
+				<Compile Include="$(UnlimotionGeneratedAppNameFile)" />
+			</ItemGroup>
+		</Target>
 
 	<ItemGroup>
 		<AvaloniaResource Include="Assets\**" />
 	</ItemGroup>
 
-	<ItemGroup>
+		<ItemGroup>
 		<PackageReference Include="AutoMapper" />
 		<PackageReference Include="Avalonia" />
 		<PackageReference Include="CompareNETObjects" />
@@ -47,9 +93,6 @@
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
-	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="..\Unlimotion.AppNameGenerator\Unlimotion.AppNameGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Compile Update="Views\SearchControl\SearchBar.axaml.cs">
