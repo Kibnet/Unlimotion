@@ -16,4 +16,7 @@
 		<!-- Установка препроцессорных директив на основе переменных окружения -->
 		<DefineConstants Condition="'$(GITHUB_ACTIONS)' == 'true'">$(DefineConstants);GITHUB_ACTIONS</DefineConstants>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(GitHubRefName)' == '' and '$(GITHUB_REF_NAME)' != ''">
+		<GitHubRefName>$(GITHUB_REF_NAME)</GitHubRefName>
+	</PropertyGroup>
 </Project>

@@ -18,7 +18,7 @@ public class AppNameGenerator : ISourceGenerator
         var appFullName = string.Empty;
         var sb = new StringBuilder();
 #if GITHUB_ACTIONS
-        var additionalAppName = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
+        var additionalAppName = GetGitHubRefName(context);
         appFullName = $"{DefaultAppName} {additionalAppName}";
 #else
         var mainSyntaxTree = context.Compilation.SyntaxTrees.First(x => x.HasCompilationUnitRoot);
@@ -69,6 +69,23 @@ public class AppNameGenerator : ISourceGenerator
     public void Initialize(GeneratorInitializationContext context)
     {
         // No initialization required for this one
+    }
+
+    private static string GetGitHubRefName(GeneratorExecutionContext context)
+    {
+        if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.GitHubRefName", out var refName)
+            && !string.IsNullOrWhiteSpace(refName))
+        {
+            return refName;
+        }
+
+        if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.GITHUB_REF_NAME", out refName)
+            && !string.IsNullOrWhiteSpace(refName))
+        {
+            return refName;
+        }
+
+        return string.Empty;
     }
 
     private static string RunGitCommand(string arguments)

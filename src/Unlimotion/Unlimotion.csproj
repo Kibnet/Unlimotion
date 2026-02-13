@@ -6,6 +6,15 @@
 		<AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 	</PropertyGroup>
 
+	<PropertyGroup Condition="'$(GitHubRefName)' == '' and '$(GITHUB_REF_NAME)' != ''">
+		<GitHubRefName>$(GITHUB_REF_NAME)</GitHubRefName>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<CompilerVisibleProperty Include="GITHUB_REF_NAME" />
+		<CompilerVisibleProperty Include="GitHubRefName" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<AvaloniaResource Include="Assets\**" />
 	</ItemGroup>
