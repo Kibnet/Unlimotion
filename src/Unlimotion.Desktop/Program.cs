@@ -29,7 +29,9 @@ namespace Unlimotion.Desktop
 #endif
 
             //Получение адреса конфига
-            var configArg = args.FirstOrDefault(s => s.StartsWith("-config="));
+            var configArg = args.FirstOrDefault(s =>
+                s.StartsWith("-config=", StringComparison.OrdinalIgnoreCase) ||
+                s.StartsWith("--config=", StringComparison.OrdinalIgnoreCase));
 
 #if DEBUG
             var configPath = DefaultConfigName;

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DynamicData;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -34,16 +35,23 @@ public class UnifiedTaskStorage : ITaskStorage
         Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
         
         // Perform migrations only for file storage
-        if (isFileStorage)
+        if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
         {
-            var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceRecheck: true);
+            var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
+            var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
             await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
         }
 
+        var taskViews = new List<TaskItemViewModel>();
         await foreach (var task in TaskTreeManager.Storage.GetAll())
         {
-            var vm = new TaskItemViewModel(task, this);
-            Tasks.AddOrUpdate(vm);
+            taskViews.Add(new TaskItemViewModel(task, this));
+        }
+
+        Tasks.Edit(operations => operations.AddOrUpdate(taskViews));
+        if (TaskTreeManager.Storage is FileStorage initFileStorage)
+        {
+            initFileStorage.Watcher?.SetEnable(true);
         }
 
         RefreshRelations();
@@ -230,14 +238,44 @@ public class UnifiedTaskStorage : ITaskStorage
         if (taskTreeManager.Storage is not FileStorage fileStorage) return;
         var migrationReportPath = Path.Combine(fileStorage.Path, "availability.migration.report");
 
-        // Check if migration has already been run
-        if (!forceRecheck && File.Exists(migrationReportPath)) return;
+        if (!forceRecheck && ShouldSkipCanBeCompletedRecheck(fileStorage, migrationReportPath))
+            return;
 
         var tasksToMigrate = new List<TaskItem>();
         await foreach (var task in taskTreeManager.Storage.GetAll()) tasksToMigrate.Add(task);
 
-        // Calculate availability for all tasks
-        foreach (var task in tasksToMigrate) await taskTreeManager.CalculateAndUpdateAvailability(task);
+        var taskById = new Dictionary<string, TaskItem>(tasksToMigrate.Count, StringComparer.Ordinal);
+        foreach (var task in tasksToMigrate)
+        {
+            if (task?.Id is not null)
+                taskById[task.Id] = task;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var changedTasks = new List<TaskItem>();
+        foreach (var task in tasksToMigrate)
+        {
+            if (task?.Id is null)
+                continue;
+
+            var newIsCanBeCompleted = IsCanBeCompletedForTask(task, taskById);
+            var newUnlockedDateTime = task.UnlockedDateTime;
+
+            if (newIsCanBeCompleted && task.UnlockedDateTime == null)
+                newUnlockedDateTime = now;
+            else if (!newIsCanBeCompleted)
+                newUnlockedDateTime = null;
+
+            if (task.IsCanBeCompleted == newIsCanBeCompleted && task.UnlockedDateTime == newUnlockedDateTime)
+                continue;
+
+            task.IsCanBeCompleted = newIsCanBeCompleted;
+            task.UnlockedDateTime = newUnlockedDateTime;
+            changedTasks.Add(task);
+        }
+
+        foreach (var changedTask in changedTasks)
+            await taskTreeManager.Storage.Save(changedTask);
 
         // Create migration report
         var report = new
@@ -246,11 +284,96 @@ public class UnifiedTaskStorage : ITaskStorage
             Timestamp = DateTimeOffset.UtcNow,
             ForceRecheck = forceRecheck,
             TasksProcessed = tasksToMigrate.Count,
+            ChangedTasks = changedTasks.Count,
             Message = "IsCanBeCompleted field calculated for all tasks"
         };
 
         await File.WriteAllTextAsync(migrationReportPath,
             JsonConvert.SerializeObject(report, Formatting.Indented));
+    }
+
+    private static bool IsCanBeCompletedForTask(TaskItem task, IReadOnlyDictionary<string, TaskItem> taskById)
+    {
+        if (task.ContainsTasks?.Any() == true)
+        {
+            foreach (var childId in task.ContainsTasks)
+            {
+                if (taskById.TryGetValue(childId, out var childTask) && childTask?.IsCompleted == false)
+                    return false;
+            }
+        }
+
+        if (task.BlockedByTasks?.Any() == true)
+        {
+            foreach (var blockerId in task.BlockedByTasks)
+            {
+                if (taskById.TryGetValue(blockerId, out var blockerTask) && blockerTask?.IsCompleted == false)
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ShouldSkipCanBeCompletedRecheck(FileStorage fileStorage, string migrationReportPath)
+    {
+        if (!File.Exists(migrationReportPath))
+            return false;
+
+        var (tasksProcessed, latestTaskWriteUtc) = GetTaskFilesMetadata(fileStorage.Path);
+        if (latestTaskWriteUtc is null)
+            return false;
+
+        try
+        {
+            var reportJson = JObject.Parse(File.ReadAllText(migrationReportPath));
+            var reportVersion = reportJson["Version"]?.Value<int>() ?? 0;
+            if (reportVersion < 1)
+                return false;
+
+            var reportTaskCount = reportJson["TasksProcessed"]?.Value<int>() ?? -1;
+            if (reportTaskCount != tasksProcessed)
+                return false;
+
+            var reportTimestamp = reportJson["Timestamp"]?.Value<DateTimeOffset?>();
+            if (reportTimestamp is null)
+                return false;
+
+            return reportTimestamp.Value.UtcDateTime >= latestTaskWriteUtc.Value;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static (int Count, DateTime? LatestWriteUtc) GetTaskFilesMetadata(string tasksPath)
+    {
+        var count = 0;
+        DateTime? latestWriteUtc = null;
+
+        foreach (var filePath in Directory.EnumerateFiles(tasksPath))
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (fileName == "migration.report" || fileName == "availability.migration.report" ||
+                fileName.EndsWith(".migration.report", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var extension = Path.GetExtension(filePath);
+            if (!string.IsNullOrEmpty(extension) && !string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            count++;
+            var writeTimeUtc = File.GetLastWriteTimeUtc(filePath);
+            if (latestWriteUtc is null || writeTimeUtc > latestWriteUtc.Value)
+                latestWriteUtc = writeTimeUtc;
+        }
+
+        return (count, latestWriteUtc);
     }
 
     private async void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
@@ -304,6 +427,41 @@ public class UnifiedTaskStorage : ITaskStorage
         {
             vm = new TaskItemViewModel(task, this);
             Tasks.AddOrUpdate(vm.Value);
+        }
+    }
+
+    private static bool ShouldForceReverseLinkRecheck(FileStorage fileStorage)
+    {
+        var migrationReportPath = Path.Combine(fileStorage.Path, "migration.report");
+        if (!File.Exists(migrationReportPath))
+            return true;
+
+        try
+        {
+            var reportJson = JObject.Parse(File.ReadAllText(migrationReportPath));
+            var reportVersion = reportJson["Version"]?.Value<int>() ?? 0;
+            if (reportVersion < FileTaskMigrator.Version)
+                return true;
+
+            var forceRecheck = reportJson["ForceRecheck"]?.Value<bool>() ?? false;
+            if (forceRecheck)
+                return true;
+
+            var issuesToken = reportJson["Issues"];
+            if (issuesToken == null)
+                return true;
+
+            if (issuesToken.Type == JTokenType.Array)
+            {
+                var issues = issuesToken.ToObject<string[]>() ?? Array.Empty<string>();
+                return issues.Length > 0;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return true;
         }
     }
 }

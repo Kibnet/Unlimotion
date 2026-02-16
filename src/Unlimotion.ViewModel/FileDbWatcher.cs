@@ -19,11 +19,16 @@ namespace Unlimotion.ViewModel
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
         private bool isEnable;
-        private readonly INotificationManagerWrapper? _notificationManager;
+    private readonly INotificationManagerWrapper? _notificationManager;
+    private readonly object itLockEnable = new();
 
         public void SetEnable(bool enable)
         {
-            isEnable = enable;
+            lock (itLockEnable)
+            {
+                isEnable = enable;
+                watcher?.EnableRaisingEvents = enable;
+            }
         }
 
         public void ForceUpdateFile(string filename, UpdateType type)
@@ -57,7 +62,7 @@ namespace Unlimotion.ViewModel
 
             //todo Добавить логер и логировать ошибки
             watcher.Error += OnError;
-            watcher.IncludeSubdirectories = true;
+            watcher.IncludeSubdirectories = false;
             isEnable = true;
             watcher.EnableRaisingEvents = true;
         }

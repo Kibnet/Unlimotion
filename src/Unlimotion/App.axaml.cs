@@ -1,6 +1,7 @@
 ﻿//#define LIVE
 
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
 using AutoMapper;
@@ -119,7 +120,9 @@ public class App : Application
         settings.ObservableForProperty(m => m.GitBackupEnabled, skipInitial: true)
             .Subscribe(c =>
             {
+                EnsureScheduler();
                 if (_scheduler == null) return;
+
                 if (c.Value)
                     _scheduler.ResumeAll();
                 else
@@ -129,7 +132,11 @@ public class App : Application
         settings.ObservableForProperty(m => m.GitPullIntervalSeconds, skipInitial: true)
             .Subscribe(c =>
             {
-                if (c.Value == 0 || _scheduler == null) return;
+                if (c.Value == 0) return;
+
+                EnsureScheduler();
+                if (_scheduler == null) return;
+
                 var triggerKey = new TriggerKey("PullTrigger", "GitPullJob");
                 _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
             });
@@ -137,7 +144,11 @@ public class App : Application
         settings.ObservableForProperty(m => m.GitPushIntervalSeconds, skipInitial: true)
             .Subscribe(c =>
             {
-                if (c.Value == 0 || _scheduler == null) return;
+                if (c.Value == 0) return;
+
+                EnsureScheduler();
+                if (_scheduler == null) return;
+
                 var triggerKey = new TriggerKey("PushTrigger", "GitPushJob");
                 _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob", c.Value));
             });
@@ -231,17 +242,17 @@ public class App : Application
                     // implementation should have a parameterless constructor! Next, we
                     // start listening for any changes in the source files. And then, we
                     // show the LiveViewHost window. Simple enough, huh?
-                    var window = new LiveViewHost(this, Console.WriteLine);
+                    var window = new LiveViewHost(this, Debug.WriteLine);
                     window.StartWatchingSourceFilesForHotReloading();
                     window.Show();
                 }
-                else
+            else
 #endif
             {
-                var vm = GetMainWindowViewModel();
                 // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
                 // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
                 DisableAvaloniaDataAnnotationValidation();
+                var vm = GetMainWindowViewModel();
                 var window = new MainWindow
                 {
                     DataContext = vm
@@ -252,14 +263,13 @@ public class App : Application
                 // Когда окно загрузится — вызовем инициализацию
                 window.Opened += async (_, __) =>
                 {
-                    try
+                    _ = vm.Connect().ContinueWith(_ =>
                     {
-                        await vm.Connect();
-                    }
-                    catch (Exception ex)
-                    {
-                        //TODO: Уведомить пользователя
-                    }
+                        if (_.Exception != null)
+                        {
+                            //TODO: Уведомить пользователя
+                        }
+                    });
                 };
             }
         }
@@ -271,7 +281,7 @@ public class App : Application
             };
         }
 
-        RxApp.DefaultExceptionHandler = Observer.Create<Exception>(Console.WriteLine);
+        RxApp.DefaultExceptionHandler = Observer.Create<Exception>(HandleReactiveException);
 
         base.OnFrameworkInitializationCompleted();
     }
@@ -293,22 +303,35 @@ public class App : Application
         DataContext = new ApplicationViewModel();
     }
 
+    private const bool ShouldLogStartup = false;
+
     private static void Log(string message)
     {
-        try
+        if (!ShouldLogStartup)
         {
-            var logDirectory = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Kibnet",
-                "Unlimotion");
-            System.IO.Directory.CreateDirectory(logDirectory);
+            return;
+        }
 
-            var logPath = System.IO.Path.Combine(logDirectory, "app_debug.log");
-            System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}\n");
-        }
-        catch
+        Debug.WriteLine($"[App.Init] {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}");
+    }
+
+    private static void EnsureScheduler()
+    {
+        if (_scheduler != null)
         {
+            return;
         }
+
+        if (_configuration == null || _backupService == null)
+        {
+            return;
+        }
+
+        var schedulerFactory = new StdSchedulerFactory();
+        _scheduler = schedulerFactory.GetScheduler().Result;
+        _scheduler.JobFactory = new DependencyInjectionJobFactory(_configuration, _backupService);
+        Log("[App.Init] Scheduler created lazily");
+        Log("[App.Init] Scheduler job factory set");
     }
 
     public static void Init(string configPath)
@@ -377,15 +400,6 @@ public class App : Application
             }
             Log("[App.Init] Initial storage created");
 
-            // Create scheduler
-            var schedulerFactory = new StdSchedulerFactory();
-            _scheduler = schedulerFactory.GetScheduler().Result;
-            Log("[App.Init] Scheduler created");
-
-            // Set up job factory for DI
-            _scheduler.JobFactory = new DependencyInjectionJobFactory(_configuration, _backupService);
-            Log("[App.Init] Job factory set");
-
             // Initialize git settings
             var gitSettings = _configuration.Get<GitSettings>("Git");
             if (gitSettings == null)
@@ -420,6 +434,18 @@ public class App : Application
                 {
                     taskRepository.Initiated += (sender, eventArgs) =>
                     {
+                        EnsureScheduler();
+                        if (_scheduler == null)
+                        {
+                            return;
+                        }
+
+                        var currentGitSettings = _configuration?.Get<GitSettings>("Git");
+                        if (currentGitSettings?.BackupEnabled != true)
+                        {
+                            return;
+                        }
+
                         var pullJob = JobBuilder.Create<GitPullJob>()
                             .WithIdentity("GitPullJob", "Git")
                             .Build();
@@ -428,15 +454,17 @@ public class App : Application
                             .Build();
 
                         var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                            gitSettings.PullIntervalSeconds);
+                            currentGitSettings.PullIntervalSeconds);
                         var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                            gitSettings.PushIntervalSeconds);
+                            currentGitSettings.PushIntervalSeconds);
 
                         _scheduler.ScheduleJob(pullJob, pullTrigger);
                         _scheduler.ScheduleJob(pushJob, pushTrigger);
 
-                        if (gitSettings.BackupEnabled)
+                        if (currentGitSettings.BackupEnabled)
+                        {
                             _scheduler.Start();
+                        }
                     };
                 }
             }
@@ -466,5 +494,17 @@ public class App : Application
 #else
         return true;
 #endif
+    }
+
+    private static void HandleReactiveException(Exception ex)
+    {
+        if (_notificationManager != null)
+        {
+            _notificationManager.ErrorToast(ex.Message);
+        }
+        else
+        {
+            Debug.WriteLine($"[ReactiveUI] {ex}");
+        }
     }
 }

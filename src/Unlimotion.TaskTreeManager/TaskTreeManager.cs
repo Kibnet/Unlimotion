@@ -769,24 +769,35 @@ public class TaskTreeManager
 
         bool newIsCanBeCompleted = allContainsCompleted && allBlockersCompleted;
 
-        // Update IsCanBeCompleted
-        task.IsCanBeCompleted = newIsCanBeCompleted;
+        var oldIsCanBeCompleted = task.IsCanBeCompleted;
+        var oldUnlockedDateTime = task.UnlockedDateTime;
+
+        DateTimeOffset? newUnlockedDateTime = null;
 
         // Manage UnlockedDateTime based on availability changes
         if (newIsCanBeCompleted && task.UnlockedDateTime == null)
         {
             // Task became available - set UnlockedDateTime
-            task.UnlockedDateTime = DateTimeOffset.UtcNow;
+            newUnlockedDateTime = DateTimeOffset.UtcNow;
         }
         else if (!newIsCanBeCompleted)
         {
             // Task became blocked - clear UnlockedDateTime
-            task.UnlockedDateTime = null;
+            newUnlockedDateTime = null;
+        }
+        else
+        {
+            newUnlockedDateTime = task.UnlockedDateTime;
         }
 
-        // Save the updated task
-        await Storage.Save(task);
-        result.AddOrUpdate(task);
+        if (oldIsCanBeCompleted != newIsCanBeCompleted || oldUnlockedDateTime != newUnlockedDateTime)
+        {
+            // Update IsCanBeCompleted only when it changed to avoid unnecessary disk writes.
+            task.IsCanBeCompleted = newIsCanBeCompleted;
+            task.UnlockedDateTime = newUnlockedDateTime;
+            await Storage.Save(task);
+            result.AddOrUpdate(task);
+        }
 
         return result.Values.ToList();
     }
