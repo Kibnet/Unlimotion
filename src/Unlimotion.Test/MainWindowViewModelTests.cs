@@ -2,12 +2,12 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Text.Json;
 using System.Threading.Tasks;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
-using Xunit;
 
 namespace Unlimotion.Test
 {
@@ -60,28 +60,28 @@ namespace Unlimotion.Test
         }
     }
 
-
+    [NotInParallel]
     public class MainWindowViewModelTests : BaseModelTests
     {
         /// <summary>
         /// Создание задачи в корне
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CreateRootTask_Success()
         {
             var task = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create,
                 taskRepository);
 
-            Assert.Empty(task.Parents);
-            TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, task.Id);
+            await Assert.That(task.Parents).IsEmpty();
+            await TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, task.Id);
         }
 
         /// <summary>
         /// Проверка что заголовок задачи не сбрасывается после сохранения файла
         /// Regression test for title reset bug
         /// </summary>
-        [Fact]
+        [Test]
         public async Task NewTask_TitleNotResetAfterFileSave()
         {
             // Arrange: Create a new task
@@ -95,19 +95,19 @@ namespace Unlimotion.Test
             await Task.Delay(TimeSpan.FromSeconds(2));
             
             // Assert: Title should still be what we set
-            Assert.Equal(expectedTitle, task.Title);
-            
+            await Assert.That(task.Title).IsEqualTo(expectedTitle);
+
             // Also verify it eventually saves correctly
             await TestHelpers.WaitThrottleTime();
             var storedTask = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.Equal(expectedTitle, storedTask?.Title);
+            await Assert.That(storedTask?.Title).IsEqualTo(expectedTitle);
         }
 
         /// <summary>
         /// Переименование задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task RenameTask_Success()
         {
             var task = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
@@ -118,16 +118,16 @@ namespace Unlimotion.Test
 
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
             var result = TestHelpers.CompareStorageVersions(before!, after!);
-            TestHelpers.ShouldHaveOnlyTitleChanged(result, "Root Task 1", "Changed task title");
+            await TestHelpers.ShouldHaveOnlyTitleChanged(result, "Root Task 1", "Changed task title");
         }
 
         /// <summary>
         /// Создание вложенной задачи
         /// </summary>
         /// <returns></returns>
-        [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
-        [InlineData(MainWindowViewModelFixture.RootTask2Id)]
+        [Test]
+        [Arguments(MainWindowViewModelFixture.RootTask1Id)]
+        [Arguments(MainWindowViewModelFixture.RootTask2Id)]
         public async Task CreateInnerTask_Success(string taskId)
         {
             TestHelpers.SetCurrentTask(mainWindowVM, taskId);
@@ -139,15 +139,15 @@ namespace Unlimotion.Test
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, taskId);
             var result = TestHelpers.CompareStorageVersions(before!, after!);
 
-            TestHelpers.ShouldContainOnlyDifference(result, nameof(after.ContainsTasks));
-            Assert.Contains(newTask.Id, after!.ContainsTasks);
+            await TestHelpers.ShouldContainOnlyDifference(result, nameof(after.ContainsTasks));
+            await Assert.That(after!.ContainsTasks).Contains(newTask.Id);
         }
 
         /// <summary>
         /// Создание вложенной задачи без выбранной текущей
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CreateInnerTask_Fail()
         {
             mainWindowVM.CurrentTaskItem = null;
@@ -155,16 +155,16 @@ namespace Unlimotion.Test
             var countBefore = taskRepository.Tasks.Count;
             mainWindowVM.CreateInner.Execute(null);
             await TestHelpers.WaitThrottleTime();
-            Assert.Equal(countBefore, taskRepository.Tasks.Count);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(countBefore);
         }
 
         /// <summary>
         /// Создание соседней задачи
         /// </summary>
         /// <returns></returns>
-        [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
-        [InlineData(MainWindowViewModelFixture.SubTask22Id)]
+        [Test]
+        [Arguments(MainWindowViewModelFixture.RootTask1Id)]
+        [Arguments(MainWindowViewModelFixture.SubTask22Id)]
         public async Task CreateSiblingTask_Success(string taskId)
         {
             mainWindowVM.AllTasksMode = true;
@@ -177,10 +177,10 @@ namespace Unlimotion.Test
             if (parent.Parents.Count > 0)
             {
                 var sharedParent = sibling.Parents.FirstOrDefault();
-                Assert.NotNull(sharedParent);
-                Assert.Contains(sharedParent, parent.Parents);
-                Assert.Contains(sibling.Id, TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, sharedParent)
-                    .ContainsTasks);
+                await Assert.That(sharedParent).IsNotNull();
+                await Assert.That(parent.Parents).Contains(sharedParent);
+                await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, sharedParent)
+                    .ContainsTasks).Contains(sibling.Id);
             }
         }
         
@@ -188,9 +188,9 @@ namespace Unlimotion.Test
         /// Создание зависимой соседней задачи
         /// </summary>
         /// <returns></returns>
-        [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTask1Id)]
-        [InlineData(MainWindowViewModelFixture.SubTask22Id)]
+        [Test]
+        [Arguments(MainWindowViewModelFixture.RootTask1Id)]
+        [Arguments(MainWindowViewModelFixture.SubTask22Id)]
         public async Task CreateBlockedSibling_Success(string taskId)
         {
             mainWindowVM.AllTasksMode = true;
@@ -204,16 +204,16 @@ namespace Unlimotion.Test
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id);
             var result = TestHelpers.CompareStorageVersions(before, after);
 
-            TestHelpers.ShouldContainOnlyDifference(result, nameof(after.BlocksTasks));
-            Assert.Contains(blocked.Id, parent.Blocks);
-            Assert.Contains(blocked.Id, after.BlocksTasks);
+            await TestHelpers.ShouldContainOnlyDifference(result, nameof(after.BlocksTasks));
+            await Assert.That(parent.Blocks).Contains(blocked.Id);
+            await Assert.That(after.BlocksTasks).Contains(blocked.Id);
         }
 
         /// <summary>
         /// Regression: цепочка зависимых соседних задач на корневом уровне
         /// не должна самопроизвольно разблокировать промежуточную/последнюю задачу.
         /// </summary>
-        [Fact]
+        [Test]
         public async Task CreateBlockedSiblingChain_RootLevel_ShouldStayUnavailable()
         {
             mainWindowVM.AllTasksMode = true;
@@ -230,7 +230,7 @@ namespace Unlimotion.Test
             await TestHelpers.WaitThrottleTime();
 
             // 3) Задача 2 должна быть недоступной.
-            Assert.False(task2.IsCanBeCompleted);
+            await Assert.That(task2.IsCanBeCompleted).IsFalse();
 
             // 4) Создаём зависимую задачу 3 на том же уровне от задачи 2.
             mainWindowVM.CurrentTaskItem = task2;
@@ -243,24 +243,24 @@ namespace Unlimotion.Test
 
             var vmTask2 = TestHelpers.GetTask(mainWindowVM, task2.Id);
             var vmTask3 = TestHelpers.GetTask(mainWindowVM, task3.Id);
-            Assert.False(vmTask2!.IsCanBeCompleted);
-            Assert.False(vmTask3!.IsCanBeCompleted);
+            await Assert.That(vmTask2!.IsCanBeCompleted).IsFalse();
+            await Assert.That(vmTask3!.IsCanBeCompleted).IsFalse();
 
             var storedTask2 = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task2.Id);
             var storedTask3 = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task3.Id);
-            Assert.NotNull(storedTask2);
-            Assert.NotNull(storedTask3);
-            Assert.False(storedTask2!.IsCanBeCompleted);
-            Assert.False(storedTask3!.IsCanBeCompleted);
-            Assert.Contains(task1.Id, storedTask2.BlockedByTasks);
-            Assert.Contains(task2.Id, storedTask3.BlockedByTasks);
+            await Assert.That(storedTask2).IsNotNull();
+            await Assert.That(storedTask3).IsNotNull();
+            await Assert.That(storedTask2!.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedTask3!.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedTask2.BlockedByTasks).Contains(task1.Id);
+            await Assert.That(storedTask3.BlockedByTasks).Contains(task2.Id);
         }
 
         /// <summary>
         /// Перемещение задачи в другую родительскую задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task MovingToRootTask_Success()
         {
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
@@ -272,44 +272,44 @@ namespace Unlimotion.Test
             var storedTo = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, to.Id);
             var storedFrom = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, from.Id);
 
-            Assert.DoesNotContain(subTask.Id, storedFrom.ContainsTasks);
-            Assert.Contains(subTask.Id, storedTo.ContainsTasks);
+            await Assert.That(storedFrom.ContainsTasks).DoesNotContain(subTask.Id);
+            await Assert.That(storedTo.ContainsTasks).Contains(subTask.Id);
         }
 
         /// <summary>
         /// Создание ссылки на задачу в другой задаче
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CloneToRootTask_Success()
         {
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
             var destination = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
             
-            var clone = await TestHelpers.CreateAndReturnNewTaskItem(async () => await subTask.CloneInto(destination),
+            var clone = await TestHelpers.CreateAndReturnNewTaskItemAsync(async () => await subTask.CloneInto(destination),
                 taskRepository);
 
-            TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, clone.Id);
+            await TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, clone.Id);
 
             var destItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, destination.Id);
-            Assert.Contains(clone.Id, destItem.ContainsTasks);
+            await Assert.That(destItem.ContainsTasks).Contains(clone.Id);
 
-            Assert.Contains(clone.Id, destination.Contains);
-            Assert.DoesNotContain(subTask.Id, destination.Contains); // так как Clone, не Move
+            await Assert.That(destination.Contains).Contains(clone.Id);
+            await Assert.That(destination.Contains).DoesNotContain(subTask.Id); // так как Clone, не Move
         }
         
         /// <summary>
         /// Перемещение ссылки в другую родительскую задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task MovingTaskWithTwoParentsToRootTask_Success()
         {
             var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
             var from = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask3Id);
             var to = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
 
-            await TestHelpers.ActionNotCreateItems(() =>
+            await TestHelpers.ActionNotCreateItemsAsync(() =>
                 subTask.MoveInto(to, from), 
                 taskRepository);
 
@@ -317,16 +317,16 @@ namespace Unlimotion.Test
             var fromStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, from.Id);
             var otherStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
 
-            Assert.Contains(subTask.Id, toStored.ContainsTasks);
-            Assert.DoesNotContain(subTask.Id, fromStored.ContainsTasks);
-            Assert.Contains(subTask.Id, otherStored.ContainsTasks);
+            await Assert.That(toStored.ContainsTasks).Contains(subTask.Id);
+            await Assert.That(fromStored.ContainsTasks).DoesNotContain(subTask.Id);
+            await Assert.That(otherStored.ContainsTasks).Contains(subTask.Id);
         }
 
         /// <summary>
         /// Удаление родительской ссылки на задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CurrentItemParentsRemove_Success()
         {
             var rootTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
@@ -339,14 +339,14 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => rootTaskWrapper.RemoveCommand.Execute(null), taskRepository);
             
             var stored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            Assert.DoesNotContain(subTask.Id, stored.ContainsTasks);
+            await Assert.That(stored.ContainsTasks).DoesNotContain(subTask.Id);
         }
 
         /// <summary>
         /// Удаление дочерней ссылки на задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CurrentItemContainsRemove_Success()
         {
             var rootTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
@@ -360,7 +360,7 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var stored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            Assert.DoesNotContain(subTask.Id, stored.ContainsTasks);
+            await Assert.That(stored.ContainsTasks).DoesNotContain(subTask.Id);
         }
 
 
@@ -368,7 +368,7 @@ namespace Unlimotion.Test
         /// Удаление блокирующей ссылки на задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CurrentItemBlockedByRemove_Success()
         {
             var rootTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
@@ -382,14 +382,14 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var blockerStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            Assert.DoesNotContain(blocked.Id, blockerStored.BlocksTasks);
+            await Assert.That(blockerStored.BlocksTasks).DoesNotContain(blocked.Id);
         }
         
         /// <summary>
         /// Удаление блокируемой ссылки на задачу
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CurrentItemBlocksRemove_Success()
         {
             var rootTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
@@ -403,14 +403,14 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => wrapper.RemoveCommand.Execute(null), taskRepository);
 
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
-            Assert.DoesNotContain(blocked.Id, rootStored.BlocksTasks);
+            await Assert.That(rootStored.BlocksTasks).DoesNotContain(blocked.Id);
         }
 
         /// <summary>
         /// Удаление ссылки из дерева задач
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task SubItemLinkRemoveCommand_Success()
         {
             var rootWrapper = mainWindowVM.CurrentAllTasksItems
@@ -424,14 +424,14 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository, -1);
 
             var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
-            Assert.Null(subStored);
+            await Assert.That(subStored).IsNull();
         }
 
         /// <summary>
         /// Отказ от удаления ссылки из дерева задач
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task SubItemRemoveCommand_Success()
         {
             var rootWrapper = mainWindowVM.CurrentAllTasksItems
@@ -447,16 +447,16 @@ namespace Unlimotion.Test
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
             var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
 
-            Assert.NotNull(rootStored);
-            Assert.NotNull(subStored);
-            Assert.Contains(subWrapper.TaskItem.Id, rootStored.ContainsTasks);
+            await Assert.That(rootStored).IsNotNull();
+            await Assert.That(subStored).IsNotNull();
+            await Assert.That(rootStored.ContainsTasks).Contains(subWrapper.TaskItem.Id);
         }
 
         /// <summary>
         /// Удаление задачи из дерева задач
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task ItemRemoveCommand_Success()
         {
             var parent = mainWindowVM.CurrentAllTasksItems
@@ -466,15 +466,15 @@ namespace Unlimotion.Test
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, -1);
             
-            Assert.Null(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id));
-            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id));
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)).IsNull();
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
         }
 
         /// <summary>
         /// Перемещение заблокированной задачи к новому родителю должно блокировать нового родителя
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task MoveBlockedTaskToNewParent_WithFileStorage_ShouldBlockNewParent()
         {
             // Arrange - Создаем задачу-ребенка, которая блокирует своего родителя
@@ -495,8 +495,8 @@ namespace Unlimotion.Test
             
             // Проверяем начальное состояние - оригинальный родитель должен быть заблокирован из-за незавершенного ребенка
             var originalParentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
-            Assert.False(originalParentStored.IsCanBeCompleted);
-            
+            await Assert.That(originalParentStored.IsCanBeCompleted).IsFalse();
+
             // Act - Перемещаем задачу с ребенком к новому родителю
             await childTask.MoveInto(newParent, originalParent );
             
@@ -509,25 +509,25 @@ namespace Unlimotion.Test
             var updatedChild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, childTask.Id);
             
             // Assert - Новый родитель должен быть заблокирован, потому что он теперь содержит задачу с незавершенным ребенком
-            Assert.False(updatedNewParent.IsCanBeCompleted);
-            Assert.Null(updatedNewParent.UnlockedDateTime);
-            
+            await Assert.That(updatedNewParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedNewParent.UnlockedDateTime).IsNull();
+
             // Оригинальный родитель должен быть разблокирован, потому что у него больше нет детей
-            Assert.True(updatedOriginalParent.IsCanBeCompleted);
-            Assert.NotNull(updatedOriginalParent.UnlockedDateTime);
-            
+            await Assert.That(updatedOriginalParent.IsCanBeCompleted).IsTrue();
+            await Assert.That(updatedOriginalParent.UnlockedDateTime).IsNotNull();
+
             // Отношения должны быть корректными
-            Assert.Contains(childTask.Id, updatedNewParent.ContainsTasks);
-            Assert.Contains(newParent.Id, updatedChild.ParentTasks);
-            Assert.DoesNotContain(childTask.Id, updatedOriginalParent.ContainsTasks);
-            Assert.DoesNotContain(updatedOriginalParent.Id, updatedChild.ParentTasks);
+            await Assert.That(updatedNewParent.ContainsTasks).Contains(childTask.Id);
+            await Assert.That(updatedChild.ParentTasks).Contains(newParent.Id);
+            await Assert.That(updatedOriginalParent.ContainsTasks).DoesNotContain(childTask.Id);
+            await Assert.That(updatedChild.ParentTasks).DoesNotContain(updatedOriginalParent.Id);
         }
 
         /// <summary>
         /// Копирование заблокированной задачи к новому родителю должно блокировать нового родителя
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CopyBlockedTaskToNewParent_WithFileStorage_ShouldBlockNewParent()
         {
             // Arrange - Создаем задачу-ребенка, которая блокирует своего родителя
@@ -545,11 +545,11 @@ namespace Unlimotion.Test
 
             // Создаем новую задачу, которая станет новым родителем
             var newParent = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
-            Assert.True(newParent.IsCanBeCompleted);
-            
+            await Assert.That(newParent.IsCanBeCompleted).IsTrue();
+
             // Проверяем начальное состояние - оригинальный родитель должен быть заблокирован из-за незавершенного ребенка
             var originalParentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, originalParent.Id);
-            Assert.False(originalParentStored.IsCanBeCompleted);
+            await Assert.That(originalParentStored.IsCanBeCompleted).IsFalse();
 
             // Act - Копируем задачу с ребенком к новому родителю
             await childTask.CopyInto(newParent);
@@ -562,23 +562,23 @@ namespace Unlimotion.Test
             var updatedNewParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, newParent.Id);
 
             // Assert - Новый родитель должен быть заблокирован, потому что он теперь содержит задачу с незавершенным ребенком
-            Assert.False(updatedNewParent.IsCanBeCompleted);
-            Assert.Null(updatedNewParent.UnlockedDateTime);
+            await Assert.That(updatedNewParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedNewParent.UnlockedDateTime).IsNull();
 
             // Оригинальный родитель должен оставаться заблокирован, потому что у него все еще есть дети
-            Assert.False(updatedOriginalParent.IsCanBeCompleted);
-            Assert.Null(updatedOriginalParent.UnlockedDateTime);
+            await Assert.That(updatedOriginalParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedOriginalParent.UnlockedDateTime).IsNull();
 
             // Отношения должны быть корректными - оба родителя содержат ребенка
-            Assert.Contains(childTask.Id, updatedOriginalParent.ContainsTasks);
-            Assert.Contains(childTask.Id, updatedNewParent.ContainsTasks);
+            await Assert.That(updatedOriginalParent.ContainsTasks).Contains(childTask.Id);
+            await Assert.That(updatedNewParent.ContainsTasks).Contains(childTask.Id);
         }
 
         /// <summary>
         /// Отказ от удаление задачи из дерева задач
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CancelItemRemoveCommand_Success()
         {
             var parent = mainWindowVM.CurrentAllTasksItems
@@ -588,15 +588,15 @@ namespace Unlimotion.Test
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
             await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository);
 
-            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id));
-            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id));
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)).IsNotNull();
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
         }
 
         /// <summary>
         /// Удаление задачи из карточки задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CurrentTaskItemRemove_Success()
         {
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask4Id);
@@ -605,15 +605,15 @@ namespace Unlimotion.Test
             
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -1);
             
-            Assert.Null(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id));
-            Assert.NotNull(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id));
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id)).IsNotNull();
         }
 
         /// <summary>
         /// Архивация задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task ArchiveCommandWithoutContainsTask_Success()
         {
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask11Id);
@@ -622,15 +622,15 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
             
             var archived = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.NotNull(archived.ArchiveDateTime);
-            Assert.Null(archived.IsCompleted);
+            await Assert.That(archived.ArchiveDateTime).IsNotNull();
+            await Assert.That(archived.IsCompleted).IsNull();
         }
 
         /// <summary>
         /// Архивация задачи с подзадачами
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task ArchiveCommandWithContainsTask_Success()
         {
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask1Id);
@@ -639,20 +639,20 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.NotNull(taskItem.ArchiveDateTime);
-            Assert.Null(taskItem.IsCompleted);
+            await Assert.That(taskItem.ArchiveDateTime).IsNotNull();
+            await Assert.That(taskItem.IsCompleted).IsNull();
 
             var subItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath,
                 MainWindowViewModelFixture.ArchiveTask11Id);
-            Assert.NotNull(subItem.ArchiveDateTime);
-            Assert.Null(subItem.IsCompleted);
+            await Assert.That(subItem.ArchiveDateTime).IsNotNull();
+            await Assert.That(subItem.IsCompleted).IsNull();
         }
 
         /// <summary>
         /// Разархивация задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task UnArchiveCommandWithoutContainsTask_Success()
         {
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask11Id);
@@ -661,15 +661,15 @@ namespace Unlimotion.Test
             await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.Null(taskItem.ArchiveDateTime);
-            Assert.False(taskItem.IsCompleted);
+            await Assert.That(taskItem.ArchiveDateTime).IsNull();
+            await Assert.That(taskItem.IsCompleted).IsFalse();
         }
 
         /// <summary>
         /// Разархивация задачи с подзадачами
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task UnArchiveCommandWithContainsTask_Success()
         {
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask1Id);
@@ -679,19 +679,19 @@ namespace Unlimotion.Test
                 mainWindowVM.CurrentTaskItem.ArchiveCommand.Execute(null), taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.Null(taskItem.ArchiveDateTime);
-            Assert.False(taskItem.IsCompleted);
+            await Assert.That(taskItem.ArchiveDateTime).IsNull();
+            await Assert.That(taskItem.IsCompleted).IsFalse();
 
             var subitem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id);
-            Assert.Null(subitem.ArchiveDateTime);
-            Assert.False(subitem.IsCompleted);
+            await Assert.That(subitem.ArchiveDateTime).IsNull();
+            await Assert.That(subitem.IsCompleted).IsFalse();
         }
 
         /// <summary>
         /// Выполнение задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task IsCompletedTask_Success()
         {
             var rootTaskViewModel = GetTask(MainWindowViewModelFixture.RootTask1Id);
@@ -702,15 +702,15 @@ namespace Unlimotion.Test
 
             // Assert
             var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
-            Assert.Equal(true, rootTask.IsCompleted);
-            Assert.NotNull(rootTask.CompletedDateTime);
+            await Assert.That(rootTask.IsCompleted).IsEqualTo(true);
+            await Assert.That(rootTask.CompletedDateTime).IsNotNull();
         }
 
         /// <summary>
         /// Отмена выполнения задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CancelCompletedTask_Success()
         {
             var completedTaskViewModel = GetTask(MainWindowViewModelFixture.CompletedTaskId);
@@ -720,15 +720,15 @@ namespace Unlimotion.Test
 
             // Assert
             var completedTask = GetStorageTaskItem(MainWindowViewModelFixture.CompletedTaskId);
-            Assert.Equal(false, completedTask.IsCompleted);
-            Assert.Null(completedTask.CompletedDateTime);
+            await Assert.That(completedTask.IsCompleted).IsEqualTo(false);
+            await Assert.That(completedTask.CompletedDateTime).IsNull();
         }
 
         /// <summary>
         /// Выполнение зависимой задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CompletingBlockingTask_Success()
         {
             var blockingTask5BeforeTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
@@ -744,49 +744,49 @@ namespace Unlimotion.Test
             // Загружаем задачу "blocked task 5" из файла, которая была заблокированная
             var blockedTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask5Id);
             //У нее проставлено время разблокировки
-            Assert.NotNull(blockedTask5AfterTest.UnlockedDateTime);
+            await Assert.That(blockedTask5AfterTest.UnlockedDateTime).IsNotNull();
             var result = compareLogic.Compare(blockedTask5BeforeTest, blockedTask5AfterTest);
             //Должно быть два различия: IsCanBeCompleted и UnlockedDateTime
-            Assert.Equal(2, result.Differences.Count);
+            await Assert.That(result.Differences.Count).IsEqualTo(2);
             var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.IsCanBeCompleted));
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.UnlockedDateTime));
 
-            Assert.NotNull(isCanBeCompletedDifference);
-            Assert.Equal(false, isCanBeCompletedDifference.Object1);
-            Assert.Equal(true, isCanBeCompletedDifference.Object2);
-            Assert.NotNull(unlockedDateTimeDifference);
-            Assert.Null(unlockedDateTimeDifference.Object1);
-            Assert.NotNull(unlockedDateTimeDifference.Object2);
+            await Assert.That(isCanBeCompletedDifference).IsNotNull();
+            await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(false);
+            await Assert.That(isCanBeCompletedDifference.Object2).IsEqualTo(true);
+            await Assert.That(unlockedDateTimeDifference).IsNotNull();
+            await Assert.That(unlockedDateTimeDifference.Object1).IsNull();
+            await Assert.That(unlockedDateTimeDifference.Object2).IsNotNull();
 
             var blockedTask5ViewModel = taskRepository.Tasks.Items.First(i => i.Id == MainWindowViewModelFixture.BlockedTask5Id);
-            Assert.NotNull(blockedTask5ViewModel);
+            await Assert.That(blockedTask5ViewModel).IsNotNull();
             //Теперь блокируемый таск можно выполнить
-            Assert.True(blockedTask5ViewModel.IsCanBeCompleted);
+            await Assert.That(blockedTask5ViewModel.IsCanBeCompleted).IsTrue();
 
             var rootTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
             //Проверяем, что в блокирующем таске изменилось
             result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
             //Должно быть 2 различия поля IsCompleted и CompletedDateTime
-            Assert.Equal(2, result.Differences.Count);
+            await Assert.That(result.Differences.Count).IsEqualTo(2);
             var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCompleted));
             var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.CompletedDateTime));
 
-            Assert.NotNull(isCompletedDifference);
-            Assert.NotNull(completedDateTimeDifference);
-            Assert.Equal(false, isCompletedDifference.Object1);
-            Assert.Equal(true, isCompletedDifference.Object2);
-            Assert.Null(completedDateTimeDifference.Object1);
-            Assert.NotNull(completedDateTimeDifference.Object2);
+            await Assert.That(isCompletedDifference).IsNotNull();
+            await Assert.That(completedDateTimeDifference).IsNotNull();
+            await Assert.That(isCompletedDifference.Object1).IsEqualTo(false);
+            await Assert.That(isCompletedDifference.Object2).IsEqualTo(true);
+            await Assert.That(completedDateTimeDifference.Object1).IsNull();
+            await Assert.That(completedDateTimeDifference.Object2).IsNotNull();
         }
 
         /// <summary>
         /// Создание зависимой связи
         /// </summary>
         /// <returns></returns>
-        [Theory]
-        [InlineData(MainWindowViewModelFixture.BlockedTask6Id, MainWindowViewModelFixture.RootTask6Id)]
-        [InlineData(MainWindowViewModelFixture.DeadlockTask6Id, MainWindowViewModelFixture.DeadlockBlockedTask6Id)]
-        public Task AddBlokedByLinkTask_Success(string draggableId, string destinationId)
+        [Test]
+        [Arguments(MainWindowViewModelFixture.BlockedTask6Id, MainWindowViewModelFixture.RootTask6Id)]
+        [Arguments(MainWindowViewModelFixture.DeadlockTask6Id, MainWindowViewModelFixture.DeadlockBlockedTask6Id)]
+        public async Task AddBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
             var destinationBeforeTest = GetStorageTaskItem(destinationId);
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
@@ -813,46 +813,45 @@ namespace Unlimotion.Test
             //Должно быть одно различие: проставлен id блокируемой задачи "Blocked task 6"
             if (isdestinationNotBlockedByDraggable)
             {
-                Assert.Single(result.Differences);
+                await Assert.That(result.Differences).HasSingleItem();
                 // Проверяем, что количество блокируемых задач изменилось
                 var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
-                Assert.NotNull(blocksTasksDifference);
+                await Assert.That(blocksTasksDifference).IsNotNull();
 
                 result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
                 //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
-                Assert.Equal(3, result.Differences.Count);
+                await Assert.That(result.Differences.Count).IsEqualTo(3);
                 var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
                 var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
                 var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
 
-                Assert.NotNull(blockedByTasksDifference);
-                Assert.NotNull(isCanBeCompletedDifference);
-                Assert.NotNull(unlockedDateTimeDifference);
-                
-                Assert.Equal(true, isCanBeCompletedDifference.Object1);
-                Assert.Equal(false, isCanBeCompletedDifference.Object2);
-                Assert.NotNull(unlockedDateTimeDifference.Object1);
-                Assert.Null(unlockedDateTimeDifference.Object2);
+                await Assert.That(blockedByTasksDifference).IsNotNull();
+                await Assert.That(isCanBeCompletedDifference).IsNotNull();
+                await Assert.That(unlockedDateTimeDifference).IsNotNull();
 
-                Assert.NotNull(rootTaskAfterTest);
+                await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(true);
+                await Assert.That(isCanBeCompletedDifference.Object2).IsEqualTo(false);
+                await Assert.That(unlockedDateTimeDifference.Object1).IsNotNull();
+                await Assert.That(unlockedDateTimeDifference.Object2).IsNull();
 
-                Assert.NotEmpty(rootTaskAfterTest.BlocksTasks);
-                Assert.Contains(blockeddraggableAfterTest.Id, rootTaskAfterTest.BlocksTasks);
+                await Assert.That(rootTaskAfterTest).IsNotNull();
+
+                await Assert.That(rootTaskAfterTest.BlocksTasks).IsNotEmpty();
+                await Assert.That(rootTaskAfterTest.BlocksTasks).Contains(blockeddraggableAfterTest.Id);
             }
             else
-                Assert.True(result.AreEqual);
+                await Assert.That(result.AreEqual).IsTrue();
 
-            return Task.CompletedTask;
         }
 
         /// <summary>
         /// Создание обратной зависимой связи
         /// </summary>
         /// <returns></returns>
-        [Theory]
-        [InlineData(MainWindowViewModelFixture.RootTask7Id, MainWindowViewModelFixture.BlockedTask7Id)]
-        [InlineData(MainWindowViewModelFixture.DeadlockBlockedTask7Id, MainWindowViewModelFixture.DeadlockTask7Id)]
-        public Task AddReverseBlokedByLinkTask_Success(string draggableId, string destinationId)
+        [Test]
+        [Arguments(MainWindowViewModelFixture.RootTask7Id, MainWindowViewModelFixture.BlockedTask7Id)]
+        [Arguments(MainWindowViewModelFixture.DeadlockBlockedTask7Id, MainWindowViewModelFixture.DeadlockTask7Id)]
+        public async Task AddReverseBlokedByLinkTask_Success(string draggableId, string destinationId)
         {
             var draggableBeforeTest = GetStorageTaskItem(draggableId);
             var destinationBeforeTest = GetStorageTaskItem(destinationId);
@@ -879,40 +878,39 @@ namespace Unlimotion.Test
             {
                 //Должно быть три различия: проставлен id блокируемой задачи "Blocked taask 6"
                 var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
-                Assert.NotNull(blocksTasksDifference);
+                await Assert.That(blocksTasksDifference).IsNotNull();
 
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
                 //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
-                Assert.Equal(3, result.Differences.Count);
+                await Assert.That(result.Differences.Count).IsEqualTo(3);
                 var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
                 var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
                 var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
 
-                Assert.NotNull(blockedByTasksDifference);
-                Assert.NotNull(isCanBeCompletedDifference);
-                Assert.NotNull(unlockedDateTimeDifference);
-                
-                Assert.Equal(true, isCanBeCompletedDifference.Object1);
-                Assert.Equal(false, isCanBeCompletedDifference.Object2);
-                Assert.NotNull(unlockedDateTimeDifference.Object1);
-                Assert.Null(unlockedDateTimeDifference.Object2);
+                await Assert.That(blockedByTasksDifference).IsNotNull();
+                await Assert.That(isCanBeCompletedDifference).IsNotNull();
+                await Assert.That(unlockedDateTimeDifference).IsNotNull();
 
-                Assert.NotNull(draggableAfterTest);
+                await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(true);
+                await Assert.That(isCanBeCompletedDifference.Object2).IsEqualTo(false);
+                await Assert.That(unlockedDateTimeDifference.Object1).IsNotNull();
+                await Assert.That(unlockedDateTimeDifference.Object2).IsNull();
 
-                Assert.NotEmpty(draggableAfterTest.BlocksTasks);
-                Assert.Contains(destinationAfterTest.Id, draggableAfterTest.BlocksTasks);
+                await Assert.That(draggableAfterTest).IsNotNull();
+
+                await Assert.That(draggableAfterTest.BlocksTasks).IsNotEmpty();
+                await Assert.That(draggableAfterTest.BlocksTasks).Contains(destinationAfterTest.Id);
             }
             else
-                Assert.True(result.AreEqual);
+                await Assert.That(result.AreEqual).IsTrue();
 
-            return Task.CompletedTask;
         }
 
         /// <summary>
         /// Клонирование задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CloneTask_Success()
         {
             //Запоминаем сколько задач было
@@ -931,23 +929,23 @@ namespace Unlimotion.Test
 
             //Assert
             //Проверяем что создалась ровно 1 задача
-            Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCount + 1);
 
             //Находим созданную склонированную задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Lookup(cloned.Id).Value;
-            Assert.NotNull(newTaskItemViewModel);
+            await Assert.That(newTaskItemViewModel).IsNotNull();
 
             //Загружаем новую задачу из файла
             var newTaskItem = GetStorageTaskItem(newTaskItemViewModel.Id);
             //Загружаем целевую задачу из файла
             var destinationTask8ItemAfterTest = GetStorageTaskItem(MainWindowViewModelFixture.DestinationTask8Id);
             //Новая задача должна быть в массиве ContainsTasks целевой задачи из файла
-            Assert.NotEmpty(destinationTask8ItemAfterTest.ContainsTasks);
-            Assert.Contains(newTaskItemViewModel.Id, destinationTask8ItemAfterTest.ContainsTasks);
+            await Assert.That(destinationTask8ItemAfterTest.ContainsTasks).IsNotEmpty();
+            await Assert.That(destinationTask8ItemAfterTest.ContainsTasks).Contains(newTaskItemViewModel.Id);
             //Теперь у целевой задачи есть невыполненные задачи внутри. Она заблокирована
 
-            Assert.False(destinationTask8ItemAfterTest.IsCanBeCompleted);
-            Assert.Null(destinationTask8ItemAfterTest.UnlockedDateTime);
+            await Assert.That(destinationTask8ItemAfterTest.IsCanBeCompleted).IsFalse();
+            await Assert.That(destinationTask8ItemAfterTest.UnlockedDateTime).IsNull();
 
             //Сравниваем старую и новую версию целевой задачи
             var result = compareLogic.Compare(destination8BeforeTest, destinationTask8ItemAfterTest);
@@ -956,35 +954,35 @@ namespace Unlimotion.Test
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
             var containsTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ContainsTasks));
 
-            Assert.NotNull(unlockedDateTimeDifference);
-            Assert.NotNull(containsTasksDifference);
-            Assert.NotNull(unlockedDateTimeDifference.Object1);
-            Assert.Null(unlockedDateTimeDifference.Object2);
-            Assert.Empty((IList)containsTasksDifference.Object1);
-            Assert.Single((IList)containsTasksDifference.Object2);
+            await Assert.That(unlockedDateTimeDifference).IsNotNull();
+            await Assert.That(containsTasksDifference).IsNotNull();
+            await Assert.That(unlockedDateTimeDifference.Object1).IsNotNull();
+            await Assert.That(unlockedDateTimeDifference.Object2).IsNull();
+            await Assert.That(((IList)containsTasksDifference.Object1).Count).IsEqualTo(0);
+            await Assert.That(((IList)containsTasksDifference.Object2).Count).IsEqualTo(1);
             //Новая задача должна быть в Contains во вьюмодели целевой задачи
-            Assert.Contains(newTaskItemViewModel.Id, destinationViewModel.Contains);
+            await Assert.That(destinationViewModel.Contains).Contains(newTaskItemViewModel.Id);
 
             //Берем клонируюмую задачу из файла
             var clonedTask8ItemAfterTest = GetStorageTaskItem(clonedViewModel.Id);
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
             //Должны отличаться id, дата создания и кол-во родителей
-            Assert.Equal(3, result.Differences.Count);
-            Assert.Contains(nameof(TaskItem.Id), result.Differences.Select(d => d.PropertyName));
-            Assert.Contains(nameof(TaskItem.CreatedDateTime), result.Differences.Select(d => d.PropertyName));
-            Assert.Contains(nameof(TaskItem.ParentTasks), result.Differences.Select(d => d.PropertyName));
+            await Assert.That(result.Differences.Count).IsEqualTo(3);
+            await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.Id));
+            await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.CreatedDateTime));
+            await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.ParentTasks));
             var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));
-            Assert.Empty(((IList)parentTasksDifference.Object1));
-            Assert.Single(((IList)parentTasksDifference.Object2));
-            Assert.Contains(MainWindowViewModelFixture.ClonnedSubTask81Id, newTaskItem.ContainsTasks);
+            await Assert.That(((IList)parentTasksDifference.Object1).Count).IsEqualTo(0);
+            await Assert.That(((IList)parentTasksDifference.Object2).Count).IsEqualTo(1);
+            await Assert.That(newTaskItem.ContainsTasks).Contains(MainWindowViewModelFixture.ClonnedSubTask81Id);
         }
 
         /// <summary>
         /// Выполнение повторяемой задачи
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task CompleteRepeatableTaskTask_Success()
         {
             //Запоминаем сколько задач было
@@ -994,20 +992,20 @@ namespace Unlimotion.Test
 
             //Берем задачу "Repeate task 9" и делаем ее выполненной
             var repeateTask9ViewModel = GetTask(MainWindowViewModelFixture.RepeateTask9Id);
-            Assert.NotNull(repeateTask9ViewModel.Repeater);
+            await Assert.That(repeateTask9ViewModel.Repeater).IsNotNull();
             repeateTask9ViewModel.IsCompleted = true;
             await TestHelpers.WaitThrottleTime();
 
             //Assert
             //Проверяем что создалась ровно 1 задача
-            Assert.Equal(taskCount + 1, taskRepository.Tasks.Count);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCount + 1);
 
 
             //Берем задачу из файла
             var repeateTask9AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RepeateTask9Id);
             //Провереряем что исходная "Repeate task 9" задача выполнена
-            Assert.Equal(true, repeateTask9AfterTest.IsCompleted);
-            Assert.NotNull(repeateTask9AfterTest.CompletedDateTime);
+            await Assert.That(repeateTask9AfterTest.IsCompleted).IsEqualTo(true);
+            await Assert.That(repeateTask9AfterTest.CompletedDateTime).IsNotNull();
 
             var result = compareLogic.Compare(repeateTask9BeforeTest, repeateTask9AfterTest);
 
@@ -1015,12 +1013,12 @@ namespace Unlimotion.Test
             var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.IsCompleted));
             var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CompletedDateTime));
 
-            Assert.NotNull(isCompletedDifference);
-            Assert.NotNull(completedDateTimeDifference);
-            Assert.Equal(false, isCompletedDifference.Object1);
-            Assert.Equal(true, isCompletedDifference.Object2);
-            Assert.Null(completedDateTimeDifference.Object1);
-            Assert.NotNull(completedDateTimeDifference.Object2);
+            await Assert.That(isCompletedDifference).IsNotNull();
+            await Assert.That(completedDateTimeDifference).IsNotNull();
+            await Assert.That(isCompletedDifference.Object1).IsEqualTo(false);
+            await Assert.That(isCompletedDifference.Object2).IsEqualTo(true);
+            await Assert.That(completedDateTimeDifference.Object1).IsNull();
+            await Assert.That(completedDateTimeDifference.Object2).IsNotNull();
 
             //Находим созданную склонированную повторяющейся "Repeate task 9" задачу в репозитории
             var newTaskItemViewModel = taskRepository.Tasks.Items.OrderBy(model => model.CreatedDateTime).Last();
@@ -1030,24 +1028,24 @@ namespace Unlimotion.Test
             result = compareLogic.Compare(repeateTask9BeforeTest, newTask9);
 
             //Должно быть только 5 различия: Id, CreatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
-            Assert.Equal(5, result.Differences.Count);
+            await Assert.That(result.Differences.Count).IsEqualTo(5);
             var idDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.Id));
             var createdDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CreatedDateTime));
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UnlockedDateTime));
             var plannedBeginDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedBeginDateTime));
             var plannedEndDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedEndDateTime));
 
-            Assert.NotNull(idDifference);
-            Assert.NotNull(createdDateTimeDifference);
-            Assert.NotNull(unlockedDateTimeDifference);
-            Assert.NotNull(plannedBeginDateTimeDifference);
-            Assert.NotNull(plannedEndDateTimeDifference);
+            await Assert.That(idDifference).IsNotNull();
+            await Assert.That(createdDateTimeDifference).IsNotNull();
+            await Assert.That(unlockedDateTimeDifference).IsNotNull();
+            await Assert.That(plannedBeginDateTimeDifference).IsNotNull();
+            await Assert.That(plannedEndDateTimeDifference).IsNotNull();
 
             //У двух задач должны быть одни предки во вьюмоделе
-            Assert.True(repeateTask9ViewModel.Parents.Count >= newTaskItemViewModel.Parents.Count);
+            await Assert.That(repeateTask9ViewModel.Parents.Count >= newTaskItemViewModel.Parents.Count).IsTrue();
             if (repeateTask9ViewModel.Parents.Count > 0)
             {
-                Assert.Contains(newTaskItemViewModel.Parents.FirstOrDefault(), repeateTask9ViewModel.Parents);
+                await Assert.That(repeateTask9ViewModel.Parents).Contains(newTaskItemViewModel.Parents.FirstOrDefault());
             }
         }
 
@@ -1055,23 +1053,22 @@ namespace Unlimotion.Test
         /// Если у выбранной задачи нет имени, вложенные создавать нельзя
         /// </summary>
         /// <returns></returns>
-        [Fact]
-        public Task CreateTask_EmptyTitle_ShouldNotCreate()
+        [Test]
+        public async Task CreateTask_EmptyTitle_ShouldNotCreate()
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             var task = new TaskItemViewModel(new TaskItem(), taskRepository); // Title is null
             mainWindowVM.CurrentTaskItem = task;
             mainWindowVM.CreateInner.Execute(null);
 
-            Assert.Equal(taskCountBefore, taskRepository.Tasks.Count);
-            return Task.CompletedTask;
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore);
         }
 
         /// <summary>
         /// Перемещение без источника должно работать как копирование
         /// </summary>
         /// <returns></returns>
-        [Fact]
+        [Test]
         public async Task MoveInto_NullSource_ShouldSucceed()
         {
             var subTask = GetTask(MainWindowViewModelFixture.SubTask22Id);
@@ -1081,60 +1078,68 @@ namespace Unlimotion.Test
             await subTask.MoveInto(destination, null);
 
             var stored = GetStorageTaskItem(destination.Id);
-            Assert.Contains(subTask.Id, stored.ContainsTasks);
+            await Assert.That(stored.ContainsTasks).Contains(subTask.Id);
 
 
             var stored2 = GetStorageTaskItem(firstParent.Id);
-            Assert.Contains(subTask.Id, stored2.ContainsTasks);
+            await Assert.That(stored2.ContainsTasks).Contains(subTask.Id);
         }
 
-        [Fact]
-        public Task RemoveTask_NoParents_ShouldDeleteFile()
+        [Test]
+        public async Task RemoveTask_NoParents_ShouldDeleteFile()
         {
             var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
             string path = Path.Combine(fixture.DefaultTasksFolderPath, task.Id);
-            Assert.True(File.Exists(path));
+            await Assert.That(File.Exists(path)).IsTrue();
 
-            task.RemoveFunc.Invoke(null);
-            Assert.False(File.Exists(path));
-            return Task.CompletedTask;
+            await task.RemoveFunc.Invoke(null);
+            await Assert.That(File.Exists(path)).IsFalse();
         }
 
-        [Fact]
-        public Task RemoveTask_HasParents_ShouldNotDeleteFile()
+        [Test]
+        public async Task RemoveTask_HasParents_ShouldNotDeleteFile()
         {
             var parent = GetTask(MainWindowViewModelFixture.RootTask2Id);
             var child = GetTask(MainWindowViewModelFixture.SubTask22Id);
             string path = Path.Combine(fixture.DefaultTasksFolderPath, child.Id);
-            Assert.True(File.Exists(path));
+            await Assert.That(File.Exists(path)).IsTrue();
 
-            child.RemoveFunc.Invoke(parent);
-            Assert.True(File.Exists(path));
-            return Task.CompletedTask;
+            await child.RemoveFunc.Invoke(parent);
+            await Assert.That(File.Exists(path)).IsTrue();
         }
 
-        [Fact]
-        public Task SelectCurrentTaskMode_SyncsCorrectly()
+        [Test]
+        public async Task SelectCurrentTaskMode_SyncsCorrectly()
         {
-            var task = GetTask(MainWindowViewModelFixture.RootTask1Id);
-            
-            Assert.True(mainWindowVM.AllTasksMode);
-            Assert.Null(mainWindowVM.CurrentAllTasksItem);
-            mainWindowVM.CurrentTaskItem = task;
-            Assert.NotNull(mainWindowVM.CurrentAllTasksItem);
-            
+            var task = mainWindowVM.CurrentAllTasksItems.First().TaskItem;
+
             mainWindowVM.AllTasksMode = true;
-            Assert.Equal(task, mainWindowVM.CurrentAllTasksItem.TaskItem);
+            mainWindowVM.CurrentTaskItem = task;
+
+            var allTasksSelected = SpinWait.SpinUntil(
+                () => mainWindowVM.CurrentAllTasksItem?.TaskItem?.Id == task.Id,
+                TimeSpan.FromSeconds(2));
+            await Assert.That(allTasksSelected).IsTrue();
 
             mainWindowVM.AllTasksMode = false;
-            Assert.Null(mainWindowVM.CurrentUnlockedItem);
             mainWindowVM.UnlockedMode = true;
-            Assert.Equal(task, mainWindowVM.CurrentUnlockedItem.TaskItem);
 
-            return Task.CompletedTask;
+            var hasUnlockedItems = SpinWait.SpinUntil(
+                () => mainWindowVM.UnlockedItems.Count > 0,
+                TimeSpan.FromSeconds(2));
+            await Assert.That(hasUnlockedItems).IsTrue();
+
+            var unlockedTask = mainWindowVM.UnlockedItems.First().TaskItem;
+            mainWindowVM.CurrentTaskItem = unlockedTask;
+
+            var unlockedSelected = SpinWait.SpinUntil(
+                () => mainWindowVM.CurrentUnlockedItem?.TaskItem?.Id == unlockedTask.Id,
+                TimeSpan.FromSeconds(2));
+            await Assert.That(unlockedSelected).IsTrue();
+
         }
 
-        [Fact]
+        [Test]
         public async Task ParentTaskWithIncompleteChildAndBlocked_ShouldRemainNotAvailable()
         {
             // Arrange - Get a parent task with an incomplete child task
@@ -1150,9 +1155,9 @@ namespace Unlimotion.Test
             
             // Verify initial state - parent should be blocked by incomplete child
             var parentStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parentTask.Id);
-            Assert.False(parentStored.IsCanBeCompleted);
-            Assert.Null(parentStored.UnlockedDateTime);
-            
+            await Assert.That(parentStored.IsCanBeCompleted).IsFalse();
+            await Assert.That(parentStored.UnlockedDateTime).IsNull();
+
             // Get a task to use as blocker
             var blockerTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
 
@@ -1162,19 +1167,18 @@ namespace Unlimotion.Test
 
             // Assert - Parent task should remain not available
             var updatedParent = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parentTask.Id);
-            Assert.False(updatedParent.IsCanBeCompleted);
-            Assert.Null(updatedParent.UnlockedDateTime);
+            await Assert.That(updatedParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedParent.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
-        public Task BlockedTask_CompletionIsPrevented()
+        [Test]
+        public async Task BlockedTask_CompletionIsPrevented()
         {
             var blocked = GetTask(MainWindowViewModelFixture.BlockedTask5Id);
-            Assert.False(blocked.IsCanBeCompleted);
-            return Task.CompletedTask;
+            await Assert.That(blocked.IsCanBeCompleted).IsFalse();
         }
 
-        [Fact]
+        [Test]
         public async Task CloneInto_MultipleParents_ResultsCorrect()
         {
             var src = GetTask(MainWindowViewModelFixture.ClonedTask8Id);
@@ -1184,9 +1188,9 @@ namespace Unlimotion.Test
 
             var clone = await src!.CloneInto(dest1);
 
-            Assert.Single(clone.Parents);
-            Assert.Contains(dest1.Id, clone.Parents);
-            Assert.DoesNotContain(dest2!.Id, clone.Parents);
+            await Assert.That(clone.Parents).HasSingleItem();
+            await Assert.That(clone.Parents).Contains(dest1.Id);
+            await Assert.That(clone.Parents).DoesNotContain(dest2!.Id);
         }
     }
 }

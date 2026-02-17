@@ -1,14 +1,15 @@
 using System;
 using System.Linq;
 using System.Threading;
-using Xunit;
+using System.Threading.Tasks;
 
 namespace Unlimotion.Test;
 
+[NotInParallel]
 public class StartupProjectionAndRelationsTests : BaseModelTests
 {
-    [Fact]
-    public void TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds()
+    [Test]
+    public async Task TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds()
     {
         foreach (var task in taskRepository.Tasks.Items)
         {
@@ -17,22 +18,22 @@ public class StartupProjectionAndRelationsTests : BaseModelTests
             var blocksIds = task.BlocksTasks.Select(item => item.Id).ToHashSet();
             var blockedByIds = task.BlockedByTasks.Select(item => item.Id).ToHashSet();
 
-            Assert.Equal(task.Contains.ToHashSet(), containsIds);
-            Assert.Equal(task.Parents.ToHashSet(), parentIds);
-            Assert.Equal(task.Blocks.ToHashSet(), blocksIds);
-            Assert.Equal(task.BlockedBy.ToHashSet(), blockedByIds);
+            await Assert.That(containsIds.SetEquals(task.Contains)).IsTrue();
+            await Assert.That(parentIds.SetEquals(task.Parents)).IsTrue();
+            await Assert.That(blocksIds.SetEquals(task.Blocks)).IsTrue();
+            await Assert.That(blockedByIds.SetEquals(task.BlockedBy)).IsTrue();
         }
     }
 
-    [Fact]
-    public void HeavyProjections_ShouldBeLoadedLazilyAfterTabActivation()
+    [Test]
+    public async Task HeavyProjections_ShouldBeLoadedLazilyAfterTabActivation()
     {
-        Assert.Empty(mainWindowVM.CompletedItems);
-        Assert.Empty(mainWindowVM.Graph.Tasks);
-        Assert.Empty(mainWindowVM.Graph.UnlockedTasks);
+        await Assert.That(mainWindowVM.CompletedItems).IsEmpty();
+        await Assert.That(mainWindowVM.Graph.Tasks).IsEmpty();
+        await Assert.That(mainWindowVM.Graph.UnlockedTasks).IsEmpty();
         mainWindowVM.GraphMode = true;
 
         var graphReady = SpinWait.SpinUntil(() => mainWindowVM.Graph.Tasks.Count > 0, TimeSpan.FromSeconds(3));
-        Assert.True(graphReady);
+        await Assert.That(graphReady).IsTrue();
     }
 }

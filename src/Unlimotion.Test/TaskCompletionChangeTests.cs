@@ -4,13 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
-using Xunit;
 
 namespace Unlimotion.Test
 {
     public class TaskCompletionChangeTests
     {
-        [Fact]
+        [Test]
         public async Task HandleTaskCompletionChange_CompletedTask_SetsCompletedDateTime()
         {
             // Arrange
@@ -28,12 +27,12 @@ namespace Unlimotion.Test
             var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
-            Assert.NotNull(task.CompletedDateTime);
-            Assert.Null(task.ArchiveDateTime);
-            Assert.Contains(task, result);
+            await Assert.That(task.CompletedDateTime).IsNotNull();
+            await Assert.That(task.ArchiveDateTime).IsNull();
+            await Assert.That(result).Contains(task);
         }
 
-        [Fact]
+        [Test]
         public async Task HandleTaskCompletionChange_UncompletedTask_ClearsDates()
         {
             // Arrange
@@ -52,12 +51,12 @@ namespace Unlimotion.Test
             var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
-            Assert.Null(task.CompletedDateTime);
-            Assert.Null(task.ArchiveDateTime);
-            Assert.Contains(task, result);
+            await Assert.That(task.CompletedDateTime).IsNull();
+            await Assert.That(task.ArchiveDateTime).IsNull();
+            await Assert.That(result).Contains(task);
         }
 
-        [Fact]
+        [Test]
         public async Task HandleTaskCompletionChange_ArchivedTask_SetsArchiveDateTime()
         {
             // Arrange
@@ -75,12 +74,12 @@ namespace Unlimotion.Test
             var result = await manager.HandleTaskCompletionChange(task);
 
             // Assert
-            Assert.NotNull(task.ArchiveDateTime);
-            Assert.Null(task.CompletedDateTime);
-            Assert.Contains(task, result);
+            await Assert.That(task.ArchiveDateTime).IsNotNull();
+            await Assert.That(task.CompletedDateTime).IsNull();
+            await Assert.That(result).Contains(task);
         }
 
-        [Fact]
+        [Test]
         public async Task HandleTaskCompletionChange_CompletedTaskWithRepeater_CreatesClone()
         {
             // Arrange
@@ -112,19 +111,19 @@ namespace Unlimotion.Test
             var clonedTask = result.Last();
 
             // Assert
-            Assert.NotNull(task.CompletedDateTime);
-            Assert.Null(task.ArchiveDateTime);
-            Assert.Contains(task, result);
-            Assert.NotNull(clonedTask.Id);
-            Assert.Equal(task.Title, clonedTask.Title);
-            Assert.Equal(task.Description, clonedTask.Description);
-            Assert.Equal(task.ContainsTasks, clonedTask.ContainsTasks);
-            Assert.Equal(task.BlocksTasks, clonedTask.BlocksTasks);
-            Assert.Equal(task.BlockedByTasks, clonedTask.BlockedByTasks);
-            Assert.Contains(clonedTask, result);
+            await Assert.That(task.CompletedDateTime).IsNotNull();
+            await Assert.That(task.ArchiveDateTime).IsNull();
+            await Assert.That(result).Contains(task);
+            await Assert.That(clonedTask.Id).IsNotNull();
+            await Assert.That(clonedTask.Title).IsEqualTo(task.Title);
+            await Assert.That(clonedTask.Description).IsEqualTo(task.Description);
+            await Assert.That(clonedTask.ContainsTasks).IsEqualTo(task.ContainsTasks);
+            await Assert.That(clonedTask.BlocksTasks).IsEqualTo(task.BlocksTasks);
+            await Assert.That(clonedTask.BlockedByTasks).IsEqualTo(task.BlockedByTasks);
+            await Assert.That(result).Contains(clonedTask);
         }
 
-        [Fact]
+        [Test]
         public async Task HandleTaskCompletionChange_CompletedTaskWithRepeater_ShouldSyncCloneRelationsAndAvailability()
         {
             // Arrange
@@ -183,30 +182,30 @@ namespace Unlimotion.Test
 
             // Assert
             var clone = result.FirstOrDefault(t => t.Id != source.Id && t.Title == source.Title);
-            Assert.NotNull(clone);
+            await Assert.That(clone).IsNotNull();
 
             var cloneFromStorage = await storage.Load(clone.Id);
             var childFromStorage = await storage.Load(child.Id);
             var blockerFromStorage = await storage.Load(blocker.Id);
             var blockedFromStorage = await storage.Load(blocked.Id);
 
-            Assert.NotNull(cloneFromStorage);
-            Assert.Contains(child.Id, cloneFromStorage.ContainsTasks);
-            Assert.Contains(blocker.Id, cloneFromStorage.BlockedByTasks);
-            Assert.Contains(blocked.Id, cloneFromStorage.BlocksTasks);
+            await Assert.That(cloneFromStorage).IsNotNull();
+            await Assert.That(cloneFromStorage.ContainsTasks).Contains(child.Id);
+            await Assert.That(cloneFromStorage.BlockedByTasks).Contains(blocker.Id);
+            await Assert.That(cloneFromStorage.BlocksTasks).Contains(blocked.Id);
 
-            Assert.NotNull(childFromStorage);
-            Assert.Contains(clone.Id, childFromStorage.ParentTasks);
+            await Assert.That(childFromStorage).IsNotNull();
+            await Assert.That(childFromStorage.ParentTasks).Contains(clone.Id);
 
-            Assert.NotNull(blockerFromStorage);
-            Assert.Contains(clone.Id, blockerFromStorage.BlocksTasks);
+            await Assert.That(blockerFromStorage).IsNotNull();
+            await Assert.That(blockerFromStorage.BlocksTasks).Contains(clone.Id);
 
-            Assert.NotNull(blockedFromStorage);
-            Assert.Contains(clone.Id, blockedFromStorage.BlockedByTasks);
-            Assert.False(blockedFromStorage.IsCanBeCompleted);
+            await Assert.That(blockedFromStorage).IsNotNull();
+            await Assert.That(blockedFromStorage.BlockedByTasks).Contains(clone.Id);
+            await Assert.That(blockedFromStorage.IsCanBeCompleted).IsFalse();
 
-            Assert.False(cloneFromStorage.IsCanBeCompleted);
-            Assert.Null(cloneFromStorage.UnlockedDateTime);
+            await Assert.That(cloneFromStorage.IsCanBeCompleted).IsFalse();
+            await Assert.That(cloneFromStorage.UnlockedDateTime).IsNull();
         }
     }
 }
