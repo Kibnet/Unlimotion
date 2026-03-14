@@ -65,6 +65,7 @@
 
 		<PackageVersion Include="AvaloniaGraphControl" Version="0.6.1" />
 		<PackageVersion Include="LibGit2Sharp" Version="0.31.0" />
+		<PackageVersion Include="LibGit2Sharp.NativeBinaries" Version="2.0.324-android.4" />
 		<PackageVersion Include="Mileeena.Notification.Avalonia" Version="2.1.2" />
 		<PackageVersion Include="Quartz" Version="3.8.1" />
 		<PackageVersion Include="DialogHost.Avalonia" Version="0.8.1" />

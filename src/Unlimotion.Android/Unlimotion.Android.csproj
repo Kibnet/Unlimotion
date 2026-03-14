@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-android</TargetFramework>
+    <TargetFramework>net8.0-android</TargetFramework>
 		<LangVersion>latest</LangVersion>
     <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
@@ -10,7 +10,32 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+    <AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <AndroidAapt2NoCompress>dll;pdb</AndroidAapt2NoCompress>
+    <AndroidUseAssemblyStore>false</AndroidUseAssemblyStore>
+    <AndroidEnableAssemblyCompression>false</AndroidEnableAssemblyCompression>
+    <AndroidStoreUncompressedFileExtensions>.dll;.pdb;$(AndroidStoreUncompressedFileExtensions)</AndroidStoreUncompressedFileExtensions>
+    <AndroidSdkDirectory Condition="Exists('/data/data/com.termux/files/home/android-sdk')">/data/data/com.termux/files/home/android-sdk</AndroidSdkDirectory>
+    <JavaSdkDirectory Condition="Exists('/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk')">/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk</JavaSdkDirectory>
+    <Aapt2ToolPath Condition="Exists('/data/data/com.termux/files/usr/bin/aapt2')">/data/data/com.termux/files/usr/bin</Aapt2ToolPath>
+    <Aapt2ToolExe Condition="Exists('/data/data/com.termux/files/usr/bin/aapt2')">aapt2</Aapt2ToolExe>
+    <ZipAlignToolPath Condition="Exists('/data/data/com.termux/files/usr/bin/zipalign')">/data/data/com.termux/files/usr/bin</ZipAlignToolPath>
+    <ZipAlignToolExe Condition="Exists('/data/data/com.termux/files/usr/bin/zipalign')">zipalign</ZipAlignToolExe>
   </PropertyGroup>
+
+
+  <ItemGroup>
+  </ItemGroup>
+
+  <ItemGroup>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libcrypto.so.3" />
+  </ItemGroup>
 
   <ItemGroup>
     <AndroidResource Include="Icon.png">
@@ -21,6 +46,7 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" />
     <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
