@@ -18,6 +18,12 @@ dotnet build /storage/emulated/0/unlimotion/src/Unlimotion.Android/Unlimotion.An
   -p:AndroidBinUtilsDirectory=/data/data/com.termux/files/home/android-binutils
 ```
 
+## libgit2 (Android arm64)
+```bash
+git submodule update --init --recursive
+scripts/build-libgit2-android.sh
+```
+
 ### Why the binutils flag matters
 The default toolchain in `Microsoft.Android.Sdk.Linux` uses `llc` built for x86_64 and will crash on Android ("Exec format error").
 The `AndroidBinUtilsDirectory` override forces Termux-compatible tools.
