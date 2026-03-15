@@ -38,7 +38,14 @@ namespace Unlimotion
             }
 
             Path = normalizedPath;
-            Directory.CreateDirectory(Path);
+            try
+            {
+                Directory.CreateDirectory(Path);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Нет доступа к каталогу: {Path}", ex);
+            }
             tasks = new();
             if (watcher)
             {
