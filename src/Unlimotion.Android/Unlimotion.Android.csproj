@@ -27,6 +27,7 @@
 
 
   <ItemGroup>
+    <AndroidAsset Include="Assets\cacert.pem" />
   </ItemGroup>
 
   <ItemGroup>

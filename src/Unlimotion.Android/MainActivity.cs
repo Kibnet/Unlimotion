@@ -11,11 +11,13 @@ using Android.OS;
 using Android.Provider;
 using Android.Widget;
 using Android.Util;
+using Android.Runtime;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
 using Avalonia;
 using Avalonia.Android;
 using Avalonia.ReactiveUI;
+using Unlimotion;
 using Unlimotion.Services;
 
 namespace Unlimotion.Android;
@@ -34,6 +36,7 @@ public class MainActivity : AvaloniaMainActivity<App>
     {
         base.OnCreate(savedInstanceState);
 
+        HookCrashLogging();
         EnsureAllFilesAccessIfNeeded();
     }
 
@@ -81,6 +84,9 @@ public class MainActivity : AvaloniaMainActivity<App>
 
         BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
 
+        EnsureGitSafeDirectory(dataDir);
+        EnsureGitSslCertBundle(dataDir);
+
         //Задание дефолтного пути для хранения задач
         TaskStorageFactory.DefaultStoragePath = Path.Combine(dataDir, TasksFolderName);
 
@@ -122,6 +128,29 @@ public class MainActivity : AvaloniaMainActivity<App>
         catch
         {
         }
+    }
+
+    private static bool _crashLoggingHooked;
+
+    private static void HookCrashLogging()
+    {
+        if (_crashLoggingHooked)
+        {
+            return;
+        }
+
+        _crashLoggingHooked = true;
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex)
+            {
+                WriteStartupError(ex);
+            }
+        };
+        AndroidEnvironment.UnhandledExceptionRaiser += (_, args) =>
+        {
+            WriteStartupError(args.Exception);
+        };
     }
 
     private static bool TryWriteStartupErrorToDownloads(string text)
@@ -246,6 +275,47 @@ public class MainActivity : AvaloniaMainActivity<App>
         }
     }
 
+    private void EnsureGitSafeDirectory(string dataDir)
+    {
+        try
+        {
+            var configPath = Path.Combine(dataDir, ".gitconfig");
+            if (!File.Exists(configPath))
+            {
+                File.WriteAllText(configPath, "[safe]\n\tdirectory = *\n");
+            }
+
+            System.Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", configPath);
+        }
+        catch
+        {
+        }
+    }
+
+    private void EnsureGitSslCertBundle(string dataDir)
+    {
+        try
+        {
+            var certPath = Path.Combine(dataDir, "cacert.pem");
+            if (!File.Exists(certPath))
+            {
+                using var input = Assets?.Open("cacert.pem");
+                if (input == null)
+                {
+                    return;
+                }
+
+                using var output = File.Create(certPath);
+                input.CopyTo(output);
+            }
+
+            LibGit2Interop.SetSslCertificateLocations(certPath, null);
+        }
+        catch
+        {
+        }
+    }
+
     private void AccessExternalStorage()
     {
         // Здесь ваш код для доступа к внешнему хранилищу
@@ -253,4 +323,3 @@ public class MainActivity : AvaloniaMainActivity<App>
         Toast.MakeText(this, $"Путь внешнего хранилища: {externalDataDir}", ToastLength.Long)?.Show();
     }
 }
-

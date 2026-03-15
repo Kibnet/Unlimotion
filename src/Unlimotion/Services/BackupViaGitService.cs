@@ -52,7 +52,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
         catch (Exception ex)
         {
-            ShowUiError(ex.Message);
+            ShowUiError(ex.Message, ex);
         }
 
         return result;
@@ -79,7 +79,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
         catch (Exception ex)
         {
-            ShowUiError(ex.Message);
+            ShowUiError(ex.Message, ex);
         }
 
         return result;
@@ -340,9 +340,16 @@ public class BackupViaGitService : IRemoteBackupService
             _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
     }
 
-    private void ShowUiError(string message)
+    private void ShowUiError(string message, Exception? ex = null)
     {
-        Debug.WriteLine($"Git error: {message} at {DateTime.Now}");
+        if (ex == null)
+        {
+            Debug.WriteLine($"Git error: {message} at {DateTime.Now}");
+        }
+        else
+        {
+            Debug.WriteLine($"Git error: {message} at {DateTime.Now}\n{ex}");
+        }
         _notificationManager?.ErrorToast(message);
     }
 
