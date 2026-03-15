@@ -455,3 +455,4 @@ $RECYCLE.BIN/
 src/Unlimotion/Tasks
 src/Unlimotion.Server/RavenDB
 src/RavenDB
+.native/libgit2-build-*/
