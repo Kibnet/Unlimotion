@@ -7,7 +7,6 @@ using System.Windows.Input;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
-using Xunit;
 
 namespace Unlimotion.Test
 {
@@ -26,7 +25,16 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
-            Assert.Equal(taskCountBefore + changeCount, taskRepository.Tasks.Count);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
+        }
+
+        public static async Task ActionNotCreateItemsAsync(Func<Task> action,
+            ITaskStorage taskRepository, int changeCount = 0)
+        {
+            var taskCountBefore = taskRepository.Tasks.Count;
+            await action.Invoke();
+            await WaitThrottleTime();
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
 
         public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(Action action,
@@ -36,7 +44,18 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
-            Assert.Equal(taskCountBefore + expectedNewTasks, taskRepository.Tasks.Count);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + expectedNewTasks);
+            return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
+        }
+
+        public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItemAsync(Func<Task> action,
+            ITaskStorage taskRepository,
+            int expectedNewTasks = 1)
+        {
+            var taskCountBefore = taskRepository.Tasks.Count;
+            await action.Invoke();
+            await WaitThrottleTime();
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + expectedNewTasks);
             return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
         }
 
@@ -90,26 +109,22 @@ namespace Unlimotion.Test
             return compareLogic.Compare(before, after);
         }
 
-        public static void ShouldHaveOnlyTitleChanged(ComparisonResult result, string oldTitle, string newTitle)
+        public static async Task ShouldHaveOnlyTitleChanged(ComparisonResult result, string oldTitle, string newTitle)
         {
-            Assert.Single(result.Differences);
-            Assert.Equal(nameof(TaskItem.Title), result.Differences[0].PropertyName);
-            Assert.StartsWith($"\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Title != Actual.Title, Values ({oldTitle},{newTitle})", result.DifferencesString);
+            await Assert.That(result.Differences).HasSingleItem();
+            await Assert.That(result.Differences[0].PropertyName).IsEqualTo(nameof(TaskItem.Title));
+            await Assert.That(result.DifferencesString).StartsWith($"\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Title != Actual.Title, Values ({oldTitle},{newTitle})");
         }
 
-        public static void ShouldContainOnlyDifference(ComparisonResult result, string propertyName)
+        public static async Task ShouldContainOnlyDifference(ComparisonResult result, string propertyName)
         {
-            Assert.Single(result.Differences, d =>
-            {
-                if (d == null) throw new ArgumentNullException(nameof(d));
-                return d.PropertyName == propertyName;
-            });
+            await Assert.That(result.Differences.Count(d => d.PropertyName == propertyName)).IsEqualTo(1);
         }
 
-        public static void AssertTaskExistsOnDisk(string folderPath, string taskId)
+        public static async Task AssertTaskExistsOnDisk(string folderPath, string taskId)
         {
             var path = Path.Combine(folderPath, taskId);
-            Assert.True(File.Exists(path), $"Task file not found: {path}");
+            await Assert.That(File.Exists(path)).IsTrue().Because($"Task file not found: {path}");
         }
     }
 }

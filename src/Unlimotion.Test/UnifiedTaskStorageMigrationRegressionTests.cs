@@ -4,13 +4,12 @@ using System.IO;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
-using Xunit;
 
 namespace Unlimotion.Test;
 
 public class UnifiedTaskStorageMigrationRegressionTests
 {
-    [Fact]
+    [Test]
     public async Task UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists()
     {
         var tempDir = CreateTempDirectory();
@@ -46,12 +45,12 @@ public class UnifiedTaskStorageMigrationRegressionTests
             var storedParent = await fileStorage.Load("p");
             var storedChild = await fileStorage.Load("c");
 
-            Assert.NotNull(storedParent);
-            Assert.NotNull(storedChild);
-            Assert.Contains("c", storedParent.ContainsTasks);
-            Assert.Contains("p", storedChild.ParentTasks);
-            Assert.True(storedParent.Version >= 1);
-            Assert.True(storedChild.Version >= 1);
+            await Assert.That(storedParent).IsNotNull();
+            await Assert.That(storedChild).IsNotNull();
+            await Assert.That(storedParent.ContainsTasks).Contains("c");
+            await Assert.That(storedChild.ParentTasks).Contains("p");
+            await Assert.That(storedParent.Version >= 1).IsTrue();
+            await Assert.That(storedChild.Version >= 1).IsTrue();
         }
         finally
         {
@@ -59,7 +58,7 @@ public class UnifiedTaskStorageMigrationRegressionTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task UnifiedTaskStorage_Init_ShouldRecalculateAvailability_WhenReverseLinksWereRepaired()
     {
         var tempDir = CreateTempDirectory();
@@ -97,10 +96,10 @@ public class UnifiedTaskStorageMigrationRegressionTests
 
             var storedBlocked = await fileStorage.Load("blocked");
 
-            Assert.NotNull(storedBlocked);
-            Assert.Contains("blocker", storedBlocked.BlockedByTasks);
-            Assert.False(storedBlocked.IsCanBeCompleted);
-            Assert.Null(storedBlocked.UnlockedDateTime);
+            await Assert.That(storedBlocked).IsNotNull();
+            await Assert.That(storedBlocked.BlockedByTasks).Contains("blocker");
+            await Assert.That(storedBlocked.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedBlocked.UnlockedDateTime).IsNull();
         }
         finally
         {

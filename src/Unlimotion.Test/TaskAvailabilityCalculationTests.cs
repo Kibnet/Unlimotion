@@ -4,15 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
-using Xunit;
 
 namespace Unlimotion.Test
 {
     public class TaskAvailabilityCalculationTests
     {
-        
-
-        [Fact]
+                [Test]
         public async Task TaskWithNoDependencies_ShouldBeAvailable()
         {
             // Arrange
@@ -31,11 +28,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(task);
 
             // Assert
-            Assert.True(task.IsCanBeCompleted);
-            Assert.NotNull(task.UnlockedDateTime);
+            await Assert.That(task.IsCanBeCompleted).IsTrue();
+            await Assert.That(task.UnlockedDateTime).IsNotNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithCompletedChild_ShouldBeAvailable()
         {
             // Arrange
@@ -63,11 +60,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(parentTask);
 
             // Assert
-            Assert.True(parentTask.IsCanBeCompleted);
-            Assert.NotNull(parentTask.UnlockedDateTime);
+            await Assert.That(parentTask.IsCanBeCompleted).IsTrue();
+            await Assert.That(parentTask.UnlockedDateTime).IsNotNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithIncompleteChild_ShouldNotBeAvailable()
         {
             // Arrange
@@ -97,11 +94,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(parentTask);
 
             // Assert
-            Assert.False(parentTask.IsCanBeCompleted);
-            Assert.Null(parentTask.UnlockedDateTime);
+            await Assert.That(parentTask.IsCanBeCompleted).IsFalse();
+            await Assert.That(parentTask.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithArchivedChild_ShouldBeAvailable()
         {
             // Arrange
@@ -129,11 +126,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(parentTask);
 
             // Assert
-            Assert.True(parentTask.IsCanBeCompleted);
-            Assert.NotNull(parentTask.UnlockedDateTime);
+            await Assert.That(parentTask.IsCanBeCompleted).IsTrue();
+            await Assert.That(parentTask.UnlockedDateTime).IsNotNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithCompletedBlocker_ShouldBeAvailable()
         {
             // Arrange
@@ -161,11 +158,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(blockedTask);
 
             // Assert
-            Assert.True(blockedTask.IsCanBeCompleted);
-            Assert.NotNull(blockedTask.UnlockedDateTime);
+            await Assert.That(blockedTask.IsCanBeCompleted).IsTrue();
+            await Assert.That(blockedTask.UnlockedDateTime).IsNotNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithIncompleteBlocker_ShouldNotBeAvailable()
         {
             // Arrange
@@ -195,11 +192,11 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(blockedTask);
 
             // Assert
-            Assert.False(blockedTask.IsCanBeCompleted);
-            Assert.Null(blockedTask.UnlockedDateTime);
+            await Assert.That(blockedTask.IsCanBeCompleted).IsFalse();
+            await Assert.That(blockedTask.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
+        [Test]
         public async Task TaskWithMixedDependencies_OneIncomplete_ShouldNotBeAvailable()
         {
             // Arrange
@@ -227,10 +224,10 @@ namespace Unlimotion.Test
             var results = await manager.CalculateAndUpdateAvailability(task);
 
             // Assert
-            Assert.False(task.IsCanBeCompleted);
+            await Assert.That(task.IsCanBeCompleted).IsFalse();
         }
 
-        [Fact]
+        [Test]
         public async Task UnlockedDateTime_ShouldBeSetWhenTaskBecomesAvailable()
         {
             // Arrange
@@ -254,12 +251,12 @@ namespace Unlimotion.Test
             await manager.CalculateAndUpdateAvailability(task);
 
             // Assert
-            Assert.True(task.IsCanBeCompleted);
-            Assert.NotNull(task.UnlockedDateTime);
-            Assert.True(task.UnlockedDateTime >= beforeCalculation);
+            await Assert.That(task.IsCanBeCompleted).IsTrue();
+            await Assert.That(task.UnlockedDateTime).IsNotNull();
+            await Assert.That(task.UnlockedDateTime >= beforeCalculation).IsTrue();
         }
 
-        [Fact]
+        [Test]
         public async Task UnlockedDateTime_ShouldBeClearedWhenTaskBecomesBlocked()
         {
             // Arrange
@@ -284,11 +281,11 @@ namespace Unlimotion.Test
             await manager.CalculateAndUpdateAvailability(task);
 
             // Assert
-            Assert.False(task.IsCanBeCompleted);
-            Assert.Null(task.UnlockedDateTime);
+            await Assert.That(task.IsCanBeCompleted).IsFalse();
+            await Assert.That(task.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
+        [Test]
         public async Task AddChildTask_ShouldRecalculateParentAvailability()
         {
             // Arrange
@@ -320,11 +317,11 @@ namespace Unlimotion.Test
 
             // Assert
             var updatedParent = results.FirstOrDefault(t => t.Id == "parent1");
-            Assert.NotNull(updatedParent);
-            Assert.False(updatedParent.IsCanBeCompleted);
+            await Assert.That(updatedParent).IsNotNull();
+            await Assert.That(updatedParent.IsCanBeCompleted).IsFalse();
         }
 
-        [Fact]
+        [Test]
         public async Task CreateBlockingRelation_ShouldRecalculateBlockedTaskAvailability()
         {
             // Arrange
@@ -353,11 +350,11 @@ namespace Unlimotion.Test
 
             // Assert
             var updatedBlocked = results.FirstOrDefault(t => t.Id == "blocked1");
-            Assert.NotNull(updatedBlocked);
-            Assert.False(updatedBlocked.IsCanBeCompleted);
+            await Assert.That(updatedBlocked).IsNotNull();
+            await Assert.That(updatedBlocked.IsCanBeCompleted).IsFalse();
         }
 
-        [Fact]
+        [Test]
         public async Task BreakBlockingRelation_ShouldRecalculateBlockedTaskAvailability()
         {
             // Arrange
@@ -388,11 +385,11 @@ namespace Unlimotion.Test
 
             // Assert
             var updatedUnblocked = results.FirstOrDefault(t => t.Id == "blocked1");
-            Assert.NotNull(updatedUnblocked);
-            Assert.True(updatedUnblocked.IsCanBeCompleted);
+            await Assert.That(updatedUnblocked).IsNotNull();
+            await Assert.That(updatedUnblocked.IsCanBeCompleted).IsTrue();
         }
 
-        [Fact]
+        [Test]
         public async Task UpdateTask_WithIsCompletedChange_ShouldRecalculateAffectedTasks()
         {
             // Arrange
@@ -428,10 +425,10 @@ namespace Unlimotion.Test
 
             // Assert - parent should now be available
             var updatedParent = await storage.Load("parent1");
-            Assert.True(updatedParent.IsCanBeCompleted);
+            await Assert.That(updatedParent.IsCanBeCompleted).IsTrue();
         }
 
-        [Fact]
+        [Test]
         public async Task MoveTaskWithChildToParent_ShouldMaintainBlockedState()
         {
             // Arrange
@@ -480,8 +477,8 @@ namespace Unlimotion.Test
             // Verify initial state - original parent should be blocked because child is not completed
             var initialResult = await manager.CalculateAndUpdateAvailability(originalParentTask);
             var updatedOriginalParent = initialResult.FirstOrDefault(t => t.Id == "originalParent") ?? originalParentTask;
-            Assert.False(updatedOriginalParent.IsCanBeCompleted);
-            Assert.Null(updatedOriginalParent.UnlockedDateTime);
+            await Assert.That(updatedOriginalParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedOriginalParent.UnlockedDateTime).IsNull();
 
             // Act - Move child from original parent to new parent
             var moveResult = await manager.MoveTaskToNewParent(childTask, newParentTask, originalParentTask);
@@ -493,21 +490,21 @@ namespace Unlimotion.Test
 
             // Assert - Both parents should maintain correct blocked state
             // Original parent should now be unblocked (no children)
-            Assert.True(updatedOriginalParent.IsCanBeCompleted);
-            Assert.NotNull(updatedOriginalParent.UnlockedDateTime);
+            await Assert.That(updatedOriginalParent.IsCanBeCompleted).IsTrue();
+            await Assert.That(updatedOriginalParent.UnlockedDateTime).IsNotNull();
 
             // New parent should be blocked (has incomplete child)
-            Assert.False(updatedNewParent.IsCanBeCompleted);
-            Assert.Null(updatedNewParent.UnlockedDateTime);
+            await Assert.That(updatedNewParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedNewParent.UnlockedDateTime).IsNull();
 
             // Child relationships should be correct
-            Assert.DoesNotContain("originalParent", updatedChild.ParentTasks);
-            Assert.Contains("newParent", updatedChild.ParentTasks);
-            Assert.DoesNotContain("child1", updatedOriginalParent.ContainsTasks);
-            Assert.Contains("child1", updatedNewParent.ContainsTasks);
+            await Assert.That(updatedChild.ParentTasks).DoesNotContain("originalParent");
+            await Assert.That(updatedChild.ParentTasks).Contains("newParent");
+            await Assert.That(updatedOriginalParent.ContainsTasks).DoesNotContain("child1");
+            await Assert.That(updatedNewParent.ContainsTasks).Contains("child1");
         }
 
-        [Fact]
+        [Test]
         public async Task ParentTaskWithIncompleteChildAndBlocked_ShouldRemainNotAvailable()
         {
             // Arrange
@@ -539,9 +536,9 @@ namespace Unlimotion.Test
             // Create parent-child relationship
             await manager.AddChildTask(childTask, parentTask);
             var updatedParent = await storage.Load(parentTask.Id);
-            Assert.False(updatedParent.IsCanBeCompleted);
-            Assert.Null(updatedParent.UnlockedDateTime);
-            
+            await Assert.That(updatedParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedParent.UnlockedDateTime).IsNull();
+
             // Create a blocker task
             var blockerTask = new TaskItem
             {
@@ -556,12 +553,12 @@ namespace Unlimotion.Test
 
             // Assert - Parent task should remain not available
             var updatedParentAfterBlock = results.FirstOrDefault(t => t.Id == "parent1");
-            Assert.NotNull(updatedParentAfterBlock);
-            Assert.False(updatedParentAfterBlock.IsCanBeCompleted);
-            Assert.Null(updatedParentAfterBlock.UnlockedDateTime);
+            await Assert.That(updatedParentAfterBlock).IsNotNull();
+            await Assert.That(updatedParentAfterBlock.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedParentAfterBlock.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
+        [Test]
         public async Task CompletionImpact_ShouldPropagateTransitivelyThroughBlockingChain()
         {
             // Arrange
@@ -605,15 +602,15 @@ namespace Unlimotion.Test
             var updatedB = await storage.Load("b");
             var updatedA = await storage.Load("a");
 
-            Assert.NotNull(updatedB);
-            Assert.NotNull(updatedA);
-            Assert.False(updatedB.IsCanBeCompleted);
-            Assert.Null(updatedB.UnlockedDateTime);
-            Assert.False(updatedA.IsCanBeCompleted);
-            Assert.Null(updatedA.UnlockedDateTime);
+            await Assert.That(updatedB).IsNotNull();
+            await Assert.That(updatedA).IsNotNull();
+            await Assert.That(updatedB.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedB.UnlockedDateTime).IsNull();
+            await Assert.That(updatedA.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedA.UnlockedDateTime).IsNull();
         }
 
-        [Fact]
+        [Test]
         public async Task AddNewParentToTask_WithSameTask_ShouldNotCreateSelfParentRelation()
         {
             // Arrange
@@ -633,14 +630,14 @@ namespace Unlimotion.Test
             var stored = await storage.Load(task.Id);
 
             // Assert
-            Assert.NotNull(stored);
-            Assert.Empty(stored.ContainsTasks);
-            Assert.Empty(stored.ParentTasks);
-            Assert.DoesNotContain(stored.Id, stored.ContainsTasks);
-            Assert.DoesNotContain(stored.Id, stored.ParentTasks);
+            await Assert.That(stored).IsNotNull();
+            await Assert.That(stored.ContainsTasks).IsEmpty();
+            await Assert.That(stored.ParentTasks).IsEmpty();
+            await Assert.That(stored.ContainsTasks).DoesNotContain(stored.Id);
+            await Assert.That(stored.ParentTasks).DoesNotContain(stored.Id);
         }
 
-        [Fact]
+        [Test]
         public async Task BlockTask_WithSameTask_ShouldNotCreateSelfBlockingRelation()
         {
             // Arrange
@@ -660,11 +657,11 @@ namespace Unlimotion.Test
             var stored = await storage.Load(task.Id);
 
             // Assert
-            Assert.NotNull(stored);
-            Assert.Empty(stored.BlocksTasks);
-            Assert.Empty(stored.BlockedByTasks);
-            Assert.DoesNotContain(stored.Id, stored.BlocksTasks);
-            Assert.DoesNotContain(stored.Id, stored.BlockedByTasks);
+            await Assert.That(stored).IsNotNull();
+            await Assert.That(stored.BlocksTasks).IsEmpty();
+            await Assert.That(stored.BlockedByTasks).IsEmpty();
+            await Assert.That(stored.BlocksTasks).DoesNotContain(stored.Id);
+            await Assert.That(stored.BlockedByTasks).DoesNotContain(stored.Id);
         }
     }
 }

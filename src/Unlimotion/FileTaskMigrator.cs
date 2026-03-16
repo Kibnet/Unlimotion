@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -18,21 +19,11 @@ public class FileTaskMigrator
     private class LinkInfo
     {
         public string Id;
-        public string ChildProp;
+        public Func<TaskItem, List<string>> GetChild;
+        public Action<TaskItem, List<string>> SetChild;
 
-        public Func<TaskItem, List<string>> GetChild =>
-            item => item.GetType().GetProperty(ChildProp).GetValue(item) as List<string>;
-
-        public Action<TaskItem, List<string>> SetChild =>
-            (item, list) => item.GetType().GetProperty(ChildProp).SetValue(item, list);
-
-        public string ParentProp;
-
-        public Func<TaskItem, List<string>> GetParent =>
-            item => item.GetType().GetProperty(ParentProp).GetValue(item) as List<string>;
-
-        public Action<TaskItem, List<string>> SetParent =>
-            (item, list) => item.GetType().GetProperty(ParentProp).SetValue(item, list);
+        public Func<TaskItem, List<string>> GetParent;
+        public Action<TaskItem, List<string>> SetParent;
 
         public ConcurrentDictionary<string, HashSet<string>> Children = new();
 
@@ -58,8 +49,38 @@ public class FileTaskMigrator
         var linkDict = links.Select(pair => new LinkInfo
         {
             Id = pair.Key,
-            ChildProp = pair.Value.getChild,
-            ParentProp = pair.Value.getParent,
+            GetChild = pair.Value.getChild switch
+            {
+                nameof(TaskItem.ContainsTasks) => task => task.ContainsTasks,
+                nameof(TaskItem.BlocksTasks) => task => task.BlocksTasks,
+                nameof(TaskItem.ParentTasks) => task => task.ParentTasks,
+                nameof(TaskItem.BlockedByTasks) => task => task.BlockedByTasks,
+                _ => _ => new List<string>()
+            },
+            SetChild = pair.Value.getChild switch
+            {
+                nameof(TaskItem.ContainsTasks) => (task, values) => task.ContainsTasks = values,
+                nameof(TaskItem.BlocksTasks) => (task, values) => task.BlocksTasks = values,
+                nameof(TaskItem.ParentTasks) => (task, values) => task.ParentTasks = values,
+                nameof(TaskItem.BlockedByTasks) => (task, values) => task.BlockedByTasks = values,
+                _ => (_, _) => { }
+            },
+            GetParent = pair.Value.getParent switch
+            {
+                nameof(TaskItem.ContainsTasks) => task => task.ContainsTasks,
+                nameof(TaskItem.BlocksTasks) => task => task.BlocksTasks,
+                nameof(TaskItem.ParentTasks) => task => task.ParentTasks,
+                nameof(TaskItem.BlockedByTasks) => task => task.BlockedByTasks,
+                _ => _ => []
+            },
+            SetParent = pair.Value.getParent switch
+            {
+                nameof(TaskItem.ContainsTasks) => (task, values) => task.ContainsTasks = values,
+                nameof(TaskItem.BlocksTasks) => (task, values) => task.BlocksTasks = values,
+                nameof(TaskItem.ParentTasks) => (task, values) => task.ParentTasks = values,
+                nameof(TaskItem.BlockedByTasks) => (task, values) => task.BlockedByTasks = values,
+                _ => (_, _) => { }
+            }
         }).ToArray();
         var issues = new ConcurrentBag<string>();
 
@@ -128,11 +149,12 @@ public class FileTaskMigrator
         }
 
         // ---------- ПАСС 3: Обновление ----------
-        var updates = new List<(string id, int oldParents, int newParents, int oldChild, int newChild)>();
         var updatedItems = 0;
         var anyRelationChanges = false;
+        var newParentsTotal = 0;
+        var childNormalizedTotal = 0;
 
-        foreach (var (id, taskItem) in idToPath.OrderBy(k => k.Key))
+        foreach (var (id, taskItem) in idToPath)
         {
             try
             {
@@ -141,34 +163,48 @@ public class FileTaskMigrator
                 foreach (var linkInfo in linkDict)
                 {
                     // Нормализация Child (оставляем только валидные и существующие — по политике)
-                    var childSet = linkInfo.Children.TryGetValue(id, out var cs) ? cs : new HashSet<string>();
-                    var childList = childSet.Where(g => idToPath.ContainsKey(g)).Distinct().OrderBy(g => g)
-                        .ToList();
+                    if (!linkInfo.Children.TryGetValue(id, out var childSet))
+                        childSet = new();
 
-                    var existingChild = (linkInfo.GetChild(taskItem))?.ToList() ?? new List<string>();
-                    if (!existingChild.SequenceEqual(childList))
+                    var childList = new List<string>(childSet.Count);
+                    foreach (var childId in childSet)
+                    {
+                        if (idToPath.ContainsKey(childId))
+                        {
+                            childList.Add(childId);
+                        }
+                    }
+
+                    childList.Sort();
+
+                    var existingChild = linkInfo.GetChild(taskItem);
+                    if (!AreSameStrings(existingChild, childList))
                     {
                         changed = true;
                         relationChanged = true;
-                        linkInfo.SetChild(taskItem, childList.Select(g => g.ToString()).ToList());
+                        linkInfo.SetChild(taskItem, childList);
+                        var existingChildCount = existingChild?.Count ?? 0;
+                        childNormalizedTotal += Math.Abs(existingChildCount - childList.Count);
                     }
-
-                    var oldChildCount = existingChild.Count;
 
                     // Установка Parents
                     var pset = linkInfo.Parents[id];
-                    var plist = pset.OrderBy(g => g).ToList();
+                    var plist = pset.ToList();
+                    plist.Sort();
 
-                    var existingParents = (linkInfo.GetParent(taskItem))?.ToList() ?? new List<string>();
-                    if (!existingParents.SequenceEqual(plist))
+                    var existingParents = linkInfo.GetParent(taskItem);
+                    if (!AreSameStrings(existingParents, plist))
                     {
                         changed = true;
                         relationChanged = true;
-                        linkInfo.SetParent(taskItem, plist.Select(g => g.ToString()).ToList());
+                        linkInfo.SetParent(taskItem, plist);
+                        var existingParentCount = existingParents?.Count ?? 0;
+                        var diff = plist.Count - existingParentCount;
+                        if (diff > 0)
+                        {
+                            newParentsTotal += diff;
+                        }
                     }
-                    var oldParentsCount = existingParents.Count;
-
-                    updates.Add((id, oldParentsCount, plist.Count, oldChildCount, childList.Count));
                 }
 
                 if (taskItem.Version < Version)
@@ -204,8 +240,8 @@ public class FileTaskMigrator
             Updated = updatedItems,
             Summary = new
             {
-                ParentsAdded = updates.Sum(u => Math.Max(0, u.newParents - u.oldParents)),
-                ChildNormalized = updates.Count(u => u.oldChild != u.newChild)
+                ParentsAdded = newParentsTotal,
+                ChildNormalized = childNormalizedTotal
             },
             Issues = issues.OrderBy(x => x).ToArray()
         };
@@ -213,11 +249,27 @@ public class FileTaskMigrator
         await File.WriteAllTextAsync(reportPath,
             JsonConvert.SerializeObject(report, Formatting.Indented));
 
-        Console.WriteLine(dryRun
+        Debug.WriteLine(dryRun
             ? $"[DRY-RUN] Готово. Отчёт: {reportPath}"
             : $"Готово. Отчёт: {reportPath}");
 
         return new MigrationResult(SkippedByReport: false, AnyChanges: anyRelationChanges, UpdatedItems: updatedItems);
+    }
+
+    private static bool AreSameStrings(List<string>? existing, List<string> normalized)
+    {
+        if (existing == null || existing.Count == 0)
+            return normalized.Count == 0;
+        if (existing.Count != normalized.Count)
+            return false;
+
+        for (int i = 0; i < normalized.Count; i++)
+        {
+            if (!string.Equals(existing[i], normalized[i], StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool IsCurrentReport(string reportPath)

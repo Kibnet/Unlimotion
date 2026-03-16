@@ -149,11 +149,16 @@ namespace Unlimotion
             Updating?.Invoke(this, e);
         }
 
-        public async IAsyncEnumerable<TaskItem> GetAll()
-        {
-            var directoryInfo = new DirectoryInfo(Path);
+    public async IAsyncEnumerable<TaskItem> GetAll()
+    {
+        var directoryInfo = new DirectoryInfo(Path);
             foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-                         .Where(info => info.Length > 0).OrderBy(info => info.CreationTime))
+                         .Where(info =>
+                             info.Length > 0 &&
+                             (string.IsNullOrEmpty(info.Extension) ||
+                              string.Equals(info.Extension, ".json", StringComparison.OrdinalIgnoreCase)) &&
+                             !string.Equals(info.Name, "migration.report", StringComparison.OrdinalIgnoreCase) &&
+                             !info.Name.EndsWith(".migration.report", StringComparison.OrdinalIgnoreCase)))
             {
                 var task = await Load(fileInfo.Name);
                 if (task != null)

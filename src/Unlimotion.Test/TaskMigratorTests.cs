@@ -6,11 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
-using Xunit;
 
 namespace Unlimotion.Test;
 
-public class MigrateTests
+public class MigrateTests : IDisposable
 {
     private readonly string _tempDir;
     Dictionary<string, (string getChild, string getParent)> props;
@@ -26,7 +25,7 @@ public class MigrateTests
         };
     }
 
-    internal void Dispose()
+    public void Dispose()
     {
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* ignore */ }
     }
@@ -49,7 +48,11 @@ public class MigrateTests
         var path = Directory.GetFiles(_tempDir, "migration.report")
                             .OrderByDescending(f => f)
                             .FirstOrDefault();
-        Assert.False(path is null, "Report file not found");
+        if (path is null)
+        {
+            throw new InvalidOperationException("Report file not found");
+        }
+
         return path;
     }
 
@@ -69,7 +72,7 @@ public class MigrateTests
 
     // --------- Tests ---------
 
-    [Fact]
+    [Test]
     public async Task Migrate_BuildsParentsAndNormalizesChildren()
     {
         // A -> {B, C, B} (дубликат B), B и C без детей
@@ -83,27 +86,27 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a, b, c), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
         // A: children нормализованы и отсортированы
-        Assert.Equal(new[] { "B", "C" }, a.ContainsTasks);
+        await Assert.That(a.ContainsTasks.SequenceEqual(new[] { "B", "C" })).IsTrue();
 
         // Parents на B и C расставлены из Children у A
-        Assert.Equal(new[] { "A" }, b.ParentTasks);
-        Assert.Equal(new[] { "A" }, c.ParentTasks);
+        await Assert.That(b.ParentTasks.SequenceEqual(new[] { "A" })).IsTrue();
+        await Assert.That(c.ParentTasks.SequenceEqual(new[] { "A" })).IsTrue();
 
         // save вызван для каждого элемента
-        Assert.Equal(3, saveCount);
+        await Assert.That(saveCount).IsEqualTo(3);
 
         // summary отражает 2 добавленных родителя (B<-A, C<-A) и факт нормализации children у A
         var report = GetReportPath();
         var (parentsAdded, childNormalized) = ReadSummary(report);
-        Assert.Equal(2, parentsAdded);
-        Assert.Equal(1, childNormalized);
+        await Assert.That(parentsAdded).IsEqualTo(2);
+        await Assert.That(childNormalized).IsEqualTo(1);
 
         // Issues пуст
         var issues = ReadIssues(report);
-        Assert.Empty(issues);
+        await Assert.That(issues).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Migrate_BuildsBlockAndNormalizesBlock()
     {
         // A -> {B, C, B} (дубликат B), B и C без детей
@@ -117,27 +120,27 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a, b, c), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
         // A: children нормализованы и отсортированы
-        Assert.Equal(new[] { "B", "C" }, a.BlocksTasks);
+        await Assert.That(a.BlocksTasks.SequenceEqual(new[] { "B", "C" })).IsTrue();
 
         // Parents на B и C расставлены из Children у A
-        Assert.Equal(new[] { "A" }, b.BlockedByTasks);
-        Assert.Equal(new[] { "A" }, c.BlockedByTasks);
+        await Assert.That(b.BlockedByTasks.SequenceEqual(new[] { "A" })).IsTrue();
+        await Assert.That(c.BlockedByTasks.SequenceEqual(new[] { "A" })).IsTrue();
 
         // save вызван для каждого элемента
-        Assert.Equal(3, saveCount);
+        await Assert.That(saveCount).IsEqualTo(3);
 
         // summary отражает 2 добавленных родителя (B<-A, C<-A) и факт нормализации children у A
         var report = GetReportPath();
         var (parentsAdded, childNormalized) = ReadSummary(report);
-        Assert.Equal(2, parentsAdded);
-        Assert.Equal(1, childNormalized);
+        await Assert.That(parentsAdded).IsEqualTo(2);
+        await Assert.That(childNormalized).IsEqualTo(1);
 
         // Issues пуст
         var issues = ReadIssues(report);
-        Assert.Empty(issues);
+        await Assert.That(issues).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Migrate_RemovesDanglingChild_AndReportsIssue()
     {
         // A -> {X, B}, где X отсутствует
@@ -150,17 +153,17 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
         // Висячая ссылка X удалена, остаётся только существующий B
-        Assert.Equal(new[] { "B" }, a.ContainsTasks);
+        await Assert.That(a.ContainsTasks.SequenceEqual(new[] { "B" })).IsTrue();
 
         // Родитель у B добавлен
-        Assert.Equal(new[] { "A" }, b.ParentTasks);
+        await Assert.That(b.ParentTasks.SequenceEqual(new[] { "A" })).IsTrue();
 
         // Есть Issue про dangling
         var issues = ReadIssues(GetReportPath());
-        Assert.Contains(issues, s => s == "DanglingChildRef: Contain parent=A child=X");
+        await Assert.That(issues.Any(s => s == "DanglingChildRef: Contain parent=A child=X")).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task Migrate_RemovesSelfLink_AndReportsIssue()
     {
         // A -> {A} (самоссылка)
@@ -172,15 +175,15 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
         // Самоссылка удалена
-        Assert.Empty(a.ContainsTasks);
-        Assert.Empty(a.ParentTasks); // у себя родителем не становится
+        await Assert.That(a.ContainsTasks).IsEmpty();
+        await Assert.That(a.ParentTasks).IsEmpty(); // у себя родителем не становится
 
         // Issue про самоссылку
         var issues = ReadIssues(GetReportPath());
-        Assert.Contains(issues, s => s == "SelfLinkRemoved: Contain A");
+        await Assert.That(issues.Any(s => s == "SelfLinkRemoved: Contain A")).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task Migrate_DryRun_DoesNotCallSave_ButWritesReport()
     {
         var a = new TaskItem { Id = "A" };
@@ -192,17 +195,17 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: true, CancellationToken.None);
 
         // данные в памяти всё равно обновлены
-        Assert.Equal(new[] { "B" }, a.ParentTasks);
-        Assert.Equal(new[] { "A" }, b.ContainsTasks);
+        await Assert.That(a.ParentTasks.SequenceEqual(new[] { "B" })).IsTrue();
+        await Assert.That(b.ContainsTasks.SequenceEqual(new[] { "A" })).IsTrue();
 
         // но сохранения не было
-        Assert.Equal(0, saveCount);
+        await Assert.That(saveCount).IsEqualTo(0);
 
         // отчёт существует
-        Assert.True(File.Exists(GetReportPath()));
+        await Assert.That(File.Exists(GetReportPath())).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task Migrate_SaveError_IsReported_AndOtherItemsProceed()
     {
         var a = new TaskItem { Id = "A" };
@@ -219,14 +222,14 @@ public class MigrateTests
         await FileTaskMigrator.Migrate(AsAsync(a, b), props, Save, _tempDir, dryRun: false, CancellationToken.None);
 
         // A сохранился, B упал
-        Assert.Contains("A", saved);
-        Assert.DoesNotContain("B", saved);
+        await Assert.That(saved).Contains("A");
+        await Assert.That(saved).DoesNotContain("B");
 
         var issues = ReadIssues(GetReportPath());
-        Assert.Contains(issues, s => s.StartsWith("WriteError: ")); // конкретный текст включает ToString объекта
+        await Assert.That(issues.Any(s => s.StartsWith("WriteError: "))).IsTrue(); // конкретный текст включает ToString объекта
     }
 
-    [Fact]
+    [Test]
     public async Task FileTaskMigrator_Migrate_ShouldSkip_WhenReportIsCurrent_AndForceDisabled()
     {
         var a = new TaskItem
@@ -261,16 +264,16 @@ public class MigrateTests
             ct: CancellationToken.None,
             forceRecheck: false);
 
-        Assert.True(result.SkippedByReport);
-        Assert.False(result.AnyChanges);
-        Assert.Equal(0, result.UpdatedItems);
-        Assert.Equal(0, saveCount);
-        Assert.Empty(b.ParentTasks);
-        Assert.Equal(0, a.Version);
-        Assert.Equal(0, b.Version);
+        await Assert.That(result.SkippedByReport).IsTrue();
+        await Assert.That(result.AnyChanges).IsFalse();
+        await Assert.That(result.UpdatedItems).IsEqualTo(0);
+        await Assert.That(saveCount).IsEqualTo(0);
+        await Assert.That(b.ParentTasks).IsEmpty();
+        await Assert.That(a.Version).IsEqualTo(0);
+        await Assert.That(b.Version).IsEqualTo(0);
     }
 
-    [Fact]
+    [Test]
     public async Task FileTaskMigrator_Migrate_ShouldRecheck_WhenForceEnabled_EvenIfReportExists()
     {
         var a = new TaskItem
@@ -305,12 +308,12 @@ public class MigrateTests
             ct: CancellationToken.None,
             forceRecheck: true);
 
-        Assert.False(result.SkippedByReport);
-        Assert.True(result.AnyChanges);
-        Assert.True(result.UpdatedItems >= 2);
-        Assert.Contains("A", b.ParentTasks);
-        Assert.Equal(1, a.Version);
-        Assert.Equal(1, b.Version);
-        Assert.True(saveCount >= 2);
+        await Assert.That(result.SkippedByReport).IsFalse();
+        await Assert.That(result.AnyChanges).IsTrue();
+        await Assert.That(result.UpdatedItems >= 2).IsTrue();
+        await Assert.That(b.ParentTasks).Contains("A");
+        await Assert.That(a.Version).IsEqualTo(1);
+        await Assert.That(b.Version).IsEqualTo(1);
+        await Assert.That(saveCount >= 2).IsTrue();
     }
 }

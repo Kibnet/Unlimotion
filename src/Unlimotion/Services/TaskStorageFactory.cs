@@ -27,6 +27,7 @@ public class TaskStorageFactory : ITaskStorageFactory
     {
         var storagePath = GetStoragePath(path);
         var fileStorage = new FileStorage(storagePath, watcher: true, _notificationManager);
+        fileStorage.Watcher?.SetEnable(false);
         CurrentWatcher = fileStorage.Watcher;
         var taskTreeManager = new TaskTreeManager(fileStorage);
         var taskStorage = new UnifiedTaskStorage(taskTreeManager);

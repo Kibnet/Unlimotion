@@ -18,6 +18,14 @@ namespace Unlimotion.ViewModel
     {
         public static bool _isInited; 
         private DisposableList connectionDisposableList = new DisposableListRealization();
+        private bool _isCompletedTabInitialized;
+        private bool _isArchivedTabInitialized;
+        private bool _isLastCreatedTabInitialized;
+        private bool _isRoadmapTabInitialized;
+        private bool _isUnlockedTabInitialized;
+        private bool _isLastOpenedTabInitialized;
+        private static readonly ReadOnlyObservableCollection<TaskWrapperViewModel> EmptyTaskWrappers =
+            new(new ObservableCollectionExtended<TaskWrapperViewModel>());
 
         public ITaskStorage? taskRepository;
         private readonly Func<ITaskStorage?>? _getTaskStorage;
@@ -37,6 +45,12 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             Settings = settings ?? new SettingsViewModel(_configuration);
             Graph = graph ?? new GraphViewModel();
+            CurrentAllTasksItems = EmptyTaskWrappers;
+            UnlockedItems = EmptyTaskWrappers;
+            CompletedItems = EmptyTaskWrappers;
+            ArchivedItems = EmptyTaskWrappers;
+            LastCreatedItems = EmptyTaskWrappers;
+            LastOpenedItems = EmptyTaskWrappers;
             Graph.SetMainWindowViewModel(this);
             Graph.Search = Search;
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
@@ -209,6 +223,12 @@ namespace Unlimotion.ViewModel
             _isInited = false;
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();
+            _isCompletedTabInitialized = false;
+            _isArchivedTabInitialized = false;
+            _isLastCreatedTabInitialized = false;
+            _isRoadmapTabInitialized = false;
+            _isUnlockedTabInitialized = false;
+            _isLastOpenedTabInitialized = false;
 
             //Set sort definition
             var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
@@ -499,27 +519,6 @@ namespace Unlimotion.ViewModel
 
             #endregion Поиск
 
-            // Ленивая активация тяжёлых проекций: до первого входа на вкладку коллекции остаются пустыми.
-            var completedProjectionFilter = this.WhenAnyValue(m => m.CompletedMode)
-                .Scan(false, (activated, mode) => activated || mode)
-                .DistinctUntilChanged()
-                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
-
-            var archivedProjectionFilter = this.WhenAnyValue(m => m.ArchivedMode)
-                .Scan(false, (activated, mode) => activated || mode)
-                .DistinctUntilChanged()
-                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
-
-            var lastCreatedProjectionFilter = this.WhenAnyValue(m => m.LastCreatedMode)
-                .Scan(false, (activated, mode) => activated || mode)
-                .DistinctUntilChanged()
-                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
-
-            var graphProjectionFilter = this.WhenAnyValue(m => m.GraphMode)
-                .Scan(false, (activated, mode) => activated || mode)
-                .DistinctUntilChanged()
-                .Select(activated => new Func<TaskItemViewModel, bool>(_ => activated));
-
             //Bind Roots
 
             #region Roots
@@ -606,67 +605,52 @@ namespace Unlimotion.ViewModel
 
             #region Unlocked
 
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    m => m.IsCanBeCompleted,
-                    m => m.IsCompleted,
-                    m => m.UnlockedDateTime,
-                    m => m.PlannedBeginDateTime,
-                    m => m.Wanted,
-                    m => m.PlannedDuration,
-                    m => m.PlannedEndDateTime))
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    x => x.Title,
-                    x => x.Description,
-                    x => x.GetAllEmoji))
-                .Filter(unlockedTimeFilter)
-                .Filter(durationFilter)
-                .Filter(emojiFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(wantedFilter)
-                .Filter(searchTopFilter)
-                .Transform(item =>
+            void ActivateUnlockedProjection()
+            {
+                if (_isUnlockedTabInitialized)
                 {
-                    var actions = new TaskWrapperActions
-                    {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .Sort(sortObservableForUnlocked)
-                .Bind(out _unlockedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
+                    return;
+                }
 
-            UnlockedItems = _unlockedItems;
-
-            taskRepository.Tasks
-                .Connect()
-                .Filter(taskFilter)
-                .Filter(emojiFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(wantedFilter)
-                .Filter(graphProjectionFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions
+                _isUnlockedTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        m => m.IsCanBeCompleted,
+                        m => m.IsCompleted,
+                        m => m.UnlockedDateTime,
+                        m => m.PlannedBeginDateTime,
+                        m => m.Wanted,
+                        m => m.PlannedDuration,
+                        m => m.PlannedEndDateTime))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Title,
+                        x => x.Description,
+                        x => x.GetAllEmoji))
+                    .Filter(unlockedTimeFilter)
+                    .Filter(durationFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(wantedFilter)
+                    .Filter(searchTopFilter)
+                    .Transform(item =>
                     {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        Filter = new() { taskFilter, emojiExcludeFilter },
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .Bind(out _FilteredItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
-            Graph.UnlockedTasks = _FilteredItems;
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .Sort(sortObservableForUnlocked)
+                    .Bind(out _unlockedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                UnlockedItems = _unlockedItems;
+            }
 
             this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
                 .Subscribe(filter =>
@@ -694,77 +678,6 @@ namespace Unlimotion.ViewModel
             #endregion Unlocked
 
             //Bind Completed
-
-            #region Completed
-
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    x => x.Title,
-                    x => x.Description,
-                    x => x.GetAllEmoji))
-                .Filter(m => m.IsCompleted == true)
-                .Filter(completedDateFilter)
-                .Filter(emojiFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(searchTopFilter)
-                .Filter(completedProjectionFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions
-                    {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
-                .Bind(out _completedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
-
-            CompletedItems = _completedItems;
-
-            #endregion Completed
-
-            //Bind Archived
-
-            #region Archived
-
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    x => x.Title,
-                    x => x.Description,
-                    x => x.GetAllEmoji))
-                .Filter(m => m.IsCompleted == null)
-                .Filter(archiveDateFilter)
-                .Filter(emojiFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(searchTopFilter)
-                .Filter(archivedProjectionFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions
-                    {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
-                .Bind(out _archivedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
-
-            ArchivedItems = _archivedItems;
-
             this.WhenAnyValue(m => m.LastCreatedDateFilter.CurrentOption, m => m.LastCreatedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
@@ -789,66 +702,250 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            #endregion Archived
-
-            //Bind LastCreated
-
-            #region LastCreated
-
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
-                .AutoRefreshOnObservable(m => m.WhenAnyValue(
-                    x => x.Title,
-                    x => x.Description,
-                    x => x.GetAllEmoji))
-                .Filter(taskFilter)
-                .Filter(lastCreatedDateFilter)
-                .Filter(emojiFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(searchTopFilter)
-                .Filter(lastCreatedProjectionFilter)
-                .Transform(item =>
+            void ActivateCompletedProjection()
+            {
+                if (_isCompletedTabInitialized)
                 {
-                    var actions = new TaskWrapperActions
+                    return;
+                }
+
+                _isCompletedTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Title,
+                        x => x.Description,
+                        x => x.GetAllEmoji))
+                    .Filter(m => m.IsCompleted == true)
+                    .Filter(completedDateFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(searchTopFilter)
+                    .Transform(item =>
                     {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
-                .Bind(out _lastCreatedItems)
-                .Subscribe()
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
+                    .Bind(out _completedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                CompletedItems = _completedItems;
+            }
+
+            void ActivateArchivedProjection()
+            {
+                if (_isArchivedTabInitialized)
+                {
+                    return;
+                }
+
+                _isArchivedTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Title,
+                        x => x.Description,
+                        x => x.GetAllEmoji))
+                    .Filter(m => m.IsCompleted == null)
+                    .Filter(archiveDateFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(searchTopFilter)
+                    .Transform(item =>
+                    {
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
+                    .Bind(out _archivedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                ArchivedItems = _archivedItems;
+            }
+
+            void ActivateLastCreatedProjection()
+            {
+                if (_isLastCreatedTabInitialized)
+                {
+                    return;
+                }
+
+                _isLastCreatedTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
+                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Title,
+                        x => x.Description,
+                        x => x.GetAllEmoji))
+                    .Filter(taskFilter)
+                    .Filter(lastCreatedDateFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(searchTopFilter)
+                    .Transform(item =>
+                    {
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(e => e.TaskItem.CreatedDateTime, SortDirection.Descending)
+                    .Bind(out _lastCreatedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                LastCreatedItems = _lastCreatedItems;
+            }
+
+            void ActivateRoadmapProjection()
+            {
+                if (_isRoadmapTabInitialized)
+                {
+                    return;
+                }
+
+                _isRoadmapTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .Filter(taskFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(wantedFilter)
+                    .Transform(item =>
+                    {
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { taskFilter, emojiExcludeFilter },
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .Bind(out _FilteredItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
+                    .AutoRefreshOnObservable(m => m.WhenAny(
+                        m => m.IsCanBeCompleted,
+                        m => m.IsCompleted,
+                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .Filter(taskFilter)
+                    .Filter(emojiRootFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Transform(item =>
+                    {
+                        var actions = new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
+                            SortComparer = sortObservable,
+                            Filter = new() { taskFilter, emojiExcludeFilter },
+                        };
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .Bind(out _graphItems)
+                    .Subscribe(set => ExpandParentNodesForTask(CurrentTaskItem))
+                    .AddToDispose(connectionDisposableList);
+
+                Graph.UnlockedTasks = _FilteredItems;
+                Graph.Tasks = _graphItems;
+            }
+
+            var lastOpenedSearchFilter =
+                searchTopFilter.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
+
+            this.WhenAnyValue(m => m.CompletedMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateCompletedProjection())
                 .AddToDispose(connectionDisposableList);
 
-            LastCreatedItems = _lastCreatedItems;
+            this.WhenAnyValue(m => m.ArchivedMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateArchivedProjection())
+                .AddToDispose(connectionDisposableList);
 
-            #endregion LastCreated
+            this.WhenAnyValue(m => m.LastCreatedMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateLastCreatedProjection())
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.UnlockedMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateUnlockedProjection())
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.GraphMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateRoadmapProjection())
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.LastOpenedMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateLastOpenedProjection())
+                .AddToDispose(connectionDisposableList);
 
             //Bind LastOpened
 
             #region LastOpened
 
-            var lastOpenedSearchFilter =
-                searchTopFilter.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
+            void ActivateLastOpenedProjection()
+            {
+                if (_isLastOpenedTabInitialized)
+                {
+                    return;
+                }
 
-            LastOpenedSource
-                .Connect()
-                .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
-                    x => x.IsCompleted,
-                    x => x.CompletedDateTime,
-                    x => x.ArchiveDateTime))
-                .Filter(lastOpenedSearchFilter)
-                .Reverse()
-                .Bind(out _lastOpenedItems)
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
+                _isLastOpenedTabInitialized = true;
+                LastOpenedSource
+                    .Connect()
+                    .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
+                        x => x.IsCompleted,
+                        x => x.CompletedDateTime,
+                        x => x.ArchiveDateTime))
+                    .Filter(lastOpenedSearchFilter)
+                    .Reverse()
+                    .Bind(out _lastOpenedItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
 
-            LastOpenedItems = _lastOpenedItems;
+                LastOpenedItems = _lastOpenedItems;
+            }
 
             this.WhenAnyValue(m => m.CurrentTaskItem, m => m.DetailsAreOpen)
                 .Subscribe(item =>
@@ -870,40 +967,7 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
-            #endregion LastCreated
-
-            #region Roadmap
-            taskRepository.Tasks
-                .Connect()
-                .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
-                .AutoRefreshOnObservable(m => m.WhenAny(
-                    m => m.IsCanBeCompleted,
-                    m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
-                .Filter(taskFilter)
-                .Filter(emojiRootFilter)
-                .Filter(emojiExcludeFilter)
-                .Filter(graphProjectionFilter)
-                .Transform(item =>
-                {
-                    var actions = new TaskWrapperActions
-                    {
-                        ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
-                        RemoveAction = RemoveTask,
-                        GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
-                        SortComparer = sortObservable,
-                        Filter = new() { taskFilter, emojiExcludeFilter },
-                    };
-                    var wrapper = new TaskWrapperViewModel(null, item, actions);
-                    return wrapper;
-                })
-                .Bind(out _graphItems)
-                .Subscribe(set => ExpandParentNodesForTask(CurrentTaskItem))
-                .AddToDispose(connectionDisposableList);
-            
-            Graph.Tasks = _graphItems;
-            
-            #endregion Roadmap
+            #endregion LastOpened
 
             this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
