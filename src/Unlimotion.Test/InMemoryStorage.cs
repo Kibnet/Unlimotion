@@ -55,6 +55,7 @@ public class InMemoryStorage : IStorage
             IsCompleted = taskItem.IsCompleted,
             IsCanBeCompleted = taskItem.IsCanBeCompleted,
             CreatedDateTime = taskItem.CreatedDateTime,
+            UpdatedDateTime = taskItem.UpdatedDateTime,
             UnlockedDateTime = taskItem.UnlockedDateTime,
             CompletedDateTime = taskItem.CompletedDateTime,
             ArchiveDateTime = taskItem.ArchiveDateTime,
