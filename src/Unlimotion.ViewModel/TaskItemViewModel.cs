@@ -402,6 +402,7 @@ namespace Unlimotion.ViewModel
                     Title = Title,
                     Description = Description,
                     CreatedDateTime = CreatedDateTime,
+                    UpdatedDateTime = UpdatedDateTime,
                     UnlockedDateTime = UnlockedDateTime,
                     CompletedDateTime = CompletedDateTime,
                     ArchiveDateTime = ArchiveDateTime,
@@ -434,6 +435,7 @@ namespace Unlimotion.ViewModel
         public bool? IsCompleted { get; set; }
         public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
+        public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
@@ -616,6 +618,7 @@ namespace Unlimotion.ViewModel
             if (Title != taskItem.Title) Title = taskItem.Title;
             if (Description != taskItem.Description) Description = taskItem.Description;
             if (CreatedDateTime != taskItem.CreatedDateTime) CreatedDateTime = taskItem.CreatedDateTime;
+            if (UpdatedDateTime != taskItem.UpdatedDateTime) UpdatedDateTime = taskItem.UpdatedDateTime;
             if (UnlockedDateTime != taskItem.UnlockedDateTime) UnlockedDateTime = taskItem.UnlockedDateTime;
             if (CompletedDateTime != taskItem.CompletedDateTime) CompletedDateTime = taskItem.CompletedDateTime;
             if (ArchiveDateTime != taskItem.ArchiveDateTime) ArchiveDateTime = taskItem.ArchiveDateTime;

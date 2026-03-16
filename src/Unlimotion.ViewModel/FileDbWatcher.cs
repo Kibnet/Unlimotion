@@ -27,7 +27,10 @@ namespace Unlimotion.ViewModel
             lock (itLockEnable)
             {
                 isEnable = enable;
-                watcher?.EnableRaisingEvents = enable;
+                if (watcher != null)
+                {
+                    watcher.EnableRaisingEvents = enable;
+                }
             }
         }
 
