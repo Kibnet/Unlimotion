@@ -118,7 +118,7 @@ namespace Unlimotion.Test
 
             var after = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
             var result = TestHelpers.CompareStorageVersions(before!, after!);
-            await TestHelpers.ShouldHaveOnlyTitleChanged(result, "Root Task 1", "Changed task title");
+            await TestHelpers.ShouldHaveTitleAndAUpdatedDateChanged(result, "Root Task 1", "Changed task title");
         }
 
         /// <summary>
@@ -746,10 +746,11 @@ namespace Unlimotion.Test
             //У нее проставлено время разблокировки
             await Assert.That(blockedTask5AfterTest.UnlockedDateTime).IsNotNull();
             var result = compareLogic.Compare(blockedTask5BeforeTest, blockedTask5AfterTest);
-            //Должно быть два различия: IsCanBeCompleted и UnlockedDateTime
-            await Assert.That(result.Differences.Count).IsEqualTo(2);
+            //Должно быть 3 различия: IsCanBeCompleted, UpdatedDateTime и UnlockedDateTime
+            await Assert.That(result.Differences.Count).IsEqualTo(3);
             var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.IsCanBeCompleted));
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(blockedTask5AfterTest.UnlockedDateTime));
+            var updatedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UpdatedDateTime));
 
             await Assert.That(isCanBeCompletedDifference).IsNotNull();
             await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(false);
@@ -757,6 +758,9 @@ namespace Unlimotion.Test
             await Assert.That(unlockedDateTimeDifference).IsNotNull();
             await Assert.That(unlockedDateTimeDifference.Object1).IsNull();
             await Assert.That(unlockedDateTimeDifference.Object2).IsNotNull();
+            await Assert.That(updatedDateTimeDifference).IsNotNull();
+            await Assert.That(updatedDateTimeDifference.Object1).IsNull();
+            await Assert.That(updatedDateTimeDifference.Object2).IsNotNull();
 
             var blockedTask5ViewModel = taskRepository.Tasks.Items.First(i => i.Id == MainWindowViewModelFixture.BlockedTask5Id);
             await Assert.That(blockedTask5ViewModel).IsNotNull();
@@ -766,11 +770,11 @@ namespace Unlimotion.Test
             var rootTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
             //Проверяем, что в блокирующем таске изменилось
             result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
-            //Должно быть 2 различия поля IsCompleted и CompletedDateTime
-            await Assert.That(result.Differences.Count).IsEqualTo(2);
+            //Должно быть 3 различия поля IsCompleted, UpdatedDateTime и CompletedDateTime
+            await Assert.That(result.Differences.Count).IsEqualTo(3);
             var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCompleted));
             var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.CompletedDateTime));
-
+            
             await Assert.That(isCompletedDifference).IsNotNull();
             await Assert.That(completedDateTimeDifference).IsNotNull();
             await Assert.That(isCompletedDifference.Object1).IsEqualTo(false);
@@ -967,10 +971,11 @@ namespace Unlimotion.Test
             var clonedTask8ItemAfterTest = GetStorageTaskItem(clonedViewModel.Id);
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
-            //Должны отличаться id, дата создания и кол-во родителей
-            await Assert.That(result.Differences.Count).IsEqualTo(3);
+            // Должны отличаться минимум id, дата создания, дата обновления и кол-во родителей.
+            await Assert.That(result.Differences.Count).IsEqualTo(4);
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.Id));
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.CreatedDateTime));
+            await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.UpdatedDateTime));
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.ParentTasks));
             var parentTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.ParentTasks));
             await Assert.That(((IList)parentTasksDifference.Object1).Count).IsEqualTo(0);
@@ -1027,16 +1032,18 @@ namespace Unlimotion.Test
             //Сравниваем ее с исходной до выполнения
             result = compareLogic.Compare(repeateTask9BeforeTest, newTask9);
 
-            //Должно быть только 5 различия: Id, CreatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
-            await Assert.That(result.Differences.Count).IsEqualTo(5);
+            //Должно быть только 6 различий: Id, CreatedDateTime, UpdatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
+            await Assert.That(result.Differences.Count).IsEqualTo(6);
             var idDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.Id));
             var createdDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CreatedDateTime));
+            var updatedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UpdatedDateTime));
             var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UnlockedDateTime));
             var plannedBeginDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedBeginDateTime));
             var plannedEndDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.PlannedEndDateTime));
 
             await Assert.That(idDifference).IsNotNull();
             await Assert.That(createdDateTimeDifference).IsNotNull();
+            await Assert.That(updatedDateTimeDifference).IsNotNull();
             await Assert.That(unlockedDateTimeDifference).IsNotNull();
             await Assert.That(plannedBeginDateTimeDifference).IsNotNull();
             await Assert.That(plannedEndDateTimeDifference).IsNotNull();
