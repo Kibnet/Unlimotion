@@ -295,7 +295,7 @@ namespace Unlimotion.TelegramBot
             string response = $"{(task.IsCanBeCompleted?"":"🔒")}{GetStatusEmodji(task.IsCompleted)} {(task.Wanted?"*":"")}{task.Title}{(task.Wanted?"*":"")}\n" +
                               $"{GetStatusEmodji(task.Wanted)} Wanted | Importance {task.Importance}\nId {task.Id}\n" +
                               $"{task.Description}\n" +
-                              $"Created {task.CreatedDateTime:yyyy.MM.dd HH:mm} Unlocked {task.UnlockedDateTime:yyyy.MM.dd HH:mm} Completed {task.CompletedDateTime:yyyy.MM.dd HH:mm} Archive {task.ArchiveDateTime:yyyy.MM.dd HH:mm}\n" +
+                              $"Created {task.CreatedDateTime:yyyy.MM.dd HH:mm} Updated {task.UpdatedDateTime:yyyy.MM.dd HH:mm} Unlocked {task.UnlockedDateTime:yyyy.MM.dd HH:mm} Completed {task.CompletedDateTime:yyyy.MM.dd HH:mm} Archive {task.ArchiveDateTime:yyyy.MM.dd HH:mm}\n" +
                               $"Begin {task.PlannedBeginDateTime:yyyy.MM.dd} Duration {TimeSpanStringConverter.SpanToString(task.PlannedDuration)} End {task.PlannedEndDateTime:yyyy.MM.dd}\n"
                               ;
 
