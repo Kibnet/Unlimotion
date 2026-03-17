@@ -9,6 +9,7 @@ namespace Unlimotion.Interface
         public string Title { get; set; }
         public string Description { get; set; }
         public bool? IsCompleted { get; set; } = false;
+        public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }

@@ -29,6 +29,7 @@ public class TaskTreeManager
                 try
                 {
                     change.Version = 1;
+                    change.UpdatedDateTime ??= change.CreatedDateTime;
                     await Storage.Save(change);
                     result.AddOrUpdate(change);
 
@@ -53,6 +54,7 @@ public class TaskTreeManager
                     if (newTaskId is null)
                     {
                         change.Version = 1;
+                        change.UpdatedDateTime ??= change.CreatedDateTime;
                         await Storage.Save(change);
                         newTaskId = change.Id;
                         result.AddOrUpdate(change);
@@ -104,6 +106,7 @@ public class TaskTreeManager
                 if (newTaskId is null)
                 {
                     change.Version = 1;
+                    change.UpdatedDateTime ??= change.CreatedDateTime;
                     await Storage.Save(change);
                     newTaskId = change.Id;
                     result.AddOrUpdate(change);
@@ -301,6 +304,7 @@ public class TaskTreeManager
                 else
                 {
                     // Regular update without IsCompleted change
+                    change.UpdatedDateTime = GetNextUpdatedDateTime(change);
                     await Storage.Save(change);
                     result.AddOrUpdate(change);
                 }
@@ -890,6 +894,7 @@ public class TaskTreeManager
 
                         // Save the cloned task
                         clone.Version = 1;
+                        clone.UpdatedDateTime ??= clone.CreatedDateTime;
                         await Storage.Save(clone);
                         result.AddOrUpdate(clone);
 
@@ -952,6 +957,7 @@ public class TaskTreeManager
                 }
 
                 // Save the updated task
+                task.UpdatedDateTime = GetNextUpdatedDateTime(task);
                 await Storage.Save(task);
                 result.AddOrUpdate(task);
 
@@ -967,5 +973,16 @@ public class TaskTreeManager
         });
 
         return result.Values.ToList();
+    }
+
+    private static DateTimeOffset GetNextUpdatedDateTime(TaskItem task)
+    {
+        var now = DateTimeOffset.Now;
+        if (task.UpdatedDateTime.HasValue && now <= task.UpdatedDateTime.Value)
+        {
+            return task.UpdatedDateTime.Value.AddSeconds(1);
+        }
+
+        return now;
     }
 }
