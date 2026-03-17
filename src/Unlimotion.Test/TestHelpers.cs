@@ -110,11 +110,16 @@ namespace Unlimotion.Test
             return compareLogic.Compare(before, after);
         }
 
-        public static async Task ShouldHaveOnlyTitleChanged(ComparisonResult result, string oldTitle, string newTitle)
+        public static async Task ShouldHaveTitleAndAUpdatedDateChanged(ComparisonResult result, string oldTitle, string newTitle)
         {
-            await Assert.That(result.Differences).HasSingleItem();
-            await Assert.That(result.Differences[0].PropertyName).IsEqualTo(nameof(TaskItem.Title));
-            await Assert.That(result.DifferencesString).StartsWith($"\r\nBegin Differences (1 differences):\r\nTypes [String,String], Item Expected.Title != Actual.Title, Values ({oldTitle},{newTitle})");
+            var names = result.Differences.Select(d => d.PropertyName).ToList();
+            var titleDiff = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.Title));
+            var updatedDateDiff = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UpdatedDateTime));
+            await Assert.That(titleDiff).IsNotNull();
+            await Assert.That(updatedDateDiff).IsNotNull();
+            await Assert.That((titleDiff.Object1 ?? "").ToString()).IsEqualTo(oldTitle);
+            await Assert.That((titleDiff.Object2 ?? "").ToString()).IsEqualTo(newTitle);
+            await Assert.That(updatedDateDiff.Object1).IsNotEqualTo(updatedDateDiff.Object2);
         }
 
         public static async Task ShouldContainOnlyDifference(ComparisonResult result, string propertyName)

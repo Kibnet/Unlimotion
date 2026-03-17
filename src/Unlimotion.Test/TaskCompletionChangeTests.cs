@@ -207,5 +207,38 @@ namespace Unlimotion.Test
             await Assert.That(cloneFromStorage.IsCanBeCompleted).IsFalse();
             await Assert.That(cloneFromStorage.UnlockedDateTime).IsNull();
         }
+
+        [Test]
+        public async Task HandleTaskCompletionChange_UpdateTask_SetUpdatedDateTime()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var task = new TaskItem
+            {
+                Id = "test-task",
+                Title = "v1",
+                Description = "d1",
+                IsCompleted = false
+            };
+
+            await storage.Save(task);
+
+            // Act 1
+            task.Title = "v2";
+            await manager.UpdateTask(task);
+            var firstUpdated = task.UpdatedDateTime;
+
+            // Act 2
+            task.Description = "d2";
+            await manager.UpdateTask(task);
+            var secondUpdated = task.UpdatedDateTime;
+
+            // Assert
+            await Assert.That(firstUpdated).IsNotNull();
+            await Assert.That(secondUpdated).IsNotNull();
+            await Assert.That(secondUpdated > firstUpdated).IsTrue();
+        }
     }
 }
