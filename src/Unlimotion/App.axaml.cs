@@ -109,12 +109,20 @@ public class App : Application
     {
         settings.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
-            if (_mainWindowViewModel != null)
+            try
             {
-                await _mainWindowViewModel.Connect();
+                _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
+                if (_mainWindowViewModel != null)
+                {
+                    await _mainWindowViewModel.Connect();
+                }
+                _notificationManager?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
             }
-            _notificationManager?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
+            catch (Exception ex)
+            {
+                var hint = OperatingSystem.IsAndroid() ? " Проверьте разрешение \"Доступ ко всем файлам\"." : string.Empty;
+                _notificationManager?.ErrorToast($"Не удалось подключить хранилище задач: {ex.Message}{hint}");
+            }
         });
 
         settings.ObservableForProperty(m => m.GitBackupEnabled, skipInitial: true)
@@ -232,6 +240,8 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        LibGit2Interop.DisableOwnerValidationOnAndroid();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
 #if LIVE

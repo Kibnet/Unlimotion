@@ -1,0 +1,3 @@
+[submodule ".native/libgit2-src"]
+	path = .native/libgit2-src
+	url = https://github.com/Kibnet/libgit2.git
