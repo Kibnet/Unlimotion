@@ -86,8 +86,13 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                CurrentTaskItem = await taskRepository?.Add();
+                var newTask = await taskRepository?.Add();
+                CurrentTaskItem = newTask;
                 SelectCurrentTask();
+                if (newTask != null)
+                {
+                    RequestTitleFocusForCurrentTask();
+                }
 
             }).AddToDisposeAndReturn(connectionDisposableList);
             CreateSibling = ReactiveCommand.CreateFromTask(async (bool isBlocked = false) =>
@@ -95,15 +100,21 @@ namespace Unlimotion.ViewModel
                 if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
 
+                TaskItemViewModel? newTask = null;
                 if (CurrentTaskItem != null)
                 {
                     if (AllTasksMode)
                     {
-                        CurrentTaskItem = await taskRepository?.Add(CurrentTaskItem, isBlocked);
+                        newTask = await taskRepository?.Add(CurrentTaskItem, isBlocked);
+                        CurrentTaskItem = newTask;
                     }
                 }
                 
                 SelectCurrentTask();
+                if (newTask != null)
+                {
+                    RequestTitleFocusForCurrentTask();
+                }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
@@ -124,7 +135,8 @@ namespace Unlimotion.ViewModel
 
                 var parent = CurrentTaskItem;
                 
-                CurrentTaskItem = await taskRepository?.AddChild(parent);
+                var newTask = await taskRepository?.AddChild(parent);
+                CurrentTaskItem = newTask;
                 SelectCurrentTask();
 
                 var wrapper = FindTaskWrapperViewModel(parent, CurrentAllTasksItems);
@@ -137,6 +149,11 @@ namespace Unlimotion.ViewModel
                         p.IsExpanded = true;
                         p = p.Parent;
                     }
+                }
+
+                if (newTask != null)
+                {
+                    RequestTitleFocusForCurrentTask();
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -216,6 +233,15 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
             ;
+        }
+
+        private void RequestTitleFocusForCurrentTask()
+        {
+            if (CurrentTaskItem == null)
+                return;
+
+            DetailsAreOpen = true;
+            TitleFocusRequestVersion++;
         }
 
         public async Task Connect()
@@ -1320,6 +1346,7 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public ReadOnlyObservableCollection<DurationFilter> DurationFilters { get; set; } = DurationFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
+        public long TitleFocusRequestVersion { get; private set; }
 
         public DateFilter CompletedDateFilter { get; set; } = new();
         public DateFilter ArchivedDateFilter { get; set; } = new();

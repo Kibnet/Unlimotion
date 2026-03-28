@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -15,6 +18,8 @@ namespace Unlimotion.Views
     {
         // Static dependencies - set once during app initialization
         public static IDialogs? DialogsInstance { get; set; }
+        private const int MaxTitleFocusRetries = 5;
+        private IDisposable? _titleFocusSubscription;
 
         public MainControl()
         {
@@ -26,8 +31,13 @@ namespace Unlimotion.Views
 
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
+            _titleFocusSubscription?.Dispose();
+            _titleFocusSubscription = null;
+
             if (DataContext is MainWindowViewModel vm)
             {
+                _titleFocusSubscription = vm.WhenAnyValue(m => m.TitleFocusRequestVersion)
+                    .Subscribe(requestVersion => QueueTitleFocus(requestVersion, vm.CurrentTaskItem?.Id, MaxTitleFocusRetries));
                 vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
                 {
                     if (vm.CurrentTaskItem == null)
@@ -68,6 +78,63 @@ namespace Unlimotion.Views
                     }
                 });
             }
+        }
+
+        private void QueueTitleFocus(long requestVersion, string? targetTaskId, int retriesRemaining)
+        {
+            if (requestVersion <= 0 || string.IsNullOrWhiteSpace(targetTaskId))
+            {
+                return;
+            }
+
+            Dispatcher.UIThread.Post(
+                () => TryFocusTitle(requestVersion, targetTaskId, retriesRemaining),
+                DispatcherPriority.Background);
+        }
+
+        private void TryFocusTitle(long requestVersion, string targetTaskId, int retriesRemaining)
+        {
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                return;
+            }
+
+            if (vm.TitleFocusRequestVersion != requestVersion || vm.CurrentTaskItem?.Id != targetTaskId)
+            {
+                return;
+            }
+
+            var titleTextBox = this.FindControl<TextBox>("CurrentTaskTitleTextBox");
+            if (titleTextBox == null || !titleTextBox.IsAttachedToVisualTree() || !titleTextBox.IsVisible || !titleTextBox.IsEnabled)
+            {
+                RetryTitleFocus(requestVersion, targetTaskId, retriesRemaining);
+                return;
+            }
+
+            if (!titleTextBox.Focus())
+            {
+                RetryTitleFocus(requestVersion, targetTaskId, retriesRemaining);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(titleTextBox.Text))
+            {
+                titleTextBox.CaretIndex = titleTextBox.Text?.Length ?? 0;
+            }
+            else
+            {
+                titleTextBox.SelectAll();
+            }
+        }
+
+        private void RetryTitleFocus(long requestVersion, string targetTaskId, int retriesRemaining)
+        {
+            if (retriesRemaining <= 0)
+            {
+                return;
+            }
+
+            QueueTitleFocus(requestVersion, targetTaskId, retriesRemaining - 1);
         }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";

@@ -77,6 +77,18 @@ namespace Unlimotion.Test
             await TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, task.Id);
         }
 
+        [Test]
+        public async Task CreateRootTask_ShouldRequestTitleFocusAndOpenDetails()
+        {
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+            mainWindowVM.DetailsAreOpen = false;
+
+            _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
         /// <summary>
         /// Проверка что заголовок задачи не сбрасывается после сохранения файла
         /// Regression test for title reset bug
@@ -143,6 +155,19 @@ namespace Unlimotion.Test
             await Assert.That(after!.ContainsTasks).Contains(newTask.Id);
         }
 
+        [Test]
+        public async Task CreateInnerTask_ShouldRequestTitleFocusAndOpenDetails()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+            mainWindowVM.DetailsAreOpen = false;
+
+            _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateInner, taskRepository);
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
         /// <summary>
         /// Создание вложенной задачи без выбранной текущей
         /// </summary>
@@ -156,6 +181,20 @@ namespace Unlimotion.Test
             mainWindowVM.CreateInner.Execute(null);
             await TestHelpers.WaitThrottleTime();
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(countBefore);
+        }
+
+        [Test]
+        public async Task CreateInnerTask_Fail_ShouldNotRequestTitleFocus()
+        {
+            mainWindowVM.CurrentTaskItem = null;
+            mainWindowVM.DetailsAreOpen = false;
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+
+            mainWindowVM.CreateInner.Execute(null);
+            await TestHelpers.WaitThrottleTime();
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
         }
 
         /// <summary>
@@ -183,6 +222,36 @@ namespace Unlimotion.Test
                     .ContainsTasks).Contains(sibling.Id);
             }
         }
+
+        [Test]
+        public async Task CreateSiblingTask_ShouldRequestTitleFocusAndOpenDetails()
+        {
+            mainWindowVM.AllTasksMode = true;
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+            mainWindowVM.DetailsAreOpen = false;
+
+            _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateSibling, taskRepository);
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
+        [Test]
+        public async Task CreateSiblingTask_WithEmptyCurrentTitle_ShouldNotRequestTitleFocus()
+        {
+            mainWindowVM.AllTasksMode = true;
+            var emptyTask = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+            mainWindowVM.CurrentTaskItem = emptyTask;
+            mainWindowVM.DetailsAreOpen = false;
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+
+            mainWindowVM.CreateSibling.Execute(null);
+            await TestHelpers.WaitThrottleTime();
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
+        }
         
         /// <summary>
         /// Создание зависимой соседней задачи
@@ -207,6 +276,20 @@ namespace Unlimotion.Test
             await TestHelpers.ShouldContainOnlyDifference(result, nameof(after.BlocksTasks));
             await Assert.That(parent.Blocks).Contains(blocked.Id);
             await Assert.That(after.BlocksTasks).Contains(blocked.Id);
+        }
+
+        [Test]
+        public async Task CreateBlockedSibling_ShouldRequestTitleFocusAndOpenDetails()
+        {
+            mainWindowVM.AllTasksMode = true;
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;
+            mainWindowVM.DetailsAreOpen = false;
+
+            _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateBlockedSibling, taskRepository);
+
+            await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
         }
 
         /// <summary>
