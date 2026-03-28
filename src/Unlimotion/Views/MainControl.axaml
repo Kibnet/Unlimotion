@@ -355,7 +355,14 @@ Command="{Binding RemoveCommand}"/>
                                 <StackPanel DataContext="{Binding CurrentTaskItem}" >
                                     <Grid ColumnDefinitions="Auto, *">
                                         <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" ></CheckBox>
-                                        <TextBox Grid.Column="1" TextWrapping="Wrap" Text="{Binding Title}" Watermark="Title" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
+                                        <TextBox Grid.Column="1"
+                                                 x:Name="CurrentTaskTitleTextBox"
+                                                 AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
+                                                 TextWrapping="Wrap"
+                                                 Text="{Binding Title}"
+                                                 Watermark="Title"
+                                                 VerticalAlignment="Center"
+                                                 VerticalContentAlignment="Center"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, Auto, Auto, *">
                                         <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
