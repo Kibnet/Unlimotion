@@ -11,14 +11,21 @@ public class SettingsViewModel
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
     private readonly IConfiguration _gitSettings;
+    private readonly IConfiguration _appearanceSettings;
     private readonly IRemoteBackupService? _backupService;
+    private readonly bool _defaultIsDarkTheme;
 
-    public SettingsViewModel(IConfiguration configuration, IRemoteBackupService? backupService = null)
+    public SettingsViewModel(
+        IConfiguration configuration,
+        IRemoteBackupService? backupService = null,
+        bool defaultIsDarkTheme = false)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
         _gitSettings = configuration.GetSection("Git");
+        _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _backupService = backupService;
+        _defaultIsDarkTheme = defaultIsDarkTheme;
     }
 
     // Commands - set externally from App.axaml.cs
@@ -72,6 +79,17 @@ public class SettingsViewModel
     {
         get => _configuration.GetSection(nameof(IsFuzzySearch)).Get<bool>();
         set => _configuration.GetSection(nameof(IsFuzzySearch)).Set(value);
+    }
+
+    public bool IsDarkTheme
+    {
+        get
+        {
+            var configuredTheme = _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>();
+            return AppearanceSettings.ParseIsDarkTheme(configuredTheme) ?? _defaultIsDarkTheme;
+        }
+        set => _appearanceSettings.GetSection(AppearanceSettings.ThemeKey)
+            .Set(AppearanceSettings.ToStoredTheme(value));
     }
 
     public bool GitBackupEnabled

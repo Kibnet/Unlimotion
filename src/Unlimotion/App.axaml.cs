@@ -10,6 +10,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
+using Avalonia.Styling;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
@@ -48,6 +49,7 @@ public class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        ApplyConfiguredTheme();
     }
 
     public event EventHandler OnLoaded;
@@ -76,7 +78,10 @@ public class App : Application
         RxApp.DefaultExceptionHandler = new ObservableExceptionHandler(_notificationManager);
 
         // Create SettingsViewModel
-        var settingsViewModel = new SettingsViewModel(_configuration!, _backupService);
+        var settingsViewModel = new SettingsViewModel(
+            _configuration!,
+            _backupService,
+            GetCurrentThemeIsDark());
 
         // Create GraphViewModel
         var graphViewModel = new GraphViewModel();
@@ -136,6 +141,9 @@ public class App : Application
                 else
                     _scheduler.PauseAll();
             });
+
+        settings.ObservableForProperty(m => m.IsDarkTheme, skipInitial: true)
+            .Subscribe(c => RequestedThemeVariant = c.Value ? ThemeVariant.Dark : ThemeVariant.Light);
 
         settings.ObservableForProperty(m => m.GitPullIntervalSeconds, skipInitial: true)
             .Subscribe(c =>
@@ -314,6 +322,29 @@ public class App : Application
     }
 
     private const bool ShouldLogStartup = false;
+
+    private void ApplyConfiguredTheme()
+    {
+        var configuredTheme = _configuration?
+            .GetSection(AppearanceSettings.SectionName)
+            .GetSection(AppearanceSettings.ThemeKey)
+            .Get<string>();
+        var isDarkTheme = AppearanceSettings.ParseIsDarkTheme(configuredTheme);
+        if (isDarkTheme.HasValue)
+        {
+            RequestedThemeVariant = isDarkTheme.Value ? ThemeVariant.Dark : ThemeVariant.Light;
+        }
+    }
+
+    private bool GetCurrentThemeIsDark()
+    {
+        return RequestedThemeVariant switch
+        {
+            var variant when variant == ThemeVariant.Dark => true,
+            var variant when variant == ThemeVariant.Light => false,
+            _ => ActualThemeVariant == ThemeVariant.Dark
+        };
+    }
 
     private static void Log(string message)
     {
