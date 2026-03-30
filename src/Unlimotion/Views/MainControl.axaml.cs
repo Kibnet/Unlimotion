@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
@@ -20,6 +21,9 @@ namespace Unlimotion.Views
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
         private IDisposable? _titleFocusSubscription;
+        private MainWindowViewModel? _treeCommandViewModel;
+        private TreeView? _activeTaskTree;
+        private TaskWrapperViewModel? _activeTaskTreeWrapper;
 
         public MainControl()
         {
@@ -33,9 +37,19 @@ namespace Unlimotion.Views
         {
             _titleFocusSubscription?.Dispose();
             _titleFocusSubscription = null;
+            if (_treeCommandViewModel != null)
+            {
+                _treeCommandViewModel.ExecuteTreeCommandAction = null;
+                _treeCommandViewModel = null;
+            }
+
+            _activeTaskTree = null;
+            _activeTaskTreeWrapper = null;
 
             if (DataContext is MainWindowViewModel vm)
             {
+                _treeCommandViewModel = vm;
+                vm.ExecuteTreeCommandAction = ExecuteTreeCommand;
                 _titleFocusSubscription = vm.WhenAnyValue(m => m.TitleFocusRequestVersion)
                     .Subscribe(requestVersion => QueueTitleFocus(requestVersion, vm.CurrentTaskItem?.Id, MaxTitleFocusRetries));
                 vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
@@ -141,14 +155,24 @@ namespace Unlimotion.Views
 
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var dragData = new DataObject();
             var control = sender as Control;
+            if (control != null)
+            {
+                UpdateActiveTreeContext(control);
+            }
+
+            if (control == null || !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
             var dc = control?.DataContext;
             if (dc == null)
             {
                 return;
             }
 
+            var dragData = new DataObject();
             dragData.Set(CustomFormat, dc);
 
             var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
@@ -356,6 +380,16 @@ namespace Unlimotion.Views
                 }
             }
         }
+
+        private void TaskTree_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is not TreeView tree)
+            {
+                return;
+            }
+
+            UpdateActiveTreeContext(tree, e.Source);
+        }
         
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
@@ -373,6 +407,167 @@ namespace Unlimotion.Views
             {
                 vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
             }
+        }
+
+        private void ExecuteTreeCommand(TreeCommandKind kind)
+        {
+            if (DataContext is not MainWindowViewModel vm || !TryGetValidatedActiveTree(out var tree))
+            {
+                return;
+            }
+
+            if (IsTextInputFocused())
+            {
+                return;
+            }
+
+            var roots = GetTreeRoots(tree);
+            if (roots == null)
+            {
+                return;
+            }
+
+            switch (kind)
+            {
+                case TreeCommandKind.ExpandCurrentNested:
+                {
+                    var current = GetCurrentWrapperForTree(tree);
+                    if (current != null)
+                    {
+                        vm.ExpandNodeAndDescendants(current);
+                    }
+
+                    break;
+                }
+                case TreeCommandKind.CollapseCurrentNested:
+                {
+                    var current = GetCurrentWrapperForTree(tree);
+                    if (current != null)
+                    {
+                        vm.CollapseNodeDescendants(current);
+                    }
+
+                    break;
+                }
+                case TreeCommandKind.ExpandAll:
+                    vm.ExpandAllNodes(roots);
+                    break;
+                case TreeCommandKind.CollapseAll:
+                    vm.CollapseAllNodes(roots);
+                    break;
+            }
+        }
+
+        private void UpdateActiveTreeContext(Control control)
+        {
+            var tree = control.FindParent<TreeView>();
+            if (tree == null)
+            {
+                return;
+            }
+
+            UpdateActiveTreeContext(tree, control);
+        }
+
+        private void UpdateActiveTreeContext(TreeView tree, object? source)
+        {
+            var wrapper = TryGetWrapper(source);
+
+            if (!ReferenceEquals(_activeTaskTree, tree))
+            {
+                _activeTaskTree = tree;
+                _activeTaskTreeWrapper = wrapper;
+                return;
+            }
+
+            if (wrapper != null)
+            {
+                _activeTaskTreeWrapper = wrapper;
+            }
+        }
+
+        private bool TryGetValidatedActiveTree(out TreeView tree)
+        {
+            tree = _activeTaskTree;
+            if (tree == null)
+            {
+                return false;
+            }
+
+            if (!tree.IsAttachedToVisualTree() || !tree.IsVisible || !tree.IsEnabled)
+            {
+                _activeTaskTree = null;
+                _activeTaskTreeWrapper = null;
+                return false;
+            }
+
+            var parentMainControl = tree.FindParent<MainControl>();
+            if (!ReferenceEquals(parentMainControl, this))
+            {
+                _activeTaskTree = null;
+                _activeTaskTreeWrapper = null;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static IEnumerable<TaskWrapperViewModel>? GetTreeRoots(TreeView tree)
+        {
+            return tree.ItemsSource switch
+            {
+                IEnumerable<TaskWrapperViewModel> roots => roots,
+                IEnumerable roots => roots.OfType<TaskWrapperViewModel>(),
+                _ => null
+            };
+        }
+
+        private TaskWrapperViewModel? GetCurrentWrapperForTree(TreeView tree)
+        {
+            if (ReferenceEquals(tree, _activeTaskTree) && _activeTaskTreeWrapper != null)
+            {
+                return _activeTaskTreeWrapper;
+            }
+
+            return tree.SelectedItem as TaskWrapperViewModel;
+        }
+
+        private static TaskWrapperViewModel? TryGetWrapper(object? source)
+        {
+            return source switch
+            {
+                TaskWrapperViewModel wrapper => wrapper,
+                Control control when control.DataContext is TaskWrapperViewModel wrapper => wrapper,
+                Control control => control.FindParentDataContext<TaskWrapperViewModel>(),
+                _ => null
+            };
+        }
+
+        private bool IsTextInputFocused()
+        {
+            var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+            if (focused == null)
+            {
+                return false;
+            }
+
+            return IsTextInputControlOrAncestor(focused);
+        }
+
+        private static bool IsTextInputControlOrAncestor(Control control)
+        {
+            Control? current = control;
+            while (current != null)
+            {
+                if (current is TextBox or AutoCompleteBox or NumericUpDown)
+                {
+                    return true;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return false;
         }
     }
 }

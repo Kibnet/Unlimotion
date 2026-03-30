@@ -52,6 +52,35 @@ x:Class="Unlimotion.Views.MainControl">
             <Setter Property="MaxDropDownHeight" Value="280"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
         </Style>
+        <Style Selector="TreeView.TaskTree">
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu DataContext="{Binding #mainControl.DataContext}">
+                        <MenuItem Header="Развернуть вложенные текущего"
+                                  Command="{Binding ExpandCurrentNestedCommand}"
+                                  AutomationProperties.AutomationId="ExpandCurrentNestedTreeMenuItem"/>
+                        <MenuItem Header="Свернуть вложенные текущего"
+                                  Command="{Binding CollapseCurrentNestedCommand}"
+                                  AutomationProperties.AutomationId="CollapseCurrentNestedTreeMenuItem"/>
+                        <MenuItem Header="Развернуть все узлы"
+                                  Command="{Binding ExpandAllTreeNodesCommand}"
+                                  AutomationProperties.AutomationId="ExpandAllTreeMenuItem"/>
+                        <MenuItem Header="Свернуть все узлы"
+                                  Command="{Binding CollapseAllTreeNodesCommand}"
+                                  AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style Selector="TreeView.TaskTree TreeViewItem">
+            <Setter Property="IsExpanded">
+                <Setter.Value>
+                    <Binding Path="((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
+                              Mode="TwoWay"
+                              RelativeSource="{RelativeSource Mode=Self}"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
@@ -95,6 +124,10 @@ Content="❌"
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
         <KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
+        <KeyBinding Gesture="Ctrl+Shift+Right" Command="{Binding ExpandCurrentNestedCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+Left" Command="{Binding CollapseCurrentNestedCommand}"/>
+        <KeyBinding Gesture="Ctrl+Alt+Right" Command="{Binding ExpandAllTreeNodesCommand}"/>
+        <KeyBinding Gesture="Ctrl+Alt+Left" Command="{Binding CollapseAllTreeNodesCommand}"/>
     </UserControl.KeyBindings>
 
     <Grid RowDefinitions="Auto,*">
@@ -148,23 +181,14 @@ Content="❌"
                                        ItemsSource="{Binding CurrentAllTasksItems}"
                                        SelectedItem="{Binding CurrentAllTasksItem}"
                                        SelectionMode= "Single"
+                                       Classes="TaskTree"
+                                       PointerPressed="TaskTree_OnPointerPressed"
                                        x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType= "viewModel:TaskWrapperViewModel" ItemsSource= "{Binding SubTasks}">
                                         <ContentControl Content= "{Binding .}" PointerPressed= "InputElement_OnPointerPressed" DoubleTapped= "TaskTree_OnDoubleTapped"/>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
-                                <TreeView.Styles>
-                                    <Style Selector= "TreeViewItem">
-                                        <Setter Property= "IsExpanded">
-                                            <Setter.Value>
-                                                <Binding Path= "((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
-                                                          Mode= "TwoWay"
-                                                          RelativeSource= "{RelativeSource Mode=Self}"/>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </TreeView.Styles>
                             </TreeView>
                         </Grid>
                     </TabItem>
@@ -195,7 +219,10 @@ Content="❌"
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
                                       SelectedItem="{Binding CurrentLastCreated}"
-                                      SelectionMode="Single">
+                                      SelectionMode="Single"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      x:Name="LastCreatedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid>
@@ -233,7 +260,10 @@ Content="❌"
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
                                       SelectedItem="{Binding CurrentUnlockedItem}"
-                                      SelectionMode="Single">
+                                      SelectionMode="Single"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      x:Name="UnlockedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
@@ -278,7 +308,10 @@ Content="❌"
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
                                       SelectedItem="{Binding CurrentCompletedItem}"
-                                      SelectionMode="Single">
+                                      SelectionMode="Single"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      x:Name="CompletedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
@@ -325,7 +358,10 @@ Content="❌"
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
                                       SelectedItem="{Binding CurrentArchivedItem}"
-                                      SelectionMode="Single">
+                                      SelectionMode="Single"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      x:Name="ArchivedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
@@ -356,7 +392,10 @@ Content="❌"
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"
                                       SelectedItem="{Binding CurrentLastOpenedItem}"
-                                      SelectionMode="Single">
+                                      SelectionMode="Single"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      x:Name="LastOpenedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
@@ -564,7 +603,11 @@ Content="❌"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
-                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemParents.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}"
+                                              ItemsSource="{Binding CurrentItemParents.SubTasks}"
+                                              Classes="TaskTree"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              x:Name="CurrentItemParentsTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -608,7 +651,11 @@ Content="❌"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
-                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}"
+                                              ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}"
+                                              Classes="TaskTree"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              x:Name="CurrentItemBlockedByTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -652,7 +699,11 @@ Content="❌"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
-                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemContains.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}"
+                                              ItemsSource="{Binding CurrentItemContains.SubTasks}"
+                                              Classes="TaskTree"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              x:Name="CurrentItemContainsTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>
@@ -696,7 +747,11 @@ Content="❌"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
-                                    <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlocks.SubTasks}">
+                                    <TreeView DataContext="{Binding MainWindow}"
+                                              ItemsSource="{Binding CurrentItemBlocks.SubTasks}"
+                                              Classes="TaskTree"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              x:Name="CurrentItemBlocksTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                                 <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="Task_OnDoubleTapped"/>

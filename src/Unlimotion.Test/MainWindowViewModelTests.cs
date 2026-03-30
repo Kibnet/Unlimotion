@@ -71,6 +71,26 @@ namespace Unlimotion.Test
             return picker.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
         }
 
+        private async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
+            CreateThreeLevelTreeCommandBranchAsync()
+        {
+            mainWindowVM.AllTasksMode = true;
+            var childTask = GetTask(MainWindowViewModelFixture.SubTask22Id);
+            var grandchildTask = await taskRepository.AddChild(childTask);
+            grandchildTask.Title = "Tree command grandchild";
+            await TestHelpers.WaitThrottleTime();
+
+            var childWrapper = mainWindowVM.FindTaskWrapperViewModel(childTask, mainWindowVM.CurrentAllTasksItems);
+            var grandchildWrapper = mainWindowVM.FindTaskWrapperViewModel(grandchildTask, mainWindowVM.CurrentAllTasksItems);
+
+            await Assert.That(childWrapper).IsNotNull();
+            await Assert.That(grandchildWrapper).IsNotNull();
+            await Assert.That(childWrapper!.Parent).IsNotNull();
+            await Assert.That(grandchildWrapper!.Parent).IsEqualTo(childWrapper);
+
+            return (childWrapper.Parent, childWrapper, grandchildWrapper);
+        }
+
         /// <summary>
         /// Создание задачи в корне
         /// </summary>
@@ -1426,6 +1446,90 @@ namespace Unlimotion.Test
             await Assert.That(clone.Parents).HasSingleItem();
             await Assert.That(clone.Parents).Contains(dest1.Id);
             await Assert.That(clone.Parents).DoesNotContain(dest2!.Id);
+        }
+
+        [Test]
+        public async Task TreeCommand_ExpandNodeAndDescendants_ExpandsWholeSubtree()
+        {
+            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+
+            rootWrapper.IsExpanded = false;
+            childWrapper.IsExpanded = false;
+            grandchildWrapper.IsExpanded = false;
+
+            mainWindowVM.ExpandNodeAndDescendants(rootWrapper);
+
+            await Assert.That(rootWrapper.IsExpanded).IsTrue();
+            await Assert.That(childWrapper.IsExpanded).IsTrue();
+            await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+        }
+
+        [Test]
+        public async Task TreeCommand_CollapseNodeDescendants_KeepsCurrentAndCollapsesChildren()
+        {
+            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+
+            rootWrapper.IsExpanded = true;
+            childWrapper.IsExpanded = true;
+            grandchildWrapper.IsExpanded = true;
+
+            mainWindowVM.CollapseNodeDescendants(rootWrapper);
+
+            await Assert.That(rootWrapper.IsExpanded).IsTrue();
+            await Assert.That(childWrapper.IsExpanded).IsFalse();
+            await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
+        }
+
+        [Test]
+        public async Task TreeCommand_ExpandAllNodes_ExpandsAllRootsAndDescendants()
+        {
+            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+            var siblingRoot = mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
+
+            rootWrapper.IsExpanded = false;
+            childWrapper.IsExpanded = false;
+            grandchildWrapper.IsExpanded = false;
+            siblingRoot.IsExpanded = false;
+
+            mainWindowVM.ExpandAllNodes(mainWindowVM.CurrentAllTasksItems);
+
+            await Assert.That(rootWrapper.IsExpanded).IsTrue();
+            await Assert.That(childWrapper.IsExpanded).IsTrue();
+            await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+            await Assert.That(siblingRoot.IsExpanded).IsTrue();
+        }
+
+        [Test]
+        public async Task TreeCommand_CollapseAllNodes_CollapsesAllRootsAndDescendants()
+        {
+            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+            var siblingRoot = mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
+
+            rootWrapper.IsExpanded = true;
+            childWrapper.IsExpanded = true;
+            grandchildWrapper.IsExpanded = true;
+            siblingRoot.IsExpanded = true;
+
+            mainWindowVM.CollapseAllNodes(mainWindowVM.CurrentAllTasksItems);
+
+            await Assert.That(rootWrapper.IsExpanded).IsFalse();
+            await Assert.That(childWrapper.IsExpanded).IsFalse();
+            await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
+            await Assert.That(siblingRoot.IsExpanded).IsFalse();
+        }
+
+        [Test]
+        public async Task TreeCommand_NullContext_IsNoOp()
+        {
+            var rootWrapper = mainWindowVM.CurrentAllTasksItems.First();
+            rootWrapper.IsExpanded = false;
+
+            mainWindowVM.ExpandNodeAndDescendants(null);
+            mainWindowVM.CollapseNodeDescendants(null);
+            mainWindowVM.ExpandAllNodes(null);
+            mainWindowVM.CollapseAllNodes(null);
+
+            await Assert.That(rootWrapper.IsExpanded).IsFalse();
         }
     }
 }
