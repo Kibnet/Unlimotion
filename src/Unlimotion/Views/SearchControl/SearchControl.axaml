@@ -20,18 +20,19 @@
                 Watermark="{Binding $parent[searchControl:SearchControl].Watermark}"
                 VerticalAlignment="Center"
                 VerticalContentAlignment="Center"
-                Height="36"
-                Padding="10,0,36,0"/>
+                Height="{DynamicResource AppSearchControlHeight}"
+                Padding="10,0,48,0"/>
             <!-- Кнопка очистки -->
             <Button
                 Grid.Column="0"
-                Width="30" Height="30"
+                Width="{DynamicResource AppSearchClearButtonSize}"
+                Height="{DynamicResource AppSearchClearButtonSize}"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"
-                Margin="0"
+                Margin="0,0,4,0"
                 Background="Transparent"
                 Click="OnClearClick">
-                <TextBlock Text="✕" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                <TextBlock Text="✕" FontSize="{DynamicResource AppSearchClearIconFontSize}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
             </Button>
         </Grid>
     </Grid>
