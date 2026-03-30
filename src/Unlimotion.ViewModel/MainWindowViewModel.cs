@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using PropertyChanged;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive.Linq;
@@ -1105,6 +1106,26 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.CurrentTaskItem)
+                .Subscribe(item =>
+                {
+                    if (item != null)
+                    {
+                        CurrentItemContainsPicker = CreateRelationPicker(TaskRelationKind.Containing);
+                        CurrentItemParentsPicker = CreateRelationPicker(TaskRelationKind.Parents);
+                        CurrentItemBlocksPicker = CreateRelationPicker(TaskRelationKind.Blocked);
+                        CurrentItemBlockedByPicker = CreateRelationPicker(TaskRelationKind.Blocking);
+                    }
+                    else
+                    {
+                        CurrentItemContainsPicker = null;
+                        CurrentItemParentsPicker = null;
+                        CurrentItemBlocksPicker = null;
+                        CurrentItemBlockedByPicker = null;
+                    }
+                })
+                .AddToDispose(connectionDisposableList);
             RegisterCommands();
 
             _isInited = true;
@@ -1197,8 +1218,81 @@ namespace Unlimotion.ViewModel
                     else
                         await task.RemoveFunc.Invoke(null);
 
-                    CurrentTaskItem = null;
+                        CurrentTaskItem = null;
                 });
+        }
+
+        private TaskRelationPickerViewModel CreateRelationPicker(TaskRelationKind kind)
+        {
+            return new TaskRelationPickerViewModel(
+                kind,
+                () => CurrentTaskItem,
+                () => taskRepository?.Tasks.Items ?? Enumerable.Empty<TaskItemViewModel>(),
+                () => Settings.IsFuzzySearch,
+                IsRelationCandidateValid,
+                TryAddRelationAsync,
+                GetRelationCandidateContext,
+                ManagerWrapper);
+        }
+
+        private async Task<bool> TryAddRelationAsync(
+            TaskRelationKind kind,
+            TaskItemViewModel currentTask,
+            TaskItemViewModel candidateTask)
+        {
+            if (taskRepository == null)
+            {
+                ManagerWrapper.ErrorToast("Task storage is not configured");
+                return false;
+            }
+
+            if (!IsRelationCandidateValid(kind, currentTask, candidateTask))
+            {
+                ManagerWrapper.ErrorToast("Нельзя добавить выбранную связь.");
+                return false;
+            }
+
+            return kind switch
+            {
+                TaskRelationKind.Parents => await taskRepository.CopyInto(currentTask, [candidateTask]),
+                TaskRelationKind.Containing => await taskRepository.CopyInto(candidateTask, [currentTask]),
+                TaskRelationKind.Blocking => await taskRepository.Block(currentTask, candidateTask),
+                TaskRelationKind.Blocked => await taskRepository.Block(candidateTask, currentTask),
+                _ => false
+            };
+        }
+
+        private static bool IsRelationCandidateValid(
+            TaskRelationKind kind,
+            TaskItemViewModel currentTask,
+            TaskItemViewModel candidateTask)
+        {
+            if (currentTask == null || candidateTask == null || string.IsNullOrWhiteSpace(currentTask.Id) ||
+                string.IsNullOrWhiteSpace(candidateTask.Id) || currentTask.Id == candidateTask.Id)
+            {
+                return false;
+            }
+
+            return kind switch
+            {
+                TaskRelationKind.Parents => currentTask.CanMoveInto(candidateTask),
+                TaskRelationKind.Containing => candidateTask.CanMoveInto(currentTask),
+                TaskRelationKind.Blocking =>
+                    !currentTask.BlockedBy.Contains(candidateTask.Id) &&
+                    !currentTask.Blocks.Contains(candidateTask.Id),
+                TaskRelationKind.Blocked =>
+                    !currentTask.Blocks.Contains(candidateTask.Id) &&
+                    !currentTask.BlockedBy.Contains(candidateTask.Id),
+                _ => false
+            };
+        }
+
+        private static string GetRelationCandidateContext(TaskItemViewModel task)
+        {
+            var breadcrumbs = BredScrumbsAlgorithms.FirstTaskParent(task);
+            return string.IsNullOrWhiteSpace(breadcrumbs)
+                ? task.Id
+                : $"{breadcrumbs} [{task.Id}]";
         }
 
         public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
@@ -1304,6 +1398,10 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentItemParents { get; private set; } = null!;
         public TaskWrapperViewModel CurrentItemBlocks { get; private set; } = null!;
         public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; } = null!;
+        public TaskRelationPickerViewModel? CurrentItemContainsPicker { get; private set; }
+        public TaskRelationPickerViewModel? CurrentItemParentsPicker { get; private set; }
+        public TaskRelationPickerViewModel? CurrentItemBlocksPicker { get; private set; }
+        public TaskRelationPickerViewModel? CurrentItemBlockedByPicker { get; private set; }
         public SearchDefinition Search { get; set; } = new();
 
         public ICommand Create { get; set; }

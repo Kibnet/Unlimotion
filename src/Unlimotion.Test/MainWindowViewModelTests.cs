@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -63,6 +64,13 @@ namespace Unlimotion.Test
     [NotInParallel]
     public class MainWindowViewModelTests : BaseModelTests
     {
+        private NotificationManagerWrapperMock NotificationManager => (NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper;
+
+        private static HashSet<string> CandidateIds(TaskRelationPickerViewModel picker)
+        {
+            return picker.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
+        }
+
         /// <summary>
         /// Создание задачи в корне
         /// </summary>
@@ -487,6 +495,150 @@ namespace Unlimotion.Test
 
             var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, rootTask.Id);
             await Assert.That(rootStored.BlocksTasks).DoesNotContain(blocked.Id);
+        }
+
+        [Test]
+        public async Task CurrentItemParentsAdd_Success()
+        {
+            var currentTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask7Id);
+            var picker = mainWindowVM.CurrentItemParentsPicker!;
+
+            picker.OpenCommand.Execute(null);
+            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
+
+            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+
+            var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
+            var parentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
+
+            await Assert.That(currentStored).IsNotNull();
+            await Assert.That(parentStored).IsNotNull();
+            await Assert.That(currentStored.ParentTasks).Contains(MainWindowViewModelFixture.RootTask1Id);
+            await Assert.That(parentStored.ContainsTasks).Contains(currentTask.Id);
+        }
+
+        [Test]
+        public async Task CurrentItemContainsAdd_Success()
+        {
+            var currentTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var picker = mainWindowVM.CurrentItemContainsPicker!;
+
+            picker.OpenCommand.Execute(null);
+            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
+
+            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+
+            var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
+            var childStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
+
+            await Assert.That(currentStored).IsNotNull();
+            await Assert.That(childStored).IsNotNull();
+            await Assert.That(currentStored.ContainsTasks).Contains(MainWindowViewModelFixture.BlockedTask7Id);
+            await Assert.That(childStored.ParentTasks).Contains(currentTask.Id);
+        }
+
+        [Test]
+        public async Task CurrentItemBlockedByAdd_Success()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask7Id);
+            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+
+            picker.OpenCommand.Execute(null);
+            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask7Id);
+
+            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+
+            var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
+            var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
+            var blockedVm = GetTask(MainWindowViewModelFixture.BlockedTask7Id);
+
+            await Assert.That(blockerStored).IsNotNull();
+            await Assert.That(blockedStored).IsNotNull();
+            await Assert.That(blockerStored.BlocksTasks).Contains(MainWindowViewModelFixture.BlockedTask7Id);
+            await Assert.That(blockedStored.BlockedByTasks).Contains(MainWindowViewModelFixture.RootTask7Id);
+            await Assert.That(blockedVm.IsCanBeCompleted).IsFalse();
+        }
+
+        [Test]
+        public async Task CurrentItemBlocksAdd_Success()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask7Id);
+            var picker = mainWindowVM.CurrentItemBlocksPicker!;
+
+            picker.OpenCommand.Execute(null);
+            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
+
+            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+
+            var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
+            var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
+            var blockedVm = GetTask(MainWindowViewModelFixture.BlockedTask7Id);
+
+            await Assert.That(blockerStored).IsNotNull();
+            await Assert.That(blockedStored).IsNotNull();
+            await Assert.That(blockerStored.BlocksTasks).Contains(MainWindowViewModelFixture.BlockedTask7Id);
+            await Assert.That(blockedStored.BlockedByTasks).Contains(MainWindowViewModelFixture.RootTask7Id);
+            await Assert.That(blockedVm.IsCanBeCompleted).IsFalse();
+        }
+
+        [Test]
+        public async Task CurrentItemParentsPicker_ShouldNotContainSelfCandidate()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var picker = mainWindowVM.CurrentItemParentsPicker!;
+
+            picker.OpenCommand.Execute(null);
+
+            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.RootTask1Id);
+        }
+
+        [Test]
+        public async Task CurrentItemBlockedByPicker_ShouldNotContainExistingRelationCandidate()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask2Id);
+            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+
+            picker.OpenCommand.Execute(null);
+
+            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.RootTask2Id);
+        }
+
+        [Test]
+        public async Task CurrentItemParentsPicker_ShouldNotContainCandidateThatCreatesCycle()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask4Id);
+            var picker = mainWindowVM.CurrentItemParentsPicker!;
+
+            picker.OpenCommand.Execute(null);
+
+            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.SubTask41Id);
+        }
+
+        [Test]
+        public async Task CurrentItemBlockedByPicker_InvalidForcedConfirm_ShouldShowToastAndKeepRelationsUnchanged()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.DeadlockTask6Id);
+            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+            var candidateTask = GetTask(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
+            NotificationManager.ClearMessages();
+
+            picker.OpenCommand.Execute(null);
+
+            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
+
+            picker.SelectedCandidate = new TaskRelationCandidateViewModel(
+                candidateTask,
+                candidateTask.Title,
+                candidateTask.Id);
+
+            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+
+            var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockTask6Id);
+            var candidateStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
+
+            await Assert.That(currentStored.BlockedByTasks).DoesNotContain(candidateTask.Id);
+            await Assert.That(candidateStored.BlocksTasks).DoesNotContain(MainWindowViewModelFixture.DeadlockTask6Id);
+            await Assert.That(NotificationManager.LastErrorMessage).IsNotNull();
         }
 
         /// <summary>
