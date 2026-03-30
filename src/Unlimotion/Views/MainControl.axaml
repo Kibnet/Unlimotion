@@ -7,6 +7,8 @@ xmlns:unlimotion="clr-namespace:Unlimotion"
 xmlns:views="clr-namespace:Unlimotion.Views"
 xmlns:converters="clr-namespace:Unlimotion.Converters"
 xmlns:behavior="clr-namespace:Unlimotion.Behavior"
+xmlns:behaviours="clr-namespace:TestAutoCompleteBehaviour.Behaviours"
+xmlns:Interaction="using:Avalonia.Xaml.Interactivity"
 xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
 xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -33,6 +35,23 @@ x:Class="Unlimotion.Views.MainControl">
         <Style Selector="searchControl|SearchBar.FilterToolbarSearch">
             <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
+        <Style Selector="Grid.RelationSectionHeader">
+            <Setter Property="ColumnSpacing" Value="8"/>
+            <Setter Property="Margin" Value="0,12,0,4"/>
+        </Style>
+        <Style Selector="Grid.RelationPickerRow">
+            <Setter Property="ColumnSpacing" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style Selector="AutoCompleteBox.RelationPickerInput">
+            <Setter Property="MinimumPrefixLength" Value="0"/>
+            <Setter Property="MinimumPopulateDelay" Value="0"/>
+            <Setter Property="FilterMode" Value="None"/>
+            <Setter Property="IsTextCompletionEnabled" Value="False"/>
+            <Setter Property="ClearSelectionOnLostFocus" Value="False"/>
+            <Setter Property="MaxDropDownHeight" Value="280"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
@@ -46,10 +65,16 @@ x:Class="Unlimotion.Views.MainControl">
                 <ContentControl Content="{Binding TaskItem}"/>
                 <Button Background="#00000000"
 Content="❌"
-BorderThickness="0"
-HorizontalAlignment="Right"
-Command="{Binding RemoveCommand}"/>
+ BorderThickness="0"
+ HorizontalAlignment="Right"
+ Command="{Binding RemoveCommand}"/>
             </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="viewModel:TaskRelationCandidateViewModel">
+            <StackPanel Margin="4,2">
+                <TextBlock Text="{Binding Title}" />
+                <TextBlock Text="{Binding Context}" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+            </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="viewModel:EmojiFilter">
             <Grid ColumnDefinitions="Auto, Auto" >
@@ -503,7 +528,42 @@ Command="{Binding RemoveCommand}"/>
 
                                     </StackPanel>
 
-                                    <Label>Parents Tasks:</Label>
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                        <Label Content="Parents Tasks:"/>
+                                        <Button Grid.Column="1"
+                                                DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
+                                                Content="+"
+                                                Command="{Binding OpenCommand}"
+                                                IsVisible="{Binding !IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
+                                        <Button Grid.Column="2"
+                                                DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
+                                                Content="Cancel"
+                                                Command="{Binding CancelCommand}"
+                                                IsVisible="{Binding IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
+                                    </Grid>
+                                    <Grid Classes="RelationPickerRow"
+                                          DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
+                                          ColumnDefinitions="*,Auto"
+                                          IsVisible="{Binding IsExpanded}">
+                                        <AutoCompleteBox Classes="RelationPickerInput"
+                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                         ItemsSource="{Binding Suggestions}"
+                                                         ValueMemberBinding="{Binding Title}"
+                                                         Watermark="{Binding Watermark}"
+                                                         KeyDown="RelationPickerEditor_OnKeyDown"
+                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
+                                            <Interaction.Behaviors>
+                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
+                                            </Interaction.Behaviors>
+                                        </AutoCompleteBox>
+                                        <Button Grid.Column="1"
+                                                Content="Add"
+                                                Command="{Binding ConfirmCommand}"
+                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                    </Grid>
                                     <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemParents.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -512,7 +572,42 @@ Command="{Binding RemoveCommand}"/>
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Label>Blocking Tasks:</Label>
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                        <Label Content="Blocking Tasks:"/>
+                                        <Button Grid.Column="1"
+                                                DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
+                                                Content="+"
+                                                Command="{Binding OpenCommand}"
+                                                IsVisible="{Binding !IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
+                                        <Button Grid.Column="2"
+                                                DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
+                                                Content="Cancel"
+                                                Command="{Binding CancelCommand}"
+                                                IsVisible="{Binding IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
+                                    </Grid>
+                                    <Grid Classes="RelationPickerRow"
+                                          DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
+                                          ColumnDefinitions="*,Auto"
+                                          IsVisible="{Binding IsExpanded}">
+                                        <AutoCompleteBox Classes="RelationPickerInput"
+                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                         ItemsSource="{Binding Suggestions}"
+                                                         ValueMemberBinding="{Binding Title}"
+                                                         Watermark="{Binding Watermark}"
+                                                         KeyDown="RelationPickerEditor_OnKeyDown"
+                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
+                                            <Interaction.Behaviors>
+                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
+                                            </Interaction.Behaviors>
+                                        </AutoCompleteBox>
+                                        <Button Grid.Column="1"
+                                                Content="Add"
+                                                Command="{Binding ConfirmCommand}"
+                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                    </Grid>
                                     <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -521,7 +616,42 @@ Command="{Binding RemoveCommand}"/>
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Label>Containing Tasks:</Label>
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                        <Label Content="Containing Tasks:"/>
+                                        <Button Grid.Column="1"
+                                                DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
+                                                Content="+"
+                                                Command="{Binding OpenCommand}"
+                                                IsVisible="{Binding !IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
+                                        <Button Grid.Column="2"
+                                                DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
+                                                Content="Cancel"
+                                                Command="{Binding CancelCommand}"
+                                                IsVisible="{Binding IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
+                                    </Grid>
+                                    <Grid Classes="RelationPickerRow"
+                                          DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
+                                          ColumnDefinitions="*,Auto"
+                                          IsVisible="{Binding IsExpanded}">
+                                        <AutoCompleteBox Classes="RelationPickerInput"
+                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                         ItemsSource="{Binding Suggestions}"
+                                                         ValueMemberBinding="{Binding Title}"
+                                                         Watermark="{Binding Watermark}"
+                                                         KeyDown="RelationPickerEditor_OnKeyDown"
+                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
+                                            <Interaction.Behaviors>
+                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
+                                            </Interaction.Behaviors>
+                                        </AutoCompleteBox>
+                                        <Button Grid.Column="1"
+                                                Content="Add"
+                                                Command="{Binding ConfirmCommand}"
+                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                    </Grid>
                                     <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemContains.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -530,7 +660,42 @@ Command="{Binding RemoveCommand}"/>
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Label>Blocked Tasks:</Label>
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                        <Label Content="Blocked Tasks:"/>
+                                        <Button Grid.Column="1"
+                                                DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
+                                                Content="+"
+                                                Command="{Binding OpenCommand}"
+                                                IsVisible="{Binding !IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
+                                        <Button Grid.Column="2"
+                                                DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
+                                                Content="Cancel"
+                                                Command="{Binding CancelCommand}"
+                                                IsVisible="{Binding IsExpanded}"
+                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
+                                    </Grid>
+                                    <Grid Classes="RelationPickerRow"
+                                          DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
+                                          ColumnDefinitions="*,Auto"
+                                          IsVisible="{Binding IsExpanded}">
+                                        <AutoCompleteBox Classes="RelationPickerInput"
+                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                         ItemsSource="{Binding Suggestions}"
+                                                         ValueMemberBinding="{Binding Title}"
+                                                         Watermark="{Binding Watermark}"
+                                                         KeyDown="RelationPickerEditor_OnKeyDown"
+                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
+                                            <Interaction.Behaviors>
+                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
+                                            </Interaction.Behaviors>
+                                        </AutoCompleteBox>
+                                        <Button Grid.Column="1"
+                                                Content="Add"
+                                                Command="{Binding ConfirmCommand}"
+                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                    </Grid>
                                     <TreeView DataContext="{Binding MainWindow}" ItemsSource="{Binding CurrentItemBlocks.SubTasks}">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">

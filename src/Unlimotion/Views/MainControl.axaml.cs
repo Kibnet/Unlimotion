@@ -331,6 +331,31 @@ namespace Unlimotion.Views
                 }
             }
         }
+
+        private void RelationPickerEditor_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (sender is not Control { DataContext: TaskRelationPickerViewModel picker })
+            {
+                return;
+            }
+
+            if (e.Key == Key.Enter)
+            {
+                if (picker.ConfirmCommand.CanExecute(null))
+                {
+                    picker.ConfirmCommand.Execute(null);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Escape)
+            {
+                if (picker.CancelCommand.CanExecute(null))
+                {
+                    picker.CancelCommand.Execute(null);
+                    e.Handled = true;
+                }
+            }
+        }
         
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
         {
