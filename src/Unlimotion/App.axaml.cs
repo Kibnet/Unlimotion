@@ -29,6 +29,16 @@ namespace Unlimotion;
 
 public class App : Application
 {
+    private const string AppFontSizeResourceKey = "AppFontSize";
+    private const string AppSmallFontSizeResourceKey = "AppSmallFontSize";
+    private const string AppTabFontSizeResourceKey = "AppTabFontSize";
+    private const string AppTabMinHeightResourceKey = "AppTabMinHeight";
+    private const string AppSearchControlHeightResourceKey = "AppSearchControlHeight";
+    private const string AppSearchClearButtonSizeResourceKey = "AppSearchClearButtonSize";
+    private const string AppSearchClearIconFontSizeResourceKey = "AppSearchClearIconFontSize";
+    private const string AppSearchBarMinWidthResourceKey = "AppSearchBarMinWidth";
+    private const string AppFloatingControlMinHeightResourceKey = "AppFloatingControlMinHeight";
+
     // Static service instances for the application
     private static IConfiguration? _configuration;
     private static IMapper? _mapper;
@@ -50,6 +60,7 @@ public class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         ApplyConfiguredTheme();
+        ApplyConfiguredFontSize();
     }
 
     public event EventHandler OnLoaded;
@@ -144,6 +155,9 @@ public class App : Application
 
         settings.ObservableForProperty(m => m.IsDarkTheme, skipInitial: true)
             .Subscribe(c => RequestedThemeVariant = c.Value ? ThemeVariant.Dark : ThemeVariant.Light);
+
+        settings.ObservableForProperty(m => m.FontSize, skipInitial: true)
+            .Subscribe(c => ApplyFontSize(c.Value));
 
         settings.ObservableForProperty(m => m.GitPullIntervalSeconds, skipInitial: true)
             .Subscribe(c =>
@@ -334,6 +348,30 @@ public class App : Application
         {
             RequestedThemeVariant = isDarkTheme.Value ? ThemeVariant.Dark : ThemeVariant.Light;
         }
+    }
+
+    private void ApplyConfiguredFontSize()
+    {
+        var configuredFontSize = _configuration?
+            .GetSection(AppearanceSettings.SectionName)
+            .GetSection(AppearanceSettings.FontSizeKey)
+            .Get<double?>();
+
+        ApplyFontSize(AppearanceSettings.NormalizeFontSize(configuredFontSize));
+    }
+
+    private void ApplyFontSize(double fontSize)
+    {
+        var normalizedFontSize = AppearanceSettings.NormalizeFontSize(fontSize);
+        Resources[AppFontSizeResourceKey] = normalizedFontSize;
+        Resources[AppSmallFontSizeResourceKey] = AppearanceSettings.GetFloatingWatermarkFontSize(normalizedFontSize);
+        Resources[AppTabFontSizeResourceKey] = AppearanceSettings.GetTabFontSize(normalizedFontSize);
+        Resources[AppTabMinHeightResourceKey] = AppearanceSettings.GetTabMinHeight(normalizedFontSize);
+        Resources[AppSearchControlHeightResourceKey] = AppearanceSettings.GetSearchControlHeight(normalizedFontSize);
+        Resources[AppSearchClearButtonSizeResourceKey] = AppearanceSettings.GetSearchClearButtonSize(normalizedFontSize);
+        Resources[AppSearchClearIconFontSizeResourceKey] = AppearanceSettings.GetSearchClearIconFontSize(normalizedFontSize);
+        Resources[AppSearchBarMinWidthResourceKey] = AppearanceSettings.GetSearchBarMinWidth(normalizedFontSize);
+        Resources[AppFloatingControlMinHeightResourceKey] = AppearanceSettings.GetFloatingControlMinHeight(normalizedFontSize);
     }
 
     private bool GetCurrentThemeIsDark()

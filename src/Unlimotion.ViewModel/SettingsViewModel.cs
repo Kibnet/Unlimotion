@@ -92,6 +92,14 @@ public class SettingsViewModel
             .Set(AppearanceSettings.ToStoredTheme(value));
     }
 
+    public double FontSize
+    {
+        get => AppearanceSettings.NormalizeFontSize(
+            _appearanceSettings.GetSection(AppearanceSettings.FontSizeKey).Get<double?>());
+        set => _appearanceSettings.GetSection(AppearanceSettings.FontSizeKey)
+            .Set(AppearanceSettings.NormalizeFontSize(value));
+    }
+
     public bool GitBackupEnabled
     {
         get => _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Get<bool>();

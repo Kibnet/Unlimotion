@@ -6,6 +6,18 @@
              RequestedThemeVariant="Default" >
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
+    <Application.Resources>
+        <x:Double x:Key="AppFontSize">12</x:Double>
+        <x:Double x:Key="AppSmallFontSize">10</x:Double>
+        <x:Double x:Key="AppTabFontSize">14</x:Double>
+        <x:Double x:Key="AppTabMinHeight">28</x:Double>
+        <x:Double x:Key="AppSearchControlHeight">36</x:Double>
+        <x:Double x:Key="AppSearchClearButtonSize">30</x:Double>
+        <x:Double x:Key="AppSearchClearIconFontSize">14</x:Double>
+        <x:Double x:Key="AppSearchBarMinWidth">328</x:Double>
+        <x:Double x:Key="AppFloatingControlMinHeight">42</x:Double>
+    </Application.Resources>
+
 	<Application.DataTemplates>
 		<local:ViewLocator/>
 	</Application.DataTemplates>
@@ -21,19 +33,19 @@
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
 		<Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
-			<Setter Property="FontSize" Value="10"/>
+			<Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
 			<Setter Property="FontWeight" Value="Bold"/>
 		</Style>
 		<Style Selector="TextBox[UseFloatingWatermark=True]">
-			<Setter Property="MinHeight" Value="42"/>
+			<Setter Property="MinHeight" Value="{DynamicResource AppFloatingControlMinHeight}"/>
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
 		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
-			<Setter Property="FontSize" Value="10"/>
+			<Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
 			<Setter Property="FontWeight" Value="Bold"/>
 		</Style>
 		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]">
-			<Setter Property="MinHeight" Value="42"/>
+			<Setter Property="MinHeight" Value="{DynamicResource AppFloatingControlMinHeight}"/>
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
 		<Style Selector="Expander" >

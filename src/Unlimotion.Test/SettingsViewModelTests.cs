@@ -51,4 +51,31 @@ public class SettingsViewModelTests : IDisposable
                 .Get<string>())
             .IsEqualTo(AppearanceSettings.DarkTheme);
     }
+
+    [Test]
+    public async System.Threading.Tasks.Task FontSize_PersistsAndNormalizesConfiguredValue()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        await Assert.That(settings.FontSize).IsEqualTo(AppearanceSettings.DefaultFontSize);
+
+        settings.FontSize = 18;
+
+        await Assert.That(settings.FontSize).IsEqualTo(18);
+        await Assert.That(configuration
+                .GetSection(AppearanceSettings.SectionName)
+                .GetSection(AppearanceSettings.FontSizeKey)
+                .Get<double>())
+            .IsEqualTo(18);
+
+        settings.FontSize = 1;
+
+        await Assert.That(settings.FontSize).IsEqualTo(AppearanceSettings.MinFontSize);
+        await Assert.That(configuration
+                .GetSection(AppearanceSettings.SectionName)
+                .GetSection(AppearanceSettings.FontSizeKey)
+                .Get<double>())
+            .IsEqualTo(AppearanceSettings.MinFontSize);
+    }
 }
