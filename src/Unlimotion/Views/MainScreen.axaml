@@ -9,6 +9,7 @@
              xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Unlimotion.Views.MainScreen"
+             FontSize="{DynamicResource AppFontSize}"
              x:DataType="viewModel:MainWindowViewModel">
 
     <Design.DataContext>

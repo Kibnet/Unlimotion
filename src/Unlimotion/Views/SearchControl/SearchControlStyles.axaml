@@ -7,8 +7,8 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <Style Selector="searchControl|SearchControl">
-        <Setter Property="MinWidth" Value="400"/>
-        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="MinWidth" Value="{DynamicResource AppSearchBarMinWidth}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource AppSearchControlHeight}"/>
         <Setter Property="Margin" Value="0 0 5 0"/>
     </Style>
 </Styles>

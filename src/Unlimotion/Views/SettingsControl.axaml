@@ -13,12 +13,14 @@
             <StackPanel>
                 <Label Content="TaskStorage Path"/>
                 <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Text="{Binding TaskStoragePath}"></TextBox>
+                    <TextBox Text="{Binding TaskStoragePath}" ToolTip.Tip="{Binding TaskStoragePath}"></TextBox>
                     <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseTaskStoragePathCommand}"/>
                 </Grid>
                 <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
                 <CheckBox IsChecked="{Binding IsFuzzySearch}" Content="Fuzzy search"/>
                 <CheckBox IsChecked="{Binding IsDarkTheme}" Content="Dark theme"/>
+                <Label Content="Font Size"/>
+                <NumericUpDown Value="{Binding FontSize}" Minimum="10" Maximum="24" Increment="1" FormatString="0"/>
                 <WrapPanel>
                     <Button Content="Connect" Command="{Binding ConnectCommand}"/>
                     <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
@@ -26,7 +28,7 @@
                     <Button Content="Resave" Command="{Binding ResaveCommand}"/>
                 </WrapPanel>
                 <Label Content="Server Storage URL"/>
-                <TextBox Text="{Binding ServerStorageUrl}"></TextBox>
+                <TextBox Text="{Binding ServerStorageUrl}" ToolTip.Tip="{Binding ServerStorageUrl}"></TextBox>
                 <Label Content="Server Login"/>
                 <TextBox Text="{Binding Login}"></TextBox>
                 <Label Content="Server Password"/>
@@ -40,7 +42,7 @@
                 </WrapPanel>
                 <CheckBox IsChecked="{Binding GitShowStatusToasts}" Content="Show Git Status Toasts"/>
                 <Label Content="Git RemoteUrl"/>
-                <TextBox Text="{Binding GitRemoteUrl}"></TextBox>
+                <TextBox Text="{Binding GitRemoteUrl}" ToolTip.Tip="{Binding GitRemoteUrl}"></TextBox>
                 <Label Content="Git Branch"/>
                 <TextBox Text="{Binding GitBranch}"></TextBox>
                 <Label Content="Git UserName"/>

@@ -7,6 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unlimotion.Views.MainWindow"
         Icon="/Assets/Unlimotion.ico"
+        FontSize="{DynamicResource AppFontSize}"
         Title="{Binding Title}"
         x:DataType="viewModel:MainWindowViewModel">
 

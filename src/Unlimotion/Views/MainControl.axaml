@@ -22,6 +22,18 @@ x:Class="Unlimotion.Views.MainControl">
         <unlimotion:EqualConverter x:Key="EqualConverter"/>
         <unlimotion:NotEqualConverter x:Key="NotEqualConverter"/>
     </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Grid.FilterToolbar">
+            <Setter Property="ColumnSpacing" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style Selector="WrapPanel.FilterToolbarItems">
+            <Setter Property="Orientation" Value="Horizontal"/>
+        </Style>
+        <Style Selector="searchControl|SearchBar.FilterToolbarSearch">
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+    </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
             <Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
@@ -63,7 +75,15 @@ Command="{Binding RemoveCommand}"/>
     <Grid RowDefinitions="Auto,*">
         <!--Адрес-->
         <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" >
-            <TextBlock TextWrapping="Wrap" Text="{Binding BreadScrumbs}" PointerPressed="BreadScrumbs_OnPointerPressed" FontWeight="Bold" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+            <TextBlock Text="{Binding BreadScrumbs}"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="1"
+                       ToolTip.Tip="{Binding BreadScrumbs}"
+                       PointerPressed="BreadScrumbs_OnPointerPressed"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Center"/>
         </Grid>
 
         <!--Панель навигации-->
@@ -77,9 +97,9 @@ Command="{Binding RemoveCommand}"/>
                 <TabControl TabStripPlacement="Top" Margin="0" Padding="0">
                     <TabControl.Styles>
                         <Style Selector="TabItem">
-                            <Setter Property="FontSize" Value="16"/>
-                            <Setter Property="Padding" Value="0,0,10,0"/>
-                            <Setter Property="MinHeight" Value="22"/>
+                            <Setter Property="FontSize" Value="{DynamicResource AppTabFontSize}"/>
+                            <Setter Property="Padding" Value="0,0,6,0"/>
+                            <Setter Property="MinHeight" Value="{DynamicResource AppTabMinHeight}"/>
                             <Setter Property="FontWeight" Value="Bold"/>
                         </Style>
                         <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
@@ -89,15 +109,16 @@ Command="{Binding RemoveCommand}"/>
                     <!--All Tasks-->
                     <TabItem Header = "All Tasks" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions= "Auto,*">
-                            <WrapPanel Orientation= "Horizontal">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
                                 <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
                                 <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
                                 <CheckBox Content= "Completed" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
                                 <CheckBox Content= "Archived" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
                                        ItemsSource="{Binding CurrentAllTasksItems}"
                                        SelectedItem="{Binding CurrentAllTasksItem}"
@@ -125,7 +146,8 @@ Command="{Binding RemoveCommand}"/>
                     <!--Last Created-->
                     <TabItem Header="Last Created" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
@@ -142,9 +164,9 @@ Command="{Binding RemoveCommand}"/>
                                 <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                 <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
                                       SelectedItem="{Binding CurrentLastCreated}"
@@ -172,16 +194,17 @@ Command="{Binding RemoveCommand}"/>
                     <!--Unlocked-->
                     <TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
                                       SelectedItem="{Binding CurrentUnlockedItem}"
@@ -208,7 +231,8 @@ Command="{Binding RemoveCommand}"/>
                     <!--Completed-->
                     <TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
@@ -223,9 +247,9 @@ Command="{Binding RemoveCommand}"/>
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
                                       SelectedItem="{Binding CurrentCompletedItem}"
@@ -254,7 +278,8 @@ Command="{Binding RemoveCommand}"/>
                     <!--Archived-->
                     <TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
                                 <CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
@@ -269,9 +294,9 @@ Command="{Binding RemoveCommand}"/>
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
                                       SelectedItem="{Binding CurrentArchivedItem}"
@@ -300,10 +325,9 @@ Command="{Binding RemoveCommand}"/>
                     <!--Last Opened-->
                     <TabItem Header="Last Opened" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
-                            <WrapPanel Orientation="Horizontal">
-                                <!--Поиск-->
-                                <searchControl:SearchBar DataContext="{Binding Search}"/>
-                            </WrapPanel>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"
                                       SelectedItem="{Binding CurrentLastOpenedItem}"
