@@ -18,6 +18,7 @@
                 </Grid>
                 <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
                 <CheckBox IsChecked="{Binding IsFuzzySearch}" Content="Fuzzy search"/>
+                <CheckBox IsChecked="{Binding IsDarkTheme}" Content="Dark theme"/>
                 <WrapPanel>
                     <Button Content="Connect" Command="{Binding ConnectCommand}"/>
                     <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
