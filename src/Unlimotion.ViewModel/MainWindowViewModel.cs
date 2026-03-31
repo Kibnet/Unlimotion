@@ -14,6 +14,14 @@ using Unlimotion.ViewModel.Search;
 
 namespace Unlimotion.ViewModel
 {
+    public enum TreeCommandKind
+    {
+        ExpandCurrentNested,
+        CollapseCurrentNested,
+        ExpandAll,
+        CollapseAll
+    }
+
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
@@ -159,6 +167,18 @@ namespace Unlimotion.ViewModel
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));
+            ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            CollapseCurrentNestedCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.CollapseCurrentNested))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            ExpandAllTreeNodesCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandAll))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            CollapseAllTreeNodesCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.CollapseAll))
+                .AddToDisposeAndReturn(connectionDisposableList);
 
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentAllTasksItem)
@@ -1295,6 +1315,59 @@ namespace Unlimotion.ViewModel
                 : $"{breadcrumbs} [{task.Id}]";
         }
 
+        public void ExpandNodeAndDescendants(TaskWrapperViewModel? current)
+        {
+            if (current == null)
+            {
+                return;
+            }
+
+            SetExpandedRecursive(current, true);
+        }
+
+        public void CollapseNodeDescendants(TaskWrapperViewModel? current)
+        {
+            SetExpandedRecursive(current, false);
+        }
+
+        public void ExpandAllNodes(IEnumerable<TaskWrapperViewModel>? roots)
+        {
+            SetExpandedRecursive(roots, true);
+        }
+
+        public void CollapseAllNodes(IEnumerable<TaskWrapperViewModel>? roots)
+        {
+            SetExpandedRecursive(roots, false);
+        }
+
+        private static void SetExpandedRecursive(IEnumerable<TaskWrapperViewModel>? roots, bool isExpanded)
+        {
+            if (roots == null)
+            {
+                return;
+            }
+
+            foreach (var root in roots)
+            {
+                SetExpandedRecursive(root, isExpanded);
+            }
+        }
+
+        private static void SetExpandedRecursive(TaskWrapperViewModel? current, bool isExpanded)
+        {
+            if (current == null)
+            {
+                return;
+            }
+
+            current.IsExpanded = isExpanded;
+
+            foreach (var child in current.SubTasks)
+            {
+                SetExpandedRecursive(child, isExpanded);
+            }
+        }
+
         public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
         {
             if (taskItemViewModel == null)
@@ -1415,6 +1488,16 @@ namespace Unlimotion.ViewModel
         public ICommand MoveToPath { get; set; }
 
         public ICommand Remove { get; set; }
+
+        public ICommand ExpandCurrentNestedCommand { get; set; }
+
+        public ICommand CollapseCurrentNestedCommand { get; set; }
+
+        public ICommand ExpandAllTreeNodesCommand { get; set; }
+
+        public ICommand CollapseAllTreeNodesCommand { get; set; }
+
+        public Action<TreeCommandKind>? ExecuteTreeCommandAction { get; set; }
 
         private IConfiguration _configuration = null!;
 

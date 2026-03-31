@@ -121,6 +121,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Avalonia.Headless" />
 		<PackageReference Include="CompareNETObjects" />
 		<PackageReference Include="JustMock" />
 		<PackageReference Include="TUnit" />
