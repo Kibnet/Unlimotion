@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
@@ -17,13 +18,20 @@ namespace Unlimotion.Views
 {
     public partial class MainControl : UserControl
     {
+        private enum TreeCommandRoute
+        {
+            Hotkey,
+            ContextMenu
+        }
+
         // Static dependencies - set once during app initialization
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
         private IDisposable? _titleFocusSubscription;
         private MainWindowViewModel? _treeCommandViewModel;
         private TreeView? _activeTaskTree;
-        private TaskWrapperViewModel? _activeTaskTreeWrapper;
+        private TreeView? _contextMenuTree;
+        private TaskWrapperViewModel? _contextMenuWrapper;
 
         public MainControl()
         {
@@ -44,7 +52,8 @@ namespace Unlimotion.Views
             }
 
             _activeTaskTree = null;
-            _activeTaskTreeWrapper = null;
+            _contextMenuTree = null;
+            _contextMenuWrapper = null;
 
             if (DataContext is MainWindowViewModel vm)
             {
@@ -388,7 +397,19 @@ namespace Unlimotion.Views
                 return;
             }
 
-            UpdateActiveTreeContext(tree, e.Source);
+            _activeTaskTree = tree;
+            UpdateContextMenuContext(tree, e);
+        }
+
+        private void TaskTreeContextMenuItem_OnClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem menuItem ||
+                !Enum.TryParse<TreeCommandKind>(menuItem.Tag?.ToString(), out var kind))
+            {
+                return;
+            }
+
+            ExecuteTreeCommand(kind, TreeCommandRoute.ContextMenu);
         }
         
         private void TaskTree_OnDoubleTapped(object sender, TappedEventArgs e)
@@ -411,50 +432,65 @@ namespace Unlimotion.Views
 
         private void ExecuteTreeCommand(TreeCommandKind kind)
         {
-            if (DataContext is not MainWindowViewModel vm || !TryGetValidatedActiveTree(out var tree))
-            {
-                return;
-            }
+            ExecuteTreeCommand(kind, TreeCommandRoute.Hotkey);
+        }
 
-            if (IsTextInputFocused())
+        private void ExecuteTreeCommand(TreeCommandKind kind, TreeCommandRoute route)
+        {
+            try
             {
-                return;
-            }
-
-            var roots = GetTreeRoots(tree);
-            if (roots == null)
-            {
-                return;
-            }
-
-            switch (kind)
-            {
-                case TreeCommandKind.ExpandCurrentNested:
+                if (DataContext is not MainWindowViewModel vm || !TryGetCommandTree(route, out var tree))
                 {
-                    var current = GetCurrentWrapperForTree(tree);
-                    if (current != null)
-                    {
-                        vm.ExpandNodeAndDescendants(current);
-                    }
-
-                    break;
+                    return;
                 }
-                case TreeCommandKind.CollapseCurrentNested:
+
+                if (route == TreeCommandRoute.Hotkey && IsTextInputFocused())
                 {
-                    var current = GetCurrentWrapperForTree(tree);
-                    if (current != null)
-                    {
-                        vm.CollapseNodeDescendants(current);
-                    }
-
-                    break;
+                    return;
                 }
-                case TreeCommandKind.ExpandAll:
-                    vm.ExpandAllNodes(roots);
-                    break;
-                case TreeCommandKind.CollapseAll:
-                    vm.CollapseAllNodes(roots);
-                    break;
+
+                var roots = GetTreeRoots(tree);
+                if (roots == null)
+                {
+                    return;
+                }
+
+                switch (kind)
+                {
+                    case TreeCommandKind.ExpandCurrentNested:
+                    {
+                        var current = GetCurrentWrapperForRoute(vm, tree, route);
+                        if (current != null)
+                        {
+                            vm.ExpandNodeAndDescendants(current);
+                        }
+
+                        break;
+                    }
+                    case TreeCommandKind.CollapseCurrentNested:
+                    {
+                        var current = GetCurrentWrapperForRoute(vm, tree, route);
+                        if (current != null)
+                        {
+                            vm.CollapseNodeDescendants(current);
+                        }
+
+                        break;
+                    }
+                    case TreeCommandKind.ExpandAll:
+                        vm.ExpandAllNodes(roots);
+                        break;
+                    case TreeCommandKind.CollapseAll:
+                        vm.CollapseAllNodes(roots);
+                        break;
+                }
+            }
+            finally
+            {
+                if (route == TreeCommandRoute.ContextMenu)
+                {
+                    ClearContextMenuContext();
+                }
             }
         }
 
@@ -466,47 +502,156 @@ namespace Unlimotion.Views
                 return;
             }
 
-            UpdateActiveTreeContext(tree, control);
+            _activeTaskTree = tree;
         }
 
-        private void UpdateActiveTreeContext(TreeView tree, object? source)
+        private void UpdateContextMenuContext(TreeView tree, PointerPressedEventArgs e)
         {
-            var wrapper = TryGetWrapper(source);
+            ClearContextMenuContext();
 
-            if (!ReferenceEquals(_activeTaskTree, tree))
+            if (!e.GetCurrentPoint(tree).Properties.IsRightButtonPressed)
             {
-                _activeTaskTree = tree;
-                _activeTaskTreeWrapper = wrapper;
                 return;
             }
 
-            if (wrapper != null)
-            {
-                _activeTaskTreeWrapper = wrapper;
-            }
+            _contextMenuTree = tree;
+            _contextMenuWrapper = TryGetWrapper(e.Source);
         }
 
         private bool TryGetValidatedActiveTree(out TreeView tree)
         {
-            tree = _activeTaskTree;
+            if (TryGetValidatedTree(_activeTaskTree, out tree))
+            {
+                return true;
+            }
+
+            _activeTaskTree = null;
+            return false;
+        }
+
+        private bool TryGetValidatedContextMenuTree(out TreeView tree)
+        {
+            if (TryGetValidatedTree(_contextMenuTree, out tree))
+            {
+                return true;
+            }
+
+            ClearContextMenuContext();
+            return false;
+        }
+
+        private bool TryGetCommandTree(TreeCommandRoute route, out TreeView tree)
+        {
+            if (route == TreeCommandRoute.ContextMenu && TryGetValidatedContextMenuTree(out tree))
+            {
+                return true;
+            }
+
+            if (route == TreeCommandRoute.Hotkey)
+            {
+                return TryGetHotkeyTree(out tree);
+            }
+
+            return TryGetValidatedActiveTree(out tree);
+        }
+
+        private bool TryGetHotkeyTree(out TreeView tree)
+        {
+            tree = null!;
+
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                return false;
+            }
+
+            if (TryGetValidatedActiveTree(out var activeTree) && ShouldUseActiveTreeForHotkey(vm, activeTree))
+            {
+                tree = activeTree;
+                return true;
+            }
+
+            return TryGetCurrentModeTree(vm, out tree);
+        }
+
+        private bool TryGetCurrentModeTree(MainWindowViewModel vm, out TreeView tree)
+        {
+            tree = null!;
+
+            if (!TryGetCurrentModeTreeName(vm, out var treeName))
+            {
+                return false;
+            }
+
+            var candidate = this.FindControl<TreeView>(treeName);
+            return TryGetValidatedTree(candidate, out tree);
+        }
+
+        private static bool ShouldUseActiveTreeForHotkey(MainWindowViewModel vm, TreeView activeTree)
+        {
+            if (!IsKnownMainTaskTree(activeTree))
+            {
+                return true;
+            }
+
+            return !TryGetCurrentModeTreeName(vm, out var currentModeTreeName) ||
+                   StringComparer.Ordinal.Equals(activeTree.Name, currentModeTreeName);
+        }
+
+        private static bool TryGetCurrentModeTreeName(MainWindowViewModel vm, out string treeName)
+        {
+            treeName = vm switch
+            {
+                _ when vm.AllTasksMode => "AllTasksTree",
+                _ when vm.LastCreatedMode => "LastCreatedTree",
+                _ when vm.UnlockedMode => "UnlockedTree",
+                _ when vm.CompletedMode => "CompletedTree",
+                _ when vm.ArchivedMode => "ArchivedTree",
+                _ when vm.LastOpenedMode => "LastOpenedTree",
+                _ => string.Empty
+            };
+
+            return !string.IsNullOrWhiteSpace(treeName);
+        }
+
+        private static bool IsKnownMainTaskTree(TreeView tree)
+        {
+            return tree.Name switch
+            {
+                "AllTasksTree" => true,
+                "LastCreatedTree" => true,
+                "UnlockedTree" => true,
+                "CompletedTree" => true,
+                "ArchivedTree" => true,
+                "LastOpenedTree" => true,
+                _ => false
+            };
+        }
+
+        private bool TryGetValidatedTree(TreeView? candidate, out TreeView tree)
+        {
+            tree = candidate;
             if (tree == null)
             {
                 return false;
             }
 
-            if (!tree.IsAttachedToVisualTree() || !tree.IsVisible || !tree.IsEnabled)
+            if (!tree.IsAttachedToVisualTree() || !tree.IsEnabled || !IsVisibleInVisualTree(tree))
             {
-                _activeTaskTree = null;
-                _activeTaskTreeWrapper = null;
                 return false;
             }
 
             var parentMainControl = tree.FindParent<MainControl>();
-            if (!ReferenceEquals(parentMainControl, this))
+            return ReferenceEquals(parentMainControl, this);
+        }
+
+        private static bool IsVisibleInVisualTree(Control control)
+        {
+            for (var current = control; current != null; current = current.GetVisualParent() as Control)
             {
-                _activeTaskTree = null;
-                _activeTaskTreeWrapper = null;
-                return false;
+                if (!current.IsVisible)
+                {
+                    return false;
+                }
             }
 
             return true;
@@ -522,14 +667,36 @@ namespace Unlimotion.Views
             };
         }
 
-        private TaskWrapperViewModel? GetCurrentWrapperForTree(TreeView tree)
+        private TaskWrapperViewModel? GetCurrentWrapperForRoute(MainWindowViewModel vm, TreeView tree, TreeCommandRoute route)
         {
-            if (ReferenceEquals(tree, _activeTaskTree) && _activeTaskTreeWrapper != null)
+            if (route == TreeCommandRoute.ContextMenu &&
+                ReferenceEquals(tree, _contextMenuTree) &&
+                _contextMenuWrapper != null)
             {
-                return _activeTaskTreeWrapper;
+                return _contextMenuWrapper;
             }
 
-            return tree.SelectedItem as TaskWrapperViewModel;
+            return GetSelectedWrapperForTree(vm, tree);
+        }
+
+        private static TaskWrapperViewModel? GetSelectedWrapperForTree(MainWindowViewModel vm, TreeView tree)
+        {
+            return tree.SelectedItem as TaskWrapperViewModel ?? tree.Name switch
+            {
+                "AllTasksTree" => vm.CurrentAllTasksItem,
+                "LastCreatedTree" => vm.CurrentLastCreated,
+                "UnlockedTree" => vm.CurrentUnlockedItem,
+                "CompletedTree" => vm.CurrentCompletedItem,
+                "ArchivedTree" => vm.CurrentArchivedItem,
+                "LastOpenedTree" => vm.CurrentLastOpenedItem,
+                _ => null
+            };
+        }
+
+        private void ClearContextMenuContext()
+        {
+            _contextMenuTree = null;
+            _contextMenuWrapper = null;
         }
 
         private static TaskWrapperViewModel? TryGetWrapper(object? source)

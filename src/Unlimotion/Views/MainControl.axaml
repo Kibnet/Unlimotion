@@ -55,18 +55,22 @@ x:Class="Unlimotion.Views.MainControl">
         <Style Selector="TreeView.TaskTree">
             <Setter Property="ContextMenu">
                 <Setter.Value>
-                    <ContextMenu DataContext="{Binding #mainControl.DataContext}">
+                    <ContextMenu>
                         <MenuItem Header="Развернуть вложенные текущего"
-                                  Command="{Binding ExpandCurrentNestedCommand}"
+                                  Tag="ExpandCurrentNested"
+                                  Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandCurrentNestedTreeMenuItem"/>
                         <MenuItem Header="Свернуть вложенные текущего"
-                                  Command="{Binding CollapseCurrentNestedCommand}"
+                                  Tag="CollapseCurrentNested"
+                                  Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseCurrentNestedTreeMenuItem"/>
                         <MenuItem Header="Развернуть все узлы"
-                                  Command="{Binding ExpandAllTreeNodesCommand}"
+                                  Tag="ExpandAll"
+                                  Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandAllTreeMenuItem"/>
                         <MenuItem Header="Свернуть все узлы"
-                                  Command="{Binding CollapseAllTreeNodesCommand}"
+                                  Tag="CollapseAll"
+                                  Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
                     </ContextMenu>
                 </Setter.Value>

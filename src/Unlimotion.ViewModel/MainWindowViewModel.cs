@@ -1327,15 +1327,7 @@ namespace Unlimotion.ViewModel
 
         public void CollapseNodeDescendants(TaskWrapperViewModel? current)
         {
-            if (current == null)
-            {
-                return;
-            }
-
-            foreach (var child in current.SubTasks)
-            {
-                SetExpandedRecursive(child, false);
-            }
+            SetExpandedRecursive(current, false);
         }
 
         public void ExpandAllNodes(IEnumerable<TaskWrapperViewModel>? roots)

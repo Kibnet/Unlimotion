@@ -1475,7 +1475,7 @@ namespace Unlimotion.Test
 
             mainWindowVM.CollapseNodeDescendants(rootWrapper);
 
-            await Assert.That(rootWrapper.IsExpanded).IsTrue();
+            await Assert.That(rootWrapper.IsExpanded).IsFalse();
             await Assert.That(childWrapper.IsExpanded).IsFalse();
             await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
         }
