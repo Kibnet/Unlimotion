@@ -496,7 +496,7 @@ namespace Unlimotion.Views
 
         private void UpdateActiveTreeContext(Control control)
         {
-            var tree = control.FindParent<TreeView>();
+            var tree = TryGetTaskTree(control);
             if (tree == null)
             {
                 return;
@@ -540,6 +540,15 @@ namespace Unlimotion.Views
             return false;
         }
 
+        private bool TryGetFocusedTaskTree(out TreeView tree)
+        {
+            tree = null!;
+
+            var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+            var candidate = TryGetTaskTree(focused);
+            return TryGetValidatedTree(candidate, out tree);
+        }
+
         private bool TryGetCommandTree(TreeCommandRoute route, out TreeView tree)
         {
             if (route == TreeCommandRoute.ContextMenu && TryGetValidatedContextMenuTree(out tree))
@@ -562,6 +571,13 @@ namespace Unlimotion.Views
             if (DataContext is not MainWindowViewModel vm)
             {
                 return false;
+            }
+
+            if (TryGetFocusedTaskTree(out var focusedTree) && ShouldUseActiveTreeForHotkey(vm, focusedTree))
+            {
+                _activeTaskTree = focusedTree;
+                tree = focusedTree;
+                return true;
             }
 
             if (TryGetValidatedActiveTree(out var activeTree) && ShouldUseActiveTreeForHotkey(vm, activeTree))
@@ -735,6 +751,11 @@ namespace Unlimotion.Views
             }
 
             return false;
+        }
+
+        private static TreeView? TryGetTaskTree(Control? control)
+        {
+            return control as TreeView ?? control?.FindParent<TreeView>();
         }
     }
 }

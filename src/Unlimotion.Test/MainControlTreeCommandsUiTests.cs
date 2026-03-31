@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -568,6 +569,129 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(childWrapper.IsExpanded).IsTrue();
                 await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTask!.Id);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_Hotkey_UsesFocusedRelationTreeWithoutPointerActivation()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+
+                var currentTask = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
+                var grandchildTask = await vm.taskRepository!.AddChild(childTask);
+                grandchildTask.Title = "Focused relation tree grandchild";
+                await TestHelpers.WaitThrottleTime();
+
+                var mainRootWrapper = vm.FindTaskWrapperViewModel(currentTask!, vm.CurrentAllTasksItems);
+                var mainChildWrapper = vm.FindTaskWrapperViewModel(childTask!, vm.CurrentAllTasksItems);
+                await Assert.That(mainRootWrapper).IsNotNull();
+                await Assert.That(mainChildWrapper).IsNotNull();
+
+                mainRootWrapper!.IsExpanded = false;
+                mainChildWrapper!.IsExpanded = false;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(relationTree).IsNotNull();
+
+                var relationChildWrapper = vm.CurrentItemContains.SubTasks.First(wrapper => wrapper.TaskItem.Id == childTask.Id);
+                var relationGrandchildWrapper = relationChildWrapper.SubTasks.First(wrapper => wrapper.TaskItem.Id == grandchildTask.Id);
+                relationChildWrapper.IsExpanded = false;
+                relationGrandchildWrapper.IsExpanded = false;
+                Dispatcher.UIThread.RunJobs();
+
+                Dispatcher.UIThread.RunJobs();
+
+                var focused = relationTree.Focus();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(focused).IsTrue();
+
+                var activeTaskTreeField = typeof(MainControl).GetField("_activeTaskTree", BindingFlags.Instance | BindingFlags.NonPublic);
+                await Assert.That(activeTaskTreeField).IsNotNull();
+                activeTaskTreeField!.SetValue(view, allTasksTree);
+
+                PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(relationChildWrapper.IsExpanded).IsTrue();
+                await Assert.That(relationGrandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(mainRootWrapper.IsExpanded).IsFalse();
+                await Assert.That(mainChildWrapper.IsExpanded).IsFalse();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_HotkeyRouting_PrefersFocusedRelationTreeOverStaleActiveTree()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(relationTree).IsNotNull();
+
+                var focused = relationTree!.Focus();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(focused).IsTrue();
+
+                var activeTaskTreeField = typeof(MainControl).GetField("_activeTaskTree", BindingFlags.Instance | BindingFlags.NonPublic);
+                var tryGetHotkeyTreeMethod = typeof(MainControl).GetMethod("TryGetHotkeyTree", BindingFlags.Instance | BindingFlags.NonPublic);
+                await Assert.That(activeTaskTreeField).IsNotNull();
+                await Assert.That(tryGetHotkeyTreeMethod).IsNotNull();
+
+                activeTaskTreeField!.SetValue(view, allTasksTree);
+                var args = new object?[] { null };
+                var resolved = (bool)tryGetHotkeyTreeMethod!.Invoke(view, args)!;
+
+                await Assert.That(resolved).IsTrue();
+                await Assert.That(args[0]).IsSameReferenceAs(relationTree);
             }
             finally
             {
