@@ -1,0 +1,120 @@
+name: Unlimotion AndroidPkg
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ANDROID_API_LEVEL: 24
+  ANDROID_PLATFORM: android-35
+  ANDROID_BUILD_TOOLS: 35.0.0
+  ANDROID_NDK_VERSION: 27.2.12479018
+  OPENSSL_VERSION: 3.0.14
+  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.4
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android SDK Packages
+      run: |
+        yes | sdkmanager --licenses > /dev/null
+        sdkmanager --install \
+          "platform-tools" \
+          "build-tools;${ANDROID_BUILD_TOOLS}" \
+          "platforms;${ANDROID_PLATFORM}" \
+          "ndk;${ANDROID_NDK_VERSION}"
+        echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build perl zip unzip
+
+    - name: Install .NET Android Workload
+      run: dotnet workload install android
+
+    - name: Prepare Local Android Feed
+      run: |
+        sudo mkdir -p /storage/emulated/0/nuget-local
+        sudo chown -R "$USER":"$USER" /storage
+        mkdir -p artifacts/android artifacts/android-native
+
+    - name: Build Android Native Dependencies
+      run: |
+        export LIB_OUTPUT_PATH="${GITHUB_WORKSPACE}/artifacts/android-native/libgit2-3f4182d.so"
+        export LIBGIT2_PATH="$LIB_OUTPUT_PATH"
+        bash ./scripts/build-libgit2-android.sh
+        bash ./scripts/build-openssl-android.sh
+        bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
+
+    - name: Build Android APK
+      run: |
+        dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
+          -c Release \
+          -t:Package \
+          -p:RuntimeIdentifier=android-arm64 \
+          -p:ContinuousIntegrationBuild=true \
+          -p:GitHubRefName="${GITHUB_REF_NAME}" \
+          -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
+          -p:JavaSdkDirectory="${JAVA_HOME}"
+
+    - name: Stage APK Artifact
+      run: |
+        apk_path="$(find src/Unlimotion.Android/bin/Release -type f -name '*-Signed.apk' | head -n 1)"
+        if [ -z "$apk_path" ]; then
+          echo "Signed APK not found under src/Unlimotion.Android/bin/Release" >&2
+          exit 1
+        fi
+
+        asset_name="Unlimotion-android-arm64.apk"
+        if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+          asset_name="Unlimotion-${GITHUB_REF_NAME}-android-arm64.apk"
+        fi
+
+        cp "$apk_path" "artifacts/android/${asset_name}"
+        echo "APK_ASSET_PATH=artifacts/android/${asset_name}" >> "$GITHUB_ENV"
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: unlimotion-android-apk
+        path: artifacts/android/*.apk
+        if-no-files-found: error
+
+    - name: Upload APK To Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.APK_ASSET_PATH }}

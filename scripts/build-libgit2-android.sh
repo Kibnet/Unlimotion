@@ -2,9 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_DIR="$ROOT_DIR/.native/libgit2-src"
-BUILD_DIR="$ROOT_DIR/.native/libgit2-build-android-arm64"
+SRC_DIR="${SRC_DIR:-$ROOT_DIR/.native/libgit2-src}"
+BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/.native/libgit2-build-android-arm64}"
 LIB_NAME="libgit2-3f4182d.so"
+LIB_OUTPUT_PATH="${LIB_OUTPUT_PATH:-$ROOT_DIR/$LIB_NAME}"
+ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
 
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/data/data/com.termux/files/home/android-sdk}"
 
@@ -33,7 +35,7 @@ fi
 cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN" \
   -DANDROID_ABI=arm64-v8a \
-  -DANDROID_PLATFORM=android-24 \
+  -DANDROID_PLATFORM="android-$ANDROID_API_LEVEL" \
   -DBUILD_SHARED_LIBS=ON \
   -DBUILD_CLAR=OFF \
   -DUSE_SSH=OFF \
@@ -52,5 +54,5 @@ if [ -z "$LIB_PATH" ]; then
   exit 1
 fi
 
-install -D -m 0644 "$LIB_PATH" "$ROOT_DIR/$LIB_NAME"
-echo "Wrote $ROOT_DIR/$LIB_NAME"
+install -D -m 0644 "$LIB_PATH" "$LIB_OUTPUT_PATH"
+echo "Wrote $LIB_OUTPUT_PATH"
