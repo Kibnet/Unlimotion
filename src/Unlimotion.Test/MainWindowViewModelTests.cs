@@ -56,8 +56,22 @@ namespace Unlimotion.Test
             var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
             if (!File.Exists(path))
                 return null;
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TaskItem>(json);
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    var json = File.ReadAllText(path);
+                    return JsonSerializer.Deserialize<TaskItem>(json);
+                }
+                catch (IOException) when (attempt < 4)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+
+            var finalJson = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<TaskItem>(finalJson);
         }
     }
 
@@ -89,6 +103,28 @@ namespace Unlimotion.Test
             await Assert.That(grandchildWrapper!.Parent).IsEqualTo(childWrapper);
 
             return (childWrapper.Parent, childWrapper, grandchildWrapper);
+        }
+
+        private static IReadOnlyList<TaskWrapperViewModel> FindWrappersByTaskId(
+            IEnumerable<TaskWrapperViewModel> roots,
+            string taskId)
+        {
+            return TraverseWrappers(roots)
+                .Where(wrapper => string.Equals(wrapper.TaskItem.Id, taskId, StringComparison.Ordinal))
+                .ToList();
+        }
+
+        private static IEnumerable<TaskWrapperViewModel> TraverseWrappers(IEnumerable<TaskWrapperViewModel> roots)
+        {
+            foreach (var wrapper in roots)
+            {
+                yield return wrapper;
+
+                foreach (var child in TraverseWrappers(wrapper.SubTasks))
+                {
+                    yield return child;
+                }
+            }
         }
 
         /// <summary>
@@ -723,6 +759,76 @@ namespace Unlimotion.Test
             
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)).IsNull();
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+        }
+
+        [Test]
+        public async Task RemoveSelectedWrappers_MultiParentSameTask_RemovesEachWrapperContext()
+        {
+            var wrappers = FindWrappersByTaskId(mainWindowVM.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
+            await Assert.That(wrappers.Count).IsEqualTo(2);
+
+            var root2Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
+            var root3Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask3Id);
+            await Assert.That(root2Wrapper).IsNotNull();
+            await Assert.That(root3Wrapper).IsNotNull();
+
+            NotificationManager.AskResult = true;
+            mainWindowVM.RemoveSelectedWrappers([root2Wrapper!, root3Wrapper!]);
+            await TestHelpers.WaitThrottleTime();
+
+            var taskFile = GetStorageTaskItem(MainWindowViewModelFixture.SubTask22Id);
+            var root2Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
+            var root3Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask3Id);
+
+            await Assert.That(taskFile).IsNull();
+            await Assert.That(root2Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+            await Assert.That(root3Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+        }
+
+        [Test]
+        public async Task RemoveSelectedWrappers_CancelledBatch_KeepsAllSelectedEntries()
+        {
+            var wrappers = new[]
+            {
+                mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask1Id),
+                mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id)
+            };
+
+            NotificationManager.AskResult = false;
+            mainWindowVM.RemoveSelectedWrappers(wrappers);
+            await TestHelpers.WaitThrottleTime();
+
+            var root1Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
+            var root4Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id);
+
+            await Assert.That(root1Stored).IsNotNull();
+            await Assert.That(root4Stored).IsNotNull();
+        }
+
+        [Test]
+        public async Task NormalizeForMoveBatch_RemovesDescendantsWhenAncestorSelected()
+        {
+            var rootWrapper = mainWindowVM.CurrentAllTasksItems
+                .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
+            var childWrapper = rootWrapper.SubTasks
+                .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.SubTask22Id);
+
+            var normalized = new[] { rootWrapper, childWrapper }.NormalizeForMoveBatch();
+
+            await Assert.That(normalized.Count).IsEqualTo(1);
+            await Assert.That(normalized[0]).IsSameReferenceAs(rootWrapper);
+        }
+
+        [Test]
+        public async Task NormalizeForNonMoveBatch_DeduplicatesSameTaskAcrossParents()
+        {
+            var wrappers = FindWrappersByTaskId(mainWindowVM.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
+            await Assert.That(wrappers.Count).IsEqualTo(2);
+
+            var normalized = wrappers.NormalizeForNonMoveBatch();
+
+            await Assert.That(normalized.Count).IsEqualTo(1);
+            await Assert.That(normalized[0].TaskItem.Id).IsEqualTo(MainWindowViewModelFixture.SubTask22Id);
         }
 
         /// <summary>
