@@ -19,7 +19,9 @@ namespace Unlimotion.ViewModel
         ExpandCurrentNested,
         CollapseCurrentNested,
         ExpandAll,
-        CollapseAll
+        CollapseAll,
+        DeleteSelection,
+        SelectAll
     }
 
     [AddINotifyPropertyChangedInterface]
@@ -178,6 +180,12 @@ namespace Unlimotion.ViewModel
                 .AddToDisposeAndReturn(connectionDisposableList);
             CollapseAllTreeNodesCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.CollapseAll))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            DeleteSelectedTreeItemsCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.DeleteSelection))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            SelectAllTreeItemsCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.SelectAll))
                 .AddToDisposeAndReturn(connectionDisposableList);
 
             //Select CurrentTaskItem from all tabs
@@ -1242,6 +1250,58 @@ namespace Unlimotion.ViewModel
                 });
         }
 
+        public void RemoveSelectedWrappers(IEnumerable<TaskWrapperViewModel>? wrappers)
+        {
+            var orderedWrappers = wrappers
+                .NormalizeForDeleteBatch()
+                .OrderByDescending(static wrapper => wrapper.GetWrapperDepth())
+                .ToList();
+
+            if (orderedWrappers.Count == 0)
+            {
+                return;
+            }
+
+            if (orderedWrappers.Count == 1)
+            {
+                RemoveTask(orderedWrappers[0]);
+                return;
+            }
+
+            ManagerWrapper.Ask(
+                "Remove tasks",
+                $"Are you sure you want to remove {orderedWrappers.Count} selected task entries?",
+                async () => await RemoveWrappersInternalAsync(orderedWrappers));
+        }
+
+        private async Task RemoveWrappersInternalAsync(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            if (wrappers == null || wrappers.Count == 0)
+            {
+                return;
+            }
+
+            var selectedTaskIds = wrappers
+                .Select(static wrapper => wrapper.TaskItem?.Id)
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet();
+
+            foreach (var wrapper in wrappers)
+            {
+                if (wrapper?.TaskItem == null)
+                {
+                    continue;
+                }
+
+                await wrapper.TaskItem.RemoveFunc.Invoke(wrapper.Parent?.TaskItem);
+            }
+
+            if (CurrentTaskItem != null && selectedTaskIds.Contains(CurrentTaskItem.Id))
+            {
+                CurrentTaskItem = null;
+            }
+        }
+
         private TaskRelationPickerViewModel CreateRelationPicker(TaskRelationKind kind)
         {
             return new TaskRelationPickerViewModel(
@@ -1496,6 +1556,10 @@ namespace Unlimotion.ViewModel
         public ICommand ExpandAllTreeNodesCommand { get; set; }
 
         public ICommand CollapseAllTreeNodesCommand { get; set; }
+
+        public ICommand DeleteSelectedTreeItemsCommand { get; set; }
+
+        public ICommand SelectAllTreeItemsCommand { get; set; }
 
         public Action<TreeCommandKind>? ExecuteTreeCommandAction { get; set; }
 

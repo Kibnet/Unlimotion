@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using KellermanSoftware.CompareNetObjects;
@@ -93,8 +94,8 @@ namespace Unlimotion.Test
         {
             var path = Path.Combine(folderPath, taskId);
             if (!File.Exists(path)) return null;
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TaskItem>(json);
+
+            return ReadStorageTaskItemWithRetry(path);
         }
 
         public static ComparisonResult CompareStorageVersions(TaskItem before, TaskItem after)
@@ -125,6 +126,25 @@ namespace Unlimotion.Test
         {
             var path = Path.Combine(folderPath, taskId);
             await Assert.That(File.Exists(path)).IsTrue().Because($"Task file not found: {path}");
+        }
+
+        private static TaskItem? ReadStorageTaskItemWithRetry(string path, int attempts = 5)
+        {
+            for (var attempt = 0; attempt < attempts; attempt++)
+            {
+                try
+                {
+                    var json = File.ReadAllText(path);
+                    return JsonSerializer.Deserialize<TaskItem>(json);
+                }
+                catch (IOException) when (attempt < attempts - 1)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+
+            var finalJson = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<TaskItem>(finalJson);
         }
     }
 }

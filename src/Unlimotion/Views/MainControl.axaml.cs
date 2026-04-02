@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -32,6 +33,49 @@ namespace Unlimotion.Views
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
         private TaskWrapperViewModel? _contextMenuWrapper;
+        private PendingTreeDragContext? _pendingTreeDrag;
+        private bool _treeDragInProgress;
+
+        private sealed class PendingTreeDragContext(
+            Control control,
+            TreeView tree,
+            TaskWrapperViewModel wrapper,
+            Point startPoint,
+            IReadOnlyList<TaskWrapperViewModel> selectionSnapshot,
+            bool wasSelected)
+        {
+            public Control Control { get; } = control;
+            public TreeView Tree { get; } = tree;
+            public TaskWrapperViewModel Wrapper { get; } = wrapper;
+            public Point StartPoint { get; } = startPoint;
+            public IReadOnlyList<TaskWrapperViewModel> SelectionSnapshot { get; } = selectionSnapshot;
+            public bool WasSelected { get; } = wasSelected;
+        }
+
+        private sealed class TaskTreeDragData(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            public IReadOnlyList<TaskWrapperViewModel> Wrappers { get; } =
+                wrappers.NormalizeForDeleteBatch();
+        }
+
+        private enum BatchDropOperationKind
+        {
+            CopyInto,
+            MoveInto,
+            CloneInto,
+            SourcesBlockTarget,
+            TargetBlocksSources
+        }
+
+        private sealed class DragSourceOperationItem(
+            TaskItemViewModel taskItem,
+            TaskItemViewModel? sourceParent = null,
+            TaskWrapperViewModel? wrapper = null)
+        {
+            public TaskItemViewModel TaskItem { get; } = taskItem;
+            public TaskItemViewModel? SourceParent { get; } = sourceParent;
+            public TaskWrapperViewModel? Wrapper { get; } = wrapper;
+        }
 
         public MainControl()
         {
@@ -161,182 +205,533 @@ namespace Unlimotion.Views
         }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
+        private const string CustomBatchFormat = "application/xxx-unlimotion-task-batch";
+        private const double TreeDragThreshold = 4;
 
-        private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var control = sender as Control;
-            if (control != null)
-            {
-                UpdateActiveTreeContext(control);
-            }
-
-            if (control == null || !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            if (sender is not Control control)
             {
                 return;
             }
 
-            var dc = control?.DataContext;
-            if (dc == null)
+            UpdateActiveTreeContext(control);
+
+            var tree = TryGetTaskTree(control);
+            var wrapper = TryGetWrapper(control) ?? TryGetWrapper(e.Source);
+            var point = e.GetCurrentPoint(control);
+
+            if (tree != null && wrapper != null && point.Properties.IsRightButtonPressed)
+            {
+                NormalizeSelectionForContextMenu(tree, wrapper);
+                _contextMenuTree = tree;
+                _contextMenuWrapper = wrapper;
+                ClearPendingTreeDrag();
+                return;
+            }
+
+            if (tree == null || wrapper == null || !point.Properties.IsLeftButtonPressed)
+            {
+                ClearPendingTreeDrag();
+                return;
+            }
+
+            if (HasSelectionModifier(e.KeyModifiers))
+            {
+                ClearPendingTreeDrag();
+                return;
+            }
+
+            var selectionSnapshot = GetSelectedWrappersForTree(tree);
+            var wasSelected = ContainsWrapper(selectionSnapshot, wrapper);
+            if (!wasSelected)
+            {
+                selectionSnapshot = [wrapper];
+            }
+
+            _pendingTreeDrag = new PendingTreeDragContext(
+                control,
+                tree,
+                wrapper,
+                e.GetPosition(control),
+                selectionSnapshot,
+                wasSelected);
+        }
+
+        private async void InputElement_OnPointerMoved(object? sender, PointerEventArgs e)
+        {
+            if (sender is not Control control ||
+                _pendingTreeDrag == null ||
+                _treeDragInProgress ||
+                !ReferenceEquals(_pendingTreeDrag.Control, control))
             {
                 return;
             }
 
-            var dragData = new DataObject();
-            dragData.Set(CustomFormat, dc);
+            if (!e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            {
+                ClearPendingTreeDrag();
+                return;
+            }
 
-            var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            if (!HasExceededDragThreshold(_pendingTreeDrag.StartPoint, e.GetPosition(control)))
+            {
+                return;
+            }
+
+            var pending = _pendingTreeDrag;
+            _pendingTreeDrag = null;
+            _treeDragInProgress = true;
+
+            try
+            {
+                await StartTreeDragAsync(pending, e);
+            }
+            finally
+            {
+                ClearPendingTreeDrag();
+            }
+        }
+
+        private void InputElement_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+        {
+            ClearPendingTreeDrag();
         }
 
         public static void DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
-            {
-                if (GetTasks(e, out var task, out var subItem)) return;
-
-                if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
-                {
-                    e.DragEffects &= DragDropEffects.Copy;
-                }
-                else if (e.KeyModifiers == KeyModifiers.Shift)
-                {
-                    if (subItem.CanMoveInto(task))
-                    {
-                        e.DragEffects &= DragDropEffects.Move;
-                    }
-                    else
-                    {
-                        e.DragEffects = DragDropEffects.None;
-                    }
-                }
-                else if (e.KeyModifiers == KeyModifiers.Control)
-                {
-                    e.DragEffects &= DragDropEffects.Link;
-                }
-                else if (e.KeyModifiers == KeyModifiers.Alt)
-                {
-                    e.DragEffects &= DragDropEffects.Link;
-                }
-                else
-                {
-                    if (subItem.CanMoveInto(task))
-                    {
-                        e.DragEffects &= DragDropEffects.Copy;
-                    }
-                    else
-                    {
-                        e.DragEffects = DragDropEffects.None;
-                    }
-                }
-            }
-            else
+            var mainControl = TryResolveMainControl(sender, e.Source);
+            if (mainControl == null || !ContainsSupportedDragData(e.Data))
             {
                 e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            mainControl.HandleDragOver(e);
+        }
+
+        public static async Task Drop(object sender, DragEventArgs e)
+        {
+            var mainControl = TryResolveMainControl(sender, e.Source);
+            if (mainControl == null || !ContainsSupportedDragData(e.Data))
+            {
+                e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            await mainControl.HandleDropAsync(e);
+        }
+
+        private async Task StartTreeDragAsync(PendingTreeDragContext pending, PointerEventArgs e)
+        {
+            var wrappers = GetWrappersForTreeDrag(pending);
+
+            if (wrappers.Count == 0)
+            {
+                return;
+            }
+
+            EnsureTreeSelectionForDragStart(pending.Tree, wrappers, pending.WasSelected);
+
+            var dragData = BuildTreeDragData(wrappers);
+            await DragDrop.DoDragDrop(
+                e,
+                dragData,
+                DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+        }
+
+        private static IReadOnlyList<TaskWrapperViewModel> GetWrappersForTreeDrag(PendingTreeDragContext pending)
+        {
+            return pending.WasSelected
+                ? pending.SelectionSnapshot.NormalizeForDeleteBatch()
+                : pending.SelectionSnapshot;
+        }
+
+        private void EnsureTreeSelectionForDragStart(
+            TreeView tree,
+            IReadOnlyList<TaskWrapperViewModel> wrappers,
+            bool preserveExistingSelection)
+        {
+            if (preserveExistingSelection || wrappers.Count == 0)
+            {
+                return;
+            }
+
+            SelectSingleWrapper(tree, wrappers[0]);
+        }
+
+        private static DataObject BuildTreeDragData(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            var dragData = new DataObject();
+            dragData.Set(CustomBatchFormat, new TaskTreeDragData(wrappers));
+            dragData.Set(CustomFormat, wrappers[0]);
+            return dragData;
+        }
+
+        private void HandleDragOver(DragEventArgs e)
+        {
+            if (!TryGetDropTargetTask(e, out var targetTask))
+            {
+                e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            var operationKind = GetBatchDropOperationKind(e.KeyModifiers);
+            if (!TryBuildOperationItems(e, operationKind, out var items, out _))
+            {
+                e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            e.DragEffects = CanApplyDrop(targetTask, items, operationKind)
+                ? GetDragEffects(operationKind)
+                : DragDropEffects.None;
+        }
+
+        private async Task HandleDropAsync(DragEventArgs e)
+        {
+            if (!TryGetDropTargetTask(e, out var targetTask))
+            {
+                e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            var operationKind = GetBatchDropOperationKind(e.KeyModifiers);
+            if (!TryBuildOperationItems(e, operationKind, out var items, out var buildError))
+            {
+                e.DragEffects = DragDropEffects.None;
+                ShowBatchDropError(buildError);
+                e.Handled = true;
+                return;
+            }
+
+            if (!CanApplyDrop(targetTask, items, operationKind))
+            {
+                e.DragEffects = DragDropEffects.None;
+                ShowBatchDropError(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (!await ConfirmBatchDropAsync(operationKind, items.Count, targetTask))
+            {
+                e.DragEffects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            e.DragEffects = GetDragEffects(operationKind);
+            await ApplyDropAsync(targetTask, items, operationKind);
+            UpdateGraph(e.Source);
+            e.Handled = true;
+        }
+
+        private static MainControl? TryResolveMainControl(object? sender, object? source)
+        {
+            return sender as MainControl ??
+                   (sender as Control)?.FindParent<MainControl>() ??
+                   (source as Control)?.FindParent<MainControl>();
+        }
+
+        private static bool ContainsSupportedDragData(IDataObject data)
+        {
+            return data.Contains(CustomBatchFormat) ||
+                   data.Contains(CustomFormat) ||
+                   data.Contains(GraphControl.CustomFormat);
+        }
+
+        private static bool TryGetDropTargetTask(DragEventArgs e, out TaskItemViewModel targetTask)
+        {
+            var control = e.Source as Control;
+            targetTask = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
+                         control?.FindParentDataContext<TaskItemViewModel>()!;
+            return targetTask != null;
+        }
+
+        private bool TryBuildOperationItems(
+            DragEventArgs e,
+            BatchDropOperationKind operationKind,
+            out IReadOnlyList<DragSourceOperationItem> items,
+            out string? errorMessage)
+        {
+            errorMessage = null;
+
+            if (e.Data.Get(CustomBatchFormat) is TaskTreeDragData batchData)
+            {
+                var normalizedWrappers = operationKind == BatchDropOperationKind.MoveInto
+                    ? batchData.Wrappers.NormalizeForMoveBatch()
+                    : batchData.Wrappers.NormalizeForNonMoveBatch();
+
+                var result = new List<DragSourceOperationItem>(normalizedWrappers.Count);
+                foreach (var wrapper in normalizedWrappers)
+                {
+                    if (wrapper?.TaskItem == null)
+                    {
+                        continue;
+                    }
+
+                    TaskItemViewModel? sourceParent = null;
+                    if (operationKind == BatchDropOperationKind.MoveInto &&
+                        !TryResolveMoveSourceParent(wrapper, out sourceParent))
+                    {
+                        items = Array.Empty<DragSourceOperationItem>();
+                        errorMessage = "Нельзя выполнить массовое перемещение: для части задач не определён исходный родитель.";
+                        return false;
+                    }
+
+                    result.Add(new DragSourceOperationItem(
+                        wrapper.TaskItem,
+                        operationKind == BatchDropOperationKind.MoveInto ? sourceParent : null,
+                        wrapper));
+                }
+
+                items = result;
+                return items.Count > 0;
+            }
+
+            var singleSource = e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat);
+            if (!TryBuildSingleOperationItem(singleSource, operationKind, out var item, out errorMessage))
+            {
+                items = Array.Empty<DragSourceOperationItem>();
+                return false;
+            }
+
+            items = [item];
+            return true;
+        }
+
+        private static bool TryBuildSingleOperationItem(
+            object? dragSource,
+            BatchDropOperationKind operationKind,
+            out DragSourceOperationItem item,
+            out string? errorMessage)
+        {
+            errorMessage = null;
+            item = null!;
+
+            switch (dragSource)
+            {
+                case TaskWrapperViewModel wrapper when wrapper.TaskItem != null:
+                {
+                    TaskItemViewModel? sourceParent = null;
+                    if (operationKind == BatchDropOperationKind.MoveInto &&
+                        !TryResolveMoveSourceParent(wrapper, out sourceParent))
+                    {
+                        errorMessage = "Нельзя выполнить перемещение: не определён исходный родитель.";
+                        return false;
+                    }
+
+                    item = new DragSourceOperationItem(
+                        wrapper.TaskItem,
+                        operationKind == BatchDropOperationKind.MoveInto ? sourceParent : null,
+                        wrapper);
+                    return true;
+                }
+                case TaskItemViewModel taskItem:
+                {
+                    TaskItemViewModel? sourceParent = null;
+                    if (operationKind == BatchDropOperationKind.MoveInto)
+                    {
+                        if (taskItem.Parents.Count <= 1)
+                        {
+                            sourceParent = taskItem.ParentsTasks.FirstOrDefault();
+                        }
+                        else
+                        {
+                            errorMessage = "Нельзя выполнить перемещение: не определён исходный родитель.";
+                            return false;
+                        }
+                    }
+
+                    item = new DragSourceOperationItem(taskItem, sourceParent);
+                    return true;
+                }
+                default:
+                    errorMessage = "Неподдерживаемый источник drag-and-drop.";
+                    return false;
             }
         }
 
-        private static bool GetTasks(DragEventArgs e, out TaskItemViewModel? task, out TaskItemViewModel? subItem)
+        private static bool TryResolveMoveSourceParent(TaskWrapperViewModel wrapper, out TaskItemViewModel? sourceParent)
         {
-            var control = e.Source as Control;
-            task = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
-                   control?.FindParentDataContext<TaskItemViewModel>();
-
-            var sub = e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat);
-            subItem = sub switch
+            sourceParent = null;
+            if (wrapper?.TaskItem == null)
             {
-                TaskWrapperViewModel taskWrapperViewModel => taskWrapperViewModel?.TaskItem,
-                TaskItemViewModel taskItemViewModel => taskItemViewModel,
-                _ => null
-            };
+                return false;
+            }
 
-            if (subItem == null || task == null)
+            if (wrapper.TaskItem.Parents.Count <= 1)
             {
-                e.DragEffects = DragDropEffects.None;
+                sourceParent = wrapper.TaskItem.ParentsTasks.FirstOrDefault();
+                return true;
+            }
+
+            if (wrapper.Parent?.TaskItem != null)
+            {
+                sourceParent = wrapper.Parent.TaskItem;
                 return true;
             }
 
             return false;
         }
 
-        public static async Task Drop(object sender, DragEventArgs e)
+        private static bool CanApplyDrop(
+            TaskItemViewModel targetTask,
+            IReadOnlyList<DragSourceOperationItem> items,
+            BatchDropOperationKind operationKind)
         {
-            if (e.Data.Contains(CustomFormat) || e.Data.Contains(GraphControl.CustomFormat))
+            return items.Count > 0 &&
+                   items.All(item => item.TaskItem != null) &&
+                   operationKind switch
+                   {
+                       BatchDropOperationKind.CopyInto => items.All(item => item.TaskItem.CanMoveInto(targetTask)),
+                       BatchDropOperationKind.MoveInto => items.All(item =>
+                           item.TaskItem.CanMoveInto(targetTask)),
+                       BatchDropOperationKind.CloneInto => items.All(item => item.TaskItem.CanMoveInto(targetTask)),
+                       BatchDropOperationKind.SourcesBlockTarget => items.All(item => targetTask.CanCreateBlockingRelation(item.TaskItem)),
+                       BatchDropOperationKind.TargetBlocksSources => items.All(item => item.TaskItem.CanCreateBlockingRelation(targetTask)),
+                       _ => false
+                   };
+        }
+
+        private async Task<bool> ConfirmBatchDropAsync(
+            BatchDropOperationKind operationKind,
+            int itemCount,
+            TaskItemViewModel targetTask)
+        {
+            if (itemCount <= 1 || DataContext is not MainWindowViewModel vm)
             {
-                if (GetTasks(e, out var task, out var subItem)) return;
+                return true;
+            }
 
-                if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
-                {
-                    e.DragEffects &= DragDropEffects.Copy;
-                    await subItem.CloneInto(task);
-                    UpdateGraph(e.Source);
-                    e.Handled = true;
-                }
-                else if (e.KeyModifiers == KeyModifiers.Shift)
-                {
-                    if (subItem.CanMoveInto(task))
-                    {
-                        TaskItemViewModel parent = null;
-                        var breakFlag = false;
-                        if (subItem.Parents.Count <= 1)
-                        {
-                            parent = subItem.ParentsTasks.FirstOrDefault();
-                        }
-                        else if ((e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat)) is TaskWrapperViewModel parentWrapper)
-                        {
-                            parent = parentWrapper.Parent.TaskItem;
-                        }
-                        else
-                        {
-                            e.DragEffects &= DragDropEffects.None;
-                            breakFlag = true;
-                        }
+            var manager = vm.ManagerWrapper;
+            if (manager == null)
+            {
+                return true;
+            }
 
-                        if (!breakFlag)
-                        {
-                            e.DragEffects &= DragDropEffects.Move;
-                            await subItem.MoveInto(task, parent);
-                            UpdateGraph(e.Source);
-                            e.Handled = true;
-                        }
-                    }
-                    else
-                    {
-                        e.DragEffects = DragDropEffects.None;
-                    }
+            var tcs = new TaskCompletionSource<bool>();
+            manager.Ask(
+                GetBatchConfirmationHeader(operationKind),
+                GetBatchConfirmationMessage(operationKind, itemCount, targetTask),
+                () => tcs.TrySetResult(true),
+                () => tcs.TrySetResult(false));
 
-                }
-                else if (e.KeyModifiers == KeyModifiers.Control) //The dragged task blocks the target task
+            return await tcs.Task;
+        }
+
+        private static string GetBatchConfirmationHeader(BatchDropOperationKind operationKind)
+        {
+            return operationKind switch
+            {
+                BatchDropOperationKind.CopyInto => "Copy tasks",
+                BatchDropOperationKind.MoveInto => "Move tasks",
+                BatchDropOperationKind.CloneInto => "Clone tasks",
+                BatchDropOperationKind.SourcesBlockTarget => "Add blocking tasks",
+                BatchDropOperationKind.TargetBlocksSources => "Add blocked tasks",
+                _ => "Confirm batch operation"
+            };
+        }
+
+        private static string GetBatchConfirmationMessage(
+            BatchDropOperationKind operationKind,
+            int itemCount,
+            TaskItemViewModel targetTask)
+        {
+            return operationKind switch
+            {
+                BatchDropOperationKind.CopyInto =>
+                    $"Are you sure you want to copy {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                BatchDropOperationKind.MoveInto =>
+                    $"Are you sure you want to move {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                BatchDropOperationKind.CloneInto =>
+                    $"Are you sure you want to clone {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                BatchDropOperationKind.SourcesBlockTarget =>
+                    $"Are you sure you want to mark {itemCount} selected tasks as blockers for \"{targetTask.Title}\"?",
+                BatchDropOperationKind.TargetBlocksSources =>
+                    $"Are you sure you want to mark \"{targetTask.Title}\" as a blocker for {itemCount} selected tasks?",
+                _ => $"Are you sure you want to update {itemCount} selected tasks?"
+            };
+        }
+
+        private static async Task ApplyDropAsync(
+            TaskItemViewModel targetTask,
+            IReadOnlyList<DragSourceOperationItem> items,
+            BatchDropOperationKind operationKind)
+        {
+            foreach (var item in items)
+            {
+                switch (operationKind)
                 {
-                    e.DragEffects &= DragDropEffects.Link;
-                    task.BlockBy(subItem); //subItem блокирует task
-                    UpdateGraph(e.Source);
-                    e.Handled = true;
-                }
-                else if (e.KeyModifiers == KeyModifiers.Alt) //The target task blocks the dragged task
-                {
-                    e.DragEffects &= DragDropEffects.Link;
-                    subItem.BlockBy(task); //task блокирует subItem
-                    UpdateGraph(e.Source);
-                    e.Handled = true;
-                }
-                else
-                {
-                    if (subItem.CanMoveInto(task))
-                    {
-                        e.DragEffects &= DragDropEffects.Copy;
-                        await subItem.CopyInto(task);
-                        UpdateGraph(e.Source);
-                        e.Handled = true;
-                    }
-                    else
-                    {
-                        e.DragEffects = DragDropEffects.None;
-                    }
+                    case BatchDropOperationKind.CopyInto:
+                        await item.TaskItem.CopyInto(targetTask);
+                        break;
+                    case BatchDropOperationKind.MoveInto:
+                        await item.TaskItem.MoveInto(targetTask, item.SourceParent);
+                        break;
+                    case BatchDropOperationKind.CloneInto:
+                        await item.TaskItem.CloneInto(targetTask);
+                        break;
+                    case BatchDropOperationKind.SourcesBlockTarget:
+                        targetTask.BlockBy(item.TaskItem);
+                        break;
+                    case BatchDropOperationKind.TargetBlocksSources:
+                        item.TaskItem.BlockBy(targetTask);
+                        break;
                 }
             }
-            else
+        }
+
+        private void ShowBatchDropError(string? errorMessage)
+        {
+            if (DataContext is MainWindowViewModel vm)
             {
-                e.DragEffects = DragDropEffects.None;
+                vm.ManagerWrapper?.ErrorToast(errorMessage ?? "Нельзя применить массовую операцию к выбранному набору.");
             }
+        }
+
+        private static BatchDropOperationKind GetBatchDropOperationKind(KeyModifiers modifiers)
+        {
+            var relevantModifiers = modifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt);
+            return relevantModifiers switch
+            {
+                KeyModifiers.Control | KeyModifiers.Shift => BatchDropOperationKind.CloneInto,
+                KeyModifiers.Shift => BatchDropOperationKind.MoveInto,
+                KeyModifiers.Control => BatchDropOperationKind.SourcesBlockTarget,
+                KeyModifiers.Alt => BatchDropOperationKind.TargetBlocksSources,
+                _ => BatchDropOperationKind.CopyInto
+            };
+        }
+
+        private static DragDropEffects GetDragEffects(BatchDropOperationKind operationKind)
+        {
+            return operationKind switch
+            {
+                BatchDropOperationKind.CopyInto => DragDropEffects.Copy,
+                BatchDropOperationKind.MoveInto => DragDropEffects.Move,
+                BatchDropOperationKind.CloneInto => DragDropEffects.Copy,
+                BatchDropOperationKind.SourcesBlockTarget => DragDropEffects.Link,
+                BatchDropOperationKind.TargetBlocksSources => DragDropEffects.Link,
+                _ => DragDropEffects.None
+            };
+        }
+
+        private static bool HasSelectionModifier(KeyModifiers modifiers)
+        {
+            var relevantModifiers = modifiers & (KeyModifiers.Control | KeyModifiers.Shift);
+            return relevantModifiers != KeyModifiers.None;
+        }
+
+        private static bool HasExceededDragThreshold(Point startPoint, Point currentPoint)
+        {
+            return Math.Abs(currentPoint.X - startPoint.X) >= TreeDragThreshold ||
+                   Math.Abs(currentPoint.Y - startPoint.Y) >= TreeDragThreshold;
+        }
+
+        private void ClearPendingTreeDrag()
+        {
+            _pendingTreeDrag = null;
+            _treeDragInProgress = false;
         }
 
         private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -449,12 +844,6 @@ namespace Unlimotion.Views
                     return;
                 }
 
-                var roots = GetTreeRoots(tree);
-                if (roots == null)
-                {
-                    return;
-                }
-
                 switch (kind)
                 {
                     case TreeCommandKind.ExpandCurrentNested:
@@ -478,10 +867,45 @@ namespace Unlimotion.Views
                         break;
                     }
                     case TreeCommandKind.ExpandAll:
+                    {
+                        var roots = GetTreeRoots(tree);
+                        if (roots == null)
+                        {
+                            return;
+                        }
+
                         vm.ExpandAllNodes(roots);
                         break;
+                    }
                     case TreeCommandKind.CollapseAll:
+                    {
+                        var roots = GetTreeRoots(tree);
+                        if (roots == null)
+                        {
+                            return;
+                        }
+
                         vm.CollapseAllNodes(roots);
+                        break;
+                    }
+                    case TreeCommandKind.DeleteSelection:
+                    {
+                        if (!IsKnownMainTaskTree(tree))
+                        {
+                            return;
+                        }
+
+                        var wrappers = GetSelectedWrappersForTree(vm, tree);
+                        if (wrappers.Count == 0)
+                        {
+                            return;
+                        }
+
+                        vm.RemoveSelectedWrappers(wrappers);
+                        break;
+                    }
+                    case TreeCommandKind.SelectAll:
+                        tree.SelectAll();
                         break;
                 }
             }
@@ -692,12 +1116,18 @@ namespace Unlimotion.Views
                 return _contextMenuWrapper;
             }
 
-            return GetSelectedWrapperForTree(vm, tree);
+            return GetSelectedWrappersForTree(vm, tree).LastOrDefault();
         }
 
-        private static TaskWrapperViewModel? GetSelectedWrapperForTree(MainWindowViewModel vm, TreeView tree)
+        private IReadOnlyList<TaskWrapperViewModel> GetSelectedWrappersForTree(MainWindowViewModel vm, TreeView tree)
         {
-            return tree.SelectedItem as TaskWrapperViewModel ?? tree.Name switch
+            var selectedWrappers = GetSelectedWrappersForTree(tree);
+            if (selectedWrappers.Count > 0)
+            {
+                return selectedWrappers;
+            }
+
+            var currentWrapper = tree.Name switch
             {
                 "AllTasksTree" => vm.CurrentAllTasksItem,
                 "LastCreatedTree" => vm.CurrentLastCreated,
@@ -707,6 +1137,99 @@ namespace Unlimotion.Views
                 "LastOpenedTree" => vm.CurrentLastOpenedItem,
                 _ => null
             };
+
+            return currentWrapper != null ? [currentWrapper] : Array.Empty<TaskWrapperViewModel>();
+        }
+
+        private static IReadOnlyList<TaskWrapperViewModel> GetSelectedWrappersForTree(TreeView tree)
+        {
+            var selectedWrappers = tree.SelectedItems?
+                .OfType<TaskWrapperViewModel>()
+                .ToList();
+
+            if (selectedWrappers?.Count > 0)
+            {
+                return selectedWrappers;
+            }
+
+            return tree.SelectedItem is TaskWrapperViewModel selectedWrapper
+                ? [selectedWrapper]
+                : Array.Empty<TaskWrapperViewModel>();
+        }
+
+        private void NormalizeSelectionForContextMenu(TreeView tree, TaskWrapperViewModel wrapper)
+        {
+            var selectedWrappers = GetSelectedWrappersForTree(tree);
+            if (ContainsWrapper(selectedWrappers, wrapper))
+            {
+                return;
+            }
+
+            SelectSingleWrapper(tree, wrapper);
+        }
+
+        private void SelectSingleWrapper(TreeView tree, TaskWrapperViewModel wrapper)
+        {
+            SetTreeSelection(tree, [wrapper]);
+        }
+
+        private void SetTreeSelection(TreeView tree, IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            var selectedItems = tree.SelectedItems;
+            if (selectedItems == null)
+            {
+                return;
+            }
+
+            selectedItems.Clear();
+            foreach (var wrapper in wrappers)
+            {
+                selectedItems.Add(wrapper);
+            }
+
+            var currentWrapper = wrappers.LastOrDefault();
+            tree.SelectedItem = currentWrapper;
+            SyncCurrentWrapperForTree(tree, currentWrapper);
+        }
+
+        private void SyncCurrentWrapperForTree(TreeView tree, TaskWrapperViewModel? wrapper)
+        {
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                return;
+            }
+
+            switch (tree.Name)
+            {
+                case "AllTasksTree":
+                    vm.CurrentAllTasksItem = wrapper;
+                    break;
+                case "LastCreatedTree":
+                    vm.CurrentLastCreated = wrapper;
+                    break;
+                case "UnlockedTree":
+                    vm.CurrentUnlockedItem = wrapper;
+                    break;
+                case "CompletedTree":
+                    vm.CurrentCompletedItem = wrapper;
+                    break;
+                case "ArchivedTree":
+                    vm.CurrentArchivedItem = wrapper;
+                    break;
+                case "LastOpenedTree":
+                    vm.CurrentLastOpenedItem = wrapper;
+                    break;
+            }
+        }
+
+        private static bool ContainsWrapper(
+            IReadOnlyList<TaskWrapperViewModel> wrappers,
+            TaskWrapperViewModel candidate)
+        {
+            var candidatePath = candidate.GetWrapperPathKey();
+            return wrappers.Any(wrapper =>
+                ReferenceEquals(wrapper, candidate) ||
+                StringComparer.Ordinal.Equals(wrapper.GetWrapperPathKey(), candidatePath));
         }
 
         private void ClearContextMenuContext()
