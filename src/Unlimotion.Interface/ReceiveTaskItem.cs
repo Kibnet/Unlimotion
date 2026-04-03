@@ -19,6 +19,7 @@ namespace Unlimotion.Interface
         public bool? IsCompleted { get; set; } = false;
         public bool IsCanBeCompleted { get; set; } = false;
         public DateTimeOffset CreatedDateTime { get; set; }
+        public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }

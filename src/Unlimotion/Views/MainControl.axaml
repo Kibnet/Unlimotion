@@ -230,10 +230,57 @@ Content="❌"
                                       x:Name="LastCreatedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                        <Grid>
+                                        <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.CreatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                            </Grid>
+                                            <Button Background="#00000000"
+                                                    Content="❌"
+                                                    BorderThickness="0"
+                                                    HorizontalAlignment="Right"
+                                                    Command="{Binding RemoveCommand}"/>
+                                        </Grid>
+                                    </TreeDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                        </Grid>
+                    </TabItem>
+                     <!--Last Updated-->
+                    <TabItem Header="Last Updated" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}">
+                        <Grid RowDefinitions="Auto,*">
+                            <WrapPanel Orientation="Horizontal">
+                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
+                                <CheckBox Content="Custom period" IsChecked="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <Label Content="From" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}"
+                                                    SelectedDate="{Binding LastUpdatedDateFilter.From}"
+                                                    IsTodayHighlighted="True"
+                                                    DisplayDate="{Binding LastUpdatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                <Label Content="To" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                    SelectedDate="{Binding LastUpdatedDateFilter.To}"
+                                                    IsTodayHighlighted="True"
+                                                    DisplayDate="{Binding LastUpdatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                <ComboBox IsVisible="{Binding !LastUpdatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastUpdatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
+                                <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                <!--Поиск-->
+                                <searchControl:SearchBar DataContext="{Binding Search}"/>
+                            </WrapPanel>
+                            <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
+                                      ItemsSource="{Binding LastUpdatedItems}"
+                                      SelectedItem="{Binding CurrentLastUpdated}"
+                                      SelectionMode="Single">
+                                <TreeView.ItemTemplate>
+                                    <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                        <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
+                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
+                                                <Label Grid.Column="1" Content="{Binding TaskItem.UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
@@ -466,6 +513,7 @@ Content="❌"
                                     <TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="Description" UseFloatingWatermark="True"></TextBox>
                                     <WrapPanel>
                                         <Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        <Label Content="{Binding UpdatedDateTime, StringFormat={}Updated: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                         <Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                         <Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                         <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
