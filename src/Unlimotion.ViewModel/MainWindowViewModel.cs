@@ -791,7 +791,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.UpdatedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.UpdatedDateTime?.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -930,6 +930,7 @@ namespace Unlimotion.ViewModel
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
                         m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.UpdatedDateTime))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
