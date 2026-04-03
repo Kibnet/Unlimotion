@@ -977,7 +977,7 @@ public class TaskTreeManager
 
     private static DateTimeOffset GetNextUpdatedDateTime(TaskItem task)
     {
-        var now = DateTimeOffset.Now;
+        var now = DateTimeOffset.UtcNow;
         if (task.UpdatedDateTime.HasValue && now <= task.UpdatedDateTime.Value)
         {
             return task.UpdatedDateTime.Value.AddSeconds(1);
