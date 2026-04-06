@@ -26,6 +26,7 @@ public class SortDefinition
                 new(w => w.TaskItem.ArchiveDateTime),
                 new(w => w.TaskItem.UnlockedDateTime),
                 new(w => w.TaskItem.CreatedDateTime),
+                new(w => w.TaskItem.UpdatedDateTime),
             }
         };
         //Эмодзи
@@ -53,6 +54,24 @@ public class SortDefinition
             Comparer = new SortExpressionComparer<TaskWrapperViewModel>
             {
                 new(w => w.TaskItem.CreatedDateTime, SortDirection.Descending)
+            }
+        };
+        //По дате обновления Asc
+        yield return new SortDefinition
+        {
+            Name = "Updated Ascending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.UpdatedDateTime)
+            }
+        };
+        //По дате обновления Des
+        yield return new SortDefinition
+        {
+            Name = "Updated Descending",
+            Comparer = new SortExpressionComparer<TaskWrapperViewModel>
+            {
+                new(w => w.TaskItem.UpdatedDateTime, SortDirection.Descending)
             }
         };
         //По дате разблокировки Asc
