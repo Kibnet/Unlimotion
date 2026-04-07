@@ -16,11 +16,11 @@ permissions:
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ANDROID_API_LEVEL: 24
-  ANDROID_PLATFORM: android-35
+  ANDROID_PLATFORM: android-36
   ANDROID_BUILD_TOOLS: 35.0.0
   ANDROID_NDK_VERSION: 27.2.12479018
   OPENSSL_VERSION: 3.0.14
-  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.4
+  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.5
 
 jobs:
   android-build:
@@ -67,16 +67,18 @@ jobs:
 
     - name: Prepare Local Android Feed
       run: |
-        sudo mkdir -p /storage/emulated/0/nuget-local
-        sudo chown -R "$USER":"$USER" /storage
-        mkdir -p artifacts/android artifacts/android-native
+        mkdir -p artifacts/android artifacts/android-native artifacts/nuget-local
 
     - name: Build Android Native Dependencies
       run: |
+        bash ./scripts/build-openssl-android.sh
+        export OPENSSL_ROOT_DIR="${GITHUB_WORKSPACE}/artifacts/android-native/openssl-${OPENSSL_VERSION}-android-arm64/prefix"
+        export OPENSSL_INCLUDE_DIR="${OPENSSL_ROOT_DIR}/include"
+        export OPENSSL_SSL_LIBRARY="${OPENSSL_ROOT_DIR}/lib/libssl.so.3"
+        export OPENSSL_CRYPTO_LIBRARY="${OPENSSL_ROOT_DIR}/lib/libcrypto.so.3"
         export LIB_OUTPUT_PATH="${GITHUB_WORKSPACE}/artifacts/android-native/libgit2-3f4182d.so"
         export LIBGIT2_PATH="$LIB_OUTPUT_PATH"
         bash ./scripts/build-libgit2-android.sh
-        bash ./scripts/build-openssl-android.sh
         bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
 
     - name: Build Android APK

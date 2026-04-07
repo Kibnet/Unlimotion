@@ -34,8 +34,45 @@ host_tag() {
         echo "darwin-x86_64"
       fi
       ;;
+    MINGW*|MSYS*|CYGWIN*)
+      echo "windows-x86_64"
+      ;;
     *)
       echo "Unsupported host OS: $(uname -s)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+ensure_perl() {
+  if perl -MLocale::Maketext::Simple -e1 >/dev/null 2>&1; then
+    return
+  fi
+
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      local portable_perl_root="$ROOT_DIR/artifacts/tools/strawberry-perl/perl"
+      local portable_perl_lib="$ROOT_DIR/artifacts/tools/perl-lib"
+      if [ -f "$portable_perl_root/lib/Locale/Maketext/Simple.pm" ]; then
+        if [ ! -f "$portable_perl_lib/Locale/Maketext/Simple.pm" ] || [ ! -f "$portable_perl_lib/ExtUtils/MakeMaker.pm" ] || [ ! -f "$portable_perl_lib/Pod/Usage.pm" ]; then
+          mkdir -p "$portable_perl_lib"
+          cp -R "$portable_perl_root/lib/Locale" "$portable_perl_lib/"
+          cp -R "$portable_perl_root/lib/ExtUtils" "$portable_perl_lib/"
+          cp -R "$portable_perl_root/lib/Pod" "$portable_perl_lib/"
+        fi
+
+        export PERL5LIB="$portable_perl_lib${PERL5LIB:+:$PERL5LIB}"
+        if perl -MLocale::Maketext::Simple -MExtUtils::MakeMaker -MPod::Usage -e1 >/dev/null 2>&1; then
+          return
+        fi
+      fi
+
+      echo "A Perl distribution with Locale::Maketext::Simple is required to build Android OpenSSL on Windows."
+      echo "Place a portable Strawberry Perl under artifacts/tools/strawberry-perl so Git Bash perl can reuse Locale and ExtUtils modules."
+      exit 1
+      ;;
+    *)
+      echo "Perl is missing the Locale::Maketext::Simple module required by OpenSSL Configure."
       exit 1
       ;;
   esac
@@ -77,28 +114,101 @@ fi
 rm -rf "$SOURCE_DIR" "$INSTALL_DIR"
 tar -xzf "$ARCHIVE_PATH" -C "$SOURCE_PARENT_DIR"
 
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]] && [ -f "$SOURCE_DIR/Configure" ]; then
+  perl -0pi -e 's/\$target\{exe_extension\}="\.pm"  if \(\$config\{target\} =~ \/vos\/\);/\$target{exe_extension}=".pm"  if (\$config{target} =~ \/vos\/);\n\$target{exe_extension}=".exe" if (\$^O eq "MSWin32" \&\& !\$target{exe_extension});/g' "$SOURCE_DIR/Configure"
+  perl -0pi -e 's/if \(eval \{ require IPC::Cmd; 1; \}\) \{/if (0 \&\& eval { require IPC::Cmd; 1; }) {/g; s/foreach \(File::Spec->path\(\)\) \{\n            my \$fullpath = catfile\(\$_, "\$name\$target\{exe_extension\}"\);\n            if \(-f \$fullpath and -x \$fullpath\) \{\n                return \$fullpath;\n            \}\n        \}/foreach (File::Spec->path()) {\n            foreach my \$fullpath (catfile(\$_, "\$name\$target{exe_extension}"), catfile(\$_, "\$name.exe"), catfile(\$_, \$name)) {\n                next unless -f \$fullpath and -x \$fullpath;\n                \$fullpath =~ s{\\\\}{\/}g;\n                return \$fullpath;\n            }\n        }/g; s/return \$fullpath;/\$fullpath =~ s{\\\\}{\/}g;\n                return \$fullpath;/g' "$SOURCE_DIR/Configure"
+  perl -0pi -e 's/\$ndk = canonpath\(\$ndk\);/\$ndk = canonpath(\$ndk);\n            \$ndk =~ s{\\\\}{\/}g;/g' "$SOURCE_DIR/Configurations/15-android.conf"
+fi
+
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-export CC="$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang"
-export CXX="$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang++"
-export AR="$TOOLCHAIN_DIR/bin/llvm-ar"
-export AS="$CC"
-export LD="$TOOLCHAIN_DIR/bin/ld"
-export RANLIB="$TOOLCHAIN_DIR/bin/llvm-ranlib"
+export ANDROID_NDK_ROOT
+export MSYS2_ENV_CONV_EXCL="PERL5LIB${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}"
 export STRIP="$TOOLCHAIN_DIR/bin/llvm-strip"
 
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
+  export SHELL="${SHELL:-$(command -v sh)}"
+  export MAKESHELL="$SHELL"
+fi
+
+ensure_perl
+
 pushd "$SOURCE_DIR" >/dev/null
-./Configure \
+perl ./Configure \
   android-arm64 \
   "-D__ANDROID_API__=$ANDROID_API_LEVEL" \
   shared \
   no-tests \
   no-unit-test \
-  no-docs \
   --prefix="$INSTALL_DIR" \
   --openssldir="$INSTALL_DIR/ssl"
 
-make -j"$(cpu_count)"
-make install_sw
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
+  make -j"$(cpu_count)" build_generated libcrypto.a libssl.a libcrypto.ld libssl.ld crypto/libssl-shlib-packet.o
+
+  if [ ! -f "crypto/libssl-shlib-packet.o" ]; then
+    echo "Expected OpenSSL shared packet object was not generated: $SOURCE_DIR/crypto/libssl-shlib-packet.o"
+    exit 1
+  fi
+
+  for generated_file in libcrypto.ld libssl.ld; do
+    if [ ! -f "$generated_file" ]; then
+      echo "Expected OpenSSL version script was not generated: $SOURCE_DIR/$generated_file"
+      exit 1
+    fi
+  done
+
+  "$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" \
+    -fPIC \
+    -pthread \
+    -Wa,--noexecstack \
+    -Qunused-arguments \
+    -Wall \
+    -O3 \
+    -Wl,-znodelete \
+    -shared \
+    -Wl,-Bsymbolic \
+    -Wl,-soname=libcrypto.so.3 \
+    -o libcrypto.so.3 \
+    -Wl,--version-script=libcrypto.ld \
+    -Wl,--whole-archive libcrypto.a \
+    -Wl,--no-whole-archive \
+    -ldl \
+    -pthread
+
+  "$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" \
+    -fPIC \
+    -pthread \
+    -Wa,--noexecstack \
+    -Qunused-arguments \
+    -Wall \
+    -O3 \
+    -Wl,-znodelete \
+    -shared \
+    -Wl,-Bsymbolic \
+    -Wl,-soname=libssl.so.3 \
+    -o libssl.so.3 \
+    -Wl,--version-script=libssl.ld \
+    crypto/libssl-shlib-packet.o \
+    -Wl,--whole-archive libssl.a \
+    -Wl,--no-whole-archive \
+    ./libcrypto.so.3 \
+    -ldl \
+    -pthread
+
+  mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
+  cp -R include/openssl "$INSTALL_DIR/include/"
+  install -m 0644 libcrypto.so.3 "$INSTALL_DIR/lib/libcrypto.so.3"
+  install -m 0644 libssl.so.3 "$INSTALL_DIR/lib/libssl.so.3"
+else
+  # Android packaging only needs the shared libraries and headers; building the
+  # full software bundle also pulls in target-side programs we never ship.
+  make -j"$(cpu_count)" build_generated libcrypto.so libssl.so
+
+  mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
+  cp -R include/openssl "$INSTALL_DIR/include/"
+  install -m 0644 libcrypto.so "$INSTALL_DIR/lib/libcrypto.so.3"
+  install -m 0644 libssl.so "$INSTALL_DIR/lib/libssl.so.3"
+fi
 popd >/dev/null
 
 "$STRIP" --strip-unneeded "$INSTALL_DIR/lib/libssl.so.3" "$INSTALL_DIR/lib/libcrypto.so.3"
