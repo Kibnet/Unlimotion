@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
@@ -85,14 +86,104 @@ public class BackupViaGitService : IRemoteBackupService
         return result;
     }
 
+    public string? GetRemoteAuthType(string remoteName)
+    {
+        try
+        {
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
+            {
+                return null;
+            }
+
+            using var repo = new Repository(path);
+            var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == remoteName);
+            return remote == null ? null : DetectAuthType(remote.Url);
+        }
+        catch (Exception ex)
+        {
+            ShowUiError(ex.Message, ex);
+            return null;
+        }
+    }
+
+    public List<string> GetSshPublicKeys()
+    {
+        var sshDirectory = GetSshDirectory();
+        if (!Directory.Exists(sshDirectory))
+        {
+            return new List<string>();
+        }
+
+        return Directory.GetFiles(sshDirectory, "*.pub", SearchOption.TopDirectoryOnly)
+            .OrderBy(x => x)
+            .ToList();
+    }
+
+    public string GenerateSshKey(string keyName)
+    {
+        var normalizedName = string.IsNullOrWhiteSpace(keyName) ? "id_ed25519_unlimotion" : keyName.Trim();
+        var sshDirectory = GetSshDirectory();
+        Directory.CreateDirectory(sshDirectory);
+
+        var privateKeyPath = Path.Combine(sshDirectory, normalizedName);
+        var publicKeyPath = $"{privateKeyPath}.pub";
+        if (File.Exists(privateKeyPath) || File.Exists(publicKeyPath))
+        {
+            throw new InvalidOperationException($"SSH key already exists: {publicKeyPath}");
+        }
+
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "ssh-keygen",
+            Arguments = $"-t ed25519 -f \"{privateKeyPath}\" -N \"\" -C \"unlimotion\"",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        });
+
+        if (process == null)
+        {
+            throw new InvalidOperationException("Failed to start ssh-keygen.");
+        }
+
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            var error = process.StandardError.ReadToEnd();
+            throw new InvalidOperationException($"ssh-keygen failed: {error}");
+        }
+
+        return publicKeyPath;
+    }
+
+    public string? ReadPublicKey(string publicKeyPath)
+    {
+        if (string.IsNullOrWhiteSpace(publicKeyPath) || !File.Exists(publicKeyPath))
+        {
+            return null;
+        }
+
+        return File.ReadAllText(publicKeyPath).Trim();
+    }
+
     public CredentialsHandler GetCredentials(GitSettings gitSettings)
     {
-        return (_url, _user, _cred) =>
-            new UsernamePasswordCredentials
+        return (url, _user, _cred) =>
+        {
+            if (IsSshUrl(url))
+            {
+                return new DefaultCredentials();
+            }
+
+            return new UsernamePasswordCredentials
             {
                 Username = gitSettings.UserName,
                 Password = gitSettings.Password
             };
+        };
     }
 
     public void CloneOrUpdateRepo()
@@ -166,12 +257,7 @@ public class BackupViaGitService : IRemoteBackupService
 
             var options = new PushOptions
             {
-                CredentialsProvider = (_, _, _) =>
-                    new UsernamePasswordCredentials
-                    {
-                        Username = settings.git.UserName,
-                        Password = settings.git.Password,
-                    }
+                CredentialsProvider = GetCredentials(settings.git)
             };
 
             var localBranch = repo.Branches[settings.git.PushRefSpec];
@@ -224,12 +310,7 @@ public class BackupViaGitService : IRemoteBackupService
                 //taskRepository?.SetPause(true);
                 Commands.Fetch(repo, settings.git.RemoteName, refSpecs, new FetchOptions
                 {
-                    CredentialsProvider = (_, _, _) =>
-                        new UsernamePasswordCredentials
-                        {
-                            Username = settings.git.UserName,
-                            Password = settings.git.Password
-                        }
+                    CredentialsProvider = GetCredentials(settings.git)
                 }, string.Empty);
 
                 var localBranch = repo.Branches[settings.git.PushRefSpec];
@@ -331,7 +412,40 @@ public class BackupViaGitService : IRemoteBackupService
     private static void CheckGitSettings(string userName, string password)
     {
         if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
-            Debug.WriteLine("Can't push to the remote repository, because username or password is empty");
+            Debug.WriteLine("Username/password can be empty when SSH auth is used.");
+    }
+
+    private static string DetectAuthType(string? remoteUrl)
+    {
+        return IsSshUrl(remoteUrl) ? "SSH" : "HTTP";
+    }
+
+    private static bool IsSshUrl(string? remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl))
+        {
+            return false;
+        }
+
+        return remoteUrl.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase)
+               || remoteUrl.StartsWith("git@", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetSshDirectory()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(profile, ".ssh");
+        }
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrWhiteSpace(home))
+        {
+            home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+
+        return Path.Combine(home, ".ssh");
     }
 
     private (GitSettings git, string? repositoryPath) GetSettings()
@@ -362,4 +476,3 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 }
-

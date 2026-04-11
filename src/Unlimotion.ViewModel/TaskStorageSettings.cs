@@ -24,6 +24,8 @@ public class GitSettings
     public string Branch { get; set; } = "master";
     public string UserName { get; set; } = "YourEmail";
     public string Password { get; set; } = "YourToken";
+    public string? SshPrivateKeyPath { get; set; }
+    public string? SshPublicKeyPath { get; set; }
 
     public int PullIntervalSeconds { get; set; } = 30;
     public int PushIntervalSeconds { get; set; } = 60;
