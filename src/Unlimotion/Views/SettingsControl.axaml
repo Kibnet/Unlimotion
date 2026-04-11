@@ -54,13 +54,27 @@
                 <Label Content="Git Push Interval Seconds"/>
                 <TextBox Text="{Binding GitPushIntervalSeconds}"></TextBox>
                 <Label Content="Git Remote Name"/>
-                <ComboBox SelectedItem="{Binding GitRemoteName}" ItemsSource="{Binding Remotes}" HorizontalAlignment="Stretch"/>
+                <ComboBox SelectedItem="{Binding GitRemoteNameDisplay}" ItemsSource="{Binding RemotesWithAuthType}" HorizontalAlignment="Stretch"/>
                 <Label Content="Git PushRefSpec"/>
                 <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}" HorizontalAlignment="Stretch"/>
                 <Label Content="Git Committer Name"/>
                 <TextBox Text="{Binding GitCommitterName}"></TextBox>
                 <Label Content="Git Committer Email"/>
                 <TextBox Text="{Binding GitCommitterEmail}"></TextBox>
+
+                <Separator Margin="0,8,0,8"/>
+                <Label Content="SSH keys"/>
+                <Label Content="New SSH key name"/>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Text="{Binding NewSshKeyName}" Watermark="id_ed25519_unlimotion"/>
+                    <Button Grid.Column="1" Margin="8,0,0,0" Content="Generate" Command="{Binding GenerateSshKeyCommand}"/>
+                </Grid>
+                <Label Content="Existing SSH public keys"/>
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <ComboBox SelectedItem="{Binding SelectedSshPublicKeyPath}" ItemsSource="{Binding SshPublicKeys}" HorizontalAlignment="Stretch"/>
+                    <Button Grid.Column="1" Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshSshKeysCommand}"/>
+                    <Button Grid.Column="2" Margin="8,0,0,0" Content="Copy public key" Command="{Binding CopySelectedSshKeyCommand}"/>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
     </Grid>
