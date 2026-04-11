@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
@@ -37,6 +38,9 @@ public class SettingsViewModel
     public ICommand? CloneCommand { get; set; }
     public ICommand? PullCommand { get; set; }
     public ICommand? PushCommand { get; set; }
+    public ICommand? GenerateSshKeyCommand { get; set; }
+    public ICommand? RefreshSshKeysCommand { get; set; }
+    public ICommand? CopySelectedSshKeyCommand { get; set; }
 
     public string? TaskStoragePath
     {
@@ -155,6 +159,33 @@ public class SettingsViewModel
     }
 
     public List<string> Remotes => _backupService?.Remotes() ?? new List<string>();
+    public List<string> RemotesWithAuthType =>
+        Remotes.Select(remote => $"{remote} ({_backupService?.GetRemoteAuthType(remote) ?? "Unknown"})").ToList();
+
+    public string? GitRemoteNameDisplay
+    {
+        get
+        {
+            var remoteName = GitRemoteName;
+            if (string.IsNullOrWhiteSpace(remoteName))
+            {
+                return null;
+            }
+
+            return $"{remoteName} ({_backupService?.GetRemoteAuthType(remoteName) ?? "Unknown"})";
+        }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                GitRemoteName = null;
+                return;
+            }
+
+            var markerIndex = value.LastIndexOf(" (", System.StringComparison.Ordinal);
+            GitRemoteName = markerIndex > 0 ? value[..markerIndex] : value;
+        }
+    }
 
     public string GitPushRefSpec
     {
@@ -174,5 +205,34 @@ public class SettingsViewModel
     {
         get => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
         set => _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Set(value);
+    }
+
+    public string? GitSshPrivateKeyPath
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Set(value);
+    }
+
+    public string? GitSshPublicKeyPath
+    {
+        get => _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Get<string>();
+        set => _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Set(value);
+    }
+
+    public string? NewSshKeyName { get; set; } = "id_ed25519_unlimotion";
+
+    public List<string> SshPublicKeys => _backupService?.GetSshPublicKeys() ?? new List<string>();
+
+    public string? SelectedSshPublicKeyPath
+    {
+        get => GitSshPublicKeyPath;
+        set
+        {
+            GitSshPublicKeyPath = value;
+            if (!string.IsNullOrWhiteSpace(value) && value.EndsWith(".pub", System.StringComparison.OrdinalIgnoreCase))
+            {
+                GitSshPrivateKeyPath = value[..^4];
+            }
+        }
     }
 }
