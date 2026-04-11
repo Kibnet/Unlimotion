@@ -175,6 +175,12 @@ public class BackupViaGitService : IRemoteBackupService
         {
             if (IsSshUrl(url))
             {
+                var privateKeyPath = gitSettings.SshPrivateKeyPath;
+                if (!string.IsNullOrWhiteSpace(privateKeyPath) && File.Exists(privateKeyPath))
+                {
+                    TryAddSshKeyToAgent(privateKeyPath);
+                }
+
                 return new DefaultCredentials();
             }
 
@@ -427,8 +433,48 @@ public class BackupViaGitService : IRemoteBackupService
             return false;
         }
 
-        return remoteUrl.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase)
-               || remoteUrl.StartsWith("git@", StringComparison.OrdinalIgnoreCase);
+        if (remoteUrl.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri))
+        {
+            return string.Equals(uri.Scheme, "ssh", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var atSignIndex = remoteUrl.IndexOf('@');
+        var colonIndex = remoteUrl.LastIndexOf(':');
+        return atSignIndex > 0
+               && colonIndex > atSignIndex + 1
+               && remoteUrl.IndexOf("://", StringComparison.Ordinal) < 0;
+    }
+
+    private static void TryAddSshKeyToAgent(string privateKeyPath)
+    {
+        try
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "ssh-add",
+                Arguments = $"\"{privateKeyPath}\"",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (process == null)
+            {
+                return;
+            }
+
+            process.WaitForExit();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to add SSH key to agent: {ex.Message}");
+        }
     }
 
     private static string GetSshDirectory()
