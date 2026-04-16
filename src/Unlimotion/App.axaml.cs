@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -258,6 +259,57 @@ public class App : Application
         {
             _backupService?.Push("Manual backup");
         });
+
+        settings.RefreshSshKeysCommand = ReactiveCommand.Create(() =>
+        {
+            settings.ReloadSshPublicKeys();
+        });
+
+        settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_backupService == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var publicKeyPath = await Task.Run(() =>
+                    _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty));
+                settings.ReloadSshPublicKeys(publicKeyPath);
+                _notificationManager?.SuccessToast($"SSH key generated: {publicKeyPath}");
+            }
+            catch (Exception ex)
+            {
+                _notificationManager?.ErrorToast($"Failed to generate SSH key: {ex.Message}");
+            }
+        });
+
+        settings.CopySelectedSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_backupService == null || string.IsNullOrWhiteSpace(settings.SelectedSshPublicKeyPath))
+            {
+                _notificationManager?.ErrorToast("Select SSH public key first.");
+                return;
+            }
+
+            var keyContent = _backupService.ReadPublicKey(settings.SelectedSshPublicKeyPath);
+            if (string.IsNullOrWhiteSpace(keyContent))
+            {
+                _notificationManager?.ErrorToast("SSH public key is empty or missing.");
+                return;
+            }
+
+            var topLevel = DialogExtensions.GetTopLevel();
+            if (topLevel?.Clipboard == null)
+            {
+                _notificationManager?.ErrorToast("Clipboard is unavailable.");
+                return;
+            }
+
+            await topLevel.Clipboard.SetTextAsync(keyContent);
+            _notificationManager?.SuccessToast("SSH public key copied to clipboard.");
+        });
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -493,6 +545,8 @@ public class App : Application
                 gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
                 gitSection.GetSection(nameof(GitSettings.UserName)).Set(gitSettings.UserName);
                 gitSection.GetSection(nameof(GitSettings.Password)).Set(gitSettings.Password);
+                gitSection.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Set(gitSettings.SshPrivateKeyPath);
+                gitSection.GetSection(nameof(GitSettings.SshPublicKeyPath)).Set(gitSettings.SshPublicKeyPath);
 
                 gitSection.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(gitSettings.PullIntervalSeconds);
                 gitSection.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(gitSettings.PushIntervalSeconds);
