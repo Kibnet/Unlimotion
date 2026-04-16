@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
@@ -27,6 +28,7 @@ public class SettingsViewModel
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _backupService = backupService;
         _defaultIsDarkTheme = defaultIsDarkTheme;
+        ReloadSshPublicKeys();
     }
 
     // Commands - set externally from App.axaml.cs
@@ -159,6 +161,7 @@ public class SettingsViewModel
     }
 
     public List<string> Remotes => _backupService?.Remotes() ?? new List<string>();
+
     public List<string> RemotesWithAuthType =>
         Remotes.Select(remote => $"{remote} ({_backupService?.GetRemoteAuthType(remote) ?? "Unknown"})").ToList();
 
@@ -182,7 +185,7 @@ public class SettingsViewModel
                 return;
             }
 
-            var markerIndex = value.LastIndexOf(" (", System.StringComparison.Ordinal);
+            var markerIndex = value.LastIndexOf(" (", StringComparison.Ordinal);
             GitRemoteName = markerIndex > 0 ? value[..markerIndex] : value;
         }
     }
@@ -221,7 +224,7 @@ public class SettingsViewModel
 
     public string? NewSshKeyName { get; set; } = "id_ed25519_unlimotion";
 
-    public List<string> SshPublicKeys => _backupService?.GetSshPublicKeys() ?? new List<string>();
+    public List<string> SshPublicKeys { get; private set; } = new();
 
     public string? SelectedSshPublicKeyPath
     {
@@ -229,10 +232,33 @@ public class SettingsViewModel
         set
         {
             GitSshPublicKeyPath = value;
-            if (!string.IsNullOrWhiteSpace(value) && value.EndsWith(".pub", System.StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(value) && value.EndsWith(".pub", StringComparison.OrdinalIgnoreCase))
             {
                 GitSshPrivateKeyPath = value[..^4];
             }
         }
+    }
+
+    public void ReloadSshPublicKeys(string? preferredSelection = null)
+    {
+        SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+
+        var matchedSelection = MatchSshPublicKeyPath(preferredSelection)
+                               ?? MatchSshPublicKeyPath(GitSshPublicKeyPath);
+        if (!string.IsNullOrWhiteSpace(matchedSelection))
+        {
+            SelectedSshPublicKeyPath = matchedSelection;
+        }
+    }
+
+    private string? MatchSshPublicKeyPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        return SshPublicKeys.FirstOrDefault(existingPath =>
+            string.Equals(existingPath, path, StringComparison.OrdinalIgnoreCase));
     }
 }

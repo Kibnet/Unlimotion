@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reactive;
+using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -261,10 +262,10 @@ public class App : Application
 
         settings.RefreshSshKeysCommand = ReactiveCommand.Create(() =>
         {
-            settings.SelectedSshPublicKeyPath = settings.GitSshPublicKeyPath;
+            settings.ReloadSshPublicKeys();
         });
 
-        settings.GenerateSshKeyCommand = ReactiveCommand.Create(() =>
+        settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_backupService == null)
             {
@@ -273,8 +274,9 @@ public class App : Application
 
             try
             {
-                var publicKeyPath = _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty);
-                settings.SelectedSshPublicKeyPath = publicKeyPath;
+                var publicKeyPath = await Task.Run(() =>
+                    _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty));
+                settings.ReloadSshPublicKeys(publicKeyPath);
                 _notificationManager?.SuccessToast($"SSH key generated: {publicKeyPath}");
             }
             catch (Exception ex)
