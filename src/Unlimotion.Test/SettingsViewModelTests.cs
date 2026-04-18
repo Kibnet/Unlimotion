@@ -29,15 +29,17 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
-    public async System.Threading.Tasks.Task IsDarkTheme_PersistsThemeChoice()
+    public async System.Threading.Tasks.Task ThemeMode_PersistsChoiceAndCompatibilityShimReflectsSelection()
     {
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
         var settings = new SettingsViewModel(configuration, defaultIsDarkTheme: true);
 
+        await Assert.That(settings.ThemeMode).IsEqualTo(ThemeMode.System);
         await Assert.That(settings.IsDarkTheme).IsTrue();
 
-        settings.IsDarkTheme = false;
+        settings.ThemeMode = ThemeMode.Light;
 
+        await Assert.That(settings.ThemeMode).IsEqualTo(ThemeMode.Light);
         await Assert.That(settings.IsDarkTheme).IsFalse();
         await Assert.That(configuration
                 .GetSection(AppearanceSettings.SectionName)
@@ -45,13 +47,68 @@ public class SettingsViewModelTests : IDisposable
                 .Get<string>())
             .IsEqualTo(AppearanceSettings.LightTheme);
 
-        settings.IsDarkTheme = true;
+        settings.ThemeMode = ThemeMode.System;
 
         await Assert.That(configuration
                 .GetSection(AppearanceSettings.SectionName)
                 .GetSection(AppearanceSettings.ThemeKey)
                 .Get<string>())
-            .IsEqualTo(AppearanceSettings.DarkTheme);
+            .IsEqualTo(AppearanceSettings.SystemTheme);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BackupAuthMode_DerivesFromRemoteUrl_WhenRepositoryRemotesAreUnavailable()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        settings.GitRemoteUrl = "git@github.com:org/unlimotion-backup.git";
+
+        await Assert.That(settings.BackupAuthMode).IsEqualTo(BackupAuthMode.Ssh);
+        await Assert.That(settings.IsSshAuthSelected).IsTrue();
+        await Assert.That(settings.BackupAuthModeText).IsEqualTo("SSH");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BackupConnection_BecomesReadyForClone_WhenSshKeyIsSelected()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration)
+        {
+            GitBackupEnabled = true,
+            GitRemoteUrl = "git@github.com:org/unlimotion-backup.git"
+        };
+
+        await Assert.That(settings.CanConnectRepository).IsFalse();
+        await Assert.That(settings.BackupStatusText).IsEqualTo("Выберите SSH-ключ.");
+
+        settings.SelectedSshPublicKeyPath = @"C:\Users\Test\.ssh\id_ed25519.pub";
+
+        await Assert.That(settings.CanConnectRepository).IsTrue();
+        await Assert.That(settings.BackupStatusText)
+            .IsEqualTo("Параметры сохранены. Нажмите \"Подключить репозиторий\".");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BackupAuthMode_UsesSelectedRemoteAuthType_WhenRemoteExists()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin", "backup" },
+            RemoteAuthTypes = new Dictionary<string, string>
+            {
+                ["origin"] = "HTTP",
+                ["backup"] = "SSH"
+            }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        settings.GitRemoteNameDisplay = "backup (SSH)";
+
+        await Assert.That(settings.BackupAuthMode).IsEqualTo(BackupAuthMode.Ssh);
+        await Assert.That(settings.IsSshAuthSelected).IsTrue();
     }
 
     [Test]
@@ -79,6 +136,27 @@ public class SettingsViewModelTests : IDisposable
                 .GetSection(AppearanceSettings.FontSizeKey)
                 .Get<double>())
             .IsEqualTo(AppearanceSettings.MinFontSize);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CanConnectStorage_FollowsSelectedModeRequirements()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        await Assert.That(settings.CanConnectStorage).IsFalse();
+
+        settings.TaskStoragePath = @"C:\Data\Tasks";
+        await Assert.That(settings.CanConnectStorage).IsTrue();
+
+        settings.IsServerMode = true;
+        await Assert.That(settings.CanConnectStorage).IsFalse();
+
+        settings.ServerStorageUrl = "https://server.example";
+        settings.Login = "user@example";
+        settings.Password = "secret";
+
+        await Assert.That(settings.CanConnectStorage).IsTrue();
     }
 
     [Test]
@@ -172,9 +250,12 @@ public class SettingsViewModelTests : IDisposable
     private sealed class FakeRemoteBackupService : IRemoteBackupService
     {
         public List<string> PublicKeys { get; set; } = new();
+        public List<string> RemoteNames { get; set; } = new();
+        public Dictionary<string, string> RemoteAuthTypes { get; set; } = new();
 
-        public List<string> Remotes() => new();
-        public string? GetRemoteAuthType(string remoteName) => "SSH";
+        public List<string> Remotes() => new(RemoteNames);
+        public string? GetRemoteAuthType(string remoteName) =>
+            RemoteAuthTypes.TryGetValue(remoteName, out var authType) ? authType : null;
         public List<string> Refs() => new();
         public List<string> GetSshPublicKeys() => new(PublicKeys);
         public string GenerateSshKey(string keyName) => throw new NotSupportedException();

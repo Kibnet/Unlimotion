@@ -7,6 +7,7 @@ public static class AppearanceSettings
     public const string SectionName = "Appearance";
     public const string ThemeKey = "Theme";
     public const string FontSizeKey = "FontSize";
+    public const string SystemTheme = "System";
     public const string DarkTheme = "Dark";
     public const string LightTheme = "Light";
     public const double DefaultFontSize = 12;
@@ -41,19 +42,40 @@ public static class AppearanceSettings
 
     public static double DefaultFloatingControlMinHeight => GetFloatingControlMinHeight(DefaultFontSize);
 
-    public static bool? ParseIsDarkTheme(string? configuredTheme)
+    public static ThemeMode ParseThemeMode(string? configuredTheme)
     {
         return configuredTheme?.Trim().ToLowerInvariant() switch
         {
-            "dark" => true,
-            "light" => false,
+            "dark" => ThemeMode.Dark,
+            "light" => ThemeMode.Light,
+            "system" => ThemeMode.System,
+            _ => ThemeMode.System
+        };
+    }
+
+    public static bool? ParseIsDarkTheme(string? configuredTheme)
+    {
+        return ParseThemeMode(configuredTheme) switch
+        {
+            ThemeMode.Dark => true,
+            ThemeMode.Light => false,
             _ => null
+        };
+    }
+
+    public static string ToStoredTheme(ThemeMode themeMode)
+    {
+        return themeMode switch
+        {
+            ThemeMode.Dark => DarkTheme,
+            ThemeMode.Light => LightTheme,
+            _ => SystemTheme
         };
     }
 
     public static string ToStoredTheme(bool isDarkTheme)
     {
-        return isDarkTheme ? DarkTheme : LightTheme;
+        return ToStoredTheme(isDarkTheme ? ThemeMode.Dark : ThemeMode.Light);
     }
 
     public static double NormalizeFontSize(double? configuredFontSize)
