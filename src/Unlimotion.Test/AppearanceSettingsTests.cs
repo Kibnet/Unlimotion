@@ -27,4 +27,12 @@ public class AppearanceSettingsTests
         await Assert.That(AppearanceSettings.GetSearchBarMinWidth(24)).IsEqualTo(376);
         await Assert.That(AppearanceSettings.GetFloatingControlMinHeight(24)).IsEqualTo(54);
     }
+
+    [Test]
+    public async System.Threading.Tasks.Task ThemeMode_ParsesSystemAndStoresExpectedToken()
+    {
+        await Assert.That(AppearanceSettings.ParseThemeMode(null)).IsEqualTo(ThemeMode.System);
+        await Assert.That(AppearanceSettings.ParseThemeMode("system")).IsEqualTo(ThemeMode.System);
+        await Assert.That(AppearanceSettings.ToStoredTheme(ThemeMode.System)).IsEqualTo(AppearanceSettings.SystemTheme);
+    }
 }
