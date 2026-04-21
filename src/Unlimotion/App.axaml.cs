@@ -2,6 +2,7 @@
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
@@ -345,13 +346,30 @@ public class App : Application
 
         settings.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            settings.SetBackupConnectionState(BackupStatusState.Connecting, "Подключение репозитория...");
             try
             {
-                await Task.Run(() => _backupService?.CloneOrUpdateRepo());
-                settings.ReloadGitMetadata();
-                settings.SetBackupConnectionState(BackupStatusState.Connected, "Репозиторий подключен.");
-                ShowBackupSuccessToast(settings, "Репозиторий подключен.");
+                var preview = await Task.Run(() => _backupService?.PreviewConnectRepository());
+                if (preview?.RequiresConfirmation == true)
+                {
+                    settings.SetBackupConnectionState(
+                        BackupStatusState.NotConfigured,
+                        "Подтвердите объединение локальных задач с репозиторием.");
+
+                    if (_notificationManager == null)
+                    {
+                        _notificationManager?.ErrorToast("Требуется подтверждение объединения локальных задач с репозиторием.");
+                        return;
+                    }
+
+                    _notificationManager.Ask(
+                        "Подключить непустой репозиторий?",
+                        "Папка с задачами не пустая, и удаленный репозиторий уже содержит данные. При подключении локальные задачи будут объединены с содержимым репозитория. Продолжить?",
+                        () => _ = ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: true),
+                        () => settings.SetBackupConnectionState(BackupStatusState.NotConfigured, "Подключение репозитория отменено."));
+                    return;
+                }
+
+                await ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: false);
             }
             catch (Exception ex)
             {
@@ -448,6 +466,39 @@ public class App : Application
             await topLevel.Clipboard.SetTextAsync(keyContent);
             _notificationManager?.SuccessToast("Публичный SSH-ключ скопирован в буфер обмена.");
         });
+    }
+
+    private async Task ConnectBackupRepositoryAsync(
+        SettingsViewModel settings,
+        bool allowMergeWithNonEmptyRemote)
+    {
+        settings.SetBackupConnectionState(BackupStatusState.Connecting, "Подключение репозитория...");
+        try
+        {
+            await Task.Run(() => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
+            settings.ReloadGitMetadata();
+            await ReloadCurrentTaskStorageAsync(settings);
+            settings.SetBackupConnectionState(BackupStatusState.Connected, "Репозиторий подключен.");
+            ShowBackupSuccessToast(settings, "Репозиторий подключен.");
+        }
+        catch (Exception ex)
+        {
+            settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка подключения репозитория: {ex.Message}");
+            _notificationManager?.ErrorToast($"Не удалось подключить репозиторий: {ex.Message}");
+        }
+    }
+
+    private async Task ReloadCurrentTaskStorageAsync(SettingsViewModel settings)
+    {
+        if (_storageFactory == null || _configuration == null || _mainWindowViewModel == null || settings.IsServerMode)
+        {
+            return;
+        }
+
+        _storageFactory.SwitchStorage(isServerMode: false, _configuration);
+        WireSettingsToCurrentStorage(settings);
+        await _mainWindowViewModel.Connect();
+        settings.SetStorageConnectionState(SettingsConnectionState.Connected);
     }
 
     private void ConfirmAndRun(
@@ -750,13 +801,15 @@ public class App : Application
 
             var isServerMode = taskStorageSettings.IsServerMode;
 
+            EnsureDefaultTaskStoragePath(_configuration, ResolveDefaultTaskStoragePath());
+            taskStorageSettings = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? taskStorageSettings;
+
             // Create storage factory
             Log($"[App.Init] Creating storage factory with DefaultStoragePath={TaskStorageFactory.DefaultStoragePath}");
             _storageFactory = new TaskStorageFactory(_configuration, _mapper, _notificationManager);
-            if (!string.IsNullOrWhiteSpace(taskStorageSettings.Path))
-            {
-                TaskStorageFactory.DefaultStoragePath = taskStorageSettings.Path;
-            }
+            TaskStorageFactory.DefaultStoragePath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
+                ? ResolveDefaultTaskStoragePath()
+                : taskStorageSettings.Path;
             Log("[App.Init] Storage factory created");
 
             // Create backup service
@@ -875,6 +928,36 @@ public class App : Application
 #else
         return true;
 #endif
+    }
+
+    public static void EnsureDefaultTaskStoragePath(IConfiguration configuration, string defaultPath)
+    {
+        var taskStorageSection = configuration.GetSection("TaskStorage");
+        if (taskStorageSection.GetSection(nameof(TaskStorageSettings.IsServerMode)).Get<bool>())
+        {
+            return;
+        }
+
+        var currentPath = taskStorageSection.GetSection(nameof(TaskStorageSettings.Path)).Get<string>();
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            return;
+        }
+
+        taskStorageSection.GetSection(nameof(TaskStorageSettings.Path)).Set(defaultPath);
+    }
+
+    private static string ResolveDefaultTaskStoragePath()
+    {
+        if (!string.IsNullOrWhiteSpace(DefaultStoragePath))
+        {
+            return DefaultStoragePath;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Unlimotion",
+            "Tasks");
     }
 
     private static void HandleReactiveException(Exception ex)

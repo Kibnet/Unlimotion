@@ -13,5 +13,7 @@ public interface IRemoteBackupService
     public string? ReadPublicKey(string publicKeyPath);
     public void Push(string msg);
     public void Pull();
+    public BackupRepositoryConnectPreview PreviewConnectRepository();
+    public void ConnectRepository(bool allowMergeWithNonEmptyRemote);
     public void CloneOrUpdateRepo();
 }

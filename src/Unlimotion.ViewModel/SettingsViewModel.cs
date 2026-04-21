@@ -482,6 +482,10 @@ public class SettingsViewModel
 
     public bool ShowServiceActions { get; set; }
 
+    public string GitBackupOnboardingHint =>
+        "Для первого подключения создайте на GitHub новый private repository без README, .gitignore и license, если хотите загрузить туда текущие локальные задачи. " +
+        "Вставьте SSH-адрес вида git@github.com:owner/repo.git, создайте или выберите SSH-ключ, скопируйте публичный ключ и добавьте его в GitHub profile SSH keys либо в Deploy keys репозитория с правом записи.";
+
     public bool IsBackupConfigured =>
         GitBackupEnabled &&
         !string.IsNullOrWhiteSpace(GitRemoteUrl) &&

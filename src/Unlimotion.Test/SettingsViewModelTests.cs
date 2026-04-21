@@ -160,6 +160,37 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task EnsureDefaultTaskStoragePath_PersistsDefaultPathWhenLocalPathIsEmpty()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var defaultPath = Path.Combine(Environment.CurrentDirectory, "DefaultTasks");
+
+        App.EnsureDefaultTaskStoragePath(configuration, defaultPath);
+
+        await Assert.That(configuration
+                .GetSection("TaskStorage")
+                .GetSection(nameof(TaskStorageSettings.Path))
+                .Get<string>())
+            .IsEqualTo(defaultPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task EnsureDefaultTaskStoragePath_PreservesExistingPath()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var existingPath = Path.Combine(Environment.CurrentDirectory, "ExistingTasks");
+        configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(existingPath);
+
+        App.EnsureDefaultTaskStoragePath(configuration, Path.Combine(Environment.CurrentDirectory, "DefaultTasks"));
+
+        await Assert.That(configuration
+                .GetSection("TaskStorage")
+                .GetSection(nameof(TaskStorageSettings.Path))
+                .Get<string>())
+            .IsEqualTo(existingPath);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task TaskStoragePathTooltip_ResolvesRelativePathToFullPath()
     {
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
@@ -392,6 +423,8 @@ public class SettingsViewModelTests : IDisposable
         public string? ReadPublicKey(string publicKeyPath) => throw new NotSupportedException();
         public void Push(string msg) => throw new NotSupportedException();
         public void Pull() => throw new NotSupportedException();
+        public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
+        public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
         public void CloneOrUpdateRepo() => throw new NotSupportedException();
     }
 }

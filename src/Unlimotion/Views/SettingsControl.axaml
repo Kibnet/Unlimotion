@@ -142,6 +142,8 @@
                     <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Автоматически создавать резервную копию" />
 
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
+                        <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
+
                         <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto,Auto,Auto">
                             <TextBlock VerticalAlignment="Center" Text="Репозиторий" />
                             <TextBox Grid.Column="1"
