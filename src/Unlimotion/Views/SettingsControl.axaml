@@ -1,81 +1,308 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-             xmlns:unlimotion="clr-namespace:Unlimotion"
-             xmlns:behaviours="clr-namespace:TestAutoCompleteBehaviour.Behaviours"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-			 x:DataType="viewModel:SettingsViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="900"
+             d:DesignHeight="700"
+             x:DataType="viewModel:SettingsViewModel"
              x:Class="Unlimotion.Views.SettingsControl">
-    <Grid>
-        <ScrollViewer>
-            <StackPanel>
-                <Label Content="TaskStorage Path"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Text="{Binding TaskStoragePath}" ToolTip.Tip="{Binding TaskStoragePath}"></TextBox>
-                    <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseTaskStoragePathCommand}"/>
-                </Grid>
-                <CheckBox IsChecked="{Binding IsServerMode}" Content="Server Mode"/>
-                <CheckBox IsChecked="{Binding IsFuzzySearch}" Content="Fuzzy search"/>
-                <CheckBox IsChecked="{Binding IsDarkTheme}" Content="Dark theme"/>
-                <Label Content="Font Size"/>
-                <NumericUpDown Value="{Binding FontSize}" Minimum="10" Maximum="24" Increment="1" FormatString="0"/>
-                <WrapPanel>
-                    <Button Content="Connect" Command="{Binding ConnectCommand}"/>
-                    <Button Content="Migrate" Command="{Binding MigrateCommand}"/>
-                    <Button Content="Backup" Command="{Binding BackupCommand}"/>
-                    <Button Content="Resave" Command="{Binding ResaveCommand}"/>
-                </WrapPanel>
-                <Label Content="Server Storage URL"/>
-                <TextBox Text="{Binding ServerStorageUrl}" ToolTip.Tip="{Binding ServerStorageUrl}"></TextBox>
-                <Label Content="Server Login"/>
-                <TextBox Text="{Binding Login}"></TextBox>
-                <Label Content="Server Password"/>
-                <TextBox PasswordChar="*" Text="{Binding Password}"/>
+    <UserControl.Styles>
+        <Style Selector="Border.SettingsSection">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style Selector="TextBlock.SectionTitle">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.SectionHint">
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,12" />
+        </Style>
+        <Style Selector="TextBlock.StatusText">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Opacity" Value="0.85" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style Selector="Grid.FieldRow">
+            <Setter Property="ColumnSpacing" Value="12" />
+            <Setter Property="RowSpacing" Value="8" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+    </UserControl.Styles>
 
-                <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Git Backup Enabled"/>
-                <WrapPanel>
-                    <Button Content="Clone" Command="{Binding CloneCommand}"/>
-                    <Button Content="Pull" Command="{Binding PullCommand}"/>
-                    <Button Content="Push" Command="{Binding PushCommand}"/>
-                </WrapPanel>
-                <CheckBox IsChecked="{Binding GitShowStatusToasts}" Content="Show Git Status Toasts"/>
-                <Label Content="Git RemoteUrl"/>
-                <TextBox Text="{Binding GitRemoteUrl}" ToolTip.Tip="{Binding GitRemoteUrl}"></TextBox>
-                <Label Content="Git Branch"/>
-                <TextBox Text="{Binding GitBranch}"></TextBox>
-                <Label Content="Git UserName"/>
-                <TextBox Text="{Binding GitUserName}"></TextBox>
-                <Label Content="Git Password"/>
-                <TextBox PasswordChar="*" Text="{Binding GitPassword}"/>
-                <Label Content="Git Pull Interval Seconds"/>
-                <TextBox Text="{Binding GitPullIntervalSeconds}"></TextBox>
-                <Label Content="Git Push Interval Seconds"/>
-                <TextBox Text="{Binding GitPushIntervalSeconds}"></TextBox>
-                <Label Content="Git Remote Name"/>
-                <ComboBox SelectedItem="{Binding GitRemoteNameDisplay}" ItemsSource="{Binding RemotesWithAuthType}" HorizontalAlignment="Stretch"/>
-                <Label Content="Git PushRefSpec"/>
-                <ComboBox SelectedItem="{Binding GitPushRefSpec}" ItemsSource="{Binding Refs}" HorizontalAlignment="Stretch"/>
-                <Label Content="Git Committer Name"/>
-                <TextBox Text="{Binding GitCommitterName}"></TextBox>
-                <Label Content="Git Committer Email"/>
-                <TextBox Text="{Binding GitCommitterEmail}"></TextBox>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16">
+            <TextBlock Classes="SectionTitle" Text="Настройки" />
+            <TextBlock Classes="SectionHint"
+                       Text="Настройте внешний вид, хранилище задач и резервное копирование. Некоторые изменения применяются сразу, а для подключения хранилища и репозитория нужны отдельные действия." />
 
-                <Separator Margin="0,8,0,8"/>
-                <Label Content="SSH keys"/>
-                <Label Content="New SSH key name"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Text="{Binding NewSshKeyName}" Watermark="id_ed25519_unlimotion"/>
-                    <Button Grid.Column="1" Margin="8,0,0,0" Content="Generate" Command="{Binding GenerateSshKeyCommand}"/>
-                </Grid>
-                <Label Content="Existing SSH public keys"/>
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                    <ComboBox SelectedItem="{Binding SelectedSshPublicKeyPath}" ItemsSource="{Binding SshPublicKeys}" HorizontalAlignment="Stretch"/>
-                    <Button Grid.Column="1" Margin="8,0,0,0" Content="Refresh" Command="{Binding RefreshSshKeysCommand}"/>
-                    <Button Grid.Column="2" Margin="8,0,0,0" Content="Copy public key" Command="{Binding CopySelectedSshKeyCommand}"/>
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="Внешний вид" />
+                    <TextBlock Classes="SectionHint" Text="Как приложение выглядит и читается." />
+
+                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto">
+                        <TextBlock VerticalAlignment="Center" Text="Тема интерфейса" />
+                        <ComboBox Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Как в системе" />
+                            <ComboBoxItem Content="Светлая" />
+                            <ComboBoxItem Content="Темная" />
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Размер текста" />
+                        <NumericUpDown Grid.Row="1"
+                                       Grid.Column="1"
+                                       Value="{Binding FontSize}"
+                                       Minimum="10"
+                                       Maximum="24"
+                                       Increment="1"
+                                       FormatString="0" />
+
+                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Умный поиск" />
+                        <CheckBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  IsChecked="{Binding IsFuzzySearch}"
+                                  Content="Включен" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="Хранилище задач" />
+                    <TextBlock Classes="SectionHint" Text="Выберите, где хранятся ваши задачи." />
+
+                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto">
+                        <TextBlock VerticalAlignment="Center" Text="Режим хранения" />
+                        <ComboBox Grid.Column="1" SelectedIndex="{Binding StorageModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="На этом устройстве" />
+                            <ComboBoxItem Content="На сервере" />
+                        </ComboBox>
+                    </Grid>
+
+                    <StackPanel IsVisible="{Binding !IsServerMode}">
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto">
+                            <TextBlock VerticalAlignment="Center" Text="Папка с данными" />
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding TaskStoragePath}"
+                                     ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
+                            <Button Grid.Column="2"
+                                    Content="Выбрать"
+                                    Command="{Binding BrowseTaskStoragePathCommand}" />
+                        </Grid>
+
+                        <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Подключить"
+                                    Command="{Binding ConnectCommand}"
+                                    IsEnabled="{Binding CanConnectStorage}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <StackPanel IsVisible="{Binding IsServerMode}">
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto">
+                            <TextBlock VerticalAlignment="Center" Text="Адрес сервера" />
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding ServerStorageUrl}"
+                                     ToolTip.Tip="{Binding ServerStorageUrl}" />
+
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Логин" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Login}" />
+
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Пароль" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Password}" PasswordChar="*" />
+                        </Grid>
+
+                        <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Подключить"
+                                    Command="{Binding ConnectCommand}"
+                                    IsEnabled="{Binding CanConnectStorage}" />
+                            <Button Content="Выйти"
+                                    Command="{Binding SignOutCommand}"
+                                    IsEnabled="{Binding CanSignOut}"
+                                    IsVisible="{Binding CanSignOut}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="Резервное копирование" />
+                    <TextBlock Classes="SectionHint" Text="Подключите Git-репозиторий для автоматической резервной копии." />
+
+                    <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Автоматически создавать резервную копию" />
+
+                    <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
+                        <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
+
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                            <TextBlock VerticalAlignment="Center" Text="Репозиторий" />
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding GitRemoteUrl}"
+                                     ToolTip.Tip="{Binding GitRemoteUrl}" />
+                            <Button Grid.Column="2"
+                                    Content="Обновить"
+                                    Command="{Binding RefreshGitMetadataCommand}" />
+
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Ветка отправки" />
+                            <ComboBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Grid.ColumnSpan="2"
+                                      SelectedItem="{Binding GitPushRefSpec}"
+                                      ItemsSource="{Binding Refs}" />
+
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Удаленный источник" />
+                            <ComboBox Grid.Row="2"
+                                      Grid.Column="1"
+                                      Grid.ColumnSpan="2"
+                                      SelectedItem="{Binding GitRemoteNameDisplay}"
+                                      ItemsSource="{Binding RemotesWithAuthType}" />
+                        </Grid>
+
+                        <Grid Classes="FieldRow"
+                              ColumnDefinitions="220,*"
+                              RowDefinitions="Auto,Auto"
+                              IsVisible="{Binding IsTokenAuthSelected}">
+                            <TextBlock VerticalAlignment="Center" Text="Логин" />
+                            <TextBox Grid.Column="1" Text="{Binding GitUserName}" />
+
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Токен доступа" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GitPassword}" PasswordChar="*" />
+                        </Grid>
+
+                        <Border Classes="SettingsSection"
+                                Padding="12"
+                                Margin="0,0,0,12"
+                                IsVisible="{Binding IsSshAuthSelected}">
+                            <StackPanel>
+                                <TextBlock Classes="SectionTitle" Text="SSH-ключи" />
+                                <TextBlock Classes="SectionHint" Text="Нужны только если репозиторий использует SSH." />
+
+                                <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto,Auto" RowDefinitions="Auto,Auto">
+                                    <TextBlock VerticalAlignment="Center" Text="Активный ключ" />
+                                    <ComboBox Grid.Column="1"
+                                              SelectedItem="{Binding SelectedSshPublicKeyPath}"
+                                              ItemsSource="{Binding SshPublicKeys}" />
+                                    <Button Grid.Column="2"
+                                            Content="Обновить"
+                                            Command="{Binding RefreshSshKeysCommand}" />
+                                    <Button Grid.Column="3"
+                                            Content="Копировать публичный ключ"
+                                            Command="{Binding CopySelectedSshKeyCommand}" />
+
+                                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Новый ключ" />
+                                    <TextBox Grid.Row="1"
+                                             Grid.Column="1"
+                                             Text="{Binding NewSshKeyName}"
+                                             Watermark="id_ed25519_unlimotion" />
+                                    <Button Grid.Row="1"
+                                            Grid.Column="2"
+                                            Content="Создать"
+                                            Command="{Binding GenerateSshKeyCommand}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Classes="StatusText" Text="{Binding BackupStatusText}" />
+
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Подключить репозиторий"
+                                    Command="{Binding CloneCommand}"
+                                    IsEnabled="{Binding CanConnectRepository}" />
+                            <Button Content="Синхронизировать сейчас"
+                                    Command="{Binding SyncNowCommand}"
+                                    IsEnabled="{Binding CanSyncRepository}" />
+                            <Button Content="Получить изменения сейчас"
+                                    Command="{Binding PullCommand}"
+                                    IsEnabled="{Binding CanSyncRepository}" />
+                            <Button Content="Отправить изменения сейчас"
+                                    Command="{Binding PushCommand}"
+                                    IsEnabled="{Binding CanSyncRepository}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <TextBlock Classes="StatusText"
+                               IsVisible="{Binding !GitBackupEnabled}"
+                               Text="{Binding BackupStatusText}" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <ToggleButton IsChecked="{Binding ShowAdvancedBackupSettings}"
+                                  Content="Показать дополнительные параметры" />
+
+                    <StackPanel Margin="0,12,0,0" IsVisible="{Binding ShowAdvancedBackupSettings}">
+                        <TextBlock Classes="SectionTitle" Text="Расширенные настройки" />
+                        <TextBlock Classes="SectionHint" Text="Параметры для продвинутой настройки синхронизации и диагностики." />
+
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                            <TextBlock VerticalAlignment="Center" Text="Показывать уведомления" />
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding GitShowStatusToasts}"
+                                      Content="Включено" />
+
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Интервал получения изменений, сек." />
+                            <NumericUpDown Grid.Row="1"
+                                           Grid.Column="1"
+                                           Value="{Binding GitPullIntervalSeconds}"
+                                           Minimum="0"
+                                           Maximum="86400"
+                                           Increment="5"
+                                           FormatString="0" />
+
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Интервал отправки изменений, сек." />
+                            <NumericUpDown Grid.Row="2"
+                                           Grid.Column="1"
+                                           Value="{Binding GitPushIntervalSeconds}"
+                                           Minimum="0"
+                                           Maximum="86400"
+                                           Increment="5"
+                                           FormatString="0" />
+
+                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Имя автора backup-коммитов" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GitCommitterName}" />
+
+                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Email автора backup-коммитов" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding GitCommitterEmail}" />
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <ToggleButton IsChecked="{Binding ShowServiceActions}"
+                                  Content="Показать сервисные действия" />
+
+                    <StackPanel Margin="0,12,0,0" IsVisible="{Binding ShowServiceActions}">
+                        <TextBlock Classes="SectionTitle" Text="Обслуживание и восстановление" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="Используйте эти действия только если понимаете последствия или следуете инструкции поддержки." />
+
+                        <WrapPanel>
+                            <Button Content="Перенести локальные задачи на сервер"
+                                    Command="{Binding MigrateCommand}"
+                                    IsEnabled="{Binding CanRunServerMaintenance}" />
+                            <Button Content="Скопировать задачи с сервера в локальное хранилище"
+                                    Command="{Binding BackupCommand}"
+                                    IsEnabled="{Binding CanRunServerMaintenance}" />
+                            <Button Content="Пересохранить все задачи"
+                                    Command="{Binding ResaveCommand}"
+                                    IsEnabled="{Binding CanRunResave}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -2,6 +2,7 @@
 
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
@@ -51,6 +52,10 @@ public class App : Application
     private static ITaskStorageFactory? _storageFactory;
     private static IScheduler? _scheduler;
     private static MainWindowViewModel? _mainWindowViewModel;
+    private ServerStorage? _wiredServerStorage;
+    private Action? _serverConnectedHandler;
+    private Action<Exception?>? _serverConnectionErrorHandler;
+    private EventHandler? _serverSignOutHandler;
     
     /// <summary>
     /// Default storage path for tasks (used as fallback when config doesn't specify one)
@@ -93,7 +98,8 @@ public class App : Application
         var settingsViewModel = new SettingsViewModel(
             _configuration!,
             _backupService,
-            GetCurrentThemeIsDark());
+            GetCurrentThemeIsDark(),
+            () => TaskStorageFactory.DefaultStoragePath);
 
         // Create GraphViewModel
         var graphViewModel = new GraphViewModel();
@@ -113,6 +119,7 @@ public class App : Application
 
         // Set up commands on SettingsViewModel
         SetupSettingsCommands(settingsViewModel);
+        WireSettingsToCurrentStorage(settingsViewModel);
 
         // Set up static instances for TaskItemViewModel and MainControl
         TaskItemViewModel.NotificationManagerInstance = _notificationManager;
@@ -126,19 +133,66 @@ public class App : Application
     {
         settings.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            settings.SetStorageConnectionState(SettingsConnectionState.Connecting);
             try
             {
                 _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
+                WireSettingsToCurrentStorage(settings);
                 if (_mainWindowViewModel != null)
                 {
                     await _mainWindowViewModel.Connect();
                 }
-                _notificationManager?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
+
+                if (!settings.IsServerMode || settings.StorageConnectionState == SettingsConnectionState.Connecting)
+                {
+                    settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+                }
+
+                if (settings.StorageConnectionState == SettingsConnectionState.Connected)
+                {
+                    _notificationManager?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
+                }
             }
             catch (Exception ex)
             {
+                settings.SetStorageConnectionState(SettingsConnectionState.Error);
                 var hint = OperatingSystem.IsAndroid() ? " Проверьте разрешение \"Доступ ко всем файлам\"." : string.Empty;
                 _notificationManager?.ErrorToast($"Не удалось подключить хранилище задач: {ex.Message}{hint}");
+            }
+        });
+
+        settings.SignOutCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var storage = _storageFactory?.CurrentStorage?.TaskTreeManager.Storage as ServerStorage;
+            if (storage == null)
+            {
+                return;
+            }
+
+            settings.SetStorageConnectionState(SettingsConnectionState.Connecting, "Выход из серверного аккаунта...");
+            await storage.SignOut();
+            settings.MarkSignedOut();
+        });
+
+        settings.SyncNowCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Синхронизация с репозиторием...");
+            try
+            {
+                await Task.Run(() =>
+                {
+                    _backupService?.Pull();
+                    _backupService?.Push("Manual backup");
+                });
+
+                settings.ReloadGitMetadata();
+                settings.SetBackupConnectionState(BackupStatusState.Connected, "Синхронизация завершена.");
+                ShowBackupSuccessToast(settings, "Синхронизация с репозиторием завершена.");
+            }
+            catch (Exception ex)
+            {
+                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка синхронизации: {ex.Message}");
+                _notificationManager?.ErrorToast($"Не удалось синхронизировать репозиторий: {ex.Message}");
             }
         });
 
@@ -154,8 +208,13 @@ public class App : Application
                     _scheduler.PauseAll();
             });
 
-        settings.ObservableForProperty(m => m.IsDarkTheme, skipInitial: true)
-            .Subscribe(c => RequestedThemeVariant = c.Value ? ThemeVariant.Dark : ThemeVariant.Light);
+        settings.ObservableForProperty(m => m.ThemeMode, skipInitial: true)
+            .Subscribe(c => RequestedThemeVariant = c.Value switch
+            {
+                ThemeMode.Dark => ThemeVariant.Dark,
+                ThemeMode.Light => ThemeVariant.Light,
+                _ => ThemeVariant.Default
+            });
 
         settings.ObservableForProperty(m => m.FontSize, skipInitial: true)
             .Subscribe(c => ApplyFontSize(c.Value));
@@ -186,59 +245,99 @@ public class App : Application
 
         settings.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var serverTaskStorage = _storageFactory?.CurrentStorage;
-            if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
-            {
-                return;
-            }
-            var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-            var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
-            var tasks = new System.Collections.Generic.List<Unlimotion.Domain.TaskItem>();
-            await foreach (var task in fileStorage.GetAll())
-                tasks.Add(task);
-            await serverTaskStorage.TaskTreeManager.Storage.BulkInsert(tasks);
+            ConfirmAndRun(
+                "Перенести локальные задачи на сервер",
+                "Локальные задачи будут загружены в текущее серверное хранилище. Продолжить?",
+                async () =>
+                {
+                    var serverTaskStorage = _storageFactory?.CurrentStorage;
+                    if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
+                    {
+                        return;
+                    }
+
+                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    var tasks = new System.Collections.Generic.List<Unlimotion.Domain.TaskItem>();
+                    await foreach (var task in fileStorage.GetAll())
+                    {
+                        tasks.Add(task);
+                    }
+
+                    await serverTaskStorage.TaskTreeManager.Storage.BulkInsert(tasks);
+                    _notificationManager?.SuccessToast("Локальные задачи перенесены на сервер.");
+                },
+                ex => _notificationManager?.ErrorToast($"Не удалось перенести локальные задачи на сервер: {ex.Message}"));
+
+            await Task.CompletedTask;
         });
 
         settings.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var serverTaskStorage = _storageFactory?.CurrentStorage;
-            if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
-            {
-                return;
-            }
-            var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-            var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
-            await foreach (var task in serverTaskStorage.TaskTreeManager.Storage.GetAll())
-            {
-                task.Id = task.Id.Replace("TaskItem/", "");
-                if (task.BlocksTasks != null)
+            ConfirmAndRun(
+                "Скопировать задачи с сервера в локальное хранилище",
+                "Текущие серверные задачи будут сохранены в локальное хранилище на этом устройстве. Продолжить?",
+                async () =>
                 {
-                    task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                }
-                if (task.ContainsTasks != null)
-                {
-                    task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
-                }
-                await fileStorage.Save(task);
-            }
+                    var serverTaskStorage = _storageFactory?.CurrentStorage;
+                    if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
+                    {
+                        return;
+                    }
+
+                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    await foreach (var task in serverTaskStorage.TaskTreeManager.Storage.GetAll())
+                    {
+                        task.Id = task.Id.Replace("TaskItem/", "");
+                        if (task.BlocksTasks != null)
+                        {
+                            task.BlocksTasks = task.BlocksTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
+                        }
+
+                        if (task.ContainsTasks != null)
+                        {
+                            task.ContainsTasks = task.ContainsTasks.Select(s => s.Replace("TaskItem/", "")).ToList();
+                        }
+
+                        await fileStorage.Save(task);
+                    }
+
+                    _notificationManager?.SuccessToast("Задачи с сервера скопированы в локальное хранилище.");
+                },
+                ex => _notificationManager?.ErrorToast($"Не удалось скопировать задачи с сервера: {ex.Message}"));
+
+            await Task.CompletedTask;
         });
 
         settings.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-            var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
-            var taskTreeManager = new Unlimotion.TaskTree.TaskTreeManager(fileStorage);
-            var fileTaskStorage = new UnifiedTaskStorage(taskTreeManager);
-            foreach (var task in fileTaskStorage.Tasks.Items)
-            {
-                task.SaveItemCommand.Execute();
-            }
+            ConfirmAndRun(
+                "Пересохранить все задачи",
+                "Все задачи будут перечитаны и сохранены заново в локальном хранилище. Продолжить?",
+                async () =>
+                {
+                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
+                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    var taskTreeManager = new Unlimotion.TaskTree.TaskTreeManager(fileStorage);
+                    var fileTaskStorage = new UnifiedTaskStorage(taskTreeManager);
+                    foreach (var task in fileTaskStorage.Tasks.Items)
+                    {
+                        task.SaveItemCommand.Execute();
+                    }
+
+                    _notificationManager?.SuccessToast("Все задачи пересохранены.");
+                    await Task.CompletedTask;
+                },
+                ex => _notificationManager?.ErrorToast($"Не удалось пересохранить задачи: {ex.Message}"));
+
+            await Task.CompletedTask;
         });
 
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
             if (_dialogs == null) return;
-            var path = await _dialogs.ShowOpenFolderDialogAsync("Task Storage Path");
+            var path = await _dialogs.ShowOpenFolderDialogAsync("Папка с данными");
             if (!string.IsNullOrWhiteSpace(path))
             {
                 settings.TaskStoragePath = path;
@@ -247,23 +346,79 @@ public class App : Application
 
         settings.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _backupService?.CloneOrUpdateRepo();
+            try
+            {
+                var preview = await Task.Run(() => _backupService?.PreviewConnectRepository());
+                if (preview?.RequiresConfirmation == true)
+                {
+                    settings.SetBackupConnectionState(
+                        BackupStatusState.NotConfigured,
+                        "Подтвердите объединение локальных задач с репозиторием.");
+
+                    if (_notificationManager == null)
+                    {
+                        _notificationManager?.ErrorToast("Требуется подтверждение объединения локальных задач с репозиторием.");
+                        return;
+                    }
+
+                    _notificationManager.Ask(
+                        "Подключить непустой репозиторий?",
+                        "Папка с задачами не пустая, и удаленный репозиторий уже содержит данные. При подключении локальные задачи будут объединены с содержимым репозитория. Продолжить?",
+                        () => _ = ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: true),
+                        () => settings.SetBackupConnectionState(BackupStatusState.NotConfigured, "Подключение репозитория отменено."));
+                    return;
+                }
+
+                await ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: false);
+            }
+            catch (Exception ex)
+            {
+                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка подключения репозитория: {ex.Message}");
+                _notificationManager?.ErrorToast($"Не удалось подключить репозиторий: {ex.Message}");
+            }
         });
 
         settings.PullCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _backupService?.Pull();
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Получение изменений из репозитория...");
+            try
+            {
+                await Task.Run(() => _backupService?.Pull());
+                settings.ReloadGitMetadata();
+                settings.SetBackupConnectionState(BackupStatusState.Connected, "Изменения из репозитория получены.");
+                ShowBackupSuccessToast(settings, "Изменения из репозитория получены.");
+            }
+            catch (Exception ex)
+            {
+                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка получения изменений: {ex.Message}");
+                _notificationManager?.ErrorToast($"Не удалось получить изменения из репозитория: {ex.Message}");
+            }
         });
 
         settings.PushCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            _backupService?.Push("Manual backup");
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Отправка изменений в репозиторий...");
+            try
+            {
+                await Task.Run(() => _backupService?.Push("Manual backup"));
+                settings.ReloadGitMetadata();
+                settings.SetBackupConnectionState(BackupStatusState.Connected, "Изменения отправлены в репозиторий.");
+                ShowBackupSuccessToast(settings, "Изменения отправлены в репозиторий.");
+            }
+            catch (Exception ex)
+            {
+                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка отправки изменений: {ex.Message}");
+                _notificationManager?.ErrorToast($"Не удалось отправить изменения в репозиторий: {ex.Message}");
+            }
         });
 
         settings.RefreshSshKeysCommand = ReactiveCommand.Create(() =>
         {
             settings.ReloadSshPublicKeys();
+            settings.ReloadGitMetadata();
         });
+
+        settings.RefreshGitMetadataCommand = ReactiveCommand.Create(settings.ReloadGitMetadata);
 
         settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -277,11 +432,12 @@ public class App : Application
                 var publicKeyPath = await Task.Run(() =>
                     _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty));
                 settings.ReloadSshPublicKeys(publicKeyPath);
-                _notificationManager?.SuccessToast($"SSH key generated: {publicKeyPath}");
+                settings.ReloadGitMetadata();
+                _notificationManager?.SuccessToast($"SSH-ключ создан: {publicKeyPath}");
             }
             catch (Exception ex)
             {
-                _notificationManager?.ErrorToast($"Failed to generate SSH key: {ex.Message}");
+                _notificationManager?.ErrorToast($"Не удалось создать SSH-ключ: {ex.Message}");
             }
         });
 
@@ -289,27 +445,162 @@ public class App : Application
         {
             if (_backupService == null || string.IsNullOrWhiteSpace(settings.SelectedSshPublicKeyPath))
             {
-                _notificationManager?.ErrorToast("Select SSH public key first.");
+                _notificationManager?.ErrorToast("Сначала выберите публичный SSH-ключ.");
                 return;
             }
 
             var keyContent = _backupService.ReadPublicKey(settings.SelectedSshPublicKeyPath);
             if (string.IsNullOrWhiteSpace(keyContent))
             {
-                _notificationManager?.ErrorToast("SSH public key is empty or missing.");
+                _notificationManager?.ErrorToast("Публичный SSH-ключ пустой или не найден.");
                 return;
             }
 
             var topLevel = DialogExtensions.GetTopLevel();
             if (topLevel?.Clipboard == null)
             {
-                _notificationManager?.ErrorToast("Clipboard is unavailable.");
+                _notificationManager?.ErrorToast("Буфер обмена недоступен.");
                 return;
             }
 
             await topLevel.Clipboard.SetTextAsync(keyContent);
-            _notificationManager?.SuccessToast("SSH public key copied to clipboard.");
+            _notificationManager?.SuccessToast("Публичный SSH-ключ скопирован в буфер обмена.");
         });
+    }
+
+    private async Task ConnectBackupRepositoryAsync(
+        SettingsViewModel settings,
+        bool allowMergeWithNonEmptyRemote)
+    {
+        settings.SetBackupConnectionState(BackupStatusState.Connecting, "Подключение репозитория...");
+        try
+        {
+            await Task.Run(() => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
+            settings.ReloadGitMetadata();
+            await ReloadCurrentTaskStorageAsync(settings);
+            settings.SetBackupConnectionState(BackupStatusState.Connected, "Репозиторий подключен.");
+            ShowBackupSuccessToast(settings, "Репозиторий подключен.");
+        }
+        catch (Exception ex)
+        {
+            settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка подключения репозитория: {ex.Message}");
+            _notificationManager?.ErrorToast($"Не удалось подключить репозиторий: {ex.Message}");
+        }
+    }
+
+    private async Task ReloadCurrentTaskStorageAsync(SettingsViewModel settings)
+    {
+        if (_storageFactory == null || _configuration == null || _mainWindowViewModel == null || settings.IsServerMode)
+        {
+            return;
+        }
+
+        _storageFactory.SwitchStorage(isServerMode: false, _configuration);
+        WireSettingsToCurrentStorage(settings);
+        await _mainWindowViewModel.Connect();
+        settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+    }
+
+    private void ConfirmAndRun(
+        string header,
+        string message,
+        Func<Task> action,
+        Action<Exception>? onError = null)
+    {
+        void Run()
+        {
+            _ = ExecuteConfirmedActionAsync(action, onError);
+        }
+
+        if (_notificationManager == null)
+        {
+            Run();
+            return;
+        }
+
+        _notificationManager.Ask(header, message, Run);
+    }
+
+    private async Task ExecuteConfirmedActionAsync(
+        Func<Task> action,
+        Action<Exception>? onError = null)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            onError?.Invoke(ex);
+        }
+    }
+
+    private void ShowBackupSuccessToast(SettingsViewModel settings, string message)
+    {
+        if (settings.GitShowStatusToasts)
+        {
+            _notificationManager?.SuccessToast(message);
+        }
+    }
+
+    private void WireSettingsToCurrentStorage(SettingsViewModel settings)
+    {
+        if (_wiredServerStorage != null)
+        {
+            if (_serverConnectedHandler != null)
+            {
+                _wiredServerStorage.OnConnected -= _serverConnectedHandler;
+            }
+
+            if (_serverConnectionErrorHandler != null)
+            {
+                _wiredServerStorage.OnConnectionError -= _serverConnectionErrorHandler;
+            }
+
+            if (_serverSignOutHandler != null)
+            {
+                _wiredServerStorage.OnSignOut -= _serverSignOutHandler;
+            }
+        }
+
+        _wiredServerStorage = null;
+        _serverConnectedHandler = null;
+        _serverConnectionErrorHandler = null;
+        _serverSignOutHandler = null;
+
+        var storage = _storageFactory?.CurrentStorage?.TaskTreeManager.Storage;
+        if (storage is ServerStorage serverStorage)
+        {
+            settings.SetStorageConnectionState(
+                serverStorage.IsConnected ? SettingsConnectionState.Connected : SettingsConnectionState.Disconnected);
+
+            _serverConnectedHandler = () =>
+            {
+                settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+            };
+
+            _serverConnectionErrorHandler = _ =>
+            {
+                settings.SetStorageConnectionState(SettingsConnectionState.Error);
+            };
+
+            _serverSignOutHandler = (_, __) =>
+            {
+                settings.MarkSignedOut();
+            };
+
+            serverStorage.OnConnected += _serverConnectedHandler;
+            serverStorage.OnConnectionError += _serverConnectionErrorHandler;
+            serverStorage.OnSignOut += _serverSignOutHandler;
+
+            _wiredServerStorage = serverStorage;
+            return;
+        }
+
+        if (storage != null)
+        {
+            settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -395,10 +686,18 @@ public class App : Application
             .GetSection(AppearanceSettings.SectionName)
             .GetSection(AppearanceSettings.ThemeKey)
             .Get<string>();
-        var isDarkTheme = AppearanceSettings.ParseIsDarkTheme(configuredTheme);
-        if (isDarkTheme.HasValue)
+        var themeMode = AppearanceSettings.ParseThemeMode(configuredTheme);
+        switch (themeMode)
         {
-            RequestedThemeVariant = isDarkTheme.Value ? ThemeVariant.Dark : ThemeVariant.Light;
+            case ThemeMode.Dark:
+                RequestedThemeVariant = ThemeVariant.Dark;
+                break;
+            case ThemeMode.Light:
+                RequestedThemeVariant = ThemeVariant.Light;
+                break;
+            default:
+                RequestedThemeVariant = ThemeVariant.Default;
+                break;
         }
     }
 
@@ -502,13 +801,15 @@ public class App : Application
 
             var isServerMode = taskStorageSettings.IsServerMode;
 
+            EnsureDefaultTaskStoragePath(_configuration, ResolveDefaultTaskStoragePath());
+            taskStorageSettings = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? taskStorageSettings;
+
             // Create storage factory
             Log($"[App.Init] Creating storage factory with DefaultStoragePath={TaskStorageFactory.DefaultStoragePath}");
             _storageFactory = new TaskStorageFactory(_configuration, _mapper, _notificationManager);
-            if (!string.IsNullOrWhiteSpace(taskStorageSettings.Path))
-            {
-                TaskStorageFactory.DefaultStoragePath = taskStorageSettings.Path;
-            }
+            TaskStorageFactory.DefaultStoragePath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
+                ? ResolveDefaultTaskStoragePath()
+                : taskStorageSettings.Path;
             Log("[App.Init] Storage factory created");
 
             // Create backup service
@@ -627,6 +928,36 @@ public class App : Application
 #else
         return true;
 #endif
+    }
+
+    public static void EnsureDefaultTaskStoragePath(IConfiguration configuration, string defaultPath)
+    {
+        var taskStorageSection = configuration.GetSection("TaskStorage");
+        if (taskStorageSection.GetSection(nameof(TaskStorageSettings.IsServerMode)).Get<bool>())
+        {
+            return;
+        }
+
+        var currentPath = taskStorageSection.GetSection(nameof(TaskStorageSettings.Path)).Get<string>();
+        if (!string.IsNullOrWhiteSpace(currentPath))
+        {
+            return;
+        }
+
+        taskStorageSection.GetSection(nameof(TaskStorageSettings.Path)).Set(defaultPath);
+    }
+
+    private static string ResolveDefaultTaskStoragePath()
+    {
+        if (!string.IsNullOrWhiteSpace(DefaultStoragePath))
+        {
+            return DefaultStoragePath;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Unlimotion",
+            "Tasks");
     }
 
     private static void HandleReactiveException(Exception ex)
