@@ -519,9 +519,9 @@ public class SettingsViewModel
             .ToList();
         Refs = _backupService?.Refs() ?? new List<string>();
         HasMultipleRemotes = RemotesWithAuthType.Count > 1;
-        EnsureSingleRemoteSelection();
+        EnsureRemoteSelection();
         TryFillGitRemoteUrlFromSelectedRemote();
-        EnsureGitPushRefSpecFallback();
+        EnsureGitPushRefSpecSelection();
         RefreshBackupAuthMode();
         RefreshBackupState();
     }
@@ -586,25 +586,23 @@ public class SettingsViewModel
         }
     }
 
-    private void EnsureSingleRemoteSelection()
+    private void EnsureRemoteSelection()
     {
-        if (Remotes.Count != 1)
-        {
-            return;
-        }
-
-        var singleRemote = Remotes[0];
-        if (string.Equals(GitRemoteName, singleRemote, StringComparison.Ordinal))
+        if (Remotes.Count == 0)
         {
             return;
         }
 
         var selectedRemote = GitRemoteName;
-        if (string.IsNullOrWhiteSpace(selectedRemote) ||
-            !Remotes.Any(remote => string.Equals(remote, selectedRemote, StringComparison.Ordinal)))
+        if (!string.IsNullOrWhiteSpace(selectedRemote) &&
+            Remotes.Any(remote => string.Equals(remote, selectedRemote, StringComparison.Ordinal)))
         {
-            GitRemoteName = singleRemote;
+            return;
         }
+
+        GitRemoteName = Remotes.FirstOrDefault(remote =>
+                            string.Equals(remote, "origin", StringComparison.OrdinalIgnoreCase))
+                        ?? Remotes[0];
     }
 
     private void TryFillGitRemoteUrlFromSelectedRemote()
@@ -633,6 +631,43 @@ public class SettingsViewModel
         {
             GitPushRefSpec = fallback;
         }
+    }
+
+    private void EnsureGitPushRefSpecSelection()
+    {
+        if (Refs.Count == 0)
+        {
+            EnsureGitPushRefSpecFallback();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(GitPushRefSpec) &&
+            Refs.Any(reference => string.Equals(reference, GitPushRefSpec, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var branchFallback = ToCanonicalBranchRef(GitBranch);
+        GitPushRefSpec = ChoosePreferredRef(Refs, branchFallback);
+    }
+
+    private static string ChoosePreferredRef(IReadOnlyList<string> refs, string? configuredBranchRef)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredBranchRef))
+        {
+            var configuredRef = refs.FirstOrDefault(reference =>
+                string.Equals(reference, configuredBranchRef, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(configuredRef))
+            {
+                return configuredRef;
+            }
+        }
+
+        return refs.FirstOrDefault(reference =>
+                   string.Equals(reference, "refs/heads/main", StringComparison.Ordinal))
+               ?? refs.FirstOrDefault(reference =>
+                   string.Equals(reference, "refs/heads/master", StringComparison.Ordinal))
+               ?? refs[0];
     }
 
     private static string? ToCanonicalBranchRef(string? branch)

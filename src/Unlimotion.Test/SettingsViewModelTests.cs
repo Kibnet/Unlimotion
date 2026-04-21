@@ -287,6 +287,27 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_SelectsOriginWhenStoredRemoteIsMissingAndMultipleRemotesExist()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "backup", "origin" },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["backup"] = "git@github.com:org/backup.git",
+                ["origin"] = "git@github.com:org/origin.git"
+            }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("missing");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitRemoteName).IsEqualTo("origin");
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/origin.git");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task GitPushRefSpec_FallsBackToCanonicalBranchWhenPushRefSpecIsEmpty()
     {
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
@@ -296,6 +317,41 @@ public class SettingsViewModelTests : IDisposable
         var settings = new SettingsViewModel(configuration);
 
         await Assert.That(settings.GitPushRefSpec).IsEqualTo("refs/heads/master");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_SelectsAvailableBranchWhenStoredPushRefSpecIsMissing()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ReferenceNames = new List<string> { "refs/heads/main" }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/master");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitPushRefSpec).IsEqualTo("refs/heads/main");
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.PushRefSpec))
+                .Get<string>())
+            .IsEqualTo("refs/heads/main");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_PreservesStoredPushRefSpecWhenItExists()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ReferenceNames = new List<string> { "refs/heads/main", "refs/heads/release" }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/release");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitPushRefSpec).IsEqualTo("refs/heads/release");
     }
 
     [Test]
@@ -409,6 +465,7 @@ public class SettingsViewModelTests : IDisposable
     {
         public List<string> PublicKeys { get; set; } = new();
         public List<string> RemoteNames { get; set; } = new();
+        public List<string> ReferenceNames { get; set; } = new();
         public Dictionary<string, string> RemoteAuthTypes { get; set; } = new();
         public Dictionary<string, string> RemoteUrls { get; set; } = new();
 
@@ -417,7 +474,7 @@ public class SettingsViewModelTests : IDisposable
             RemoteAuthTypes.TryGetValue(remoteName, out var authType) ? authType : null;
         public string? GetRemoteUrl(string remoteName) =>
             RemoteUrls.TryGetValue(remoteName, out var remoteUrl) ? remoteUrl : null;
-        public List<string> Refs() => new();
+        public List<string> Refs() => new(ReferenceNames);
         public List<string> GetSshPublicKeys() => new(PublicKeys);
         public string GenerateSshKey(string keyName) => throw new NotSupportedException();
         public string? ReadPublicKey(string publicKeyPath) => throw new NotSupportedException();

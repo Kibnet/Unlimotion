@@ -58,6 +58,24 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task PreviewConnectRepository_TreatsOnlyMigrationReportsAsEmptyLocalFolder()
+    {
+        var localPath = Path.Combine(_rootPath, "OnlyReportsTasks");
+        Directory.CreateDirectory(localPath);
+        File.WriteAllText(Path.Combine(localPath, "migration.report"), "local migration");
+        File.WriteAllText(Path.Combine(localPath, "availability.migration.report"), "local availability");
+        var remotePath = CreateBareRemoteWithCommit("remote-task", "remote content");
+        var service = CreateService(localPath, remotePath);
+
+        var preview = service.PreviewConnectRepository();
+
+        await Assert.That(preview.Action).IsEqualTo(BackupRepositoryConnectAction.FetchIntoEmptyLocalFolder);
+        await Assert.That(preview.RequiresConfirmation).IsFalse();
+        await Assert.That(preview.LocalFolderHasContent).IsFalse();
+        await Assert.That(preview.RemoteHasContent).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ConnectRepository_InitializesLocalRepositoryAndPushesLocalTasksToEmptyRemote()
     {
         var localPath = CreateLocalTaskFolder();
@@ -91,6 +109,57 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ConnectRepository_ChecksOutRemoteOverLocalMigrationReportsWithoutConflict()
+    {
+        var localPath = Path.Combine(_rootPath, "OnlyReportsCheckoutTasks");
+        Directory.CreateDirectory(localPath);
+        File.WriteAllText(Path.Combine(localPath, "migration.report"), "local migration");
+        File.WriteAllText(Path.Combine(localPath, "availability.migration.report"), "local availability");
+        var remotePath = CreateBareRemoteWithFiles(
+            ("remote-task", "remote content"),
+            ("migration.report", "remote migration"),
+            ("availability.migration.report", "remote availability"));
+        var service = CreateService(localPath, remotePath);
+
+        service.ConnectRepository(allowMergeWithNonEmptyRemote: false);
+
+        using var local = new Repository(localPath);
+        await Assert.That(File.Exists(Path.Combine(localPath, "remote-task"))).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(localPath, "migration.report"))).IsFalse();
+        await Assert.That(File.Exists(Path.Combine(localPath, "availability.migration.report"))).IsFalse();
+        await Assert.That(local.Index["migration.report"]).IsNull();
+        await Assert.That(local.Index["availability.migration.report"]).IsNull();
+        await Assert.That(local.Head.Tip.Tree["migration.report"]).IsNull();
+        await Assert.That(local.Head.Tip.Tree["availability.migration.report"]).IsNull();
+        using var remote = new Repository(remotePath);
+        await Assert.That(remote.Branches["main"].Tip.Tree["migration.report"]).IsNull();
+        await Assert.That(remote.Branches["main"].Tip.Tree["availability.migration.report"]).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ConnectRepository_SelectsExistingRemoteBranchWhenConfiguredBranchIsMissing()
+    {
+        var localPath = Path.Combine(_rootPath, "MissingBranchTasks");
+        Directory.CreateDirectory(localPath);
+        var remotePath = CreateBareRemoteWithCommit("remote-task", "remote content");
+        var service = CreateService(
+            localPath,
+            remotePath,
+            out var configuration,
+            pushRefSpec: "refs/heads/master",
+            branch: "master");
+
+        service.ConnectRepository(allowMergeWithNonEmptyRemote: false);
+
+        await Assert.That(File.Exists(Path.Combine(localPath, "remote-task"))).IsTrue();
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.PushRefSpec))
+                .Get<string>())
+            .IsEqualTo("refs/heads/main");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ConnectRepository_RefusesNonEmptyRemoteAndNonEmptyLocalFolderWithoutConfirmation()
     {
         var localPath = CreateLocalTaskFolder();
@@ -117,6 +186,37 @@ public sealed class BackupViaGitServiceTests : IDisposable
         await Assert.That(local.Index.Conflicts.Any()).IsFalse();
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task ConnectRepository_MergesNonEmptyRemoteWithLocalFolderAndIgnoresMigrationReports()
+    {
+        var localPath = CreateLocalTaskFolder();
+        File.WriteAllText(Path.Combine(localPath, "migration.report"), "local migration");
+        File.WriteAllText(Path.Combine(localPath, "availability.migration.report"), "local availability");
+        var remotePath = CreateBareRemoteWithFiles(
+            ("remote-task", "remote content"),
+            ("migration.report", "remote migration"),
+            ("availability.migration.report", "remote availability"));
+        var service = CreateService(localPath, remotePath);
+
+        service.ConnectRepository(allowMergeWithNonEmptyRemote: true);
+
+        using var local = new Repository(localPath);
+        await Assert.That(local.Index.Conflicts.Any()).IsFalse();
+        await Assert.That(local.Index["migration.report"]).IsNull();
+        await Assert.That(local.Index["availability.migration.report"]).IsNull();
+        await Assert.That(local.Head.Tip.Tree["migration.report"]).IsNull();
+        await Assert.That(local.Head.Tip.Tree["availability.migration.report"]).IsNull();
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, ".gitignore"))).Contains("migration.report");
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, ".gitignore"))).Contains("availability.migration.report");
+        await Assert.That(File.Exists(Path.Combine(localPath, "migration.report"))).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(localPath, "availability.migration.report"))).IsTrue();
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "migration.report"))).IsEqualTo("local migration");
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "availability.migration.report"))).IsEqualTo("local availability");
+        using var remote = new Repository(remotePath);
+        await Assert.That(remote.Branches["main"].Tip.Tree["migration.report"]).IsNull();
+        await Assert.That(remote.Branches["main"].Tip.Tree["availability.migration.report"]).IsNull();
+    }
+
     private string CreateLocalTaskFolder()
     {
         var localPath = Path.Combine(_rootPath, "Tasks");
@@ -134,11 +234,19 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
     private string CreateBareRemoteWithCommit(string fileName, string content)
     {
+        return CreateBareRemoteWithFiles((fileName, content));
+    }
+
+    private string CreateBareRemoteWithFiles(params (string FileName, string Content)[] files)
+    {
         var remotePath = CreateBareRemote();
         var seedPath = Path.Combine(_rootPath, $"seed-{Guid.NewGuid():N}");
         Directory.CreateDirectory(seedPath);
         Repository.Init(seedPath);
-        File.WriteAllText(Path.Combine(seedPath, fileName), content);
+        foreach (var (fileName, content) in files)
+        {
+            File.WriteAllText(Path.Combine(seedPath, fileName), content);
+        }
 
         using (var seed = new Repository(seedPath))
         {
@@ -154,14 +262,30 @@ public sealed class BackupViaGitServiceTests : IDisposable
         return remotePath;
     }
 
-    private BackupViaGitService CreateService(string localPath, string remotePath)
+    private BackupViaGitService CreateService(
+        string localPath,
+        string remotePath,
+        string pushRefSpec = "refs/heads/main",
+        string branch = "main",
+        string remoteName = "origin")
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        return CreateService(localPath, remotePath, out _, pushRefSpec, branch, remoteName);
+    }
+
+    private BackupViaGitService CreateService(
+        string localPath,
+        string remotePath,
+        out IConfigurationRoot configuration,
+        string pushRefSpec = "refs/heads/main",
+        string branch = "main",
+        string remoteName = "origin")
+    {
+        configuration = WritableJsonConfigurationFabric.Create(_configPath);
         configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(localPath);
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set(remotePath);
-        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
-        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/main");
-        configuration.GetSection("Git").GetSection(nameof(GitSettings.Branch)).Set("main");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set(remoteName);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set(pushRefSpec);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.Branch)).Set(branch);
         configuration.GetSection("Git").GetSection(nameof(GitSettings.CommitterName)).Set("Backuper");
         configuration.GetSection("Git").GetSection(nameof(GitSettings.CommitterEmail)).Set("backuper@example.com");
         configuration.GetSection("Git").GetSection(nameof(GitSettings.ShowStatusToasts)).Set(false);

@@ -18,6 +18,12 @@ public class BackupViaGitService : IRemoteBackupService
 {
     private const string DefaultSshKeyFileName = "id_ed25519_unlimotion";
     private const string TasksFolderName = "Tasks";
+    private static readonly string[] IgnoredMigrationReportFileNames =
+    {
+        "availability.migration.report",
+        "migration.report"
+    };
+
     private static readonly object LockObject = new();
     public static Func<string, string> GetAbsolutePath;
 
@@ -245,6 +251,7 @@ public class BackupViaGitService : IRemoteBackupService
             switch (preview.Action)
             {
                 case BackupRepositoryConnectAction.PullExistingRepository:
+                    EnsureGitSelectionFromLocalRepository(preview.RepositoryPath, settings.git);
                     Pull();
                     return;
                 case BackupRepositoryConnectAction.InitializeLocalAndPush:
@@ -499,6 +506,9 @@ public class BackupViaGitService : IRemoteBackupService
 
     private void InitializeLocalRepositoryAndPush(string repositoryPath, string remoteUrl, GitSettings gitSettings)
     {
+        EnsureRemoteNameConfigured(gitSettings);
+        EnsurePushRefSpecConfigured(gitSettings);
+
         Directory.CreateDirectory(repositoryPath);
         Repository.Init(repositoryPath);
 
@@ -511,18 +521,41 @@ public class BackupViaGitService : IRemoteBackupService
 
     private void InitializeLocalRepositoryAndCheckoutRemote(string repositoryPath, string remoteUrl, GitSettings gitSettings)
     {
+        EnsureRemoteNameConfigured(gitSettings);
+        EnsurePushRefSpecMatchesRemote(remoteUrl, gitSettings);
+
         Directory.CreateDirectory(repositoryPath);
         Repository.Init(repositoryPath);
 
         using var repo = new Repository(repositoryPath);
         EnsureRemote(repo, gitSettings.RemoteName, remoteUrl);
         FetchRemote(repo, repositoryPath, gitSettings);
-        CheckoutRemoteBranch(repo, gitSettings);
+        var localMigrationReports = BackupAndRemoveIgnoredMigrationReports(repo);
+        var hasCleanupCommit = false;
+        try
+        {
+            CheckoutRemoteBranch(repo, gitSettings);
+            hasCleanupCommit = CommitIgnoredMigrationReportsCleanup(repo, gitSettings, "Ignore migration reports");
+        }
+        finally
+        {
+            DiscardIgnoredMigrationReports(localMigrationReports);
+        }
+
+        DeleteIgnoredMigrationReportFiles(repo);
+        if (hasCleanupCommit)
+        {
+            PushConfiguredBranch(repo, gitSettings);
+        }
+
         ShowUiMessage("Repository connected");
     }
 
     private void InitializeLocalRepositoryMergeAndPush(string repositoryPath, string remoteUrl, GitSettings gitSettings)
     {
+        EnsureRemoteNameConfigured(gitSettings);
+        EnsurePushRefSpecMatchesRemote(remoteUrl, gitSettings);
+
         Directory.CreateDirectory(repositoryPath);
         Repository.Init(repositoryPath);
 
@@ -530,14 +563,27 @@ public class BackupViaGitService : IRemoteBackupService
         EnsureRemote(repo, gitSettings.RemoteName, remoteUrl);
         EnsureCommitOnConfiguredBranch(repo, gitSettings, "Local tasks before connecting backup");
         FetchRemote(repo, repositoryPath, gitSettings);
-        MergeRemoteBranch(repo, repositoryPath, gitSettings);
+        var localMigrationReports = BackupAndRemoveIgnoredMigrationReports(repo);
+        try
+        {
+            MergeRemoteBranch(repo, repositoryPath, gitSettings);
+            CommitIgnoredMigrationReportsCleanup(repo, gitSettings, "Ignore migration reports");
+        }
+        finally
+        {
+            RestoreIgnoredMigrationReports(repo, localMigrationReports);
+        }
+
         PushConfiguredBranch(repo, gitSettings);
         ShowUiMessage("Repository connected and merged");
     }
 
     private void EnsureCommitOnConfiguredBranch(Repository repo, GitSettings gitSettings, string message)
     {
+        EnsureMigrationReportIgnoreRules(repo);
         Commands.Stage(repo, "*");
+        EnsureIgnoredMigrationReportsUntracked(repo);
+
         if (!repo.RetrieveStatus().IsDirty)
         {
             return;
@@ -592,6 +638,25 @@ public class BackupViaGitService : IRemoteBackupService
         {
             throw new InvalidOperationException("Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.");
         }
+    }
+
+    private static bool CommitIgnoredMigrationReportsCleanup(
+        Repository repo,
+        GitSettings gitSettings,
+        string message)
+    {
+        EnsureMigrationReportIgnoreRules(repo);
+        Commands.Stage(repo, ".gitignore");
+        EnsureIgnoredMigrationReportsUntracked(repo);
+
+        if (!repo.RetrieveStatus().IsDirty)
+        {
+            return false;
+        }
+
+        var signature = CreateSignature(gitSettings);
+        repo.Commit(message, signature, signature);
+        return true;
     }
 
     private void MergeRemoteBranchWithGitCli(string repositoryPath, GitSettings gitSettings)
@@ -669,6 +734,11 @@ public class BackupViaGitService : IRemoteBackupService
 
     private bool RemoteHasContent(string remoteUrl, GitSettings gitSettings)
     {
+        return GetRemoteHeadRefs(remoteUrl, gitSettings).Count > 0;
+    }
+
+    private List<string> GetRemoteHeadRefs(string remoteUrl, GitSettings gitSettings)
+    {
         if (ShouldUseConfiguredSshKey(remoteUrl, gitSettings))
         {
             var processResult = RunGitCommandWithConfiguredSshKey(
@@ -678,12 +748,134 @@ public class BackupViaGitService : IRemoteBackupService
                 "ls-remote",
                 "--heads",
                 remoteUrl);
-            return !string.IsNullOrWhiteSpace(processResult.StandardOutput);
+            return processResult.StandardOutput
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).LastOrDefault())
+                .Where(reference => !string.IsNullOrWhiteSpace(reference) &&
+                                    reference.StartsWith("refs/heads/", StringComparison.Ordinal))
+                .Select(reference => reference!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
         }
 
         return Repository
             .ListRemoteReferences(remoteUrl, GetCredentials(gitSettings))
-            .Any(reference => reference.CanonicalName.StartsWith("refs/heads/", StringComparison.Ordinal));
+            .Select(reference => reference.CanonicalName)
+            .Where(reference => reference.StartsWith("refs/heads/", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private void EnsureGitSelectionFromLocalRepository(string repositoryPath, GitSettings gitSettings)
+    {
+        using var repo = new Repository(repositoryPath);
+        EnsureRemoteNameMatchesLocalRepository(repo, gitSettings);
+        EnsurePushRefSpecMatchesLocalRepository(repo, gitSettings);
+    }
+
+    private void EnsureRemoteNameMatchesLocalRepository(Repository repo, GitSettings gitSettings)
+    {
+        var remotes = repo.Network.Remotes.ToList();
+        if (remotes.Count == 0)
+        {
+            EnsureRemoteNameConfigured(gitSettings);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(gitSettings.RemoteName) &&
+            remotes.Any(remote => string.Equals(remote.Name, gitSettings.RemoteName, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        var selectedRemote = remotes.FirstOrDefault(remote =>
+                                 string.Equals(remote.Name, "origin", StringComparison.OrdinalIgnoreCase))
+                             ?? remotes[0];
+        SetRemoteName(gitSettings, selectedRemote.Name);
+
+        if (string.IsNullOrWhiteSpace(gitSettings.RemoteUrl) && !string.IsNullOrWhiteSpace(selectedRemote.Url))
+        {
+            SetRemoteUrl(gitSettings, selectedRemote.Url);
+        }
+    }
+
+    private void EnsureRemoteNameConfigured(GitSettings gitSettings)
+    {
+        if (!string.IsNullOrWhiteSpace(gitSettings.RemoteName))
+        {
+            return;
+        }
+
+        SetRemoteName(gitSettings, "origin");
+    }
+
+    private void EnsurePushRefSpecMatchesLocalRepository(Repository repo, GitSettings gitSettings)
+    {
+        var localRefs = repo.Branches
+            .Where(branch => !branch.IsRemote)
+            .Select(branch => branch.CanonicalName)
+            .ToList();
+        var preferredRef = repo.Head is { IsRemote: false } ? repo.Head.CanonicalName : null;
+        EnsurePushRefSpecMatchesAvailableRefs(gitSettings, localRefs, preferredRef);
+    }
+
+    private void EnsurePushRefSpecMatchesRemote(string remoteUrl, GitSettings gitSettings)
+    {
+        EnsurePushRefSpecMatchesAvailableRefs(gitSettings, GetRemoteHeadRefs(remoteUrl, gitSettings), preferredRef: null);
+    }
+
+    private void EnsurePushRefSpecMatchesAvailableRefs(
+        GitSettings gitSettings,
+        IReadOnlyList<string> refs,
+        string? preferredRef)
+    {
+        if (refs.Count == 0)
+        {
+            EnsurePushRefSpecConfigured(gitSettings);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(gitSettings.PushRefSpec) &&
+            refs.Any(reference => string.Equals(reference, gitSettings.PushRefSpec, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        SetPushRefSpec(gitSettings, ChoosePreferredRef(refs, ToCanonicalBranchRef(gitSettings.Branch), preferredRef));
+    }
+
+    private void EnsurePushRefSpecConfigured(GitSettings gitSettings)
+    {
+        var canonicalRef = ToCanonicalBranchRef(gitSettings.PushRefSpec)
+                           ?? ToCanonicalBranchRef(gitSettings.Branch)
+                           ?? "refs/heads/master";
+        if (string.Equals(gitSettings.PushRefSpec, canonicalRef, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SetPushRefSpec(gitSettings, canonicalRef);
+    }
+
+    private void SetRemoteName(GitSettings gitSettings, string remoteName)
+    {
+        gitSettings.RemoteName = remoteName;
+        _configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set(remoteName);
+    }
+
+    private void SetRemoteUrl(GitSettings gitSettings, string remoteUrl)
+    {
+        gitSettings.RemoteUrl = remoteUrl;
+        _configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set(remoteUrl);
+    }
+
+    private void SetPushRefSpec(GitSettings gitSettings, string pushRefSpec)
+    {
+        gitSettings.PushRefSpec = pushRefSpec;
+        gitSettings.Branch = GetBranchShortName(pushRefSpec);
+        var gitSection = _configuration.GetSection("Git");
+        gitSection.GetSection(nameof(GitSettings.PushRefSpec)).Set(pushRefSpec);
+        gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
     }
 
     private static bool HasLocalFolderContent(string repositoryPath)
@@ -695,8 +887,150 @@ public class BackupViaGitService : IRemoteBackupService
 
         return Directory
             .EnumerateFileSystemEntries(repositoryPath)
-            .Any(path => !string.Equals(Path.GetFileName(path), ".git", StringComparison.OrdinalIgnoreCase));
+            .Any(path =>
+                !string.Equals(Path.GetFileName(path), ".git", StringComparison.OrdinalIgnoreCase) &&
+                !IsIgnoredMigrationReportFile(path));
     }
+
+    private static void EnsureMigrationReportIgnoreRules(Repository repo)
+    {
+        var workingDirectory = repo.Info.WorkingDirectory;
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            throw new InvalidOperationException("Repository working directory is not available.");
+        }
+
+        var gitIgnorePath = Path.Combine(workingDirectory, ".gitignore");
+        var existingText = File.Exists(gitIgnorePath) ? File.ReadAllText(gitIgnorePath) : string.Empty;
+        var existingRules = existingText
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missingRules = IgnoredMigrationReportFileNames
+            .Where(fileName => !existingRules.Contains(fileName))
+            .ToList();
+
+        if (missingRules.Count == 0)
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        if (!string.IsNullOrEmpty(existingText) &&
+            !existingText.EndsWith("\n", StringComparison.Ordinal))
+        {
+            builder.AppendLine();
+        }
+
+        foreach (var rule in missingRules)
+        {
+            builder.AppendLine(rule);
+        }
+
+        File.AppendAllText(gitIgnorePath, builder.ToString());
+    }
+
+    private static bool EnsureIgnoredMigrationReportsUntracked(Repository repo)
+    {
+        var changed = false;
+        foreach (var fileName in IgnoredMigrationReportFileNames)
+        {
+            if (repo.Index[fileName] == null)
+            {
+                continue;
+            }
+
+            repo.Index.Remove(fileName);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            repo.Index.Write();
+        }
+
+        return changed;
+    }
+
+    private static bool IsIgnoredMigrationReportFile(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return IgnoredMigrationReportFileNames.Any(ignoredFileName =>
+            string.Equals(fileName, ignoredFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<IgnoredMigrationReportBackup> BackupAndRemoveIgnoredMigrationReports(Repository repo)
+    {
+        var workingDirectory = repo.Info.WorkingDirectory;
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            throw new InvalidOperationException("Repository working directory is not available.");
+        }
+
+        var backups = new List<IgnoredMigrationReportBackup>();
+        foreach (var fileName in IgnoredMigrationReportFileNames)
+        {
+            var path = Path.Combine(workingDirectory, fileName);
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            backups.Add(new IgnoredMigrationReportBackup(fileName, File.ReadAllBytes(path)));
+            File.Delete(path);
+        }
+
+        return backups;
+    }
+
+    private static void RestoreIgnoredMigrationReports(
+        Repository repo,
+        IReadOnlyCollection<IgnoredMigrationReportBackup> backups)
+    {
+        if (backups.Count == 0)
+        {
+            return;
+        }
+
+        var workingDirectory = repo.Info.WorkingDirectory;
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            throw new InvalidOperationException("Repository working directory is not available.");
+        }
+
+        foreach (var backup in backups)
+        {
+            File.WriteAllBytes(Path.Combine(workingDirectory, backup.FileName), backup.Content);
+        }
+    }
+
+    private static void DiscardIgnoredMigrationReports(IReadOnlyCollection<IgnoredMigrationReportBackup> backups)
+    {
+        foreach (var backup in backups)
+        {
+            Array.Clear(backup.Content);
+        }
+    }
+
+    private static void DeleteIgnoredMigrationReportFiles(Repository repo)
+    {
+        var workingDirectory = repo.Info.WorkingDirectory;
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            throw new InvalidOperationException("Repository working directory is not available.");
+        }
+
+        foreach (var fileName in IgnoredMigrationReportFileNames)
+        {
+            var path = Path.Combine(workingDirectory, fileName);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    private sealed record IgnoredMigrationReportBackup(string FileName, byte[] Content);
 
     private static string RequireRemoteUrl(GitSettings gitSettings)
     {
@@ -717,6 +1051,51 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         return canonicalBranchName;
+    }
+
+    private static string? ToCanonicalBranchRef(string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(branch))
+        {
+            return null;
+        }
+
+        var trimmedBranch = branch.Trim();
+        return trimmedBranch.StartsWith("refs/", StringComparison.Ordinal)
+            ? trimmedBranch
+            : $"refs/heads/{trimmedBranch}";
+    }
+
+    private static string ChoosePreferredRef(
+        IReadOnlyList<string> refs,
+        string? configuredBranchRef,
+        string? preferredRef)
+    {
+        if (!string.IsNullOrWhiteSpace(preferredRef))
+        {
+            var matchedPreferredRef = refs.FirstOrDefault(reference =>
+                string.Equals(reference, preferredRef, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(matchedPreferredRef))
+            {
+                return matchedPreferredRef;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(configuredBranchRef))
+        {
+            var matchedConfiguredRef = refs.FirstOrDefault(reference =>
+                string.Equals(reference, configuredBranchRef, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(matchedConfiguredRef))
+            {
+                return matchedConfiguredRef;
+            }
+        }
+
+        return refs.FirstOrDefault(reference =>
+                   string.Equals(reference, "refs/heads/main", StringComparison.Ordinal))
+               ?? refs.FirstOrDefault(reference =>
+                   string.Equals(reference, "refs/heads/master", StringComparison.Ordinal))
+               ?? refs[0];
     }
 
     private static Signature CreateSignature(GitSettings gitSettings) =>
