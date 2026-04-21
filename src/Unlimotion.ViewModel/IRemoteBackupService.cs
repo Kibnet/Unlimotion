@@ -6,6 +6,7 @@ public interface IRemoteBackupService
 {
     public List<string> Remotes();
     public string? GetRemoteAuthType(string remoteName);
+    public string? GetRemoteUrl(string remoteName);
     public List<string> Refs();
     public List<string> GetSshPublicKeys();
     public string GenerateSshKey(string keyName);

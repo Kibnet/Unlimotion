@@ -112,6 +112,27 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
+    public string? GetRemoteUrl(string remoteName)
+    {
+        try
+        {
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
+            {
+                return null;
+            }
+
+            using var repo = new Repository(path);
+            return repo.Network.Remotes.FirstOrDefault(r => r.Name == remoteName)?.Url;
+        }
+        catch (Exception ex)
+        {
+            ShowUiError(ex.Message, ex);
+            return null;
+        }
+    }
+
     public List<string> GetSshPublicKeys()
     {
         var sshDirectory = GetSshDirectory();

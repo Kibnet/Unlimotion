@@ -160,6 +160,133 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task TaskStoragePathTooltip_ResolvesRelativePathToFullPath()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        settings.TaskStoragePath = Path.Combine("Data", "Tasks");
+
+        await Assert.That(settings.TaskStoragePathTooltip)
+            .IsEqualTo(Path.GetFullPath(Path.Combine("Data", "Tasks")));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskStoragePathTooltip_UsesActualFallbackPathWhenPathIsEmpty()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        settings.TaskStoragePath = string.Empty;
+
+        await Assert.That(settings.TaskStoragePathTooltip)
+            .IsEqualTo(Path.GetFullPath("Tasks"));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskStoragePathTooltip_DoesNotThrowForInvalidIntermediateInput()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration);
+
+        settings.TaskStoragePath = new string((char)0, 1);
+        var tooltip = settings.TaskStoragePathTooltip;
+
+        await Assert.That(tooltip).IsNotNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_FillsEmptyRepositoryUrlFromSelectedRemote()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin", "backup" },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["origin"] = "https://github.com/org/origin.git",
+                ["backup"] = "git@github.com:org/unlimotion-backup.git"
+            }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("backup");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_DoesNotOverwriteExistingRepositoryUrl()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin" },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["origin"] = "https://github.com/org/origin.git"
+            }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/custom.git");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("https://example.com/custom.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_SelectsSingleRemoteWhenStoredRemoteIsMissing()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "backup" },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["backup"] = "git@github.com:org/unlimotion-backup.git"
+            }
+        };
+
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitRemoteName).IsEqualTo("backup");
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GitPushRefSpec_FallsBackToCanonicalBranchWhenPushRefSpecIsEmpty()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.Branch)).Set("master");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set(string.Empty);
+
+        var settings = new SettingsViewModel(configuration);
+
+        await Assert.That(settings.GitPushRefSpec).IsEqualTo("refs/heads/master");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CanSyncRepository_RequiresBackupRemoteAndPushRefSpecWithoutConnectedState()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var settings = new SettingsViewModel(configuration)
+        {
+            GitBackupEnabled = true,
+            GitRemoteName = "origin",
+            GitPushRefSpec = "refs/heads/main"
+        };
+
+        await Assert.That(settings.BackupConnectionState).IsNotEqualTo(BackupStatusState.Connected);
+        await Assert.That(settings.CanSyncRepository).IsTrue();
+
+        settings.GitPushRefSpec = string.Empty;
+
+        await Assert.That(settings.CanSyncRepository).IsFalse();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadSshPublicKeys_PreservesExistingSelectionWhenKeyStillExists()
     {
         var backupService = new FakeRemoteBackupService
@@ -252,10 +379,13 @@ public class SettingsViewModelTests : IDisposable
         public List<string> PublicKeys { get; set; } = new();
         public List<string> RemoteNames { get; set; } = new();
         public Dictionary<string, string> RemoteAuthTypes { get; set; } = new();
+        public Dictionary<string, string> RemoteUrls { get; set; } = new();
 
         public List<string> Remotes() => new(RemoteNames);
         public string? GetRemoteAuthType(string remoteName) =>
             RemoteAuthTypes.TryGetValue(remoteName, out var authType) ? authType : null;
+        public string? GetRemoteUrl(string remoteName) =>
+            RemoteUrls.TryGetValue(remoteName, out var remoteUrl) ? remoteUrl : null;
         public List<string> Refs() => new();
         public List<string> GetSshPublicKeys() => new(PublicKeys);
         public string GenerateSshKey(string keyName) => throw new NotSupportedException();

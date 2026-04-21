@@ -92,7 +92,7 @@
                             <TextBlock VerticalAlignment="Center" Text="Папка с данными" />
                             <TextBox Grid.Column="1"
                                      Text="{Binding TaskStoragePath}"
-                                     ToolTip.Tip="{Binding TaskStoragePath}" />
+                                     ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
                             <Button Grid.Column="2"
                                     Content="Выбрать"
                                     Command="{Binding BrowseTaskStoragePathCommand}" />
@@ -142,28 +142,26 @@
                     <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Автоматически создавать резервную копию" />
 
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto,Auto,Auto">
                             <TextBlock VerticalAlignment="Center" Text="Репозиторий" />
                             <TextBox Grid.Column="1"
                                      Text="{Binding GitRemoteUrl}"
                                      ToolTip.Tip="{Binding GitRemoteUrl}" />
+                            <Button Grid.Column="2"
+                                    Content="Обновить"
+                                    Command="{Binding RefreshGitMetadataCommand}" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Ветка" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GitBranch}" />
-
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Способ входа" />
-                            <TextBox Grid.Row="2"
-                                     Grid.Column="1"
-                                     Text="{Binding BackupAuthModeText}"
-                                     IsReadOnly="True" />
-
-                            <TextBlock Grid.Row="3"
-                                       VerticalAlignment="Center"
-                                       Text="Удаленный источник"
-                                       IsVisible="{Binding HasMultipleRemotes}" />
-                            <ComboBox Grid.Row="3"
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Ветка отправки" />
+                            <ComboBox Grid.Row="1"
                                       Grid.Column="1"
-                                      IsVisible="{Binding HasMultipleRemotes}"
+                                      Grid.ColumnSpan="2"
+                                      SelectedItem="{Binding GitPushRefSpec}"
+                                      ItemsSource="{Binding Refs}" />
+
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Удаленный источник" />
+                            <ComboBox Grid.Row="2"
+                                      Grid.Column="1"
+                                      Grid.ColumnSpan="2"
                                       SelectedItem="{Binding GitRemoteNameDisplay}"
                                       ItemsSource="{Binding RemotesWithAuthType}" />
                         </Grid>
@@ -221,6 +219,12 @@
                             <Button Content="Синхронизировать сейчас"
                                     Command="{Binding SyncNowCommand}"
                                     IsEnabled="{Binding CanSyncRepository}" />
+                            <Button Content="Получить изменения сейчас"
+                                    Command="{Binding PullCommand}"
+                                    IsEnabled="{Binding CanSyncRepository}" />
+                            <Button Content="Отправить изменения сейчас"
+                                    Command="{Binding PushCommand}"
+                                    IsEnabled="{Binding CanSyncRepository}" />
                         </WrapPanel>
                     </StackPanel>
 
@@ -239,13 +243,13 @@
                         <TextBlock Classes="SectionTitle" Text="Расширенные настройки" />
                         <TextBlock Classes="SectionHint" Text="Параметры для продвинутой настройки синхронизации и диагностики." />
 
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <TextBlock VerticalAlignment="Center" Text="Показывать уведомления" />
                             <CheckBox Grid.Column="1"
                                       IsChecked="{Binding GitShowStatusToasts}"
                                       Content="Включено" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Интервал получения изменений" />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Интервал получения изменений, сек." />
                             <NumericUpDown Grid.Row="1"
                                            Grid.Column="1"
                                            Value="{Binding GitPullIntervalSeconds}"
@@ -254,7 +258,7 @@
                                            Increment="5"
                                            FormatString="0" />
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Интервал отправки изменений" />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Интервал отправки изменений, сек." />
                             <NumericUpDown Grid.Row="2"
                                            Grid.Column="1"
                                            Value="{Binding GitPushIntervalSeconds}"
@@ -263,33 +267,12 @@
                                            Increment="5"
                                            FormatString="0" />
 
-                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Удаленный источник" />
-                            <ComboBox Grid.Row="3"
-                                      Grid.Column="1"
-                                      SelectedItem="{Binding GitRemoteNameDisplay}"
-                                      ItemsSource="{Binding RemotesWithAuthType}" />
+                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Имя автора backup-коммитов" />
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GitCommitterName}" />
 
-                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Ветка отправки" />
-                            <ComboBox Grid.Row="4"
-                                      Grid.Column="1"
-                                      SelectedItem="{Binding GitPushRefSpec}"
-                                      ItemsSource="{Binding Refs}" />
-
-                            <TextBlock Grid.Row="5" VerticalAlignment="Center" Text="Имя автора backup-коммитов" />
-                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding GitCommitterName}" />
-
-                            <TextBlock Grid.Row="6" VerticalAlignment="Center" Text="Email автора backup-коммитов" />
-                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding GitCommitterEmail}" />
+                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Email автора backup-коммитов" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding GitCommitterEmail}" />
                         </Grid>
-
-                        <WrapPanel>
-                            <Button Content="Получить изменения сейчас"
-                                    Command="{Binding PullCommand}"
-                                    IsEnabled="{Binding CanSyncRepository}" />
-                            <Button Content="Отправить изменения сейчас"
-                                    Command="{Binding PushCommand}"
-                                    IsEnabled="{Binding CanSyncRepository}" />
-                        </WrapPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>

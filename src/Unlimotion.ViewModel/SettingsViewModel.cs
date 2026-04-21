@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +13,7 @@ public class SettingsViewModel
 {
     private const string ClientSettingsSectionName = "ClientSettings";
     private const string ClientLoginKey = "Login";
+    private const string DefaultTaskStoragePath = "Tasks";
 
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
@@ -19,6 +21,7 @@ public class SettingsViewModel
     private readonly IConfiguration _appearanceSettings;
     private readonly IRemoteBackupService? _backupService;
     private readonly bool _defaultIsDarkTheme;
+    private readonly Func<string?>? _defaultTaskStoragePathProvider;
 
     private ThemeMode _themeMode;
     private string? _taskStoragePath;
@@ -44,7 +47,8 @@ public class SettingsViewModel
     public SettingsViewModel(
         IConfiguration configuration,
         IRemoteBackupService? backupService = null,
-        bool defaultIsDarkTheme = false)
+        bool defaultIsDarkTheme = false,
+        Func<string?>? defaultTaskStoragePathProvider = null)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
@@ -52,6 +56,7 @@ public class SettingsViewModel
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _backupService = backupService;
         _defaultIsDarkTheme = defaultIsDarkTheme;
+        _defaultTaskStoragePathProvider = defaultTaskStoragePathProvider;
 
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
@@ -71,6 +76,7 @@ public class SettingsViewModel
         _gitPushIntervalSeconds = _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Get<int>();
         _gitRemoteName = _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Get<string>();
         _gitPushRefSpec = _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Get<string>() ?? string.Empty;
+        EnsureGitPushRefSpecFallback();
         _gitCommitterName = _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Get<string>();
         _gitCommitterEmail = _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
         _gitSshPrivateKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Get<string>();
@@ -100,6 +106,7 @@ public class SettingsViewModel
     public ICommand? PushCommand { get; set; }
     public ICommand? GenerateSshKeyCommand { get; set; }
     public ICommand? RefreshSshKeysCommand { get; set; }
+    public ICommand? RefreshGitMetadataCommand { get; set; }
     public ICommand? CopySelectedSshKeyCommand { get; set; }
 
     public ThemeMode ThemeMode
@@ -141,6 +148,7 @@ public class SettingsViewModel
         set => ThemeMode = value ? ThemeMode.Dark : ThemeMode.Light;
     }
 
+    [AlsoNotifyFor(nameof(TaskStoragePathTooltip))]
     public string? TaskStoragePath
     {
         get => _taskStoragePath;
@@ -151,6 +159,8 @@ public class SettingsViewModel
             RefreshStorageStatusText();
         }
     }
+
+    public string TaskStoragePathTooltip => ResolveTaskStoragePathTooltip();
 
     public string? TaskStorageURL
     {
@@ -271,6 +281,8 @@ public class SettingsViewModel
         {
             _gitBranch = value;
             _gitSettings.GetSection(nameof(GitSettings.Branch)).Set(value);
+            EnsureGitPushRefSpecFallback();
+            RefreshBackupActionAvailability();
         }
     }
 
@@ -323,6 +335,7 @@ public class SettingsViewModel
         {
             _gitRemoteName = value;
             _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
+            TryFillGitRemoteUrlFromSelectedRemote();
             RefreshBackupAuthMode();
             RefreshBackupState();
         }
@@ -356,7 +369,6 @@ public class SettingsViewModel
 
             var markerIndex = value.LastIndexOf(" (", StringComparison.Ordinal);
             GitRemoteName = markerIndex > 0 ? value[..markerIndex] : value;
-            RefreshBackupAuthMode();
         }
     }
 
@@ -367,6 +379,7 @@ public class SettingsViewModel
         {
             _gitPushRefSpec = value;
             _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Set(value);
+            RefreshBackupActionAvailability();
         }
     }
 
@@ -502,6 +515,9 @@ public class SettingsViewModel
             .ToList();
         Refs = _backupService?.Refs() ?? new List<string>();
         HasMultipleRemotes = RemotesWithAuthType.Count > 1;
+        EnsureSingleRemoteSelection();
+        TryFillGitRemoteUrlFromSelectedRemote();
+        EnsureGitPushRefSpecFallback();
         RefreshBackupAuthMode();
         RefreshBackupState();
     }
@@ -543,6 +559,89 @@ public class SettingsViewModel
     {
         ConnectedServerLogin = null;
         SetStorageConnectionState(SettingsConnectionState.Disconnected, "Вы вышли из серверного аккаунта.");
+    }
+
+    private string ResolveTaskStoragePathTooltip()
+    {
+        var effectivePath = string.IsNullOrWhiteSpace(TaskStoragePath)
+            ? _defaultTaskStoragePathProvider?.Invoke()
+            : TaskStoragePath;
+
+        if (string.IsNullOrWhiteSpace(effectivePath))
+        {
+            effectivePath = DefaultTaskStoragePath;
+        }
+
+        try
+        {
+            return Path.GetFullPath(effectivePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return effectivePath;
+        }
+    }
+
+    private void EnsureSingleRemoteSelection()
+    {
+        if (Remotes.Count != 1)
+        {
+            return;
+        }
+
+        var singleRemote = Remotes[0];
+        if (string.Equals(GitRemoteName, singleRemote, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var selectedRemote = GitRemoteName;
+        if (string.IsNullOrWhiteSpace(selectedRemote) ||
+            !Remotes.Any(remote => string.Equals(remote, selectedRemote, StringComparison.Ordinal)))
+        {
+            GitRemoteName = singleRemote;
+        }
+    }
+
+    private void TryFillGitRemoteUrlFromSelectedRemote()
+    {
+        if (!string.IsNullOrWhiteSpace(GitRemoteUrl) || string.IsNullOrWhiteSpace(GitRemoteName))
+        {
+            return;
+        }
+
+        var remoteUrl = _backupService?.GetRemoteUrl(GitRemoteName);
+        if (!string.IsNullOrWhiteSpace(remoteUrl))
+        {
+            GitRemoteUrl = remoteUrl;
+        }
+    }
+
+    private void EnsureGitPushRefSpecFallback()
+    {
+        if (!string.IsNullOrWhiteSpace(GitPushRefSpec))
+        {
+            return;
+        }
+
+        var fallback = ToCanonicalBranchRef(GitBranch);
+        if (!string.IsNullOrWhiteSpace(fallback))
+        {
+            GitPushRefSpec = fallback;
+        }
+    }
+
+    private static string? ToCanonicalBranchRef(string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(branch))
+        {
+            return null;
+        }
+
+        var trimmedBranch = branch.Trim();
+        return trimmedBranch.StartsWith("refs/", StringComparison.Ordinal)
+            ? trimmedBranch
+            : $"refs/heads/{trimmedBranch}";
     }
 
     private void RefreshStorageSelectionState()
@@ -662,6 +761,9 @@ public class SettingsViewModel
     private void RefreshBackupActionAvailability()
     {
         var hasRemoteUrl = GitBackupEnabled && !string.IsNullOrWhiteSpace(GitRemoteUrl);
+        var hasReadySyncTarget = GitBackupEnabled &&
+                                 !string.IsNullOrWhiteSpace(GitRemoteName) &&
+                                 !string.IsNullOrWhiteSpace(GitPushRefSpec);
         var hasReadyTokenAuth = IsTokenAuthSelected &&
                                 !string.IsNullOrWhiteSpace(GitUserName) &&
                                 !string.IsNullOrWhiteSpace(GitPassword);
@@ -669,7 +771,7 @@ public class SettingsViewModel
                               !string.IsNullOrWhiteSpace(SelectedSshPublicKeyPath);
 
         CanConnectRepository = !IsBackupBusy && hasRemoteUrl && (hasReadyTokenAuth || hasReadySshAuth);
-        CanSyncRepository = !IsBackupBusy && hasRemoteUrl && BackupConnectionState == BackupStatusState.Connected;
+        CanSyncRepository = !IsBackupBusy && hasReadySyncTarget;
     }
 
     private BackupAuthMode ResolveBackupAuthMode()

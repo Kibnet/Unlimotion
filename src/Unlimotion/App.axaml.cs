@@ -97,7 +97,8 @@ public class App : Application
         var settingsViewModel = new SettingsViewModel(
             _configuration!,
             _backupService,
-            GetCurrentThemeIsDark());
+            GetCurrentThemeIsDark(),
+            () => TaskStorageFactory.DefaultStoragePath);
 
         // Create GraphViewModel
         var graphViewModel = new GraphViewModel();
@@ -398,6 +399,8 @@ public class App : Application
             settings.ReloadSshPublicKeys();
             settings.ReloadGitMetadata();
         });
+
+        settings.RefreshGitMetadataCommand = ReactiveCommand.Create(settings.ReloadGitMetadata);
 
         settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
         {
