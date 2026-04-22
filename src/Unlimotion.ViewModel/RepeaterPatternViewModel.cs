@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using PropertyChanged;
 using Unlimotion.Domain;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel;
 
@@ -71,18 +73,17 @@ public class RepeaterPatternViewModel
     
     public RepeaterType Type { get; set; }
 
-    public List<RepeaterType> RepeaterTypes
-    {
-        get
-        {
-            var result = new List<RepeaterType>();
-            var array = Enum.GetValues(typeof(RepeaterType));
-            foreach (var en in array)
-            {
-                result.Add((RepeaterType)en);
-            }
+    public IReadOnlyList<RepeaterTypeOption> RepeaterTypes => RepeaterTypeOption.Definitions;
 
-            return result;
+    public RepeaterTypeOption SelectedRepeaterType
+    {
+        get => RepeaterTypeOption.Find(Type);
+        set
+        {
+            if (value != null)
+            {
+                Type = value.Value;
+            }
         }
     }
 
@@ -167,5 +168,31 @@ public class RepeaterPatternViewModel
     public bool Sunday { get; set; }
     public bool AfterComplete { get; set; }
 
-    public string Title => $"{Type}, {Period}";
+    public string Title
+    {
+        get
+        {
+            var typeText = Type == RepeaterType.Weekly && WorkDays
+                ? L10n.Get("RepeaterTypeWeeklyWorkDays")
+                : RepeaterTypeOption.Find(Type).ToString();
+            return L10n.Format("RepeaterPatternTitle", typeText, Period);
+        }
+    }
+}
+
+public sealed record RepeaterTypeOption(RepeaterType Value, string ResourceKey)
+{
+    public static readonly IReadOnlyList<RepeaterTypeOption> Definitions =
+    [
+        new(RepeaterType.None, "RepeaterTypeNone"),
+        new(RepeaterType.Daily, "RepeaterTypeDaily"),
+        new(RepeaterType.Weekly, "RepeaterTypeWeekly"),
+        new(RepeaterType.Monthly, "RepeaterTypeMonthly"),
+        new(RepeaterType.Yearly, "RepeaterTypeYearly")
+    ];
+
+    public static RepeaterTypeOption Find(RepeaterType value) =>
+        Definitions.FirstOrDefault(option => option.Value == value) ?? Definitions[0];
+
+    public override string ToString() => L10n.Get(ResourceKey);
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion;
 
@@ -49,8 +50,7 @@ public static class JsonRepairingReader
         {
             // Чтобы было понятно, что и как пытались чинить
             throw new JsonReaderException(
-                $"Не удалось распарсить JSON даже после авто-ремонта запятых. Файл: {fullPath}. " +
-                $"Первые 200 символов после ремонта: {Preview(repaired, 200)}",
+                L10n.Format("JsonRepairFailed", fullPath, Preview(repaired, 200)),
                 ex2);
         }
     }

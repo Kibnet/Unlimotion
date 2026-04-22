@@ -11,6 +11,7 @@ using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Services;
 
@@ -160,7 +161,7 @@ public class BackupViaGitService : IRemoteBackupService
         var keyPaths = GetSshKeyPaths(sshDirectory, keyName);
         if (File.Exists(keyPaths.PrivateKeyPath) || File.Exists(keyPaths.PublicKeyPath))
         {
-            throw new InvalidOperationException($"SSH key already exists: {keyPaths.PublicKeyPath}");
+            throw new InvalidOperationException(L10n.Format("SshKeyAlreadyExists", keyPaths.PublicKeyPath));
         }
 
         var processResult = RunProcess(CreateProcessStartInfo(
@@ -177,12 +178,12 @@ public class BackupViaGitService : IRemoteBackupService
 
         if (processResult.ExitCode != 0)
         {
-            throw new InvalidOperationException($"ssh-keygen failed: {GetProcessError(processResult)}");
+            throw new InvalidOperationException(L10n.Format("SshKeygenFailed", GetProcessError(processResult)));
         }
 
         if (!File.Exists(keyPaths.PrivateKeyPath) || !File.Exists(keyPaths.PublicKeyPath))
         {
-            throw new InvalidOperationException($"ssh-keygen did not create expected key files in {sshDirectory}.");
+            throw new InvalidOperationException(L10n.Format("SshKeygenDidNotCreateFiles", sshDirectory));
         }
 
         return keyPaths.PublicKeyPath;
@@ -264,7 +265,7 @@ public class BackupViaGitService : IRemoteBackupService
                     if (!allowMergeWithNonEmptyRemote)
                     {
                         throw new InvalidOperationException(
-                            "Подключение отменено: локальная папка задач и удаленный репозиторий не пустые.");
+                            L10n.Get("BackupConnectCanceledNonEmpty"));
                     }
 
                     InitializeLocalRepositoryMergeAndPush(preview.RepositoryPath, preview.RemoteUrl, settings.git);
@@ -283,7 +284,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
         catch (Exception ex)
         {
-            ShowUiError("Ошибка при клонировании или обновлении репозитория:\n" + ex.Message, ex);
+            ShowUiError(L10n.Format("CloneOrUpdateRepositoryFailed", ex.Message), ex);
         }
     }
 
@@ -304,13 +305,13 @@ public class BackupViaGitService : IRemoteBackupService
             var remote = repo.Network.Remotes[settings.git.RemoteName];
             if (remote == null)
             {
-                ShowUiError($"Remote not found: {settings.git.RemoteName}");
+                ShowUiError(L10n.Format("RemoteNotFound", settings.git.RemoteName));
                 return;
             }
 
             var dbwatcher = _storageFactory?.CurrentWatcher;
 
-            ShowUiMessage("Start Git Push");
+            ShowUiMessage(L10n.Get("StartGitPush"));
             try
             {
                 dbwatcher?.SetEnable(false);
@@ -322,7 +323,7 @@ public class BackupViaGitService : IRemoteBackupService
                     var committer = new Signature(settings.git.CommitterName, settings.git.CommitterEmail, DateTime.Now);
                     repo.Commit(msg, committer, committer);
 
-                    ShowUiMessage("Commit Created");
+                    ShowUiMessage(L10n.Get("CommitCreated"));
                 }
             }
             finally
@@ -333,7 +334,7 @@ public class BackupViaGitService : IRemoteBackupService
             var localBranch = repo.Branches[settings.git.PushRefSpec];
             if (localBranch == null)
             {
-                ShowUiError($"Local branch not found: {settings.git.PushRefSpec}");
+                ShowUiError(L10n.Format("LocalBranchNotFound", settings.git.PushRefSpec));
                 return;
             }
 
@@ -358,11 +359,11 @@ public class BackupViaGitService : IRemoteBackupService
                         repo.Network.Push(remote, settings.git.PushRefSpec, options);
                     }
 
-                    ShowUiMessage("Push Successful");
+                    ShowUiMessage(L10n.Get("PushSuccessful"));
                 }
                 catch (Exception ex)
                 {
-                    var errorMessage = $"Can't push the remote repository, because {ex.Message}";
+                    var errorMessage = L10n.Format("PushRemoteFailed", ex.Message);
                     Debug.WriteLine(errorMessage);
                     ShowUiError(errorMessage, ex);
                 }
@@ -391,11 +392,11 @@ public class BackupViaGitService : IRemoteBackupService
             var remote = repo.Network.Remotes[settings.git.RemoteName];
             if (remote == null)
             {
-                ShowUiError($"Remote not found: {settings.git.RemoteName}");
+                ShowUiError(L10n.Format("RemoteNotFound", settings.git.RemoteName));
                 return;
             }
 
-            ShowUiMessage("Start Git Pull");
+            ShowUiMessage(L10n.Get("StartGitPull"));
 
             var dbwatcher = _storageFactory?.CurrentWatcher;
             try
@@ -418,14 +419,14 @@ public class BackupViaGitService : IRemoteBackupService
                 var localBranch = repo.Branches[settings.git.PushRefSpec];
                 if (localBranch == null)
                 {
-                    ShowUiError($"Local branch not found: {settings.git.PushRefSpec}");
+                    ShowUiError(L10n.Format("LocalBranchNotFound", settings.git.PushRefSpec));
                     return;
                 }
 
                 var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
                 if (remoteBranch == null)
                 {
-                    ShowUiError($"Remote branch not found after fetch: {settings.git.RemoteName}/{localBranch.FriendlyName}");
+                    ShowUiError(L10n.Format("RemoteBranchNotFoundAfterFetch", $"{settings.git.RemoteName}/{localBranch.FriendlyName}"));
                     return;
                 }
 
@@ -465,11 +466,11 @@ public class BackupViaGitService : IRemoteBackupService
                             dbwatcher?.ForceUpdateFile(change.Path, mode);
                         }
 
-                        ShowUiMessage("Merge Successful");
+                        ShowUiMessage(L10n.Get("MergeSuccessful"));
                     }
                     catch (Exception ex)
                     {
-                        var errorMessage = $"Can't merge remote branch to local branch, because {ex.Message}";
+                        var errorMessage = L10n.Format("MergeRemoteBranchFailed", ex.Message);
                         Debug.WriteLine(errorMessage);
                         ShowUiError(errorMessage, ex);
                     }
@@ -479,7 +480,7 @@ public class BackupViaGitService : IRemoteBackupService
                         var stashIndex = repo.Stashes.ToList().IndexOf(stash);
                         var applyStatus = repo.Stashes.Apply(stashIndex);
 
-                        ShowUiMessage("Stash Applied");
+                        ShowUiMessage(L10n.Get("StashApplied"));
                         if (applyStatus == StashApplyStatus.Applied)
                         {
                             repo.Stashes.Remove(stashIndex);
@@ -488,14 +489,13 @@ public class BackupViaGitService : IRemoteBackupService
 
                     if (repo.Index.Conflicts.Any())
                     {
-                        const string errorMessage = "Fix conflicts and then commit the result";
-                        ShowUiError(errorMessage);
+                        ShowUiError(L10n.Get("FixConflictsCommitResult"));
                     }
                 }
             }
             catch (Exception ex)
             {
-                ShowUiError($"Can't pull the remote repository, because {ex.Message}", ex);
+                ShowUiError(L10n.Format("PullErrorToast", ex.Message), ex);
             }
             finally
             {
@@ -516,7 +516,7 @@ public class BackupViaGitService : IRemoteBackupService
         EnsureRemote(repo, gitSettings.RemoteName, remoteUrl);
         EnsureCommitOnConfiguredBranch(repo, gitSettings, "Initial task backup");
         PushConfiguredBranch(repo, gitSettings);
-        ShowUiMessage("Repository initialized and pushed");
+        ShowUiMessage(L10n.Get("RepositoryInitializedAndPushed"));
     }
 
     private void InitializeLocalRepositoryAndCheckoutRemote(string repositoryPath, string remoteUrl, GitSettings gitSettings)
@@ -548,7 +548,7 @@ public class BackupViaGitService : IRemoteBackupService
             PushConfiguredBranch(repo, gitSettings);
         }
 
-        ShowUiMessage("Repository connected");
+        ShowUiMessage(L10n.Get("RepositoryConnected"));
     }
 
     private void InitializeLocalRepositoryMergeAndPush(string repositoryPath, string remoteUrl, GitSettings gitSettings)
@@ -575,7 +575,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         PushConfiguredBranch(repo, gitSettings);
-        ShowUiMessage("Repository connected and merged");
+        ShowUiMessage(L10n.Get("RepositoryConnectedAndMerged"));
     }
 
     private void EnsureCommitOnConfiguredBranch(Repository repo, GitSettings gitSettings, string message)
@@ -604,7 +604,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         var remote = repo.Network.Remotes[gitSettings.RemoteName]
-                     ?? throw new InvalidOperationException($"Remote not found: {gitSettings.RemoteName}");
+                     ?? throw new InvalidOperationException(L10n.Format("RemoteNotFound", gitSettings.RemoteName));
         Commands.Fetch(repo, gitSettings.RemoteName, remote.FetchRefSpecs.Select(x => x.Specification), new FetchOptions
         {
             CredentialsProvider = GetCredentials(gitSettings)
@@ -636,7 +636,7 @@ public class BackupViaGitService : IRemoteBackupService
 
         if (repo.Index.Conflicts.Any())
         {
-            throw new InvalidOperationException("Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.");
+            throw new InvalidOperationException(L10n.Get("GitConflicts"));
         }
     }
 
@@ -680,14 +680,14 @@ public class BackupViaGitService : IRemoteBackupService
 
         if (processResult.ExitCode != 0)
         {
-            throw new InvalidOperationException($"git merge failed: {GetProcessError(processResult)}");
+            throw new InvalidOperationException(L10n.Format("GitMergeFailed", GetProcessError(processResult)));
         }
     }
 
     private void PushConfiguredBranch(Repository repo, GitSettings gitSettings)
     {
         var remote = repo.Network.Remotes[gitSettings.RemoteName]
-                     ?? throw new InvalidOperationException($"Remote not found: {gitSettings.RemoteName}");
+                     ?? throw new InvalidOperationException(L10n.Format("RemoteNotFound", gitSettings.RemoteName));
         if (ShouldUseConfiguredSshKey(remote.Url, gitSettings))
         {
             PushWithConfiguredSshKey(repo.Info.WorkingDirectory, gitSettings.RemoteName, gitSettings.PushRefSpec, gitSettings);
@@ -712,7 +712,7 @@ public class BackupViaGitService : IRemoteBackupService
         var branchName = GetBranchShortName(gitSettings.PushRefSpec);
         return repo.Branches[$"refs/remotes/{gitSettings.RemoteName}/{branchName}"]
                ?? throw new InvalidOperationException(
-                   $"Remote branch not found after fetch: {gitSettings.RemoteName}/{branchName}");
+                   L10n.Format("RemoteBranchNotFoundAfterFetch", $"{gitSettings.RemoteName}/{branchName}"));
     }
 
     private void EnsureRemote(Repository repo, string remoteName, string remoteUrl)
@@ -897,7 +897,7 @@ public class BackupViaGitService : IRemoteBackupService
         var workingDirectory = repo.Info.WorkingDirectory;
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            throw new InvalidOperationException("Repository working directory is not available.");
+            throw new InvalidOperationException(L10n.Get("RepositoryWorkingDirectoryUnavailable"));
         }
 
         var gitIgnorePath = Path.Combine(workingDirectory, ".gitignore");
@@ -964,7 +964,7 @@ public class BackupViaGitService : IRemoteBackupService
         var workingDirectory = repo.Info.WorkingDirectory;
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            throw new InvalidOperationException("Repository working directory is not available.");
+            throw new InvalidOperationException(L10n.Get("RepositoryWorkingDirectoryUnavailable"));
         }
 
         var backups = new List<IgnoredMigrationReportBackup>();
@@ -995,7 +995,7 @@ public class BackupViaGitService : IRemoteBackupService
         var workingDirectory = repo.Info.WorkingDirectory;
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            throw new InvalidOperationException("Repository working directory is not available.");
+            throw new InvalidOperationException(L10n.Get("RepositoryWorkingDirectoryUnavailable"));
         }
 
         foreach (var backup in backups)
@@ -1017,7 +1017,7 @@ public class BackupViaGitService : IRemoteBackupService
         var workingDirectory = repo.Info.WorkingDirectory;
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
-            throw new InvalidOperationException("Repository working directory is not available.");
+            throw new InvalidOperationException(L10n.Get("RepositoryWorkingDirectoryUnavailable"));
         }
 
         foreach (var fileName in IgnoredMigrationReportFileNames)
@@ -1036,7 +1036,7 @@ public class BackupViaGitService : IRemoteBackupService
     {
         if (string.IsNullOrWhiteSpace(gitSettings.RemoteUrl))
         {
-            throw new InvalidOperationException("Remote repository URL is not configured.");
+            throw new InvalidOperationException(L10n.Get("RemoteRepositoryUrlNotConfigured"));
         }
 
         return gitSettings.RemoteUrl;
@@ -1141,7 +1141,7 @@ public class BackupViaGitService : IRemoteBackupService
         var privateKeyPath = Path.GetFullPath(Path.Combine(rootDirectory, safeFileName));
         if (!IsPathWithinDirectory(privateKeyPath, rootDirectory))
         {
-            throw new InvalidOperationException($"SSH key path must stay inside {rootDirectory}.");
+            throw new InvalidOperationException(L10n.Format("SshKeyPathOutsideDirectory", rootDirectory));
         }
 
         return (privateKeyPath, $"{privateKeyPath}.pub");
@@ -1151,7 +1151,7 @@ public class BackupViaGitService : IRemoteBackupService
     {
         if (string.IsNullOrWhiteSpace(privateKeyPath))
         {
-            throw new InvalidOperationException("SSH private key path is not configured.");
+            throw new InvalidOperationException(L10n.Get("SshPrivateKeyPathNotConfigured"));
         }
 
         var normalizedPath = privateKeyPath.Replace('\\', '/').Replace("\"", "\\\"");
@@ -1165,7 +1165,7 @@ public class BackupViaGitService : IRemoteBackupService
         {
             if (GetAbsolutePath == null)
             {
-                throw new Exception("Can't get absolute path");
+                throw new Exception(L10n.Get("CannotGetAbsolutePath"));
             }
 
             path = GetAbsolutePath(path);
@@ -1227,7 +1227,7 @@ public class BackupViaGitService : IRemoteBackupService
         var cloneRoot = Path.GetDirectoryName(repositoryPath);
         if (string.IsNullOrWhiteSpace(cloneRoot))
         {
-            throw new InvalidOperationException($"Can't resolve clone directory for {repositoryPath}.");
+            throw new InvalidOperationException(L10n.Format("CannotResolveCloneDirectory", repositoryPath));
         }
 
         Directory.CreateDirectory(cloneRoot);
@@ -1269,7 +1269,7 @@ public class BackupViaGitService : IRemoteBackupService
         var processResult = RunProcess(startInfo);
         if (processResult.ExitCode != 0)
         {
-            throw new InvalidOperationException($"{operationName} failed: {GetProcessError(processResult)}");
+            throw new InvalidOperationException(L10n.Format("GitOperationFailed", operationName, GetProcessError(processResult)));
         }
 
         return processResult;
@@ -1286,7 +1286,7 @@ public class BackupViaGitService : IRemoteBackupService
         var processResult = RunProcess(startInfo);
         if (processResult.ExitCode != 0)
         {
-            throw new InvalidOperationException($"{operationName} failed: {GetProcessError(processResult)}");
+            throw new InvalidOperationException(L10n.Format("GitOperationFailed", operationName, GetProcessError(processResult)));
         }
 
         return processResult;
@@ -1297,12 +1297,12 @@ public class BackupViaGitService : IRemoteBackupService
         var privateKeyPath = gitSettings.SshPrivateKeyPath;
         if (string.IsNullOrWhiteSpace(privateKeyPath))
         {
-            throw new InvalidOperationException("SSH private key path is not configured.");
+            throw new InvalidOperationException(L10n.Get("SshPrivateKeyPathNotConfigured"));
         }
 
         if (!File.Exists(privateKeyPath))
         {
-            throw new InvalidOperationException($"SSH private key not found: {privateKeyPath}");
+            throw new InvalidOperationException(L10n.Format("SshPrivateKeyNotFound", privateKeyPath));
         }
 
         return privateKeyPath;
@@ -1335,7 +1335,7 @@ public class BackupViaGitService : IRemoteBackupService
     private static (int ExitCode, string StandardOutput, string StandardError) RunProcess(ProcessStartInfo startInfo)
     {
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException($"Failed to start {startInfo.FileName}.");
+                            ?? throw new InvalidOperationException(L10n.Format("FailedToStartProcess", startInfo.FileName));
 
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();

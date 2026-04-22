@@ -14,6 +14,7 @@ using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
 using Unlimotion.Domain;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
@@ -596,9 +597,15 @@ namespace Unlimotion.ViewModel
                 _ => throw new Exception("Undefined ArchiveMethodType")
             };
 
-            var methodTypeString = methodType.ToString();
-            notificationManager.Ask($"{methodTypeString} contained tasks",
-                $"Are you sure you want to {methodTypeString.ToLower()} the {childrenTasks.Count} contained tasks from \"{taskName}\"?",
+            var headerKey = methodType == ArchiveMethodType.Archive
+                ? "ArchiveContainedTasksHeader"
+                : "UnarchiveContainedTasksHeader";
+            var messageKey = methodType == ArchiveMethodType.Archive
+                ? "ArchiveContainedTasksMessage"
+                : "UnarchiveContainedTasksMessage";
+
+            notificationManager.Ask(L10n.Get(headerKey),
+                L10n.Format(messageKey, childrenTasks.Count, taskName),
                 yesAction);
         }
 

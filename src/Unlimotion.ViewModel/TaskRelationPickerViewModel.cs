@@ -4,11 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using ReactiveUI;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.ViewModel.Search;
 
 namespace Unlimotion.ViewModel;
 
-public sealed class TaskRelationPickerViewModel : ReactiveObject
+public sealed class TaskRelationPickerViewModel : ReactiveObject, IDisposable
 {
     private const int EmptyQuerySuggestionLimit = 30;
     private const int SearchSuggestionLimit = 100;
@@ -21,6 +22,9 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
     private readonly Func<TaskRelationKind, TaskItemViewModel, TaskItemViewModel, Task<bool>> _addRelationAsync;
     private readonly Func<TaskItemViewModel, string> _getContextText;
     private readonly INotificationManagerWrapper _notificationManager;
+    private readonly ILocalizationService _localization;
+    private readonly EventHandler _cultureChangedHandler;
+    private bool _isDisposed;
 
     private bool _isExpanded;
     private string _query = string.Empty;
@@ -35,7 +39,8 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
         Func<TaskRelationKind, TaskItemViewModel, TaskItemViewModel, bool> isCandidateValid,
         Func<TaskRelationKind, TaskItemViewModel, TaskItemViewModel, Task<bool>> addRelationAsync,
         Func<TaskItemViewModel, string> getContextText,
-        INotificationManagerWrapper notificationManager)
+        INotificationManagerWrapper notificationManager,
+        ILocalizationService? localizationService = null)
     {
         _kind = kind;
         _getCurrentTask = getCurrentTask;
@@ -45,10 +50,13 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
         _addRelationAsync = addRelationAsync;
         _getContextText = getContextText;
         _notificationManager = notificationManager;
+        _localization = localizationService ?? LocalizationService.Current;
 
         OpenCommand = ReactiveCommand.Create(Open);
         CancelCommand = ReactiveCommand.Create(Cancel);
         ConfirmCommand = ReactiveCommand.CreateFromTask(ConfirmAsync, this.WhenAnyValue(vm => vm.CanConfirm));
+        _cultureChangedHandler = (_, _) => this.RaisePropertyChanged(nameof(Watermark));
+        _localization.CultureChanged += _cultureChangedHandler;
     }
 
     public bool IsExpanded
@@ -113,7 +121,7 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
 
     public bool CanConfirm => ResolveCandidateForConfirm() != null;
 
-    public string Watermark => "Find task";
+    public string Watermark => _localization.Get("FindTask");
 
     public string KindName => _kind.ToString();
 
@@ -156,7 +164,7 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
 
         if (!_isCandidateValid(_kind, currentTask, candidate.Task))
         {
-            _notificationManager.ErrorToast("Нельзя добавить выбранную связь.");
+            _notificationManager.ErrorToast(_localization.Get("InvalidRelation"));
             RefreshSuggestions();
             return;
         }
@@ -166,14 +174,14 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
             var added = await _addRelationAsync(_kind, currentTask, candidate.Task);
             if (!added)
             {
-                _notificationManager.ErrorToast("Не удалось добавить связь.");
+                _notificationManager.ErrorToast(_localization.Get("AddRelationFailed"));
                 RefreshSuggestions();
                 return;
             }
         }
         catch (Exception ex)
         {
-            _notificationManager.ErrorToast($"Не удалось добавить связь: {ex.Message}");
+            _notificationManager.ErrorToast(_localization.Format("AddRelationFailedWithError", ex.Message));
             RefreshSuggestions();
             return;
         }
@@ -326,5 +334,16 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
     private static string GetDisplayTitle(TaskItemViewModel task)
     {
         return string.IsNullOrWhiteSpace(task.Title) ? task.Id : task.Title;
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _localization.CultureChanged -= _cultureChangedHandler;
+        _isDisposed = true;
     }
 }

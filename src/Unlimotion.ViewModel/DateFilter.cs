@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using DynamicData.Binding;
 using PropertyChanged;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
@@ -11,8 +12,13 @@ namespace Unlimotion.ViewModel
     {
         public DateTime? From { get; set; } 
         public DateTime? To { get; set; }
-        public string CurrentOption { get; set; } = "Today";
+        public DateFilterOption CurrentOption { get; set; } = DateFilterDefinition.Today;
         public bool IsCustom { get; set; }
+
+        public void SetDateTimes(DateFilterOption option)
+        {
+            SetDateTimes(option.Id);
+        }
 
         public void SetDateTimes(string typeString)
         {
@@ -67,9 +73,43 @@ namespace Unlimotion.ViewModel
 
     public static class DateFilterDefinition
     {
-        public static ReadOnlyObservableCollection<string> GetDefinitions()
+        public static readonly DateFilterOption Today = new("Today", "DateFilterToday");
+
+        public static ReadOnlyObservableCollection<DateFilterOption> GetDefinitions()
         {
-            return new ReadOnlyObservableCollection<string>(new ObservableCollectionExtended<string>(Options.DateFilterOptions.Keys.ToList()));
+            return new ReadOnlyObservableCollection<DateFilterOption>(new ObservableCollectionExtended<DateFilterOption>
+            {
+                Today,
+                new("Week", "DateFilterWeek"),
+                new("Month", "DateFilterMonth"),
+                new("Quarter", "DateFilterQuarter"),
+                new("Year", "DateFilterYear"),
+                new("Last Two Days", "DateFilterLastTwoDays"),
+                new("Last Week", "DateFilterLastWeek"),
+                new("Last Month", "DateFilterLastMonth"),
+                new("Last Year", "DateFilterLastYear"),
+                new("All Time", "DateFilterAllTime")
+            });
         }
+
+        public static DateFilterOption FindById(string? id)
+        {
+            return GetDefinitions().FirstOrDefault(option => option.Id == id) ?? Today;
+        }
+    }
+
+    public sealed class DateFilterOption
+    {
+        public DateFilterOption(string id, string resourceKey)
+        {
+            Id = id;
+            ResourceKey = resourceKey;
+        }
+
+        public string Id { get; }
+
+        public string ResourceKey { get; }
+
+        public override string ToString() => L10n.Get(ResourceKey);
     }
 }

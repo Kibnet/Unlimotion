@@ -13,6 +13,7 @@ using Unlimotion.Domain;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion
 {
@@ -44,7 +45,7 @@ namespace Unlimotion
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Нет доступа к каталогу: {Path}", ex);
+                throw new InvalidOperationException(L10n.Format("FileStorageNoAccess", Path), ex);
             }
             tasks = new();
             if (watcher)

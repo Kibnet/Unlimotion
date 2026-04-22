@@ -56,19 +56,19 @@ x:Class="Unlimotion.Views.MainControl">
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
-                        <MenuItem Header="Развернуть вложенные текущего"
+                        <MenuItem Header="{DynamicResource ExpandCurrentNested}"
                                   Tag="ExpandCurrentNested"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandCurrentNestedTreeMenuItem"/>
-                        <MenuItem Header="Свернуть вложенные текущего"
+                        <MenuItem Header="{DynamicResource CollapseCurrentNested}"
                                   Tag="CollapseCurrentNested"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseCurrentNestedTreeMenuItem"/>
-                        <MenuItem Header="Развернуть все узлы"
+                        <MenuItem Header="{DynamicResource ExpandAllNodes}"
                                   Tag="ExpandAll"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandAllTreeMenuItem"/>
-                        <MenuItem Header="Свернуть все узлы"
+                        <MenuItem Header="{DynamicResource CollapseAllNodes}"
                                   Tag="CollapseAll"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
@@ -170,15 +170,15 @@ Content="❌"
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
-                    <TabItem Header = "All Tasks" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource AllTasks}" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
                                 <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
                                 <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
-                                <CheckBox Content= "Completed" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
-                                <CheckBox Content= "Archived" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
+                                <CheckBox Content="{DynamicResource Completed}" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
+                                <CheckBox Content="{DynamicResource Archived}" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -198,26 +198,26 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Last Created-->
-                    <TabItem Header="Last Created" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastCreated}" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="Custom period" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <Label Content="From" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <Label Content="{DynamicResource From}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
                                                     SelectedDate="{Binding LastCreatedDateFilter.From}"
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="To" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <Label Content="{DynamicResource To}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                     SelectedDate="{Binding LastCreatedDateFilter.To}"
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                 <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
+                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -249,26 +249,26 @@ Content="❌"
                         </Grid>
                     </TabItem>
                      <!--Last Updated-->
-                    <TabItem Header="Last Updated" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                     <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                     <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="Custom period" IsChecked="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <Label Content="From" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <Label Content="{DynamicResource From}" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                     <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}"
                                                         SelectedDate="{Binding LastUpdatedDateFilter.From}"
                                                         IsTodayHighlighted="True"
                                                         DisplayDate="{Binding LastUpdatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <Label Content="To" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <Label Content="{DynamicResource To}" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                     <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                         SelectedDate="{Binding LastUpdatedDateFilter.To}"
                                                         IsTodayHighlighted="True"
                                                         DisplayDate="{Binding LastUpdatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                     <ComboBox IsVisible="{Binding !LastUpdatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastUpdatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                    <CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
+                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -300,13 +300,13 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Unlocked-->
-                    <TabItem Header="Unlocked" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Unlocked}" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
+                                <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                 <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
@@ -340,19 +340,19 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Completed-->
-                    <TabItem Header="Completed" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Completed}" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="Custom period" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <Label Content="From" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                <Label Content="{DynamicResource From}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                     SelectedDate="{Binding CompletedDateFilter.From}"
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="To" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                <Label Content="{DynamicResource To}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                     SelectedDate="{Binding CompletedDateFilter.To}"
                                                     IsTodayHighlighted="True"
@@ -390,19 +390,19 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Archived-->
-                    <TabItem Header="Archived" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Archived}" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
                                 <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
                                 <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="Custom period" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
-                                <Label Content="From" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
+                                <Label Content="{DynamicResource From}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                     SelectedDate="{Binding ArchivedDateFilter.From}"
                                                     IsTodayHighlighted="True"
                                                     DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="To" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                <Label Content="{DynamicResource To}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                 <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
                                                     SelectedDate="{Binding ArchivedDateFilter.To}"
                                                     IsTodayHighlighted="True"
@@ -440,7 +440,7 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Last Opened-->
-                    <TabItem Header="Last Opened" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastOpened}" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
@@ -473,11 +473,11 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Roadmap-->
-                    <TabItem Header="Roadmap" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Roadmap}" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
                         <views:GraphControl DataContext="{Binding Graph}"/>
                     </TabItem>
                     <!--Settings-->
-                    <TabItem Header="Settings" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
                         <views:SettingsControl DataContext="{Binding Settings}"/>
                     </TabItem>
                 </TabControl>
@@ -488,12 +488,12 @@ Content="❌"
                     <ScrollViewer IsVisible="{Binding DetailsAreOpen}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
                         <StackPanel Margin="10">
                             <WrapPanel>
-                                <Button Command="{Binding Create}">➕New</Button>
-                                <Button Command="{Binding CreateSibling}">➕Sibling</Button>
-                                <Button Command="{Binding CreateBlockedSibling}">➕🔒Sibling</Button>
-                                <Button Command="{Binding CreateInner}">➕Inner</Button>
-                                <Button Command="{Binding MoveToPath}">Move To Path</Button>
-                                <Button Command="{Binding Remove}">Remove</Button>
+                                <Button Command="{Binding Create}" Content="{DynamicResource NewTask}" />
+                                <Button Command="{Binding CreateSibling}" Content="{DynamicResource NewSibling}" />
+                                <Button Command="{Binding CreateBlockedSibling}" Content="{DynamicResource NewBlockedSibling}" />
+                                <Button Command="{Binding CreateInner}" Content="{DynamicResource NewInner}" />
+                                <Button Command="{Binding MoveToPath}" Content="{DynamicResource MoveToPath}" />
+                                <Button Command="{Binding Remove}" Content="{DynamicResource Remove}" />
                             </WrapPanel>
                             <Border IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
                                 <StackPanel DataContext="{Binding CurrentTaskItem}" >
@@ -504,94 +504,109 @@ Content="❌"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
                                                  TextWrapping="Wrap"
                                                  Text="{Binding Title}"
-                                                 Watermark="Title"
+                                                 Watermark="{DynamicResource TitleWatermark}"
                                                  VerticalAlignment="Center"
                                                  VerticalContentAlignment="Center"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, Auto, Auto, *">
-                                        <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="Wanted" />
-                                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="Importance" Watermark="Importance" Grid.Column="1"/>
-                                        <Button Grid.Column="2" Content="Archive" Command="{Binding ArchiveCommand}"/>
+                                        <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="{DynamicResource Wanted}" />
+                                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="{DynamicResource Importance}" Watermark="{DynamicResource Importance}" Grid.Column="1"/>
+                                        <Button Grid.Column="2" Content="{DynamicResource Archive}" Command="{Binding ArchiveCommand}"/>
                                         <TextBox Grid.Column="3" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>
                                     </Grid>
-                                    <TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="Description" UseFloatingWatermark="True"></TextBox>
+                                    <TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="{DynamicResource Description}" UseFloatingWatermark="True"></TextBox>
                                     <WrapPanel>
-                                        <Label Content="{Binding CreatedDateTime, StringFormat={}Created: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                        <Label Content="{Binding UpdatedDateTime, StringFormat={}Updated: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                        <Label Content="{Binding UnlockedDateTime, StringFormat={}Unlocked: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                        <Label Content="{Binding CompletedDateTime, StringFormat={}Completed: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                        <Label Content="{Binding ArchiveDateTime, StringFormat={}Archive: {0:yyyy.MM.dd HH:mm}}" IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        <WrapPanel IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <Label Content="{DynamicResource CreatedPrefix}" Padding="0" VerticalAlignment="Center"/>
+                                            <Label Content="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+                                        <WrapPanel IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <Label Content="{DynamicResource UpdatedPrefix}" Padding="0" VerticalAlignment="Center"/>
+                                            <Label Content="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+                                        <WrapPanel IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <Label Content="{DynamicResource UnlockedPrefix}" Padding="0" VerticalAlignment="Center"/>
+                                            <Label Content="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+                                        <WrapPanel IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <Label Content="{DynamicResource CompletedPrefix}" Padding="0" VerticalAlignment="Center"/>
+                                            <Label Content="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
+                                        <WrapPanel IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <Label Content="{DynamicResource ArchivedPrefix}" Padding="0" VerticalAlignment="Center"/>
+                                            <Label Content="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                                        </WrapPanel>
                                     </WrapPanel>
 
                                     <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,*">
                                         <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
                                                             IsTodayHighlighted="True"
-                                                            Watermark="Planned Begin"
+                                                            Watermark="{DynamicResource PlannedBegin}"
                                                             UseFloatingWatermark="True"
                                                             HorizontalAlignment="Stretch"
                                                             DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
-                                        <DropDownButton Content="Set Begin" Grid.Row="1">
+                                        <DropDownButton Content="{DynamicResource SetBegin}" Grid.Row="1">
                                             <DropDownButton.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="Today" Command="{Binding Commands.SetBeginToday}"/>
-                                                    <MenuItem Header="Tomorrow" Command="{Binding Commands.SetBeginTomorrow}"/>
-                                                    <MenuItem Header="Next Monday" Command="{Binding Commands.SetBeginNextMonday}"/>
-                                                    <MenuItem Header="First day of next month" Command="{Binding Commands.SetBegin1DayNextMonth}"/>
-                                                    <MenuItem Header="None" Command="{Binding Commands.SetBeginNone}"/>
+                                                    <MenuItem Header="{DynamicResource Today}" Command="{Binding Commands.SetBeginToday}"/>
+                                                    <MenuItem Header="{DynamicResource Tomorrow}" Command="{Binding Commands.SetBeginTomorrow}"/>
+                                                    <MenuItem Header="{DynamicResource NextMonday}" Command="{Binding Commands.SetBeginNextMonday}"/>
+                                                    <MenuItem Header="{DynamicResource FirstDayNextMonth}" Command="{Binding Commands.SetBegin1DayNextMonth}"/>
+                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding Commands.SetBeginNone}"/>
                                                 </MenuFlyout>
                                             </DropDownButton.Flyout>
                                         </DropDownButton>
                                         <TextBox Grid.Column="1"
-                                                 ToolTip.Tip="Example: 1d, 5h, 20m, 50s, 300ms"
+                                                 ToolTip.Tip="{DynamicResource DurationExample}"
                                                  HorizontalAlignment="Stretch"
-                                                 Watermark="Planned Duration" UseFloatingWatermark="True">
+                                                 Watermark="{DynamicResource PlannedDuration}" UseFloatingWatermark="True">
                                             <Interaction.Behaviors>
                                                 <behavior:LostFocusUpdateBindingBehavior Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"/>
                                             </Interaction.Behaviors>
                                         </TextBox>
 
-                                        <DropDownButton Content="Set Duration" Grid.Column="1" Grid.Row="1">
+                                        <DropDownButton Content="{DynamicResource SetDuration}" Grid.Column="1" Grid.Row="1">
                                             <DropDownButton.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="1 minute" Command="{Binding SetDurationCommands.OneMinCommand}" />
-                                                    <MenuItem Header="5 minute" Command="{Binding SetDurationCommands.FiveMinutesCommand}" />
-                                                    <MenuItem Header="10 minute" Command="{Binding SetDurationCommands.TenMinutesCommand}" />
-                                                    <MenuItem Header="20 minute" Command="{Binding SetDurationCommands.TwentyMinutesCommand}" />
-                                                    <MenuItem Header="40 minute" Command="{Binding SetDurationCommands.FortyMinutesCommand}" />
-                                                    <MenuItem Header="1 hour" Command="{Binding SetDurationCommands.OneHourCommand}" />
-                                                    <MenuItem Header="2 hour" Command="{Binding SetDurationCommands.TwoHoursCommand}" />
-                                                    <MenuItem Header="4 hour" Command="{Binding SetDurationCommands.FourHoursCommand}" />
-                                                    <MenuItem Header="1 day" Command="{Binding SetDurationCommands.OneDayCommand}" />
-                                                    <MenuItem Header="2 day" Command="{Binding SetDurationCommands.TwoDaysCommand}" />
-                                                    <MenuItem Header="4 day" Command="{Binding SetDurationCommands.FourDaysCommand}" />
-                                                    <MenuItem Header="8 day" Command="{Binding SetDurationCommands.EightDaysCommand}" />
-                                                    <MenuItem Header="None" Command="{Binding SetDurationCommands.NoneCommand}" />
+                                                    <MenuItem Header="{DynamicResource OneMinute}" Command="{Binding SetDurationCommands.OneMinCommand}" />
+                                                    <MenuItem Header="{DynamicResource FiveMinutes}" Command="{Binding SetDurationCommands.FiveMinutesCommand}" />
+                                                    <MenuItem Header="{DynamicResource TenMinutes}" Command="{Binding SetDurationCommands.TenMinutesCommand}" />
+                                                    <MenuItem Header="{DynamicResource TwentyMinutes}" Command="{Binding SetDurationCommands.TwentyMinutesCommand}" />
+                                                    <MenuItem Header="{DynamicResource FortyMinutes}" Command="{Binding SetDurationCommands.FortyMinutesCommand}" />
+                                                    <MenuItem Header="{DynamicResource OneHour}" Command="{Binding SetDurationCommands.OneHourCommand}" />
+                                                    <MenuItem Header="{DynamicResource TwoHours}" Command="{Binding SetDurationCommands.TwoHoursCommand}" />
+                                                    <MenuItem Header="{DynamicResource FourHours}" Command="{Binding SetDurationCommands.FourHoursCommand}" />
+                                                    <MenuItem Header="{DynamicResource OneDay}" Command="{Binding SetDurationCommands.OneDayCommand}" />
+                                                    <MenuItem Header="{DynamicResource TwoDays}" Command="{Binding SetDurationCommands.TwoDaysCommand}" />
+                                                    <MenuItem Header="{DynamicResource FourDays}" Command="{Binding SetDurationCommands.FourDaysCommand}" />
+                                                    <MenuItem Header="{DynamicResource EightDays}" Command="{Binding SetDurationCommands.EightDaysCommand}" />
+                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding SetDurationCommands.NoneCommand}" />
                                                 </MenuFlyout>
                                             </DropDownButton.Flyout>
                                         </DropDownButton>
                                         <CalendarDatePicker Grid.Column="2" SelectedDate="{Binding PlannedEndDateTime}"
                                                             IsTodayHighlighted="True"
-                                                            Watermark="Planned End"
+                                                            Watermark="{DynamicResource PlannedEnd}"
                                                             UseFloatingWatermark="True"
                                                             HorizontalAlignment="Stretch"
                                                             DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
-                                        <DropDownButton Content="Set End" Grid.Column="2" Grid.Row="1">
+                                        <DropDownButton Content="{DynamicResource SetEnd}" Grid.Column="2" Grid.Row="1">
                                             <DropDownButton.Flyout>
                                                 <MenuFlyout>
-                                                    <MenuItem Header="Today" Command="{Binding Commands.SetEndToday}"/>
-                                                    <MenuItem Header="Tomorrow" Command="{Binding Commands.SetEndTomorrow}"/>
-                                                    <MenuItem Header="Next Friday" Command="{Binding Commands.SetEndNextFriday}"/>
-                                                    <MenuItem Header="1 day" Command="{Binding Commands.SetEnd1Days}"/>
-                                                    <MenuItem Header="5 days" Command="{Binding Commands.SetEnd5Days}"/>
-                                                    <MenuItem Header="7 days" Command="{Binding Commands.SetEnd7Days}"/>
-                                                    <MenuItem Header="10 days" Command="{Binding Commands.SetEnd10Days}"/>
-                                                    <MenuItem Header="1 month" Command="{Binding Commands.SetEnd1Month}"/>
-                                                    <MenuItem Header="None" Command="{Binding Commands.SetEndNone}"/>
+                                                    <MenuItem Header="{DynamicResource Today}" Command="{Binding Commands.SetEndToday}"/>
+                                                    <MenuItem Header="{DynamicResource Tomorrow}" Command="{Binding Commands.SetEndTomorrow}"/>
+                                                    <MenuItem Header="{DynamicResource NextFriday}" Command="{Binding Commands.SetEndNextFriday}"/>
+                                                    <MenuItem Header="{DynamicResource OneDay}" Command="{Binding Commands.SetEnd1Days}"/>
+                                                    <MenuItem Header="{DynamicResource FiveDays}" Command="{Binding Commands.SetEnd5Days}"/>
+                                                    <MenuItem Header="{DynamicResource SevenDays}" Command="{Binding Commands.SetEnd7Days}"/>
+                                                    <MenuItem Header="{DynamicResource TenDays}" Command="{Binding Commands.SetEnd10Days}"/>
+                                                    <MenuItem Header="{DynamicResource OneMonth}" Command="{Binding Commands.SetEnd1Month}"/>
+                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding Commands.SetEndNone}"/>
                                                 </MenuFlyout>
                                             </DropDownButton.Flyout>
                                         </DropDownButton>
                                     </Grid>
-                                    <Label Content="Repeater Templates"/>
+                                    <Label Content="{DynamicResource RepeaterTemplates}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <ComboBox ItemsSource="{Binding Repeaters}" SelectedItem="{Binding Repeater}">
                                             <ComboBox.ItemTemplate>
@@ -602,21 +617,21 @@ Content="❌"
                                         </ComboBox>
                                         <Border IsVisible="{Binding IsHaveRepeater}">
                                             <WrapPanel DataContext="{Binding Repeater}" >
-                                                <ComboBox ItemsSource="{Binding RepeaterTypes}" SelectedItem="{Binding Type}" />
-                                                <NumericUpDown Value="{Binding Period}" Watermark="Period" ToolTip.Tip="Period"/>
-                                                <CheckBox IsChecked="{Binding AfterComplete}" Content="After Complete"/>
+                                                <ComboBox ItemsSource="{Binding RepeaterTypes}" SelectedItem="{Binding SelectedRepeaterType}" />
+                                                <NumericUpDown Value="{Binding Period}" Watermark="{DynamicResource Period}" ToolTip.Tip="{DynamicResource Period}"/>
+                                                <CheckBox IsChecked="{Binding AfterComplete}" Content="{DynamicResource AfterComplete}"/>
                                             </WrapPanel>
                                         </Border>
                                     </StackPanel>
                                     <Border IsVisible="{Binding IsHaveRepeater}">
                                         <UniformGrid Columns="7" DataContext="{Binding Repeater}" IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static domain:RepeaterType.Weekly}, FallbackValue={x:Static domain:RepeaterType.None}}">
-                                            <ToggleButton IsChecked="{Binding Monday}" Content="Monday" HorizontalAlignment="Stretch" />
-                                            <ToggleButton IsChecked="{Binding Tuesday}" Content="Tuesday" HorizontalAlignment="Stretch" />
-                                            <ToggleButton IsChecked="{Binding Wednesday}" Content="Wednesday" HorizontalAlignment="Stretch"/>
-                                            <ToggleButton IsChecked="{Binding Thursday}" Content="Thursday" HorizontalAlignment="Stretch" />
-                                            <ToggleButton IsChecked="{Binding Friday}" Content="Friday" HorizontalAlignment="Stretch" />
-                                            <ToggleButton IsChecked="{Binding Saturday}" Content="Saturday" HorizontalAlignment="Stretch" />
-                                            <ToggleButton IsChecked="{Binding Sunday}" Content="Sunday" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Monday}" Content="{DynamicResource Monday}" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Tuesday}" Content="{DynamicResource Tuesday}" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Wednesday}" Content="{DynamicResource Wednesday}" HorizontalAlignment="Stretch"/>
+                                            <ToggleButton IsChecked="{Binding Thursday}" Content="{DynamicResource Thursday}" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Friday}" Content="{DynamicResource Friday}" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Saturday}" Content="{DynamicResource Saturday}" HorizontalAlignment="Stretch" />
+                                            <ToggleButton IsChecked="{Binding Sunday}" Content="{DynamicResource Sunday}" HorizontalAlignment="Stretch" />
                                         </UniformGrid>
                                     </Border>
 
@@ -625,7 +640,7 @@ Content="❌"
                                     </StackPanel>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
-                                        <Label Content="Parents Tasks:"/>
+                                        <Label Content="{DynamicResource ParentsTasks}"/>
                                         <Button Grid.Column="1"
                                                 DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
                                                 Content="+"
@@ -634,7 +649,7 @@ Content="❌"
                                                 AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
                                         <Button Grid.Column="2"
                                                 DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
-                                                Content="Cancel"
+                                                Content="{DynamicResource Cancel}"
                                                 Command="{Binding CancelCommand}"
                                                 IsVisible="{Binding IsExpanded}"
                                                 AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
@@ -656,7 +671,7 @@ Content="❌"
                                             </Interaction.Behaviors>
                                         </AutoCompleteBox>
                                         <Button Grid.Column="1"
-                                                Content="Add"
+                                                Content="{DynamicResource Add}"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
@@ -674,7 +689,7 @@ Content="❌"
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
-                                        <Label Content="Blocking Tasks:"/>
+                                        <Label Content="{DynamicResource BlockingTasks}"/>
                                         <Button Grid.Column="1"
                                                 DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
                                                 Content="+"
@@ -683,7 +698,7 @@ Content="❌"
                                                 AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
                                         <Button Grid.Column="2"
                                                 DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
-                                                Content="Cancel"
+                                                Content="{DynamicResource Cancel}"
                                                 Command="{Binding CancelCommand}"
                                                 IsVisible="{Binding IsExpanded}"
                                                 AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
@@ -705,7 +720,7 @@ Content="❌"
                                             </Interaction.Behaviors>
                                         </AutoCompleteBox>
                                         <Button Grid.Column="1"
-                                                Content="Add"
+                                                Content="{DynamicResource Add}"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
@@ -723,7 +738,7 @@ Content="❌"
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
-                                        <Label Content="Containing Tasks:"/>
+                                        <Label Content="{DynamicResource ContainingTasks}"/>
                                         <Button Grid.Column="1"
                                                 DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
                                                 Content="+"
@@ -732,7 +747,7 @@ Content="❌"
                                                 AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
                                         <Button Grid.Column="2"
                                                 DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
-                                                Content="Cancel"
+                                                Content="{DynamicResource Cancel}"
                                                 Command="{Binding CancelCommand}"
                                                 IsVisible="{Binding IsExpanded}"
                                                 AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
@@ -754,7 +769,7 @@ Content="❌"
                                             </Interaction.Behaviors>
                                         </AutoCompleteBox>
                                         <Button Grid.Column="1"
-                                                Content="Add"
+                                                Content="{DynamicResource Add}"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>
@@ -772,7 +787,7 @@ Content="❌"
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
-                                        <Label Content="Blocked Tasks:"/>
+                                        <Label Content="{DynamicResource BlockedTasks}"/>
                                         <Button Grid.Column="1"
                                                 DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
                                                 Content="+"
@@ -781,7 +796,7 @@ Content="❌"
                                                 AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
                                         <Button Grid.Column="2"
                                                 DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
-                                                Content="Cancel"
+                                                Content="{DynamicResource Cancel}"
                                                 Command="{Binding CancelCommand}"
                                                 IsVisible="{Binding IsExpanded}"
                                                 AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
@@ -803,7 +818,7 @@ Content="❌"
                                             </Interaction.Behaviors>
                                         </AutoCompleteBox>
                                         <Button Grid.Column="1"
-                                                Content="Add"
+                                                Content="{DynamicResource Add}"
                                                 Command="{Binding ConfirmCommand}"
                                                 AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
                                     </Grid>

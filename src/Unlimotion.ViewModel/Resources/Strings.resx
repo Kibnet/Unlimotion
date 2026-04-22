@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Add" xml:space="preserve"><value>Add</value></data>
+  <data name="AddBlockedTasksHeader" xml:space="preserve"><value>Add blocked tasks</value></data>
+  <data name="AddBlockedTasksMessage" xml:space="preserve"><value>Are you sure you want to mark "{0}" as a blocker for {1} selected tasks?</value></data>
+  <data name="AddBlockingTasksHeader" xml:space="preserve"><value>Add blocking tasks</value></data>
+  <data name="AddBlockingTasksMessage" xml:space="preserve"><value>Are you sure you want to mark {0} selected tasks as blockers for "{1}"?</value></data>
+  <data name="AddRelationFailed" xml:space="preserve"><value>Could not add the relation.</value></data>
+  <data name="AddRelationFailedWithError" xml:space="preserve"><value>Could not add the relation: {0}</value></data>
+  <data name="AdvancedHint" xml:space="preserve"><value>Parameters for advanced sync setup and diagnostics.</value></data>
+  <data name="AdvancedSettings" xml:space="preserve"><value>Advanced settings</value></data>
+  <data name="AfterComplete" xml:space="preserve"><value>After complete</value></data>
+  <data name="ActiveKey" xml:space="preserve"><value>Active key</value></data>
+  <data name="All" xml:space="preserve"><value>All</value></data>
+  <data name="AllTasks" xml:space="preserve"><value>All Tasks</value></data>
+  <data name="AppearanceHint" xml:space="preserve"><value>How the app looks and reads.</value></data>
+  <data name="AppearanceTitle" xml:space="preserve"><value>Appearance</value></data>
+  <data name="Archive" xml:space="preserve"><value>Archive</value></data>
+  <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Archive contained tasks</value></data>
+  <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to archive the {0} contained tasks from "{1}"?</value></data>
+  <data name="Archived" xml:space="preserve"><value>Archived</value></data>
+  <data name="ArchivedLabelFormat" xml:space="preserve"><value>Archived: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="ArchivedPrefix" xml:space="preserve"><value>Archived:</value></data>
+  <data name="BackupAuto" xml:space="preserve"><value>Create backups automatically</value></data>
+  <data name="BackupCommitterEmail" xml:space="preserve"><value>Backup commit author email</value></data>
+  <data name="BackupCommitterName" xml:space="preserve"><value>Backup commit author name</value></data>
+  <data name="BackupConfirmHeader" xml:space="preserve"><value>Copy tasks from server to local storage</value></data>
+  <data name="BackupConfirmMessage" xml:space="preserve"><value>Current server tasks will be saved to local storage on this device. Continue?</value></data>
+  <data name="BackupConnecting" xml:space="preserve"><value>Connecting repository...</value></data>
+  <data name="BackupDisabled" xml:space="preserve"><value>Backup is disabled.</value></data>
+  <data name="BackupError" xml:space="preserve"><value>Sync error.</value></data>
+  <data name="BackupHint" xml:space="preserve"><value>Connect a Git repository for automatic backups.</value></data>
+  <data name="BackupMergeConfirmHeader" xml:space="preserve"><value>Connect non-empty repository?</value></data>
+  <data name="BackupMergeConfirmMessage" xml:space="preserve"><value>The tasks folder is not empty and the remote repository already contains data. Local tasks will be merged with repository contents. Continue?</value></data>
+  <data name="BackupMergeConfirmStatus" xml:space="preserve"><value>Confirm merging local tasks with the repository.</value></data>
+  <data name="BackupMergeConfirmationRequired" xml:space="preserve"><value>Confirmation is required before merging local tasks with the repository.</value></data>
+  <data name="BackupNotConfigured" xml:space="preserve"><value>Backup is not configured.</value></data>
+  <data name="BackupOnboardingHint" xml:space="preserve"><value>For first connection, create a new GitHub private repository without README, .gitignore, or license if you want to upload current local tasks. Paste an SSH URL like git@github.com:owner/repo.git, create or select an SSH key, copy the public key, and add it to GitHub profile SSH keys or repository Deploy keys with write access.</value></data>
+  <data name="BackupStatusConnected" xml:space="preserve"><value>Repository connected.</value></data>
+  <data name="BackupSyncing" xml:space="preserve"><value>Synchronizing with repository...</value></data>
+  <data name="BackupTitle" xml:space="preserve"><value>Backup</value></data>
+  <data name="BatchMoveMissingParents" xml:space="preserve"><value>Cannot move multiple tasks: the source parent is missing for some tasks.</value></data>
+  <data name="BatchOperationInvalid" xml:space="preserve"><value>Cannot apply the batch operation to the selected set.</value></data>
+  <data name="BlockedTasks" xml:space="preserve"><value>Blocked tasks:</value></data>
+  <data name="BlockingTasks" xml:space="preserve"><value>Blocking tasks:</value></data>
+  <data name="Browse" xml:space="preserve"><value>Browse</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="CannotGetAbsolutePath" xml:space="preserve"><value>Cannot get absolute path.</value></data>
+  <data name="ClipboardUnavailable" xml:space="preserve"><value>Clipboard is unavailable.</value></data>
+  <data name="CloneTasksHeader" xml:space="preserve"><value>Clone tasks</value></data>
+  <data name="CloneTasksMessage" xml:space="preserve"><value>Are you sure you want to clone {0} selected tasks into "{1}"?</value></data>
+  <data name="CollapseAllNodes" xml:space="preserve"><value>Collapse all nodes</value></data>
+  <data name="CollapseCurrentNested" xml:space="preserve"><value>Collapse nested for current</value></data>
+  <data name="Completed" xml:space="preserve"><value>Completed</value></data>
+  <data name="CompletedLabelFormat" xml:space="preserve"><value>Completed: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="CompletedPrefix" xml:space="preserve"><value>Completed:</value></data>
+  <data name="Connect" xml:space="preserve"><value>Connect</value></data>
+  <data name="ConnectHint" xml:space="preserve"><value>After changing address or credentials, click "Connect".</value></data>
+  <data name="ConnectRepository" xml:space="preserve"><value>Connect repository</value></data>
+  <data name="ConnectStorageFailed" xml:space="preserve"><value>Could not connect task storage: {0}{1}</value></data>
+  <data name="ConnectingRepository" xml:space="preserve"><value>Connecting repository...</value></data>
+  <data name="ContainingTasks" xml:space="preserve"><value>Containing tasks:</value></data>
+  <data name="CopyPublicKey" xml:space="preserve"><value>Copy public key</value></data>
+  <data name="CopyServerTasksToLocal" xml:space="preserve"><value>Copy tasks from server to local storage</value></data>
+  <data name="CopyTasksHeader" xml:space="preserve"><value>Copy tasks</value></data>
+  <data name="CopyTasksMessage" xml:space="preserve"><value>Are you sure you want to copy {0} selected tasks into "{1}"?</value></data>
+  <data name="CreatedLabelFormat" xml:space="preserve"><value>Created: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="CreatedPrefix" xml:space="preserve"><value>Created:</value></data>
+  <data name="Create" xml:space="preserve"><value>Create</value></data>
+  <data name="CustomPeriod" xml:space="preserve"><value>Custom period</value></data>
+  <data name="DataFolder" xml:space="preserve"><value>Data folder</value></data>
+  <data name="DateFilterAllTime" xml:space="preserve"><value>All Time</value></data>
+  <data name="DateFilterLastMonth" xml:space="preserve"><value>Last Month</value></data>
+  <data name="DateFilterLastTwoDays" xml:space="preserve"><value>Last Two Days</value></data>
+  <data name="DateFilterLastWeek" xml:space="preserve"><value>Last Week</value></data>
+  <data name="DateFilterLastYear" xml:space="preserve"><value>Last Year</value></data>
+  <data name="DateFilterMonth" xml:space="preserve"><value>Month</value></data>
+  <data name="DateFilterQuarter" xml:space="preserve"><value>Quarter</value></data>
+  <data name="DateFilterToday" xml:space="preserve"><value>Today</value></data>
+  <data name="DateFilterWeek" xml:space="preserve"><value>Week</value></data>
+  <data name="DateFilterYear" xml:space="preserve"><value>Year</value></data>
+  <data name="Description" xml:space="preserve"><value>Description</value></data>
+  <data name="DialogNo" xml:space="preserve"><value>No</value></data>
+  <data name="DialogYes" xml:space="preserve"><value>Yes</value></data>
+  <data name="DurationExample" xml:space="preserve"><value>Example: 1d, 5h, 20m, 50s, 300ms</value></data>
+  <data name="DurationFilter1dLess" xml:space="preserve"><value>1d&lt;</value></data>
+  <data name="DurationFilter2hTo1d" xml:space="preserve"><value>2h&lt; &amp; &lt;=1d</value></data>
+  <data name="DurationFilter30mTo2h" xml:space="preserve"><value>30m&lt; &amp; &lt;=2h</value></data>
+  <data name="DurationFilter5m" xml:space="preserve"><value>&lt;=5m</value></data>
+  <data name="DurationFilter5mTo30m" xml:space="preserve"><value>5m&lt; &amp; &lt;=30m</value></data>
+  <data name="DurationFilterNoDuration" xml:space="preserve"><value>No duration</value></data>
+  <data name="EightDays" xml:space="preserve"><value>8 days</value></data>
+  <data name="EmptySshKey" xml:space="preserve"><value>The public SSH key is empty or was not found.</value></data>
+  <data name="Enabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="EnterLoginAndToken" xml:space="preserve"><value>Enter login and access token.</value></data>
+  <data name="ExpandAllNodes" xml:space="preserve"><value>Expand all nodes</value></data>
+  <data name="ExpandCurrentNested" xml:space="preserve"><value>Expand nested for current</value></data>
+  <data name="FileStorageNoAccess" xml:space="preserve"><value>No access to directory: {0}</value></data>
+  <data name="FindTask" xml:space="preserve"><value>Find task</value></data>
+  <data name="FirstDayNextMonth" xml:space="preserve"><value>First day of next month</value></data>
+  <data name="FiveDays" xml:space="preserve"><value>5 days</value></data>
+  <data name="FiveMinutes" xml:space="preserve"><value>5 minutes</value></data>
+  <data name="FolderPickerDataFolder" xml:space="preserve"><value>Data folder</value></data>
+  <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Task storage folder</value></data>
+  <data name="FontSize" xml:space="preserve"><value>Text size</value></data>
+  <data name="FortyMinutes" xml:space="preserve"><value>40 minutes</value></data>
+  <data name="FourDays" xml:space="preserve"><value>4 days</value></data>
+  <data name="FourHours" xml:space="preserve"><value>4 hours</value></data>
+  <data name="Friday" xml:space="preserve"><value>Friday</value></data>
+  <data name="From" xml:space="preserve"><value>From</value></data>
+  <data name="FuzzySearch" xml:space="preserve"><value>Smart search</value></data>
+  <data name="GitConflicts" xml:space="preserve"><value>Could not merge local tasks with the remote repository: Git conflicts were found.</value></data>
+  <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Only Unlocked</value></data>
+  <data name="Importance" xml:space="preserve"><value>Importance</value></data>
+  <data name="InvalidRelation" xml:space="preserve"><value>The selected relation cannot be added.</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="LanguageLabel" xml:space="preserve"><value>Language</value></data>
+  <data name="LanguageRussian" xml:space="preserve"><value>Russian</value></data>
+  <data name="LanguageSystem" xml:space="preserve"><value>System</value></data>
+  <data name="JsonRepairFailed" xml:space="preserve"><value>Could not parse JSON even after automatic comma repair. File: {0}. First 200 characters after repair: {1}</value></data>
+  <data name="LastCreated" xml:space="preserve"><value>Last Created</value></data>
+  <data name="LastOpened" xml:space="preserve"><value>Last Opened</value></data>
+  <data name="LastUpdated" xml:space="preserve"><value>Last Updated</value></data>
+  <data name="LocalReady" xml:space="preserve"><value>Local storage is ready to connect.</value></data>
+  <data name="LocalStorageConnected" xml:space="preserve"><value>Connected to local storage.</value></data>
+  <data name="LocalStorageConnecting" xml:space="preserve"><value>Connecting local storage...</value></data>
+  <data name="LocalStorageError" xml:space="preserve"><value>Could not access local storage.</value></data>
+  <data name="Login" xml:space="preserve"><value>Login</value></data>
+  <data name="MaintenanceHint" xml:space="preserve"><value>Use these actions only if you understand the consequences or follow support instructions.</value></data>
+  <data name="MaintenanceTitle" xml:space="preserve"><value>Maintenance and recovery</value></data>
+  <data name="MigrateConfirmHeader" xml:space="preserve"><value>Move local tasks to server</value></data>
+  <data name="MigrateConfirmMessage" xml:space="preserve"><value>Local tasks will be uploaded to the current server storage. Continue?</value></data>
+  <data name="MigrateLocalTasksToServer" xml:space="preserve"><value>Move local tasks to server</value></data>
+  <data name="Monday" xml:space="preserve"><value>Monday</value></data>
+  <data name="MoveMissingParent" xml:space="preserve"><value>Cannot move: source parent is missing.</value></data>
+  <data name="MoveTasksHeader" xml:space="preserve"><value>Move tasks</value></data>
+  <data name="MoveTasksMessage" xml:space="preserve"><value>Are you sure you want to move {0} selected tasks into "{1}"?</value></data>
+  <data name="MoveToPath" xml:space="preserve"><value>Move to path</value></data>
+  <data name="NewBlockedSibling" xml:space="preserve"><value>➕🔒 Sibling</value></data>
+  <data name="NewInner" xml:space="preserve"><value>➕ Inner</value></data>
+  <data name="NewKey" xml:space="preserve"><value>New key</value></data>
+  <data name="NewSibling" xml:space="preserve"><value>➕ Sibling</value></data>
+  <data name="NewTask" xml:space="preserve"><value>➕ New</value></data>
+  <data name="NextFriday" xml:space="preserve"><value>Next Friday</value></data>
+  <data name="NextMonday" xml:space="preserve"><value>Next Monday</value></data>
+  <data name="None" xml:space="preserve"><value>None</value></data>
+  <data name="OneDay" xml:space="preserve"><value>1 day</value></data>
+  <data name="OneHour" xml:space="preserve"><value>1 hour</value></data>
+  <data name="OneMinute" xml:space="preserve"><value>1 minute</value></data>
+  <data name="OnlyWanted" xml:space="preserve"><value>Only Wanted</value></data>
+  <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Parameters saved. Click "Connect repository".</value></data>
+  <data name="ParentsTasks" xml:space="preserve"><value>Parent tasks:</value></data>
+  <data name="Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Period" xml:space="preserve"><value>Period</value></data>
+  <data name="PlannedBegin" xml:space="preserve"><value>Planned Begin</value></data>
+  <data name="PlannedDuration" xml:space="preserve"><value>Planned Duration</value></data>
+  <data name="PlannedEnd" xml:space="preserve"><value>Planned End</value></data>
+  <data name="PullErrorStatus" xml:space="preserve"><value>Pull error: {0}</value></data>
+  <data name="PullErrorToast" xml:space="preserve"><value>Could not pull repository changes: {0}</value></data>
+  <data name="PullIntervalSeconds" xml:space="preserve"><value>Pull interval, sec.</value></data>
+  <data name="PullNow" xml:space="preserve"><value>Pull changes now</value></data>
+  <data name="PulledChanges" xml:space="preserve"><value>Repository changes pulled.</value></data>
+  <data name="PullingChanges" xml:space="preserve"><value>Pulling changes from repository...</value></data>
+  <data name="PushBranch" xml:space="preserve"><value>Push branch</value></data>
+  <data name="PushErrorStatus" xml:space="preserve"><value>Push error: {0}</value></data>
+  <data name="PushErrorToast" xml:space="preserve"><value>Could not push repository changes: {0}</value></data>
+  <data name="PushIntervalSeconds" xml:space="preserve"><value>Push interval, sec.</value></data>
+  <data name="PushNow" xml:space="preserve"><value>Push changes now</value></data>
+  <data name="PushedChanges" xml:space="preserve"><value>Changes pushed to repository.</value></data>
+  <data name="PushingChanges" xml:space="preserve"><value>Pushing changes to repository...</value></data>
+  <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="RemoteRepositoryUrlNotConfigured" xml:space="preserve"><value>Remote repository URL is not configured.</value></data>
+  <data name="RemoteSource" xml:space="preserve"><value>Remote source</value></data>
+  <data name="Remove" xml:space="preserve"><value>Remove</value></data>
+  <data name="RemoveTaskHeader" xml:space="preserve"><value>Remove task</value></data>
+  <data name="RemoveTaskMessage" xml:space="preserve"><value>Are you sure you want to remove the task "{0}" from disk?</value></data>
+  <data name="RemoveTasksHeader" xml:space="preserve"><value>Remove tasks</value></data>
+  <data name="RemoveTasksMessage" xml:space="preserve"><value>Are you sure you want to remove {0} selected task entries?</value></data>
+  <data name="RepeaterTemplates" xml:space="preserve"><value>Repeater templates</value></data>
+  <data name="Repository" xml:space="preserve"><value>Repository</value></data>
+  <data name="RepositoryConnected" xml:space="preserve"><value>Repository connected.</value></data>
+  <data name="RepositoryConnectCanceled" xml:space="preserve"><value>Repository connection canceled.</value></data>
+  <data name="RepositoryConnectErrorStatus" xml:space="preserve"><value>Repository connection error: {0}</value></data>
+  <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Could not connect repository: {0}</value></data>
+  <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Repository working directory is unavailable.</value></data>
+  <data name="ResaveAllTasks" xml:space="preserve"><value>Resave all tasks</value></data>
+  <data name="ResaveConfirmHeader" xml:space="preserve"><value>Resave all tasks</value></data>
+  <data name="ResaveConfirmMessage" xml:space="preserve"><value>All tasks will be read and saved again in local storage. Continue?</value></data>
+  <data name="Roadmap" xml:space="preserve"><value>Roadmap</value></data>
+  <data name="Saturday" xml:space="preserve"><value>Saturday</value></data>
+  <data name="Search" xml:space="preserve"><value>Search</value></data>
+  <data name="SelectDataFolder" xml:space="preserve"><value>Select a data folder.</value></data>
+  <data name="SelectSshKey" xml:space="preserve"><value>Select an SSH key.</value></data>
+  <data name="ServerAddress" xml:space="preserve"><value>Server address</value></data>
+  <data name="ServerConnected" xml:space="preserve"><value>Connected to server.</value></data>
+  <data name="ServerConnectedAs" xml:space="preserve"><value>Connected as {0}.</value></data>
+  <data name="ServerConnecting" xml:space="preserve"><value>Connecting to server...</value></data>
+  <data name="ServerConnectionError" xml:space="preserve"><value>Server connection error.</value></data>
+  <data name="SetBegin" xml:space="preserve"><value>Set Begin</value></data>
+  <data name="SetDuration" xml:space="preserve"><value>Set Duration</value></data>
+  <data name="SetEnd" xml:space="preserve"><value>Set End</value></data>
+  <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="SettingsIntro" xml:space="preserve"><value>Configure appearance, task storage, and backup. Some changes apply immediately; connecting storage and repository requires separate actions.</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>Settings</value></data>
+  <data name="SevenDays" xml:space="preserve"><value>7 days</value></data>
+  <data name="ShowAdvancedBackupSettings" xml:space="preserve"><value>Show advanced settings</value></data>
+  <data name="ShowNotifications" xml:space="preserve"><value>Show notifications</value></data>
+  <data name="ShowServiceActions" xml:space="preserve"><value>Show service actions</value></data>
+  <data name="SignOut" xml:space="preserve"><value>Sign out</value></data>
+  <data name="SignOutInProgress" xml:space="preserve"><value>Signing out of server account...</value></data>
+  <data name="SignedOut" xml:space="preserve"><value>You signed out of the server account.</value></data>
+  <data name="SortArchiveAscending" xml:space="preserve"><value>Archive Ascending</value></data>
+  <data name="SortArchiveDescending" xml:space="preserve"><value>Archive Descending</value></data>
+  <data name="SortComfort" xml:space="preserve"><value>Comfort</value></data>
+  <data name="SortCompletedAscending" xml:space="preserve"><value>Completed Ascending</value></data>
+  <data name="SortCompletedDescending" xml:space="preserve"><value>Completed Descending</value></data>
+  <data name="SortCreatedAscending" xml:space="preserve"><value>Created Ascending</value></data>
+  <data name="SortCreatedDescending" xml:space="preserve"><value>Created Descending</value></data>
+  <data name="SortEmoji" xml:space="preserve"><value>Emoji</value></data>
+  <data name="SortImportanceAscending" xml:space="preserve"><value>Importance Ascending</value></data>
+  <data name="SortImportanceDescending" xml:space="preserve"><value>Importance Descending</value></data>
+  <data name="SortIsCanBeCompletedAscending" xml:space="preserve"><value>Can Be Completed Ascending</value></data>
+  <data name="SortIsCanBeCompletedDescending" xml:space="preserve"><value>Can Be Completed Descending</value></data>
+  <data name="SortIsCompletedAscending" xml:space="preserve"><value>Completion Ascending</value></data>
+  <data name="SortIsCompletedDescending" xml:space="preserve"><value>Completion Descending</value></data>
+  <data name="SortPlannedBeginAscending" xml:space="preserve"><value>Planned Begin Ascending</value></data>
+  <data name="SortPlannedBeginDescending" xml:space="preserve"><value>Planned Begin Descending</value></data>
+  <data name="SortPlannedDurationAscending" xml:space="preserve"><value>Planned Duration Ascending</value></data>
+  <data name="SortPlannedDurationDescending" xml:space="preserve"><value>Planned Duration Descending</value></data>
+  <data name="SortPlannedFinishAscending" xml:space="preserve"><value>Planned Finish Ascending</value></data>
+  <data name="SortPlannedFinishDescending" xml:space="preserve"><value>Planned Finish Descending</value></data>
+  <data name="SortTitleAscending" xml:space="preserve"><value>Title Ascending</value></data>
+  <data name="SortTitleDescending" xml:space="preserve"><value>Title Descending</value></data>
+  <data name="SortUnlockedAscending" xml:space="preserve"><value>Unlocked Ascending</value></data>
+  <data name="SortUnlockedDescending" xml:space="preserve"><value>Unlocked Descending</value></data>
+  <data name="SortUpdatedAscending" xml:space="preserve"><value>Updated Ascending</value></data>
+  <data name="SortUpdatedDescending" xml:space="preserve"><value>Updated Descending</value></data>
+  <data name="SpecifyRepositoryUrl" xml:space="preserve"><value>Specify repository URL.</value></data>
+  <data name="SshKeyCopied" xml:space="preserve"><value>Public SSH key copied to clipboard.</value></data>
+  <data name="SshKeyCreateFailed" xml:space="preserve"><value>Could not create SSH key: {0}</value></data>
+  <data name="SshKeyCreated" xml:space="preserve"><value>SSH key created: {0}</value></data>
+  <data name="SshKeys" xml:space="preserve"><value>SSH keys</value></data>
+  <data name="SshKeysHint" xml:space="preserve"><value>Needed only when the repository uses SSH.</value></data>
+  <data name="SshPrivateKeyPathNotConfigured" xml:space="preserve"><value>SSH private key path is not configured.</value></data>
+  <data name="StorageConnectedToast" xml:space="preserve"><value>Task storage connected and all tasks loaded.</value></data>
+  <data name="StorageHint" xml:space="preserve"><value>Choose where your tasks are stored.</value></data>
+  <data name="StorageMode" xml:space="preserve"><value>Storage mode</value></data>
+  <data name="StorageServer" xml:space="preserve"><value>On server</value></data>
+  <data name="StorageTitle" xml:space="preserve"><value>Task storage</value></data>
+  <data name="StorageLocal" xml:space="preserve"><value>On this device</value></data>
+  <data name="SyncComplete" xml:space="preserve"><value>Synchronization complete.</value></data>
+  <data name="SyncErrorStatus" xml:space="preserve"><value>Sync error: {0}</value></data>
+  <data name="SyncErrorToast" xml:space="preserve"><value>Could not synchronize repository: {0}</value></data>
+  <data name="SyncNow" xml:space="preserve"><value>Synchronize now</value></data>
+  <data name="SyncingRepository" xml:space="preserve"><value>Synchronizing with repository...</value></data>
+  <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>
+  <data name="TenDays" xml:space="preserve"><value>10 days</value></data>
+  <data name="TenMinutes" xml:space="preserve"><value>10 minutes</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="ThemeInterface" xml:space="preserve"><value>Interface theme</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
+  <data name="ThemeSystem" xml:space="preserve"><value>System</value></data>
+  <data name="Thursday" xml:space="preserve"><value>Thursday</value></data>
+  <data name="TitleWatermark" xml:space="preserve"><value>Title</value></data>
+  <data name="To" xml:space="preserve"><value>To</value></data>
+  <data name="Token" xml:space="preserve"><value>Token</value></data>
+  <data name="TokenAccess" xml:space="preserve"><value>Access token</value></data>
+  <data name="Tuesday" xml:space="preserve"><value>Tuesday</value></data>
+  <data name="TwentyMinutes" xml:space="preserve"><value>20 minutes</value></data>
+  <data name="TwoDays" xml:space="preserve"><value>2 days</value></data>
+  <data name="TwoHours" xml:space="preserve"><value>2 hours</value></data>
+  <data name="Unknown" xml:space="preserve"><value>Unknown</value></data>
+  <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Unarchive contained tasks</value></data>
+  <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to unarchive the {0} contained tasks from "{1}"?</value></data>
+  <data name="Unlocked" xml:space="preserve"><value>Unlocked</value></data>
+  <data name="UnlockedLabelFormat" xml:space="preserve"><value>Unlocked: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="UnlockedPrefix" xml:space="preserve"><value>Unlocked:</value></data>
+  <data name="UnlockedTimeFilterFuture" xml:space="preserve"><value>Future</value></data>
+  <data name="UnlockedTimeFilterMaybe" xml:space="preserve"><value>Maybe</value></data>
+  <data name="UnlockedTimeFilterOverdue" xml:space="preserve"><value>Overdue</value></data>
+  <data name="UnlockedTimeFilterToday" xml:space="preserve"><value>Today</value></data>
+  <data name="UnlockedTimeFilterUnplanned" xml:space="preserve"><value>Unplanned</value></data>
+  <data name="UnlockedTimeFilterUrgent" xml:space="preserve"><value>Urgent</value></data>
+  <data name="UnsupportedDragSource" xml:space="preserve"><value>Unsupported drag-and-drop source.</value></data>
+  <data name="UpdatedLabelFormat" xml:space="preserve"><value>Updated: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="UpdatedPrefix" xml:space="preserve"><value>Updated:</value></data>
+  <data name="Wanted" xml:space="preserve"><value>Wanted</value></data>
+  <data name="Wednesday" xml:space="preserve"><value>Wednesday</value></data>
+  <data name="AllTasksResaved" xml:space="preserve"><value>All tasks were resaved.</value></data>
+  <data name="AndroidAllFilesHint" xml:space="preserve"><value> Check the "All files access" permission.</value></data>
+  <data name="BackupConnectCanceledNonEmpty" xml:space="preserve"><value>Connection canceled: the local tasks folder and the remote repository are not empty.</value></data>
+  <data name="CannotResolveCloneDirectory" xml:space="preserve"><value>Cannot resolve clone directory for {0}.</value></data>
+  <data name="CloneOrUpdateRepositoryFailed" xml:space="preserve"><value>Could not clone or update the repository: {0}</value></data>
+  <data name="CommitCreated" xml:space="preserve"><value>Commit created.</value></data>
+  <data name="ConfirmBatchOperationHeader" xml:space="preserve"><value>Confirm batch operation</value></data>
+  <data name="ConfirmBatchOperationMessage" xml:space="preserve"><value>Are you sure you want to update {0} selected tasks?</value></data>
+  <data name="CopyServerTasksFailed" xml:space="preserve"><value>Could not copy tasks from server: {0}</value></data>
+  <data name="FailedToStartProcess" xml:space="preserve"><value>Failed to start {0}.</value></data>
+  <data name="FileWatcherError" xml:space="preserve"><value>File watcher error: {0}</value></data>
+  <data name="FixConflictsCommitResult" xml:space="preserve"><value>Fix conflicts and then commit the result.</value></data>
+  <data name="GitMergeFailed" xml:space="preserve"><value>Git merge failed: {0}</value></data>
+  <data name="GitOperationFailed" xml:space="preserve"><value>{0} failed: {1}</value></data>
+  <data name="LocalBranchNotFound" xml:space="preserve"><value>Local branch not found: {0}</value></data>
+  <data name="MergeRemoteBranchFailed" xml:space="preserve"><value>Could not merge the remote branch into the local branch: {0}</value></data>
+  <data name="MergeSuccessful" xml:space="preserve"><value>Merge successful.</value></data>
+  <data name="MigrateLocalTasksFailed" xml:space="preserve"><value>Could not move local tasks to server: {0}</value></data>
+  <data name="MigrateLocalTasksSuccess" xml:space="preserve"><value>Local tasks were moved to the server.</value></data>
+  <data name="OneMonth" xml:space="preserve"><value>1 month</value></data>
+  <data name="PushRemoteFailed" xml:space="preserve"><value>Could not push to the remote repository: {0}</value></data>
+  <data name="PushSuccessful" xml:space="preserve"><value>Push successful.</value></data>
+  <data name="ReactiveUnhandledError" xml:space="preserve"><value>Unexpected error: {0}</value></data>
+  <data name="ReactiveUnhandledErrorWithLocation" xml:space="preserve"><value>Unexpected error: {0} File: {1}. Row: {2}</value></data>
+  <data name="RemoteBranchNotFoundAfterFetch" xml:space="preserve"><value>Remote branch not found after fetch: {0}</value></data>
+  <data name="RemoteNotFound" xml:space="preserve"><value>Remote not found: {0}</value></data>
+  <data name="RepositoryConnectedAndMerged" xml:space="preserve"><value>Repository connected and merged.</value></data>
+  <data name="RepositoryInitializedAndPushed" xml:space="preserve"><value>Repository initialized and pushed.</value></data>
+  <data name="RepeaterPatternTitle" xml:space="preserve"><value>{0}, every {1}</value></data>
+  <data name="RepeaterTypeDaily" xml:space="preserve"><value>Daily</value></data>
+  <data name="RepeaterTypeMonthly" xml:space="preserve"><value>Monthly</value></data>
+  <data name="RepeaterTypeNone" xml:space="preserve"><value>None</value></data>
+  <data name="RepeaterTypeWeekly" xml:space="preserve"><value>Weekly</value></data>
+  <data name="RepeaterTypeWeeklyWorkDays" xml:space="preserve"><value>Weekdays</value></data>
+  <data name="RepeaterTypeYearly" xml:space="preserve"><value>Yearly</value></data>
+  <data name="ResaveTasksFailed" xml:space="preserve"><value>Could not resave tasks: {0}</value></data>
+  <data name="ServerTasksCopiedToLocal" xml:space="preserve"><value>Tasks from server were copied to local storage.</value></data>
+  <data name="SshKeyAlreadyExists" xml:space="preserve"><value>SSH key already exists: {0}</value></data>
+  <data name="SshKeyPathOutsideDirectory" xml:space="preserve"><value>SSH key path must stay inside {0}.</value></data>
+  <data name="SshKeygenDidNotCreateFiles" xml:space="preserve"><value>ssh-keygen did not create expected key files in {0}.</value></data>
+  <data name="SshKeygenFailed" xml:space="preserve"><value>ssh-keygen failed: {0}</value></data>
+  <data name="SshPrivateKeyNotFound" xml:space="preserve"><value>SSH private key not found: {0}</value></data>
+  <data name="StartGitPull" xml:space="preserve"><value>Starting Git pull...</value></data>
+  <data name="StartGitPush" xml:space="preserve"><value>Starting Git push...</value></data>
+  <data name="StashApplied" xml:space="preserve"><value>Stash applied.</value></data>
+  <data name="Sunday" xml:space="preserve"><value>Sunday</value></data>
+  <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Unsupported Git connect action: {0}.</value></data>
+</root>

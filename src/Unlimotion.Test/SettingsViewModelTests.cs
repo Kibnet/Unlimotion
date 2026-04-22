@@ -4,6 +4,7 @@ using System.IO;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
@@ -136,6 +137,113 @@ public class SettingsViewModelTests : IDisposable
                 .GetSection(AppearanceSettings.FontSizeKey)
                 .Get<double>())
             .IsEqualTo(AppearanceSettings.MinFontSize);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageMode_DoesNotCultureFormatPersistedNumericSettings()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization);
+
+        settings.LanguageMode = LocalizationService.RussianLanguage;
+        settings.FontSize = 18.5;
+        settings.GitPullIntervalSeconds = 45;
+        settings.GitPushIntervalSeconds = 90;
+
+        var json = File.ReadAllText(_configPath);
+
+        await Assert.That(localization.CurrentCulture.Name).IsEqualTo("ru");
+        await Assert.That(json).Contains("18.5");
+        await Assert.That(json).DoesNotContain("18,5");
+        await Assert.That(configuration
+                .GetSection(AppearanceSettings.SectionName)
+                .GetSection(AppearanceSettings.FontSizeKey)
+                .Get<double>())
+            .IsEqualTo(18.5);
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.PullIntervalSeconds))
+                .Get<int>())
+            .IsEqualTo(45);
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.PushIntervalSeconds))
+                .Get<int>())
+            .IsEqualTo(90);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageMode_PersistsChoiceAndUpdatesLocalizedStatusText()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization)
+        {
+            TaskStoragePath = @"C:\Data\Tasks"
+        };
+
+        await Assert.That(settings.StorageStatusText).IsEqualTo("Connected to local storage.");
+
+        settings.LanguageMode = LocalizationService.RussianLanguage;
+
+        await Assert.That(configuration
+                .GetSection(AppearanceSettings.SectionName)
+                .GetSection(AppearanceSettings.LanguageKey)
+                .Get<string>())
+            .IsEqualTo(LocalizationService.RussianLanguage);
+        await Assert.That(settings.StorageStatusText).IsEqualTo("Подключено к локальному хранилищу.");
+        await Assert.That(settings.GitBackupOnboardingHint).Contains("Для первого подключения");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageModeIndex_ReturnsToCapturedSystemLanguage()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization);
+
+        settings.LanguageMode = LocalizationService.EnglishLanguage;
+        await Assert.That(settings.BackupStatusText).IsEqualTo("Backup is disabled.");
+
+        settings.LanguageModeIndex = 0;
+
+        await Assert.That(settings.LanguageMode).IsEqualTo(LocalizationService.SystemLanguage);
+        await Assert.That(localization.CurrentCulture.Name).IsEqualTo("ru");
+        await Assert.That(settings.BackupStatusText).IsEqualTo("Резервное копирование выключено.");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageModeIndex_IgnoresTransientInvalidSelectionIndex()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization);
+
+        settings.LanguageMode = LocalizationService.RussianLanguage;
+        settings.LanguageModeIndex = -1;
+
+        await Assert.That(settings.LanguageMode).IsEqualTo(LocalizationService.RussianLanguage);
+        await Assert.That(localization.CurrentCulture.Name).IsEqualTo("ru");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageOptions_KeepCollectionInstanceWhenLanguageChanges()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization);
+        var options = settings.LanguageOptions;
+
+        await Assert.That(options[0].DisplayName).IsEqualTo("System");
+
+        settings.LanguageModeIndex = 2;
+
+        await Assert.That(settings.LanguageOptions).IsSameReferenceAs(options);
+        await Assert.That(settings.LanguageModeIndex).IsEqualTo(2);
+        await Assert.That(options[0].DisplayName).IsEqualTo("Как в системе");
+        await Assert.That(options[1].DisplayName).IsEqualTo("Английский");
+        await Assert.That(options[2].DisplayName).IsEqualTo("Русский");
     }
 
     [Test]
@@ -483,5 +591,15 @@ public class SettingsViewModelTests : IDisposable
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
         public void CloneOrUpdateRepo() => throw new NotSupportedException();
+    }
+
+    private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
+    {
+        public FakeSystemCultureProvider(string cultureName)
+        {
+            SystemUICulture = System.Globalization.CultureInfo.GetCultureInfo(cultureName);
+        }
+
+        public System.Globalization.CultureInfo SystemUICulture { get; }
     }
 }

@@ -6,5 +6,5 @@
              x:Class="Unlimotion.Views.SearchControl.SearchBar">
     <search:SearchControl
         SearchText="{Binding SearchText, Mode=TwoWay}"
-        Watermark="Search"/>
+        Watermark="{DynamicResource Search}"/>
 </UserControl>
