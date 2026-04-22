@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Linq;
+using System.ComponentModel;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -95,6 +96,76 @@ public class LocalizationDisplayDefinitionTests
             fixture?.MainWindowViewModelTest.Dispose();
             fixture?.CleanTasks();
             LocalizationService.Current = previousLocalization;
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task MainWindowViewModel_LanguageRefreshKeepsRuntimeFilterCollections()
+    {
+        var previousLocalization = LocalizationService.Current;
+        MainWindowViewModelFixture? fixture = null;
+        try
+        {
+            var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+            LocalizationService.Current = localization;
+            fixture = new MainWindowViewModelFixture();
+            var viewModel = fixture.MainWindowViewModelTest;
+            var unlockedFilters = viewModel.UnlockedTimeFilters;
+            var durationFilters = viewModel.DurationFilters;
+            var unlockedFilter = unlockedFilters.First(filter => filter.ResourceKey == "UnlockedTimeFilterToday");
+            var durationFilter = durationFilters.First(filter => filter.ResourceKey == "DurationFilterNoDuration");
+
+            unlockedFilter.ShowTasks = true;
+            durationFilter.ShowTasks = true;
+            await Assert.That(unlockedFilter.Title).IsEqualTo("Today");
+            await Assert.That(durationFilter.Title).IsEqualTo("No duration");
+
+            localization.SetLanguage(LocalizationService.RussianLanguage);
+
+            await Assert.That(viewModel.UnlockedTimeFilters).IsSameReferenceAs(unlockedFilters);
+            await Assert.That(viewModel.DurationFilters).IsSameReferenceAs(durationFilters);
+            await Assert.That(unlockedFilter.ShowTasks).IsTrue();
+            await Assert.That(durationFilter.ShowTasks).IsTrue();
+            await Assert.That(unlockedFilter.Title).IsEqualTo("Сегодня");
+            await Assert.That(durationFilter.Title).IsEqualTo("Без длительности");
+        }
+        finally
+        {
+            fixture?.MainWindowViewModelTest.Dispose();
+            fixture?.CleanTasks();
+            LocalizationService.Current = previousLocalization;
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskRelationPicker_DisposeUnsubscribesFromCultureChanges()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var picker = new TaskRelationPickerViewModel(
+            TaskRelationKind.Parents,
+            () => null,
+            () => [],
+            () => false,
+            (_, _, _) => true,
+            (_, _, _) => System.Threading.Tasks.Task.FromResult(true),
+            _ => string.Empty,
+            new NotificationManagerWrapperMock(),
+            localization);
+        var watermarkChangeCount = 0;
+        picker.PropertyChanged += OnPropertyChanged;
+
+        localization.SetLanguage(LocalizationService.RussianLanguage);
+        picker.Dispose();
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+
+        await Assert.That(watermarkChangeCount).IsEqualTo(1);
+
+        void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == nameof(TaskRelationPickerViewModel.Watermark))
+            {
+                watermarkChangeCount++;
+            }
         }
     }
 

@@ -105,6 +105,7 @@
   <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 минут</value></data>
   <data name="FolderPickerDataFolder" xml:space="preserve"><value>Папка с данными</value></data>
+  <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Папка хранилища задач</value></data>
   <data name="FontSize" xml:space="preserve"><value>Размер текста</value></data>
   <data name="FortyMinutes" xml:space="preserve"><value>40 минут</value></data>
   <data name="FourDays" xml:space="preserve"><value>4 дня</value></data>

@@ -112,6 +112,7 @@ namespace Unlimotion.ViewModel
             EventHandler localizationChanged = (_, __) => RefreshLocalizedCollections();
             localization.CultureChanged += localizationChanged;
             Disposable.Create(() => localization.CultureChanged -= localizationChanged).AddToDispose(this);
+            Disposable.Create(DisposeCurrentRelationPickers).AddToDispose(this);
         }
 
         private void RefreshLocalizedCollections()
@@ -139,8 +140,15 @@ namespace Unlimotion.ViewModel
             LastCreatedDateFilter.CurrentOption = DateFilterDefinition.FindById(lastCreatedDateFilterId);
             LastUpdatedDateFilter.CurrentOption = DateFilterDefinition.FindById(lastUpdatedDateFilterId);
 
-            UnlockedTimeFilters = UnlockedTimeFilter.GetDefinitions();
-            DurationFilters = DurationFilter.GetDefinitions();
+            foreach (var filter in UnlockedTimeFilters)
+            {
+                filter.RefreshLocalization();
+            }
+
+            foreach (var filter in DurationFilters)
+            {
+                filter.RefreshLocalization();
+            }
         }
 
         private void RegisterCommands()
@@ -1280,6 +1288,8 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
+                    DisposeCurrentRelationPickers();
+
                     if (item != null)
                     {
                         CurrentItemContainsPicker = CreateRelationPicker(TaskRelationKind.Containing);
@@ -1451,7 +1461,7 @@ namespace Unlimotion.ViewModel
 
         private TaskRelationPickerViewModel CreateRelationPicker(TaskRelationKind kind)
         {
-            return new TaskRelationPickerViewModel(
+            var picker = new TaskRelationPickerViewModel(
                 kind,
                 () => CurrentTaskItem,
                 () => taskRepository?.Tasks.Items ?? Enumerable.Empty<TaskItemViewModel>(),
@@ -1459,7 +1469,17 @@ namespace Unlimotion.ViewModel
                 IsRelationCandidateValid,
                 TryAddRelationAsync,
                 GetRelationCandidateContext,
-                ManagerWrapper);
+                ManagerWrapper,
+                LocalizationService.Current);
+            return picker;
+        }
+
+        private void DisposeCurrentRelationPickers()
+        {
+            CurrentItemContainsPicker?.Dispose();
+            CurrentItemParentsPicker?.Dispose();
+            CurrentItemBlocksPicker?.Dispose();
+            CurrentItemBlockedByPicker?.Dispose();
         }
 
         private async Task<bool> TryAddRelationAsync(

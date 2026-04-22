@@ -1,26 +1,42 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using DynamicData.Binding;
-using PropertyChanged;
+using ReactiveUI;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
-    [AddINotifyPropertyChangedInterface]
-    public class UnlockedTimeFilter
+    public class UnlockedTimeFilter : ReactiveObject
     {
         private string _title = string.Empty;
+        private string _resourceKey = string.Empty;
+        private bool _showTasks;
 
         public string Title
         {
             get => string.IsNullOrWhiteSpace(ResourceKey) ? _title : L10n.Get(ResourceKey);
-            set => _title = value;
+            set => this.RaiseAndSetIfChanged(ref _title, value);
         }
 
-        public string ResourceKey { get; set; } = string.Empty;
+        public string ResourceKey
+        {
+            get => _resourceKey;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _resourceKey, value);
+                this.RaisePropertyChanged(nameof(Title));
+            }
+        }
 
-        public bool ShowTasks { get; set; }
-        public Func<TaskItemViewModel, bool> Predicate { get; set; }
+        public bool ShowTasks
+        {
+            get => _showTasks;
+            set => this.RaiseAndSetIfChanged(ref _showTasks, value);
+        }
+
+        public Func<TaskItemViewModel, bool> Predicate { get; set; } = null!;
+
+        public void RefreshLocalization() => this.RaisePropertyChanged(nameof(Title));
 
         public override string ToString() => Title;
 
