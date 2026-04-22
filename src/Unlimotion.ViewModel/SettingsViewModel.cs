@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -144,8 +145,9 @@ public class SettingsViewModel
         };
     }
 
-    public List<LanguageOption> LanguageOptions { get; private set; } = new();
+    public ObservableCollection<LanguageOption> LanguageOptions { get; } = new();
 
+    [AlsoNotifyFor(nameof(LanguageModeIndex))]
     public string LanguageMode
     {
         get => _localization.LanguageMode;
@@ -158,12 +160,14 @@ public class SettingsViewModel
         }
     }
 
+    [AlsoNotifyFor(nameof(LanguageModeIndex))]
+    public int LanguageOptionsVersion { get; private set; }
+
     public int LanguageModeIndex
     {
         get
         {
-            var index = LanguageOptions.FindIndex(option =>
-                string.Equals(option.Value, LanguageMode, StringComparison.OrdinalIgnoreCase));
+            var index = FindLanguageOptionIndex(LanguageMode);
             return index >= 0 ? index : 0;
         }
         set
@@ -607,10 +611,59 @@ public class SettingsViewModel
 
     private void RefreshLocalizedText()
     {
-        LanguageOptions = _localization.SupportedLanguages.ToList();
+        RefreshLanguageOptions();
         RefreshBackupAuthMode();
         RefreshStorageStatusText();
         RefreshBackupState();
+    }
+
+    private void RefreshLanguageOptions()
+    {
+        var supportedLanguages = _localization.SupportedLanguages.ToList();
+
+        for (var index = 0; index < supportedLanguages.Count; index++)
+        {
+            var option = supportedLanguages[index];
+            var existingIndex = FindLanguageOptionIndex(option.Value);
+
+            if (existingIndex < 0)
+            {
+                LanguageOptions.Insert(index, option);
+                continue;
+            }
+
+            if (existingIndex != index)
+            {
+                LanguageOptions.Move(existingIndex, index);
+            }
+
+            LanguageOptions[index].DisplayName = option.DisplayName;
+        }
+
+        for (var index = LanguageOptions.Count - 1; index >= 0; index--)
+        {
+            var option = LanguageOptions[index];
+            if (supportedLanguages.All(supported =>
+                    !string.Equals(supported.Value, option.Value, StringComparison.OrdinalIgnoreCase)))
+            {
+                LanguageOptions.RemoveAt(index);
+            }
+        }
+
+        LanguageOptionsVersion++;
+    }
+
+    private int FindLanguageOptionIndex(string? languageMode)
+    {
+        for (var index = 0; index < LanguageOptions.Count; index++)
+        {
+            if (string.Equals(LanguageOptions[index].Value, languageMode, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private string ResolveTaskStoragePathTooltip()

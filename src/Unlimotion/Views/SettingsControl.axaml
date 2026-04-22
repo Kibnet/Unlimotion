@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:localization="clr-namespace:Unlimotion.ViewModel.Localization;assembly=Unlimotion.ViewModel"
              mc:Ignorable="d"
              d:DesignWidth="900"
              d:DesignHeight="700"
@@ -52,7 +53,13 @@
                         <TextBlock VerticalAlignment="Center" Text="{DynamicResource LanguageLabel}" />
                         <ComboBox Grid.Column="1"
                                   SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
-                                  ItemsSource="{Binding LanguageOptions}" />
+                                  ItemsSource="{Binding LanguageOptions}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="localization:LanguageOption">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource ThemeInterface}" />
                         <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">

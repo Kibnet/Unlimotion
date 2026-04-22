@@ -228,6 +228,25 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task LanguageOptions_KeepCollectionInstanceWhenLanguageChanges()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var settings = new SettingsViewModel(configuration, localizationService: localization);
+        var options = settings.LanguageOptions;
+
+        await Assert.That(options[0].DisplayName).IsEqualTo("System");
+
+        settings.LanguageModeIndex = 2;
+
+        await Assert.That(settings.LanguageOptions).IsSameReferenceAs(options);
+        await Assert.That(settings.LanguageModeIndex).IsEqualTo(2);
+        await Assert.That(options[0].DisplayName).IsEqualTo("Как в системе");
+        await Assert.That(options[1].DisplayName).IsEqualTo("Английский");
+        await Assert.That(options[2].DisplayName).IsEqualTo("Русский");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task CanConnectStorage_FollowsSelectedModeRequirements()
     {
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
