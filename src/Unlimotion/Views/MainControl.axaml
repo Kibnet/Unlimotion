@@ -88,9 +88,16 @@ x:Class="Unlimotion.Views.MainControl">
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
-            <Grid ColumnDefinitions="Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
+            <Grid ColumnDefinitions="Auto, Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
                 <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-                <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding RepeaterListMarker}"
+                           IsVisible="{Binding IsHaveRepeater}"
+                           ToolTip.Tip="{Binding RepeaterListMarkerToolTip}"
+                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                           Margin="4,0,4,0"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -231,11 +238,18 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.CreatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -282,11 +296,18 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -323,10 +344,17 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="2" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -371,12 +399,19 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -421,12 +456,19 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -455,11 +497,18 @@ Content="❌"
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
-                                            <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
                                                 <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
                                                 <Label Grid.Column="1" Content="{Binding SpecialDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm:ss}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
