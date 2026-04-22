@@ -7,9 +7,11 @@ public static class AppearanceSettings
     public const string SectionName = "Appearance";
     public const string ThemeKey = "Theme";
     public const string FontSizeKey = "FontSize";
+    public const string LanguageKey = "Language";
     public const string SystemTheme = "System";
     public const string DarkTheme = "Dark";
     public const string LightTheme = "Light";
+    public const string SystemLanguage = "System";
     public const double DefaultFontSize = 12;
     public const double MinFontSize = 10;
     public const double MaxFontSize = 24;

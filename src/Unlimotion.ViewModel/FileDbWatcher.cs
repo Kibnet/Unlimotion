@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.Caching;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 using System.Threading.Tasks;
 using Unlimotion.TaskTree;
 
@@ -82,7 +83,7 @@ namespace Unlimotion.ViewModel
         private void OnError(object sender, ErrorEventArgs e)
         {
             Debug.WriteLine("Error in FileWatcher");
-            _notificationManager?.ErrorToast(e.GetException().Message);
+            _notificationManager?.ErrorToast(L10n.Format("FileWatcherError", e.GetException().Message));
 
         }
 

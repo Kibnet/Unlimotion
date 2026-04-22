@@ -7,10 +7,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Unlimotion.ViewModel.Search;
+using Unlimotion.ViewModel.Localization;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
@@ -72,8 +75,8 @@ namespace Unlimotion.ViewModel
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
             var sortName = _configuration?.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             var sortNameForUnlocked = _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
-            CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Name == sortName) ?? SortDefinitions.First();
-            CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.Name == sortNameForUnlocked) ?? SortDefinitions.First();
+            CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortName)) ?? SortDefinitions.First();
+            CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortNameForUnlocked)) ?? SortDefinitions.First();
 
             this.WhenAnyValue(m => m.ShowCompleted)
                 .Subscribe(b => _configuration?.GetSection("AllTasks:ShowCompleted").Set(b))
@@ -85,14 +88,59 @@ namespace Unlimotion.ViewModel
                 .Subscribe(b => _configuration?.GetSection("AllTasks:ShowWanted").Set(b))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
-                .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinition").Set(b.Name))
+                .Subscribe(b =>
+                {
+                    if (b != null)
+                    {
+                        _configuration?.GetSection("AllTasks:CurrentSortDefinition").Set(b.Id);
+                    }
+                })
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
-                .Subscribe(b => _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Name))
+                .Subscribe(b =>
+                {
+                    if (b != null)
+                    {
+                        _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Set(b.Id);
+                    }
+                })
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.Settings.IsFuzzySearch)
                 .Subscribe(b => Search.IsFuzzySearch = b)
                 .AddToDispose(this);
+            var localization = LocalizationService.Current;
+            EventHandler localizationChanged = (_, __) => RefreshLocalizedCollections();
+            localization.CultureChanged += localizationChanged;
+            Disposable.Create(() => localization.CultureChanged -= localizationChanged).AddToDispose(this);
+        }
+
+        private void RefreshLocalizedCollections()
+        {
+            var currentSortId = CurrentSortDefinition?.Id;
+            var currentUnlockedSortId = CurrentSortDefinitionForUnlocked?.Id;
+
+            SortDefinitions.Clear();
+            foreach (var sortDefinition in SortDefinition.GetDefinitions())
+            {
+                SortDefinitions.Add(sortDefinition);
+            }
+
+            CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.Id == currentSortId) ?? SortDefinitions.First();
+            CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.Id == currentUnlockedSortId) ?? SortDefinitions.First();
+
+            var completedDateFilterId = CompletedDateFilter.CurrentOption?.Id;
+            var archivedDateFilterId = ArchivedDateFilter.CurrentOption?.Id;
+            var lastCreatedDateFilterId = LastCreatedDateFilter.CurrentOption?.Id;
+            var lastUpdatedDateFilterId = LastUpdatedDateFilter.CurrentOption?.Id;
+
+            DateFilterDefinitions = DateFilterDefinition.GetDefinitions();
+            CompletedDateFilter.CurrentOption = DateFilterDefinition.FindById(completedDateFilterId);
+            ArchivedDateFilter.CurrentOption = DateFilterDefinition.FindById(archivedDateFilterId);
+            LastCreatedDateFilter.CurrentOption = DateFilterDefinition.FindById(lastCreatedDateFilterId);
+            LastUpdatedDateFilter.CurrentOption = DateFilterDefinition.FindById(lastUpdatedDateFilterId);
+
+            UnlockedTimeFilters = UnlockedTimeFilter.GetDefinitions();
+            DurationFilters = DurationFilter.GetDefinitions();
         }
 
         private void RegisterCommands()
@@ -305,9 +353,13 @@ namespace Unlimotion.ViewModel
             _isLastOpenedTabInitialized = false;
 
             //Set sort definition
-            var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition).Select(d => d.Comparer);
+            var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition)
+                .Where(d => d != null)
+                .Select(d => d.Comparer);
             var sortObservableForUnlocked =
-                this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked).Select(d => d.Comparer);
+                this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
+                    .Where(d => d != null)
+                    .Select(d => d.Comparer);
 
             //Set All Tasks Filter
             var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
@@ -325,7 +377,7 @@ namespace Unlimotion.ViewModel
 
             if (taskStorage == null)
             {
-                ManagerWrapper?.ErrorToast("Task storage is not configured");
+                ManagerWrapper?.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
                 return;
             }
 
@@ -333,7 +385,7 @@ namespace Unlimotion.ViewModel
             {
                 taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
                 {
-                    ManagerWrapper?.ErrorToast("Ошибка подключения к серверу.");
+                    ManagerWrapper?.ErrorToast(L10n.Get("ServerConnectionError"));
                 };
             }
 
@@ -520,7 +572,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.ArchivedDateFilter.CurrentOption, m => m.ArchivedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
-                    if (!filter.Item2)
+                    if (!filter.Item2 && filter.Item1 != null)
                         ArchivedDateFilter.SetDateTimes(filter.Item1);
                 });
 
@@ -729,7 +781,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CompletedDateFilter.CurrentOption, m => m.CompletedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
-                    if (!filter.Item2)
+                    if (!filter.Item2 && filter.Item1 != null)
                         CompletedDateFilter.SetDateTimes(filter.Item1);
                 });
 
@@ -754,7 +806,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.LastCreatedDateFilter.CurrentOption, m => m.LastCreatedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
-                    if (!filter.Item2)
+                    if (!filter.Item2 && filter.Item1 != null)
                         LastCreatedDateFilter.SetDateTimes(filter.Item1);
                 });
 
@@ -778,7 +830,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.LastUpdatedDateFilter.CurrentOption, m => m.LastUpdatedDateFilter.IsCustom)
                 .Subscribe(filter =>
                 {
-                    if (!filter.Item2)
+                    if (!filter.Item2 && filter.Item1 != null)
                         LastUpdatedDateFilter.SetDateTimes(filter.Item1);
                 });
 
@@ -1306,8 +1358,8 @@ namespace Unlimotion.ViewModel
         {
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {
-                ManagerWrapper.Ask("Remove task",
-                    $"Are you sure you want to remove the task \"{task.TaskItem.Title}\" from disk?",
+                ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
+                    L10n.Format("RemoveTaskMessage", task.TaskItem.Title),
                     async () =>
                     {
                         if (await task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
@@ -1327,8 +1379,8 @@ namespace Unlimotion.ViewModel
 
         private async Task RemoveTaskItem(TaskItemViewModel task)
         {
-            ManagerWrapper.Ask("Remove task",
-                $"Are you sure you want to remove the task \"{task.Title}\" from disk?",
+            ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
+                L10n.Format("RemoveTaskMessage", task.Title),
                 async () =>
                 {
                     if (task.Parents?.Count > 0)
@@ -1364,8 +1416,8 @@ namespace Unlimotion.ViewModel
             }
 
             ManagerWrapper.Ask(
-                "Remove tasks",
-                $"Are you sure you want to remove {orderedWrappers.Count} selected task entries?",
+                L10n.Get("RemoveTasksHeader"),
+                L10n.Format("RemoveTasksMessage", orderedWrappers.Count),
                 async () => await RemoveWrappersInternalAsync(orderedWrappers));
         }
 
@@ -1417,13 +1469,13 @@ namespace Unlimotion.ViewModel
         {
             if (taskRepository == null)
             {
-                ManagerWrapper.ErrorToast("Task storage is not configured");
+                ManagerWrapper.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
                 return false;
             }
 
             if (!IsRelationCandidateValid(kind, currentTask, candidateTask))
             {
-                ManagerWrapper.ErrorToast("Нельзя добавить выбранную связь.");
+                ManagerWrapper.ErrorToast(L10n.Get("InvalidRelation"));
                 return false;
             }
 
@@ -1698,7 +1750,7 @@ namespace Unlimotion.ViewModel
         public DateFilter LastCreatedDateFilter { get; set; } = new();
         public DateFilter LastUpdatedDateFilter { get; set; } = new();
 
-        public static ReadOnlyObservableCollection<string> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
+        public ReadOnlyObservableCollection<DateFilterOption> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
         public object TabItems { get; } = null!;
         public object ToastNotificationManager { get; set; } = null!;
     }

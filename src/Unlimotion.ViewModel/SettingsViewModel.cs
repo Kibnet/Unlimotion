@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
+using Unlimotion.ViewModel.Localization;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel;
 
@@ -20,6 +23,7 @@ public class SettingsViewModel
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
     private readonly IRemoteBackupService? _backupService;
+    private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
     private readonly Func<string?>? _defaultTaskStoragePathProvider;
 
@@ -48,15 +52,20 @@ public class SettingsViewModel
         IConfiguration configuration,
         IRemoteBackupService? backupService = null,
         bool defaultIsDarkTheme = false,
-        Func<string?>? defaultTaskStoragePathProvider = null)
+        Func<string?>? defaultTaskStoragePathProvider = null,
+        ILocalizationService? localizationService = null)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _backupService = backupService;
+        _localization = localizationService ?? LocalizationService.Current;
         _defaultIsDarkTheme = defaultIsDarkTheme;
         _defaultTaskStoragePathProvider = defaultTaskStoragePathProvider;
+
+        _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
+        _localization.CultureChanged += (_, __) => RefreshLocalizedText();
 
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
@@ -89,8 +98,7 @@ public class SettingsViewModel
         ReloadSshPublicKeys();
         ReloadGitMetadata();
         RefreshStorageSelectionState();
-        RefreshStorageStatusText();
-        RefreshBackupState();
+        RefreshLocalizedText();
     }
 
     // Commands - set externally from App.axaml.cs
@@ -134,6 +142,39 @@ public class SettingsViewModel
             2 => ThemeMode.Dark,
             _ => ThemeMode.System
         };
+    }
+
+    public List<LanguageOption> LanguageOptions { get; private set; } = new();
+
+    public string LanguageMode
+    {
+        get => _localization.LanguageMode;
+        set
+        {
+            var normalizedValue = L10n.NormalizeLanguageMode(value);
+            _appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Set(normalizedValue);
+            _localization.SetLanguage(normalizedValue);
+            RefreshLocalizedText();
+        }
+    }
+
+    public int LanguageModeIndex
+    {
+        get
+        {
+            var index = LanguageOptions.FindIndex(option =>
+                string.Equals(option.Value, LanguageMode, StringComparison.OrdinalIgnoreCase));
+            return index >= 0 ? index : 0;
+        }
+        set
+        {
+            if (value < 0 || value >= LanguageOptions.Count)
+            {
+                return;
+            }
+
+            LanguageMode = LanguageOptions[value].Value;
+        }
     }
 
     // Compatibility shim for older callers/tests.
@@ -235,10 +276,10 @@ public class SettingsViewModel
 
     public double FontSize
     {
-        get => AppearanceSettings.NormalizeFontSize(
-            _appearanceSettings.GetSection(AppearanceSettings.FontSizeKey).Get<double?>());
+        get => AppearanceSettings.NormalizeFontSize(ReadInvariantDouble(
+            _appearanceSettings.GetSection(AppearanceSettings.FontSizeKey)));
         set => _appearanceSettings.GetSection(AppearanceSettings.FontSizeKey)
-            .Set(AppearanceSettings.NormalizeFontSize(value));
+            .Set(AppearanceSettings.NormalizeFontSize(value).ToString(CultureInfo.InvariantCulture));
     }
 
     public bool GitBackupEnabled
@@ -446,7 +487,7 @@ public class SettingsViewModel
 
     public BackupAuthMode BackupAuthMode { get; private set; } = BackupAuthMode.Token;
 
-    public string BackupAuthModeText { get; private set; } = "Токен";
+    public string BackupAuthModeText { get; private set; } = string.Empty;
 
     public bool IsTokenAuthSelected { get; private set; } = true;
 
@@ -483,8 +524,7 @@ public class SettingsViewModel
     public bool ShowServiceActions { get; set; }
 
     public string GitBackupOnboardingHint =>
-        "Для первого подключения создайте на GitHub новый private repository без README, .gitignore и license, если хотите загрузить туда текущие локальные задачи. " +
-        "Вставьте SSH-адрес вида git@github.com:owner/repo.git, создайте или выберите SSH-ключ, скопируйте публичный ключ и добавьте его в GitHub profile SSH keys либо в Deploy keys репозитория с правом записи.";
+        _localization.Get("BackupOnboardingHint");
 
     public bool IsBackupConfigured =>
         GitBackupEnabled &&
@@ -515,7 +555,7 @@ public class SettingsViewModel
     {
         Remotes = _backupService?.Remotes() ?? new List<string>();
         RemotesWithAuthType = Remotes
-            .Select(remote => $"{remote} ({_backupService?.GetRemoteAuthType(remote) ?? "Unknown"})")
+            .Select(remote => $"{remote} ({_backupService?.GetRemoteAuthType(remote) ?? _localization.Get("Unknown")})")
             .ToList();
         Refs = _backupService?.Refs() ?? new List<string>();
         HasMultipleRemotes = RemotesWithAuthType.Count > 1;
@@ -562,7 +602,15 @@ public class SettingsViewModel
     public void MarkSignedOut()
     {
         ConnectedServerLogin = null;
-        SetStorageConnectionState(SettingsConnectionState.Disconnected, "Вы вышли из серверного аккаунта.");
+        SetStorageConnectionState(SettingsConnectionState.Disconnected, _localization.Get("SignedOut"));
+    }
+
+    private void RefreshLocalizedText()
+    {
+        LanguageOptions = _localization.SupportedLanguages.ToList();
+        RefreshBackupAuthMode();
+        RefreshStorageStatusText();
+        RefreshBackupState();
     }
 
     private string ResolveTaskStoragePathTooltip()
@@ -683,6 +731,26 @@ public class SettingsViewModel
             : $"refs/heads/{trimmedBranch}";
     }
 
+    private static double? ReadInvariantDouble(IConfigurationSection section)
+    {
+        var rawValue = section.Value;
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return section.Get<double?>();
+        }
+
+        var normalizedValue = rawValue.Contains(',') && !rawValue.Contains('.')
+            ? rawValue.Replace(',', '.')
+            : rawValue;
+
+        if (double.TryParse(normalizedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedValue))
+        {
+            return parsedValue;
+        }
+
+        return section.Get<double?>();
+    }
+
     private void RefreshStorageSelectionState()
     {
         IsLocalStorageSelected = !IsServerMode;
@@ -711,24 +779,24 @@ public class SettingsViewModel
         {
             StorageStatusText = StorageConnectionState switch
             {
-                SettingsConnectionState.Connecting => "Подключение локального хранилища...",
-                SettingsConnectionState.Error => "Ошибка доступа к локальному хранилищу.",
-                SettingsConnectionState.Connected => "Подключено к локальному хранилищу.",
+                SettingsConnectionState.Connecting => _localization.Get("LocalStorageConnecting"),
+                SettingsConnectionState.Error => _localization.Get("LocalStorageError"),
+                SettingsConnectionState.Connected => _localization.Get("LocalStorageConnected"),
                 _ => string.IsNullOrWhiteSpace(TaskStoragePath)
-                    ? "Выберите папку с данными."
-                    : "Локальное хранилище готово к подключению."
+                    ? _localization.Get("SelectDataFolder")
+                    : _localization.Get("LocalReady")
             };
             return;
         }
 
         StorageStatusText = StorageConnectionState switch
         {
-            SettingsConnectionState.Connecting => "Подключение к серверу...",
+            SettingsConnectionState.Connecting => _localization.Get("ServerConnecting"),
             SettingsConnectionState.Connected when !string.IsNullOrWhiteSpace(ConnectedServerLogin) =>
-                $"Подключено как {ConnectedServerLogin}.",
-            SettingsConnectionState.Connected => "Подключено к серверу.",
-            SettingsConnectionState.Error => "Ошибка подключения к серверу.",
-            _ => "После изменения адреса или входа нажмите \"Подключить\"."
+                _localization.Format("ServerConnectedAs", ConnectedServerLogin),
+            SettingsConnectionState.Connected => _localization.Get("ServerConnected"),
+            SettingsConnectionState.Error => _localization.Get("ServerConnectionError"),
+            _ => _localization.Get("ConnectHint")
         };
     }
 
@@ -736,13 +804,13 @@ public class SettingsViewModel
     {
         if (!GitBackupEnabled)
         {
-            SetBackupConnectionState(BackupStatusState.NotConfigured, "Резервное копирование выключено.");
+            SetBackupConnectionState(BackupStatusState.NotConfigured, _localization.Get("BackupDisabled"));
             return;
         }
 
         if (string.IsNullOrWhiteSpace(GitRemoteUrl))
         {
-            SetBackupConnectionState(BackupStatusState.NotConfigured, "Укажите адрес репозитория.");
+            SetBackupConnectionState(BackupStatusState.NotConfigured, _localization.Get("SpecifyRepositoryUrl"));
             return;
         }
 
@@ -756,19 +824,19 @@ public class SettingsViewModel
         {
             if (RemotesWithAuthType.Count > 0)
             {
-                SetBackupConnectionState(BackupStatusState.Connected, "Репозиторий подключен.");
+                SetBackupConnectionState(BackupStatusState.Connected, _localization.Get("RepositoryConnected"));
             }
             else
             {
-                SetBackupConnectionState(BackupStatusState.NotConfigured, "Параметры сохранены. Нажмите \"Подключить репозиторий\".");
+                SetBackupConnectionState(BackupStatusState.NotConfigured, _localization.Get("ParamsSavedConnectRepository"));
             }
 
             return;
         }
 
         SetBackupConnectionState(BackupStatusState.NotConfigured, IsTokenAuthSelected
-            ? "Введите логин и токен доступа."
-            : "Выберите SSH-ключ.");
+            ? _localization.Get("EnterLoginAndToken")
+            : _localization.Get("SelectSshKey"));
     }
 
     private void RefreshBackupStatusText(string? explicitStatus = null)
@@ -781,11 +849,11 @@ public class SettingsViewModel
 
         BackupStatusText = BackupConnectionState switch
         {
-            BackupStatusState.Connecting => "Подключение репозитория...",
-            BackupStatusState.Syncing => "Синхронизация с репозиторием...",
-            BackupStatusState.Connected => "Репозиторий подключен.",
-            BackupStatusState.Error => "Ошибка синхронизации.",
-            _ => "Резервное копирование не настроено."
+            BackupStatusState.Connecting => _localization.Get("BackupConnecting"),
+            BackupStatusState.Syncing => _localization.Get("BackupSyncing"),
+            BackupStatusState.Connected => _localization.Get("BackupStatusConnected"),
+            BackupStatusState.Error => _localization.Get("BackupError"),
+            _ => _localization.Get("BackupNotConfigured")
         };
     }
 
@@ -794,7 +862,7 @@ public class SettingsViewModel
         BackupAuthMode = ResolveBackupAuthMode();
         IsTokenAuthSelected = BackupAuthMode == BackupAuthMode.Token;
         IsSshAuthSelected = BackupAuthMode == BackupAuthMode.Ssh;
-        BackupAuthModeText = IsSshAuthSelected ? "SSH" : "Токен";
+        BackupAuthModeText = IsSshAuthSelected ? "SSH" : _localization.Get("Token");
     }
 
     private void RefreshBackupActionAvailability()

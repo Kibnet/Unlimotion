@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Views
 {
@@ -475,7 +476,7 @@ namespace Unlimotion.Views
                         !TryResolveMoveSourceParent(wrapper, out sourceParent))
                     {
                         items = Array.Empty<DragSourceOperationItem>();
-                        errorMessage = "Нельзя выполнить массовое перемещение: для части задач не определён исходный родитель.";
+                        errorMessage = L10n.Get("BatchMoveMissingParents");
                         return false;
                     }
 
@@ -517,7 +518,7 @@ namespace Unlimotion.Views
                     if (operationKind == BatchDropOperationKind.MoveInto &&
                         !TryResolveMoveSourceParent(wrapper, out sourceParent))
                     {
-                        errorMessage = "Нельзя выполнить перемещение: не определён исходный родитель.";
+                        errorMessage = L10n.Get("MoveMissingParent");
                         return false;
                     }
 
@@ -538,7 +539,7 @@ namespace Unlimotion.Views
                         }
                         else
                         {
-                            errorMessage = "Нельзя выполнить перемещение: не определён исходный родитель.";
+                            errorMessage = L10n.Get("MoveMissingParent");
                             return false;
                         }
                     }
@@ -547,7 +548,7 @@ namespace Unlimotion.Views
                     return true;
                 }
                 default:
-                    errorMessage = "Неподдерживаемый источник drag-and-drop.";
+                    errorMessage = L10n.Get("UnsupportedDragSource");
                     return false;
             }
         }
@@ -624,12 +625,12 @@ namespace Unlimotion.Views
         {
             return operationKind switch
             {
-                BatchDropOperationKind.CopyInto => "Copy tasks",
-                BatchDropOperationKind.MoveInto => "Move tasks",
-                BatchDropOperationKind.CloneInto => "Clone tasks",
-                BatchDropOperationKind.SourcesBlockTarget => "Add blocking tasks",
-                BatchDropOperationKind.TargetBlocksSources => "Add blocked tasks",
-                _ => "Confirm batch operation"
+                BatchDropOperationKind.CopyInto => L10n.Get("CopyTasksHeader"),
+                BatchDropOperationKind.MoveInto => L10n.Get("MoveTasksHeader"),
+                BatchDropOperationKind.CloneInto => L10n.Get("CloneTasksHeader"),
+                BatchDropOperationKind.SourcesBlockTarget => L10n.Get("AddBlockingTasksHeader"),
+                BatchDropOperationKind.TargetBlocksSources => L10n.Get("AddBlockedTasksHeader"),
+                _ => L10n.Get("ConfirmBatchOperationHeader")
             };
         }
 
@@ -641,16 +642,16 @@ namespace Unlimotion.Views
             return operationKind switch
             {
                 BatchDropOperationKind.CopyInto =>
-                    $"Are you sure you want to copy {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                    L10n.Format("CopyTasksMessage", itemCount, targetTask.Title),
                 BatchDropOperationKind.MoveInto =>
-                    $"Are you sure you want to move {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                    L10n.Format("MoveTasksMessage", itemCount, targetTask.Title),
                 BatchDropOperationKind.CloneInto =>
-                    $"Are you sure you want to clone {itemCount} selected tasks into \"{targetTask.Title}\"?",
+                    L10n.Format("CloneTasksMessage", itemCount, targetTask.Title),
                 BatchDropOperationKind.SourcesBlockTarget =>
-                    $"Are you sure you want to mark {itemCount} selected tasks as blockers for \"{targetTask.Title}\"?",
+                    L10n.Format("AddBlockingTasksMessage", itemCount, targetTask.Title),
                 BatchDropOperationKind.TargetBlocksSources =>
-                    $"Are you sure you want to mark \"{targetTask.Title}\" as a blocker for {itemCount} selected tasks?",
-                _ => $"Are you sure you want to update {itemCount} selected tasks?"
+                    L10n.Format("AddBlockedTasksMessage", targetTask.Title, itemCount),
+                _ => L10n.Format("ConfirmBatchOperationMessage", itemCount)
             };
         }
 
@@ -686,7 +687,7 @@ namespace Unlimotion.Views
         {
             if (DataContext is MainWindowViewModel vm)
             {
-                vm.ManagerWrapper?.ErrorToast(errorMessage ?? "Нельзя применить массовую операцию к выбранному набору.");
+                vm.ManagerWrapper?.ErrorToast(errorMessage ?? L10n.Get("BatchOperationInvalid"));
             }
         }
 

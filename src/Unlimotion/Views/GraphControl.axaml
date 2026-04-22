@@ -18,14 +18,14 @@
 		<WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
             <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
             <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-            <CheckBox Content="Only Wanted" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0" IsVisible="{Binding OnlyUnlocked}"/>
-            <CheckBox Content="Completed" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
-			<CheckBox Content="Archived" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
-            <CheckBox Content="Only Unlocked" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,10,0"/>
+            <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0" IsVisible="{Binding OnlyUnlocked}"/>
+            <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
+			<CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
+            <CheckBox Content="{DynamicResource GraphOnlyUnlocked}" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,10,0"/>
             <!--Поиск-->
             <searchControl:SearchControl
                 SearchText="{Binding Search.SearchText, Mode=TwoWay}"
-                Watermark="Search"/>
+                Watermark="{DynamicResource Search}"/>
         </WrapPanel>
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
 					  HorizontalScrollBarVisibility="Auto">

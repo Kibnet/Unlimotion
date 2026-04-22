@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using ReactiveUI;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.ViewModel.Search;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel;
 
@@ -49,6 +51,7 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
         OpenCommand = ReactiveCommand.Create(Open);
         CancelCommand = ReactiveCommand.Create(Cancel);
         ConfirmCommand = ReactiveCommand.CreateFromTask(ConfirmAsync, this.WhenAnyValue(vm => vm.CanConfirm));
+        LocalizationService.Current.CultureChanged += (_, _) => this.RaisePropertyChanged(nameof(Watermark));
     }
 
     public bool IsExpanded
@@ -113,7 +116,7 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
 
     public bool CanConfirm => ResolveCandidateForConfirm() != null;
 
-    public string Watermark => "Find task";
+    public string Watermark => L10n.Get("FindTask");
 
     public string KindName => _kind.ToString();
 
@@ -156,7 +159,7 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
 
         if (!_isCandidateValid(_kind, currentTask, candidate.Task))
         {
-            _notificationManager.ErrorToast("Нельзя добавить выбранную связь.");
+            _notificationManager.ErrorToast(L10n.Get("InvalidRelation"));
             RefreshSuggestions();
             return;
         }
@@ -166,14 +169,14 @@ public sealed class TaskRelationPickerViewModel : ReactiveObject
             var added = await _addRelationAsync(_kind, currentTask, candidate.Task);
             if (!added)
             {
-                _notificationManager.ErrorToast("Не удалось добавить связь.");
+                _notificationManager.ErrorToast(L10n.Get("AddRelationFailed"));
                 RefreshSuggestions();
                 return;
             }
         }
         catch (Exception ex)
         {
-            _notificationManager.ErrorToast($"Не удалось добавить связь: {ex.Message}");
+            _notificationManager.ErrorToast(L10n.Format("AddRelationFailedWithError", ex.Message));
             RefreshSuggestions();
             return;
         }

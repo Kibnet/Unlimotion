@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Add" xml:space="preserve"><value>Добавить</value></data>
+  <data name="AddBlockedTasksHeader" xml:space="preserve"><value>Добавить заблокированные задачи</value></data>
+  <data name="AddBlockedTasksMessage" xml:space="preserve"><value>Сделать задачу "{0}" блокирующей для {1} выбранных задач?</value></data>
+  <data name="AddBlockingTasksHeader" xml:space="preserve"><value>Добавить блокирующие задачи</value></data>
+  <data name="AddBlockingTasksMessage" xml:space="preserve"><value>Сделать {0} выбранных задач блокирующими для "{1}"?</value></data>
+  <data name="AddRelationFailed" xml:space="preserve"><value>Не удалось добавить связь.</value></data>
+  <data name="AddRelationFailedWithError" xml:space="preserve"><value>Не удалось добавить связь: {0}</value></data>
+  <data name="AdvancedHint" xml:space="preserve"><value>Параметры для продвинутой настройки синхронизации и диагностики.</value></data>
+  <data name="AdvancedSettings" xml:space="preserve"><value>Расширенные настройки</value></data>
+  <data name="AfterComplete" xml:space="preserve"><value>После выполнения</value></data>
+  <data name="ActiveKey" xml:space="preserve"><value>Активный ключ</value></data>
+  <data name="All" xml:space="preserve"><value>Все</value></data>
+  <data name="AllTasks" xml:space="preserve"><value>Все задачи</value></data>
+  <data name="AppearanceHint" xml:space="preserve"><value>Как приложение выглядит и читается.</value></data>
+  <data name="AppearanceTitle" xml:space="preserve"><value>Внешний вид</value></data>
+  <data name="Archive" xml:space="preserve"><value>Архивировать</value></data>
+  <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Архивировать вложенные задачи</value></data>
+  <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Архивировать {0} вложенных задач из "{1}"?</value></data>
+  <data name="Archived" xml:space="preserve"><value>Архивные</value></data>
+  <data name="ArchivedLabelFormat" xml:space="preserve"><value>Архивировано: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="ArchivedPrefix" xml:space="preserve"><value>Архивировано:</value></data>
+  <data name="BackupAuto" xml:space="preserve"><value>Автоматически создавать резервную копию</value></data>
+  <data name="BackupCommitterEmail" xml:space="preserve"><value>Email автора backup-коммитов</value></data>
+  <data name="BackupCommitterName" xml:space="preserve"><value>Имя автора backup-коммитов</value></data>
+  <data name="BackupConfirmHeader" xml:space="preserve"><value>Скопировать задачи с сервера в локальное хранилище</value></data>
+  <data name="BackupConfirmMessage" xml:space="preserve"><value>Текущие серверные задачи будут сохранены в локальное хранилище на этом устройстве. Продолжить?</value></data>
+  <data name="BackupConnecting" xml:space="preserve"><value>Подключение репозитория...</value></data>
+  <data name="BackupDisabled" xml:space="preserve"><value>Резервное копирование выключено.</value></data>
+  <data name="BackupError" xml:space="preserve"><value>Ошибка синхронизации.</value></data>
+  <data name="BackupHint" xml:space="preserve"><value>Подключите Git-репозиторий для автоматической резервной копии.</value></data>
+  <data name="BackupMergeConfirmHeader" xml:space="preserve"><value>Подключить непустой репозиторий?</value></data>
+  <data name="BackupMergeConfirmMessage" xml:space="preserve"><value>Папка с задачами не пустая, и удаленный репозиторий уже содержит данные. При подключении локальные задачи будут объединены с содержимым репозитория. Продолжить?</value></data>
+  <data name="BackupMergeConfirmStatus" xml:space="preserve"><value>Подтвердите объединение локальных задач с репозиторием.</value></data>
+  <data name="BackupMergeConfirmationRequired" xml:space="preserve"><value>Требуется подтверждение объединения локальных задач с репозиторием.</value></data>
+  <data name="BackupNotConfigured" xml:space="preserve"><value>Резервное копирование не настроено.</value></data>
+  <data name="BackupOnboardingHint" xml:space="preserve"><value>Для первого подключения создайте на GitHub новый private repository без README, .gitignore и license, если хотите загрузить туда текущие локальные задачи. Вставьте SSH-адрес вида git@github.com:owner/repo.git, создайте или выберите SSH-ключ, скопируйте публичный ключ и добавьте его в GitHub profile SSH keys либо в Deploy keys репозитория с правом записи.</value></data>
+  <data name="BackupStatusConnected" xml:space="preserve"><value>Репозиторий подключен.</value></data>
+  <data name="BackupSyncing" xml:space="preserve"><value>Синхронизация с репозиторием...</value></data>
+  <data name="BackupTitle" xml:space="preserve"><value>Резервное копирование</value></data>
+  <data name="BatchMoveMissingParents" xml:space="preserve"><value>Нельзя выполнить массовое перемещение: для части задач не определён исходный родитель.</value></data>
+  <data name="BatchOperationInvalid" xml:space="preserve"><value>Нельзя применить массовую операцию к выбранному набору.</value></data>
+  <data name="BlockedTasks" xml:space="preserve"><value>Заблокированные задачи:</value></data>
+  <data name="BlockingTasks" xml:space="preserve"><value>Блокирующие задачи:</value></data>
+  <data name="Browse" xml:space="preserve"><value>Выбрать</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Отмена</value></data>
+  <data name="CannotGetAbsolutePath" xml:space="preserve"><value>Не удалось получить абсолютный путь.</value></data>
+  <data name="ClipboardUnavailable" xml:space="preserve"><value>Буфер обмена недоступен.</value></data>
+  <data name="CloneTasksHeader" xml:space="preserve"><value>Клонировать задачи</value></data>
+  <data name="CloneTasksMessage" xml:space="preserve"><value>Клонировать {0} выбранных задач в "{1}"?</value></data>
+  <data name="CollapseAllNodes" xml:space="preserve"><value>Свернуть все узлы</value></data>
+  <data name="CollapseCurrentNested" xml:space="preserve"><value>Свернуть вложенные текущего</value></data>
+  <data name="Completed" xml:space="preserve"><value>Завершенные</value></data>
+  <data name="CompletedLabelFormat" xml:space="preserve"><value>Завершено: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="CompletedPrefix" xml:space="preserve"><value>Завершено:</value></data>
+  <data name="Connect" xml:space="preserve"><value>Подключить</value></data>
+  <data name="ConnectHint" xml:space="preserve"><value>После изменения адреса или входа нажмите "Подключить".</value></data>
+  <data name="ConnectRepository" xml:space="preserve"><value>Подключить репозиторий</value></data>
+  <data name="ConnectStorageFailed" xml:space="preserve"><value>Не удалось подключить хранилище задач: {0}{1}</value></data>
+  <data name="ConnectingRepository" xml:space="preserve"><value>Подключение репозитория...</value></data>
+  <data name="ContainingTasks" xml:space="preserve"><value>Содержащие задачи:</value></data>
+  <data name="CopyPublicKey" xml:space="preserve"><value>Копировать публичный ключ</value></data>
+  <data name="CopyServerTasksToLocal" xml:space="preserve"><value>Скопировать задачи с сервера в локальное хранилище</value></data>
+  <data name="CopyTasksHeader" xml:space="preserve"><value>Копировать задачи</value></data>
+  <data name="CopyTasksMessage" xml:space="preserve"><value>Копировать {0} выбранных задач в "{1}"?</value></data>
+  <data name="CreatedLabelFormat" xml:space="preserve"><value>Создано: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="CreatedPrefix" xml:space="preserve"><value>Создано:</value></data>
+  <data name="Create" xml:space="preserve"><value>Создать</value></data>
+  <data name="CustomPeriod" xml:space="preserve"><value>Произвольный период</value></data>
+  <data name="DataFolder" xml:space="preserve"><value>Папка с данными</value></data>
+  <data name="DateFilterAllTime" xml:space="preserve"><value>За все время</value></data>
+  <data name="DateFilterLastMonth" xml:space="preserve"><value>Последний месяц</value></data>
+  <data name="DateFilterLastTwoDays" xml:space="preserve"><value>Последние два дня</value></data>
+  <data name="DateFilterLastWeek" xml:space="preserve"><value>Последняя неделя</value></data>
+  <data name="DateFilterLastYear" xml:space="preserve"><value>Последний год</value></data>
+  <data name="DateFilterMonth" xml:space="preserve"><value>Месяц</value></data>
+  <data name="DateFilterQuarter" xml:space="preserve"><value>Квартал</value></data>
+  <data name="DateFilterToday" xml:space="preserve"><value>Сегодня</value></data>
+  <data name="DateFilterWeek" xml:space="preserve"><value>Неделя</value></data>
+  <data name="DateFilterYear" xml:space="preserve"><value>Год</value></data>
+  <data name="Description" xml:space="preserve"><value>Описание</value></data>
+  <data name="DialogNo" xml:space="preserve"><value>Нет</value></data>
+  <data name="DialogYes" xml:space="preserve"><value>Да</value></data>
+  <data name="DurationExample" xml:space="preserve"><value>Пример: 1d, 5h, 20m, 50s, 300ms</value></data>
+  <data name="DurationFilter1dLess" xml:space="preserve"><value>1d&lt;</value></data>
+  <data name="DurationFilter2hTo1d" xml:space="preserve"><value>2h&lt; и &lt;=1d</value></data>
+  <data name="DurationFilter30mTo2h" xml:space="preserve"><value>30m&lt; и &lt;=2h</value></data>
+  <data name="DurationFilter5m" xml:space="preserve"><value>&lt;=5m</value></data>
+  <data name="DurationFilter5mTo30m" xml:space="preserve"><value>5m&lt; и &lt;=30m</value></data>
+  <data name="DurationFilterNoDuration" xml:space="preserve"><value>Без длительности</value></data>
+  <data name="EightDays" xml:space="preserve"><value>8 дней</value></data>
+  <data name="EmptySshKey" xml:space="preserve"><value>Публичный SSH-ключ пустой или не найден.</value></data>
+  <data name="Enabled" xml:space="preserve"><value>Включено</value></data>
+  <data name="EnterLoginAndToken" xml:space="preserve"><value>Введите логин и токен доступа.</value></data>
+  <data name="ExpandAllNodes" xml:space="preserve"><value>Развернуть все узлы</value></data>
+  <data name="ExpandCurrentNested" xml:space="preserve"><value>Развернуть вложенные текущего</value></data>
+  <data name="FileStorageNoAccess" xml:space="preserve"><value>Нет доступа к каталогу: {0}</value></data>
+  <data name="FindTask" xml:space="preserve"><value>Найти задачу</value></data>
+  <data name="FirstDayNextMonth" xml:space="preserve"><value>Первый день следующего месяца</value></data>
+  <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
+  <data name="FiveMinutes" xml:space="preserve"><value>5 минут</value></data>
+  <data name="FolderPickerDataFolder" xml:space="preserve"><value>Папка с данными</value></data>
+  <data name="FontSize" xml:space="preserve"><value>Размер текста</value></data>
+  <data name="FortyMinutes" xml:space="preserve"><value>40 минут</value></data>
+  <data name="FourDays" xml:space="preserve"><value>4 дня</value></data>
+  <data name="FourHours" xml:space="preserve"><value>4 часа</value></data>
+  <data name="Friday" xml:space="preserve"><value>Пятница</value></data>
+  <data name="From" xml:space="preserve"><value>С</value></data>
+  <data name="FuzzySearch" xml:space="preserve"><value>Умный поиск</value></data>
+  <data name="GitConflicts" xml:space="preserve"><value>Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.</value></data>
+  <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Только разблокированные</value></data>
+  <data name="Importance" xml:space="preserve"><value>Важность</value></data>
+  <data name="InvalidRelation" xml:space="preserve"><value>Нельзя добавить выбранную связь.</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>Английский</value></data>
+  <data name="LanguageLabel" xml:space="preserve"><value>Язык</value></data>
+  <data name="LanguageRussian" xml:space="preserve"><value>Русский</value></data>
+  <data name="LanguageSystem" xml:space="preserve"><value>Как в системе</value></data>
+  <data name="JsonRepairFailed" xml:space="preserve"><value>Не удалось разобрать JSON даже после автоматического ремонта запятых. Файл: {0}. Первые 200 символов после ремонта: {1}</value></data>
+  <data name="LastCreated" xml:space="preserve"><value>Последние созданные</value></data>
+  <data name="LastOpened" xml:space="preserve"><value>Последние открытые</value></data>
+  <data name="LastUpdated" xml:space="preserve"><value>Последние измененные</value></data>
+  <data name="LocalReady" xml:space="preserve"><value>Локальное хранилище готово к подключению.</value></data>
+  <data name="LocalStorageConnected" xml:space="preserve"><value>Подключено к локальному хранилищу.</value></data>
+  <data name="LocalStorageConnecting" xml:space="preserve"><value>Подключение локального хранилища...</value></data>
+  <data name="LocalStorageError" xml:space="preserve"><value>Ошибка доступа к локальному хранилищу.</value></data>
+  <data name="Login" xml:space="preserve"><value>Логин</value></data>
+  <data name="MaintenanceHint" xml:space="preserve"><value>Используйте эти действия только если понимаете последствия или следуете инструкции поддержки.</value></data>
+  <data name="MaintenanceTitle" xml:space="preserve"><value>Обслуживание и восстановление</value></data>
+  <data name="MigrateConfirmHeader" xml:space="preserve"><value>Перенести локальные задачи на сервер</value></data>
+  <data name="MigrateConfirmMessage" xml:space="preserve"><value>Локальные задачи будут загружены в текущее серверное хранилище. Продолжить?</value></data>
+  <data name="MigrateLocalTasksToServer" xml:space="preserve"><value>Перенести локальные задачи на сервер</value></data>
+  <data name="Monday" xml:space="preserve"><value>Понедельник</value></data>
+  <data name="MoveMissingParent" xml:space="preserve"><value>Нельзя выполнить перемещение: не определён исходный родитель.</value></data>
+  <data name="MoveTasksHeader" xml:space="preserve"><value>Переместить задачи</value></data>
+  <data name="MoveTasksMessage" xml:space="preserve"><value>Переместить {0} выбранных задач в "{1}"?</value></data>
+  <data name="MoveToPath" xml:space="preserve"><value>Переместить в папку</value></data>
+  <data name="NewBlockedSibling" xml:space="preserve"><value>➕🔒 Соседняя</value></data>
+  <data name="NewInner" xml:space="preserve"><value>➕ Внутренняя</value></data>
+  <data name="NewKey" xml:space="preserve"><value>Новый ключ</value></data>
+  <data name="NewSibling" xml:space="preserve"><value>➕ Соседняя</value></data>
+  <data name="NewTask" xml:space="preserve"><value>➕ Новая</value></data>
+  <data name="NextFriday" xml:space="preserve"><value>Следующая пятница</value></data>
+  <data name="NextMonday" xml:space="preserve"><value>Следующий понедельник</value></data>
+  <data name="None" xml:space="preserve"><value>Нет</value></data>
+  <data name="OneDay" xml:space="preserve"><value>1 день</value></data>
+  <data name="OneHour" xml:space="preserve"><value>1 час</value></data>
+  <data name="OneMinute" xml:space="preserve"><value>1 минута</value></data>
+  <data name="OnlyWanted" xml:space="preserve"><value>Только важные</value></data>
+  <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Параметры сохранены. Нажмите "Подключить репозиторий".</value></data>
+  <data name="ParentsTasks" xml:space="preserve"><value>Родительские задачи:</value></data>
+  <data name="Password" xml:space="preserve"><value>Пароль</value></data>
+  <data name="Period" xml:space="preserve"><value>Период</value></data>
+  <data name="PlannedBegin" xml:space="preserve"><value>Планируемое начало</value></data>
+  <data name="PlannedDuration" xml:space="preserve"><value>Планируемая длительность</value></data>
+  <data name="PlannedEnd" xml:space="preserve"><value>Планируемое окончание</value></data>
+  <data name="PullErrorStatus" xml:space="preserve"><value>Ошибка получения изменений: {0}</value></data>
+  <data name="PullErrorToast" xml:space="preserve"><value>Не удалось получить изменения из репозитория: {0}</value></data>
+  <data name="PullIntervalSeconds" xml:space="preserve"><value>Интервал получения изменений, сек.</value></data>
+  <data name="PullNow" xml:space="preserve"><value>Получить изменения сейчас</value></data>
+  <data name="PulledChanges" xml:space="preserve"><value>Изменения из репозитория получены.</value></data>
+  <data name="PullingChanges" xml:space="preserve"><value>Получение изменений из репозитория...</value></data>
+  <data name="PushBranch" xml:space="preserve"><value>Ветка отправки</value></data>
+  <data name="PushErrorStatus" xml:space="preserve"><value>Ошибка отправки изменений: {0}</value></data>
+  <data name="PushErrorToast" xml:space="preserve"><value>Не удалось отправить изменения в репозиторий: {0}</value></data>
+  <data name="PushIntervalSeconds" xml:space="preserve"><value>Интервал отправки изменений, сек.</value></data>
+  <data name="PushNow" xml:space="preserve"><value>Отправить изменения сейчас</value></data>
+  <data name="PushedChanges" xml:space="preserve"><value>Изменения отправлены в репозиторий.</value></data>
+  <data name="PushingChanges" xml:space="preserve"><value>Отправка изменений в репозиторий...</value></data>
+  <data name="Refresh" xml:space="preserve"><value>Обновить</value></data>
+  <data name="RemoteRepositoryUrlNotConfigured" xml:space="preserve"><value>Адрес удаленного репозитория не настроен.</value></data>
+  <data name="RemoteSource" xml:space="preserve"><value>Удаленный источник</value></data>
+  <data name="Remove" xml:space="preserve"><value>Удалить</value></data>
+  <data name="RemoveTaskHeader" xml:space="preserve"><value>Удалить задачу</value></data>
+  <data name="RemoveTaskMessage" xml:space="preserve"><value>Удалить задачу "{0}" с диска?</value></data>
+  <data name="RemoveTasksHeader" xml:space="preserve"><value>Удалить задачи</value></data>
+  <data name="RemoveTasksMessage" xml:space="preserve"><value>Удалить {0} выбранных записей задач?</value></data>
+  <data name="RepeaterTemplates" xml:space="preserve"><value>Шаблоны повторения</value></data>
+  <data name="Repository" xml:space="preserve"><value>Репозиторий</value></data>
+  <data name="RepositoryConnected" xml:space="preserve"><value>Репозиторий подключен.</value></data>
+  <data name="RepositoryConnectCanceled" xml:space="preserve"><value>Подключение репозитория отменено.</value></data>
+  <data name="RepositoryConnectErrorStatus" xml:space="preserve"><value>Ошибка подключения репозитория: {0}</value></data>
+  <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Не удалось подключить репозиторий: {0}</value></data>
+  <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Рабочая папка репозитория недоступна.</value></data>
+  <data name="ResaveAllTasks" xml:space="preserve"><value>Пересохранить все задачи</value></data>
+  <data name="ResaveConfirmHeader" xml:space="preserve"><value>Пересохранить все задачи</value></data>
+  <data name="ResaveConfirmMessage" xml:space="preserve"><value>Все задачи будут перечитаны и сохранены заново в локальном хранилище. Продолжить?</value></data>
+  <data name="Roadmap" xml:space="preserve"><value>Карта</value></data>
+  <data name="Saturday" xml:space="preserve"><value>Суббота</value></data>
+  <data name="Search" xml:space="preserve"><value>Поиск</value></data>
+  <data name="SelectDataFolder" xml:space="preserve"><value>Выберите папку с данными.</value></data>
+  <data name="SelectSshKey" xml:space="preserve"><value>Выберите SSH-ключ.</value></data>
+  <data name="ServerAddress" xml:space="preserve"><value>Адрес сервера</value></data>
+  <data name="ServerConnected" xml:space="preserve"><value>Подключено к серверу.</value></data>
+  <data name="ServerConnectedAs" xml:space="preserve"><value>Подключено как {0}.</value></data>
+  <data name="ServerConnecting" xml:space="preserve"><value>Подключение к серверу...</value></data>
+  <data name="ServerConnectionError" xml:space="preserve"><value>Ошибка подключения к серверу.</value></data>
+  <data name="SetBegin" xml:space="preserve"><value>Задать начало</value></data>
+  <data name="SetDuration" xml:space="preserve"><value>Задать длительность</value></data>
+  <data name="SetEnd" xml:space="preserve"><value>Задать окончание</value></data>
+  <data name="Settings" xml:space="preserve"><value>Настройки</value></data>
+  <data name="SettingsIntro" xml:space="preserve"><value>Настройте внешний вид, хранилище задач и резервное копирование. Некоторые изменения применяются сразу, а для подключения хранилища и репозитория нужны отдельные действия.</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>Настройки</value></data>
+  <data name="SevenDays" xml:space="preserve"><value>7 дней</value></data>
+  <data name="ShowAdvancedBackupSettings" xml:space="preserve"><value>Показать дополнительные параметры</value></data>
+  <data name="ShowNotifications" xml:space="preserve"><value>Показывать уведомления</value></data>
+  <data name="ShowServiceActions" xml:space="preserve"><value>Показать сервисные действия</value></data>
+  <data name="SignOut" xml:space="preserve"><value>Выйти</value></data>
+  <data name="SignOutInProgress" xml:space="preserve"><value>Выход из серверного аккаунта...</value></data>
+  <data name="SignedOut" xml:space="preserve"><value>Вы вышли из серверного аккаунта.</value></data>
+  <data name="SortArchiveAscending" xml:space="preserve"><value>Архивация по возрастанию</value></data>
+  <data name="SortArchiveDescending" xml:space="preserve"><value>Архивация по убыванию</value></data>
+  <data name="SortComfort" xml:space="preserve"><value>Комфорт</value></data>
+  <data name="SortCompletedAscending" xml:space="preserve"><value>Выполнение по возрастанию</value></data>
+  <data name="SortCompletedDescending" xml:space="preserve"><value>Выполнение по убыванию</value></data>
+  <data name="SortCreatedAscending" xml:space="preserve"><value>Создание по возрастанию</value></data>
+  <data name="SortCreatedDescending" xml:space="preserve"><value>Создание по убыванию</value></data>
+  <data name="SortEmoji" xml:space="preserve"><value>Эмодзи</value></data>
+  <data name="SortImportanceAscending" xml:space="preserve"><value>Важность по возрастанию</value></data>
+  <data name="SortImportanceDescending" xml:space="preserve"><value>Важность по убыванию</value></data>
+  <data name="SortIsCanBeCompletedAscending" xml:space="preserve"><value>Готовность к выполнению по возрастанию</value></data>
+  <data name="SortIsCanBeCompletedDescending" xml:space="preserve"><value>Готовность к выполнению по убыванию</value></data>
+  <data name="SortIsCompletedAscending" xml:space="preserve"><value>Статус выполнения по возрастанию</value></data>
+  <data name="SortIsCompletedDescending" xml:space="preserve"><value>Статус выполнения по убыванию</value></data>
+  <data name="SortPlannedBeginAscending" xml:space="preserve"><value>Планируемое начало по возрастанию</value></data>
+  <data name="SortPlannedBeginDescending" xml:space="preserve"><value>Планируемое начало по убыванию</value></data>
+  <data name="SortPlannedDurationAscending" xml:space="preserve"><value>Планируемая длительность по возрастанию</value></data>
+  <data name="SortPlannedDurationDescending" xml:space="preserve"><value>Планируемая длительность по убыванию</value></data>
+  <data name="SortPlannedFinishAscending" xml:space="preserve"><value>Планируемое окончание по возрастанию</value></data>
+  <data name="SortPlannedFinishDescending" xml:space="preserve"><value>Планируемое окончание по убыванию</value></data>
+  <data name="SortTitleAscending" xml:space="preserve"><value>Название по возрастанию</value></data>
+  <data name="SortTitleDescending" xml:space="preserve"><value>Название по убыванию</value></data>
+  <data name="SortUnlockedAscending" xml:space="preserve"><value>Разблокировка по возрастанию</value></data>
+  <data name="SortUnlockedDescending" xml:space="preserve"><value>Разблокировка по убыванию</value></data>
+  <data name="SortUpdatedAscending" xml:space="preserve"><value>Изменение по возрастанию</value></data>
+  <data name="SortUpdatedDescending" xml:space="preserve"><value>Изменение по убыванию</value></data>
+  <data name="SpecifyRepositoryUrl" xml:space="preserve"><value>Укажите адрес репозитория.</value></data>
+  <data name="SshKeyCopied" xml:space="preserve"><value>Публичный SSH-ключ скопирован в буфер обмена.</value></data>
+  <data name="SshKeyCreateFailed" xml:space="preserve"><value>Не удалось создать SSH-ключ: {0}</value></data>
+  <data name="SshKeyCreated" xml:space="preserve"><value>SSH-ключ создан: {0}</value></data>
+  <data name="SshKeys" xml:space="preserve"><value>SSH-ключи</value></data>
+  <data name="SshKeysHint" xml:space="preserve"><value>Нужны только если репозиторий использует SSH.</value></data>
+  <data name="SshPrivateKeyPathNotConfigured" xml:space="preserve"><value>Путь к приватному SSH-ключу не настроен.</value></data>
+  <data name="StorageConnectedToast" xml:space="preserve"><value>Хранилище задач подключено и все задачи из него загружены.</value></data>
+  <data name="StorageHint" xml:space="preserve"><value>Выберите, где хранятся ваши задачи.</value></data>
+  <data name="StorageMode" xml:space="preserve"><value>Режим хранения</value></data>
+  <data name="StorageServer" xml:space="preserve"><value>На сервере</value></data>
+  <data name="StorageTitle" xml:space="preserve"><value>Хранилище задач</value></data>
+  <data name="StorageLocal" xml:space="preserve"><value>На этом устройстве</value></data>
+  <data name="SyncComplete" xml:space="preserve"><value>Синхронизация завершена.</value></data>
+  <data name="SyncErrorStatus" xml:space="preserve"><value>Ошибка синхронизации: {0}</value></data>
+  <data name="SyncErrorToast" xml:space="preserve"><value>Не удалось синхронизировать репозиторий: {0}</value></data>
+  <data name="SyncNow" xml:space="preserve"><value>Синхронизировать сейчас</value></data>
+  <data name="SyncingRepository" xml:space="preserve"><value>Синхронизация с репозиторием...</value></data>
+  <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>
+  <data name="TenDays" xml:space="preserve"><value>10 дней</value></data>
+  <data name="TenMinutes" xml:space="preserve"><value>10 минут</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>Темная</value></data>
+  <data name="ThemeInterface" xml:space="preserve"><value>Тема интерфейса</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>Светлая</value></data>
+  <data name="ThemeSystem" xml:space="preserve"><value>Как в системе</value></data>
+  <data name="Thursday" xml:space="preserve"><value>Четверг</value></data>
+  <data name="TitleWatermark" xml:space="preserve"><value>Название</value></data>
+  <data name="To" xml:space="preserve"><value>По</value></data>
+  <data name="Token" xml:space="preserve"><value>Токен</value></data>
+  <data name="TokenAccess" xml:space="preserve"><value>Токен доступа</value></data>
+  <data name="Tuesday" xml:space="preserve"><value>Вторник</value></data>
+  <data name="TwentyMinutes" xml:space="preserve"><value>20 минут</value></data>
+  <data name="TwoDays" xml:space="preserve"><value>2 дня</value></data>
+  <data name="TwoHours" xml:space="preserve"><value>2 часа</value></data>
+  <data name="Unknown" xml:space="preserve"><value>Неизвестно</value></data>
+  <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Разархивировать вложенные задачи</value></data>
+  <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Разархивировать {0} вложенных задач из "{1}"?</value></data>
+  <data name="Unlocked" xml:space="preserve"><value>Разблокированные</value></data>
+  <data name="UnlockedLabelFormat" xml:space="preserve"><value>Разблокировано: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="UnlockedPrefix" xml:space="preserve"><value>Разблокировано:</value></data>
+  <data name="UnlockedTimeFilterFuture" xml:space="preserve"><value>Будущее</value></data>
+  <data name="UnlockedTimeFilterMaybe" xml:space="preserve"><value>Возможно</value></data>
+  <data name="UnlockedTimeFilterOverdue" xml:space="preserve"><value>Просрочено</value></data>
+  <data name="UnlockedTimeFilterToday" xml:space="preserve"><value>Сегодня</value></data>
+  <data name="UnlockedTimeFilterUnplanned" xml:space="preserve"><value>Без плана</value></data>
+  <data name="UnlockedTimeFilterUrgent" xml:space="preserve"><value>Срочно</value></data>
+  <data name="UnsupportedDragSource" xml:space="preserve"><value>Неподдерживаемый источник drag-and-drop.</value></data>
+  <data name="UpdatedLabelFormat" xml:space="preserve"><value>Изменено: {0:yyyy.MM.dd HH:mm}</value></data>
+  <data name="UpdatedPrefix" xml:space="preserve"><value>Изменено:</value></data>
+  <data name="Wanted" xml:space="preserve"><value>Важное</value></data>
+  <data name="Wednesday" xml:space="preserve"><value>Среда</value></data>
+  <data name="AllTasksResaved" xml:space="preserve"><value>Все задачи пересохранены.</value></data>
+  <data name="AndroidAllFilesHint" xml:space="preserve"><value> Проверьте разрешение "Доступ ко всем файлам".</value></data>
+  <data name="BackupConnectCanceledNonEmpty" xml:space="preserve"><value>Подключение отменено: локальная папка задач и удаленный репозиторий не пустые.</value></data>
+  <data name="CannotResolveCloneDirectory" xml:space="preserve"><value>Не удалось определить папку клонирования для {0}.</value></data>
+  <data name="CloneOrUpdateRepositoryFailed" xml:space="preserve"><value>Не удалось клонировать или обновить репозиторий: {0}</value></data>
+  <data name="CommitCreated" xml:space="preserve"><value>Коммит создан.</value></data>
+  <data name="ConfirmBatchOperationHeader" xml:space="preserve"><value>Подтвердить массовую операцию</value></data>
+  <data name="ConfirmBatchOperationMessage" xml:space="preserve"><value>Обновить {0} выбранных задач?</value></data>
+  <data name="CopyServerTasksFailed" xml:space="preserve"><value>Не удалось скопировать задачи с сервера: {0}</value></data>
+  <data name="FailedToStartProcess" xml:space="preserve"><value>Не удалось запустить {0}.</value></data>
+  <data name="FileWatcherError" xml:space="preserve"><value>Ошибка наблюдения за файлами: {0}</value></data>
+  <data name="FixConflictsCommitResult" xml:space="preserve"><value>Исправьте конфликты и закоммитьте результат.</value></data>
+  <data name="GitMergeFailed" xml:space="preserve"><value>Не удалось выполнить git merge: {0}</value></data>
+  <data name="GitOperationFailed" xml:space="preserve"><value>Операция {0} завершилась ошибкой: {1}</value></data>
+  <data name="LocalBranchNotFound" xml:space="preserve"><value>Локальная ветка не найдена: {0}</value></data>
+  <data name="MergeRemoteBranchFailed" xml:space="preserve"><value>Не удалось объединить удаленную ветку с локальной: {0}</value></data>
+  <data name="MergeSuccessful" xml:space="preserve"><value>Объединение выполнено.</value></data>
+  <data name="MigrateLocalTasksFailed" xml:space="preserve"><value>Не удалось перенести локальные задачи на сервер: {0}</value></data>
+  <data name="MigrateLocalTasksSuccess" xml:space="preserve"><value>Локальные задачи перенесены на сервер.</value></data>
+  <data name="OneMonth" xml:space="preserve"><value>1 месяц</value></data>
+  <data name="PushRemoteFailed" xml:space="preserve"><value>Не удалось отправить изменения в удаленный репозиторий: {0}</value></data>
+  <data name="PushSuccessful" xml:space="preserve"><value>Отправка выполнена.</value></data>
+  <data name="ReactiveUnhandledError" xml:space="preserve"><value>Непредвиденная ошибка: {0}</value></data>
+  <data name="ReactiveUnhandledErrorWithLocation" xml:space="preserve"><value>Непредвиденная ошибка: {0} Файл: {1}. Строка: {2}</value></data>
+  <data name="RemoteBranchNotFoundAfterFetch" xml:space="preserve"><value>Удаленная ветка не найдена после fetch: {0}</value></data>
+  <data name="RemoteNotFound" xml:space="preserve"><value>Удаленный источник не найден: {0}</value></data>
+  <data name="RepositoryConnectedAndMerged" xml:space="preserve"><value>Репозиторий подключен и объединен.</value></data>
+  <data name="RepositoryInitializedAndPushed" xml:space="preserve"><value>Репозиторий инициализирован, изменения отправлены.</value></data>
+  <data name="RepeaterPatternTitle" xml:space="preserve"><value>{0}, каждые {1}</value></data>
+  <data name="RepeaterTypeDaily" xml:space="preserve"><value>Ежедневно</value></data>
+  <data name="RepeaterTypeMonthly" xml:space="preserve"><value>Ежемесячно</value></data>
+  <data name="RepeaterTypeNone" xml:space="preserve"><value>Нет</value></data>
+  <data name="RepeaterTypeWeekly" xml:space="preserve"><value>Еженедельно</value></data>
+  <data name="RepeaterTypeWeeklyWorkDays" xml:space="preserve"><value>По рабочим дням</value></data>
+  <data name="RepeaterTypeYearly" xml:space="preserve"><value>Ежегодно</value></data>
+  <data name="ResaveTasksFailed" xml:space="preserve"><value>Не удалось пересохранить задачи: {0}</value></data>
+  <data name="ServerTasksCopiedToLocal" xml:space="preserve"><value>Задачи с сервера скопированы в локальное хранилище.</value></data>
+  <data name="SshKeyAlreadyExists" xml:space="preserve"><value>SSH-ключ уже существует: {0}</value></data>
+  <data name="SshKeyPathOutsideDirectory" xml:space="preserve"><value>Путь к SSH-ключу должен оставаться внутри {0}.</value></data>
+  <data name="SshKeygenDidNotCreateFiles" xml:space="preserve"><value>ssh-keygen не создал ожидаемые файлы ключей в {0}.</value></data>
+  <data name="SshKeygenFailed" xml:space="preserve"><value>ssh-keygen завершился с ошибкой: {0}</value></data>
+  <data name="SshPrivateKeyNotFound" xml:space="preserve"><value>Приватный SSH-ключ не найден: {0}</value></data>
+  <data name="StartGitPull" xml:space="preserve"><value>Запуск Git pull...</value></data>
+  <data name="StartGitPush" xml:space="preserve"><value>Запуск Git push...</value></data>
+  <data name="StashApplied" xml:space="preserve"><value>Stash применен.</value></data>
+  <data name="Sunday" xml:space="preserve"><value>Воскресенье</value></data>
+  <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Неподдерживаемое действие подключения Git: {0}.</value></data>
+</root>

@@ -2,6 +2,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
@@ -21,8 +22,10 @@ using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using WritableJsonConfiguration;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 #if LIVE
 using Live.Avalonia;
 #endif
@@ -65,6 +68,8 @@ public class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        ApplyLocalizedResources();
+        LocalizationService.Current.CultureChanged += (_, __) => ApplyLocalizedResources();
         ApplyConfiguredTheme();
         ApplyConfiguredFontSize();
     }
@@ -150,14 +155,14 @@ public class App : Application
 
                 if (settings.StorageConnectionState == SettingsConnectionState.Connected)
                 {
-                    _notificationManager?.SuccessToast("Хранилище задач подключено и все задачи из него загружены");
+                    _notificationManager?.SuccessToast(L10n.Get("StorageConnectedToast"));
                 }
             }
             catch (Exception ex)
             {
                 settings.SetStorageConnectionState(SettingsConnectionState.Error);
-                var hint = OperatingSystem.IsAndroid() ? " Проверьте разрешение \"Доступ ко всем файлам\"." : string.Empty;
-                _notificationManager?.ErrorToast($"Не удалось подключить хранилище задач: {ex.Message}{hint}");
+                var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
+                _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
             }
         });
 
@@ -169,14 +174,14 @@ public class App : Application
                 return;
             }
 
-            settings.SetStorageConnectionState(SettingsConnectionState.Connecting, "Выход из серверного аккаунта...");
+            settings.SetStorageConnectionState(SettingsConnectionState.Connecting, L10n.Get("SignOutInProgress"));
             await storage.SignOut();
             settings.MarkSignedOut();
         });
 
         settings.SyncNowCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Синхронизация с репозиторием...");
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("SyncingRepository"));
             try
             {
                 await Task.Run(() =>
@@ -186,13 +191,13 @@ public class App : Application
                 });
 
                 settings.ReloadGitMetadata();
-                settings.SetBackupConnectionState(BackupStatusState.Connected, "Синхронизация завершена.");
-                ShowBackupSuccessToast(settings, "Синхронизация с репозиторием завершена.");
+                settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("SyncComplete"));
+                ShowBackupSuccessToast(settings, L10n.Get("SyncComplete"));
             }
             catch (Exception ex)
             {
-                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка синхронизации: {ex.Message}");
-                _notificationManager?.ErrorToast($"Не удалось синхронизировать репозиторий: {ex.Message}");
+                settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("SyncErrorStatus", ex.Message));
+                _notificationManager?.ErrorToast(L10n.Format("SyncErrorToast", ex.Message));
             }
         });
 
@@ -246,8 +251,8 @@ public class App : Application
         settings.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
-                "Перенести локальные задачи на сервер",
-                "Локальные задачи будут загружены в текущее серверное хранилище. Продолжить?",
+                L10n.Get("MigrateConfirmHeader"),
+                L10n.Get("MigrateConfirmMessage"),
                 async () =>
                 {
                     var serverTaskStorage = _storageFactory?.CurrentStorage;
@@ -265,9 +270,9 @@ public class App : Application
                     }
 
                     await serverTaskStorage.TaskTreeManager.Storage.BulkInsert(tasks);
-                    _notificationManager?.SuccessToast("Локальные задачи перенесены на сервер.");
+                    _notificationManager?.SuccessToast(L10n.Get("MigrateLocalTasksSuccess"));
                 },
-                ex => _notificationManager?.ErrorToast($"Не удалось перенести локальные задачи на сервер: {ex.Message}"));
+                ex => _notificationManager?.ErrorToast(L10n.Format("MigrateLocalTasksFailed", ex.Message)));
 
             await Task.CompletedTask;
         });
@@ -275,8 +280,8 @@ public class App : Application
         settings.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
-                "Скопировать задачи с сервера в локальное хранилище",
-                "Текущие серверные задачи будут сохранены в локальное хранилище на этом устройстве. Продолжить?",
+                L10n.Get("BackupConfirmHeader"),
+                L10n.Get("BackupConfirmMessage"),
                 async () =>
                 {
                     var serverTaskStorage = _storageFactory?.CurrentStorage;
@@ -303,9 +308,9 @@ public class App : Application
                         await fileStorage.Save(task);
                     }
 
-                    _notificationManager?.SuccessToast("Задачи с сервера скопированы в локальное хранилище.");
+                    _notificationManager?.SuccessToast(L10n.Get("ServerTasksCopiedToLocal"));
                 },
-                ex => _notificationManager?.ErrorToast($"Не удалось скопировать задачи с сервера: {ex.Message}"));
+                ex => _notificationManager?.ErrorToast(L10n.Format("CopyServerTasksFailed", ex.Message)));
 
             await Task.CompletedTask;
         });
@@ -313,8 +318,8 @@ public class App : Application
         settings.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
-                "Пересохранить все задачи",
-                "Все задачи будут перечитаны и сохранены заново в локальном хранилище. Продолжить?",
+                L10n.Get("ResaveConfirmHeader"),
+                L10n.Get("ResaveConfirmMessage"),
                 async () =>
                 {
                     var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
@@ -326,10 +331,10 @@ public class App : Application
                         task.SaveItemCommand.Execute();
                     }
 
-                    _notificationManager?.SuccessToast("Все задачи пересохранены.");
+                    _notificationManager?.SuccessToast(L10n.Get("AllTasksResaved"));
                     await Task.CompletedTask;
                 },
-                ex => _notificationManager?.ErrorToast($"Не удалось пересохранить задачи: {ex.Message}"));
+                ex => _notificationManager?.ErrorToast(L10n.Format("ResaveTasksFailed", ex.Message)));
 
             await Task.CompletedTask;
         });
@@ -337,7 +342,7 @@ public class App : Application
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
             if (_dialogs == null) return;
-            var path = await _dialogs.ShowOpenFolderDialogAsync("Папка с данными");
+            var path = await _dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerDataFolder"));
             if (!string.IsNullOrWhiteSpace(path))
             {
                 settings.TaskStoragePath = path;
@@ -353,19 +358,19 @@ public class App : Application
                 {
                     settings.SetBackupConnectionState(
                         BackupStatusState.NotConfigured,
-                        "Подтвердите объединение локальных задач с репозиторием.");
+                        L10n.Get("BackupMergeConfirmStatus"));
 
                     if (_notificationManager == null)
                     {
-                        _notificationManager?.ErrorToast("Требуется подтверждение объединения локальных задач с репозиторием.");
+                        _notificationManager?.ErrorToast(L10n.Get("BackupMergeConfirmationRequired"));
                         return;
                     }
 
                     _notificationManager.Ask(
-                        "Подключить непустой репозиторий?",
-                        "Папка с задачами не пустая, и удаленный репозиторий уже содержит данные. При подключении локальные задачи будут объединены с содержимым репозитория. Продолжить?",
+                        L10n.Get("BackupMergeConfirmHeader"),
+                        L10n.Get("BackupMergeConfirmMessage"),
                         () => _ = ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: true),
-                        () => settings.SetBackupConnectionState(BackupStatusState.NotConfigured, "Подключение репозитория отменено."));
+                        () => settings.SetBackupConnectionState(BackupStatusState.NotConfigured, L10n.Get("RepositoryConnectCanceled")));
                     return;
                 }
 
@@ -373,42 +378,42 @@ public class App : Application
             }
             catch (Exception ex)
             {
-                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка подключения репозитория: {ex.Message}");
-                _notificationManager?.ErrorToast($"Не удалось подключить репозиторий: {ex.Message}");
+                settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("RepositoryConnectErrorStatus", ex.Message));
+                _notificationManager?.ErrorToast(L10n.Format("RepositoryConnectErrorToast", ex.Message));
             }
         });
 
         settings.PullCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Получение изменений из репозитория...");
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("PullingChanges"));
             try
             {
                 await Task.Run(() => _backupService?.Pull());
                 settings.ReloadGitMetadata();
-                settings.SetBackupConnectionState(BackupStatusState.Connected, "Изменения из репозитория получены.");
-                ShowBackupSuccessToast(settings, "Изменения из репозитория получены.");
+                settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("PulledChanges"));
+                ShowBackupSuccessToast(settings, L10n.Get("PulledChanges"));
             }
             catch (Exception ex)
             {
-                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка получения изменений: {ex.Message}");
-                _notificationManager?.ErrorToast($"Не удалось получить изменения из репозитория: {ex.Message}");
+                settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("PullErrorStatus", ex.Message));
+                _notificationManager?.ErrorToast(L10n.Format("PullErrorToast", ex.Message));
             }
         });
 
         settings.PushCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            settings.SetBackupConnectionState(BackupStatusState.Syncing, "Отправка изменений в репозиторий...");
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("PushingChanges"));
             try
             {
                 await Task.Run(() => _backupService?.Push("Manual backup"));
                 settings.ReloadGitMetadata();
-                settings.SetBackupConnectionState(BackupStatusState.Connected, "Изменения отправлены в репозиторий.");
-                ShowBackupSuccessToast(settings, "Изменения отправлены в репозиторий.");
+                settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("PushedChanges"));
+                ShowBackupSuccessToast(settings, L10n.Get("PushedChanges"));
             }
             catch (Exception ex)
             {
-                settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка отправки изменений: {ex.Message}");
-                _notificationManager?.ErrorToast($"Не удалось отправить изменения в репозиторий: {ex.Message}");
+                settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("PushErrorStatus", ex.Message));
+                _notificationManager?.ErrorToast(L10n.Format("PushErrorToast", ex.Message));
             }
         });
 
@@ -433,11 +438,11 @@ public class App : Application
                     _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty));
                 settings.ReloadSshPublicKeys(publicKeyPath);
                 settings.ReloadGitMetadata();
-                _notificationManager?.SuccessToast($"SSH-ключ создан: {publicKeyPath}");
+                _notificationManager?.SuccessToast(L10n.Format("SshKeyCreated", publicKeyPath));
             }
             catch (Exception ex)
             {
-                _notificationManager?.ErrorToast($"Не удалось создать SSH-ключ: {ex.Message}");
+                _notificationManager?.ErrorToast(L10n.Format("SshKeyCreateFailed", ex.Message));
             }
         });
 
@@ -445,26 +450,26 @@ public class App : Application
         {
             if (_backupService == null || string.IsNullOrWhiteSpace(settings.SelectedSshPublicKeyPath))
             {
-                _notificationManager?.ErrorToast("Сначала выберите публичный SSH-ключ.");
+                _notificationManager?.ErrorToast(L10n.Get("SelectSshKey"));
                 return;
             }
 
             var keyContent = _backupService.ReadPublicKey(settings.SelectedSshPublicKeyPath);
             if (string.IsNullOrWhiteSpace(keyContent))
             {
-                _notificationManager?.ErrorToast("Публичный SSH-ключ пустой или не найден.");
+                _notificationManager?.ErrorToast(L10n.Get("EmptySshKey"));
                 return;
             }
 
             var topLevel = DialogExtensions.GetTopLevel();
             if (topLevel?.Clipboard == null)
             {
-                _notificationManager?.ErrorToast("Буфер обмена недоступен.");
+                _notificationManager?.ErrorToast(L10n.Get("ClipboardUnavailable"));
                 return;
             }
 
             await topLevel.Clipboard.SetTextAsync(keyContent);
-            _notificationManager?.SuccessToast("Публичный SSH-ключ скопирован в буфер обмена.");
+            _notificationManager?.SuccessToast(L10n.Get("SshKeyCopied"));
         });
     }
 
@@ -472,19 +477,19 @@ public class App : Application
         SettingsViewModel settings,
         bool allowMergeWithNonEmptyRemote)
     {
-        settings.SetBackupConnectionState(BackupStatusState.Connecting, "Подключение репозитория...");
+        settings.SetBackupConnectionState(BackupStatusState.Connecting, L10n.Get("ConnectingRepository"));
         try
         {
             await Task.Run(() => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
             settings.ReloadGitMetadata();
             await ReloadCurrentTaskStorageAsync(settings);
-            settings.SetBackupConnectionState(BackupStatusState.Connected, "Репозиторий подключен.");
-            ShowBackupSuccessToast(settings, "Репозиторий подключен.");
+            settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("RepositoryConnected"));
+            ShowBackupSuccessToast(settings, L10n.Get("RepositoryConnected"));
         }
         catch (Exception ex)
         {
-            settings.SetBackupConnectionState(BackupStatusState.Error, $"Ошибка подключения репозитория: {ex.Message}");
-            _notificationManager?.ErrorToast($"Не удалось подключить репозиторий: {ex.Message}");
+            settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("RepositoryConnectErrorStatus", ex.Message));
+            _notificationManager?.ErrorToast(L10n.Format("RepositoryConnectErrorToast", ex.Message));
         }
     }
 
@@ -725,6 +730,14 @@ public class App : Application
         Resources[AppFloatingControlMinHeightResourceKey] = AppearanceSettings.GetFloatingControlMinHeight(normalizedFontSize);
     }
 
+    private void ApplyLocalizedResources()
+    {
+        foreach (var key in LocalizationService.Current.GetResourceKeys(CultureInfo.InvariantCulture))
+        {
+            Resources[key] = L10n.Get(key);
+        }
+    }
+
     private bool GetCurrentThemeIsDark()
     {
         return RequestedThemeVariant switch
@@ -773,6 +786,13 @@ public class App : Application
             // Create configuration
             _configuration = WritableJsonConfigurationFabric.Create(configPath);
             Log("[App.Init] Configuration created");
+
+            LocalizationService.Current = new LocalizationService(new DefaultLocalizationSystemCultureProvider());
+            L10n.SetLanguage(_configuration
+                .GetSection(AppearanceSettings.SectionName)
+                .GetSection(AppearanceSettings.LanguageKey)
+                .Get<string>());
+            Log("[App.Init] Localization initialized");
 
             // Create mapper
             _mapper = AppModelMapping.ConfigureMapping();
@@ -964,7 +984,7 @@ public class App : Application
     {
         if (_notificationManager != null)
         {
-            _notificationManager.ErrorToast(ex.Message);
+            _notificationManager.ErrorToast(L10n.Format("ReactiveUnhandledError", ex.Message));
         }
         else
         {

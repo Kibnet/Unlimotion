@@ -38,12 +38,12 @@
 									HorizontalAlignment="Stretch"
 									HorizontalContentAlignment="Center"
 									Command="{Binding YesCommand}"
-									Content="Yes"/>
+									Content="{DynamicResource DialogYes}"/>
                             <Button Grid.Column="1"
 									HorizontalAlignment="Stretch"
 									HorizontalContentAlignment="Center"
 									Command="{Binding NoCommand}"
-									Content="No"/>
+									Content="{DynamicResource DialogNo}"/>
                         </Grid>
                     </Grid>
                 </DataTemplate>

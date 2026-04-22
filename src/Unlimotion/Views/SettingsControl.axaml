@@ -39,25 +39,30 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="16">
-            <TextBlock Classes="SectionTitle" Text="Настройки" />
+            <TextBlock Classes="SectionTitle" Text="{DynamicResource SettingsTitle}" />
             <TextBlock Classes="SectionHint"
-                       Text="Настройте внешний вид, хранилище задач и резервное копирование. Некоторые изменения применяются сразу, а для подключения хранилища и репозитория нужны отдельные действия." />
+                       Text="{DynamicResource SettingsIntro}" />
 
             <Border Classes="SettingsSection">
                 <StackPanel>
-                    <TextBlock Classes="SectionTitle" Text="Внешний вид" />
-                    <TextBlock Classes="SectionHint" Text="Как приложение выглядит и читается." />
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource AppearanceTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource AppearanceHint}" />
 
-                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto">
-                        <TextBlock VerticalAlignment="Center" Text="Тема интерфейса" />
-                        <ComboBox Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">
-                            <ComboBoxItem Content="Как в системе" />
-                            <ComboBoxItem Content="Светлая" />
-                            <ComboBoxItem Content="Темная" />
+                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource LanguageLabel}" />
+                        <ComboBox Grid.Column="1"
+                                  SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
+                                  ItemsSource="{Binding LanguageOptions}" />
+
+                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource ThemeInterface}" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="{DynamicResource ThemeSystem}" />
+                            <ComboBoxItem Content="{DynamicResource ThemeLight}" />
+                            <ComboBoxItem Content="{DynamicResource ThemeDark}" />
                         </ComboBox>
 
-                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Размер текста" />
-                        <NumericUpDown Grid.Row="1"
+                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource FontSize}" />
+                        <NumericUpDown Grid.Row="2"
                                        Grid.Column="1"
                                        Value="{Binding FontSize}"
                                        Minimum="10"
@@ -65,42 +70,42 @@
                                        Increment="1"
                                        FormatString="0" />
 
-                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Умный поиск" />
-                        <CheckBox Grid.Row="2"
+                        <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{DynamicResource FuzzySearch}" />
+                        <CheckBox Grid.Row="3"
                                   Grid.Column="1"
                                   IsChecked="{Binding IsFuzzySearch}"
-                                  Content="Включен" />
+                                  Content="{DynamicResource Enabled}" />
                     </Grid>
                 </StackPanel>
             </Border>
 
             <Border Classes="SettingsSection">
                 <StackPanel>
-                    <TextBlock Classes="SectionTitle" Text="Хранилище задач" />
-                    <TextBlock Classes="SectionHint" Text="Выберите, где хранятся ваши задачи." />
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource StorageTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource StorageHint}" />
 
                     <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto">
-                        <TextBlock VerticalAlignment="Center" Text="Режим хранения" />
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource StorageMode}" />
                         <ComboBox Grid.Column="1" SelectedIndex="{Binding StorageModeIndex, Mode=TwoWay}">
-                            <ComboBoxItem Content="На этом устройстве" />
-                            <ComboBoxItem Content="На сервере" />
+                            <ComboBoxItem Content="{DynamicResource StorageLocal}" />
+                            <ComboBoxItem Content="{DynamicResource StorageServer}" />
                         </ComboBox>
                     </Grid>
 
                     <StackPanel IsVisible="{Binding !IsServerMode}">
                         <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto">
-                            <TextBlock VerticalAlignment="Center" Text="Папка с данными" />
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource DataFolder}" />
                             <TextBox Grid.Column="1"
                                      Text="{Binding TaskStoragePath}"
                                      ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
                             <Button Grid.Column="2"
-                                    Content="Выбрать"
+                                    Content="{DynamicResource Browse}"
                                     Command="{Binding BrowseTaskStoragePathCommand}" />
                         </Grid>
 
                         <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
                         <WrapPanel Margin="0,12,0,0">
-                            <Button Content="Подключить"
+                            <Button Content="{DynamicResource Connect}"
                                     Command="{Binding ConnectCommand}"
                                     IsEnabled="{Binding CanConnectStorage}" />
                         </WrapPanel>
@@ -108,24 +113,24 @@
 
                     <StackPanel IsVisible="{Binding IsServerMode}">
                         <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="Адрес сервера" />
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ServerAddress}" />
                             <TextBox Grid.Column="1"
                                      Text="{Binding ServerStorageUrl}"
                                      ToolTip.Tip="{Binding ServerStorageUrl}" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Логин" />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource Login}" />
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Login}" />
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Пароль" />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource Password}" />
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Password}" PasswordChar="*" />
                         </Grid>
 
                         <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
                         <WrapPanel Margin="0,12,0,0">
-                            <Button Content="Подключить"
+                            <Button Content="{DynamicResource Connect}"
                                     Command="{Binding ConnectCommand}"
                                     IsEnabled="{Binding CanConnectStorage}" />
-                            <Button Content="Выйти"
+                            <Button Content="{DynamicResource SignOut}"
                                     Command="{Binding SignOutCommand}"
                                     IsEnabled="{Binding CanSignOut}"
                                     IsVisible="{Binding CanSignOut}" />
@@ -136,31 +141,31 @@
 
             <Border Classes="SettingsSection">
                 <StackPanel>
-                    <TextBlock Classes="SectionTitle" Text="Резервное копирование" />
-                    <TextBlock Classes="SectionHint" Text="Подключите Git-репозиторий для автоматической резервной копии." />
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />
 
-                    <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="Автоматически создавать резервную копию" />
+                    <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="{DynamicResource BackupAuto}" />
 
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
                         <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
 
                         <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="Репозиторий" />
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource Repository}" />
                             <TextBox Grid.Column="1"
                                      Text="{Binding GitRemoteUrl}"
                                      ToolTip.Tip="{Binding GitRemoteUrl}" />
                             <Button Grid.Column="2"
-                                    Content="Обновить"
+                                    Content="{DynamicResource Refresh}"
                                     Command="{Binding RefreshGitMetadataCommand}" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Ветка отправки" />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource PushBranch}" />
                             <ComboBox Grid.Row="1"
                                       Grid.Column="1"
                                       Grid.ColumnSpan="2"
                                       SelectedItem="{Binding GitPushRefSpec}"
                                       ItemsSource="{Binding Refs}" />
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Удаленный источник" />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource RemoteSource}" />
                             <ComboBox Grid.Row="2"
                                       Grid.Column="1"
                                       Grid.ColumnSpan="2"
@@ -172,10 +177,10 @@
                               ColumnDefinitions="220,*"
                               RowDefinitions="Auto,Auto"
                               IsVisible="{Binding IsTokenAuthSelected}">
-                            <TextBlock VerticalAlignment="Center" Text="Логин" />
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource Login}" />
                             <TextBox Grid.Column="1" Text="{Binding GitUserName}" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Токен доступа" />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource TokenAccess}" />
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GitPassword}" PasswordChar="*" />
                         </Grid>
 
@@ -184,29 +189,29 @@
                                 Margin="0,0,0,12"
                                 IsVisible="{Binding IsSshAuthSelected}">
                             <StackPanel>
-                                <TextBlock Classes="SectionTitle" Text="SSH-ключи" />
-                                <TextBlock Classes="SectionHint" Text="Нужны только если репозиторий использует SSH." />
+                                <TextBlock Classes="SectionTitle" Text="{DynamicResource SshKeys}" />
+                                <TextBlock Classes="SectionHint" Text="{DynamicResource SshKeysHint}" />
 
                                 <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto,Auto" RowDefinitions="Auto,Auto">
-                                    <TextBlock VerticalAlignment="Center" Text="Активный ключ" />
+                                    <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActiveKey}" />
                                     <ComboBox Grid.Column="1"
                                               SelectedItem="{Binding SelectedSshPublicKeyPath}"
                                               ItemsSource="{Binding SshPublicKeys}" />
                                     <Button Grid.Column="2"
-                                            Content="Обновить"
+                                            Content="{DynamicResource Refresh}"
                                             Command="{Binding RefreshSshKeysCommand}" />
                                     <Button Grid.Column="3"
-                                            Content="Копировать публичный ключ"
+                                            Content="{DynamicResource CopyPublicKey}"
                                             Command="{Binding CopySelectedSshKeyCommand}" />
 
-                                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Новый ключ" />
+                                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource NewKey}" />
                                     <TextBox Grid.Row="1"
                                              Grid.Column="1"
                                              Text="{Binding NewSshKeyName}"
                                              Watermark="id_ed25519_unlimotion" />
                                     <Button Grid.Row="1"
                                             Grid.Column="2"
-                                            Content="Создать"
+                                            Content="{DynamicResource Create}"
                                             Command="{Binding GenerateSshKeyCommand}" />
                                 </Grid>
                             </StackPanel>
@@ -215,16 +220,16 @@
                         <TextBlock Classes="StatusText" Text="{Binding BackupStatusText}" />
 
                         <WrapPanel Margin="0,12,0,0">
-                            <Button Content="Подключить репозиторий"
+                            <Button Content="{DynamicResource ConnectRepository}"
                                     Command="{Binding CloneCommand}"
                                     IsEnabled="{Binding CanConnectRepository}" />
-                            <Button Content="Синхронизировать сейчас"
+                            <Button Content="{DynamicResource SyncNow}"
                                     Command="{Binding SyncNowCommand}"
                                     IsEnabled="{Binding CanSyncRepository}" />
-                            <Button Content="Получить изменения сейчас"
+                            <Button Content="{DynamicResource PullNow}"
                                     Command="{Binding PullCommand}"
                                     IsEnabled="{Binding CanSyncRepository}" />
-                            <Button Content="Отправить изменения сейчас"
+                            <Button Content="{DynamicResource PushNow}"
                                     Command="{Binding PushCommand}"
                                     IsEnabled="{Binding CanSyncRepository}" />
                         </WrapPanel>
@@ -239,19 +244,19 @@
             <Border Classes="SettingsSection">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowAdvancedBackupSettings}"
-                                  Content="Показать дополнительные параметры" />
+                                  Content="{DynamicResource ShowAdvancedBackupSettings}" />
 
                     <StackPanel Margin="0,12,0,0" IsVisible="{Binding ShowAdvancedBackupSettings}">
-                        <TextBlock Classes="SectionTitle" Text="Расширенные настройки" />
-                        <TextBlock Classes="SectionHint" Text="Параметры для продвинутой настройки синхронизации и диагностики." />
+                        <TextBlock Classes="SectionTitle" Text="{DynamicResource AdvancedSettings}" />
+                        <TextBlock Classes="SectionHint" Text="{DynamicResource AdvancedHint}" />
 
                         <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="Показывать уведомления" />
+                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ShowNotifications}" />
                             <CheckBox Grid.Column="1"
                                       IsChecked="{Binding GitShowStatusToasts}"
-                                      Content="Включено" />
+                                      Content="{DynamicResource Enabled}" />
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Интервал получения изменений, сек." />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource PullIntervalSeconds}" />
                             <NumericUpDown Grid.Row="1"
                                            Grid.Column="1"
                                            Value="{Binding GitPullIntervalSeconds}"
@@ -260,7 +265,7 @@
                                            Increment="5"
                                            FormatString="0" />
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Интервал отправки изменений, сек." />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource PushIntervalSeconds}" />
                             <NumericUpDown Grid.Row="2"
                                            Grid.Column="1"
                                            Value="{Binding GitPushIntervalSeconds}"
@@ -269,10 +274,10 @@
                                            Increment="5"
                                            FormatString="0" />
 
-                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Имя автора backup-коммитов" />
+                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{DynamicResource BackupCommitterName}" />
                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GitCommitterName}" />
 
-                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Email автора backup-коммитов" />
+                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="{DynamicResource BackupCommitterEmail}" />
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding GitCommitterEmail}" />
                         </Grid>
                     </StackPanel>
@@ -282,21 +287,21 @@
             <Border Classes="SettingsSection">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowServiceActions}"
-                                  Content="Показать сервисные действия" />
+                                  Content="{DynamicResource ShowServiceActions}" />
 
                     <StackPanel Margin="0,12,0,0" IsVisible="{Binding ShowServiceActions}">
-                        <TextBlock Classes="SectionTitle" Text="Обслуживание и восстановление" />
+                        <TextBlock Classes="SectionTitle" Text="{DynamicResource MaintenanceTitle}" />
                         <TextBlock Classes="SectionHint"
-                                   Text="Используйте эти действия только если понимаете последствия или следуете инструкции поддержки." />
+                                   Text="{DynamicResource MaintenanceHint}" />
 
                         <WrapPanel>
-                            <Button Content="Перенести локальные задачи на сервер"
+                            <Button Content="{DynamicResource MigrateLocalTasksToServer}"
                                     Command="{Binding MigrateCommand}"
                                     IsEnabled="{Binding CanRunServerMaintenance}" />
-                            <Button Content="Скопировать задачи с сервера в локальное хранилище"
+                            <Button Content="{DynamicResource CopyServerTasksToLocal}"
                                     Command="{Binding BackupCommand}"
                                     IsEnabled="{Binding CanRunServerMaintenance}" />
-                            <Button Content="Пересохранить все задачи"
+                            <Button Content="{DynamicResource ResaveAllTasks}"
                                     Command="{Binding ResaveCommand}"
                                     IsEnabled="{Binding CanRunResave}" />
                         </WrapPanel>
