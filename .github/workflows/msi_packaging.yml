@@ -10,6 +10,9 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WINDOWS_PUBLISH_DIR: ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net10.0\win-x64\publish
+  WINDOWS_PORTABLE_DIR: ${{ github.workspace }}\artifacts\windows-portable
+  WINDOWS_PORTABLE_ZIP: ${{ github.workspace }}\artifacts\windows-portable\Unlimotion-${{ github.ref_name }}-win-x64-portable.zip
 
 jobs:
   advinst-aip-build:
@@ -27,7 +30,26 @@ jobs:
         dotnet-version: 10.0.x
         
     - name: Publish
-      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net10.0\win-x64\publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }} --ignore-failed-sources
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o "${{ env.WINDOWS_PUBLISH_DIR }}" -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }} --ignore-failed-sources
+
+    - name: Create Portable Zip
+      shell: pwsh
+      run: |
+        if (-not (Test-Path -LiteralPath "${{ env.WINDOWS_PUBLISH_DIR }}")) {
+          throw "Windows publish directory was not created: ${{ env.WINDOWS_PUBLISH_DIR }}"
+        }
+
+        New-Item -ItemType Directory -Force -Path "${{ env.WINDOWS_PORTABLE_DIR }}" | Out-Null
+
+        if (Test-Path -LiteralPath "${{ env.WINDOWS_PORTABLE_ZIP }}") {
+          Remove-Item -LiteralPath "${{ env.WINDOWS_PORTABLE_ZIP }}" -Force
+        }
+
+        Compress-Archive -Path (Join-Path -Path "${{ env.WINDOWS_PUBLISH_DIR }}" -ChildPath '*') -DestinationPath "${{ env.WINDOWS_PORTABLE_ZIP }}" -Force
+
+        if (-not (Test-Path -LiteralPath "${{ env.WINDOWS_PORTABLE_ZIP }}")) {
+          throw "Portable zip was not created: ${{ env.WINDOWS_PORTABLE_ZIP }}"
+        }
 
     - name: Build AIP
       uses: caphyon/advinst-github-action@v1.0
@@ -46,4 +68,10 @@ jobs:
       uses: xresloader/upload-to-github-release@v1.3.11
       with:
         file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
+        tags: true
+
+    - name: Upload Portable Zip to Release
+      uses: xresloader/upload-to-github-release@v1.3.11
+      with:
+        file: ${{ env.WINDOWS_PORTABLE_ZIP }}
         tags: true
