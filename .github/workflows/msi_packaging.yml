@@ -85,6 +85,7 @@ jobs:
           --packVersion "${{ steps.release_version.outputs.version }}" `
           --packDir "${{ env.WINDOWS_PUBLISH_DIR }}" `
           --outputDir "${{ env.VELOPACK_RELEASES_DIR }}" `
+          --channel win `
           --runtime win-x64 `
           --mainExe Unlimotion.Desktop.exe `
           --packTitle Unlimotion `
@@ -96,6 +97,7 @@ jobs:
       run: |
         vpk upload github `
           --outputDir "${{ env.VELOPACK_RELEASES_DIR }}" `
+          --channel win `
           --repoUrl "https://github.com/${{ github.repository }}" `
           --token "${{ secrets.GITHUB_TOKEN }}" `
           --tag "${{ github.ref_name }}" `

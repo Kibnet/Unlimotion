@@ -7,9 +7,12 @@ on:
 
 permissions:
   contents: write
-        
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VELOPACK_VERSION: 0.0.1298
+  OSX_APP_PATH: ${{ github.workspace }}/Unlimotion.app
+  OSX_VELOPACK_DIR: ${{ github.workspace }}/artifacts/velopack/osx
 
 jobs:
   osx-build:
@@ -21,14 +24,69 @@ jobs:
       with:
         ref: ${{ github.sha }}
 
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Normalize release version
+      id: release_version
+      shell: bash
+      run: |
+        version="${GITHUB_REF_NAME}"
+        version="${version#v}"
+
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Release tag '${GITHUB_REF_NAME}' cannot be used by the current macOS Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
+          exit 1
+        fi
+
+        if [[ "$version" == "0.0.0" ]]; then
+          echo "Release tag '${GITHUB_REF_NAME}' cannot be used as a Velopack package version. Use 0.0.1 or greater." >&2
+          exit 1
+        fi
+
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Publish
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ steps.release_version.outputs.version }}
 
     - name: Generate App
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{ github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{ steps.release_version.outputs.version }}
+
+    - name: Install Velopack CLI
+      run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}" --ignore-failed-sources
+
+    - name: Pack Velopack macOS Release
+      shell: bash
+      run: |
+        mkdir -p "${{ env.OSX_VELOPACK_DIR }}"
+
+        "$HOME/.dotnet/tools/vpk" pack \
+          --packId Unlimotion \
+          --packVersion "${{ steps.release_version.outputs.version }}" \
+          --packDir "${{ env.OSX_APP_PATH }}" \
+          --outputDir "${{ env.OSX_VELOPACK_DIR }}" \
+          --channel osx \
+          --runtime osx-x64 \
+          --mainExe Unlimotion.Desktop.ForMacBuild \
+          --packTitle Unlimotion \
+          --packAuthors Kibnet
+
+    - name: Upload Velopack macOS Release
+      shell: bash
+      run: |
+        "$HOME/.dotnet/tools/vpk" upload github \
+          --outputDir "${{ env.OSX_VELOPACK_DIR }}" \
+          --channel osx \
+          --repoUrl "https://github.com/${{ github.repository }}" \
+          --token "${{ secrets.GITHUB_TOKEN }}" \
+          --tag "${{ github.ref_name }}" \
+          --merge \
+          --publish
 
     - name: Generate Pkg
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{ github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{ steps.release_version.outputs.version }}
 
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1

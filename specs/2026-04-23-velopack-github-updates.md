@@ -7,7 +7,7 @@
 - Целевой релиз / ветка: текущая рабочая ветка
 - Ограничения:
   - До подтверждения этой спеки разрешено менять только этот файл.
-  - Первая реализация ориентирована на Windows desktop build `src/Unlimotion.Desktop`.
+  - Первая реализация охватывает desktop release channels `win`, `linux` и `osx` в рамках текущих desktop build-проектов.
   - Текущие MSI и portable ZIP release assets не удаляются в рамках этой задачи.
   - Существующие мобильные, browser и shared Avalonia проекты не должны получить обязательную зависимость от Velopack.
 - Связанные ссылки:
@@ -17,13 +17,14 @@
   - https://www.nuget.org/packages/vpk
 
 ## 1. Overview / Цель
-Добавить основу автообновления desktop-приложения через Velopack и GitHub Releases: приложение должно корректно обрабатывать Velopack install/update hooks, уметь проверять релизные артефакты GitHub Releases и release workflow должен публиковать Velopack-пакеты вместе с текущими артефактами.
+Добавить основу автообновления desktop-приложения через Velopack и GitHub Releases: приложение должно корректно обрабатывать Velopack install/update hooks, уметь проверять релизные артефакты GitHub Releases, а release workflows должны публиковать Velopack-пакеты и feed metadata для `win`, `linux` и `osx` вместе с текущими артефактами.
 
 ## 2. Текущее состояние (AS-IS)
 - Desktop-приложение находится в `src/Unlimotion.Desktop` и запускает shared Avalonia app из `src/Unlimotion`.
 - `src/Unlimotion.Desktop/Program.cs` выполняет раннюю настройку путей, затем вызывает `App.Init(configPath)` и `BuildAvaloniaApp().StartWithClassicDesktopLifetime(args)`.
 - `src/Directory.Packages.props` использует centralized package management.
 - `.github/workflows/msi_packaging.yml` запускается на `release.published`, публикует `dotnet publish` output для `win-x64`, собирает MSI через Advanced Installer и загружает MSI + portable ZIP в GitHub Release.
+- `.github/workflows/deb_packaging.yml` и `.github/workflows/osx-packaging.yml` уже публикуют Linux/macOS release assets (`.deb` и `.pkg`), но не создают Velopack-managed update feeds/packages.
 - `Unlimotion.aip` остается текущей схемой MSI packaging.
 - Пользовательские данные и настройки в Release режиме пишутся вне папки приложения: `Settings.json` в `Documents/Unlimotion`, задачи через `TaskStorageFactory`, backup paths через `LocalApplicationData/Unlimotion`. Это важно, потому что Velopack заменяет папку установленного приложения при обновлении.
 - `src/Unlimotion/Views/SettingsControl.axaml` уже содержит секционную страницу настроек: внешний вид, хранилище, backup, advanced backup и service actions.
@@ -36,6 +37,7 @@
 ## 4. Цели дизайна
 - Разделение ответственности: Velopack-зависимость и GitHub update source остаются в desktop entrypoint/desktop services.
 - Повторное использование: release workflow переиспользует существующий `dotnet publish` output.
+- Cross-platform release safety: каждый desktop runtime публикуется в отдельный Velopack channel/feed, чтобы Windows/Linux/macOS не пересекались в одном release index.
 - Тестируемость: логика решения "есть обновление -> скачать -> спросить о рестарте / не падать при ошибке" отделяется от прямых Velopack API через тонкую абстракцию.
 - Консистентность: текущие настройки, данные задач и backup-настройки не переносятся в папку приложения.
 - Обратная совместимость: MSI и portable ZIP продолжают публиковаться, пока Velopack-путь не будет проверен на реальных релизах.
@@ -58,7 +60,7 @@
 - `src/Unlimotion.Desktop/Services/*` -> добавить desktop-only Velopack implementation для platform-neutral update service.
 - `src/Unlimotion/App.axaml.cs` -> подключить update service к `SettingsViewModel` после создания view model, без прямой зависимости shared проекта от Velopack.
 - `src/Unlimotion/Views/SettingsControl.axaml` -> добавить секцию "Обновления" с текущим статусом, ручной проверкой и применением скачанного обновления.
-- `.github/workflows/msi_packaging.yml` -> добавить шаги установки `vpk`, упаковки `dotnet publish` output и загрузки Velopack assets в текущий GitHub Release.
+- `.github/workflows/msi_packaging.yml`, `.github/workflows/deb_packaging.yml`, `.github/workflows/osx-packaging.yml` -> добавить шаги установки `vpk`, упаковки platform-specific publish output и загрузки Velopack assets/feed metadata в текущий GitHub Release.
 - `src/Unlimotion.Test` -> добавить unit tests для coordinator logic, если абстракция будет жить в тестируемом shared/desktop-neutral слое; иначе ограничиться build/packaging smoke checks для инфраструктурной части.
 
 ### 6.2 Детальный дизайн
@@ -67,6 +69,7 @@
   - После FastCallback приложение должно быстро выйти, если Velopack запустил его с install/update аргументами.
 - Проверка обновлений запускается после открытия главного окна, чтобы не блокировать UI startup.
 - Update source: `new UpdateManager(new GithubSource("https://github.com/<owner>/<repo>"))`.
+- Отдельные feed URLs/репозитории не нужны: Velopack сам использует `releases.{channel}.json` в том же GitHub Release asset set. Для cross-platform rollout каналы должны быть раздельными (`win`, `linux`, `osx`) или явно заданными platform-specific значениями.
 - Репозиторий должен определяться константой или build property для текущего проекта. Если origin невозможно надежно вывести из runtime, использовать явное значение GitHub repo из workflow.
 - Поток обновления:
   1. Проверить, запущено ли приложение из Velopack-installed context; portable/MSI legacy запуск не должен падать.
@@ -113,6 +116,7 @@
 - `SettingsControl.axaml`: ручной триггер `CheckForUpdatesCommand`, `DownloadUpdateCommand`, `ApplyUpdateCommand`.
 - GitHub Actions `release.published`: упаковка Velopack assets после существующего `dotnet publish`.
 - GitHub Release assets: Velopack packages и release metadata должны лежать в том же release, откуда `GithubSource` сможет получить update feed.
+- Для cross-platform rollout каждый workflow публикует свой `releases.{channel}.json` и соответствующие platform assets в тот же GitHub release, без общего "универсального" feed-файла.
 
 ## 9. Изменения модели данных / состояния
 - Новых persisted полей в пользовательских настройках не требуется.
@@ -123,8 +127,9 @@
 ## 10. Миграция / Rollout / Rollback
 - Rollout:
   1. Сначала публиковать Velopack assets вместе с MSI/portable ZIP.
-  2. Проверить установку Velopack bootstrapper на отдельной машине/VM.
-  3. Проверить обновление с версии N на N+1 через GitHub Release.
+  2. Проверить, что для каждого desktop runtime (`win`, `linux`, `osx`) в release появляются свои Velopack channel assets.
+  3. Проверить установку Velopack bootstrapper / portable artifact на отдельных машинах/VM по платформам.
+  4. Проверить обновление с версии N на N+1 через GitHub Release хотя бы на одной машине для каждого поддерживаемого desktop runtime.
 - Совместимость:
   - Уже установленные MSI-копии не станут Velopack-managed автоматически.
   - Пользователь должен установить Velopack bootstrapper/installer хотя бы один раз, чтобы дальнейшие обновления шли через Velopack.
@@ -143,6 +148,7 @@
   - В не-Velopack установке раздел настроек показывает unsupported state или отключенные действия без исключений.
   - Во время проверки/скачивания update-кнопки корректно отключаются и статус обновляется.
   - Release workflow публикует Velopack assets в GitHub Release.
+  - Release workflows публикуют раздельные Velopack feeds/assets для `win`, `linux` и `osx` в одном GitHub Release.
   - Текущие MSI и portable ZIP assets продолжают публиковаться.
 - Какие тесты добавить/изменить:
   - Unit tests для update coordinator/settings update state с fake update client: unsupported install, no update, update available, download success, apply restart, exception path, repeated command guard.
@@ -184,7 +190,7 @@
 
 ## 14. Открытые вопросы
 Нет блокирующих вопросов. Принятые допущения:
-- Первый релизный канал: Windows desktop.
+- Первый rollout охватывает `win`, `linux` и `osx` каналы, по одному Velopack feed на платформу.
 - GitHub Releases публичного репозитория достаточно без PAT для runtime update checks.
 - MSI/portable ZIP остаются параллельными артефактами минимум на переходный период.
 
@@ -209,13 +215,15 @@
 | `src/Unlimotion/Views/SettingsControl.axaml` | Секция "Обновления" | Ручная проверка, скачивание и применение обновлений |
 | `src/Unlimotion.ViewModel/Resources/Strings*.resx` | Строки update section/prompt/statuses | Локализация пользовательских сообщений |
 | `src/Unlimotion.Test/*` | Coordinator tests | Проверка поведения без сети/GitHub |
-| `.github/workflows/msi_packaging.yml` | Velopack packaging/upload steps | Публикация update assets в GitHub Release |
+| `.github/workflows/msi_packaging.yml` | Velopack packaging/upload steps для Windows | Публикация Windows update assets в GitHub Release |
+| `.github/workflows/deb_packaging.yml` | Velopack packaging/upload steps для Linux + сохранение `.deb` | Публикация Linux update assets в GitHub Release |
+| `.github/workflows/osx-packaging.yml` | Velopack packaging/upload steps для macOS + сохранение `.pkg` | Публикация macOS update assets в GitHub Release |
 
 ## 17. Таблица соответствий (было -> стало)
 | Область | Было | Стало |
 | --- | --- | --- |
 | Startup lifecycle | Только app/Avalonia init | Ранний Velopack hook, затем обычный startup |
-| Release assets | MSI + portable ZIP | MSI + portable ZIP + Velopack packages/feed |
+| Release assets | MSI + portable ZIP + `.deb` + `.pkg` | Те же артефакты + Velopack packages/feed для `win`, `linux`, `osx` |
 | Runtime updates | Нет проверки | Background check через GitHub Releases |
 | Settings updates | Нет раздела обновлений | Ручная проверка, скачивание и применение в настройках |
 | User restart | Не применимо | Рестарт только после согласия пользователя |
@@ -294,3 +302,4 @@
 | EXEC | Продолжение верификации | 0.95 | Нет | Финализировать ответ | Нет | Да, пользователь сказал `продолжай` | Устранены blockers полного тестового прогона: Git backup fixtures перенесены в короткую temp-папку, settings-тест изолирован от глобальной локализации. Полный `dotnet test` теперь проходит: 198/198; `dotnet build src\Unlimotion.sln --no-restore -m:1` проходит. | `src/Unlimotion.Test/BackupViaGitServiceTests.cs`, `src/Unlimotion.Test/SettingsViewModelTests.cs`, `specs/2026-04-23-velopack-github-updates.md` |
 | EXEC | Исправление review findings | 0.96 | Нет | Финализировать ответ | Нет | Да, пользователь сказал `испрравь` | Состояние pending restart теперь не теряется при ручной проверке обновлений, кнопка проверки блокируется до применения; workflow больше не принимает prerelease/build-теги, чтобы не передавать их в MSI `SetVersion`. Проверки: targeted settings tests 36/36, полный `dotnet test --no-build` 199/199, `dotnet build src\Unlimotion.sln --no-restore -m:1`, `git diff --check`. | `src/Unlimotion.ViewModel/SettingsViewModel.cs`, `src/Unlimotion.Desktop/Services/VelopackApplicationUpdateService.cs`, `src/Unlimotion.Test/SettingsViewModelTests.cs`, `.github/workflows/msi_packaging.yml` |
 | EXEC | Rebase на основную ветку | 0.96 | Нет | Сделать коммит | Нет | Да, пользователь попросил новую ветку, rebase на `master` и commit; фактическая основная ветка репозитория - `main` | Создана `feature/velopack-github-updates` от `origin/main`, stash изменений применен с разрешением конфликтов. Для `main` добавлены Velopack references в Debian/macOS desktop-проекты, которые компилируют общий desktop entrypoint. Проверки после переноса: `dotnet restore src\Unlimotion.sln`, `dotnet build src\Unlimotion.sln --no-restore -m:1`, `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj --no-build` 201/201. | `src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj`, `src/Unlimotion.Desktop/Unlimotion.Desktop.ForMacBuild.csproj`, `src/Unlimotion/App.axaml.cs`, `src/Unlimotion.Test/*`, `specs/2026-04-23-velopack-github-updates.md` |
+| EXEC | Multi-platform release feeds | 0.97 | Нет | Закоммитить и допушить PR | Нет | Да, пользователь попросил публиковать Velopack сразу для всех поддерживаемых платформ | Windows feed зафиксирован как `win`, в Linux/macOS workflows добавлены platform-specific Velopack pack/upload шаги и нормализация release version. Отдельные feed URLs не понадобились: используются каналы `win`, `linux`, `osx` в одном GitHub Release. Дополнительно исправлен `generate-osx-publish.sh`: restore теперь идет с `--runtime osx-x64`, иначе local macOS publish падал на `NETSDK1047`. Проверки: локальный `vpk pack --help`/`vpk upload github --help`, `dotnet publish` для `linux-x64`, `dotnet restore --runtime osx-x64` + `dotnet publish` для `osx-x64`, `git diff --check`. | `.github/workflows/msi_packaging.yml`, `.github/workflows/deb_packaging.yml`, `.github/workflows/osx-packaging.yml`, `src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh`, `specs/2026-04-23-velopack-github-updates.md` |
