@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AppAutomation.Abstractions" Version="1.5.2" />
+    <PackageReference Include="AppAutomation.Authoring" Version="1.5.2" />
+    <PackageReference Include="AppAutomation.TUnit" Version="1.5.2" />
+    <PackageReference Include="TUnit.Assertions" Version="1.15.0" />
+    <PackageReference Include="TUnit.Core" Version="1.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Unlimotion.AppAutomation.TestHost\Unlimotion.AppAutomation.TestHost.csproj" />
+  </ItemGroup>
+</Project>

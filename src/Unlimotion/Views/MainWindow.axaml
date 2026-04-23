@@ -9,6 +9,7 @@
         Icon="/Assets/Unlimotion.ico"
         FontSize="{DynamicResource AppFontSize}"
         Title="{Binding Title}"
+        AutomationProperties.AutomationId="MainWindow"
         x:DataType="viewModel:MainWindowViewModel">
 
     <Design.DataContext>

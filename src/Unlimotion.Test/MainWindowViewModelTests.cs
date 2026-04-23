@@ -671,6 +671,28 @@ namespace Unlimotion.Test
         }
 
         [Test]
+        public async Task RelationCandidateBreadcrumbs_ShouldStopAtParentCycle()
+        {
+            var currentTask = GetTask(MainWindowViewModelFixture.RootTask1Id)!;
+            var parentTask = GetTask(MainWindowViewModelFixture.RootTask2Id)!;
+
+            currentTask.ApplyRelations(
+                [],
+                [parentTask],
+                [],
+                []);
+            parentTask.ApplyRelations(
+                [],
+                [currentTask],
+                [],
+                []);
+
+            var breadcrumbs = BredScrumbsAlgorithms.FirstTaskParent(currentTask);
+
+            await Assert.That(breadcrumbs).IsEqualTo("Task 2 / Root Task 1");
+        }
+
+        [Test]
         public async Task CurrentItemBlockedByPicker_InvalidForcedConfirm_ShouldShowToastAndKeepRelationsUnchanged()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.DeadlockTask6Id);

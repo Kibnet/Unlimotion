@@ -164,7 +164,8 @@ Content="❌"
                    CompactPaneLength="20"
                    PanePlacement="Right">
             <Grid Margin="10,0,0,0">
-                <TabControl TabStripPlacement="Top" Margin="0" Padding="0">
+                <TabControl TabStripPlacement="Top" Margin="0" Padding="0"
+                            AutomationProperties.AutomationId="MainTabs">
                     <TabControl.Styles>
                         <Style Selector="TabItem">
                             <Setter Property="FontSize" Value="{DynamicResource AppTabFontSize}"/>
@@ -177,7 +178,8 @@ Content="❌"
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
-                    <TabItem Header="{DynamicResource AllTasks}" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource AllTasks}" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="AllTasksTabItem">
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -195,6 +197,7 @@ Content="❌"
                                        SelectionMode= "Multiple"
                                        Classes="TaskTree"
                                        PointerPressed="TaskTree_OnPointerPressed"
+                                       AutomationProperties.AutomationId="AllTasksTree"
                                        x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType= "viewModel:TaskWrapperViewModel" ItemsSource= "{Binding SubTasks}">
@@ -205,7 +208,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Last Created-->
-                    <TabItem Header="{DynamicResource LastCreated}" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastCreated}" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="LastCreatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -234,6 +238,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="LastCreatedTree"
                                       x:Name="LastCreatedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -263,7 +268,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                      <!--Last Updated-->
-                    <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="LastUpdatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -292,6 +298,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="LastUpdatedTree"
                                       x:Name="LastUpdatedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -321,7 +328,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Unlocked-->
-                    <TabItem Header="{DynamicResource Unlocked}" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Unlocked}" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="UnlockedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -340,6 +348,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="UnlockedTree"
                                       x:Name="UnlockedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -368,7 +377,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Completed-->
-                    <TabItem Header="{DynamicResource Completed}" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Completed}" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="CompletedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -395,6 +405,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="CompletedTree"
                                       x:Name="CompletedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -425,7 +436,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Archived-->
-                    <TabItem Header="{DynamicResource Archived}" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Archived}" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="ArchivedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
@@ -452,6 +464,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="ArchivedTree"
                                       x:Name="ArchivedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -482,7 +495,8 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Last Opened-->
-                    <TabItem Header="{DynamicResource LastOpened}" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource LastOpened}" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="LastOpenedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
@@ -493,6 +507,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      AutomationProperties.AutomationId="LastOpenedTree"
                                       x:Name="LastOpenedTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -522,18 +537,21 @@ Content="❌"
                         </Grid>
                     </TabItem>
                     <!--Roadmap-->
-                    <TabItem Header="{DynamicResource Roadmap}" IsSelected="{Binding GraphMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Roadmap}" IsSelected="{Binding GraphMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="RoadmapTabItem">
                         <views:GraphControl DataContext="{Binding Graph}"/>
                     </TabItem>
                     <!--Settings-->
-                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}">
+                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="SettingsTabItem">
                         <views:SettingsControl DataContext="{Binding Settings}"/>
                     </TabItem>
                 </TabControl>
             </Grid>
             <SplitView.Pane>
                 <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ColumnDefinitions="*,Auto">
-                    <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding !DetailsAreOpen}"></ToggleButton>
+                    <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding !DetailsAreOpen}"
+                                  AutomationProperties.AutomationId="DetailsPaneToggleButton"></ToggleButton>
                     <ScrollViewer IsVisible="{Binding DetailsAreOpen}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
                         <StackPanel Margin="10">
                             <WrapPanel>
@@ -729,6 +747,7 @@ Content="❌"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree"
                                               PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemParentsTree"
                                               x:Name="CurrentItemParentsTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -778,6 +797,7 @@ Content="❌"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree"
                                               PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemBlockedByTree"
                                               x:Name="CurrentItemBlockedByTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -827,6 +847,7 @@ Content="❌"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree"
                                               PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemContainsTree"
                                               x:Name="CurrentItemContainsTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
@@ -876,6 +897,7 @@ Content="❌"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree"
                                               PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemBlocksTree"
                                               x:Name="CurrentItemBlocksTree">
                                         <TreeView.ItemTemplate>
                                             <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">

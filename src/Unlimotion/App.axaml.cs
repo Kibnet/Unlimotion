@@ -34,6 +34,8 @@ namespace Unlimotion;
 
 public class App : Application
 {
+    private const string AutomationCurrentTaskIdEnvironmentVariable = "UNLIMOTION_AUTOMATION_CURRENT_TASK_ID";
+    private const string AutomationOpenDetailsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPEN_DETAILS";
     private const string AppFontSizeResourceKey = "AppFontSize";
     private const string AppSmallFontSizeResourceKey = "AppSmallFontSize";
     private const string AppTabFontSizeResourceKey = "AppTabFontSize";
@@ -643,13 +645,15 @@ public class App : Application
                 // Когда окно загрузится — вызовем инициализацию
                 window.Opened += async (_, __) =>
                 {
-                    _ = vm.Connect().ContinueWith(_ =>
+                    try
                     {
-                        if (_.Exception != null)
-                        {
-                            //TODO: Уведомить пользователя
-                        }
-                    });
+                        await vm.Connect();
+                        ApplyAutomationStartupState(vm);
+                    }
+                    catch
+                    {
+                        // Existing startup behavior ignored connect failures here.
+                    }
                 };
             }
         }
@@ -664,6 +668,27 @@ public class App : Application
         RxApp.DefaultExceptionHandler = Observer.Create<Exception>(HandleReactiveException);
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void ApplyAutomationStartupState(MainWindowViewModel vm)
+    {
+        var taskId = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(taskId) && vm.taskRepository != null)
+        {
+            var lookup = vm.taskRepository.Tasks.Lookup(taskId);
+            if (lookup.HasValue)
+            {
+                vm.AllTasksMode = true;
+                vm.CurrentTaskItem = lookup.Value;
+                vm.SelectCurrentTask();
+            }
+        }
+
+        var openDetails = Environment.GetEnvironmentVariable(AutomationOpenDetailsEnvironmentVariable);
+        if (bool.TryParse(openDetails, out var shouldOpenDetails) && shouldOpenDetails)
+        {
+            vm.DetailsAreOpen = true;
+        }
     }
 
     private void DisableAvaloniaDataAnnotationValidation()
