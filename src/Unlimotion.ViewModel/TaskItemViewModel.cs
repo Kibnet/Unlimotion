@@ -4,7 +4,9 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -48,6 +50,7 @@ namespace Unlimotion.ViewModel
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _parentsTasks;
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
+        private readonly SerialDisposable _repeaterPropertyChangedSubscription = new();
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands commands;
@@ -57,6 +60,7 @@ namespace Unlimotion.ViewModel
 
         private void Init(ITaskStorage taskStorage)
         {
+            _repeaterPropertyChangedSubscription.AddToDispose(this);
             SetDurationCommands = new SetDurationCommands(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -234,40 +238,93 @@ namespace Unlimotion.ViewModel
             });            
 
             this.WhenAnyValue(t => t.Repeater)
-                .Subscribe(r =>
-                {
-                    if (r is INotifyPropertyChanged repeater)
-                    {
-                        Observable.FromEventPattern(repeater, nameof(INotifyPropertyChanged.PropertyChanged))
-                            .Where(changed =>
-                            {
-                                var args = changed.EventArgs as PropertyChangedEventArgs;
-                                switch (args.PropertyName)
-                                {
-                                    //case nameof(Repeater.Type)://TODO из интерфейса прилетает изменение при переключении
-                                    case nameof(Repeater.AfterComplete):
-                                    case nameof(Repeater.Period):
-                                    case nameof(Repeater.Monday):
-                                    case nameof(Repeater.Tuesday):
-                                    case nameof(Repeater.Wednesday):
-                                    case nameof(Repeater.Thursday):
-                                    case nameof(Repeater.Friday):
-                                    case nameof(Repeater.Saturday):
-                                    case nameof(Repeater.Sunday):
-                                        return true;
-                                }
-                                return false;
-                            })
-                            .Throttle(TimeSpan.FromSeconds(2))
-                            .Subscribe(x =>
-                            {
-                                if (MainWindowViewModel._isInited) SaveItemCommand.Execute();
-                            }
-                            )
-                            .AddToDispose(this);
-                    }
-                })
+                .Subscribe(RegisterRepeaterPropertyChangedSubscription)
                 .AddToDispose(this);
+        }
+
+        private void RegisterRepeaterPropertyChangedSubscription(RepeaterPatternViewModel? repeater)
+        {
+            NotifyRepeaterListMarkerChanged();
+
+            if (repeater is not INotifyPropertyChanged inpc)
+            {
+                _repeaterPropertyChangedSubscription.Disposable = Disposable.Empty;
+                return;
+            }
+
+            var repeaterChanges = Observable.FromEventPattern<PropertyChangedEventHandler, PropertyChangedEventArgs>(
+                handler => inpc.PropertyChanged += handler,
+                handler => inpc.PropertyChanged -= handler);
+
+            var markerSubscription = repeaterChanges
+                .Where(changed => IsRepeaterPatternMarkerProperty(changed.EventArgs.PropertyName))
+                .Subscribe(_ => NotifyRepeaterListMarkerChanged());
+
+            var saveSubscription = repeaterChanges
+                .Where(changed => IsRepeaterPatternPersistenceProperty(changed.EventArgs.PropertyName))
+                .Throttle(TimeSpan.FromSeconds(2))
+                .Subscribe(_ =>
+                {
+                    if (MainWindowViewModel._isInited) SaveItemCommand.Execute();
+                });
+
+            _repeaterPropertyChangedSubscription.Disposable = new CompositeDisposable(markerSubscription, saveSubscription);
+        }
+
+        private void NotifyRepeaterListMarkerChanged()
+        {
+            OnPropertyChanged(nameof(IsHaveRepeater));
+            OnPropertyChanged(nameof(RepeaterListMarker));
+            OnPropertyChanged(nameof(RepeaterListMarkerToolTip));
+        }
+
+        private void OnPropertyChanged(string propertyName)
+        {
+            if (this is not INotifyPropertyChanged propertyChangedSource)
+            {
+                return;
+            }
+
+            var propertyChangedHandler = propertyChangedSource
+                .GetType()
+                .GetField(
+                    nameof(INotifyPropertyChanged.PropertyChanged),
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                ?.GetValue(propertyChangedSource) as PropertyChangedEventHandler;
+
+            propertyChangedHandler?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private static bool IsRepeaterPatternMarkerProperty(string? propertyName)
+        {
+            return string.IsNullOrEmpty(propertyName) ||
+                   propertyName is nameof(RepeaterPatternViewModel.Type)
+                       or nameof(RepeaterPatternViewModel.SelectedRepeaterType)
+                       or nameof(RepeaterPatternViewModel.Period)
+                       or nameof(RepeaterPatternViewModel.WorkDays)
+                       or nameof(RepeaterPatternViewModel.Monday)
+                       or nameof(RepeaterPatternViewModel.Tuesday)
+                       or nameof(RepeaterPatternViewModel.Wednesday)
+                       or nameof(RepeaterPatternViewModel.Thursday)
+                       or nameof(RepeaterPatternViewModel.Friday)
+                       or nameof(RepeaterPatternViewModel.Saturday)
+                       or nameof(RepeaterPatternViewModel.Sunday)
+                       or nameof(RepeaterPatternViewModel.AfterComplete)
+                       or nameof(RepeaterPatternViewModel.Title);
+        }
+
+        private static bool IsRepeaterPatternPersistenceProperty(string? propertyName)
+        {
+            return string.IsNullOrEmpty(propertyName) ||
+                   propertyName is nameof(RepeaterPatternViewModel.AfterComplete)
+                       or nameof(RepeaterPatternViewModel.Period)
+                       or nameof(RepeaterPatternViewModel.Monday)
+                       or nameof(RepeaterPatternViewModel.Tuesday)
+                       or nameof(RepeaterPatternViewModel.Wednesday)
+                       or nameof(RepeaterPatternViewModel.Thursday)
+                       or nameof(RepeaterPatternViewModel.Friday)
+                       or nameof(RepeaterPatternViewModel.Saturday)
+                       or nameof(RepeaterPatternViewModel.Sunday);
         }
 
         public void ApplyRelations(
@@ -552,9 +609,14 @@ namespace Unlimotion.ViewModel
             return orderedParents;
         }
 
+        [AlsoNotifyFor(nameof(IsHaveRepeater), nameof(RepeaterListMarker), nameof(RepeaterListMarkerToolTip))]
         public RepeaterPatternViewModel Repeater { get; set; } = null!;
 
         public bool IsHaveRepeater => Repeater != null && Repeater.Type != RepeaterType.None;
+
+        public string RepeaterListMarker => IsHaveRepeater ? "↻" : string.Empty;
+
+        public string? RepeaterListMarkerToolTip => IsHaveRepeater ? Repeater.Title : null;
 
         public List<RepeaterPatternViewModel> Repeaters => new()
         {
