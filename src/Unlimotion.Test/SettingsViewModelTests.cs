@@ -74,7 +74,9 @@ public class SettingsViewModelTests : IDisposable
     public async System.Threading.Tasks.Task BackupConnection_BecomesReadyForClone_WhenSshKeyIsSelected()
     {
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
-        var settings = new SettingsViewModel(configuration)
+        var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
+        localization.SetLanguage(LocalizationService.RussianLanguage);
+        var settings = new SettingsViewModel(configuration, localizationService: localization)
         {
             GitBackupEnabled = true,
             GitRemoteUrl = "git@github.com:org/unlimotion-backup.git"
