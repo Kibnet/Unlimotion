@@ -53,6 +53,7 @@ public class App : Application
     private static INotificationMessageManager? _notificationMessageManager;
     private static INotificationManagerWrapper? _notificationManager;
     private static IRemoteBackupService? _backupService;
+    private static IApplicationUpdateService? _applicationUpdateService;
     private static IAppNameDefinitionService? _appNameService;
     private static ITaskStorageFactory? _storageFactory;
     private static IScheduler? _scheduler;
@@ -107,6 +108,7 @@ public class App : Application
             _backupService,
             GetCurrentThemeIsDark(),
             () => TaskStorageFactory.DefaultStoragePath);
+        settingsViewModel.ConfigureUpdateService(_applicationUpdateService);
 
         // Create GraphViewModel
         var graphViewModel = new GraphViewModel();
@@ -473,6 +475,10 @@ public class App : Application
             await topLevel.Clipboard.SetTextAsync(keyContent);
             _notificationManager?.SuccessToast(L10n.Get("SshKeyCopied"));
         });
+
+        settings.CheckForUpdatesCommand = ReactiveCommand.CreateFromTask(() => settings.CheckForUpdatesAsync());
+        settings.DownloadUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.DownloadUpdateAsync());
+        settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
     }
 
     private async Task ConnectBackupRepositoryAsync(
@@ -654,6 +660,8 @@ public class App : Application
                     {
                         // Existing startup behavior ignored connect failures here.
                     }
+
+                    _ = CheckForUpdatesOnStartupAsync(vm.Settings);
                 };
             }
         }
@@ -706,6 +714,34 @@ public class App : Application
     public App()
     {
         DataContext = new ApplicationViewModel();
+    }
+
+    public static void ConfigureUpdateService(IApplicationUpdateService? updateService)
+    {
+        _applicationUpdateService = updateService;
+        _mainWindowViewModel?.Settings.ConfigureUpdateService(updateService);
+    }
+
+    private async Task CheckForUpdatesOnStartupAsync(SettingsViewModel settings)
+    {
+        await settings.CheckForUpdatesAsync(silent: true);
+
+        if (settings.UpdateState != ApplicationUpdateState.UpdateAvailable)
+        {
+            return;
+        }
+
+        await settings.DownloadUpdateAsync();
+
+        if (settings.UpdateState != ApplicationUpdateState.ReadyToApply)
+        {
+            return;
+        }
+
+        _notificationManager?.Ask(
+            L10n.Get("UpdateReadyHeader"),
+            L10n.Format("UpdateReadyMessage", settings.AvailableUpdateVersion ?? L10n.Get("Unknown")),
+            () => _ = settings.ApplyUpdateAsync());
     }
 
     private const bool ShouldLogStartup = false;

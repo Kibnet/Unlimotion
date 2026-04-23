@@ -88,6 +88,44 @@
 
             <Border Classes="SettingsSection">
                 <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource UpdatesTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource UpdatesHint}" />
+
+                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto">
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource UpdateCurrentVersion}" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding CurrentApplicationVersion}" />
+
+                        <TextBlock Grid.Row="1"
+                                   VerticalAlignment="Center"
+                                   Text="{DynamicResource UpdateAvailableVersion}"
+                                   IsVisible="{Binding HasAvailableUpdate}" />
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding AvailableUpdateVersion}"
+                                   IsVisible="{Binding HasAvailableUpdate}" />
+                    </Grid>
+
+                    <TextBlock Classes="StatusText" Text="{Binding UpdateStatusText}" />
+
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="{DynamicResource UpdatesCheckNow}"
+                                Command="{Binding CheckForUpdatesCommand}"
+                                IsEnabled="{Binding CanCheckForUpdates}" />
+                        <Button Content="{DynamicResource UpdateDownload}"
+                                Command="{Binding DownloadUpdateCommand}"
+                                IsEnabled="{Binding CanDownloadUpdate}" />
+                        <Button Content="{DynamicResource UpdateApply}"
+                                Command="{Binding ApplyUpdateCommand}"
+                                IsEnabled="{Binding CanApplyUpdate}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource StorageTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource StorageHint}" />
 

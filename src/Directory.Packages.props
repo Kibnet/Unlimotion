@@ -33,6 +33,7 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageVersion Include="Telegram.Bot" Version="16.0.2" />
+    <PackageVersion Include="Velopack" Version="0.0.1298" />
     <PackageVersion Include="ServiceStack.Interfaces" Version="6.4.0" />
     <PackageVersion Include="ServiceStack.Server" Version="6.4.0" />
     <PackageVersion Include="AutoMapper" Version="13.0.1" />

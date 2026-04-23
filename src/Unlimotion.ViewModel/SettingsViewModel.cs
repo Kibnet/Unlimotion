@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
@@ -27,6 +29,9 @@ public class SettingsViewModel
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
     private readonly Func<string?>? _defaultTaskStoragePathProvider;
+    private IApplicationUpdateService? _applicationUpdateService;
+    private ApplicationUpdateInfo? _availableUpdate;
+    private string? _updateStatusOverride;
 
     private ThemeMode _themeMode;
     private string? _taskStoragePath;
@@ -117,6 +122,9 @@ public class SettingsViewModel
     public ICommand? RefreshSshKeysCommand { get; set; }
     public ICommand? RefreshGitMetadataCommand { get; set; }
     public ICommand? CopySelectedSshKeyCommand { get; set; }
+    public ICommand? CheckForUpdatesCommand { get; set; }
+    public ICommand? DownloadUpdateCommand { get; set; }
+    public ICommand? ApplyUpdateCommand { get; set; }
 
     public ThemeMode ThemeMode
     {
@@ -527,6 +535,24 @@ public class SettingsViewModel
 
     public bool ShowServiceActions { get; set; }
 
+    public ApplicationUpdateState UpdateState { get; private set; } = ApplicationUpdateState.Unsupported;
+
+    public string CurrentApplicationVersion { get; private set; } = string.Empty;
+
+    public string? AvailableUpdateVersion { get; private set; }
+
+    public string UpdateStatusText { get; private set; } = string.Empty;
+
+    public bool IsUpdateBusy { get; private set; }
+
+    public bool HasAvailableUpdate { get; private set; }
+
+    public bool CanCheckForUpdates { get; private set; }
+
+    public bool CanDownloadUpdate { get; private set; }
+
+    public bool CanApplyUpdate { get; private set; }
+
     public string GitBackupOnboardingHint =>
         _localization.Get("BackupOnboardingHint");
 
@@ -603,6 +629,139 @@ public class SettingsViewModel
         RefreshBackupActionAvailability();
     }
 
+    public void ConfigureUpdateService(IApplicationUpdateService? updateService)
+    {
+        _applicationUpdateService = updateService;
+        CurrentApplicationVersion = updateService?.CurrentVersion ?? _localization.Get("Unknown");
+
+        if (updateService?.IsSupported != true)
+        {
+            _availableUpdate = null;
+            AvailableUpdateVersion = null;
+            SetUpdateState(ApplicationUpdateState.Unsupported);
+            return;
+        }
+
+        _availableUpdate = updateService.PendingUpdate;
+        AvailableUpdateVersion = _availableUpdate?.Version;
+        SetUpdateState(_availableUpdate == null
+            ? ApplicationUpdateState.Idle
+            : ApplicationUpdateState.ReadyToApply);
+    }
+
+    public async Task CheckForUpdatesAsync(
+        bool silent = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!CanCheckForUpdates && UpdateState != ApplicationUpdateState.Error)
+        {
+            return;
+        }
+
+        var updateService = _applicationUpdateService;
+        if (updateService?.IsSupported != true)
+        {
+            SetUpdateState(ApplicationUpdateState.Unsupported);
+            return;
+        }
+
+        var pendingUpdate = updateService.PendingUpdate;
+        if (pendingUpdate != null)
+        {
+            _availableUpdate = pendingUpdate;
+            AvailableUpdateVersion = pendingUpdate.Version;
+            SetUpdateState(ApplicationUpdateState.ReadyToApply);
+            return;
+        }
+
+        SetUpdateState(ApplicationUpdateState.Checking);
+
+        try
+        {
+            _availableUpdate = await updateService.CheckForUpdatesAsync(cancellationToken);
+            AvailableUpdateVersion = _availableUpdate?.Version;
+            SetUpdateState(_availableUpdate == null
+                ? ApplicationUpdateState.NoUpdates
+                : ApplicationUpdateState.UpdateAvailable);
+        }
+        catch (OperationCanceledException)
+        {
+            SetUpdateState(ApplicationUpdateState.Idle);
+        }
+        catch (Exception ex)
+        {
+            var status = silent
+                ? _localization.Get("UpdateCheckFailed")
+                : _localization.Format("UpdateCheckFailedWithError", ex.Message);
+            SetUpdateState(ApplicationUpdateState.Error, status);
+        }
+    }
+
+    public async Task DownloadUpdateAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanDownloadUpdate)
+        {
+            return;
+        }
+
+        var updateService = _applicationUpdateService;
+        if (updateService?.IsSupported != true)
+        {
+            SetUpdateState(ApplicationUpdateState.Unsupported);
+            return;
+        }
+
+        SetUpdateState(ApplicationUpdateState.Downloading);
+
+        try
+        {
+            await updateService.DownloadUpdateAsync(cancellationToken);
+            SetUpdateState(ApplicationUpdateState.ReadyToApply);
+        }
+        catch (OperationCanceledException)
+        {
+            SetUpdateState(_availableUpdate == null
+                ? ApplicationUpdateState.Idle
+                : ApplicationUpdateState.UpdateAvailable);
+        }
+        catch (Exception ex)
+        {
+            SetUpdateState(
+                ApplicationUpdateState.Error,
+                _localization.Format("UpdateDownloadFailedWithError", ex.Message));
+        }
+    }
+
+    public Task ApplyUpdateAsync()
+    {
+        if (!CanApplyUpdate)
+        {
+            return Task.CompletedTask;
+        }
+
+        var updateService = _applicationUpdateService;
+        if (updateService?.IsSupported != true)
+        {
+            SetUpdateState(ApplicationUpdateState.Unsupported);
+            return Task.CompletedTask;
+        }
+
+        SetUpdateState(ApplicationUpdateState.Applying);
+
+        try
+        {
+            updateService.ApplyUpdateAndRestart();
+        }
+        catch (Exception ex)
+        {
+            SetUpdateState(
+                ApplicationUpdateState.Error,
+                _localization.Format("UpdateApplyFailedWithError", ex.Message));
+        }
+
+        return Task.CompletedTask;
+    }
+
     public void MarkSignedOut()
     {
         ConnectedServerLogin = null;
@@ -615,6 +774,7 @@ public class SettingsViewModel
         RefreshBackupAuthMode();
         RefreshStorageStatusText();
         RefreshBackupState();
+        RefreshUpdateStatusText();
     }
 
     private void RefreshLanguageOptions()
@@ -932,6 +1092,62 @@ public class SettingsViewModel
 
         CanConnectRepository = !IsBackupBusy && hasRemoteUrl && (hasReadyTokenAuth || hasReadySshAuth);
         CanSyncRepository = !IsBackupBusy && hasReadySyncTarget;
+    }
+
+    private void SetUpdateState(ApplicationUpdateState state, string? statusText = null)
+    {
+        UpdateState = state;
+        _updateStatusOverride = statusText;
+        IsUpdateBusy = state is ApplicationUpdateState.Checking
+            or ApplicationUpdateState.Downloading
+            or ApplicationUpdateState.Applying;
+        HasAvailableUpdate = _availableUpdate != null;
+        RefreshUpdateStatusText();
+        RefreshUpdateActionAvailability();
+    }
+
+    private void RefreshUpdateStatusText()
+    {
+        if (!string.IsNullOrWhiteSpace(_updateStatusOverride))
+        {
+            UpdateStatusText = _updateStatusOverride;
+            return;
+        }
+
+        UpdateStatusText = UpdateState switch
+        {
+            ApplicationUpdateState.Idle => _localization.Get("UpdateStatusIdle"),
+            ApplicationUpdateState.Checking => _localization.Get("UpdateStatusChecking"),
+            ApplicationUpdateState.NoUpdates => _localization.Get("UpdateStatusNoUpdates"),
+            ApplicationUpdateState.UpdateAvailable => _localization.Format(
+                "UpdateStatusAvailable",
+                AvailableUpdateVersion ?? _localization.Get("Unknown")),
+            ApplicationUpdateState.Downloading => _localization.Format(
+                "UpdateStatusDownloading",
+                AvailableUpdateVersion ?? _localization.Get("Unknown")),
+            ApplicationUpdateState.ReadyToApply => _localization.Format(
+                "UpdateStatusReadyToApply",
+                AvailableUpdateVersion ?? _localization.Get("Unknown")),
+            ApplicationUpdateState.Applying => _localization.Get("UpdateStatusApplying"),
+            ApplicationUpdateState.Error => _localization.Get("UpdateStatusError"),
+            _ => _localization.Get("UpdateStatusUnsupported")
+        };
+    }
+
+    private void RefreshUpdateActionAvailability()
+    {
+        var isSupported = _applicationUpdateService?.IsSupported == true;
+        CanCheckForUpdates = isSupported &&
+                             !IsUpdateBusy &&
+                             UpdateState != ApplicationUpdateState.ReadyToApply;
+        CanDownloadUpdate = isSupported &&
+                            !IsUpdateBusy &&
+                            UpdateState == ApplicationUpdateState.UpdateAvailable &&
+                            _availableUpdate != null;
+        CanApplyUpdate = isSupported &&
+                         !IsUpdateBusy &&
+                         UpdateState == ApplicationUpdateState.ReadyToApply &&
+                         _availableUpdate != null;
     }
 
     private BackupAuthMode ResolveBackupAuthMode()

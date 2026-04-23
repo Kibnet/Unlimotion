@@ -274,6 +274,28 @@
   <data name="TwoDays" xml:space="preserve"><value>2 дня</value></data>
   <data name="TwoHours" xml:space="preserve"><value>2 часа</value></data>
   <data name="Unknown" xml:space="preserve"><value>Неизвестно</value></data>
+  <data name="UpdateApply" xml:space="preserve"><value>Применить и перезапустить</value></data>
+  <data name="UpdateApplyFailedWithError" xml:space="preserve"><value>Не удалось применить обновление: {0}</value></data>
+  <data name="UpdateAvailableVersion" xml:space="preserve"><value>Доступная версия</value></data>
+  <data name="UpdateCheckFailed" xml:space="preserve"><value>Не удалось проверить обновления.</value></data>
+  <data name="UpdateCheckFailedWithError" xml:space="preserve"><value>Не удалось проверить обновления: {0}</value></data>
+  <data name="UpdateCurrentVersion" xml:space="preserve"><value>Текущая версия</value></data>
+  <data name="UpdateDownload" xml:space="preserve"><value>Скачать обновление</value></data>
+  <data name="UpdateDownloadFailedWithError" xml:space="preserve"><value>Не удалось скачать обновление: {0}</value></data>
+  <data name="UpdateReadyHeader" xml:space="preserve"><value>Обновление готово</value></data>
+  <data name="UpdateReadyMessage" xml:space="preserve"><value>Версия {0} готова к установке. Перезапустить приложение сейчас?</value></data>
+  <data name="UpdatesCheckNow" xml:space="preserve"><value>Проверить обновления</value></data>
+  <data name="UpdatesHint" xml:space="preserve"><value>Проверьте GitHub Releases на новую desktop-версию и примените скачанное обновление, когда будете готовы перезапустить приложение.</value></data>
+  <data name="UpdatesTitle" xml:space="preserve"><value>Обновления</value></data>
+  <data name="UpdateStatusApplying" xml:space="preserve"><value>Применение обновления и перезапуск...</value></data>
+  <data name="UpdateStatusAvailable" xml:space="preserve"><value>Доступна версия {0}.</value></data>
+  <data name="UpdateStatusChecking" xml:space="preserve"><value>Проверка обновлений...</value></data>
+  <data name="UpdateStatusDownloading" xml:space="preserve"><value>Скачивание версии {0}...</value></data>
+  <data name="UpdateStatusError" xml:space="preserve"><value>Операция обновления завершилась ошибкой.</value></data>
+  <data name="UpdateStatusIdle" xml:space="preserve"><value>Готово к проверке обновлений.</value></data>
+  <data name="UpdateStatusNoUpdates" xml:space="preserve"><value>Установлена последняя версия.</value></data>
+  <data name="UpdateStatusReadyToApply" xml:space="preserve"><value>Версия {0} скачана и готова к применению.</value></data>
+  <data name="UpdateStatusUnsupported" xml:space="preserve"><value>Обновления недоступны для этой установки.</value></data>
   <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Разархивировать вложенные задачи</value></data>
   <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Разархивировать {0} вложенных задач из "{1}"?</value></data>
   <data name="Unlocked" xml:space="preserve"><value>Разблокированные</value></data>

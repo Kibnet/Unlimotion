@@ -13,6 +13,8 @@ env:
   WINDOWS_PUBLISH_DIR: ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net10.0\win-x64\publish
   WINDOWS_PORTABLE_DIR: ${{ github.workspace }}\artifacts\windows-portable
   WINDOWS_PORTABLE_ZIP: ${{ github.workspace }}\artifacts\windows-portable\Unlimotion-${{ github.ref_name }}-win-x64-portable.zip
+  VELOPACK_VERSION: 0.0.1298
+  VELOPACK_RELEASES_DIR: ${{ github.workspace }}\artifacts\velopack
 
 jobs:
   advinst-aip-build:
@@ -28,9 +30,30 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
+
+    - name: Normalize release version
+      id: release_version
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}"
+        if ($version.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
+          $version = $version.Substring(1)
+        }
+
+        if ($version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Release tag '${{ github.ref_name }}' cannot be used by the current MSI + Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3."
+        }
+
+        $baseVersion = [System.Version]$version
+        if ($baseVersion -lt [System.Version]'0.0.1') {
+          throw "Release tag '${{ github.ref_name }}' cannot be used as a Velopack package version. Use 0.0.1 or greater."
+        }
+
+        "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         
     - name: Publish
-      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o "${{ env.WINDOWS_PUBLISH_DIR }}" -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{  github.ref_name }} --ignore-failed-sources
+      run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o "${{ env.WINDOWS_PUBLISH_DIR }}" -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{ steps.release_version.outputs.version }} --ignore-failed-sources
 
     - name: Create Portable Zip
       shell: pwsh
@@ -51,6 +74,34 @@ jobs:
           throw "Portable zip was not created: ${{ env.WINDOWS_PORTABLE_ZIP }}"
         }
 
+    - name: Install Velopack CLI
+      run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}" --ignore-failed-sources
+
+    - name: Pack Velopack Release
+      shell: pwsh
+      run: |
+        vpk pack `
+          --packId Unlimotion `
+          --packVersion "${{ steps.release_version.outputs.version }}" `
+          --packDir "${{ env.WINDOWS_PUBLISH_DIR }}" `
+          --outputDir "${{ env.VELOPACK_RELEASES_DIR }}" `
+          --runtime win-x64 `
+          --mainExe Unlimotion.Desktop.exe `
+          --packTitle Unlimotion `
+          --packAuthors Kibnet `
+          --icon "${{ github.workspace }}\src\Unlimotion.Desktop\Assets\Unlimotion.ico"
+
+    - name: Upload Velopack Release
+      shell: pwsh
+      run: |
+        vpk upload github `
+          --outputDir "${{ env.VELOPACK_RELEASES_DIR }}" `
+          --repoUrl "https://github.com/${{ github.repository }}" `
+          --token "${{ secrets.GITHUB_TOKEN }}" `
+          --tag "${{ github.ref_name }}" `
+          --merge `
+          --publish
+
     - name: Build AIP
       uses: caphyon/advinst-github-action@v1.0
       with:
@@ -62,7 +113,7 @@ jobs:
         aip-output-dir:  ${{ github.workspace }}\setup
         aip-commands: |
           SetProperty FOO="foo"
-          SetVersion ${{  github.ref_name }}
+          SetVersion ${{ steps.release_version.outputs.version }}
 
     - name: Upload MsiPkg to Release
       uses: xresloader/upload-to-github-release@v1.3.11
