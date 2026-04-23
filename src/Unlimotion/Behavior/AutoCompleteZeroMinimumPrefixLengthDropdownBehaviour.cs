@@ -85,8 +85,10 @@ namespace TestAutoCompleteBehaviour.Behaviours
                 {
                     //We *must* set the field and not the property as we need to avoid the changed event being raised (which prevents the dropdown opening).
                     var ipc = typeof(AutoCompleteBox).GetField("_ignorePropertyChange", BindingFlags.NonPublic | BindingFlags.Instance);
-                    if (!(bool)ipc?.GetValue(AssociatedObject))
+                    if (ipc?.GetValue(AssociatedObject) is false)
+                    {
                         ipc?.SetValue(AssociatedObject, true);
+                    }
 
                     AssociatedObject.SetCurrentValue(AutoCompleteBox.IsDropDownOpenProperty, true);
                 }

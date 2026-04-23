@@ -47,23 +47,14 @@ public class MainControlRelationPickerUiTests
                 await ClickControlAsync(window, addButton);
 
                 var input = WaitForControl<AutoCompleteBox>(view, "CurrentTaskParentsRelationAddInput");
+                await ClickControlAsync(window, input);
                 input.Text = "Task 1";
                 Dispatcher.UIThread.RunJobs();
 
                 var pickerReady = WaitFor(() =>
-                {
-                    var picker = vm.CurrentItemParentsPicker;
-                    var candidate = picker?.Suggestions.FirstOrDefault(candidate =>
-                        candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
-                    if (picker == null || candidate == null)
-                    {
-                        return false;
-                    }
-
-                    input.SelectedItem = candidate;
-                    Dispatcher.UIThread.RunJobs();
-                    return picker.CanConfirm;
-                });
+                    vm.CurrentItemParentsPicker?.CanConfirm == true &&
+                    vm.CurrentItemParentsPicker.Suggestions.Any(candidate =>
+                        candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id));
                 await Assert.That(pickerReady).IsTrue();
 
                 var confirmButton = WaitForControl<Button>(view, "CurrentTaskParentsRelationAddConfirmButton");
