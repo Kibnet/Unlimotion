@@ -16,7 +16,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
     public BackupViaGitServiceTests()
     {
-        _rootPath = Path.Combine(Path.GetTempPath(), "UnlimotionGit", Guid.NewGuid().ToString("N"));
+        _rootPath = Path.Combine(Path.GetTempPath(), $"ug-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_rootPath);
         _configPath = Path.Combine(_rootPath, "settings.json");
         File.WriteAllText(_configPath, "{}");

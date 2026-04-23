@@ -8,8 +8,11 @@ on:
 permissions:
   contents: write
 
-env:  
+env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VELOPACK_VERSION: 0.0.1298
+  LINUX_PUBLISH_DIR: ${{ github.workspace }}/src/Unlimotion.Desktop/bin/Release/net10.0/linux-x64/publish
+  LINUX_VELOPACK_DIR: ${{ github.workspace }}/artifacts/velopack/linux
 
 jobs:
   deb-build:
@@ -21,11 +24,82 @@ jobs:
       with:
         ref: ${{ github.sha }}
 
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Normalize release version
+      id: release_version
+      shell: bash
+      run: |
+        version="${GITHUB_REF_NAME}"
+        version="${version#v}"
+
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Release tag '${GITHUB_REF_NAME}' cannot be used by the current Linux Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
+          exit 1
+        fi
+
+        if [[ "$version" == "0.0.0" ]]; then
+          echo "Release tag '${GITHUB_REF_NAME}' cannot be used as a Velopack package version. Use 0.0.1 or greater." >&2
+          exit 1
+        fi
+
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Publish Linux Build
+      run: >
+        dotnet publish src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj
+        -c Release
+        -f net10.0
+        -r linux-x64
+        -o "${{ env.LINUX_PUBLISH_DIR }}"
+        -p:PublishSingleFile=true
+        --self-contained true
+        -p:IncludeNativeLibrariesForSelfExtract=true
+        -p:DebugType=None
+        -p:DebugSymbols=false
+        -p:Version=${{ steps.release_version.outputs.version }}
+        --ignore-failed-sources
+
     - name: Generate DebPkg
-      run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{  github.ref_name }}
+      run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{ steps.release_version.outputs.version }}
 
     - name: Rename DebPkg
       run: cd ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64 && mv ./*.deb ./Unlimotion-${{  github.ref_name }}.deb
+
+    - name: Install Velopack CLI
+      run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}" --ignore-failed-sources
+
+    - name: Pack Velopack Linux Release
+      shell: bash
+      run: |
+        mkdir -p "${{ env.LINUX_VELOPACK_DIR }}"
+
+        "$HOME/.dotnet/tools/vpk" pack \
+          --packId Unlimotion \
+          --packVersion "${{ steps.release_version.outputs.version }}" \
+          --packDir "${{ env.LINUX_PUBLISH_DIR }}" \
+          --outputDir "${{ env.LINUX_VELOPACK_DIR }}" \
+          --channel linux \
+          --runtime linux-x64 \
+          --mainExe Unlimotion.Desktop \
+          --packTitle Unlimotion \
+          --packAuthors Kibnet \
+          --icon "${{ github.workspace }}/src/Unlimotion.Android/Icon.png"
+
+    - name: Upload Velopack Linux Release
+      shell: bash
+      run: |
+        "$HOME/.dotnet/tools/vpk" upload github \
+          --outputDir "${{ env.LINUX_VELOPACK_DIR }}" \
+          --channel linux \
+          --repoUrl "https://github.com/${{ github.repository }}" \
+          --token "${{ secrets.GITHUB_TOKEN }}" \
+          --tag "${{ github.ref_name }}" \
+          --merge \
+          --publish
 
     - name: Upload DebPkg To Release
       uses: softprops/action-gh-release@v1

@@ -274,6 +274,28 @@
   <data name="TwoDays" xml:space="preserve"><value>2 days</value></data>
   <data name="TwoHours" xml:space="preserve"><value>2 hours</value></data>
   <data name="Unknown" xml:space="preserve"><value>Unknown</value></data>
+  <data name="UpdateApply" xml:space="preserve"><value>Apply and restart</value></data>
+  <data name="UpdateApplyFailedWithError" xml:space="preserve"><value>Could not apply the update: {0}</value></data>
+  <data name="UpdateAvailableVersion" xml:space="preserve"><value>Available version</value></data>
+  <data name="UpdateCheckFailed" xml:space="preserve"><value>Could not check for updates.</value></data>
+  <data name="UpdateCheckFailedWithError" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
+  <data name="UpdateCurrentVersion" xml:space="preserve"><value>Current version</value></data>
+  <data name="UpdateDownload" xml:space="preserve"><value>Download update</value></data>
+  <data name="UpdateDownloadFailedWithError" xml:space="preserve"><value>Could not download the update: {0}</value></data>
+  <data name="UpdateReadyHeader" xml:space="preserve"><value>Update ready</value></data>
+  <data name="UpdateReadyMessage" xml:space="preserve"><value>Version {0} is ready to install. Restart the app now?</value></data>
+  <data name="UpdatesCheckNow" xml:space="preserve"><value>Check for updates</value></data>
+  <data name="UpdatesHint" xml:space="preserve"><value>Check GitHub Releases for a new desktop version and apply a downloaded update when you are ready to restart.</value></data>
+  <data name="UpdatesTitle" xml:space="preserve"><value>Updates</value></data>
+  <data name="UpdateStatusApplying" xml:space="preserve"><value>Applying update and restarting...</value></data>
+  <data name="UpdateStatusAvailable" xml:space="preserve"><value>Version {0} is available.</value></data>
+  <data name="UpdateStatusChecking" xml:space="preserve"><value>Checking for updates...</value></data>
+  <data name="UpdateStatusDownloading" xml:space="preserve"><value>Downloading version {0}...</value></data>
+  <data name="UpdateStatusError" xml:space="preserve"><value>Update operation failed.</value></data>
+  <data name="UpdateStatusIdle" xml:space="preserve"><value>Ready to check for updates.</value></data>
+  <data name="UpdateStatusNoUpdates" xml:space="preserve"><value>You are using the latest version.</value></data>
+  <data name="UpdateStatusReadyToApply" xml:space="preserve"><value>Version {0} is downloaded and ready to apply.</value></data>
+  <data name="UpdateStatusUnsupported" xml:space="preserve"><value>Updates are unavailable for this installation.</value></data>
   <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Unarchive contained tasks</value></data>
   <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to unarchive the {0} contained tasks from "{1}"?</value></data>
   <data name="Unlocked" xml:space="preserve"><value>Unlocked</value></data>

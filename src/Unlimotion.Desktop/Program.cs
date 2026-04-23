@@ -5,7 +5,9 @@ using Avalonia;
 using Avalonia.Logging;
 using Avalonia.ReactiveUI;
 using ServiceStack;
+using Unlimotion.Desktop.Services;
 using Unlimotion.Services;
+using Velopack;
 
 namespace Unlimotion.Desktop
 {
@@ -21,6 +23,9 @@ namespace Unlimotion.Desktop
         [STAThread]
         public static void Main(string[] args)
         {
+            VelopackApp.Build().Run();
+            App.ConfigureUpdateService(new VelopackApplicationUpdateService());
+
             //Задание дефолтного пути для хранения задач
 #if DEBUG
             TaskStorageFactory.DefaultStoragePath = TasksFolderName;

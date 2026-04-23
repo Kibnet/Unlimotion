@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
@@ -55,6 +56,121 @@ public class SettingsViewModelTests : IDisposable
                 .GetSection(AppearanceSettings.ThemeKey)
                 .Get<string>())
             .IsEqualTo(AppearanceSettings.SystemTheme);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task Updates_AreDisabled_WhenUpdateServiceIsUnsupported()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService { IsSupported = false };
+        var settings = CreateSettingsViewModel(configuration);
+
+        settings.ConfigureUpdateService(updateService);
+
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.Unsupported);
+        await Assert.That(settings.CurrentApplicationVersion).IsEqualTo("1.0.0");
+        await Assert.That(settings.CanCheckForUpdates).IsFalse();
+        await Assert.That(settings.CanDownloadUpdate).IsFalse();
+        await Assert.That(settings.CanApplyUpdate).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CheckForUpdatesAsync_SetsNoUpdatesState_WhenNoUpdateExists()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService();
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        await settings.CheckForUpdatesAsync();
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(1);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.NoUpdates);
+        await Assert.That(settings.CanCheckForUpdates).IsTrue();
+        await Assert.That(settings.CanDownloadUpdate).IsFalse();
+        await Assert.That(settings.CanApplyUpdate).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CheckForUpdatesAsync_UsesPendingUpdateBeforeNetworkCheck()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService();
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        updateService.PendingUpdate = new ApplicationUpdateInfo("2.0.0");
+
+        await settings.CheckForUpdatesAsync();
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(0);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.ReadyToApply);
+        await Assert.That(settings.AvailableUpdateVersion).IsEqualTo("2.0.0");
+        await Assert.That(settings.CanCheckForUpdates).IsFalse();
+        await Assert.That(settings.CanApplyUpdate).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task DownloadUpdateAsync_SetsReadyToApply_WhenUpdateWasFound()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService
+        {
+            NextUpdate = new ApplicationUpdateInfo("2.0.0")
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        await settings.CheckForUpdatesAsync();
+        await settings.DownloadUpdateAsync();
+
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.ReadyToApply);
+        await Assert.That(settings.AvailableUpdateVersion).IsEqualTo("2.0.0");
+        await Assert.That(updateService.DownloadCalls).IsEqualTo(1);
+        await Assert.That(settings.CanApplyUpdate).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ApplyUpdateAsync_CallsUpdateServiceRestart_WhenUpdateIsReady()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService
+        {
+            NextUpdate = new ApplicationUpdateInfo("2.0.0")
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        await settings.CheckForUpdatesAsync();
+        await settings.DownloadUpdateAsync();
+        await settings.ApplyUpdateAsync();
+
+        await Assert.That(updateService.ApplyCalls).IsEqualTo(1);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.Applying);
+        await Assert.That(settings.CanApplyUpdate).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CheckForUpdatesAsync_IgnoresRepeatedCalls_WhileBusy()
+    {
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var updateService = new FakeApplicationUpdateService
+        {
+            CheckCompletion = new System.Threading.Tasks.TaskCompletionSource<ApplicationUpdateInfo?>()
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        var firstCheck = settings.CheckForUpdatesAsync();
+        var secondCheck = settings.CheckForUpdatesAsync();
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(1);
+
+        updateService.CheckCompletion.SetResult(null);
+        await firstCheck;
+        await secondCheck;
+
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.NoUpdates);
     }
 
     [Test]
@@ -593,6 +709,74 @@ public class SettingsViewModelTests : IDisposable
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
         public void CloneOrUpdateRepo() => throw new NotSupportedException();
+    }
+
+    private static SettingsViewModel CreateSettingsViewModel(IConfiguration configuration)
+    {
+        return new SettingsViewModel(configuration, localizationService: new FakeLocalizationService());
+    }
+
+    private sealed class FakeLocalizationService : ILocalizationService
+    {
+        public event EventHandler? CultureChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public System.Globalization.CultureInfo CurrentCulture { get; } =
+            System.Globalization.CultureInfo.GetCultureInfo("en");
+
+        public string LanguageMode { get; private set; } = LocalizationService.EnglishLanguage;
+
+        public IReadOnlyList<LanguageOption> SupportedLanguages { get; } =
+        [
+            new LanguageOption(LocalizationService.EnglishLanguage, "English")
+        ];
+
+        public void SetLanguage(string? languageMode)
+        {
+            LanguageMode = string.IsNullOrWhiteSpace(languageMode)
+                ? LocalizationService.EnglishLanguage
+                : languageMode;
+        }
+
+        public string Get(string key) => key;
+
+        public string Format(string key, params object?[] args) => $"{key}: {string.Join(", ", args)}";
+
+        public IReadOnlyCollection<string> GetResourceKeys(System.Globalization.CultureInfo culture) =>
+            Array.Empty<string>();
+    }
+
+    private sealed class FakeApplicationUpdateService : IApplicationUpdateService
+    {
+        public bool IsSupported { get; set; } = true;
+        public string CurrentVersion { get; set; } = "1.0.0";
+        public ApplicationUpdateInfo? PendingUpdate { get; set; }
+        public ApplicationUpdateInfo? NextUpdate { get; set; }
+        public System.Threading.Tasks.TaskCompletionSource<ApplicationUpdateInfo?>? CheckCompletion { get; set; }
+        public int CheckCalls { get; private set; }
+        public int DownloadCalls { get; private set; }
+        public int ApplyCalls { get; private set; }
+
+        public System.Threading.Tasks.Task<ApplicationUpdateInfo?> CheckForUpdatesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            CheckCalls++;
+            return CheckCompletion?.Task ?? System.Threading.Tasks.Task.FromResult(NextUpdate);
+        }
+
+        public System.Threading.Tasks.Task DownloadUpdateAsync(CancellationToken cancellationToken = default)
+        {
+            DownloadCalls++;
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        public void ApplyUpdateAndRestart()
+        {
+            ApplyCalls++;
+        }
     }
 
     private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
