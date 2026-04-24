@@ -269,6 +269,8 @@
   <data name="To" xml:space="preserve"><value>По</value></data>
   <data name="Token" xml:space="preserve"><value>Токен</value></data>
   <data name="TokenAccess" xml:space="preserve"><value>Токен доступа</value></data>
+  <data name="Today" xml:space="preserve"><value>Сегодня</value></data>
+  <data name="Tomorrow" xml:space="preserve"><value>Завтра</value></data>
   <data name="Tuesday" xml:space="preserve"><value>Вторник</value></data>
   <data name="TwentyMinutes" xml:space="preserve"><value>20 минут</value></data>
   <data name="TwoDays" xml:space="preserve"><value>2 дня</value></data>

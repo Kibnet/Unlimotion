@@ -269,6 +269,8 @@
   <data name="To" xml:space="preserve"><value>To</value></data>
   <data name="Token" xml:space="preserve"><value>Token</value></data>
   <data name="TokenAccess" xml:space="preserve"><value>Access token</value></data>
+  <data name="Today" xml:space="preserve"><value>Today</value></data>
+  <data name="Tomorrow" xml:space="preserve"><value>Tomorrow</value></data>
   <data name="Tuesday" xml:space="preserve"><value>Tuesday</value></data>
   <data name="TwentyMinutes" xml:space="preserve"><value>20 minutes</value></data>
   <data name="TwoDays" xml:space="preserve"><value>2 days</value></data>
