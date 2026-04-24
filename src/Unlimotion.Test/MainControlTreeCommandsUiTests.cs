@@ -356,6 +356,55 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeCommandUi_Hotkey_WorksOnFirstPressImmediatelyAfterTabHeaderClick()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await ClickControlAsync(window, allTasksTree!);
+
+                await ClickTabHeaderAsync(window, view, "Last Created");
+                var lastCreatedReady = WaitFor(() => vm.LastCreatedItems.Any());
+                await Assert.That(lastCreatedReady).IsTrue();
+
+                await ClickTabHeaderAsync(window, view, "All Tasks");
+                Dispatcher.UIThread.RunJobs();
+
+                vm.CollapseAllNodes(vm.CurrentAllTasksItems);
+                vm.CollapseAllNodes(vm.LastCreatedItems);
+                Dispatcher.UIThread.RunJobs();
+
+                await ClickTabHeaderAsync(window, view, "Last Created");
+                PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
+
+                var expandedLastCreated = WaitFor(() => vm.LastCreatedItems.Any() && vm.LastCreatedItems.All(IsExpandedRecursive));
+                await Assert.That(expandedLastCreated).IsTrue();
+                await Assert.That(vm.CurrentAllTasksItems.All(IsCollapsedRecursive)).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_LastCreatedTab_CurrentCommands_WorkOnClickedItem()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -732,6 +781,7 @@ public class MainControlTreeCommandsUiTests
                 vm.CollapseAllNodes(vm.UnlockedItems);
                 Dispatcher.UIThread.RunJobs();
 
+                ClearStoredTreeCommandContext(view);
                 unlockedTree.ContextMenu!.PlacementTarget = unlockedTree;
                 var expandAllMenuItem = unlockedTree.ContextMenu.Items
                     .OfType<MenuItem>()
@@ -739,6 +789,116 @@ public class MainControlTreeCommandsUiTests
                 InvokeMenuItemClick(expandAllMenuItem);
 
                 await Assert.That(vm.UnlockedItems.All(IsExpandedRecursive)).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_ContextMenu_DisplaysHotkeysForTreeCommands()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(allTasksTree!.ContextMenu).IsNotNull();
+
+                var menuItems = allTasksTree.ContextMenu!.Items
+                    .OfType<MenuItem>()
+                    .ToDictionary(item => item.Tag?.ToString() ?? string.Empty, item => item);
+
+                await Assert.That(menuItems["ExpandCurrentNested"].InputGesture?.ToString()).IsEqualTo("Ctrl+Shift+Right");
+                await Assert.That(menuItems["CollapseCurrentNested"].InputGesture?.ToString()).IsEqualTo("Ctrl+Shift+Left");
+                await Assert.That(menuItems["ExpandAll"].InputGesture?.ToString()).IsEqualTo("Ctrl+Alt+Right");
+                await Assert.That(menuItems["CollapseAll"].InputGesture?.ToString()).IsEqualTo("Ctrl+Alt+Left");
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetItemWithoutStoredContextForCurrentCommand()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var rootTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
+                var grandchildTask = await vm.taskRepository!.AddChild(childTask);
+                grandchildTask.Title = "PlacementTarget current command grandchild";
+                await TestHelpers.WaitThrottleTime();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                SelectTab(view, 1);
+
+                var lastCreatedTree = view.FindControl<TreeView>("LastCreatedTree");
+                await Assert.That(lastCreatedTree).IsNotNull();
+                await Assert.That(lastCreatedTree!.ContextMenu).IsNotNull();
+
+                var rootWrapper = vm.FindTaskWrapperViewModel(rootTask!, vm.LastCreatedItems);
+                var childWrapper = vm.FindTaskWrapperViewModel(childTask!, vm.LastCreatedItems);
+                var grandchildWrapper = vm.FindTaskWrapperViewModel(grandchildTask, vm.LastCreatedItems);
+
+                await Assert.That(rootWrapper).IsNotNull();
+                await Assert.That(childWrapper).IsNotNull();
+                await Assert.That(grandchildWrapper).IsNotNull();
+
+                rootWrapper!.IsExpanded = true;
+                childWrapper!.IsExpanded = false;
+                grandchildWrapper!.IsExpanded = false;
+                Dispatcher.UIThread.RunJobs();
+
+                var childControl = lastCreatedTree.GetVisualDescendants()
+                    .OfType<Control>()
+                    .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == childTask.Id);
+
+                lastCreatedTree.SelectedItems?.Clear();
+                lastCreatedTree.SelectedItem = null;
+                vm.CurrentLastCreated = null!;
+
+                ClearStoredTreeCommandContext(view);
+                lastCreatedTree.ContextMenu!.PlacementTarget = childControl;
+                var expandCurrentMenuItem = lastCreatedTree.ContextMenu.Items
+                    .OfType<MenuItem>()
+                    .First(item => string.Equals(item.Tag?.ToString(), "ExpandCurrentNested", StringComparison.Ordinal));
+                InvokeMenuItemClick(expandCurrentMenuItem);
+
+                await Assert.That(childWrapper.IsExpanded).IsTrue();
+                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
             }
             finally
             {
@@ -1068,6 +1228,23 @@ public class MainControlTreeCommandsUiTests
     {
         menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
         Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void ClearStoredTreeCommandContext(MainControl view)
+    {
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var type = typeof(MainControl);
+
+        var activeTaskTreeField = type.GetField("_activeTaskTree", flags)
+            ?? throw new InvalidOperationException("Cannot find _activeTaskTree field.");
+        var contextMenuTreeField = type.GetField("_contextMenuTree", flags)
+            ?? throw new InvalidOperationException("Cannot find _contextMenuTree field.");
+        var contextMenuWrapperField = type.GetField("_contextMenuWrapper", flags)
+            ?? throw new InvalidOperationException("Cannot find _contextMenuWrapper field.");
+
+        activeTaskTreeField.SetValue(view, null);
+        contextMenuTreeField.SetValue(view, null);
+        contextMenuWrapperField.SetValue(view, null);
     }
 
     private static void SelectTab(MainControl view, int index)

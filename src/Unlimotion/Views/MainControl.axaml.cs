@@ -26,6 +26,16 @@ namespace Unlimotion.Views
             ContextMenu
         }
 
+        private static readonly string[] KnownMainTaskTreeNames =
+        [
+            "AllTasksTree",
+            "LastCreatedTree",
+            "UnlockedTree",
+            "CompletedTree",
+            "ArchivedTree",
+            "LastOpenedTree"
+        ];
+
         // Static dependencies - set once during app initialization
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
@@ -811,6 +821,7 @@ namespace Unlimotion.Views
                 return;
             }
 
+            RestoreContextMenuContextFromPlacementTarget(menuItem);
             ExecuteTreeCommand(kind, TreeCommandRoute.ContextMenu);
         }
         
@@ -834,19 +845,35 @@ namespace Unlimotion.Views
 
         private void ExecuteTreeCommand(TreeCommandKind kind)
         {
-            ExecuteTreeCommand(kind, TreeCommandRoute.Hotkey);
+            ExecuteTreeCommand(kind, TreeCommandRoute.Hotkey, allowDeferredRetry: true);
         }
 
         private void ExecuteTreeCommand(TreeCommandKind kind, TreeCommandRoute route)
         {
+            ExecuteTreeCommand(kind, route, allowDeferredRetry: false);
+        }
+
+        private void ExecuteTreeCommand(TreeCommandKind kind, TreeCommandRoute route, bool allowDeferredRetry)
+        {
             try
             {
-                if (DataContext is not MainWindowViewModel vm || !TryGetCommandTree(route, out var tree))
+                if (route == TreeCommandRoute.Hotkey)
                 {
-                    return;
+                    if (IsTextInputFocused())
+                    {
+                        return;
+                    }
+
+                    if (allowDeferredRetry && IsTabHeaderFocused())
+                    {
+                        Dispatcher.UIThread.Post(
+                            () => ExecuteTreeCommand(kind, route, allowDeferredRetry: false),
+                            DispatcherPriority.Background);
+                        return;
+                    }
                 }
 
-                if (route == TreeCommandRoute.Hotkey && IsTextInputFocused())
+                if (DataContext is not MainWindowViewModel vm || !TryGetCommandTree(route, out var tree))
                 {
                     return;
                 }
@@ -999,22 +1026,27 @@ namespace Unlimotion.Views
         {
             tree = null!;
 
-            if (DataContext is not MainWindowViewModel vm)
-            {
-                return false;
-            }
-
-            if (TryGetFocusedTaskTree(out var focusedTree) && ShouldUseActiveTreeForHotkey(vm, focusedTree))
+            if (TryGetFocusedTaskTree(out var focusedTree) && ShouldUseActiveTreeForHotkey(focusedTree))
             {
                 _activeTaskTree = focusedTree;
                 tree = focusedTree;
                 return true;
             }
 
-            if (TryGetValidatedActiveTree(out var activeTree) && ShouldUseActiveTreeForHotkey(vm, activeTree))
+            if (TryGetValidatedActiveTree(out var activeTree) && ShouldUseActiveTreeForHotkey(activeTree))
             {
                 tree = activeTree;
                 return true;
+            }
+
+            if (TryGetVisibleMainTaskTree(out tree))
+            {
+                return true;
+            }
+
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                return false;
             }
 
             return TryGetCurrentModeTree(vm, out tree);
@@ -1023,6 +1055,11 @@ namespace Unlimotion.Views
         private bool TryGetCurrentModeTree(MainWindowViewModel vm, out TreeView tree)
         {
             tree = null!;
+
+            if (TryGetVisibleMainTaskTree(out tree))
+            {
+                return true;
+            }
 
             if (!TryGetCurrentModeTreeName(vm, out var treeName))
             {
@@ -1033,15 +1070,15 @@ namespace Unlimotion.Views
             return TryGetValidatedTree(candidate, out tree);
         }
 
-        private static bool ShouldUseActiveTreeForHotkey(MainWindowViewModel vm, TreeView activeTree)
+        private bool ShouldUseActiveTreeForHotkey(TreeView activeTree)
         {
             if (!IsKnownMainTaskTree(activeTree))
             {
                 return true;
             }
 
-            return !TryGetCurrentModeTreeName(vm, out var currentModeTreeName) ||
-                   StringComparer.Ordinal.Equals(activeTree.Name, currentModeTreeName);
+            return !TryGetVisibleMainTaskTree(out var visibleTree) ||
+                   StringComparer.Ordinal.Equals(activeTree.Name, visibleTree.Name);
         }
 
         private static bool TryGetCurrentModeTreeName(MainWindowViewModel vm, out string treeName)
@@ -1062,16 +1099,22 @@ namespace Unlimotion.Views
 
         private static bool IsKnownMainTaskTree(TreeView tree)
         {
-            return tree.Name switch
+            return KnownMainTaskTreeNames.Contains(tree.Name, StringComparer.Ordinal);
+        }
+
+        private bool TryGetVisibleMainTaskTree(out TreeView tree)
+        {
+            foreach (var treeName in KnownMainTaskTreeNames)
             {
-                "AllTasksTree" => true,
-                "LastCreatedTree" => true,
-                "UnlockedTree" => true,
-                "CompletedTree" => true,
-                "ArchivedTree" => true,
-                "LastOpenedTree" => true,
-                _ => false
-            };
+                var candidate = this.FindControl<TreeView>(treeName);
+                if (TryGetValidatedTree(candidate, out tree))
+                {
+                    return true;
+                }
+            }
+
+            tree = null!;
+            return false;
         }
 
         private bool TryGetValidatedTree(TreeView? candidate, out TreeView tree)
@@ -1245,6 +1288,18 @@ namespace Unlimotion.Views
             _contextMenuWrapper = null;
         }
 
+        private void RestoreContextMenuContextFromPlacementTarget(MenuItem menuItem)
+        {
+            var contextMenu = menuItem.FindParent<ContextMenu>();
+            if (contextMenu?.PlacementTarget is not Control placementTarget)
+            {
+                return;
+            }
+
+            _contextMenuTree = TryGetTaskTree(placementTarget) ?? _contextMenuTree;
+            _contextMenuWrapper ??= TryGetWrapper(placementTarget);
+        }
+
         private static TaskWrapperViewModel? TryGetWrapper(object? source)
         {
             return source switch
@@ -1267,12 +1322,26 @@ namespace Unlimotion.Views
             return IsTextInputControlOrAncestor(focused);
         }
 
+        private bool IsTabHeaderFocused()
+        {
+            var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+            return focused != null && IsControlOrAncestor<TabItem>(focused);
+        }
+
         private static bool IsTextInputControlOrAncestor(Control control)
+        {
+            return IsControlOrAncestor<TextBox>(control) ||
+                   IsControlOrAncestor<AutoCompleteBox>(control) ||
+                   IsControlOrAncestor<NumericUpDown>(control);
+        }
+
+        private static bool IsControlOrAncestor<TControl>(Control control)
+            where TControl : Control
         {
             Control? current = control;
             while (current != null)
             {
-                if (current is TextBox or AutoCompleteBox or NumericUpDown)
+                if (current is TControl)
                 {
                     return true;
                 }

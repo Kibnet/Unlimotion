@@ -58,18 +58,22 @@ x:Class="Unlimotion.Views.MainControl">
                     <ContextMenu>
                         <MenuItem Header="{DynamicResource ExpandCurrentNested}"
                                   Tag="ExpandCurrentNested"
+                                  InputGesture="Ctrl+Shift+Right"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandCurrentNestedTreeMenuItem"/>
                         <MenuItem Header="{DynamicResource CollapseCurrentNested}"
                                   Tag="CollapseCurrentNested"
+                                  InputGesture="Ctrl+Shift+Left"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseCurrentNestedTreeMenuItem"/>
                         <MenuItem Header="{DynamicResource ExpandAllNodes}"
                                   Tag="ExpandAll"
+                                  InputGesture="Ctrl+Alt+Right"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="ExpandAllTreeMenuItem"/>
                         <MenuItem Header="{DynamicResource CollapseAllNodes}"
                                   Tag="CollapseAll"
+                                  InputGesture="Ctrl+Alt+Left"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
                     </ContextMenu>
