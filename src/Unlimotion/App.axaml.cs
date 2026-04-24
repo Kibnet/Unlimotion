@@ -165,8 +165,7 @@ public class App : Application
             catch (Exception ex)
             {
                 settings.SetStorageConnectionState(SettingsConnectionState.Error);
-                var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
-                _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
+                _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
             }
         });
 
