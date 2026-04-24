@@ -130,6 +130,13 @@ New tasks are always created relative to the selected task. To do this, you can 
 
 After creating a task, you need to fill in the name of the current task, because if a task without a name is selected, the creation buttons will be disabled.
 
+### Tree expansion shortcuts
+In all task list tabs and relation trees on the task card, you can control expansion with these hotkeys:
+- **Expand nested for current (Ctrl+Shift+Right)** - Expand the selected node and all nested nodes under it
+- **Collapse nested for current (Ctrl+Shift+Left)** - Collapse nested nodes under the selected node
+- **Expand all nodes (Ctrl+Alt+Right)** - Expand all nodes in the active tree
+- **Collapse all nodes (Ctrl+Alt+Left)** - Collapse all nodes in the active tree
+
 ### Tasks deleting
 Tasks are permanently deleted when you click the "❌" button in the task list. 
 Also, when you press **Shift+Delete**, the selected task is deleted.
