@@ -10,6 +10,7 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  INSTALLER_PUBLISHER: Kibnet
   WINDOWS_PUBLISH_DIR: ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net10.0\win-x64\publish
   WINDOWS_PORTABLE_DIR: ${{ github.workspace }}\artifacts\windows-portable
   WINDOWS_PORTABLE_ZIP: ${{ github.workspace }}\artifacts\windows-portable\Unlimotion-${{ github.ref_name }}-win-x64-portable.zip
@@ -89,7 +90,7 @@ jobs:
           --runtime win-x64 `
           --mainExe Unlimotion.Desktop.exe `
           --packTitle Unlimotion `
-          --packAuthors Kibnet `
+          --packAuthors "${{ env.INSTALLER_PUBLISHER }}" `
           --icon "${{ github.workspace }}\src\Unlimotion.Desktop\Assets\Unlimotion.ico"
 
     - name: Upload Velopack Release

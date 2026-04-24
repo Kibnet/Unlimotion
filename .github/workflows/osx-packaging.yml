@@ -10,6 +10,7 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  INSTALLER_PUBLISHER: Kibnet
   VELOPACK_VERSION: 0.0.1298
   OSX_APP_PATH: ${{ github.workspace }}/Unlimotion.app
   OSX_VELOPACK_DIR: ${{ github.workspace }}/artifacts/velopack/osx
@@ -71,7 +72,7 @@ jobs:
           --runtime osx-x64 \
           --mainExe Unlimotion.Desktop.ForMacBuild \
           --packTitle Unlimotion \
-          --packAuthors Kibnet
+          --packAuthors "${{ env.INSTALLER_PUBLISHER }}"
 
     - name: Upload Velopack macOS Release
       shell: bash

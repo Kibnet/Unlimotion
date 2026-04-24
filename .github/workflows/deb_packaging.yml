@@ -10,6 +10,7 @@ permissions:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  INSTALLER_PUBLISHER: Kibnet
   VELOPACK_VERSION: 0.0.1298
   LINUX_PUBLISH_DIR: ${{ github.workspace }}/src/Unlimotion.Desktop/bin/Release/net10.0/linux-x64/publish
   LINUX_VELOPACK_DIR: ${{ github.workspace }}/artifacts/velopack/linux
@@ -86,7 +87,7 @@ jobs:
           --runtime linux-x64 \
           --mainExe Unlimotion.Desktop \
           --packTitle Unlimotion \
-          --packAuthors Kibnet \
+          --packAuthors "${{ env.INSTALLER_PUBLISHER }}" \
           --icon "${{ github.workspace }}/src/Unlimotion.Android/Icon.png"
 
     - name: Upload Velopack Linux Release
