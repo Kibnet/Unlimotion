@@ -966,24 +966,45 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(root1Item.IsSelected).IsTrue();
                 await Assert.That(root3Item.IsSelected).IsTrue();
 
+                var collectionChangeCount = 0;
+                var mouseIsDown = false;
                 var selectedItemsNotifier = allTasksTree.SelectedItems as INotifyCollectionChanged;
                 await Assert.That(selectedItemsNotifier).IsNotNull();
-
-                var ensureSelectionMethod = typeof(MainControl).GetMethod(
-                    "EnsureTreeSelectionForDragStart",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                await Assert.That(ensureSelectionMethod).IsNotNull();
-
-                var collectionChangeCount = 0;
                 NotifyCollectionChangedEventHandler handler = (_, _) => collectionChangeCount++;
                 selectedItemsNotifier!.CollectionChanged += handler;
                 try
                 {
-                    ensureSelectionMethod!.Invoke(view, [allTasksTree, selectedBefore, true]);
+                    var startPoint = GetControlCenterPoint(window, root1Control);
+                    var movePoint = new Point(startPoint.X + 12, startPoint.Y + 12);
+
+                    window.MouseDown(startPoint, MouseButton.Left, RawInputModifiers.None);
+                    mouseIsDown = true;
+                    Dispatcher.UIThread.RunJobs();
+
+                    await Assert.That(GetSelectedWrappers(allTasksTree).Count).IsEqualTo(2);
+                    await Assert.That(root1Item.IsSelected).IsTrue();
+                    await Assert.That(root3Item.IsSelected).IsTrue();
+
+                    window.MouseMove(movePoint, RawInputModifiers.LeftMouseButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    await Assert.That(GetSelectedWrappers(allTasksTree).Count).IsEqualTo(2);
+                    await Assert.That(root1Item.IsSelected).IsTrue();
+                    await Assert.That(root3Item.IsSelected).IsTrue();
+
+                    window.MouseUp(movePoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                    mouseIsDown = false;
                     Dispatcher.UIThread.RunJobs();
                 }
                 finally
                 {
+                    if (mouseIsDown && window is { } topLevel)
+                    {
+                        var releasePoint = GetControlCenterPoint(topLevel, root1Control);
+                        topLevel.MouseUp(releasePoint, MouseButton.Left, RawInputModifiers.None);
+                        Dispatcher.UIThread.RunJobs();
+                    }
+
                     selectedItemsNotifier.CollectionChanged -= handler;
                 }
 
@@ -1016,19 +1037,25 @@ public class MainControlTreeCommandsUiTests
         MouseButton button = MouseButton.Left,
         RawInputModifiers modifiers = RawInputModifiers.None)
     {
+        var point = GetControlCenterPoint(window, control);
+        window.MouseDown(point, button, modifiers);
+        window.MouseUp(point, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
+        await Task.CompletedTask;
+    }
+
+    private static Point GetControlCenterPoint(Visual relativeTo, Control control)
+    {
         var point = control.TranslatePoint(
             new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
-            window);
+            relativeTo);
 
         if (!point.HasValue)
         {
             throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
         }
 
-        window.MouseDown(point.Value, button, modifiers);
-        window.MouseUp(point.Value, button, modifiers);
-        Dispatcher.UIThread.RunJobs();
-        await Task.CompletedTask;
+        return point.Value;
     }
 
     private static void PressHotkey(Window window, Key key, PhysicalKey physicalKey, RawInputModifiers modifiers)

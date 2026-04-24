@@ -249,6 +249,12 @@ namespace Unlimotion.Views
             {
                 selectionSnapshot = [wrapper];
             }
+            else if (selectionSnapshot.Count > 1)
+            {
+                // Prevent TreeView from collapsing an existing multi-selection to the drag source
+                // before the drag gesture crosses the threshold.
+                e.Handled = true;
+            }
 
             _pendingTreeDrag = new PendingTreeDragContext(
                 control,
