@@ -145,15 +145,17 @@ Content="❌"
     <Grid RowDefinitions="Auto,*">
         <!--Адрес-->
         <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" >
-            <TextBlock Text="{Binding BreadScrumbs}"
-                       TextWrapping="NoWrap"
-                       TextTrimming="CharacterEllipsis"
-                       MaxLines="1"
-                       ToolTip.Tip="{Binding BreadScrumbs}"
-                       PointerPressed="BreadScrumbs_OnPointerPressed"
-                       FontWeight="Bold"
-                       HorizontalAlignment="Stretch"
-                       VerticalAlignment="Center"/>
+            <unlimotion:EmojiTextBlock x:Name="BreadcrumbsTextBlock"
+                                       AutomationProperties.AutomationId="BreadcrumbsTextBlock"
+                                       EmojiText="{Binding BreadScrumbs}"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxLines="1"
+                                       ToolTip.Tip="{Binding BreadScrumbs}"
+                                       PointerPressed="BreadScrumbs_OnPointerPressed"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Center"/>
         </Grid>
 
         <!--Панель навигации-->
