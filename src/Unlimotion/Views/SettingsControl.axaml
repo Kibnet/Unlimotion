@@ -31,10 +31,35 @@
             <Setter Property="Opacity" Value="0.85" />
             <Setter Property="Margin" Value="0,8,0,0" />
         </Style>
-        <Style Selector="Grid.FieldRow">
-            <Setter Property="ColumnSpacing" Value="12" />
-            <Setter Property="RowSpacing" Value="8" />
+        <Style Selector="StackPanel.FieldGroup">
+            <Setter Property="Spacing" Value="6" />
             <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style Selector="TextBlock.FieldLabel">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Grid.FieldActionRow">
+            <Setter Property="ColumnSpacing" Value="8" />
+        </Style>
+        <Style Selector="UserControl ComboBox">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="UserControl TextBox">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="UserControl NumericUpDown">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="WrapPanel.ActionButtons">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Margin" Value="0,12,0,0" />
+        </Style>
+        <Style Selector="WrapPanel.ActionButtons Button">
+            <Setter Property="Margin" Value="0,0,8,8" />
+        </Style>
+        <Style Selector="WrapPanel.ActionButtons ToggleButton">
+            <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
     </UserControl.Styles>
 
@@ -49,10 +74,9 @@
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource AppearanceTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource AppearanceHint}" />
 
-                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto">
-                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource LanguageLabel}" />
-                        <ComboBox Grid.Column="1"
-                                  SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource LanguageLabel}" />
+                        <ComboBox SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
                                   ItemsSource="{Binding LanguageOptions}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate DataType="localization:LanguageOption">
@@ -60,29 +84,31 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                    </StackPanel>
 
-                        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource ThemeInterface}" />
-                        <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource ThemeInterface}" />
+                        <ComboBox SelectedIndex="{Binding ThemeModeIndex, Mode=TwoWay}">
                             <ComboBoxItem Content="{DynamicResource ThemeSystem}" />
                             <ComboBoxItem Content="{DynamicResource ThemeLight}" />
                             <ComboBoxItem Content="{DynamicResource ThemeDark}" />
                         </ComboBox>
+                    </StackPanel>
 
-                        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource FontSize}" />
-                        <NumericUpDown Grid.Row="2"
-                                       Grid.Column="1"
-                                       Value="{Binding FontSize}"
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource FontSize}" />
+                        <NumericUpDown Value="{Binding FontSize}"
                                        Minimum="10"
                                        Maximum="24"
                                        Increment="1"
                                        FormatString="0" />
+                    </StackPanel>
 
-                        <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{DynamicResource FuzzySearch}" />
-                        <CheckBox Grid.Row="3"
-                                  Grid.Column="1"
-                                  IsChecked="{Binding IsFuzzySearch}"
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource FuzzySearch}" />
+                        <CheckBox IsChecked="{Binding IsFuzzySearch}"
                                   Content="{DynamicResource Enabled}" />
-                    </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -91,26 +117,20 @@
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource UpdatesTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource UpdatesHint}" />
 
-                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto">
-                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource UpdateCurrentVersion}" />
-                        <TextBlock Grid.Column="1"
-                                   VerticalAlignment="Center"
-                                   Text="{Binding CurrentApplicationVersion}" />
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource UpdateCurrentVersion}" />
+                        <TextBlock Text="{Binding CurrentApplicationVersion}" />
+                    </StackPanel>
 
-                        <TextBlock Grid.Row="1"
-                                   VerticalAlignment="Center"
-                                   Text="{DynamicResource UpdateAvailableVersion}"
-                                   IsVisible="{Binding HasAvailableUpdate}" />
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="1"
-                                   VerticalAlignment="Center"
-                                   Text="{Binding AvailableUpdateVersion}"
-                                   IsVisible="{Binding HasAvailableUpdate}" />
-                    </Grid>
+                    <StackPanel Classes="FieldGroup"
+                                IsVisible="{Binding HasAvailableUpdate}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource UpdateAvailableVersion}" />
+                        <TextBlock Text="{Binding AvailableUpdateVersion}" />
+                    </StackPanel>
 
                     <TextBlock Classes="StatusText" Text="{Binding UpdateStatusText}" />
 
-                    <WrapPanel Margin="0,12,0,0">
+                    <WrapPanel Classes="ActionButtons">
                         <Button Content="{DynamicResource UpdatesCheckNow}"
                                 Command="{Binding CheckForUpdatesCommand}"
                                 IsEnabled="{Binding CanCheckForUpdates}" />
@@ -129,27 +149,29 @@
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource StorageTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource StorageHint}" />
 
-                    <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto">
-                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource StorageMode}" />
-                        <ComboBox Grid.Column="1" SelectedIndex="{Binding StorageModeIndex, Mode=TwoWay}">
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource StorageMode}" />
+                        <ComboBox SelectedIndex="{Binding StorageModeIndex, Mode=TwoWay}">
                             <ComboBoxItem Content="{DynamicResource StorageLocal}" />
                             <ComboBoxItem Content="{DynamicResource StorageServer}" />
                         </ComboBox>
-                    </Grid>
+                    </StackPanel>
 
                     <StackPanel IsVisible="{Binding !IsServerMode}">
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto">
-                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource DataFolder}" />
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding TaskStoragePath}"
-                                     ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
-                            <Button Grid.Column="2"
-                                    Content="{DynamicResource Browse}"
-                                    Command="{Binding BrowseTaskStoragePathCommand}" />
-                        </Grid>
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource DataFolder}" />
+                            <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding TaskStoragePath}"
+                                         ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
+                                <Button Grid.Column="1"
+                                        Content="{DynamicResource Browse}"
+                                        Command="{Binding BrowseTaskStoragePathCommand}" />
+                            </Grid>
+                        </StackPanel>
 
                         <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
-                        <WrapPanel Margin="0,12,0,0">
+
+                        <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource Connect}"
                                     Command="{Binding ConnectCommand}"
                                     IsEnabled="{Binding CanConnectStorage}" />
@@ -157,21 +179,25 @@
                     </StackPanel>
 
                     <StackPanel IsVisible="{Binding IsServerMode}">
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ServerAddress}" />
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding ServerStorageUrl}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource ServerAddress}" />
+                            <TextBox Text="{Binding ServerStorageUrl}"
                                      ToolTip.Tip="{Binding ServerStorageUrl}" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource Login}" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Login}" />
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource Login}" />
+                            <TextBox Text="{Binding Login}" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource Password}" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Password}" PasswordChar="*" />
-                        </Grid>
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource Password}" />
+                            <TextBox Text="{Binding Password}" PasswordChar="*" />
+                        </StackPanel>
 
                         <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
-                        <WrapPanel Margin="0,12,0,0">
+
+                        <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource Connect}"
                                     Command="{Binding ConnectCommand}"
                                     IsEnabled="{Binding CanConnectStorage}" />
@@ -194,40 +220,40 @@
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
                         <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
 
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto" RowDefinitions="Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource Repository}" />
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding GitRemoteUrl}"
-                                     ToolTip.Tip="{Binding GitRemoteUrl}" />
-                            <Button Grid.Column="2"
-                                    Content="{DynamicResource Refresh}"
-                                    Command="{Binding RefreshGitMetadataCommand}" />
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource Repository}" />
+                            <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding GitRemoteUrl}"
+                                         ToolTip.Tip="{Binding GitRemoteUrl}" />
+                                <Button Grid.Column="1"
+                                        Content="{DynamicResource Refresh}"
+                                        Command="{Binding RefreshGitMetadataCommand}" />
+                            </Grid>
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource PushBranch}" />
-                            <ComboBox Grid.Row="1"
-                                      Grid.Column="1"
-                                      Grid.ColumnSpan="2"
-                                      SelectedItem="{Binding GitPushRefSpec}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource PushBranch}" />
+                            <ComboBox SelectedItem="{Binding GitPushRefSpec}"
                                       ItemsSource="{Binding Refs}" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource RemoteSource}" />
-                            <ComboBox Grid.Row="2"
-                                      Grid.Column="1"
-                                      Grid.ColumnSpan="2"
-                                      SelectedItem="{Binding GitRemoteNameDisplay}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource RemoteSource}" />
+                            <ComboBox SelectedItem="{Binding GitRemoteNameDisplay}"
                                       ItemsSource="{Binding RemotesWithAuthType}" />
-                        </Grid>
+                        </StackPanel>
 
-                        <Grid Classes="FieldRow"
-                              ColumnDefinitions="220,*"
-                              RowDefinitions="Auto,Auto"
-                              IsVisible="{Binding IsTokenAuthSelected}">
-                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource Login}" />
-                            <TextBox Grid.Column="1" Text="{Binding GitUserName}" />
+                        <StackPanel IsVisible="{Binding IsTokenAuthSelected}">
+                            <StackPanel Classes="FieldGroup">
+                                <TextBlock Classes="FieldLabel" Text="{DynamicResource Login}" />
+                                <TextBox Text="{Binding GitUserName}" />
+                            </StackPanel>
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource TokenAccess}" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GitPassword}" PasswordChar="*" />
-                        </Grid>
+                            <StackPanel Classes="FieldGroup">
+                                <TextBlock Classes="FieldLabel" Text="{DynamicResource TokenAccess}" />
+                                <TextBox Text="{Binding GitPassword}" PasswordChar="*" />
+                            </StackPanel>
+                        </StackPanel>
 
                         <Border Classes="SettingsSection"
                                 Padding="12"
@@ -237,34 +263,34 @@
                                 <TextBlock Classes="SectionTitle" Text="{DynamicResource SshKeys}" />
                                 <TextBlock Classes="SectionHint" Text="{DynamicResource SshKeysHint}" />
 
-                                <Grid Classes="FieldRow" ColumnDefinitions="220,*,Auto,Auto" RowDefinitions="Auto,Auto">
-                                    <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActiveKey}" />
-                                    <ComboBox Grid.Column="1"
-                                              SelectedItem="{Binding SelectedSshPublicKeyPath}"
+                                <StackPanel Classes="FieldGroup">
+                                    <TextBlock Classes="FieldLabel" Text="{DynamicResource ActiveKey}" />
+                                    <ComboBox SelectedItem="{Binding SelectedSshPublicKeyPath}"
                                               ItemsSource="{Binding SshPublicKeys}" />
-                                    <Button Grid.Column="2"
-                                            Content="{DynamicResource Refresh}"
-                                            Command="{Binding RefreshSshKeysCommand}" />
-                                    <Button Grid.Column="3"
-                                            Content="{DynamicResource CopyPublicKey}"
-                                            Command="{Binding CopySelectedSshKeyCommand}" />
+                                    <WrapPanel Classes="ActionButtons" Margin="0,8,0,0">
+                                        <Button Content="{DynamicResource Refresh}"
+                                                Command="{Binding RefreshSshKeysCommand}" />
+                                        <Button Content="{DynamicResource CopyPublicKey}"
+                                                Command="{Binding CopySelectedSshKeyCommand}" />
+                                    </WrapPanel>
+                                </StackPanel>
 
-                                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource NewKey}" />
-                                    <TextBox Grid.Row="1"
-                                             Grid.Column="1"
-                                             Text="{Binding NewSshKeyName}"
-                                             Watermark="id_ed25519_unlimotion" />
-                                    <Button Grid.Row="1"
-                                            Grid.Column="2"
-                                            Content="{DynamicResource Create}"
-                                            Command="{Binding GenerateSshKeyCommand}" />
-                                </Grid>
+                                <StackPanel Classes="FieldGroup">
+                                    <TextBlock Classes="FieldLabel" Text="{DynamicResource NewKey}" />
+                                    <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                                        <TextBox Text="{Binding NewSshKeyName}"
+                                                 Watermark="id_ed25519_unlimotion" />
+                                        <Button Grid.Column="1"
+                                                Content="{DynamicResource Create}"
+                                                Command="{Binding GenerateSshKeyCommand}" />
+                                    </Grid>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
                         <TextBlock Classes="StatusText" Text="{Binding BackupStatusText}" />
 
-                        <WrapPanel Margin="0,12,0,0">
+                        <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource ConnectRepository}"
                                     Command="{Binding CloneCommand}"
                                     IsEnabled="{Binding CanConnectRepository}" />
@@ -295,36 +321,39 @@
                         <TextBlock Classes="SectionTitle" Text="{DynamicResource AdvancedSettings}" />
                         <TextBlock Classes="SectionHint" Text="{DynamicResource AdvancedHint}" />
 
-                        <Grid Classes="FieldRow" ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ShowNotifications}" />
-                            <CheckBox Grid.Column="1"
-                                      IsChecked="{Binding GitShowStatusToasts}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource ShowNotifications}" />
+                            <CheckBox IsChecked="{Binding GitShowStatusToasts}"
                                       Content="{DynamicResource Enabled}" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{DynamicResource PullIntervalSeconds}" />
-                            <NumericUpDown Grid.Row="1"
-                                           Grid.Column="1"
-                                           Value="{Binding GitPullIntervalSeconds}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource PullIntervalSeconds}" />
+                            <NumericUpDown Value="{Binding GitPullIntervalSeconds}"
                                            Minimum="0"
                                            Maximum="86400"
                                            Increment="5"
                                            FormatString="0" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{DynamicResource PushIntervalSeconds}" />
-                            <NumericUpDown Grid.Row="2"
-                                           Grid.Column="1"
-                                           Value="{Binding GitPushIntervalSeconds}"
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource PushIntervalSeconds}" />
+                            <NumericUpDown Value="{Binding GitPushIntervalSeconds}"
                                            Minimum="0"
                                            Maximum="86400"
                                            Increment="5"
                                            FormatString="0" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{DynamicResource BackupCommitterName}" />
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GitCommitterName}" />
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource BackupCommitterName}" />
+                            <TextBox Text="{Binding GitCommitterName}" />
+                        </StackPanel>
 
-                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="{DynamicResource BackupCommitterEmail}" />
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding GitCommitterEmail}" />
-                        </Grid>
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource BackupCommitterEmail}" />
+                            <TextBox Text="{Binding GitCommitterEmail}" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -339,7 +368,7 @@
                         <TextBlock Classes="SectionHint"
                                    Text="{DynamicResource MaintenanceHint}" />
 
-                        <WrapPanel>
+                        <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource MigrateLocalTasksToServer}"
                                     Command="{Binding MigrateCommand}"
                                     IsEnabled="{Binding CanRunServerMaintenance}" />
