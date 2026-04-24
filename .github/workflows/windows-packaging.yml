@@ -1,4 +1,4 @@
-name: Unlimotion msiPkg
+name: Unlimotion windowsPkg
 
 on:
   release:
@@ -17,7 +17,7 @@ env:
   VELOPACK_RELEASES_DIR: ${{ github.workspace }}\artifacts\velopack
 
 jobs:
-  advinst-aip-build:
+  windows-release:
     runs-on: windows-2022
 
     steps:
@@ -41,7 +41,7 @@ jobs:
         }
 
         if ($version -notmatch '^\d+\.\d+\.\d+$') {
-          throw "Release tag '${{ github.ref_name }}' cannot be used by the current MSI + Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3."
+          throw "Release tag '${{ github.ref_name }}' cannot be used by the current Windows Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3."
         }
 
         $baseVersion = [System.Version]$version
@@ -51,7 +51,7 @@ jobs:
 
         "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-        
+
     - name: Publish
       run: dotnet publish src\Unlimotion.Desktop\Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o "${{ env.WINDOWS_PUBLISH_DIR }}" -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=${{ steps.release_version.outputs.version }} --ignore-failed-sources
 
@@ -103,25 +103,6 @@ jobs:
           --tag "${{ github.ref_name }}" `
           --merge `
           --publish
-
-    - name: Build AIP
-      uses: caphyon/advinst-github-action@v1.0
-      with:
-        advinst-version: '20.3.2'
-        advinst-enable-automation: 'true'
-        aip-path: ${{ github.workspace }}\Unlimotion.aip
-        aip-build-name: DefaultBuild
-        aip-package-name: Unlimotion-${{  github.ref_name }}.msi
-        aip-output-dir:  ${{ github.workspace }}\setup
-        aip-commands: |
-          SetProperty FOO="foo"
-          SetVersion ${{ steps.release_version.outputs.version }}
-
-    - name: Upload MsiPkg to Release
-      uses: xresloader/upload-to-github-release@v1.3.11
-      with:
-        file: ${{ github.workspace }}\setup\Unlimotion-${{  github.ref_name }}.msi
-        tags: true
 
     - name: Upload Portable Zip to Release
       uses: xresloader/upload-to-github-release@v1.3.11
