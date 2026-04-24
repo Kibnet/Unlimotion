@@ -12,6 +12,19 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 {
     [Test]
     [NotInParallel(DesktopUiConstraint)]
+    public async Task Main_window_loads_current_task_on_launch()
+    {
+        using (Assert.Multiple())
+        {
+            await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+            await UiAssert.TextEqualsAsync(
+                () => Page.CurrentTaskTitleTextBox.Text,
+                UnlimotionAppLaunchHost.CurrentTaskTitle);
+        }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
     public async Task Card_relation_picker_can_be_opened_from_task_card()
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
