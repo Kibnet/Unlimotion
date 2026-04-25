@@ -611,6 +611,296 @@ namespace Unlimotion.Test
         }
 
         [Test]
+        public async Task ChildTask_ShouldBecomeUnavailable_WhenParentHasIncompleteBlocker()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var blocker = new TaskItem
+            {
+                Id = "blocker",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            };
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string> { "child" },
+                BlockedByTasks = new List<string> { "blocker" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ParentTasks = new List<string> { "parent" }
+            };
+
+            await storage.Save(blocker);
+            await storage.Save(parent);
+            await storage.Save(child);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+
+            var updatedChild = await storage.Load("child");
+
+            await Assert.That(updatedChild).IsNotNull();
+            await Assert.That(updatedChild.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedChild.UnlockedDateTime).IsNull();
+            await Assert.That(updatedChild.BlockedByTasks).IsEmpty();
+        }
+
+        [Test]
+        public async Task Grandchild_ShouldInheritIncompleteBlockerFromAncestor()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var blocker = new TaskItem
+            {
+                Id = "blocker",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            };
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string> { "child" },
+                BlockedByTasks = new List<string> { "blocker" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string> { "grandchild" },
+                ParentTasks = new List<string> { "parent" }
+            };
+            var grandchild = new TaskItem
+            {
+                Id = "grandchild",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ParentTasks = new List<string> { "child" }
+            };
+
+            await storage.Save(blocker);
+            await storage.Save(parent);
+            await storage.Save(child);
+            await storage.Save(grandchild);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+
+            var updatedChild = await storage.Load("child");
+            var updatedGrandchild = await storage.Load("grandchild");
+
+            await Assert.That(updatedChild).IsNotNull();
+            await Assert.That(updatedGrandchild).IsNotNull();
+            await Assert.That(updatedChild.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedGrandchild.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedChild.UnlockedDateTime).IsNull();
+            await Assert.That(updatedGrandchild.UnlockedDateTime).IsNull();
+        }
+
+        [Test]
+        public async Task Sibling_ShouldRemainAvailable_WhenParentIsUnavailableOnlyBecauseOfAnotherIncompleteChild()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string> { "blocking-child", "sibling" }
+            };
+            var blockingChild = new TaskItem
+            {
+                Id = "blocking-child",
+                IsCompleted = false,
+                ParentTasks = new List<string> { "parent" }
+            };
+            var sibling = new TaskItem
+            {
+                Id = "sibling",
+                IsCompleted = false,
+                IsCanBeCompleted = false,
+                UnlockedDateTime = null,
+                ParentTasks = new List<string> { "parent" }
+            };
+
+            await storage.Save(parent);
+            await storage.Save(blockingChild);
+            await storage.Save(sibling);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+
+            var updatedParent = await storage.Load("parent");
+            var updatedSibling = await storage.Load("sibling");
+
+            await Assert.That(updatedParent).IsNotNull();
+            await Assert.That(updatedSibling).IsNotNull();
+            await Assert.That(updatedParent.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedSibling.IsCanBeCompleted).IsTrue();
+            await Assert.That(updatedSibling.UnlockedDateTime).IsNotNull();
+        }
+
+        [Test]
+        public async Task Descendants_ShouldBecomeAvailable_WhenAncestorBlockerIsCompleted()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var blocker = new TaskItem
+            {
+                Id = "blocker",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            };
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ContainsTasks = new List<string> { "child" },
+                BlockedByTasks = new List<string> { "blocker" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ParentTasks = new List<string> { "parent" }
+            };
+
+            await storage.Save(blocker);
+            await storage.Save(parent);
+            await storage.Save(child);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+
+            blocker.IsCompleted = true;
+            await manager.UpdateTask(blocker);
+
+            var updatedChild = await storage.Load("child");
+
+            await Assert.That(updatedChild).IsNotNull();
+            await Assert.That(updatedChild.IsCanBeCompleted).IsTrue();
+            await Assert.That(updatedChild.UnlockedDateTime).IsNotNull();
+        }
+
+        [Test]
+        public async Task MultiParentTask_ShouldBecomeUnavailable_WhenAnyAncestorHasIncompleteBlocker()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var blocker = new TaskItem
+            {
+                Id = "blocker",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "parent-a" }
+            };
+            var blockedParent = new TaskItem
+            {
+                Id = "parent-a",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "shared-child" },
+                BlockedByTasks = new List<string> { "blocker" }
+            };
+            var freeParent = new TaskItem
+            {
+                Id = "parent-b",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "shared-child" }
+            };
+            var sharedChild = new TaskItem
+            {
+                Id = "shared-child",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ParentTasks = new List<string> { "parent-a", "parent-b" }
+            };
+
+            await storage.Save(blocker);
+            await storage.Save(blockedParent);
+            await storage.Save(freeParent);
+            await storage.Save(sharedChild);
+
+            await manager.CalculateAndUpdateAvailability(blockedParent);
+
+            var updatedSharedChild = await storage.Load("shared-child");
+
+            await Assert.That(updatedSharedChild).IsNotNull();
+            await Assert.That(updatedSharedChild.IsCanBeCompleted).IsFalse();
+            await Assert.That(updatedSharedChild.UnlockedDateTime).IsNull();
+        }
+
+        [Test]
+        public async Task DeleteTask_ShouldUnblockChild_WhenStorageLoadsDetachedInstances()
+        {
+            var storage = new DetachedLoadStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var blocker = new TaskItem
+            {
+                Id = "blocker",
+                IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            };
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "child" },
+                BlockedByTasks = new List<string> { "blocker" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow,
+                ParentTasks = new List<string> { "parent" }
+            };
+
+            await storage.Save(blocker);
+            await storage.Save(parent);
+            await storage.Save(child);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+            var blockedChild = await storage.Load("child");
+
+            await Assert.That(blockedChild).IsNotNull();
+            await Assert.That(blockedChild.IsCanBeCompleted).IsFalse();
+
+            await manager.DeleteTask(parent);
+
+            var deletedParent = await storage.Load("parent");
+            var updatedChild = await storage.Load("child");
+
+            await Assert.That(deletedParent).IsNull();
+            await Assert.That(updatedChild).IsNotNull();
+            await Assert.That(updatedChild.ParentTasks).IsEmpty();
+            await Assert.That(updatedChild.IsCanBeCompleted).IsTrue();
+            await Assert.That(updatedChild.UnlockedDateTime).IsNotNull();
+        }
+
+        [Test]
         public async Task AddNewParentToTask_WithSameTask_ShouldNotCreateSelfParentRelation()
         {
             // Arrange
@@ -662,6 +952,94 @@ namespace Unlimotion.Test
             await Assert.That(stored.BlockedByTasks).IsEmpty();
             await Assert.That(stored.BlocksTasks).DoesNotContain(stored.Id);
             await Assert.That(stored.BlockedByTasks).DoesNotContain(stored.Id);
+        }
+
+        private sealed class DetachedLoadStorage : IStorage
+        {
+            private readonly Dictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
+
+            public event EventHandler<TaskStorageUpdateEventArgs> Updating
+            {
+                add { }
+                remove { }
+            }
+
+            public event Action<Exception?>? OnConnectionError;
+
+            public Task<TaskItem> Save(TaskItem item)
+            {
+                var clone = CloneTask(item);
+                clone.Id ??= Guid.NewGuid().ToString();
+                item.Id = clone.Id;
+                _tasks[clone.Id] = clone;
+                return Task.FromResult(CloneTask(clone));
+            }
+
+            public Task<bool> Remove(string itemId)
+            {
+                _tasks.Remove(itemId);
+                return Task.FromResult(true);
+            }
+
+            public Task<TaskItem?> Load(string itemId)
+            {
+                return Task.FromResult(_tasks.TryGetValue(itemId, out var task) ? CloneTask(task) : null);
+            }
+
+            public async IAsyncEnumerable<TaskItem> GetAll()
+            {
+                foreach (var task in _tasks.Values)
+                {
+                    yield return CloneTask(task);
+                }
+            }
+
+            public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
+            {
+                foreach (var taskItem in taskItems)
+                {
+                    await Save(taskItem);
+                }
+            }
+
+            public Task<bool> Connect()
+            {
+                return Task.FromResult(true);
+            }
+
+            public Task Disconnect()
+            {
+                return Task.CompletedTask;
+            }
+
+            private static TaskItem CloneTask(TaskItem task)
+            {
+                return new TaskItem
+                {
+                    Id = task.Id,
+                    UserId = task.UserId,
+                    Title = task.Title,
+                    Description = task.Description,
+                    IsCompleted = task.IsCompleted,
+                    IsCanBeCompleted = task.IsCanBeCompleted,
+                    CreatedDateTime = task.CreatedDateTime,
+                    UpdatedDateTime = task.UpdatedDateTime,
+                    UnlockedDateTime = task.UnlockedDateTime,
+                    CompletedDateTime = task.CompletedDateTime,
+                    ArchiveDateTime = task.ArchiveDateTime,
+                    PlannedBeginDateTime = task.PlannedBeginDateTime,
+                    PlannedEndDateTime = task.PlannedEndDateTime,
+                    PlannedDuration = task.PlannedDuration,
+                    ContainsTasks = task.ContainsTasks?.ToList() ?? new List<string>(),
+                    ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
+                    BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
+                    BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>(),
+                    Repeater = task.Repeater,
+                    Importance = task.Importance,
+                    Wanted = task.Wanted,
+                    Version = task.Version
+                };
+            }
         }
     }
 }
