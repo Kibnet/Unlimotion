@@ -54,6 +54,43 @@
                 <controls:NotificationMessageContainer
                     Manager="{Binding ToastNotificationManager}"
                     HorizontalAlignment="Center"/>
+                <Grid x:Name="TasksLoadingOverlay"
+                      IsVisible="{Binding IsTasksLoading}"
+                      AutomationProperties.AutomationId="TasksLoadingOverlay">
+                    <Border Background="#66000000"/>
+                    <Border MaxWidth="260"
+                            Padding="20"
+                            CornerRadius="14"
+                            Background="#F2FFFFFF"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel Spacing="12">
+                            <Grid x:Name="TasksLoadingSpinner"
+                                  Width="34"
+                                  Height="34"
+                                  HorizontalAlignment="Center"
+                                  RenderTransformOrigin="50%,50%"
+                                  AutomationProperties.AutomationId="TasksLoadingSpinner">
+                                <Border Width="6"
+                                        Height="14"
+                                        CornerRadius="3"
+                                        Background="Black"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Top"/>
+                                <Ellipse Width="6"
+                                         Height="6"
+                                         Fill="#40000000"
+                                         HorizontalAlignment="Center"
+                                         VerticalAlignment="Bottom"/>
+                            </Grid>
+                            <TextBlock Text="{DynamicResource LoadingTasks}"
+                                       Foreground="Black"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
 
             </Panel>
         </dialogHostAvalonia:DialogHost>

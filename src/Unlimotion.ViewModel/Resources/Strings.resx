@@ -134,6 +134,7 @@
   <data name="LocalStorageConnected" xml:space="preserve"><value>Connected to local storage.</value></data>
   <data name="LocalStorageConnecting" xml:space="preserve"><value>Connecting local storage...</value></data>
   <data name="LocalStorageError" xml:space="preserve"><value>Could not access local storage.</value></data>
+  <data name="LoadingTasks" xml:space="preserve"><value>Loading tasks...</value></data>
   <data name="Login" xml:space="preserve"><value>Login</value></data>
   <data name="MaintenanceHint" xml:space="preserve"><value>Use these actions only if you understand the consequences or follow support instructions.</value></data>
   <data name="MaintenanceTitle" xml:space="preserve"><value>Maintenance and recovery</value></data>

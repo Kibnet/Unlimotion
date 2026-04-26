@@ -15,12 +15,14 @@ namespace Unlimotion;
 public class UnifiedTaskStorage : ITaskStorage
 {
     private const int AvailabilityMigrationVersion = 2;
+    private const int InitialLoadBatchSize = 64;
     private readonly bool isFileStorage;
 
     public UnifiedTaskStorage(TaskTreeManager taskTreeManager)
     {
         TaskTreeManager = taskTreeManager;
         isFileStorage = taskTreeManager.Storage is FileStorage;
+        Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
         Relations = new TaskRelationsIndex();
     }
 
@@ -33,33 +35,70 @@ public class UnifiedTaskStorage : ITaskStorage
 
     public async Task Init()
     {
-        Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
-        
-        // Perform migrations only for file storage
-        if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
-        {
-            var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
-            var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
-            await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
-        }
+        Tasks.Edit(operations => operations.Clear());
+        TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
 
-        var taskViews = new List<TaskItemViewModel>();
-        await foreach (var task in TaskTreeManager.Storage.GetAll())
-        {
-            taskViews.Add(new TaskItemViewModel(task, this));
-        }
+        var initialTaskViews = await BuildInitialTaskViewsAsync();
+        await AddInitialTasksToCacheAsync(initialTaskViews);
 
-        Tasks.Edit(operations => operations.AddOrUpdate(taskViews));
         if (TaskTreeManager.Storage is FileStorage initFileStorage)
         {
             initFileStorage.Watcher?.SetEnable(true);
         }
 
-        RefreshRelations();
-
         TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
         OnInited();
+    }
+
+    private async Task<List<TaskItemViewModel>> BuildInitialTaskViewsAsync()
+    {
+        return await Task.Run(async () =>
+        {
+            if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
+            {
+                var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
+                var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
+                await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
+            }
+
+            var initialTasks = new List<TaskItem>();
+            await foreach (var task in TaskTreeManager.Storage.GetAll())
+            {
+                initialTasks.Add(task);
+            }
+
+            var initialTaskViews = initialTasks
+                .Select(task => new TaskItemViewModel(task, this))
+                .ToList();
+
+            new TaskRelationsIndex().Rebuild(initialTaskViews);
+            return initialTaskViews;
+        });
+    }
+
+    private async Task AddInitialTasksToCacheAsync(IEnumerable<TaskItemViewModel> initialTaskViews)
+    {
+        var batch = new List<TaskItemViewModel>(InitialLoadBatchSize);
+
+        foreach (var taskView in initialTaskViews)
+        {
+            batch.Add(taskView);
+
+            if (batch.Count < InitialLoadBatchSize)
+            {
+                continue;
+            }
+
+            Tasks.Edit(operations => operations.AddOrUpdate(batch));
+            batch = new List<TaskItemViewModel>(InitialLoadBatchSize);
+            await Task.Yield();
+        }
+
+        if (batch.Count > 0)
+        {
+            Tasks.Edit(operations => operations.AddOrUpdate(batch));
+        }
     }
 
     public async Task<TaskItemViewModel> Add(TaskItemViewModel currentTask = null, bool isBlocked = false)

@@ -134,6 +134,7 @@
   <data name="LocalStorageConnected" xml:space="preserve"><value>Подключено к локальному хранилищу.</value></data>
   <data name="LocalStorageConnecting" xml:space="preserve"><value>Подключение локального хранилища...</value></data>
   <data name="LocalStorageError" xml:space="preserve"><value>Ошибка доступа к локальному хранилищу.</value></data>
+  <data name="LoadingTasks" xml:space="preserve"><value>Загрузка задач...</value></data>
   <data name="Login" xml:space="preserve"><value>Логин</value></data>
   <data name="MaintenanceHint" xml:space="preserve"><value>Используйте эти действия только если понимаете последствия или следуете инструкции поддержки.</value></data>
   <data name="MaintenanceTitle" xml:space="preserve"><value>Обслуживание и восстановление</value></data>
