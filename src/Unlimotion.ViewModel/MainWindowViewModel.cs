@@ -412,8 +412,6 @@ namespace Unlimotion.ViewModel
                 }
 
                 await taskStorage.TaskTreeManager.Storage.Connect();
-                await taskStorage.Init();
-
                 taskRepository = taskStorage;
 
                 //Если из коллекции пропадает итем, то очищаем выделенный итем.
@@ -1309,7 +1307,9 @@ namespace Unlimotion.ViewModel
                 .Where(isOpen => !isOpen)
                 .Subscribe(_ => CurrentRelationEditor.Close())
                 .AddToDispose(connectionDisposableList);
-            RegisterCommands();
+
+                await taskStorage.Init();
+                RegisterCommands();
 
                 _isInited = true;
             }
