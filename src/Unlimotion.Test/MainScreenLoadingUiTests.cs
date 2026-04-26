@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Configuration;
@@ -42,7 +43,7 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
-                var spinner = FindControlByAutomationId<TextBlock>(view, "TasksLoadingSpinner");
+                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
 
                 await Assert.That(overlay.IsVisible).IsFalse();
 
@@ -80,13 +81,18 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
+                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
                 var connectTask = vm.Connect();
 
                 var postedCallbackRan = false;
                 Dispatcher.UIThread.Post(() => postedCallbackRan = true);
+                var initialAngle = GetSpinnerAngle(spinner);
 
                 var stayedResponsive = WaitFor(
-                    () => postedCallbackRan && overlay.IsVisible && !connectTask.IsCompleted,
+                    () => postedCallbackRan &&
+                          overlay.IsVisible &&
+                          !connectTask.IsCompleted &&
+                          GetSpinnerAngle(spinner) != initialAngle,
                     timeoutMilliseconds: 2000);
                 await Assert.That(stayedResponsive).IsTrue();
 
@@ -151,6 +157,13 @@ public class MainScreenLoadingUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
+    private static double GetSpinnerAngle(Control spinner)
+    {
+        return spinner.RenderTransform is RotateTransform rotateTransform
+            ? rotateTransform.Angle
+            : 0d;
     }
 
     private sealed class TestMainWindowContext : IDisposable

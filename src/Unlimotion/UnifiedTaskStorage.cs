@@ -38,22 +38,20 @@ public class UnifiedTaskStorage : ITaskStorage
         Tasks.Edit(operations => operations.Clear());
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
 
-        var initialTasks = await LoadInitialTasksAsync();
-        await AddInitialTasksToCacheAsync(initialTasks);
+        var initialTaskViews = await BuildInitialTaskViewsAsync();
+        await AddInitialTasksToCacheAsync(initialTaskViews);
 
         if (TaskTreeManager.Storage is FileStorage initFileStorage)
         {
             initFileStorage.Watcher?.SetEnable(true);
         }
 
-        RefreshRelations();
-
         TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
         OnInited();
     }
 
-    private async Task<List<TaskItem>> LoadInitialTasksAsync()
+    private async Task<List<TaskItemViewModel>> BuildInitialTaskViewsAsync()
     {
         return await Task.Run(async () =>
         {
@@ -70,17 +68,22 @@ public class UnifiedTaskStorage : ITaskStorage
                 initialTasks.Add(task);
             }
 
-            return initialTasks;
+            var initialTaskViews = initialTasks
+                .Select(task => new TaskItemViewModel(task, this))
+                .ToList();
+
+            new TaskRelationsIndex().Rebuild(initialTaskViews);
+            return initialTaskViews;
         });
     }
 
-    private async Task AddInitialTasksToCacheAsync(IEnumerable<TaskItem> initialTasks)
+    private async Task AddInitialTasksToCacheAsync(IEnumerable<TaskItemViewModel> initialTaskViews)
     {
         var batch = new List<TaskItemViewModel>(InitialLoadBatchSize);
 
-        foreach (var task in initialTasks)
+        foreach (var taskView in initialTaskViews)
         {
-            batch.Add(new TaskItemViewModel(task, this));
+            batch.Add(taskView);
 
             if (batch.Count < InitialLoadBatchSize)
             {
