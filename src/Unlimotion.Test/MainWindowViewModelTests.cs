@@ -80,9 +80,9 @@ namespace Unlimotion.Test
     {
         private NotificationManagerWrapperMock NotificationManager => (NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper;
 
-        private static HashSet<string> CandidateIds(TaskRelationPickerViewModel picker)
+        private static HashSet<string> CandidateIds(TaskRelationEditorViewModel editor)
         {
-            return picker.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
+            return editor.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
         }
 
         private async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
@@ -557,12 +557,12 @@ namespace Unlimotion.Test
         public async Task CurrentItemParentsAdd_Success()
         {
             var currentTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask7Id);
-            var picker = mainWindowVM.CurrentItemParentsPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Parents);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
+            editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
 
-            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
             var parentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
@@ -577,12 +577,12 @@ namespace Unlimotion.Test
         public async Task CurrentItemContainsAdd_Success()
         {
             var currentTask = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
-            var picker = mainWindowVM.CurrentItemContainsPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Containing);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
+            editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             var childStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -597,12 +597,12 @@ namespace Unlimotion.Test
         public async Task CurrentItemBlockedByAdd_Success()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask7Id);
-            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Blocking);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask7Id);
+            editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
 
             var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
             var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -619,12 +619,12 @@ namespace Unlimotion.Test
         public async Task CurrentItemBlocksAdd_Success()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask7Id);
-            var picker = mainWindowVM.CurrentItemBlocksPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Blocked);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-            picker.SelectedCandidate = picker.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
+            editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
 
             var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
             var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -638,36 +638,33 @@ namespace Unlimotion.Test
         }
 
         [Test]
-        public async Task CurrentItemParentsPicker_ShouldNotContainSelfCandidate()
+        public async Task CurrentRelationEditor_ShouldNotContainSelfCandidateForParents()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
-            var picker = mainWindowVM.CurrentItemParentsPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Parents);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-
-            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.RootTask1Id);
+            await Assert.That(CandidateIds(editor)).DoesNotContain(MainWindowViewModelFixture.RootTask1Id);
         }
 
         [Test]
-        public async Task CurrentItemBlockedByPicker_ShouldNotContainExistingRelationCandidate()
+        public async Task CurrentRelationEditor_ShouldNotContainExistingBlockingCandidate()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.BlockedTask2Id);
-            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Blocking);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-
-            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.RootTask2Id);
+            await Assert.That(CandidateIds(editor)).DoesNotContain(MainWindowViewModelFixture.RootTask2Id);
         }
 
         [Test]
-        public async Task CurrentItemParentsPicker_ShouldNotContainCandidateThatCreatesCycle()
+        public async Task CurrentRelationEditor_ShouldNotContainCandidateThatCreatesCycle()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask4Id);
-            var picker = mainWindowVM.CurrentItemParentsPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Parents);
+            var editor = mainWindowVM.CurrentRelationEditor;
 
-            picker.OpenCommand.Execute(null);
-
-            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.SubTask41Id);
+            await Assert.That(CandidateIds(editor)).DoesNotContain(MainWindowViewModelFixture.SubTask41Id);
         }
 
         [Test]
@@ -693,23 +690,22 @@ namespace Unlimotion.Test
         }
 
         [Test]
-        public async Task CurrentItemBlockedByPicker_InvalidForcedConfirm_ShouldShowToastAndKeepRelationsUnchanged()
+        public async Task CurrentRelationEditor_InvalidForcedConfirm_ShouldShowToastAndKeepRelationsUnchanged()
         {
             TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.DeadlockTask6Id);
-            var picker = mainWindowVM.CurrentItemBlockedByPicker!;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Blocking);
+            var editor = mainWindowVM.CurrentRelationEditor;
             var candidateTask = GetTask(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
             NotificationManager.ClearMessages();
 
-            picker.OpenCommand.Execute(null);
+            await Assert.That(CandidateIds(editor)).DoesNotContain(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
 
-            await Assert.That(CandidateIds(picker)).DoesNotContain(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
-
-            picker.SelectedCandidate = new TaskRelationCandidateViewModel(
+            editor.SelectedCandidate = new TaskRelationCandidateViewModel(
                 candidateTask,
                 candidateTask.Title,
                 candidateTask.Id);
 
-            await TestHelpers.ActionNotCreateItems(() => picker.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockTask6Id);
             var candidateStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
@@ -717,6 +713,34 @@ namespace Unlimotion.Test
             await Assert.That(currentStored.BlockedByTasks).DoesNotContain(candidateTask.Id);
             await Assert.That(candidateStored.BlocksTasks).DoesNotContain(MainWindowViewModelFixture.DeadlockTask6Id);
             await Assert.That(NotificationManager.LastErrorMessage).IsNotNull();
+        }
+
+        [Test]
+        public async Task CurrentRelationEditor_ShouldCloseWhenCurrentTaskChanges()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Parents);
+
+            await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsTrue();
+
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+
+            await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsFalse();
+            await Assert.That(mainWindowVM.CurrentRelationEditor.Query).IsEmpty();
+        }
+
+        [Test]
+        public async Task CurrentRelationEditor_ShouldCloseWhenDetailsPaneCloses()
+        {
+            TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.DetailsAreOpen = true;
+            mainWindowVM.OpenRelationEditor(TaskRelationKind.Parents);
+
+            await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsTrue();
+
+            mainWindowVM.DetailsAreOpen = false;
+
+            await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsFalse();
         }
 
         /// <summary>

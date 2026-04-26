@@ -31,6 +31,11 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 
         Page.ClickButton(static page => page.CurrentTaskParentsRelationAddButton);
 
+        var input = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskParentsRelationAddInput),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Parents relation editor input did not open.")!;
         var cancelButton = WaitUntil(
             () => TryResolveDuringWait(() => Page.CurrentTaskParentsRelationAddCancelButton),
             static control => control is not null,
@@ -42,10 +47,108 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
             await UiAssert.TextEqualsAsync(
                 () => Page.CurrentTaskTitleTextBox.Text,
                 UnlimotionAppLaunchHost.CurrentTaskTitle);
+            await Assert.That(input.AutomationId)
+                .IsEqualTo("CurrentTaskParentsRelationAddInput");
             await Assert.That(cancelButton.AutomationId)
                 .IsEqualTo("CurrentTaskParentsRelationAddCancelButton");
             await Assert.That(Page.CurrentItemParentsTree.AutomationId)
                 .IsEqualTo("CurrentItemParentsTree");
+        }
+
+        cancelButton.Invoke();
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Card_blocking_relation_editor_can_be_opened_from_task_card()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        Page.ClickButton(static page => page.CurrentTaskBlockingRelationAddButton);
+
+        var input = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskBlockingRelationAddInput),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Blocking relation editor input did not open.")!;
+        var cancelButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskBlockingRelationAddCancelButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Blocking relation editor did not open.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(input.AutomationId)
+                .IsEqualTo("CurrentTaskBlockingRelationAddInput");
+            await Assert.That(cancelButton.AutomationId)
+                .IsEqualTo("CurrentTaskBlockingRelationAddCancelButton");
+            await Assert.That(Page.CurrentItemBlockedByTree.AutomationId)
+                .IsEqualTo("CurrentItemBlockedByTree");
+        }
+
+        cancelButton.Invoke();
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Card_containing_relation_editor_can_be_opened_from_task_card()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        Page.ClickButton(static page => page.CurrentTaskContainingRelationAddButton);
+
+        var input = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskContainingRelationAddInput),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Containing relation editor input did not open.")!;
+        var cancelButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskContainingRelationAddCancelButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Containing relation editor did not open.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(input.AutomationId)
+                .IsEqualTo("CurrentTaskContainingRelationAddInput");
+            await Assert.That(cancelButton.AutomationId)
+                .IsEqualTo("CurrentTaskContainingRelationAddCancelButton");
+            await Assert.That(Page.CurrentItemContainsTree.AutomationId)
+                .IsEqualTo("CurrentItemContainsTree");
+        }
+
+        cancelButton.Invoke();
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Card_blocked_relation_editor_can_be_opened_from_task_card()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        Page.ClickButton(static page => page.CurrentTaskBlockedRelationAddButton);
+
+        var input = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskBlockedRelationAddInput),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Blocked relation editor input did not open.")!;
+        var cancelButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskBlockedRelationAddCancelButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Blocked relation editor did not open.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(input.AutomationId)
+                .IsEqualTo("CurrentTaskBlockedRelationAddInput");
+            await Assert.That(cancelButton.AutomationId)
+                .IsEqualTo("CurrentTaskBlockedRelationAddCancelButton");
+            await Assert.That(Page.CurrentItemBlocksTree.AutomationId)
+                .IsEqualTo("CurrentItemBlocksTree");
         }
 
         cancelButton.Invoke();

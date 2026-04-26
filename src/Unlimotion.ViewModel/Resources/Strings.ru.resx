@@ -11,6 +11,10 @@
   <data name="AddBlockingTasksMessage" xml:space="preserve"><value>Сделать {0} выбранных задач блокирующими для "{1}"?</value></data>
   <data name="AddRelationFailed" xml:space="preserve"><value>Не удалось добавить связь.</value></data>
   <data name="AddRelationFailedWithError" xml:space="preserve"><value>Не удалось добавить связь: {0}</value></data>
+  <data name="AddParentRelation" xml:space="preserve"><value>Добавить родительскую задачу</value></data>
+  <data name="AddContainingRelation" xml:space="preserve"><value>Добавить содержащую задачу</value></data>
+  <data name="AddBlockingRelation" xml:space="preserve"><value>Добавить блокирующую задачу</value></data>
+  <data name="AddBlockedRelation" xml:space="preserve"><value>Добавить заблокированную задачу</value></data>
   <data name="AdvancedHint" xml:space="preserve"><value>Параметры для продвинутой настройки синхронизации и диагностики.</value></data>
   <data name="AdvancedSettings" xml:space="preserve"><value>Расширенные настройки</value></data>
   <data name="AfterComplete" xml:space="preserve"><value>После выполнения</value></data>
@@ -101,6 +105,7 @@
   <data name="ExpandCurrentNested" xml:space="preserve"><value>Развернуть вложенные текущего</value></data>
   <data name="FileStorageNoAccess" xml:space="preserve"><value>Нет доступа к каталогу: {0}</value></data>
   <data name="FindTask" xml:space="preserve"><value>Найти задачу</value></data>
+  <data name="NoRelationCandidates" xml:space="preserve"><value>Для этого типа связи нет доступных задач.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>Первый день следующего месяца</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 минут</value></data>

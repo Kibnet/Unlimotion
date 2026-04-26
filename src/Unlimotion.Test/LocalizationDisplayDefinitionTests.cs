@@ -138,13 +138,12 @@ public class LocalizationDisplayDefinitionTests
     }
 
     [Test]
-    public async System.Threading.Tasks.Task TaskRelationPicker_DisposeUnsubscribesFromCultureChanges()
+    public async System.Threading.Tasks.Task TaskRelationEditor_DisposeUnsubscribesFromCultureChanges()
     {
         var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
-        var picker = new TaskRelationPickerViewModel(
-            TaskRelationKind.Parents,
-            () => null,
+        var editor = new TaskRelationEditorViewModel(
             () => [],
+            _ => null,
             () => false,
             (_, _, _) => true,
             (_, _, _) => System.Threading.Tasks.Task.FromResult(true),
@@ -152,17 +151,17 @@ public class LocalizationDisplayDefinitionTests
             new NotificationManagerWrapperMock(),
             localization);
         var watermarkChangeCount = 0;
-        picker.PropertyChanged += OnPropertyChanged;
+        editor.PropertyChanged += OnPropertyChanged;
 
         localization.SetLanguage(LocalizationService.RussianLanguage);
-        picker.Dispose();
+        editor.Dispose();
         localization.SetLanguage(LocalizationService.EnglishLanguage);
 
         await Assert.That(watermarkChangeCount).IsEqualTo(1);
 
         void OnPropertyChanged(object? sender, PropertyChangedEventArgs args)
         {
-            if (args.PropertyName == nameof(TaskRelationPickerViewModel.Watermark))
+            if (args.PropertyName == nameof(TaskRelationEditorViewModel.Watermark))
             {
                 watermarkChangeCount++;
             }

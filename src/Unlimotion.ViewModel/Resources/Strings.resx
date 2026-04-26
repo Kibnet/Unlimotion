@@ -11,6 +11,10 @@
   <data name="AddBlockingTasksMessage" xml:space="preserve"><value>Are you sure you want to mark {0} selected tasks as blockers for "{1}"?</value></data>
   <data name="AddRelationFailed" xml:space="preserve"><value>Could not add the relation.</value></data>
   <data name="AddRelationFailedWithError" xml:space="preserve"><value>Could not add the relation: {0}</value></data>
+  <data name="AddParentRelation" xml:space="preserve"><value>Add parent task</value></data>
+  <data name="AddContainingRelation" xml:space="preserve"><value>Add containing task</value></data>
+  <data name="AddBlockingRelation" xml:space="preserve"><value>Add blocking task</value></data>
+  <data name="AddBlockedRelation" xml:space="preserve"><value>Add blocked task</value></data>
   <data name="AdvancedHint" xml:space="preserve"><value>Parameters for advanced sync setup and diagnostics.</value></data>
   <data name="AdvancedSettings" xml:space="preserve"><value>Advanced settings</value></data>
   <data name="AfterComplete" xml:space="preserve"><value>After complete</value></data>
@@ -101,6 +105,7 @@
   <data name="ExpandCurrentNested" xml:space="preserve"><value>Expand nested for current</value></data>
   <data name="FileStorageNoAccess" xml:space="preserve"><value>No access to directory: {0}</value></data>
   <data name="FindTask" xml:space="preserve"><value>Find task</value></data>
+  <data name="NoRelationCandidates" xml:space="preserve"><value>No available tasks for this relation.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>First day of next month</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 days</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 minutes</value></data>
