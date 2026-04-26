@@ -21,7 +21,58 @@ namespace Unlimotion.Test;
 public class MainControlRelationPickerUiTests
 {
     [Test]
-    public async Task TaskCardRelationPicker_AddParentFromCard_UpdatesStorage()
+    [Arguments(MainWindowViewModelFixture.BlockedTask7Id, "CurrentTaskParentsRelationAddButton", "CurrentTaskParentsRelationAddInput")]
+    [Arguments(MainWindowViewModelFixture.BlockedTask7Id, "CurrentTaskBlockingRelationAddButton", "CurrentTaskBlockingRelationAddInput")]
+    [Arguments(MainWindowViewModelFixture.RootTask1Id, "CurrentTaskContainingRelationAddButton", "CurrentTaskContainingRelationAddInput")]
+    [Arguments(MainWindowViewModelFixture.RootTask7Id, "CurrentTaskBlockedRelationAddButton", "CurrentTaskBlockedRelationAddInput")]
+    public async Task TaskCardRelationEditor_OpenFocusesExpectedInput(
+        string currentTaskId,
+        string addButtonAutomationId,
+        string inputAutomationId)
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+                var currentTask = TestHelpers.SetCurrentTask(vm, currentTaskId);
+                await Assert.That(currentTask).IsNotNull();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var addButton = WaitForControl<Button>(view, addButtonAutomationId);
+                await ClickControlAsync(window, addButton);
+
+                var input = WaitForControl<TextBox>(view, inputAutomationId);
+                var focused = WaitFor(() =>
+                    ReferenceEquals(window.FocusManager?.GetFocusedElement(), input) || input.IsFocused);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(input.IsVisible).IsTrue();
+                    await Assert.That(focused).IsTrue();
+                }
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskCardRelationEditor_AddParentFromCard_UpdatesStorage()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
@@ -46,14 +97,14 @@ public class MainControlRelationPickerUiTests
                 var addButton = WaitForControl<Button>(view, "CurrentTaskParentsRelationAddButton");
                 await ClickControlAsync(window, addButton);
 
-                var input = WaitForControl<AutoCompleteBox>(view, "CurrentTaskParentsRelationAddInput");
+                var input = WaitForControl<TextBox>(view, "CurrentTaskParentsRelationAddInput");
                 await ClickControlAsync(window, input);
-                input.Text = "Task 1";
+                input.Text = "Root Task 1";
                 Dispatcher.UIThread.RunJobs();
 
                 var pickerReady = WaitFor(() =>
-                    vm.CurrentItemParentsPicker?.CanConfirm == true &&
-                    vm.CurrentItemParentsPicker.Suggestions.Any(candidate =>
+                    vm.CurrentRelationEditor.CanConfirm &&
+                    vm.CurrentRelationEditor.Suggestions.Any(candidate =>
                         candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id));
                 await Assert.That(pickerReady).IsTrue();
 
@@ -125,7 +176,10 @@ public class MainControlRelationPickerUiTests
                     string.Equals(
                         AutomationProperties.GetAutomationId(candidate),
                         automationId,
-                        StringComparison.Ordinal));
+                        StringComparison.Ordinal) &&
+                    candidate.IsAttachedToVisualTree() &&
+                    candidate.IsVisible &&
+                    candidate.IsEnabled);
             return control != null;
         }, timeoutMilliseconds);
 

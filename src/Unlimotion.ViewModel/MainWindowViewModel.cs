@@ -108,11 +108,20 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.Settings.IsFuzzySearch)
                 .Subscribe(b => Search.IsFuzzySearch = b)
                 .AddToDispose(this);
+            CurrentRelationEditor = new TaskRelationEditorViewModel(
+                () => taskRepository?.Tasks.Items ?? Enumerable.Empty<TaskItemViewModel>(),
+                FindTaskById,
+                () => Settings.IsFuzzySearch,
+                IsRelationCandidateValid,
+                TryAddRelationAsync,
+                GetRelationCandidateContext,
+                ManagerWrapper,
+                LocalizationService.Current);
             var localization = LocalizationService.Current;
             EventHandler localizationChanged = (_, __) => RefreshLocalizedCollections();
             localization.CultureChanged += localizationChanged;
             Disposable.Create(() => localization.CultureChanged -= localizationChanged).AddToDispose(this);
-            Disposable.Create(DisposeCurrentRelationPickers).AddToDispose(this);
+            Disposable.Create(() => CurrentRelationEditor.Dispose()).AddToDispose(this);
         }
 
         private void RefreshLocalizedCollections()
@@ -1288,23 +1297,12 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentTaskItem)
                 .Subscribe(item =>
                 {
-                    DisposeCurrentRelationPickers();
-
-                    if (item != null)
-                    {
-                        CurrentItemContainsPicker = CreateRelationPicker(TaskRelationKind.Containing);
-                        CurrentItemParentsPicker = CreateRelationPicker(TaskRelationKind.Parents);
-                        CurrentItemBlocksPicker = CreateRelationPicker(TaskRelationKind.Blocked);
-                        CurrentItemBlockedByPicker = CreateRelationPicker(TaskRelationKind.Blocking);
-                    }
-                    else
-                    {
-                        CurrentItemContainsPicker = null;
-                        CurrentItemParentsPicker = null;
-                        CurrentItemBlocksPicker = null;
-                        CurrentItemBlockedByPicker = null;
-                    }
+                    CurrentRelationEditor.SyncCurrentTask(item);
                 })
+                .AddToDispose(connectionDisposableList);
+            this.WhenAnyValue(m => m.DetailsAreOpen)
+                .Where(isOpen => !isOpen)
+                .Subscribe(_ => CurrentRelationEditor.Close())
                 .AddToDispose(connectionDisposableList);
             RegisterCommands();
 
@@ -1459,27 +1457,20 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private TaskRelationPickerViewModel CreateRelationPicker(TaskRelationKind kind)
+        public void OpenRelationEditor(TaskRelationKind kind)
         {
-            var picker = new TaskRelationPickerViewModel(
-                kind,
-                () => CurrentTaskItem,
-                () => taskRepository?.Tasks.Items ?? Enumerable.Empty<TaskItemViewModel>(),
-                () => Settings.IsFuzzySearch,
-                IsRelationCandidateValid,
-                TryAddRelationAsync,
-                GetRelationCandidateContext,
-                ManagerWrapper,
-                LocalizationService.Current);
-            return picker;
+            CurrentRelationEditor.Open(kind, CurrentTaskItem);
         }
 
-        private void DisposeCurrentRelationPickers()
+        private TaskItemViewModel? FindTaskById(string taskId)
         {
-            CurrentItemContainsPicker?.Dispose();
-            CurrentItemParentsPicker?.Dispose();
-            CurrentItemBlocksPicker?.Dispose();
-            CurrentItemBlockedByPicker?.Dispose();
+            if (taskRepository == null || string.IsNullOrWhiteSpace(taskId))
+            {
+                return null;
+            }
+
+            var lookup = taskRepository.Tasks.Lookup(taskId);
+            return lookup.HasValue ? lookup.Value : null;
         }
 
         private async Task<bool> TryAddRelationAsync(
@@ -1703,10 +1694,7 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentItemParents { get; private set; } = null!;
         public TaskWrapperViewModel CurrentItemBlocks { get; private set; } = null!;
         public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; } = null!;
-        public TaskRelationPickerViewModel? CurrentItemContainsPicker { get; private set; }
-        public TaskRelationPickerViewModel? CurrentItemParentsPicker { get; private set; }
-        public TaskRelationPickerViewModel? CurrentItemBlocksPicker { get; private set; }
-        public TaskRelationPickerViewModel? CurrentItemBlockedByPicker { get; private set; }
+        public TaskRelationEditorViewModel CurrentRelationEditor { get; }
         public SearchDefinition Search { get; set; } = new();
 
         public ICommand Create { get; set; }

@@ -7,7 +7,6 @@ xmlns:unlimotion="clr-namespace:Unlimotion"
 xmlns:views="clr-namespace:Unlimotion.Views"
 xmlns:converters="clr-namespace:Unlimotion.Converters"
 xmlns:behavior="clr-namespace:Unlimotion.Behavior"
-xmlns:behaviours="clr-namespace:TestAutoCompleteBehaviour.Behaviours"
 xmlns:Interaction="using:Avalonia.Xaml.Interactivity"
 xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
 xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
@@ -39,18 +38,22 @@ x:Class="Unlimotion.Views.MainControl">
             <Setter Property="ColumnSpacing" Value="8"/>
             <Setter Property="Margin" Value="0,12,0,4"/>
         </Style>
-        <Style Selector="Grid.RelationPickerRow">
-            <Setter Property="ColumnSpacing" Value="8"/>
-            <Setter Property="Margin" Value="0,0,0,6"/>
+        <Style Selector="StackPanel.RelationPickerRow">
+            <Setter Property="Spacing" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
-        <Style Selector="AutoCompleteBox.RelationPickerInput">
-            <Setter Property="MinimumPrefixLength" Value="0"/>
-            <Setter Property="MinimumPopulateDelay" Value="0"/>
-            <Setter Property="FilterMode" Value="None"/>
-            <Setter Property="IsTextCompletionEnabled" Value="False"/>
-            <Setter Property="ClearSelectionOnLostFocus" Value="False"/>
-            <Setter Property="MaxDropDownHeight" Value="280"/>
+        <Style Selector="Border.RelationEditorCard">
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="BorderBrush" Value="#33000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="TextBox.RelationEditorSearch">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.RelationEditorSuggestions">
+            <Setter Property="MaxHeight" Value="240"/>
         </Style>
         <Style Selector="TreeView.TaskTree">
             <Setter Property="ContextMenu">
@@ -712,42 +715,45 @@ Content="❌"
 
                                     </StackPanel>
 
-                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource ParentsTasks}"/>
                                         <Button Grid.Column="1"
-                                                DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
-                                                Content="+"
-                                                Command="{Binding OpenCommand}"
-                                                IsVisible="{Binding !IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
-                                        <Button Grid.Column="2"
-                                                DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
-                                                Content="{DynamicResource Cancel}"
-                                                Command="{Binding CancelCommand}"
-                                                IsVisible="{Binding IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
-                                    </Grid>
-                                    <Grid Classes="RelationPickerRow"
-                                          DataContext="{Binding MainWindow.CurrentItemParentsPicker}"
-                                          ColumnDefinitions="*,Auto"
-                                          IsVisible="{Binding IsExpanded}">
-                                        <AutoCompleteBox Classes="RelationPickerInput"
-                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
-                                                         ItemsSource="{Binding Suggestions}"
-                                                         ValueMemberBinding="{Binding Title}"
-                                                         Watermark="{Binding Watermark}"
-                                                         KeyDown="RelationPickerEditor_OnKeyDown"
-                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
-                                            <Interaction.Behaviors>
-                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
-                                            </Interaction.Behaviors>
-                                        </AutoCompleteBox>
-                                        <Button Grid.Column="1"
                                                 Content="{DynamicResource Add}"
-                                                Command="{Binding ConfirmCommand}"
-                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Parents"
+                                                AutomationProperties.AutomationId="CurrentTaskParentsRelationAddButton"/>
                                     </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding MainWindow.CurrentRelationEditor}"
+                                            IsVisible="{Binding IsOpenForParents}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Watermark="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskParentsRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskParentsRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskParentsRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskParentsRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemParents.SubTasks}"
                                               SelectionMode="Multiple"
@@ -762,42 +768,45 @@ Content="❌"
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource BlockingTasks}"/>
                                         <Button Grid.Column="1"
-                                                DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
-                                                Content="+"
-                                                Command="{Binding OpenCommand}"
-                                                IsVisible="{Binding !IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
-                                        <Button Grid.Column="2"
-                                                DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
-                                                Content="{DynamicResource Cancel}"
-                                                Command="{Binding CancelCommand}"
-                                                IsVisible="{Binding IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
-                                    </Grid>
-                                    <Grid Classes="RelationPickerRow"
-                                          DataContext="{Binding MainWindow.CurrentItemBlockedByPicker}"
-                                          ColumnDefinitions="*,Auto"
-                                          IsVisible="{Binding IsExpanded}">
-                                        <AutoCompleteBox Classes="RelationPickerInput"
-                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
-                                                         ItemsSource="{Binding Suggestions}"
-                                                         ValueMemberBinding="{Binding Title}"
-                                                         Watermark="{Binding Watermark}"
-                                                         KeyDown="RelationPickerEditor_OnKeyDown"
-                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
-                                            <Interaction.Behaviors>
-                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
-                                            </Interaction.Behaviors>
-                                        </AutoCompleteBox>
-                                        <Button Grid.Column="1"
                                                 Content="{DynamicResource Add}"
-                                                Command="{Binding ConfirmCommand}"
-                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Blocking"
+                                                AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddButton"/>
                                     </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding MainWindow.CurrentRelationEditor}"
+                                            IsVisible="{Binding IsOpenForBlocking}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Watermark="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockingRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}"
                                               SelectionMode="Multiple"
@@ -812,42 +821,45 @@ Content="❌"
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource ContainingTasks}"/>
                                         <Button Grid.Column="1"
-                                                DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
-                                                Content="+"
-                                                Command="{Binding OpenCommand}"
-                                                IsVisible="{Binding !IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
-                                        <Button Grid.Column="2"
-                                                DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
-                                                Content="{DynamicResource Cancel}"
-                                                Command="{Binding CancelCommand}"
-                                                IsVisible="{Binding IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
-                                    </Grid>
-                                    <Grid Classes="RelationPickerRow"
-                                          DataContext="{Binding MainWindow.CurrentItemContainsPicker}"
-                                          ColumnDefinitions="*,Auto"
-                                          IsVisible="{Binding IsExpanded}">
-                                        <AutoCompleteBox Classes="RelationPickerInput"
-                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
-                                                         ItemsSource="{Binding Suggestions}"
-                                                         ValueMemberBinding="{Binding Title}"
-                                                         Watermark="{Binding Watermark}"
-                                                         KeyDown="RelationPickerEditor_OnKeyDown"
-                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
-                                            <Interaction.Behaviors>
-                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
-                                            </Interaction.Behaviors>
-                                        </AutoCompleteBox>
-                                        <Button Grid.Column="1"
                                                 Content="{DynamicResource Add}"
-                                                Command="{Binding ConfirmCommand}"
-                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Containing"
+                                                AutomationProperties.AutomationId="CurrentTaskContainingRelationAddButton"/>
                                     </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding MainWindow.CurrentRelationEditor}"
+                                            IsVisible="{Binding IsOpenForContaining}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Watermark="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskContainingRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskContainingRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskContainingRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskContainingRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemContains.SubTasks}"
                                               SelectionMode="Multiple"
@@ -862,42 +874,45 @@ Content="❌"
                                         </TreeView.ItemTemplate>
                                     </TreeView>
 
-                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto,Auto">
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource BlockedTasks}"/>
                                         <Button Grid.Column="1"
-                                                DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
-                                                Content="+"
-                                                Command="{Binding OpenCommand}"
-                                                IsVisible="{Binding !IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding AddButtonAutomationId}"/>
-                                        <Button Grid.Column="2"
-                                                DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
-                                                Content="{DynamicResource Cancel}"
-                                                Command="{Binding CancelCommand}"
-                                                IsVisible="{Binding IsExpanded}"
-                                                AutomationProperties.AutomationId="{Binding CancelButtonAutomationId}"/>
-                                    </Grid>
-                                    <Grid Classes="RelationPickerRow"
-                                          DataContext="{Binding MainWindow.CurrentItemBlocksPicker}"
-                                          ColumnDefinitions="*,Auto"
-                                          IsVisible="{Binding IsExpanded}">
-                                        <AutoCompleteBox Classes="RelationPickerInput"
-                                                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
-                                                         ItemsSource="{Binding Suggestions}"
-                                                         ValueMemberBinding="{Binding Title}"
-                                                         Watermark="{Binding Watermark}"
-                                                         KeyDown="RelationPickerEditor_OnKeyDown"
-                                                         AutomationProperties.AutomationId="{Binding InputAutomationId}">
-                                            <Interaction.Behaviors>
-                                                <behaviours:AutoCompleteZeroMinimumPrefixLengthDropdownBehaviour />
-                                            </Interaction.Behaviors>
-                                        </AutoCompleteBox>
-                                        <Button Grid.Column="1"
                                                 Content="{DynamicResource Add}"
-                                                Command="{Binding ConfirmCommand}"
-                                                AutomationProperties.AutomationId="{Binding ConfirmButtonAutomationId}"/>
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Blocked"
+                                                AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddButton"/>
                                     </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding MainWindow.CurrentRelationEditor}"
+                                            IsVisible="{Binding IsOpenForBlocked}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Watermark="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockedRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemBlocks.SubTasks}"
                                               SelectionMode="Multiple"

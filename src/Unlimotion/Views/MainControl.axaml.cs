@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -39,7 +40,9 @@ namespace Unlimotion.Views
         // Static dependencies - set once during app initialization
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
+        private const int MaxRelationEditorFocusRetries = 5;
         private IDisposable? _titleFocusSubscription;
+        private IDisposable? _relationEditorFocusSubscription;
         private MainWindowViewModel? _treeCommandViewModel;
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
@@ -100,6 +103,8 @@ namespace Unlimotion.Views
         {
             _titleFocusSubscription?.Dispose();
             _titleFocusSubscription = null;
+            _relationEditorFocusSubscription?.Dispose();
+            _relationEditorFocusSubscription = null;
             if (_treeCommandViewModel != null)
             {
                 _treeCommandViewModel.ExecuteTreeCommandAction = null;
@@ -116,6 +121,13 @@ namespace Unlimotion.Views
                 vm.ExecuteTreeCommandAction = ExecuteTreeCommand;
                 _titleFocusSubscription = vm.WhenAnyValue(m => m.TitleFocusRequestVersion)
                     .Subscribe(requestVersion => QueueTitleFocus(requestVersion, vm.CurrentTaskItem?.Id, MaxTitleFocusRetries));
+                _relationEditorFocusSubscription = vm.CurrentRelationEditor
+                    .WhenAnyValue(m => m.FocusRequestVersion)
+                    .Subscribe(requestVersion =>
+                        QueueRelationEditorFocus(
+                            requestVersion,
+                            vm.CurrentRelationEditor.InputAutomationId,
+                            MaxRelationEditorFocusRetries));
                 vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
                 {
                     if (vm.CurrentTaskItem == null)
@@ -213,6 +225,69 @@ namespace Unlimotion.Views
             }
 
             QueueTitleFocus(requestVersion, targetTaskId, retriesRemaining - 1);
+        }
+
+        private void QueueRelationEditorFocus(long requestVersion, string? automationId, int retriesRemaining)
+        {
+            if (requestVersion <= 0 || string.IsNullOrWhiteSpace(automationId))
+            {
+                return;
+            }
+
+            Dispatcher.UIThread.Post(
+                () => TryFocusRelationEditor(requestVersion, automationId, retriesRemaining),
+                DispatcherPriority.Background);
+        }
+
+        private void TryFocusRelationEditor(long requestVersion, string automationId, int retriesRemaining)
+        {
+            if (DataContext is not MainWindowViewModel vm)
+            {
+                return;
+            }
+
+            var editor = vm.CurrentRelationEditor;
+            if (!editor.IsOpen ||
+                editor.FocusRequestVersion != requestVersion ||
+                !string.Equals(editor.InputAutomationId, automationId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var input = this.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        automationId,
+                        StringComparison.Ordinal) &&
+                    candidate.IsAttachedToVisualTree() &&
+                    candidate.IsVisible &&
+                    candidate.IsEnabled);
+
+            if (input == null)
+            {
+                RetryRelationEditorFocus(requestVersion, automationId, retriesRemaining);
+                return;
+            }
+
+            if (!input.Focus())
+            {
+                RetryRelationEditorFocus(requestVersion, automationId, retriesRemaining);
+                return;
+            }
+
+            input.CaretIndex = input.Text?.Length ?? 0;
+        }
+
+        private void RetryRelationEditorFocus(long requestVersion, string automationId, int retriesRemaining)
+        {
+            if (retriesRemaining <= 0)
+            {
+                return;
+            }
+
+            QueueRelationEditorFocus(requestVersion, automationId, retriesRemaining - 1);
         }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
@@ -777,28 +852,54 @@ namespace Unlimotion.Views
             }
         }
 
-        private void RelationPickerEditor_OnKeyDown(object? sender, KeyEventArgs e)
+        private void RelationAddButton_OnClick(object? sender, RoutedEventArgs e)
         {
-            if (sender is not Control { DataContext: TaskRelationPickerViewModel picker })
+            if (DataContext is not MainWindowViewModel vm ||
+                sender is not Control control ||
+                !Enum.TryParse<TaskRelationKind>(control.Tag?.ToString(), out var kind))
+            {
+                return;
+            }
+
+            vm.OpenRelationEditor(kind);
+        }
+
+        private void RelationEditorControl_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (sender is not Control { DataContext: TaskRelationEditorViewModel editor })
             {
                 return;
             }
 
             if (e.Key == Key.Enter)
             {
-                if (picker.ConfirmCommand.CanExecute(null))
+                if (editor.ConfirmCommand.CanExecute(null))
                 {
-                    picker.ConfirmCommand.Execute(null);
+                    editor.ConfirmCommand.Execute(null);
                     e.Handled = true;
                 }
             }
             else if (e.Key == Key.Escape)
             {
-                if (picker.CancelCommand.CanExecute(null))
+                if (editor.CancelCommand.CanExecute(null))
                 {
-                    picker.CancelCommand.Execute(null);
+                    editor.CancelCommand.Execute(null);
                     e.Handled = true;
                 }
+            }
+        }
+
+        private void RelationEditorSuggestions_OnDoubleTapped(object? sender, TappedEventArgs e)
+        {
+            if (sender is not Control { DataContext: TaskRelationEditorViewModel editor })
+            {
+                return;
+            }
+
+            if (editor.ConfirmCommand.CanExecute(null))
+            {
+                editor.ConfirmCommand.Execute(null);
+                e.Handled = true;
             }
         }
 
@@ -1332,7 +1433,24 @@ namespace Unlimotion.Views
         {
             return IsControlOrAncestor<TextBox>(control) ||
                    IsControlOrAncestor<AutoCompleteBox>(control) ||
-                   IsControlOrAncestor<NumericUpDown>(control);
+                   IsControlOrAncestor<NumericUpDown>(control) ||
+                   IsRelationEditorSuggestionsOrAncestor(control);
+        }
+
+        private static bool IsRelationEditorSuggestionsOrAncestor(Control control)
+        {
+            Control? current = control;
+            while (current != null)
+            {
+                if (current is ListBox listBox && listBox.DataContext is TaskRelationEditorViewModel)
+                {
+                    return true;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return false;
         }
 
         private static bool IsControlOrAncestor<TControl>(Control control)
