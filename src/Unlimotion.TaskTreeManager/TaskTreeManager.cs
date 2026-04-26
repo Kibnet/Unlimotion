@@ -130,7 +130,7 @@ public class TaskTreeManager
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
         var result = new Dictionary<string, TaskItem>();
-        var tasksToRecalculate = new List<TaskItem>();
+        var taskIdsToRecalculate = new HashSet<string>(StringComparer.Ordinal);
 
         await IsCompletedAsync(async () =>
         {
@@ -141,10 +141,20 @@ public class TaskTreeManager
                 {
                     foreach (var parentId in change.ParentTasks)
                     {
-                        var parentItem = await Storage.Load(parentId);
-                        if (parentItem != null)
+                        if (!string.IsNullOrWhiteSpace(parentId))
                         {
-                            tasksToRecalculate.Add(parentItem);
+                            taskIdsToRecalculate.Add(parentId);
+                        }
+                    }
+                }
+
+                if (change.ContainsTasks?.Any() == true)
+                {
+                    foreach (var childId in change.ContainsTasks)
+                    {
+                        if (!string.IsNullOrWhiteSpace(childId))
+                        {
+                            taskIdsToRecalculate.Add(childId);
                         }
                     }
                 }
@@ -153,10 +163,9 @@ public class TaskTreeManager
                 {
                     foreach (var blockedId in change.BlocksTasks)
                     {
-                        var blockedItem = await Storage.Load(blockedId);
-                        if (blockedItem != null)
+                        if (!string.IsNullOrWhiteSpace(blockedId))
                         {
-                            tasksToRecalculate.Add(blockedItem);
+                            taskIdsToRecalculate.Add(blockedId);
                         }
                     }
                 }
@@ -253,13 +262,6 @@ public class TaskTreeManager
                     }
                 }
 
-                // Recalculate availability for affected tasks
-                foreach (var taskToRecalc in tasksToRecalculate)
-                {
-                    result.AddOrUpdateRange(
-                        await CalculateAndUpdateAvailability(taskToRecalc));
-                }
-
                 // Удаление самой задачи
                 if (deleteInStorage)
                 {
@@ -268,6 +270,18 @@ public class TaskTreeManager
                     // Удаляем из результата
                     result.Remove(change.Id);
                     await Storage.Remove(change.Id);
+                }
+
+                // Recalculate availability after relations are updated using freshly loaded
+                // tasks so detached storage implementations see the final graph state.
+                foreach (var taskIdToRecalculate in taskIdsToRecalculate)
+                {
+                    var taskToRecalculate = await Storage.Load(taskIdToRecalculate);
+                    if (taskToRecalculate != null)
+                    {
+                        result.AddOrUpdateRange(
+                            await CalculateAndUpdateAvailability(taskToRecalculate));
+                    }
                 }
 
                 return true;
@@ -514,6 +528,8 @@ public class TaskTreeManager
 
                 result.AddOrUpdateRange(
                     await CalculateAndUpdateAvailability(parent));
+                result.AddOrUpdateRange(
+                    await CalculateAndUpdateAvailability(child));
 
                 return true;
             }
@@ -737,41 +753,12 @@ public class TaskTreeManager
     {
         var result = new Dictionary<string, TaskItem>();
 
-        // Calculate IsCanBeCompleted based on business rules:
-        // 1. All contained tasks must be completed (IsCompleted != false)
-        // 2. All blocking tasks must be completed (IsCompleted != false)
-        bool allContainsCompleted = true;
-        bool allBlockersCompleted = true;
-
-        // Check all contained tasks
-        if (task.ContainsTasks?.Any() == true)
-        {
-            foreach (var childId in task.ContainsTasks)
-            {
-                var childTask = await Storage.Load(childId);
-                if (childTask != null && childTask.IsCompleted == false)
-                {
-                    allContainsCompleted = false;
-                    break;
-                }
-            }
-        }
-
-        // Check all blocking tasks
-        if (task.BlockedByTasks?.Any() == true)
-        {
-            foreach (var blockerId in task.BlockedByTasks)
-            {
-                var blockerTask = await Storage.Load(blockerId);
-                if (blockerTask != null && blockerTask.IsCompleted == false)
-                {
-                    allBlockersCompleted = false;
-                    break;
-                }
-            }
-        }
-
-        bool newIsCanBeCompleted = allContainsCompleted && allBlockersCompleted;
+        // Availability combines local child completion with blockers inherited
+        // through the whole parent chain.
+        var allContainsCompleted = await AreContainedTasksCompleted(task);
+        var hasIncompleteBlockerInTaskOrAncestors =
+            await HasIncompleteBlockerInTaskOrAncestors(task, new HashSet<string>(StringComparer.Ordinal));
+        bool newIsCanBeCompleted = allContainsCompleted && !hasIncompleteBlockerInTaskOrAncestors;
 
         var oldIsCanBeCompleted = task.IsCanBeCompleted;
         var oldUnlockedDateTime = task.UnlockedDateTime;
@@ -828,6 +815,24 @@ public class TaskTreeManager
             }
         }
 
+        // Collect all contained tasks because inherited blockers propagate from
+        // parents down to all descendants.
+        if (task.ContainsTasks?.Any() == true)
+        {
+            foreach (var childId in task.ContainsTasks)
+            {
+                if (!processedIds.Contains(childId))
+                {
+                    var childTask = await Storage.Load(childId);
+                    if (childTask != null)
+                    {
+                        affectedTasks.Add(childTask);
+                        processedIds.Add(childId);
+                    }
+                }
+            }
+        }
+
         // Collect all tasks blocked by this task (because their availability depends on this task)
         if (task.BlocksTasks?.Any() == true)
         {
@@ -846,6 +851,76 @@ public class TaskTreeManager
         }
 
         return affectedTasks;
+    }
+
+    private async Task<bool> AreContainedTasksCompleted(TaskItem task)
+    {
+        if (task.ContainsTasks?.Any() != true)
+        {
+            return true;
+        }
+
+        foreach (var childId in task.ContainsTasks)
+        {
+            var childTask = await Storage.Load(childId);
+            if (childTask != null && childTask.IsCompleted == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task<bool> HasIncompleteBlockerInTaskOrAncestors(
+        TaskItem task,
+        ISet<string> visitedTaskIds)
+    {
+        if (task == null || string.IsNullOrWhiteSpace(task.Id) || !visitedTaskIds.Add(task.Id))
+        {
+            return false;
+        }
+
+        if (await HasIncompleteDirectBlocker(task))
+        {
+            return true;
+        }
+
+        if (task.ParentTasks?.Any() != true)
+        {
+            return false;
+        }
+
+        foreach (var parentId in task.ParentTasks)
+        {
+            var parentTask = await Storage.Load(parentId);
+            if (parentTask != null &&
+                await HasIncompleteBlockerInTaskOrAncestors(parentTask, visitedTaskIds))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task<bool> HasIncompleteDirectBlocker(TaskItem task)
+    {
+        if (task.BlockedByTasks?.Any() != true)
+        {
+            return false;
+        }
+
+        foreach (var blockerId in task.BlockedByTasks)
+        {
+            var blockerTask = await Storage.Load(blockerId);
+            if (blockerTask != null && blockerTask.IsCompleted == false)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

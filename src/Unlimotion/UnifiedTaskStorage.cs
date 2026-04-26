@@ -14,6 +14,7 @@ namespace Unlimotion;
 
 public class UnifiedTaskStorage : ITaskStorage
 {
+    private const int AvailabilityMigrationVersion = 2;
     private readonly bool isFileStorage;
 
     public UnifiedTaskStorage(TaskTreeManager taskTreeManager)
@@ -280,7 +281,7 @@ public class UnifiedTaskStorage : ITaskStorage
         // Create migration report
         var report = new
         {
-            Version = 1,
+            Version = AvailabilityMigrationVersion,
             Timestamp = DateTimeOffset.UtcNow,
             ForceRecheck = forceRecheck,
             TasksProcessed = tasksToMigrate.Count,
@@ -294,25 +295,8 @@ public class UnifiedTaskStorage : ITaskStorage
 
     private static bool IsCanBeCompletedForTask(TaskItem task, IReadOnlyDictionary<string, TaskItem> taskById)
     {
-        if (task.ContainsTasks?.Any() == true)
-        {
-            foreach (var childId in task.ContainsTasks)
-            {
-                if (taskById.TryGetValue(childId, out var childTask) && childTask?.IsCompleted == false)
-                    return false;
-            }
-        }
-
-        if (task.BlockedByTasks?.Any() == true)
-        {
-            foreach (var blockerId in task.BlockedByTasks)
-            {
-                if (taskById.TryGetValue(blockerId, out var blockerTask) && blockerTask?.IsCompleted == false)
-                    return false;
-            }
-        }
-
-        return true;
+        return AreContainedTasksCompleted(task, taskById) &&
+               !HasIncompleteBlockerInTaskOrAncestors(task, taskById, new HashSet<string>(StringComparer.Ordinal));
     }
 
     private static bool ShouldSkipCanBeCompletedRecheck(FileStorage fileStorage, string migrationReportPath)
@@ -328,7 +312,7 @@ public class UnifiedTaskStorage : ITaskStorage
         {
             var reportJson = JObject.Parse(File.ReadAllText(migrationReportPath));
             var reportVersion = reportJson["Version"]?.Value<int>() ?? 0;
-            if (reportVersion < 1)
+            if (reportVersion < AvailabilityMigrationVersion)
                 return false;
 
             var reportTaskCount = reportJson["TasksProcessed"]?.Value<int>() ?? -1;
@@ -374,6 +358,65 @@ public class UnifiedTaskStorage : ITaskStorage
         }
 
         return (count, latestWriteUtc);
+    }
+
+    private static bool AreContainedTasksCompleted(
+        TaskItem task,
+        IReadOnlyDictionary<string, TaskItem> taskById)
+    {
+        if (task.ContainsTasks?.Any() != true)
+            return true;
+
+        foreach (var childId in task.ContainsTasks)
+        {
+            if (taskById.TryGetValue(childId, out var childTask) && childTask?.IsCompleted == false)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasIncompleteBlockerInTaskOrAncestors(
+        TaskItem task,
+        IReadOnlyDictionary<string, TaskItem> taskById,
+        ISet<string> visitedTaskIds)
+    {
+        if (task?.Id is null || !visitedTaskIds.Add(task.Id))
+            return false;
+
+        if (HasIncompleteDirectBlocker(task, taskById))
+            return true;
+
+        if (task.ParentTasks?.Any() != true)
+            return false;
+
+        foreach (var parentId in task.ParentTasks)
+        {
+            if (taskById.TryGetValue(parentId, out var parentTask) &&
+                parentTask != null &&
+                HasIncompleteBlockerInTaskOrAncestors(parentTask, taskById, visitedTaskIds))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasIncompleteDirectBlocker(
+        TaskItem task,
+        IReadOnlyDictionary<string, TaskItem> taskById)
+    {
+        if (task.BlockedByTasks?.Any() != true)
+            return false;
+
+        foreach (var blockerId in task.BlockedByTasks)
+        {
+            if (taskById.TryGetValue(blockerId, out var blockerTask) && blockerTask?.IsCompleted == false)
+                return true;
+        }
+
+        return false;
     }
 
     private async void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
