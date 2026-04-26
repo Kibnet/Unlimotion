@@ -54,6 +54,33 @@
                 <controls:NotificationMessageContainer
                     Manager="{Binding ToastNotificationManager}"
                     HorizontalAlignment="Center"/>
+                <Grid x:Name="TasksLoadingOverlay"
+                      IsVisible="{Binding IsTasksLoading}"
+                      AutomationProperties.AutomationId="TasksLoadingOverlay">
+                    <Border Background="#66000000"/>
+                    <Border MaxWidth="260"
+                            Padding="20"
+                            CornerRadius="14"
+                            Background="#F2FFFFFF"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Name="TasksLoadingSpinner"
+                                       Text="↻"
+                                       FontSize="30"
+                                       FontWeight="Bold"
+                                       Foreground="Black"
+                                       HorizontalAlignment="Center"
+                                       RenderTransformOrigin="50%,50%"
+                                       AutomationProperties.AutomationId="TasksLoadingSpinner"/>
+                            <TextBlock Text="{DynamicResource LoadingTasks}"
+                                       Foreground="Black"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
 
             </Panel>
         </dialogHostAvalonia:DialogHost>

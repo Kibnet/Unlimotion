@@ -358,71 +358,76 @@ namespace Unlimotion.ViewModel
 
         public async Task Connect()
         {
-            _isInited = false;
-            connectionDisposableList.Dispose();
-            connectionDisposableList.Disposables.Clear();
-            _isCompletedTabInitialized = false;
-            _isArchivedTabInitialized = false;
-            _isLastCreatedTabInitialized = false;
-            _isLastUpdatedTabInitialized = false;
-            _isRoadmapTabInitialized = false;
-            _isUnlockedTabInitialized = false;
-            _isLastOpenedTabInitialized = false;
+            IsTasksLoading = true;
+            await Task.Yield();
 
-            //Set sort definition
-            var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition)
-                .Where(d => d != null)
-                .Select(d => d.Comparer);
-            var sortObservableForUnlocked =
-                this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
+            try
+            {
+                _isInited = false;
+                connectionDisposableList.Dispose();
+                connectionDisposableList.Disposables.Clear();
+                _isCompletedTabInitialized = false;
+                _isArchivedTabInitialized = false;
+                _isLastCreatedTabInitialized = false;
+                _isLastUpdatedTabInitialized = false;
+                _isRoadmapTabInitialized = false;
+                _isUnlockedTabInitialized = false;
+                _isLastOpenedTabInitialized = false;
+
+                //Set sort definition
+                var sortObservable = this.WhenAnyValue(m => m.CurrentSortDefinition)
                     .Where(d => d != null)
                     .Select(d => d.Comparer);
+                var sortObservableForUnlocked =
+                    this.WhenAnyValue(m => m.CurrentSortDefinitionForUnlocked)
+                        .Where(d => d != null)
+                        .Select(d => d.Comparer);
 
-            //Set All Tasks Filter
-            var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
-                .Select(filters =>
+                //Set All Tasks Filter
+                var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
+                    .Select(filters =>
+                    {
+                        bool Predicate(TaskItemViewModel task) =>
+                            task.IsCompleted == false ||
+                            ((task.IsCompleted == true) && filters.Item1) ||
+                            ((task.IsCompleted == null) && filters.Item2);
+
+                        return (Func<TaskItemViewModel, bool>)Predicate;
+                    });
+
+                var taskStorage = _getTaskStorage?.Invoke();
+
+                if (taskStorage == null)
                 {
-                    bool Predicate(TaskItemViewModel task) =>
-                        task.IsCompleted == false ||
-                        ((task.IsCompleted == true) && filters.Item1) ||
-                        ((task.IsCompleted == null) && filters.Item2);
+                    ManagerWrapper?.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
+                    return;
+                }
 
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            var taskStorage = _getTaskStorage?.Invoke();
-
-            if (taskStorage == null)
-            {
-                ManagerWrapper?.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
-                return;
-            }
-
-            if (Settings.IsServerMode)
-            {
-                taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
+                if (Settings.IsServerMode)
                 {
-                    ManagerWrapper?.ErrorToast(L10n.Get("ServerConnectionError"));
-                };
-            }
+                    taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
+                    {
+                        ManagerWrapper?.ErrorToast(L10n.Get("ServerConnectionError"));
+                    };
+                }
 
-            await taskStorage.TaskTreeManager.Storage.Connect();
-            await taskStorage.Init();
+                await taskStorage.TaskTreeManager.Storage.Connect();
+                await taskStorage.Init();
 
-            taskRepository = taskStorage;
+                taskRepository = taskStorage;
 
-            //Если из коллекции пропадает итем, то очищаем выделенный итем.
-            taskRepository.Tasks.Connect()
-                .OnItemRemoved(x =>
-                {
-                    if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
-                })
-                .OnItemUpdated((newItem, oldItem) =>
-                {
-                    if (newItem.Id == CurrentTaskItem?.Id && newItem.Id == oldItem.Id) CurrentTaskItem = newItem;
-                })
-                .Subscribe()
-                .AddToDispose(connectionDisposableList);
+                //Если из коллекции пропадает итем, то очищаем выделенный итем.
+                taskRepository.Tasks.Connect()
+                    .OnItemRemoved(x =>
+                    {
+                        if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
+                    })
+                    .OnItemUpdated((newItem, oldItem) =>
+                    {
+                        if (newItem.Id == CurrentTaskItem?.Id && newItem.Id == oldItem.Id) CurrentTaskItem = newItem;
+                    })
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
 
             //Bind Emoji
 
@@ -1306,7 +1311,12 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
             RegisterCommands();
 
-            _isInited = true;
+                _isInited = true;
+            }
+            finally
+            {
+                IsTasksLoading = false;
+            }
         }
 
         public void SelectCurrentTask()
@@ -1638,6 +1648,7 @@ namespace Unlimotion.ViewModel
             }
         }
         public string Title { get; set; }
+        public bool IsTasksLoading { get; private set; }
         public bool AllTasksMode { get; set; }
         public bool UnlockedMode { get; set; }
         public bool CompletedMode { get; set; }
