@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
@@ -14,8 +14,10 @@ namespace Unlimotion.Test
         private const string DefaultConfigName = "TestSettings.json";
         private string UniquiId => guid.ToString()!;
         private readonly ThreadLocal<Guid> guid;
+        private readonly IDisposable? configurationDisposable;
 
         private readonly string uniqueConfigName;
+        private bool isCleaned;
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
         public readonly string DefaultTasksFolderPath;
         private readonly string defaultSnapshotsFolderPath;
@@ -71,6 +73,7 @@ namespace Unlimotion.Test
 
             // Create configuration
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(uniqueConfigName);
+            configurationDisposable = configuration as IDisposable;
 
             // Create mapper
             var mapper = AppModelMapping.ConfigureMapping();
@@ -80,13 +83,8 @@ namespace Unlimotion.Test
 
             // Create storage factory
             var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManagerMock);
-            TaskStorageFactory.DefaultStoragePath = DefaultTasksFolderPath;
-
             // Create file storage
             storageFactory.CreateFileStorage(DefaultTasksFolderPath);
-
-            // Set up static instances
-            TaskItemViewModel.NotificationManagerInstance = notificationManagerMock;
 
             // Create SettingsViewModel
             var settingsViewModel = new SettingsViewModel(configuration);
@@ -99,9 +97,6 @@ namespace Unlimotion.Test
                 () => storageFactory.CurrentStorage,
                 settingsViewModel
             );
-
-            // Set static MainWindow reference for TaskItemViewModel
-            TaskItemViewModel.MainWindowInstance = MainWindowViewModelTest;
         }
 
         private void CopyTaskFromSnapshotsFolder()
@@ -134,6 +129,14 @@ namespace Unlimotion.Test
 
         public void CleanTasks()
         {
+            if (isCleaned)
+            {
+                return;
+            }
+
+            isCleaned = true;
+            configurationDisposable?.Dispose();
+
             if (File.Exists(uniqueConfigName))
             {
                 Try(() => File.Delete(uniqueConfigName));

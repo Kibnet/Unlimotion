@@ -19,7 +19,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlTreeCommandsUiTests
 {
     [Test]

@@ -6,6 +6,8 @@ using System.Linq;
 using System.Threading;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Avalonia.Headless;
+using Avalonia.Threading;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
@@ -14,28 +16,76 @@ namespace Unlimotion.Test
 {
     public class BaseModelTests : IDisposable
     {
-        protected readonly MainWindowViewModelFixture fixture;
-        protected readonly MainWindowViewModel mainWindowVM;
+        private MainWindowViewModelFixture? _fixture;
+        private MainWindowViewModel? _mainWindowVM;
+        private ITaskStorage? _taskRepository;
+
+        protected MainWindowViewModelFixture fixture => EnsureInitialized().Fixture;
+        protected MainWindowViewModel mainWindowVM => EnsureInitialized().MainWindowViewModel;
         protected readonly CompareLogic compareLogic;
-        protected readonly ITaskStorage taskRepository;
+        protected ITaskStorage taskRepository => EnsureInitialized().TaskRepository;
 
         public BaseModelTests()
         {
             compareLogic = new CompareLogic();
             compareLogic.Config.MaxDifferences = 10;
-            TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(10);
-            fixture = new MainWindowViewModelFixture();
-            mainWindowVM = fixture.MainWindowViewModelTest;
-            mainWindowVM.Connect().GetAwaiter().GetResult();
-            mainWindowVM.AllTasksMode = true;
-            while (mainWindowVM.CurrentAllTasksItems.Count == 0){ }
-            taskRepository = mainWindowVM.taskRepository!;
         }
 
         /// <summary>
         /// Очистка после тестов
         /// </summary>
-        public void Dispose() => fixture.CleanTasks();
+        public void Dispose() => _fixture?.CleanTasks();
+
+        private (MainWindowViewModelFixture Fixture, MainWindowViewModel MainWindowViewModel, ITaskStorage TaskRepository) EnsureInitialized()
+        {
+            if (_fixture != null && _mainWindowVM != null && _taskRepository != null)
+            {
+                return (_fixture, _mainWindowVM, _taskRepository);
+            }
+
+            TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(10);
+            _fixture = new MainWindowViewModelFixture();
+            _mainWindowVM = _fixture.MainWindowViewModelTest;
+            _mainWindowVM.Connect().GetAwaiter().GetResult();
+            _mainWindowVM.AllTasksMode = true;
+
+            _taskRepository = _mainWindowVM.taskRepository
+                ?? throw new InvalidOperationException("Task repository was not initialized.");
+
+            return (_fixture, _mainWindowVM, _taskRepository);
+        }
+
+        protected async Task RunWithTreeProjectionAsync(
+            Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
+        {
+            using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await session.Dispatch(async () =>
+            {
+                var projectionFixture = new MainWindowViewModelFixture();
+
+                try
+                {
+                    var viewModel = projectionFixture.MainWindowViewModelTest;
+                    await viewModel.Connect();
+                    viewModel.AllTasksMode = true;
+                    Dispatcher.UIThread.RunJobs();
+
+                    var repository = viewModel.taskRepository
+                        ?? throw new InvalidOperationException("Task repository was not initialized.");
+
+                    if (viewModel.CurrentAllTasksItems.Count == 0)
+                    {
+                        throw new TimeoutException("Main window task tree was not loaded in time for the test.");
+                    }
+
+                    await action(projectionFixture, viewModel, repository);
+                }
+                finally
+                {
+                    projectionFixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
 
         protected TaskItemViewModel? GetTask(string taskId, bool dontAssertNull = false)
         {
@@ -75,7 +125,7 @@ namespace Unlimotion.Test
         }
     }
 
-    [NotInParallel]
+    [ParallelLimiter<SharedUiStateParallelLimit>]
     public class MainWindowViewModelTests : BaseModelTests
     {
         private NotificationManagerWrapperMock NotificationManager => (NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper;
@@ -85,24 +135,34 @@ namespace Unlimotion.Test
             return editor.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
         }
 
-        private async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
-            CreateThreeLevelTreeCommandBranchAsync()
+        private static async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
+            CreateThreeLevelTreeCommandBranchAsync(MainWindowViewModel viewModel, ITaskStorage repository)
         {
-            mainWindowVM.AllTasksMode = true;
-            var childTask = GetTask(MainWindowViewModelFixture.SubTask22Id);
-            var grandchildTask = await taskRepository.AddChild(childTask);
+            viewModel.AllTasksMode = true;
+            var childTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
+            var grandchildTask = await repository.AddChild(childTask);
             grandchildTask.Title = "Tree command grandchild";
+
             await TestHelpers.WaitThrottleTime();
+            Dispatcher.UIThread.RunJobs();
 
-            var childWrapper = mainWindowVM.FindTaskWrapperViewModel(childTask, mainWindowVM.CurrentAllTasksItems);
-            var grandchildWrapper = mainWindowVM.FindTaskWrapperViewModel(grandchildTask, mainWindowVM.CurrentAllTasksItems);
+            var wrappersLoaded = await TestHelpers.WaitUntilAsync(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                var childWrapper = viewModel.FindTaskWrapperViewModel(childTask!, viewModel.CurrentAllTasksItems);
+                var grandchildWrapper = viewModel.FindTaskWrapperViewModel(grandchildTask!, viewModel.CurrentAllTasksItems);
+                return childWrapper?.Parent != null && grandchildWrapper?.Parent == childWrapper;
+            }, TimeSpan.FromSeconds(2));
 
-            await Assert.That(childWrapper).IsNotNull();
-            await Assert.That(grandchildWrapper).IsNotNull();
-            await Assert.That(childWrapper!.Parent).IsNotNull();
-            await Assert.That(grandchildWrapper!.Parent).IsEqualTo(childWrapper);
+            await Assert.That(wrappersLoaded).IsTrue();
+            var finalChildWrapper = viewModel.FindTaskWrapperViewModel(childTask!, viewModel.CurrentAllTasksItems);
+            var finalGrandchildWrapper = viewModel.FindTaskWrapperViewModel(grandchildTask!, viewModel.CurrentAllTasksItems);
+            await Assert.That(finalChildWrapper).IsNotNull();
+            await Assert.That(finalGrandchildWrapper).IsNotNull();
 
-            return (childWrapper.Parent, childWrapper, grandchildWrapper);
+            var childWrapper = finalChildWrapper!;
+            var grandchildWrapper = finalGrandchildWrapper!;
+            return (childWrapper!.Parent, childWrapper, grandchildWrapper!);
         }
 
         private static IReadOnlyList<TaskWrapperViewModel> FindWrappersByTaskId(
@@ -166,16 +226,27 @@ namespace Unlimotion.Test
             // Act: Set title immediately after creation
             var expectedTitle = "Test Title That Should Not Reset";
             task.Title = expectedTitle;
-            
-            // Wait for file watcher to potentially trigger update (1 second throttle + buffer)
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            
-            // Assert: Title should still be what we set
-            await Assert.That(task.Title).IsEqualTo(expectedTitle);
+            var verificationWindow = TimeSpan.FromSeconds(2);
+            var verificationStartedAt = DateTime.UtcNow;
 
-            // Also verify it eventually saves correctly
-            await TestHelpers.WaitThrottleTime();
+            var savedWithoutReset = await TestHelpers.WaitUntilAsync(
+                () =>
+                {
+                    var storedTask = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+                    return task.Title == expectedTitle && storedTask?.Title == expectedTitle;
+                },
+                verificationWindow);
+
+            await Assert.That(savedWithoutReset).IsTrue();
+
+            var remainingWindow = verificationWindow - (DateTime.UtcNow - verificationStartedAt);
+            if (remainingWindow > TimeSpan.Zero)
+            {
+                await Task.Delay(remainingWindow);
+            }
+
             var storedTask = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id);
+            await Assert.That(task.Title).IsEqualTo(expectedTitle);
             await Assert.That(storedTask?.Title).IsEqualTo(expectedTitle);
         }
 
@@ -750,18 +821,20 @@ namespace Unlimotion.Test
         [Test]
         public async Task SubItemLinkRemoveCommand_Success()
         {
-            var rootWrapper = mainWindowVM.CurrentAllTasksItems
-                .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, repository) =>
+            {
+                var rootWrapper = viewModel.CurrentAllTasksItems
+                    .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
+                var subWrapper = rootWrapper.SubTasks
+                    .First(st => st.TaskItem.Id == MainWindowViewModelFixture.SubTask41Id);
 
-            var subWrapper = rootWrapper.SubTasks
-                .First(st => st.TaskItem.Id == MainWindowViewModelFixture.SubTask41Id);
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
 
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
+                await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), repository, -1);
 
-            await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository, -1);
-
-            var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
-            await Assert.That(subStored).IsNull();
+                var subStored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
+                await Assert.That(subStored).IsNull();
+            });
         }
 
         /// <summary>
@@ -771,22 +844,24 @@ namespace Unlimotion.Test
         [Test]
         public async Task SubItemRemoveCommand_Success()
         {
-            var rootWrapper = mainWindowVM.CurrentAllTasksItems
-                .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, repository) =>
+            {
+                var rootWrapper = viewModel.CurrentAllTasksItems
+                    .First(i => i.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id);
+                var subWrapper = rootWrapper.SubTasks
+                    .First(st => st.TaskItem.Id == MainWindowViewModelFixture.SubTask41Id);
 
-            var subWrapper = rootWrapper.SubTasks
-                .First(st => st.TaskItem.Id == MainWindowViewModelFixture.SubTask41Id);
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = false;
 
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
-            
-            await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), taskRepository);
-            
-            var rootStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
-            var subStored = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
+                await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), repository);
 
-            await Assert.That(rootStored).IsNotNull();
-            await Assert.That(subStored).IsNotNull();
-            await Assert.That(rootStored.ContainsTasks).Contains(subWrapper.TaskItem.Id);
+                var rootStored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
+                var subStored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
+
+                await Assert.That(rootStored).IsNotNull();
+                await Assert.That(subStored).IsNotNull();
+                await Assert.That(rootStored.ContainsTasks).Contains(subWrapper.TaskItem.Id);
+            });
         }
 
         /// <summary>
@@ -796,85 +871,100 @@ namespace Unlimotion.Test
         [Test]
         public async Task ItemRemoveCommand_Success()
         {
-            var parent = mainWindowVM.CurrentAllTasksItems
-                .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
-            var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, repository) =>
+            {
+                var parent = viewModel.CurrentAllTasksItems
+                    .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
+                var subTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
 
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository, -1);
-            
-            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)).IsNull();
-            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
+                await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), repository, -1);
+
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, parent.Id)).IsNull();
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+            });
         }
 
         [Test]
         public async Task RemoveSelectedWrappers_MultiParentSameTask_RemovesEachWrapperContext()
         {
-            var wrappers = FindWrappersByTaskId(mainWindowVM.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
-            await Assert.That(wrappers.Count).IsEqualTo(2);
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, _) =>
+            {
+                var wrappers = FindWrappersByTaskId(viewModel.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(wrappers.Count).IsEqualTo(2);
 
-            var root2Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
-            var root3Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask3Id);
-            await Assert.That(root2Wrapper).IsNotNull();
-            await Assert.That(root3Wrapper).IsNotNull();
+                var root2Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
+                var root3Wrapper = wrappers.FirstOrDefault(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask3Id);
+                await Assert.That(root2Wrapper).IsNotNull();
+                await Assert.That(root3Wrapper).IsNotNull();
 
-            NotificationManager.AskResult = true;
-            mainWindowVM.RemoveSelectedWrappers([root2Wrapper!, root3Wrapper!]);
-            await TestHelpers.WaitThrottleTime();
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
+                viewModel.RemoveSelectedWrappers([root2Wrapper!, root3Wrapper!]);
+                await TestHelpers.WaitThrottleTime();
 
-            var taskFile = GetStorageTaskItem(MainWindowViewModelFixture.SubTask22Id);
-            var root2Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask2Id);
-            var root3Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask3Id);
+                var taskFile = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask22Id);
+                var root2Stored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
+                var root3Stored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask3Id);
 
-            await Assert.That(taskFile).IsNull();
-            await Assert.That(root2Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
-            await Assert.That(root3Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(taskFile).IsNull();
+                await Assert.That(root2Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(root3Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+            });
         }
 
         [Test]
         public async Task RemoveSelectedWrappers_CancelledBatch_KeepsAllSelectedEntries()
         {
-            var wrappers = new[]
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, _) =>
             {
-                mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask1Id),
-                mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id)
-            };
+                var wrappers = new[]
+                {
+                    viewModel.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask1Id),
+                    viewModel.CurrentAllTasksItems.First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask4Id)
+                };
 
-            NotificationManager.AskResult = false;
-            mainWindowVM.RemoveSelectedWrappers(wrappers);
-            await TestHelpers.WaitThrottleTime();
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = false;
+                viewModel.RemoveSelectedWrappers(wrappers);
+                await TestHelpers.WaitThrottleTime();
 
-            var root1Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
-            var root4Stored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask4Id);
+                var root1Stored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask1Id);
+                var root4Stored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id);
 
-            await Assert.That(root1Stored).IsNotNull();
-            await Assert.That(root4Stored).IsNotNull();
+                await Assert.That(root1Stored).IsNotNull();
+                await Assert.That(root4Stored).IsNotNull();
+            });
         }
 
         [Test]
         public async Task NormalizeForMoveBatch_RemovesDescendantsWhenAncestorSelected()
         {
-            var rootWrapper = mainWindowVM.CurrentAllTasksItems
-                .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
-            var childWrapper = rootWrapper.SubTasks
-                .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.SubTask22Id);
+            await RunWithTreeProjectionAsync(async (_, viewModel, _) =>
+            {
+                var rootWrapper = viewModel.CurrentAllTasksItems
+                    .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
+                var childWrapper = rootWrapper.SubTasks
+                    .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.SubTask22Id);
 
-            var normalized = new[] { rootWrapper, childWrapper }.NormalizeForMoveBatch();
+                var normalized = new[] { rootWrapper, childWrapper }.NormalizeForMoveBatch();
 
-            await Assert.That(normalized.Count).IsEqualTo(1);
-            await Assert.That(normalized[0]).IsSameReferenceAs(rootWrapper);
+                await Assert.That(normalized.Count).IsEqualTo(1);
+                await Assert.That(normalized[0]).IsSameReferenceAs(rootWrapper);
+            });
         }
 
         [Test]
         public async Task NormalizeForNonMoveBatch_DeduplicatesSameTaskAcrossParents()
         {
-            var wrappers = FindWrappersByTaskId(mainWindowVM.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
-            await Assert.That(wrappers.Count).IsEqualTo(2);
+            await RunWithTreeProjectionAsync(async (_, viewModel, _) =>
+            {
+                var wrappers = FindWrappersByTaskId(viewModel.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(wrappers.Count).IsEqualTo(2);
 
-            var normalized = wrappers.NormalizeForNonMoveBatch();
+                var normalized = wrappers.NormalizeForNonMoveBatch();
 
-            await Assert.That(normalized.Count).IsEqualTo(1);
-            await Assert.That(normalized[0].TaskItem.Id).IsEqualTo(MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(normalized.Count).IsEqualTo(1);
+                await Assert.That(normalized[0].TaskItem.Id).IsEqualTo(MainWindowViewModelFixture.SubTask22Id);
+            });
         }
 
         /// <summary>
@@ -988,15 +1078,18 @@ namespace Unlimotion.Test
         [Test]
         public async Task CancelItemRemoveCommand_Success()
         {
-            var parent = mainWindowVM.CurrentAllTasksItems
-                .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
-            var subTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, repository) =>
+            {
+                var parent = viewModel.CurrentAllTasksItems
+                    .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
+                var subTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
 
-            ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = false;
-            await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), taskRepository);
+                ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = false;
+                await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), repository);
 
-            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)).IsNotNull();
-            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, parent.Id)).IsNotNull();
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+            });
         }
 
         /// <summary>
@@ -1225,7 +1318,6 @@ namespace Unlimotion.Test
             if (isdestinationNotBlockedByDraggable)
             {
                 await Assert.That(result.Differences).HasSingleItem();
-                // Проверяем, что количество блокируемых задач изменилось
                 var blocksTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlocksTasks));
                 await Assert.That(blocksTasksDifference).IsNotNull();
 
@@ -1525,32 +1617,42 @@ namespace Unlimotion.Test
         [Test]
         public async Task SelectCurrentTaskMode_SyncsCorrectly()
         {
-            var task = mainWindowVM.CurrentAllTasksItems.First().TaskItem;
+            await RunWithTreeProjectionAsync(async (_, viewModel, _) =>
+            {
+                var task = viewModel.CurrentAllTasksItems.First().TaskItem;
+                viewModel.AllTasksMode = true;
+                viewModel.CurrentTaskItem = task;
+                Dispatcher.UIThread.RunJobs();
 
-            mainWindowVM.AllTasksMode = true;
-            mainWindowVM.CurrentTaskItem = task;
+                var allTasksSelected = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return viewModel.CurrentAllTasksItem?.TaskItem?.Id == task.Id;
+                }, TimeSpan.FromSeconds(2));
+                await Assert.That(allTasksSelected).IsTrue();
 
-            var allTasksSelected = SpinWait.SpinUntil(
-                () => mainWindowVM.CurrentAllTasksItem?.TaskItem?.Id == task.Id,
-                TimeSpan.FromSeconds(2));
-            await Assert.That(allTasksSelected).IsTrue();
+                viewModel.AllTasksMode = false;
+                viewModel.UnlockedMode = true;
+                Dispatcher.UIThread.RunJobs();
 
-            mainWindowVM.AllTasksMode = false;
-            mainWindowVM.UnlockedMode = true;
+                var hasUnlockedItems = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return viewModel.UnlockedItems.Count > 0;
+                }, TimeSpan.FromSeconds(2));
+                await Assert.That(hasUnlockedItems).IsTrue();
 
-            var hasUnlockedItems = SpinWait.SpinUntil(
-                () => mainWindowVM.UnlockedItems.Count > 0,
-                TimeSpan.FromSeconds(2));
-            await Assert.That(hasUnlockedItems).IsTrue();
+                var unlockedTask = viewModel.UnlockedItems.First().TaskItem;
+                viewModel.CurrentTaskItem = unlockedTask;
+                Dispatcher.UIThread.RunJobs();
 
-            var unlockedTask = mainWindowVM.UnlockedItems.First().TaskItem;
-            mainWindowVM.CurrentTaskItem = unlockedTask;
-
-            var unlockedSelected = SpinWait.SpinUntil(
-                () => mainWindowVM.CurrentUnlockedItem?.TaskItem?.Id == unlockedTask.Id,
-                TimeSpan.FromSeconds(2));
-            await Assert.That(unlockedSelected).IsTrue();
-
+                var unlockedSelected = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return viewModel.CurrentUnlockedItem?.TaskItem?.Id == unlockedTask.Id;
+                }, TimeSpan.FromSeconds(2));
+                await Assert.That(unlockedSelected).IsTrue();
+            });
         }
 
         [Test]
@@ -1610,85 +1712,99 @@ namespace Unlimotion.Test
         [Test]
         public async Task TreeCommand_ExpandNodeAndDescendants_ExpandsWholeSubtree()
         {
-            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var (rootWrapper, childWrapper, grandchildWrapper) =
+                    await CreateThreeLevelTreeCommandBranchAsync(viewModel, repository);
 
-            rootWrapper.IsExpanded = false;
-            childWrapper.IsExpanded = false;
-            grandchildWrapper.IsExpanded = false;
+                rootWrapper.IsExpanded = false;
+                childWrapper.IsExpanded = false;
+                grandchildWrapper.IsExpanded = false;
+                viewModel.ExpandNodeAndDescendants(rootWrapper);
 
-            mainWindowVM.ExpandNodeAndDescendants(rootWrapper);
-
-            await Assert.That(rootWrapper.IsExpanded).IsTrue();
-            await Assert.That(childWrapper.IsExpanded).IsTrue();
-            await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(rootWrapper.IsExpanded).IsTrue();
+                await Assert.That(childWrapper.IsExpanded).IsTrue();
+                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+            });
         }
 
         [Test]
         public async Task TreeCommand_CollapseNodeDescendants_KeepsCurrentAndCollapsesChildren()
         {
-            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var (rootWrapper, childWrapper, grandchildWrapper) =
+                    await CreateThreeLevelTreeCommandBranchAsync(viewModel, repository);
 
-            rootWrapper.IsExpanded = true;
-            childWrapper.IsExpanded = true;
-            grandchildWrapper.IsExpanded = true;
+                rootWrapper.IsExpanded = true;
+                childWrapper.IsExpanded = true;
+                grandchildWrapper.IsExpanded = true;
+                viewModel.CollapseNodeDescendants(rootWrapper);
 
-            mainWindowVM.CollapseNodeDescendants(rootWrapper);
-
-            await Assert.That(rootWrapper.IsExpanded).IsFalse();
-            await Assert.That(childWrapper.IsExpanded).IsFalse();
-            await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
+                await Assert.That(rootWrapper.IsExpanded).IsFalse();
+                await Assert.That(childWrapper.IsExpanded).IsFalse();
+                await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
+            });
         }
 
         [Test]
         public async Task TreeCommand_ExpandAllNodes_ExpandsAllRootsAndDescendants()
         {
-            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
-            var siblingRoot = mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var (rootWrapper, childWrapper, grandchildWrapper) =
+                    await CreateThreeLevelTreeCommandBranchAsync(viewModel, repository);
+                var siblingRoot = viewModel.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
 
-            rootWrapper.IsExpanded = false;
-            childWrapper.IsExpanded = false;
-            grandchildWrapper.IsExpanded = false;
-            siblingRoot.IsExpanded = false;
+                rootWrapper.IsExpanded = false;
+                childWrapper.IsExpanded = false;
+                grandchildWrapper.IsExpanded = false;
+                siblingRoot.IsExpanded = false;
+                viewModel.ExpandAllNodes(viewModel.CurrentAllTasksItems);
 
-            mainWindowVM.ExpandAllNodes(mainWindowVM.CurrentAllTasksItems);
-
-            await Assert.That(rootWrapper.IsExpanded).IsTrue();
-            await Assert.That(childWrapper.IsExpanded).IsTrue();
-            await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
-            await Assert.That(siblingRoot.IsExpanded).IsTrue();
+                await Assert.That(rootWrapper.IsExpanded).IsTrue();
+                await Assert.That(childWrapper.IsExpanded).IsTrue();
+                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(siblingRoot.IsExpanded).IsTrue();
+            });
         }
 
         [Test]
         public async Task TreeCommand_CollapseAllNodes_CollapsesAllRootsAndDescendants()
         {
-            var (rootWrapper, childWrapper, grandchildWrapper) = await CreateThreeLevelTreeCommandBranchAsync();
-            var siblingRoot = mainWindowVM.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var (rootWrapper, childWrapper, grandchildWrapper) =
+                    await CreateThreeLevelTreeCommandBranchAsync(viewModel, repository);
+                var siblingRoot = viewModel.CurrentAllTasksItems.First(wrapper => wrapper != rootWrapper);
 
-            rootWrapper.IsExpanded = true;
-            childWrapper.IsExpanded = true;
-            grandchildWrapper.IsExpanded = true;
-            siblingRoot.IsExpanded = true;
+                rootWrapper.IsExpanded = true;
+                childWrapper.IsExpanded = true;
+                grandchildWrapper.IsExpanded = true;
+                siblingRoot.IsExpanded = true;
+                viewModel.CollapseAllNodes(viewModel.CurrentAllTasksItems);
 
-            mainWindowVM.CollapseAllNodes(mainWindowVM.CurrentAllTasksItems);
-
-            await Assert.That(rootWrapper.IsExpanded).IsFalse();
-            await Assert.That(childWrapper.IsExpanded).IsFalse();
-            await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
-            await Assert.That(siblingRoot.IsExpanded).IsFalse();
+                await Assert.That(rootWrapper.IsExpanded).IsFalse();
+                await Assert.That(childWrapper.IsExpanded).IsFalse();
+                await Assert.That(grandchildWrapper.IsExpanded).IsFalse();
+                await Assert.That(siblingRoot.IsExpanded).IsFalse();
+            });
         }
 
         [Test]
         public async Task TreeCommand_NullContext_IsNoOp()
         {
-            var rootWrapper = mainWindowVM.CurrentAllTasksItems.First();
-            rootWrapper.IsExpanded = false;
+            await RunWithTreeProjectionAsync(async (_, viewModel, _) =>
+            {
+                var rootWrapper = viewModel.CurrentAllTasksItems.First();
+                rootWrapper.IsExpanded = false;
+                viewModel.ExpandNodeAndDescendants(null);
+                viewModel.CollapseNodeDescendants(null);
+                viewModel.ExpandAllNodes(null);
+                viewModel.CollapseAllNodes(null);
 
-            mainWindowVM.ExpandNodeAndDescendants(null);
-            mainWindowVM.CollapseNodeDescendants(null);
-            mainWindowVM.ExpandAllNodes(null);
-            mainWindowVM.CollapseAllNodes(null);
-
-            await Assert.That(rootWrapper.IsExpanded).IsFalse();
+                await Assert.That(rootWrapper.IsExpanded).IsFalse();
+            });
         }
     }
 }

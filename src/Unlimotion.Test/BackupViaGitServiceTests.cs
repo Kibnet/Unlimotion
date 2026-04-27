@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using LibGit2Sharp;
@@ -13,6 +14,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
 {
     private readonly string _rootPath;
     private readonly string _configPath;
+    private readonly List<IDisposable> _configurationDisposables = [];
 
     public BackupViaGitServiceTests()
     {
@@ -24,6 +26,11 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
     public void Dispose()
     {
+        foreach (var disposable in _configurationDisposables)
+        {
+            disposable.Dispose();
+        }
+
         TryDeleteDirectory(_rootPath);
     }
 
@@ -281,6 +288,12 @@ public sealed class BackupViaGitServiceTests : IDisposable
         string remoteName = "origin")
     {
         configuration = WritableJsonConfigurationFabric.Create(_configPath);
+
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
         configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(localPath);
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set(remotePath);
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set(remoteName);
