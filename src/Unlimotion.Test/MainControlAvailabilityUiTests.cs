@@ -15,6 +15,56 @@ namespace Unlimotion.Test;
 public class MainControlAvailabilityUiTests
 {
     [Test]
+    public async Task LastOpenedTaskTitle_ShouldBeDimmed_WhenTaskCannotBeCompleted()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(GetDesktopAppEntryPointType());
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var blockerTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                var blockedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+
+                await Assert.That(blockerTask).IsNotNull();
+                await Assert.That(blockedTask).IsNotNull();
+
+                await vm.taskRepository!.Block(blockedTask!, blockerTask!);
+                await Assert.That(blockedTask.IsCanBeCompleted).IsFalse();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                SelectTab(view, "LastOpenedTabItem");
+                vm.DetailsAreOpen = true;
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+
+                var lastOpenedTree = view.FindControl<TreeView>("LastOpenedTree");
+                await Assert.That(lastOpenedTree).IsNotNull();
+
+                var titleLabel = WaitForWrapperTitleLabel(
+                    lastOpenedTree!,
+                    MainWindowViewModelFixture.RootTask2Id,
+                    blockedTask.Title);
+
+                await Assert.That(titleLabel.Opacity).IsEqualTo(0.4);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task DescendantCheckbox_ShouldBeDisabled_WhenAncestorHasIncompleteBlocker()
     {
         using var session = HeadlessUnitTestSession.StartNew(GetDesktopAppEntryPointType());
@@ -80,6 +130,16 @@ public class MainControlAvailabilityUiTests
         };
     }
 
+    private static void SelectTab(Control root, string automationId)
+    {
+        var tab = root.GetVisualDescendants()
+            .OfType<TabItem>()
+            .First(control => Avalonia.Automation.AutomationProperties.GetAutomationId(control) == automationId);
+
+        tab.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static CheckBox WaitForTaskCheckBox(TreeView tree, string taskId, int timeoutMilliseconds = 2000)
     {
         CheckBox? checkBox = null;
@@ -98,6 +158,33 @@ public class MainControlAvailabilityUiTests
         }
 
         return checkBox;
+    }
+
+    private static Label WaitForWrapperTitleLabel(
+        TreeView tree,
+        string taskId,
+        string title,
+        int timeoutMilliseconds = 3000)
+    {
+        Label? label = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            label = tree.GetVisualDescendants()
+                .OfType<Label>()
+                .FirstOrDefault(control =>
+                    control.DataContext is TaskWrapperViewModel wrapper &&
+                    wrapper.TaskItem.Id == taskId &&
+                    Equals(control.Content?.ToString(), title));
+            return label != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || label == null)
+        {
+            throw new InvalidOperationException($"Title label for task '{taskId}' was not found.");
+        }
+
+        return label;
     }
 
     private static Type GetDesktopAppEntryPointType()

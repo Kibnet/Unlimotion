@@ -532,7 +532,7 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}"/>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
