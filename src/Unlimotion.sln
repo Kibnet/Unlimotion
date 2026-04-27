@@ -1,4 +1,5 @@
-﻿Microsoft Visual Studio Solution File, Format Version 12.00
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.5.11626.173
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -55,6 +56,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.UiTests.Headless", "..\tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj", "{6FD3F478-8B0A-4408-9170-5E247BAE29CC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.UiTests.FlaUI", "..\tests\Unlimotion.UiTests.FlaUI\Unlimotion.UiTests.FlaUI.csproj", "{0629C424-CE1F-4EF6-8B56-918F121DE9A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.ReadmeMedia", "..\tests\Unlimotion.ReadmeMedia\Unlimotion.ReadmeMedia.csproj", "{0B451BDA-5D31-4546-B1A4-7688EF157D4F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -316,6 +319,18 @@ Global
 		{0629C424-CE1F-4EF6-8B56-918F121DE9A8}.Release|x64.Build.0 = Release|Any CPU
 		{0629C424-CE1F-4EF6-8B56-918F121DE9A8}.Release|x86.ActiveCfg = Release|Any CPU
 		{0629C424-CE1F-4EF6-8B56-918F121DE9A8}.Release|x86.Build.0 = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|x64.Build.0 = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Debug|x86.Build.0 = Debug|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|x64.ActiveCfg = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|x64.Build.0 = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|x86.ActiveCfg = Release|Any CPU
+		{0B451BDA-5D31-4546-B1A4-7688EF157D4F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

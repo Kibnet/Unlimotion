@@ -14,6 +14,7 @@ using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
@@ -36,6 +37,9 @@ public class App : Application
 {
     private const string AutomationCurrentTaskIdEnvironmentVariable = "UNLIMOTION_AUTOMATION_CURRENT_TASK_ID";
     private const string AutomationOpenDetailsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPEN_DETAILS";
+    private const string AutomationOpenedTaskIdsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPENED_TASK_IDS";
+    private const string AutomationWindowTitleEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_TITLE";
+    private const string AutomationExpandAllTaskTreesEnvironmentVariable = "UNLIMOTION_AUTOMATION_EXPAND_ALL_TASK_TREES";
     private const string AppFontSizeResourceKey = "AppFontSize";
     private const string AppSmallFontSizeResourceKey = "AppSmallFontSize";
     private const string AppTabFontSizeResourceKey = "AppTabFontSize";
@@ -653,6 +657,7 @@ public class App : Application
                 {
                     try
                     {
+                        ApplyAutomationTaskWrapperDefaults();
                         await vm.Connect();
                         ApplyAutomationStartupState(vm);
                     }
@@ -680,7 +685,124 @@ public class App : Application
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)
     {
+        ApplyAutomationWindowTitle(vm);
+
+        var openDetails = Environment.GetEnvironmentVariable(AutomationOpenDetailsEnvironmentVariable);
+        if (bool.TryParse(openDetails, out var shouldOpenDetails) && shouldOpenDetails)
+        {
+            vm.DetailsAreOpen = true;
+        }
+
+        var openedTaskIds = Environment
+            .GetEnvironmentVariable(AutomationOpenedTaskIdsEnvironmentVariable)?
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (openedTaskIds is { Length: > 0 })
+        {
+            foreach (var openedTaskId in openedTaskIds)
+            {
+                SelectAutomationTask(vm, openedTaskId);
+            }
+
+            ApplyAutomationTreeExpansion(vm);
+            return;
+        }
+
         var taskId = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
+        SelectAutomationTask(vm, taskId);
+        ApplyAutomationTreeExpansion(vm);
+    }
+
+    private static void ApplyAutomationTaskWrapperDefaults()
+    {
+        TaskWrapperViewModel.DefaultIsExpanded = ShouldExpandAutomationTaskTrees();
+    }
+
+    private static void ApplyAutomationWindowTitle(MainWindowViewModel vm)
+    {
+        var title = Environment.GetEnvironmentVariable(AutomationWindowTitleEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            vm.Title = title;
+        }
+    }
+
+    private static void ApplyAutomationTreeExpansion(MainWindowViewModel vm)
+    {
+        if (!ShouldExpandAutomationTaskTrees())
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => ExpandAllTaskTrees(vm), DispatcherPriority.Background);
+    }
+
+    private static bool ShouldExpandAutomationTaskTrees()
+    {
+        var expandAll = Environment.GetEnvironmentVariable(AutomationExpandAllTaskTreesEnvironmentVariable);
+        return bool.TryParse(expandAll, out var shouldExpandAll) && shouldExpandAll;
+    }
+
+    private static void ExpandAllTaskTrees(MainWindowViewModel vm)
+    {
+        var allTasksMode = vm.AllTasksMode;
+        var unlockedMode = vm.UnlockedMode;
+        var completedMode = vm.CompletedMode;
+        var archivedMode = vm.ArchivedMode;
+        var graphMode = vm.GraphMode;
+        var settingsMode = vm.SettingsMode;
+        var lastCreatedMode = vm.LastCreatedMode;
+        var lastUpdatedMode = vm.LastUpdatedMode;
+        var lastOpenedMode = vm.LastOpenedMode;
+
+        try
+        {
+            vm.ExpandAllNodes(vm.CurrentAllTasksItems);
+            ExpandCurrentTaskRelationTrees(vm);
+
+            vm.LastCreatedMode = true;
+            vm.ExpandAllNodes(vm.LastCreatedItems);
+
+            vm.LastUpdatedMode = true;
+            vm.ExpandAllNodes(vm.LastUpdatedItems);
+
+            vm.UnlockedMode = true;
+            vm.ExpandAllNodes(vm.UnlockedItems);
+
+            vm.CompletedMode = true;
+            vm.ExpandAllNodes(vm.CompletedItems);
+
+            vm.ArchivedMode = true;
+            vm.ExpandAllNodes(vm.ArchivedItems);
+
+            vm.LastOpenedMode = true;
+            vm.ExpandAllNodes(vm.LastOpenedItems);
+        }
+        finally
+        {
+            vm.AllTasksMode = allTasksMode;
+            vm.UnlockedMode = unlockedMode;
+            vm.CompletedMode = completedMode;
+            vm.ArchivedMode = archivedMode;
+            vm.GraphMode = graphMode;
+            vm.SettingsMode = settingsMode;
+            vm.LastCreatedMode = lastCreatedMode;
+            vm.LastUpdatedMode = lastUpdatedMode;
+            vm.LastOpenedMode = lastOpenedMode;
+            vm.SelectCurrentTask();
+        }
+    }
+
+    private static void ExpandCurrentTaskRelationTrees(MainWindowViewModel vm)
+    {
+        vm.ExpandNodeAndDescendants(vm.CurrentItemContains);
+        vm.ExpandNodeAndDescendants(vm.CurrentItemParents);
+        vm.ExpandNodeAndDescendants(vm.CurrentItemBlocks);
+        vm.ExpandNodeAndDescendants(vm.CurrentItemBlockedBy);
+    }
+
+    private static void SelectAutomationTask(MainWindowViewModel vm, string? taskId)
+    {
         if (!string.IsNullOrWhiteSpace(taskId) && vm.taskRepository != null)
         {
             var lookup = vm.taskRepository.Tasks.Lookup(taskId);
@@ -690,12 +812,6 @@ public class App : Application
                 vm.CurrentTaskItem = lookup.Value;
                 vm.SelectCurrentTask();
             }
-        }
-
-        var openDetails = Environment.GetEnvironmentVariable(AutomationOpenDetailsEnvironmentVariable);
-        if (bool.TryParse(openDetails, out var shouldOpenDetails) && shouldOpenDetails)
-        {
-            vm.DetailsAreOpen = true;
         }
     }
 

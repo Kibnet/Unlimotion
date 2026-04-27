@@ -5,9 +5,11 @@
 			 xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
              xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
 			 xmlns:local="clr-namespace:Unlimotion.Views.Graph"
-             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
+			 xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-			 x:Class="Unlimotion.Views.GraphControl">
+			 x:Class="Unlimotion.Views.GraphControl"
+             AutomationProperties.AutomationId="RoadmapRoot"
+             Focusable="True">
     <UserControl.Styles>
         <Style Selector="TextBlock.highlighted">
             <Setter Property="Foreground" Value="#2F80ED"/>
@@ -30,6 +32,7 @@
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
 					  HorizontalScrollBarVisibility="Auto">
 			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
+                            AutomationProperties.AutomationId="RoadmapZoomBorder"
 							ClipToBounds="True" Focusable="True" PanButton="Right"
 							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
 				<avaloniaGraphControl:GraphPanel x:Name="Graph"
