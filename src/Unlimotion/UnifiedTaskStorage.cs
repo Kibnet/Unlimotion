@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using DynamicData;
 using Newtonsoft.Json;
@@ -39,7 +40,8 @@ public class UnifiedTaskStorage : ITaskStorage
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
 
         var initialTaskViews = await BuildInitialTaskViewsAsync();
-        await AddInitialTasksToCacheAsync(initialTaskViews);
+        var shouldYieldBetweenBatches = SynchronizationContext.Current != null;
+        await AddInitialTasksToCacheAsync(initialTaskViews, shouldYieldBetweenBatches);
 
         if (TaskTreeManager.Storage is FileStorage initFileStorage)
         {
@@ -68,8 +70,9 @@ public class UnifiedTaskStorage : ITaskStorage
                 initialTasks.Add(task);
             }
 
+            // Initial view models subscribe immediately; keep startup hydration from saving tasks.
             var initialTaskViews = initialTasks
-                .Select(task => new TaskItemViewModel(task, this))
+                .Select(task => new TaskItemViewModel(task, this, () => false))
                 .ToList();
 
             new TaskRelationsIndex().Rebuild(initialTaskViews);
@@ -77,7 +80,9 @@ public class UnifiedTaskStorage : ITaskStorage
         });
     }
 
-    private async Task AddInitialTasksToCacheAsync(IEnumerable<TaskItemViewModel> initialTaskViews)
+    private async Task AddInitialTasksToCacheAsync(
+        IEnumerable<TaskItemViewModel> initialTaskViews,
+        bool shouldYieldBetweenBatches)
     {
         var batch = new List<TaskItemViewModel>(InitialLoadBatchSize);
 
@@ -92,7 +97,13 @@ public class UnifiedTaskStorage : ITaskStorage
 
             Tasks.Edit(operations => operations.AddOrUpdate(batch));
             batch = new List<TaskItemViewModel>(InitialLoadBatchSize);
-            await Task.Yield();
+
+            // Yield only when a UI synchronization context is present, so the app stays responsive
+            // without making plain test runs depend on thread-pool rescheduling between batches.
+            if (shouldYieldBetweenBatches)
+            {
+                await Task.Yield();
+            }
         }
 
         if (batch.Count > 0)

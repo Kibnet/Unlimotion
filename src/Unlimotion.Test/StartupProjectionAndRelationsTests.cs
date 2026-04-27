@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class StartupProjectionAndRelationsTests : BaseModelTests
 {
     [Test]

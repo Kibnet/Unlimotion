@@ -11,7 +11,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlAvailabilityUiTests
 {
     [Test]

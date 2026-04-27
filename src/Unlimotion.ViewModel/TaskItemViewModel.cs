@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -26,9 +26,16 @@ namespace Unlimotion.ViewModel
         // Static dependencies - set once during app initialization
         public static INotificationManagerWrapper? NotificationManagerInstance { get; set; }
         public static MainWindowViewModel? MainWindowInstance { get; set; }
+        public INotificationManagerWrapper? NotificationManager { get; set; }
+        public MainWindowViewModel? MainWindow { get; set; }
+        public Func<bool>? IsInitializedProvider { get; set; }
 
-        public TaskItemViewModel(TaskItem model, ITaskStorage taskStorage)
+        public TaskItemViewModel(
+            TaskItem model,
+            ITaskStorage taskStorage,
+            Func<bool>? isInitializedProvider = null)
         {
+            IsInitializedProvider = isInitializedProvider ?? (() => true);
             Model = model;
             _taskStorage = taskStorage;
             _containsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_containsTasksSource);
@@ -57,6 +64,7 @@ namespace Unlimotion.ViewModel
         public SetDurationCommands SetDurationCommands { get; set; } = null!;
         public static TimeSpan DefaultThrottleTime = TimeSpan.FromSeconds(10);
         public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = DefaultThrottleTime;
+        private bool IsInitialized => IsInitializedProvider?.Invoke() ?? true;
 
         private void Init(ITaskStorage taskStorage)
         {
@@ -76,7 +84,7 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.IsCompleted).Subscribe(async b =>
             {
                 // Use TaskTreeManager to handle IsCompleted changes
-                if (MainWindowViewModel._isInited)
+                if (IsInitialized)
                 {
                     SaveItemCommand.Execute();
                 }
@@ -84,7 +92,7 @@ namespace Unlimotion.ViewModel
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
-                var notificationManager = NotificationManagerInstance;
+                var notificationManager = NotificationManager ?? NotificationManagerInstance;
 
                 switch (IsCompleted)
                 {
@@ -165,9 +173,9 @@ namespace Unlimotion.ViewModel
                         }
                     })
                     .Publish(shared =>
-                        shared.Where(_ => !MainWindowViewModel._isInited)
+                        shared.Where(_ => !IsInitialized)
                               .Merge(
-                                  shared.Where(_ => MainWindowViewModel._isInited)
+                                  shared.Where(_ => IsInitialized)
                                         .Throttle(PropertyChangedThrottleTimeSpanDefault)
                               )
                     );
@@ -175,7 +183,7 @@ namespace Unlimotion.ViewModel
                 propertyChanged
                     .Subscribe(_ =>
                     {
-                        if (MainWindowViewModel._isInited)
+                        if (IsInitialized)
                             SaveItemCommand.Execute();
                     })
                     .AddToDispose(this);
@@ -265,7 +273,7 @@ namespace Unlimotion.ViewModel
                 .Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(_ =>
                 {
-                    if (MainWindowViewModel._isInited) SaveItemCommand.Execute();
+                    if (IsInitialized) SaveItemCommand.Execute();
                 });
 
             _repeaterPropertyChangedSubscription.Disposable = new CompositeDisposable(markerSubscription, saveSubscription);
@@ -521,8 +529,6 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<TaskItemViewModel> BlockedByTasks => _blockedByTasks;
 
-        public MainWindowViewModel? MainWindow => MainWindowInstance;
-
         public ObservableCollection<string> Contains { get; set; } = new();
         public ObservableCollection<string> Parents { get; set; } = new();
         public ObservableCollection<string> Blocks { get; set; } = new();
@@ -631,10 +637,10 @@ namespace Unlimotion.ViewModel
         /// </summary>
         public DateCommands Commands => commands ??= new DateCommands(this);
         
-        private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper notificationManager, string taskName,
+        private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper? notificationManager, string taskName,
             List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
         {
-            if (childrenTasks.Count == 0) return;
+            if (childrenTasks.Count == 0 || notificationManager == null) return;
 
             Action yesAction = methodType switch
             {

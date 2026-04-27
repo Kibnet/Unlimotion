@@ -30,7 +30,7 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class MainWindowViewModel : DisposableList
     {
-        public static bool _isInited; 
+        public bool IsInitialized { get; private set; }
         private DisposableList connectionDisposableList = new DisposableListRealization();
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
@@ -356,6 +356,13 @@ namespace Unlimotion.ViewModel
             TitleFocusRequestVersion++;
         }
 
+        private void AttachTaskContext(TaskItemViewModel taskItem)
+        {
+            taskItem.NotificationManager = ManagerWrapper;
+            taskItem.MainWindow = this;
+            taskItem.IsInitializedProvider = () => IsInitialized;
+        }
+
         public async Task Connect()
         {
             IsTasksLoading = true;
@@ -363,7 +370,7 @@ namespace Unlimotion.ViewModel
 
             try
             {
-                _isInited = false;
+                IsInitialized = false;
                 connectionDisposableList.Dispose();
                 connectionDisposableList.Disposables.Clear();
                 _isCompletedTabInitialized = false;
@@ -416,12 +423,14 @@ namespace Unlimotion.ViewModel
 
                 //Если из коллекции пропадает итем, то очищаем выделенный итем.
                 taskRepository.Tasks.Connect()
+                    .OnItemAdded(AttachTaskContext)
                     .OnItemRemoved(x =>
                     {
                         if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
                     })
                     .OnItemUpdated((newItem, oldItem) =>
                     {
+                        AttachTaskContext(newItem);
                         if (newItem.Id == CurrentTaskItem?.Id && newItem.Id == oldItem.Id) CurrentTaskItem = newItem;
                     })
                     .Subscribe()
@@ -1309,9 +1318,13 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
                 await taskStorage.Init();
+                foreach (var taskItem in taskRepository.Tasks.Items)
+                {
+                    AttachTaskContext(taskItem);
+                }
                 RegisterCommands();
 
-                _isInited = true;
+                IsInitialized = true;
             }
             finally
             {

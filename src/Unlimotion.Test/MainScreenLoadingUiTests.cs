@@ -22,7 +22,7 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainScreenLoadingUiTests
 {
     [Test]
@@ -169,11 +169,16 @@ public class MainScreenLoadingUiTests
     private sealed class TestMainWindowContext : IDisposable
     {
         private readonly string _configPath;
+        private readonly IDisposable? _configurationDisposable;
 
-        private TestMainWindowContext(string configPath, MainWindowViewModel mainWindowViewModel)
+        private TestMainWindowContext(
+            string configPath,
+            MainWindowViewModel mainWindowViewModel,
+            IDisposable? configurationDisposable)
         {
             _configPath = configPath;
             MainWindowViewModel = mainWindowViewModel;
+            _configurationDisposable = configurationDisposable;
         }
 
         public MainWindowViewModel MainWindowViewModel { get; }
@@ -199,11 +204,16 @@ public class MainScreenLoadingUiTests
             TaskItemViewModel.NotificationManagerInstance = notificationManager;
             TaskItemViewModel.MainWindowInstance = mainWindowViewModel;
 
-            return new TestMainWindowContext(configPath, mainWindowViewModel);
+            return new TestMainWindowContext(
+                configPath,
+                mainWindowViewModel,
+                configuration as IDisposable);
         }
 
         public void Dispose()
         {
+            _configurationDisposable?.Dispose();
+
             if (File.Exists(_configPath))
             {
                 File.Delete(_configPath);

@@ -10,9 +10,11 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
+ [ParallelLimiter<SharedUiStateParallelLimit>]
 public class SettingsViewModelTests : IDisposable
 {
     private readonly string _configPath;
+    private readonly List<IDisposable> _configurationDisposables = [];
 
     public SettingsViewModelTests()
     {
@@ -24,16 +26,33 @@ public class SettingsViewModelTests : IDisposable
 
     public void Dispose()
     {
+        foreach (var disposable in _configurationDisposables)
+        {
+            disposable.Dispose();
+        }
+
         if (File.Exists(_configPath))
         {
             File.Delete(_configPath);
         }
     }
 
+    private IConfigurationRoot CreateConfiguration()
+    {
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        return configuration;
+    }
+
     [Test]
     public async System.Threading.Tasks.Task ThemeMode_PersistsChoiceAndCompatibilityShimReflectsSelection()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration, defaultIsDarkTheme: true);
 
         await Assert.That(settings.ThemeMode).IsEqualTo(ThemeMode.System);
@@ -61,7 +80,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task Updates_AreDisabled_WhenUpdateServiceIsUnsupported()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService { IsSupported = false };
         var settings = CreateSettingsViewModel(configuration);
 
@@ -77,7 +96,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task CheckForUpdatesAsync_SetsNoUpdatesState_WhenNoUpdateExists()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService();
         var settings = CreateSettingsViewModel(configuration);
         settings.ConfigureUpdateService(updateService);
@@ -94,7 +113,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task CheckForUpdatesAsync_UsesPendingUpdateBeforeNetworkCheck()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService();
         var settings = CreateSettingsViewModel(configuration);
         settings.ConfigureUpdateService(updateService);
@@ -113,7 +132,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task DownloadUpdateAsync_SetsReadyToApply_WhenUpdateWasFound()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService
         {
             NextUpdate = new ApplicationUpdateInfo("2.0.0")
@@ -133,7 +152,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task ApplyUpdateAsync_CallsUpdateServiceRestart_WhenUpdateIsReady()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService
         {
             NextUpdate = new ApplicationUpdateInfo("2.0.0")
@@ -153,7 +172,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task CheckForUpdatesAsync_IgnoresRepeatedCalls_WhileBusy()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var updateService = new FakeApplicationUpdateService
         {
             CheckCompletion = new System.Threading.Tasks.TaskCompletionSource<ApplicationUpdateInfo?>()
@@ -176,7 +195,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task BackupAuthMode_DerivesFromRemoteUrl_WhenRepositoryRemotesAreUnavailable()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         settings.GitRemoteUrl = "git@github.com:org/unlimotion-backup.git";
@@ -189,7 +208,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task BackupConnection_BecomesReadyForClone_WhenSshKeyIsSelected()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
         localization.SetLanguage(LocalizationService.RussianLanguage);
         var settings = new SettingsViewModel(configuration, localizationService: localization)
@@ -221,7 +240,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration, backupService);
 
         settings.GitRemoteNameDisplay = "backup (SSH)";
@@ -233,7 +252,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task FontSize_PersistsAndNormalizesConfiguredValue()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         await Assert.That(settings.FontSize).IsEqualTo(AppearanceSettings.DefaultFontSize);
@@ -260,7 +279,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task LanguageMode_DoesNotCultureFormatPersistedNumericSettings()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
         var settings = new SettingsViewModel(configuration, localizationService: localization);
 
@@ -294,7 +313,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task LanguageMode_PersistsChoiceAndUpdatesLocalizedStatusText()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
         var settings = new SettingsViewModel(configuration, localizationService: localization)
         {
@@ -317,7 +336,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task LanguageModeIndex_ReturnsToCapturedSystemLanguage()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
         var settings = new SettingsViewModel(configuration, localizationService: localization);
 
@@ -334,7 +353,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task LanguageModeIndex_IgnoresTransientInvalidSelectionIndex()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
         var settings = new SettingsViewModel(configuration, localizationService: localization);
 
@@ -348,7 +367,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task LanguageOptions_KeepCollectionInstanceWhenLanguageChanges()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
         var settings = new SettingsViewModel(configuration, localizationService: localization);
         var options = settings.LanguageOptions;
@@ -367,7 +386,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task CanConnectStorage_FollowsSelectedModeRequirements()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         await Assert.That(settings.CanConnectStorage).IsFalse();
@@ -388,7 +407,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task EnsureDefaultTaskStoragePath_PersistsDefaultPathWhenLocalPathIsEmpty()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var defaultPath = Path.Combine(Environment.CurrentDirectory, "DefaultTasks");
 
         App.EnsureDefaultTaskStoragePath(configuration, defaultPath);
@@ -403,7 +422,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task EnsureDefaultTaskStoragePath_PreservesExistingPath()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var existingPath = Path.Combine(Environment.CurrentDirectory, "ExistingTasks");
         configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(existingPath);
 
@@ -419,7 +438,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task TaskStoragePathTooltip_ResolvesRelativePathToFullPath()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         settings.TaskStoragePath = Path.Combine("Data", "Tasks");
@@ -431,7 +450,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task TaskStoragePathTooltip_UsesActualFallbackPathWhenPathIsEmpty()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         settings.TaskStoragePath = string.Empty;
@@ -443,7 +462,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task TaskStoragePathTooltip_DoesNotThrowForInvalidIntermediateInput()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         settings.TaskStoragePath = new string((char)0, 1);
@@ -465,7 +484,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("backup");
         var settings = new SettingsViewModel(configuration, backupService);
 
@@ -484,7 +503,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/custom.git");
         var settings = new SettingsViewModel(configuration, backupService);
@@ -504,7 +523,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
         var settings = new SettingsViewModel(configuration, backupService);
 
@@ -525,7 +544,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("missing");
         var settings = new SettingsViewModel(configuration, backupService);
 
@@ -536,7 +555,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task GitPushRefSpec_FallsBackToCanonicalBranchWhenPushRefSpecIsEmpty()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.Branch)).Set("master");
         configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set(string.Empty);
 
@@ -553,7 +572,7 @@ public class SettingsViewModelTests : IDisposable
             ReferenceNames = new List<string> { "refs/heads/main" }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/master");
         var settings = new SettingsViewModel(configuration, backupService);
 
@@ -573,7 +592,7 @@ public class SettingsViewModelTests : IDisposable
             ReferenceNames = new List<string> { "refs/heads/main", "refs/heads/release" }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/release");
         var settings = new SettingsViewModel(configuration, backupService);
 
@@ -583,7 +602,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task CanSyncRepository_RequiresBackupRemoteAndPushRefSpecWithoutConnectedState()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration)
         {
             GitBackupEnabled = true,
@@ -610,7 +629,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration, backupService);
         settings.SelectedSshPublicKeyPath = @"C:\Users\Test\.ssh\id_first.pub";
 
@@ -638,7 +657,7 @@ public class SettingsViewModelTests : IDisposable
             }
         };
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration, backupService);
 
         settings.ReloadSshPublicKeys(@"C:\Users\Test\.ssh\id_second.pub");
@@ -650,7 +669,7 @@ public class SettingsViewModelTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task SelectedSshPublicKeyPath_UpdatesPrivateKeyPath()
     {
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        IConfigurationRoot configuration = CreateConfiguration();
         var settings = new SettingsViewModel(configuration);
 
         settings.SelectedSshPublicKeyPath = @"C:\Users\Test\.ssh\id_ed25519.pub";

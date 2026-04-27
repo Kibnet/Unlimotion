@@ -7,7 +7,7 @@ using Unlimotion.ViewModel.Localization;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class LocalizationDisplayDefinitionTests
 {
     [Test]

@@ -73,6 +73,27 @@ namespace Unlimotion.Test
             await Task.Delay(sleepTime);
         }
 
+        public static async Task<bool> WaitUntilAsync(
+            Func<bool> predicate,
+            TimeSpan timeout,
+            TimeSpan? pollInterval = null)
+        {
+            var delay = pollInterval ?? TimeSpan.FromMilliseconds(20);
+            var deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                if (predicate())
+                {
+                    return true;
+                }
+
+                await Task.Delay(delay);
+            }
+
+            return predicate();
+        }
+
         public static TaskItemViewModel? GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing = true)
         {
             if (viewModel.taskRepository != null)
