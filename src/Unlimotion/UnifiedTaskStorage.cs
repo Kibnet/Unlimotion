@@ -114,16 +114,17 @@ public class UnifiedTaskStorage : ITaskStorage
 
     public async Task<TaskItemViewModel> Add(TaskItemViewModel currentTask = null, bool isBlocked = false)
     {
+        var createdTask = new TaskItem();
         var taskItemList = (await TaskTreeManager.AddTask(
-            new TaskItem(),
+            createdTask,
             currentTask?.Model,
-            isBlocked)).OrderBy(t => t.CreatedDateTime).ToList();
+            isBlocked)).ToList();
 
-        var newTask = taskItemList.Last();
+        var newTask = taskItemList.First(t => t.Id == createdTask.Id);
         var vm = new TaskItemViewModel(newTask, this);
         Tasks.AddOrUpdate(vm);
 
-        foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
+        foreach (var task in taskItemList.Where(t => t.Id != createdTask.Id)) UpdateCache(task);
         RefreshRelations();
         
         return vm;
@@ -131,16 +132,17 @@ public class UnifiedTaskStorage : ITaskStorage
 
     public async Task<TaskItemViewModel> AddChild(TaskItemViewModel currentTask)
     {
+        var createdTask = new TaskItem();
         var taskItemList = (await TaskTreeManager.AddChildTask(
-                new TaskItem(),
+                createdTask,
                 currentTask.Model))
-            .OrderBy(t => t.CreatedDateTime).ToList();
+            .ToList();
 
-        var newTask = taskItemList.Last();
+        var newTask = taskItemList.First(t => t.Id == createdTask.Id);
         var vm = new TaskItemViewModel(newTask, this);
         Tasks.AddOrUpdate(vm);
 
-        foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
+        foreach (var task in taskItemList.Where(t => t.Id != createdTask.Id)) UpdateCache(task);
         RefreshRelations();
         
         return vm;

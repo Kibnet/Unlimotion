@@ -9,6 +9,8 @@ namespace Unlimotion.Behavior
 {
     public class LostFocusUpdateBindingBehavior : Behavior<TextBox>
     {
+        private object? focusedDataContext;
+
         static LostFocusUpdateBindingBehavior()
         {
             TextProperty.Changed.Subscribe(e =>
@@ -18,10 +20,10 @@ namespace Unlimotion.Behavior
         }
         
 
-        public static readonly StyledProperty<string> TextProperty = AvaloniaProperty.Register<LostFocusUpdateBindingBehavior, string>(
+        public static readonly StyledProperty<string?> TextProperty = AvaloniaProperty.Register<LostFocusUpdateBindingBehavior, string?>(
             "Text", defaultBindingMode: BindingMode.TwoWay);
 
-        public string Text
+        public string? Text
         {
             get => GetValue(TextProperty);
             set => SetValue(TextProperty, value);
@@ -29,20 +31,38 @@ namespace Unlimotion.Behavior
 
         protected override void OnAttached()
         {
-            AssociatedObject.LostFocus += OnLostFocus;
+            if (AssociatedObject != null)
+            {
+                AssociatedObject.GotFocus += OnGotFocus;
+                AssociatedObject.LostFocus += OnLostFocus;
+            }
+
             base.OnAttached();
         }
 
         protected override void OnDetaching()
         {
-            AssociatedObject.LostFocus -= OnLostFocus;
+            if (AssociatedObject != null)
+            {
+                AssociatedObject.GotFocus -= OnGotFocus;
+                AssociatedObject.LostFocus -= OnLostFocus;
+            }
+
+            focusedDataContext = null;
             base.OnDetaching();
+        }
+
+        private void OnGotFocus(object? sender, RoutedEventArgs e)
+        {
+            focusedDataContext = AssociatedObject?.DataContext;
         }
         
         private void OnLostFocus(object? sender, RoutedEventArgs e)
         {
-            if (AssociatedObject != null)
+            if (AssociatedObject != null && ReferenceEquals(focusedDataContext, AssociatedObject.DataContext))
                 Text = AssociatedObject.Text;
+
+            focusedDataContext = null;
         }
         
         private void OnBindingValueChanged()
