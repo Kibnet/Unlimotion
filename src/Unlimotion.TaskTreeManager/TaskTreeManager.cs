@@ -106,6 +106,7 @@ public class TaskTreeManager
                 if (newTaskId is null)
                 {
                     change.Version = 1;
+                    change.Wanted = currentTask.Wanted;
                     change.UpdatedDateTime ??= change.CreatedDateTime;
                     await Storage.Save(change);
                     newTaskId = change.Id;

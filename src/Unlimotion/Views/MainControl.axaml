@@ -585,7 +585,8 @@ Content="❌"
                                                  VerticalContentAlignment="Center"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, Auto, Auto, *">
-                                        <CheckBox IsChecked="{Binding Wanted}" VerticalAlignment="Center" Content="{DynamicResource Wanted}" />
+                                        <CheckBox IsChecked="{Binding WantedFromUi}" VerticalAlignment="Center" Content="{DynamicResource Wanted}"
+                                                  AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
                                         <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="{DynamicResource Importance}" Watermark="{DynamicResource Importance}" Grid.Column="1"/>
                                         <Button Grid.Column="2" Content="{DynamicResource Archive}" Command="{Binding ArchiveCommand}"/>
                                         <TextBox Grid.Column="3" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>

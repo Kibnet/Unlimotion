@@ -436,16 +436,26 @@ namespace Unlimotion.ViewModel
         private IEnumerable<TaskItemViewModel> GetChildrenTasks(Func<TaskItemViewModel, bool> predicate)
         {
             var queue = new Queue<TaskItemViewModel>();
+            var visited = new HashSet<string>();
 
-            foreach (var child in ContainsTasks.Where(predicate))
+            foreach (var child in ContainsTasks)
             {
                 queue.Enqueue(child);
             }
 
             while (queue.TryDequeue(out var current))
             {
-                yield return current;
-                foreach (var child in current.ContainsTasks.Where(predicate))
+                if (!visited.Add(current.Id))
+                {
+                    continue;
+                }
+
+                if (predicate(current))
+                {
+                    yield return current;
+                }
+
+                foreach (var child in current.ContainsTasks)
                 {
                     queue.Enqueue(child);
                 }
@@ -519,7 +529,14 @@ namespace Unlimotion.ViewModel
 
         public TimeSpan? PlannedDuration { get; set; }
         public int Importance { get; set; }
-        public bool Wanted { get; set; }        
+        [AlsoNotifyFor(nameof(WantedFromUi))]
+        public bool Wanted { get; set; }
+
+        public bool WantedFromUi
+        {
+            get => Wanted;
+            set => SetWantedFromUi(value);
+        }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
 
@@ -636,6 +653,39 @@ namespace Unlimotion.ViewModel
         /// Команды для быстрого выбора дат, ленивая загрузка
         /// </summary>
         public DateCommands Commands => commands ??= new DateCommands(this);
+
+        private void SetWantedFromUi(bool wanted)
+        {
+            if (Wanted == wanted)
+            {
+                return;
+            }
+
+            Wanted = wanted;
+
+            var childrenTasks = GetChildrenTasks(task => task.Wanted != wanted).ToList();
+            ShowModalAndChangeChildrenWanted(NotificationManager ?? NotificationManagerInstance, Title, childrenTasks, wanted);
+        }
+
+        private void ShowModalAndChangeChildrenWanted(
+            INotificationManagerWrapper? notificationManager,
+            string taskName,
+            List<TaskItemViewModel> childrenTasks,
+            bool wanted)
+        {
+            if (childrenTasks.Count == 0 || notificationManager == null) return;
+
+            notificationManager.Ask(
+                L10n.Get("WantedContainedTasksHeader"),
+                L10n.Format("WantedContainedTasksMessage", childrenTasks.Count, taskName),
+                () =>
+                {
+                    foreach (var task in childrenTasks)
+                    {
+                        task.Wanted = wanted;
+                    }
+                });
+        }
         
         private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper? notificationManager, string taskName,
             List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
