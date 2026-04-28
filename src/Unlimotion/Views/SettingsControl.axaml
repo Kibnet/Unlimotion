@@ -8,7 +8,8 @@
              d:DesignWidth="900"
              d:DesignHeight="700"
              x:DataType="viewModel:SettingsViewModel"
-             x:Class="Unlimotion.Views.SettingsControl">
+             x:Class="Unlimotion.Views.SettingsControl"
+             AutomationProperties.AutomationId="SettingsRoot">
     <UserControl.Styles>
         <Style Selector="Border.SettingsSection">
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />

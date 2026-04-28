@@ -25,6 +25,7 @@ namespace Unlimotion.Views
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
+            KeyDown += ZoomBorder_KeyDown;
             if (ZoomBorder != null)
             {
                 ZoomBorder.KeyDown += ZoomBorder_KeyDown;

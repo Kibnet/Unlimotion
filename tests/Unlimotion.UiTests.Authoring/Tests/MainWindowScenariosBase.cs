@@ -10,6 +10,8 @@ namespace Unlimotion.UiTests.Authoring.Tests;
 public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSession, MainWindowPage>
     where TSession : class, IUiTestSession
 {
+    protected virtual string ExpectedCurrentTaskTitle => UnlimotionAppLaunchHost.CurrentTaskTitle;
+
     [Test]
     [NotInParallel(DesktopUiConstraint)]
     public async Task Main_window_loads_current_task_on_launch()
@@ -19,8 +21,49 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
             await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
             await UiAssert.TextEqualsAsync(
                 () => Page.CurrentTaskTitleTextBox.Text,
-                UnlimotionAppLaunchHost.CurrentTaskTitle);
+                ExpectedCurrentTaskTitle);
         }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Major_tabs_can_be_opened_from_main_window()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
+
+        Page.SelectTabItem(static page => page.LastUpdatedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.LastUpdatedTree.AutomationId).IsEqualTo("LastUpdatedTree");
+
+        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.UnlockedTree.AutomationId).IsEqualTo("UnlockedTree");
+
+        Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.CompletedTree.AutomationId).IsEqualTo("CompletedTree");
+
+        Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.ArchivedTree.AutomationId).IsEqualTo("ArchivedTree");
+
+        Page.SelectTabItem(static page => page.LastOpenedTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.LastOpenedTree.AutomationId).IsEqualTo("LastOpenedTree");
+
+        Page.SelectTabItem(static page => page.RoadmapTabItem, timeoutMs: 10_000);
+        var roadmapRoot = WaitUntil(
+            () => TryResolveDuringWait(() => Page.RoadmapRoot),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Roadmap root did not become available.")!;
+        await Assert.That(roadmapRoot.AutomationId).IsEqualTo("RoadmapRoot");
+
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        var settingsRoot = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SettingsRoot),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Settings root did not become available.")!;
+        await Assert.That(settingsRoot.AutomationId).IsEqualTo("SettingsRoot");
     }
 
     [Test]
@@ -46,7 +89,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
         {
             await UiAssert.TextEqualsAsync(
                 () => Page.CurrentTaskTitleTextBox.Text,
-                UnlimotionAppLaunchHost.CurrentTaskTitle);
+                ExpectedCurrentTaskTitle);
             await Assert.That(input.AutomationId)
                 .IsEqualTo("CurrentTaskParentsRelationAddInput");
             await Assert.That(cancelButton.AutomationId)

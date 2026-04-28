@@ -73,11 +73,14 @@ public class TaskWrapperViewModel : DisposableList
     private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
     private readonly TaskWrapperActions _actions;
 
+    public static bool DefaultIsExpanded { get; set; }
+
     public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, TaskWrapperActions actions)
     {
         TaskItem = task;
         Parent = parent;
         _actions = actions;
+        IsExpanded = DefaultIsExpanded;
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_actions.RemoveAction != null) 

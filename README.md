@@ -1,7 +1,7 @@
 ﻿# Unlimotion
 # [Перейти в русское Readme](README.RU.md)
 
-![All Tasks](media/All%20Tasks.jpg)
+![Desktop tab tour](media/readme/en/tab-tour.gif)
 
 ## Strengths
 1. Unlimited levels of task nesting
@@ -17,7 +17,7 @@ Rights aren't automatically granted due to Apple's security policy for unsigned 
 No additional steps are required for correct installation on OS Windows and Debian.
 
 Case 2:
-1. Download and install the [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
+1. Download and install the [.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
 2. Download the latest version of the program's source code as a [zip-archive](https://github.com/Kibnet/Unlimotion/archive/refs/heads/main.zip) and **unpack** it to any folder on your computer.
 If you know the git version control system, instead of downloading the archive, clone this [git-repository](https://github.com/Kibnet/Unlimotion.git)
 to your computer in any folder using your favorite git-client (for example [Fork](https://git-fork.com/)).
@@ -87,39 +87,49 @@ The interface consists of 3 parts.
 2. On the right is a panel of detailed information of the currently selected task, where all the task fields available for viewing and editing are displayed.
 3. The left panel has the ability to switch between tabs:
 
+The screenshots below are generated from a deterministic synthetic workspace used by the UI automation pipeline, so the README can be refreshed after visual changes without hand-editing demo data.
+
 ### All Tasks
 It's a hierarchical representation of all tasks.
 At the root are those tasks that don't have parents.
-![All Tasks](media/All%20Tasks.jpg)
+![All Tasks](media/readme/en/all-tasks.png)
 
 ### Last Created
 Shows all tasks by creation date in descending order.
-![Last Created](media/Last%20Created.jpg)
+![Last Created](media/readme/en/last-created.png)
+
+### Last Updated
+Shows the tasks with the most recent edits first.
+![Last Updated](media/readme/en/last-updated.png)
 
 ### Unlocked
 Window of Opportunity - represents only those tasks that are currently available for execution.
-![Unlocked](media/Unlocked.jpg)
+![Unlocked](media/readme/en/unlocked.png)
 
 ### Completed
 The list of completed tasks in the reverse order of execution - the last ones from the top.
-![Completed](media/Completed.jpg)
+![Completed](media/readme/en/completed.png)
 
 ### Archived
 The list of archived tasks in the reverse order of archiving - the last ones from the top. This includes tasks that no longer need to be performed, but you don't want to delete them either.
-![Archived](media/Archived.jpg)
+![Archived](media/readme/en/archived.png)
+
+### Last Opened
+Shows the tasks that were opened most recently, which is useful for quickly returning to the working context you just left.
+![Last Opened](media/readme/en/last-opened.png)
 
 ### Roadmap
 Displaying tasks in the form of a roadmap. Inspired by the development tree from games. In this view, tasks are displayed in the form of a directed graph, which allows you to visualize the tracks of tasks that need to be completed in order to reach the goal.
 Green arrows - child-parent relationship
 Red arrows - the ratio of the blocking task to the blocked one
-![Roadmap](media/Roadmap.jpg)
+![Roadmap](media/readme/en/roadmap.png)
 
 ### Settings
 Settings window - allows you to change the parameters that affect the operation of the program.
 - **TaskStorage Path** - Path to the directory(folder) with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
 If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.
 
-![Settings](media/Settings.jpg)
+![Settings](media/readme/en/settings.png)
 
 ## How to get started
 ### Tasks creation
