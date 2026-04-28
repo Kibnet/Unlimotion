@@ -175,32 +175,14 @@ namespace Unlimotion.ViewModel
             }).AddToDisposeAndReturn(connectionDisposableList);
             CreateSibling = ReactiveCommand.CreateFromTask(async (bool isBlocked = false) =>
             {
-                if (CurrentTaskItem != null && string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
-                    return;
-
-                TaskItemViewModel? newTask = null;
-                if (CurrentTaskItem != null)
-                {
-                    if (AllTasksMode)
-                    {
-                        newTask = await taskRepository?.Add(CurrentTaskItem, isBlocked);
-                        CurrentTaskItem = newTask;
-                    }
-                }
-                
-                SelectCurrentTask();
-                if (newTask != null)
-                {
-                    RequestTitleFocusForCurrentTask();
-                }
+                await CreateSiblingTaskAsync(isBlocked);
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             CreateBlockedSibling = ReactiveCommand.CreateFromTask(async () =>
             {
-                var parent = CurrentTaskItem;
                 if (CurrentTaskItem != null)
                 {
-                    CreateSibling.Execute(true);
+                    await CreateSiblingTaskAsync(true);
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
 
@@ -345,6 +327,37 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
             ;
+        }
+
+        private async Task<TaskItemViewModel?> CreateSiblingTaskAsync(bool isBlocked = false)
+        {
+            if (CurrentTaskItem == null)
+            {
+                SelectCurrentTask();
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
+            {
+                return null;
+            }
+
+            if (taskRepository == null)
+            {
+                SelectCurrentTask();
+                return null;
+            }
+
+            var newTask = await taskRepository.Add(CurrentTaskItem, isBlocked);
+            CurrentTaskItem = newTask;
+
+            SelectCurrentTask();
+            if (newTask != null)
+            {
+                RequestTitleFocusForCurrentTask();
+            }
+
+            return newTask;
         }
 
         private void RequestTitleFocusForCurrentTask()

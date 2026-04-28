@@ -31,6 +31,7 @@ namespace Unlimotion.Views
         [
             "AllTasksTree",
             "LastCreatedTree",
+            "LastUpdatedTree",
             "UnlockedTree",
             "CompletedTree",
             "ArchivedTree",
@@ -1188,6 +1189,7 @@ namespace Unlimotion.Views
             {
                 _ when vm.AllTasksMode => "AllTasksTree",
                 _ when vm.LastCreatedMode => "LastCreatedTree",
+                _ when vm.LastUpdatedMode => "LastUpdatedTree",
                 _ when vm.UnlockedMode => "UnlockedTree",
                 _ when vm.CompletedMode => "CompletedTree",
                 _ when vm.ArchivedMode => "ArchivedTree",
@@ -1282,6 +1284,7 @@ namespace Unlimotion.Views
             {
                 "AllTasksTree" => vm.CurrentAllTasksItem,
                 "LastCreatedTree" => vm.CurrentLastCreated,
+                "LastUpdatedTree" => vm.CurrentLastUpdated,
                 "UnlockedTree" => vm.CurrentUnlockedItem,
                 "CompletedTree" => vm.CurrentCompletedItem,
                 "ArchivedTree" => vm.CurrentArchivedItem,
@@ -1357,6 +1360,9 @@ namespace Unlimotion.Views
                     break;
                 case "LastCreatedTree":
                     vm.CurrentLastCreated = wrapper;
+                    break;
+                case "LastUpdatedTree":
+                    vm.CurrentLastUpdated = wrapper;
                     break;
                 case "UnlockedTree":
                     vm.CurrentUnlockedItem = wrapper;
