@@ -480,6 +480,166 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeCommandUi_LastUpdatedTab_Hotkey_WorksAfterSwitchFromAllTasksHeaderClick()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.CollapseAllNodes(vm.CurrentAllTasksItems);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await ClickControlAsync(window, allTasksTree!);
+
+                await ClickTabHeaderAsync(window, view, "All Tasks");
+                PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
+                Dispatcher.UIThread.RunJobs();
+                PressHotkey(window, Key.Left, PhysicalKey.ArrowLeft, RawInputModifiers.Control | RawInputModifiers.Alt);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(vm.CurrentAllTasksItems.All(IsCollapsedRecursive)).IsTrue();
+
+                await ClickTabHeaderAsync(window, view, "Last Updated");
+                var lastUpdatedReady = WaitFor(() => vm.LastUpdatedItems.Any());
+                await Assert.That(lastUpdatedReady).IsTrue();
+                vm.CollapseAllNodes(vm.LastUpdatedItems);
+                Dispatcher.UIThread.RunJobs();
+
+                PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(vm.LastUpdatedItems.All(IsExpandedRecursive)).IsTrue();
+                await Assert.That(vm.CurrentAllTasksItems.All(IsCollapsedRecursive)).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(selectedTask).IsNotNull();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                await ClickTabHeaderAsync(window, view, "Last Updated");
+                var lastUpdatedReady = WaitFor(() => vm.LastUpdatedItems.Any());
+                await Assert.That(lastUpdatedReady).IsTrue();
+
+                var lastUpdatedTree = view.FindControl<TreeView>("LastUpdatedTree");
+                await Assert.That(lastUpdatedTree).IsNotNull();
+
+                vm.ExpandAllNodes(vm.LastUpdatedItems);
+                Dispatcher.UIThread.RunJobs();
+
+                var selectedControl = FindWrapperControl(lastUpdatedTree!, selectedTask!.Id);
+                await ClickControlAsync(window, selectedControl);
+
+                await Assert.That(vm.CurrentLastUpdated?.TaskItem.Id).IsEqualTo(selectedTask.Id);
+                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
+
+                vm.AllTasksMode = false;
+                vm.LastCreatedMode = false;
+                vm.LastUpdatedMode = true;
+                vm.UnlockedMode = false;
+                vm.CompletedMode = false;
+                vm.ArchivedMode = false;
+                vm.LastOpenedMode = false;
+
+                var taskCountBefore = vm.taskRepository!.Tasks.Count;
+                PressHotkey(window, Key.Enter, PhysicalKey.Enter, RawInputModifiers.Control);
+
+                var created = WaitFor(() =>
+                    vm.taskRepository.Tasks.Count == taskCountBefore + 1 &&
+                    vm.CurrentTaskItem != null &&
+                    vm.CurrentTaskItem.Id != selectedTask.Id);
+                await Assert.That(created).IsTrue();
+                await Assert.That(vm.CurrentTaskItem!.Parents).IsEquivalentTo(selectedTask.Parents);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_ShiftDelete_RemovesSelectedLastUpdatedTreeItem()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                ((NotificationManagerWrapperMock)vm.ManagerWrapper).AskResult = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                await ClickTabHeaderAsync(window, view, "Last Updated");
+                var lastUpdatedReady = WaitFor(() => vm.LastUpdatedItems.Any());
+                await Assert.That(lastUpdatedReady).IsTrue();
+
+                var lastUpdatedTree = view.FindControl<TreeView>("LastUpdatedTree");
+                await Assert.That(lastUpdatedTree).IsNotNull();
+
+                var root4Control = FindWrapperControl(lastUpdatedTree!, MainWindowViewModelFixture.RootTask4Id);
+                await ClickControlAsync(window, root4Control);
+                await Assert.That(vm.CurrentLastUpdated?.TaskItem.Id).IsEqualTo(MainWindowViewModelFixture.RootTask4Id);
+
+                PressHotkey(window, Key.Delete, PhysicalKey.Delete, RawInputModifiers.Shift);
+                await TestHelpers.WaitThrottleTime();
+
+                await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     [Arguments(2, "UnlockedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.SubTask22Id)]
     [Arguments(3, "CompletedTree", MainWindowViewModelFixture.CompletedTaskId, MainWindowViewModelFixture.CompletedTaskId)]
     [Arguments(4, "ArchivedTree", MainWindowViewModelFixture.ArchivedTask1Id, MainWindowViewModelFixture.ArchivedTask11Id)]
@@ -1314,6 +1474,7 @@ public class MainControlTreeCommandsUiTests
     {
         return treeName switch
         {
+            "LastUpdatedTree" => vm.LastUpdatedItems,
             "UnlockedTree" => vm.UnlockedItems,
             "CompletedTree" => vm.CompletedItems,
             "ArchivedTree" => vm.ArchivedItems,
@@ -1326,6 +1487,7 @@ public class MainControlTreeCommandsUiTests
     {
         return treeName switch
         {
+            "LastUpdatedTree" => vm.CurrentLastUpdated,
             "UnlockedTree" => vm.CurrentUnlockedItem,
             "CompletedTree" => vm.CurrentCompletedItem,
             "ArchivedTree" => vm.CurrentArchivedItem,
