@@ -9,7 +9,9 @@ namespace Unlimotion.Behavior
 {
     public class LostFocusUpdateBindingBehavior : Behavior<TextBox>
     {
-        private object? focusedDataContext;
+        private object? changedTextDataContext;
+        private bool isUpdatingTextFromBinding;
+        private bool hasChangedTextForCurrentDataContext;
 
         static LostFocusUpdateBindingBehavior()
         {
@@ -34,6 +36,8 @@ namespace Unlimotion.Behavior
             if (AssociatedObject != null)
             {
                 AssociatedObject.GotFocus += OnGotFocus;
+                AssociatedObject.DataContextChanged += OnDataContextChanged;
+                AssociatedObject.TextChanged += OnTextChanged;
                 AssociatedObject.LostFocus += OnLostFocus;
             }
 
@@ -45,30 +49,69 @@ namespace Unlimotion.Behavior
             if (AssociatedObject != null)
             {
                 AssociatedObject.GotFocus -= OnGotFocus;
+                AssociatedObject.DataContextChanged -= OnDataContextChanged;
+                AssociatedObject.TextChanged -= OnTextChanged;
                 AssociatedObject.LostFocus -= OnLostFocus;
             }
 
-            focusedDataContext = null;
+            ClearChangedTextContext();
             base.OnDetaching();
         }
 
         private void OnGotFocus(object? sender, RoutedEventArgs e)
         {
-            focusedDataContext = AssociatedObject?.DataContext;
+            ClearChangedTextContext();
+        }
+
+        private void OnDataContextChanged(object? sender, EventArgs e)
+        {
+            ClearChangedTextContext();
+            OnBindingValueChanged();
+        }
+
+        private void OnTextChanged(object? sender, TextChangedEventArgs e)
+        {
+            if (isUpdatingTextFromBinding)
+            {
+                return;
+            }
+
+            changedTextDataContext = AssociatedObject?.DataContext;
+            hasChangedTextForCurrentDataContext = true;
         }
         
         private void OnLostFocus(object? sender, RoutedEventArgs e)
         {
-            if (AssociatedObject != null && ReferenceEquals(focusedDataContext, AssociatedObject.DataContext))
+            if (AssociatedObject != null &&
+                hasChangedTextForCurrentDataContext &&
+                ReferenceEquals(changedTextDataContext, AssociatedObject.DataContext))
+            {
                 Text = AssociatedObject.Text;
+            }
 
-            focusedDataContext = null;
+            ClearChangedTextContext();
         }
         
         private void OnBindingValueChanged()
         {
             if (AssociatedObject != null)
-                AssociatedObject.Text = Text;
+            {
+                isUpdatingTextFromBinding = true;
+                try
+                {
+                    AssociatedObject.Text = Text;
+                }
+                finally
+                {
+                    isUpdatingTextFromBinding = false;
+                }
+            }
+        }
+
+        private void ClearChangedTextContext()
+        {
+            changedTextDataContext = null;
+            hasChangedTextForCurrentDataContext = false;
         }
     }
 }

@@ -187,7 +187,7 @@
 
 ### Post-EXEC Review
 - Статус: PASS с оговоркой по full suite
-- Что проверено: targeted UI tests прошли 8/8; create-тесты `MainWindowViewModelTests` прошли 17/17; `dotnet build src/Unlimotion.sln --no-restore -m:1 -nr:false` прошел.
+- Что проверено: targeted UI tests прошли 9/9; create-тесты `MainWindowViewModelTests` прошли 17/17; `dotnet build src/Unlimotion.sln --no-restore -m:1 -nr:false` прошел.
 - Оговорка: полный `dotnet run --no-build --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --timeout 15m --output Detailed --no-progress` был отменен TUnit по таймауту 15 минут; видимая часть тестов, включая новые UI-тесты, прошла, затем cleanup выдал фоновые `FileSystemWatcher` / temp config exceptions после cancellation.
 - Риск после review: низкий для затронутого сценария; остается общий риск долгого полного suite в текущем окружении.
 
@@ -203,3 +203,4 @@
 | EXEC | Локализовать источник переноса срока | 0.75 | Headless не воспроизвел прямую запись старых дат в модель | Исправить storage selection и UI stale-source guards | Нет | Нет | Storage выбирал созданную задачу по `CreatedDateTime`, а UI-поля срока/длительности не должны писать retained display state при смене задачи | `src/Unlimotion/UnifiedTaskStorage.cs`, `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion/Behavior/PlannedDurationBehavior.cs` |
 | EXEC | Внести fix и проверить targeted UI | 0.9 | Нет для целевого сценария | Запустить build и полный тестовый прогон | Нет | Нет | Targeted Avalonia.Headless набор `MainControlNewTaskDeadlineUiTests` прошел: 8/8 | `src/Unlimotion.Test/MainControlNewTaskDeadlineUiTests.cs`, `src/Unlimotion/UnifiedTaskStorage.cs`, `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion/Behavior/PlannedDurationBehavior.cs` |
 | EXEC | Проверить сборку и дополнительные тесты | 0.9 | Полный suite не успел завершиться за 15 минут | Выполнить post-EXEC review | Нет | Нет | `dotnet build src/Unlimotion.sln --no-restore -m:1 -nr:false` прошел; старые create-тесты ViewModel прошли 17/17; полный TUnit был отменен по `--timeout 15m` после прохождения видимой части, включая новые UI-тесты | `src/Unlimotion.sln`, `src/Unlimotion.Test/Unlimotion.Test.csproj` |
+| EXEC | Учесть review по смене DataContext у редактора длительности | 0.95 | Нет | Закоммитить и отправить изменения в PR | Нет | Да, пользователь передал review comment | Guard теперь отслеживает последний пользовательский ввод для текущего `DataContext`; добавлен regression UI-тест, targeted набор прошел 9/9 | `src/Unlimotion/Behavior/PlannedDurationBehavior.cs`, `src/Unlimotion.Test/MainControlNewTaskDeadlineUiTests.cs`, `specs/2026-04-27-new-task-deadline-reset.md` |

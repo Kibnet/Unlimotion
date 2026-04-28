@@ -8,6 +8,8 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia.Xaml.Interactivity;
+using Unlimotion.Behavior;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
@@ -190,6 +192,53 @@ public class MainControlNewTaskDeadlineUiTests
             {
                 window?.Close();
                 fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task PlannedDurationEditor_ShouldCommitNewText_AfterFocusedDataContextSwitch()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            Window? window = null;
+
+            try
+            {
+                var previousTask = new object();
+                var newTask = new object();
+                var durationTextBox = new TextBox { DataContext = previousTask };
+                var blurTarget = new Button { Content = "Blur target" };
+                var behavior = new LostFocusUpdateBindingBehavior { Text = "" };
+                Interaction.GetBehaviors(durationTextBox).Add(behavior);
+
+                var root = new StackPanel();
+                root.Children.Add(durationTextBox);
+                root.Children.Add(blurTarget);
+
+                window = CreateWindow(root);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                durationTextBox.Focus();
+                await Assert.That(durationTextBox.IsFocused).IsTrue();
+                durationTextBox.Text = "5h";
+                Dispatcher.UIThread.RunJobs();
+
+                durationTextBox.DataContext = newTask;
+                Dispatcher.UIThread.RunJobs();
+                durationTextBox.Text = "2h";
+                Dispatcher.UIThread.RunJobs();
+
+                blurTarget.Focus();
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(behavior.Text).IsEqualTo("2h");
+            }
+            finally
+            {
+                window?.Close();
             }
         }, CancellationToken.None);
     }
