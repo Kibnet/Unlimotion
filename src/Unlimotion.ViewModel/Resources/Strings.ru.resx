@@ -319,6 +319,8 @@
   <data name="UpdatedLabelFormat" xml:space="preserve"><value>Изменено: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="UpdatedPrefix" xml:space="preserve"><value>Изменено:</value></data>
   <data name="Wanted" xml:space="preserve"><value>Важное</value></data>
+  <data name="WantedContainedTasksHeader" xml:space="preserve"><value>Изменить важность вложенных задач</value></data>
+  <data name="WantedContainedTasksMessage" xml:space="preserve"><value>Изменить отметку "Важное" у {0} вложенных задач из "{1}"?</value></data>
   <data name="Wednesday" xml:space="preserve"><value>Среда</value></data>
   <data name="AllTasksResaved" xml:space="preserve"><value>Все задачи пересохранены.</value></data>
   <data name="AndroidAllFilesHint" xml:space="preserve"><value> Проверьте разрешение "Доступ ко всем файлам".</value></data>

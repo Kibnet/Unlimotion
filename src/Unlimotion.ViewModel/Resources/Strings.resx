@@ -319,6 +319,8 @@
   <data name="UpdatedLabelFormat" xml:space="preserve"><value>Updated: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="UpdatedPrefix" xml:space="preserve"><value>Updated:</value></data>
   <data name="Wanted" xml:space="preserve"><value>Wanted</value></data>
+  <data name="WantedContainedTasksHeader" xml:space="preserve"><value>Update Wanted for contained tasks</value></data>
+  <data name="WantedContainedTasksMessage" xml:space="preserve"><value>Update Wanted for {0} contained tasks from "{1}"?</value></data>
   <data name="Wednesday" xml:space="preserve"><value>Wednesday</value></data>
   <data name="AllTasksResaved" xml:space="preserve"><value>All tasks were resaved.</value></data>
   <data name="AndroidAllFilesHint" xml:space="preserve"><value> Check the "All files access" permission.</value></data>

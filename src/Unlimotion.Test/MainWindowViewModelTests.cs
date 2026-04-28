@@ -303,6 +303,91 @@ namespace Unlimotion.Test
             await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
         }
 
+        [Test]
+        public async Task CreateInnerTask_ShouldInheritWantedFromParent()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            parent!.Wanted = true;
+            await TestHelpers.WaitThrottleTime();
+
+            var newTask = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateInner, taskRepository);
+
+            var storedTask = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, newTask.Id);
+            await Assert.That(newTask.Wanted).IsTrue();
+            await Assert.That(storedTask).IsNotNull();
+            await Assert.That(storedTask!.Wanted).IsTrue();
+        }
+
+        [Test]
+        public async Task WantedFromUi_WhenConfirmed_ShouldUpdateDescendants()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+            var child = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            var grandchild = await taskRepository.AddChild(child!);
+            grandchild.Title = "Wanted cascade grandchild";
+            parent!.Wanted = false;
+            child!.Wanted = true;
+            grandchild.Wanted = false;
+            await TestHelpers.WaitThrottleTime();
+
+            NotificationManager.AskResult = true;
+            parent.WantedFromUi = true;
+            await TestHelpers.WaitThrottleTime();
+
+            await Assert.That(NotificationManager.AskCount).IsEqualTo(1);
+            await Assert.That(parent.Wanted).IsTrue();
+            await Assert.That(child.Wanted).IsTrue();
+            await Assert.That(grandchild.Wanted).IsTrue();
+
+            var storedChild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, child.Id);
+            var storedGrandchild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, grandchild.Id);
+            await Assert.That(storedChild!.Wanted).IsTrue();
+            await Assert.That(storedGrandchild!.Wanted).IsTrue();
+        }
+
+        [Test]
+        public async Task WantedFromUi_WhenDeclined_ShouldUpdateOnlyCurrentTask()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+            var child = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            parent!.Wanted = false;
+            child!.Wanted = false;
+            await TestHelpers.WaitThrottleTime();
+
+            NotificationManager.AskResult = false;
+            parent.WantedFromUi = true;
+            await TestHelpers.WaitThrottleTime();
+
+            await Assert.That(NotificationManager.AskCount).IsEqualTo(1);
+            await Assert.That(parent.Wanted).IsTrue();
+            await Assert.That(child.Wanted).IsFalse();
+
+            var storedParentUpdated = await TestHelpers.WaitUntilAsync(
+                () => TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, parent.Id)?.Wanted == true,
+                TimeSpan.FromSeconds(2));
+            var storedChild = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, child.Id);
+            await Assert.That(storedParentUpdated).IsTrue();
+            await Assert.That(storedChild!.Wanted).IsFalse();
+        }
+
+        [Test]
+        public async Task WantedProgrammaticChange_ShouldNotAskOrUpdateDescendants()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+            var child = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
+            parent!.Wanted = false;
+            child!.Wanted = false;
+            await TestHelpers.WaitThrottleTime();
+            NotificationManager.ClearMessages();
+
+            parent.Wanted = true;
+            await TestHelpers.WaitThrottleTime();
+
+            await Assert.That(NotificationManager.AskCount).IsEqualTo(0);
+            await Assert.That(parent.Wanted).IsTrue();
+            await Assert.That(child.Wanted).IsFalse();
+        }
+
         /// <summary>
         /// Создание вложенной задачи без выбранной текущей
         /// </summary>
