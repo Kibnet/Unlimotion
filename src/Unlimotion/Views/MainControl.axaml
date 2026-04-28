@@ -620,7 +620,7 @@ Content="❌"
                                                             Watermark="{DynamicResource PlannedBegin}"
                                                             UseFloatingWatermark="True"
                                                             HorizontalAlignment="Stretch"
-                                                            DisplayDate="{Binding PlannedBeginDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            DisplayDate="{Binding PlannedBeginDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
                                         <DropDownButton Content="{DynamicResource SetBegin}" Grid.Row="1">
                                             <DropDownButton.Flyout>
                                                 <MenuFlyout>
@@ -665,7 +665,7 @@ Content="❌"
                                                             Watermark="{DynamicResource PlannedEnd}"
                                                             UseFloatingWatermark="True"
                                                             HorizontalAlignment="Stretch"
-                                                            DisplayDate="{Binding PlannedEndDateTime, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            DisplayDate="{Binding PlannedEndDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
                                         <DropDownButton Content="{DynamicResource SetEnd}" Grid.Column="2" Grid.Row="1">
                                             <DropDownButton.Flyout>
                                                 <MenuFlyout>
