@@ -413,6 +413,75 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeCommandUi_InlineTitleEdit_FocusesOnlyFromHotkeyOrTitleText()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var currentTask = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(currentTask).IsNotNull();
+                currentTask!.Title = "Editable title";
+                vm.SelectCurrentTask();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(WaitFor(() => IsVisibleInVisualTree(allTasksTree!))).IsTrue();
+
+                var titleText = WaitForInlineTitleTextBlock(
+                    view,
+                    MainWindowViewModelFixture.RootTask2Id,
+                    "AllTasksTree");
+                var inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(titleText.Bounds.Width).IsGreaterThan(0);
+                await Assert.That(inlineEditor.IsHitTestVisible).IsFalse();
+
+                allTasksTree!.Focus();
+                Dispatcher.UIThread.RunJobs();
+
+                await ClickPointAsync(window, GetPointRightOfControl(window, titleText, 48));
+                await Assert.That(IsFocused(window, inlineEditor)).IsFalse();
+
+                await ClickControlAsync(window, titleText);
+
+                var clickFocused = WaitFor(() => IsFocused(window, inlineEditor));
+                await Assert.That(clickFocused).IsTrue();
+
+                inlineEditor.Text = "Renamed from title text";
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(currentTask.Title).IsEqualTo("Renamed from title text");
+
+                allTasksTree.Focus();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(IsFocused(window, inlineEditor)).IsFalse();
+
+                PressHotkey(window, Key.None, PhysicalKey.E, RawInputModifiers.None, "\u0443");
+
+                var hotkeyFocused = WaitFor(() => IsFocused(window, inlineEditor));
+                await Assert.That(hotkeyFocused).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_Hotkey_UsesSelectedItem_NotLastClickedWrapper()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1670,6 +1739,18 @@ public class MainControlTreeCommandsUiTests
         await Task.CompletedTask;
     }
 
+    private static async Task ClickPointAsync(
+        Window window,
+        Point point,
+        MouseButton button = MouseButton.Left,
+        RawInputModifiers modifiers = RawInputModifiers.None)
+    {
+        window.MouseDown(point, button, modifiers);
+        window.MouseUp(point, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
+        await Task.CompletedTask;
+    }
+
     private static Point GetControlCenterPoint(Visual relativeTo, Control control)
     {
         var point = control.TranslatePoint(
@@ -1684,10 +1765,34 @@ public class MainControlTreeCommandsUiTests
         return point.Value;
     }
 
-    private static void PressHotkey(Window window, Key key, PhysicalKey physicalKey, RawInputModifiers modifiers)
+    private static Point GetPointRightOfControl(Visual relativeTo, Control control, double offset)
     {
-        window.KeyPress(key, modifiers, physicalKey, null);
-        window.KeyRelease(key, modifiers, physicalKey, null);
+        var point = control.TranslatePoint(
+            new Point(control.Bounds.Width + offset, control.Bounds.Height / 2),
+            relativeTo);
+
+        if (!point.HasValue)
+        {
+            throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
+        }
+
+        return point.Value;
+    }
+
+    private static bool IsFocused(Window window, Control control)
+    {
+        return ReferenceEquals(window.FocusManager?.GetFocusedElement(), control) || control.IsFocused;
+    }
+
+    private static void PressHotkey(
+        Window window,
+        Key key,
+        PhysicalKey physicalKey,
+        RawInputModifiers modifiers,
+        string? keySymbol = null)
+    {
+        window.KeyPress(key, modifiers, physicalKey, keySymbol);
+        window.KeyRelease(key, modifiers, physicalKey, keySymbol);
     }
 
     private static void InvokeMenuItemClick(MenuItem menuItem)
@@ -1783,6 +1888,103 @@ public class MainControlTreeCommandsUiTests
         return tree.GetVisualDescendants()
             .OfType<Control>()
             .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == taskId);
+    }
+
+    private static TextBlock WaitForInlineTitleTextBlock(
+        Control root,
+        string taskId,
+        string treeAutomationId,
+        int timeoutMilliseconds = 2000)
+    {
+        TextBlock? textBlock = null;
+        var ready = WaitFor(() =>
+        {
+            textBlock = root.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        "InlineTaskTitleTextBlock",
+                        StringComparison.Ordinal) &&
+                    TryGetTaskItem(candidate.DataContext)?.Id == taskId &&
+                    HasVisualAncestorWithAutomationId(candidate, treeAutomationId) &&
+                    candidate.IsAttachedToVisualTree() &&
+                    candidate.IsVisible &&
+                    candidate.IsEnabled);
+
+            return textBlock != null;
+        }, timeoutMilliseconds);
+
+        if (!ready || textBlock == null)
+        {
+            throw new InvalidOperationException($"Inline title text for task '{taskId}' was not found.");
+        }
+
+        return textBlock;
+    }
+
+    private static TextBox WaitForInlineTitleEditor(Control root, string taskId, int timeoutMilliseconds = 2000)
+    {
+        TextBox? textBox = null;
+        var ready = WaitFor(() =>
+        {
+            textBox = root.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        "InlineTaskTitleTextBox",
+                        StringComparison.Ordinal) &&
+                    TryGetTaskItem(candidate.DataContext)?.Id == taskId &&
+                    candidate.IsAttachedToVisualTree() &&
+                    candidate.IsVisible &&
+                    candidate.IsEnabled);
+
+            return textBox != null;
+        }, timeoutMilliseconds);
+
+        if (!ready || textBox == null)
+        {
+            throw new InvalidOperationException($"Inline title editor for task '{taskId}' was not found.");
+        }
+
+        return textBox;
+    }
+
+    private static bool IsVisibleInVisualTree(Control control)
+    {
+        for (Control? current = control; current != null; current = current.GetVisualParent() as Control)
+        {
+            if (!current.IsVisible)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static TaskItemViewModel? TryGetTaskItem(object? source)
+    {
+        return source switch
+        {
+            TaskItemViewModel taskItem => taskItem,
+            TaskWrapperViewModel wrapper => wrapper.TaskItem,
+            _ => null
+        };
+    }
+
+    private static bool HasVisualAncestorWithAutomationId(Control control, string automationId)
+    {
+        for (Control? current = control; current != null; current = current.GetVisualParent() as Control)
+        {
+            if (AutomationProperties.GetAutomationId(current) == automationId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static TreeViewItem FindWrapperTreeItem(TreeView tree, string taskId)

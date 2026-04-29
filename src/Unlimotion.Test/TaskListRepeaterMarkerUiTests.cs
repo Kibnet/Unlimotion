@@ -87,7 +87,7 @@ public class TaskListRepeaterMarkerUiTests
     {
         var xaml = File.ReadAllText(FindViewXamlPath("MainControl.axaml"));
 
-        var inlineTitleCount = CountOccurrences(xaml, "Content=\"{Binding TaskItem.Title}\"");
+        var inlineTitleCount = CountOccurrences(xaml, "Text=\"{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"");
         var inlineMarkerCount = CountOccurrences(xaml, "Text=\"{Binding TaskItem.RepeaterListMarker}\"");
 
         await Assert.That(xaml).Contains("Text=\"{Binding RepeaterListMarker}\"");

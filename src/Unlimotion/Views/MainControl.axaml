@@ -55,6 +55,25 @@ x:Class="Unlimotion.Views.MainControl">
         <Style Selector="ListBox.RelationEditorSuggestions">
             <Setter Property="MaxHeight" Value="240"/>
         </Style>
+        <Style Selector="TextBox.InlineTaskTitleEditor">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="Padding" Value="2,0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="TextBox.InlineTaskTitleEditor:focus">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+        </Style>
+        <Style Selector="TextBox.InlineTaskTitleEditor.IsWanted">
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
         <Style Selector="TreeView.TaskTree">
             <Setter Property="ContextMenu">
                 <Setter.Value>
@@ -115,7 +134,13 @@ x:Class="Unlimotion.Views.MainControl">
                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
-                <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+                <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
+                <TextBox Grid.Column="2"
+                         Classes="InlineTaskTitleEditor"
+                         Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Classes.IsWanted="{Binding Wanted}"
+                         Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"
+                         AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -219,6 +244,7 @@ Content="❌"
                                        SelectionMode= "Multiple"
                                        Classes="TaskTree"
                                        PointerPressed="TaskTree_OnPointerPressed"
+                                       KeyDown="TaskTree_OnKeyDown"
                                        AutomationProperties.AutomationId="AllTasksTree"
                                        x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
@@ -260,6 +286,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="LastCreatedTree"
                                       x:Name="LastCreatedTree">
                                 <TreeView.ItemTemplate>
@@ -276,7 +303,13 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Grid Grid.Column="4" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -320,6 +353,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="LastUpdatedTree"
                                       x:Name="LastUpdatedTree">
                                 <TreeView.ItemTemplate>
@@ -336,7 +370,13 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Grid Grid.Column="4" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -370,6 +410,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="UnlockedTree"
                                       x:Name="UnlockedTree">
                                 <TreeView.ItemTemplate>
@@ -385,7 +426,13 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="3" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Grid Grid.Column="3" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -427,6 +474,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="CompletedTree"
                                       x:Name="CompletedTree">
                                 <TreeView.ItemTemplate>
@@ -444,7 +492,13 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Grid Grid.Column="4" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -486,6 +540,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="ArchivedTree"
                                       x:Name="ArchivedTree">
                                 <TreeView.ItemTemplate>
@@ -503,7 +558,13 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center"  Classes.IsWanted="{Binding TaskItem.Wanted}"/>
+                                                <Grid Grid.Column="4" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"
@@ -529,6 +590,7 @@ Content="❌"
                                       SelectionMode="Multiple"
                                       Classes="TaskTree"
                                       PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
                                       AutomationProperties.AutomationId="LastOpenedTree"
                                       x:Name="LastOpenedTree">
                                 <TreeView.ItemTemplate>
@@ -545,7 +607,14 @@ Content="❌"
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Label Grid.Column="4" Content="{Binding TaskItem.Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}"/>
+                                                <Grid Grid.Column="4" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                    <TextBox Classes="InlineTaskTitleEditor"
+                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
+                                                             Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}"
+                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
+                                                </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
                                                     Content="❌"

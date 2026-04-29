@@ -951,6 +951,111 @@ namespace Unlimotion.Views
             UpdateContextMenuContext(tree, e);
         }
 
+        private void InlineTaskTitleText_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (e.Handled ||
+                sender is not Control control ||
+                e.KeyModifiers != KeyModifiers.None ||
+                !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            var tree = TryGetTaskTree(control);
+            if (tree == null || !IsKnownMainTaskTree(tree))
+            {
+                return;
+            }
+
+            var task = TryGetTaskItem(control.DataContext);
+            if (task == null || string.IsNullOrWhiteSpace(task.Id))
+            {
+                return;
+            }
+
+            if (TryGetWrapper(control) is { } wrapper)
+            {
+                SelectSingleWrapper(tree, wrapper);
+            }
+            else if (DataContext is MainWindowViewModel vm && vm.CurrentTaskItem != task)
+            {
+                vm.CurrentTaskItem = task;
+            }
+
+            if (FocusCurrentTaskInlineTitleEditor(tree, task.Id))
+            {
+                e.Handled = true;
+            }
+        }
+
+        private void TaskTree_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Handled ||
+                sender is not TreeView tree ||
+                DataContext is not MainWindowViewModel vm ||
+                IsTextInputFocused())
+            {
+                return;
+            }
+
+            if (!KnownMainTaskTreeNames.Contains(tree.Name, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.None && IsInlineTitleEditKey(e))
+            {
+                e.Handled = FocusCurrentTaskInlineTitleEditor(tree, vm.CurrentTaskItem?.Id);
+            }
+        }
+
+        private static bool IsInlineTitleEditKey(KeyEventArgs e)
+        {
+            if (e.Key == Key.E)
+            {
+                return true;
+            }
+
+            return string.Equals(e.KeySymbol, "e", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(e.KeySymbol, "\u0443", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool FocusCurrentTaskInlineTitleEditor(TreeView tree, string? currentTaskId)
+        {
+            if (string.IsNullOrWhiteSpace(currentTaskId))
+            {
+                return false;
+            }
+
+            var titleEditor = tree.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "InlineTaskTitleTextBox",
+                        StringComparison.Ordinal) &&
+                    TryGetTaskItem(control.DataContext)?.Id == currentTaskId &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+
+            if (titleEditor == null || !titleEditor.Focus())
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(titleEditor.Text))
+            {
+                titleEditor.SelectAll();
+            }
+            else
+            {
+                titleEditor.CaretIndex = 0;
+            }
+
+            return true;
+        }
+
         private void TaskTreeContextMenuItem_OnClick(object? sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem menuItem ||
@@ -1265,6 +1370,16 @@ namespace Unlimotion.Views
         private static bool IsKnownMainTaskTree(TreeView tree)
         {
             return KnownMainTaskTreeNames.Contains(tree.Name, StringComparer.Ordinal);
+        }
+
+        private static TaskItemViewModel? TryGetTaskItem(object? source)
+        {
+            return source switch
+            {
+                TaskItemViewModel taskItem => taskItem,
+                TaskWrapperViewModel wrapper => wrapper.TaskItem,
+                _ => null
+            };
         }
 
         private bool TryGetVisibleMainTaskTree(out TreeView tree)
