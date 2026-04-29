@@ -70,6 +70,9 @@
   <data name="ContainingTasks" xml:space="preserve"><value>Содержащие задачи:</value></data>
   <data name="CopyPublicKey" xml:space="preserve"><value>Копировать публичный ключ</value></data>
   <data name="CopyServerTasksToLocal" xml:space="preserve"><value>Скопировать задачи с сервера в локальное хранилище</value></data>
+  <data name="CopyTaskOutlineAsMarkdown" xml:space="preserve"><value>Копирование в Markdown формате</value></data>
+  <data name="CopyTaskOutlineDescription" xml:space="preserve"><value>Копировать описание</value></data>
+  <data name="CopyTaskOutline" xml:space="preserve"><value>Копировать задачу аутлайном</value></data>
   <data name="CopyTasksHeader" xml:space="preserve"><value>Копировать задачи</value></data>
   <data name="CopyTasksMessage" xml:space="preserve"><value>Копировать {0} выбранных задач в "{1}"?</value></data>
   <data name="CreatedLabelFormat" xml:space="preserve"><value>Создано: {0:yyyy.MM.dd HH:mm}</value></data>
@@ -161,6 +164,12 @@
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Параметры сохранены. Нажмите "Подключить репозиторий".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Родительские задачи:</value></data>
   <data name="Password" xml:space="preserve"><value>Пароль</value></data>
+  <data name="PasteTaskOutline" xml:space="preserve"><value>Вставить задачу аутлайном</value></data>
+  <data name="PasteTaskOutlineConfirmHeader" xml:space="preserve"><value>Вставить аутлайн задач?</value></data>
+  <data name="PasteTaskOutlineDestinationInto" xml:space="preserve"><value>Внутрь: {0}</value></data>
+  <data name="PasteTaskOutlineDestinationRoot" xml:space="preserve"><value>В корень списка задач</value></data>
+  <data name="PasteTaskOutlineDestinationUnavailable" xml:space="preserve"><value>Место вставки больше недоступно.</value></data>
+  <data name="PasteTaskOutlineTaskCount" xml:space="preserve"><value>Будет создано задач: {0}</value></data>
   <data name="Period" xml:space="preserve"><value>Период</value></data>
   <data name="PlannedBegin" xml:space="preserve"><value>Планируемое начало</value></data>
   <data name="PlannedDuration" xml:space="preserve"><value>Планируемая длительность</value></data>
@@ -265,6 +274,8 @@
   <data name="SyncErrorToast" xml:space="preserve"><value>Не удалось синхронизировать репозиторий: {0}</value></data>
   <data name="SyncNow" xml:space="preserve"><value>Синхронизировать сейчас</value></data>
   <data name="SyncingRepository" xml:space="preserve"><value>Синхронизация с репозиторием...</value></data>
+  <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Выберите, как копировать аутлайн задач. Вставляемые аутлайны распознаются автоматически.</value></data>
+  <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Буфер обмена аутлайном задач</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 дней</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 минут</value></data>

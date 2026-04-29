@@ -20,11 +20,15 @@ public class SettingsViewModel
     private const string ClientSettingsSectionName = "ClientSettings";
     private const string ClientLoginKey = "Login";
     private const string DefaultTaskStoragePath = "Tasks";
+    private const string TaskOutlineClipboardSectionName = "TaskOutlineClipboard";
+    private const string TaskOutlineCopyAsMarkdownKey = "CopyAsMarkdown";
+    private const string TaskOutlineCopyDescriptionKey = "CopyDescription";
 
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
+    private readonly IConfiguration _taskOutlineClipboardSettings;
     private readonly IRemoteBackupService? _backupService;
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
@@ -53,6 +57,8 @@ public class SettingsViewModel
     private string? _gitCommitterEmail;
     private string? _gitSshPrivateKeyPath;
     private string? _gitSshPublicKeyPath;
+    private bool _copyTaskOutlineAsMarkdown;
+    private bool _copyTaskOutlineDescription;
 
     public SettingsViewModel(
         IConfiguration configuration,
@@ -65,6 +71,7 @@ public class SettingsViewModel
         _taskStorageSettings = configuration.GetSection("TaskStorage");
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
+        _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
         _backupService = backupService;
         _localization = localizationService ?? LocalizationService.Current;
         _defaultIsDarkTheme = defaultIsDarkTheme;
@@ -96,6 +103,8 @@ public class SettingsViewModel
         _gitCommitterEmail = _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
         _gitSshPrivateKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Get<string>();
         _gitSshPublicKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Get<string>();
+        _copyTaskOutlineAsMarkdown = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyAsMarkdownKey).Get<bool>();
+        _copyTaskOutlineDescription = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Get<bool>();
 
         ConnectedServerLogin = GetStoredClientLogin();
         StorageConnectionState = IsServerMode ? SettingsConnectionState.Disconnected : SettingsConnectionState.Connected;
@@ -284,6 +293,26 @@ public class SettingsViewModel
     {
         get => _configuration.GetSection(nameof(IsFuzzySearch)).Get<bool>();
         set => _configuration.GetSection(nameof(IsFuzzySearch)).Set(value);
+    }
+
+    public bool CopyTaskOutlineAsMarkdown
+    {
+        get => _copyTaskOutlineAsMarkdown;
+        set
+        {
+            _copyTaskOutlineAsMarkdown = value;
+            _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyAsMarkdownKey).Set(value);
+        }
+    }
+
+    public bool CopyTaskOutlineDescription
+    {
+        get => _copyTaskOutlineDescription;
+        set
+        {
+            _copyTaskOutlineDescription = value;
+            _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Set(value);
+        }
     }
 
     public double FontSize

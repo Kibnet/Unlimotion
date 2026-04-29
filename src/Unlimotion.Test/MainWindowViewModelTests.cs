@@ -136,6 +136,13 @@ namespace Unlimotion.Test
             return editor.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
         }
 
+        private static string? NormalizeNewLines(string? text)
+        {
+            return text?
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+        }
+
         private static async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
             CreateThreeLevelTreeCommandBranchAsync(MainWindowViewModel viewModel, ITaskStorage repository)
         {
@@ -317,6 +324,172 @@ namespace Unlimotion.Test
             await Assert.That(newTask.Wanted).IsTrue();
             await Assert.That(storedTask).IsNotNull();
             await Assert.That(storedTask!.Wanted).IsTrue();
+        }
+
+        [Test]
+        public async Task CopyTaskOutline_WritesCurrentTaskSubtreeToClipboard()
+        {
+            var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var child = await taskRepository.AddChild(parent!);
+            child.Title = "Outline VM copy child";
+            await taskRepository.Update(child);
+            var grandchild = await taskRepository.AddChild(child);
+            grandchild.Title = "Outline VM copy grandchild";
+            await taskRepository.Update(grandchild);
+
+            string? clipboardText = null;
+            mainWindowVM.SetClipboardTextAsync = text =>
+            {
+                clipboardText = text;
+                return Task.CompletedTask;
+            };
+
+            await mainWindowVM.CopyTaskOutline(parent);
+
+            await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                $"{parent.Title}\n\tOutline VM copy child\n\t\tOutline VM copy grandchild");
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_CreatesNestedTasksUnderCurrentTask()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            NotificationManager.AskResult = true;
+            const string outline =
+                "Outline VM paste root\n" +
+                "\tOutline VM paste child\n" +
+                "\t\tOutline VM paste grandchild";
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>(outline);
+
+            var countBefore = taskRepository.Tasks.Count;
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(countBefore + 3);
+            await Assert.That(NotificationManager.TaskOutlinePasteConfirmationCount).IsEqualTo(1);
+            await Assert.That(NotificationManager.LastTaskOutlinePastePreview).IsNotNull();
+            await Assert.That(NotificationManager.LastTaskOutlinePastePreview!.TaskCount).IsEqualTo(3);
+            await Assert.That(NotificationManager.LastTaskOutlinePastePreview.DestinationLabel).Contains(parent!.Title);
+
+            var pastedRoot = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste root");
+            var pastedChild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste child");
+            var pastedGrandchild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste grandchild");
+
+            await Assert.That(parent!.Contains).Contains(pastedRoot.Id);
+            await Assert.That(pastedRoot.Parents).Contains(parent.Id);
+            await Assert.That(pastedRoot.Contains).Contains(pastedChild.Id);
+            await Assert.That(pastedChild.Contains).Contains(pastedGrandchild.Id);
+            await Assert.That(pastedGrandchild.Parents).Contains(pastedChild.Id);
+        }
+
+        [Test]
+        public async Task CopyTaskOutline_UsesMarkdownAndDescriptionSettings()
+        {
+            var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            parent!.Description = "Parent description";
+            parent.IsCompleted = true;
+            await taskRepository.Update(parent);
+            var child = await taskRepository.AddChild(parent);
+            child.Title = "Outline markdown child";
+            child.Description = "Child description";
+            await taskRepository.Update(child);
+            mainWindowVM.Settings.CopyTaskOutlineAsMarkdown = true;
+            mainWindowVM.Settings.CopyTaskOutlineDescription = true;
+
+            string? clipboardText = null;
+            mainWindowVM.SetClipboardTextAsync = text =>
+            {
+                clipboardText = text;
+                return Task.CompletedTask;
+            };
+
+            await mainWindowVM.CopyTaskOutline(parent);
+
+            await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                $"- [x] {parent.Title}\n" +
+                "    Parent description\n" +
+                "    - [ ] Outline markdown child\n" +
+                "        Child description");
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_FillsDescriptionCompletionAndCompletedDateAfterConfirmation()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            NotificationManager.AskResult = true;
+            const string outline =
+                "- [x] Outline completed paste root\n" +
+                "    Imported description\n" +
+                "    - [ ] Outline incomplete paste child";
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>(outline);
+
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            var pastedRoot = taskRepository.Tasks.Items.First(task => task.Title == "Outline completed paste root");
+            var pastedChild = taskRepository.Tasks.Items.First(task => task.Title == "Outline incomplete paste child");
+
+            await Assert.That(pastedRoot.Description).IsEqualTo("Imported description");
+            await Assert.That(pastedRoot.IsCompleted).IsTrue();
+            await Assert.That(pastedRoot.CompletedDateTime).IsNotNull();
+            await Assert.That(pastedChild.IsCompleted).IsFalse();
+            await Assert.That(NotificationManager.LastTaskOutlinePastePreview).IsNotNull();
+            await Assert.That(NormalizeNewLines(NotificationManager.LastTaskOutlinePastePreview!.PreviewText)).IsEqualTo(
+                "- [x] Outline completed paste root\n" +
+                "    Imported description\n" +
+                "    - [ ] Outline incomplete paste child");
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_CancelConfirmation_CreatesNoTasksAndKeepsSelection()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            NotificationManager.AskResult = false;
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>("Canceled paste root");
+            var countBefore = taskRepository.Tasks.Count;
+
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(countBefore);
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(parent);
+            await Assert.That(NotificationManager.TaskOutlinePasteConfirmationCount).IsEqualTo(1);
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_UsesCapturedDestination_WhenSelectionChangesBeforeConfirmation()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var other = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>("Captured destination paste");
+            NotificationManager.ConfirmTaskOutlinePasteHandler = _ =>
+            {
+                mainWindowVM.CurrentTaskItem = other;
+                return Task.FromResult(true);
+            };
+
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            var pasted = taskRepository.Tasks.Items.First(task => task.Title == "Captured destination paste");
+            await Assert.That(parent!.Contains).Contains(pasted.Id);
+            await Assert.That(other!.Contains).DoesNotContain(pasted.Id);
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_DeletedCapturedDestination_CreatesNoTasks()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>("Deleted destination paste");
+            NotificationManager.ConfirmTaskOutlinePasteHandler = async _ =>
+            {
+                await taskRepository.Delete(parent!);
+                return true;
+            };
+            var countBefore = taskRepository.Tasks.Count;
+
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            await Assert.That(taskRepository.Tasks.Items.Any(task => task.Title == "Deleted destination paste")).IsFalse();
+            await Assert.That(taskRepository.Tasks.Count).IsLessThan(countBefore);
+            await Assert.That(NotificationManager.LastErrorMessage).IsEqualTo(
+                Unlimotion.ViewModel.Localization.Localization.Get("PasteTaskOutlineDestinationUnavailable"));
         }
 
         [Test]

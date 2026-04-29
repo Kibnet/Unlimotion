@@ -24,7 +24,9 @@ namespace Unlimotion.ViewModel
         ExpandAll,
         CollapseAll,
         DeleteSelection,
-        SelectAll
+        SelectAll,
+        CopyOutline,
+        PasteOutline
     }
 
     [AddINotifyPropertyChangedInterface]
@@ -235,6 +237,18 @@ namespace Unlimotion.ViewModel
                 .AddToDisposeAndReturn(connectionDisposableList);
             SelectAllTreeItemsCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.SelectAll))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            CopyTaskOutlineTreeCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.CopyOutline))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            PasteTaskOutlineTreeCommand = ReactiveCommand.Create(() =>
+                ExecuteTreeCommandAction?.Invoke(TreeCommandKind.PasteOutline))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            CopyTaskOutlineCommand = ReactiveCommand.CreateFromTask(async () =>
+                await CopyTaskOutline(CurrentTaskItem))
+                .AddToDisposeAndReturn(connectionDisposableList);
+            PasteTaskOutlineCommand = ReactiveCommand.CreateFromTask(async () =>
+                await PasteTaskOutline(CurrentTaskItem))
                 .AddToDisposeAndReturn(connectionDisposableList);
 
             //Select CurrentTaskItem from all tabs
@@ -1589,6 +1603,174 @@ namespace Unlimotion.ViewModel
             CurrentRelationEditor.Open(kind, CurrentTaskItem);
         }
 
+        public async Task CopyTaskOutline(TaskItemViewModel? task = null)
+        {
+            var source = task ?? CurrentTaskItem;
+            if (source == null)
+            {
+                return;
+            }
+
+            if (SetClipboardTextAsync == null)
+            {
+                ManagerWrapper?.ErrorToast(L10n.Get("ClipboardUnavailable"));
+                return;
+            }
+
+            var outline = TaskOutlineClipboardService.BuildOutline(source, GetTaskOutlineClipboardOptions());
+            await SetClipboardTextAsync(outline);
+        }
+
+        public async Task CopyTaskOutline(TaskWrapperViewModel? wrapper)
+        {
+            if (wrapper == null)
+            {
+                await CopyTaskOutline(CurrentTaskItem);
+                return;
+            }
+
+            if (SetClipboardTextAsync == null)
+            {
+                ManagerWrapper?.ErrorToast(L10n.Get("ClipboardUnavailable"));
+                return;
+            }
+
+            var outline = TaskOutlineClipboardService.BuildOutline(wrapper, GetTaskOutlineClipboardOptions());
+            await SetClipboardTextAsync(outline);
+        }
+
+        public async Task PasteTaskOutline(TaskItemViewModel? destination = null)
+        {
+            if (taskRepository == null)
+            {
+                ManagerWrapper?.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
+                return;
+            }
+
+            if (GetClipboardTextAsync == null)
+            {
+                ManagerWrapper?.ErrorToast(L10n.Get("ClipboardUnavailable"));
+                return;
+            }
+
+            var outline = await GetClipboardTextAsync();
+            var nodes = TaskOutlineClipboardService.ParseOutline(outline);
+            if (nodes.Count == 0)
+            {
+                return;
+            }
+
+            var parent = destination ?? CurrentTaskItem;
+            var capturedParentId = parent?.Id;
+            var preview = CreateTaskOutlinePastePreview(nodes, parent);
+            if (!await ManagerWrapper.ConfirmTaskOutlinePasteAsync(preview))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(capturedParentId))
+            {
+                parent = FindTaskById(capturedParentId);
+                if (parent == null)
+                {
+                    ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
+                    return;
+                }
+            }
+            else
+            {
+                parent = null;
+            }
+
+            TaskItemViewModel? firstCreated = null;
+
+            foreach (var node in nodes)
+            {
+                var created = await CreateTaskFromOutlineNode(node, parent);
+                firstCreated ??= created;
+            }
+
+            if (firstCreated == null)
+            {
+                return;
+            }
+
+            CurrentTaskItem = firstCreated;
+            SelectCurrentTask();
+            ExpandParentNodesForTask(firstCreated);
+        }
+
+        private async Task<TaskItemViewModel> CreateTaskFromOutlineNode(
+            TaskOutlineNode node,
+            TaskItemViewModel? parent)
+        {
+            var created = parent == null
+                ? await taskRepository!.Add()
+                : await taskRepository!.AddChild(parent);
+
+            created.Title = node.Title;
+            if (!string.IsNullOrWhiteSpace(node.Description))
+            {
+                created.Description = node.Description;
+            }
+
+            if (node.IsCompleted.HasValue)
+            {
+                created.IsCompleted = node.IsCompleted.Value;
+                created.ArchiveDateTime = null;
+                created.CompletedDateTime = node.IsCompleted.Value
+                    ? created.CompletedDateTime ?? DateTimeOffset.UtcNow
+                    : null;
+            }
+
+            var createdId = created.Id;
+            var updated = await taskRepository.Update(created);
+            created = updated?.Id == createdId
+                ? updated
+                : FindTaskById(createdId) ?? created;
+
+            foreach (var child in node.Children)
+            {
+                await CreateTaskFromOutlineNode(child, created);
+            }
+
+            return created;
+        }
+
+        private TaskOutlineClipboardOptions GetTaskOutlineClipboardOptions()
+        {
+            return new TaskOutlineClipboardOptions(
+                Settings.CopyTaskOutlineAsMarkdown,
+                Settings.CopyTaskOutlineDescription);
+        }
+
+        private TaskOutlinePastePreview CreateTaskOutlinePastePreview(
+            IReadOnlyList<TaskOutlineNode> nodes,
+            TaskItemViewModel? destination)
+        {
+            var destinationLabel = destination == null
+                ? L10n.Get("PasteTaskOutlineDestinationRoot")
+                : L10n.Format("PasteTaskOutlineDestinationInto", GetTaskOutlineDestinationName(destination));
+            var taskCount = TaskOutlineClipboardService.CountNodes(nodes);
+
+            return new TaskOutlinePastePreview(
+                L10n.Get("PasteTaskOutlineConfirmHeader"),
+                destinationLabel,
+                L10n.Format("PasteTaskOutlineTaskCount", taskCount),
+                TaskOutlineClipboardService.BuildPreviewText(nodes),
+                taskCount);
+        }
+
+        private static string GetTaskOutlineDestinationName(TaskItemViewModel destination)
+        {
+            if (!string.IsNullOrWhiteSpace(destination.Title))
+            {
+                return destination.Title;
+            }
+
+            return string.IsNullOrWhiteSpace(destination.Id) ? "?" : destination.Id;
+        }
+
         private TaskItemViewModel? FindTaskById(string taskId)
         {
             if (taskRepository == null || string.IsNullOrWhiteSpace(taskId))
@@ -1849,7 +2031,19 @@ namespace Unlimotion.ViewModel
 
         public ICommand SelectAllTreeItemsCommand { get; set; }
 
+        public ICommand CopyTaskOutlineTreeCommand { get; set; }
+
+        public ICommand PasteTaskOutlineTreeCommand { get; set; }
+
+        public ICommand CopyTaskOutlineCommand { get; set; }
+
+        public ICommand PasteTaskOutlineCommand { get; set; }
+
         public Action<TreeCommandKind>? ExecuteTreeCommandAction { get; set; }
+
+        public Func<string, Task>? SetClipboardTextAsync { get; set; }
+
+        public Func<Task<string?>>? GetClipboardTextAsync { get; set; }
 
         private IConfiguration _configuration = null!;
 

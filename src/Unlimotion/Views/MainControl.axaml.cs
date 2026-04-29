@@ -109,6 +109,8 @@ namespace Unlimotion.Views
             if (_treeCommandViewModel != null)
             {
                 _treeCommandViewModel.ExecuteTreeCommandAction = null;
+                _treeCommandViewModel.SetClipboardTextAsync = null;
+                _treeCommandViewModel.GetClipboardTextAsync = null;
                 _treeCommandViewModel = null;
             }
 
@@ -120,6 +122,8 @@ namespace Unlimotion.Views
             {
                 _treeCommandViewModel = vm;
                 vm.ExecuteTreeCommandAction = ExecuteTreeCommand;
+                vm.SetClipboardTextAsync = SetClipboardTextAsync;
+                vm.GetClipboardTextAsync = GetClipboardTextAsync;
                 _titleFocusSubscription = vm.WhenAnyValue(m => m.TitleFocusRequestVersion)
                     .Subscribe(requestVersion => QueueTitleFocus(requestVersion, vm.CurrentTaskItem?.Id, MaxTitleFocusRetries));
                 _relationEditorFocusSubscription = vm.CurrentRelationEditor
@@ -169,6 +173,38 @@ namespace Unlimotion.Views
                     }
                 });
             }
+        }
+
+        private async Task SetClipboardTextAsync(string text)
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null)
+            {
+                if (DataContext is MainWindowViewModel vm)
+                {
+                    vm.ManagerWrapper?.ErrorToast(L10n.Get("ClipboardUnavailable"));
+                }
+
+                return;
+            }
+
+            await clipboard.SetTextAsync(text);
+        }
+
+        private async Task<string?> GetClipboardTextAsync()
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null)
+            {
+                if (DataContext is MainWindowViewModel vm)
+                {
+                    vm.ManagerWrapper?.ErrorToast(L10n.Get("ClipboardUnavailable"));
+                }
+
+                return null;
+            }
+
+            return await clipboard.GetTextAsync();
         }
 
         private void QueueTitleFocus(long requestVersion, string? targetTaskId, int retriesRemaining)
@@ -1043,6 +1079,20 @@ namespace Unlimotion.Views
                     case TreeCommandKind.SelectAll:
                         tree.SelectAll();
                         break;
+                    case TreeCommandKind.CopyOutline:
+                    {
+                        var current = GetCurrentWrapperForRoute(vm, tree, route);
+                        ExecuteTaskOutlineCommandAsync(vm, () => current != null
+                            ? vm.CopyTaskOutline(current)
+                            : vm.CopyTaskOutline(vm.CurrentTaskItem));
+                        break;
+                    }
+                    case TreeCommandKind.PasteOutline:
+                    {
+                        var destination = GetCurrentWrapperForRoute(vm, tree, route)?.TaskItem ?? vm.CurrentTaskItem;
+                        ExecuteTaskOutlineCommandAsync(vm, () => vm.PasteTaskOutline(destination));
+                        break;
+                    }
                 }
             }
             finally
@@ -1051,6 +1101,18 @@ namespace Unlimotion.Views
                 {
                     ClearContextMenuContext();
                 }
+            }
+        }
+
+        private static async void ExecuteTaskOutlineCommandAsync(MainWindowViewModel vm, Func<Task> action)
+        {
+            try
+            {
+                await action();
+            }
+            catch (Exception ex)
+            {
+                vm.ManagerWrapper?.ErrorToast(L10n.Format("ReactiveUnhandledError", ex.Message));
             }
         }
 

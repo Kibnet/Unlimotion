@@ -78,6 +78,34 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task TaskOutlineClipboardSettings_PersistChoices()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+
+        await Assert.That(settings.CopyTaskOutlineAsMarkdown).IsFalse();
+        await Assert.That(settings.CopyTaskOutlineDescription).IsFalse();
+
+        settings.CopyTaskOutlineAsMarkdown = true;
+        settings.CopyTaskOutlineDescription = true;
+
+        await Assert.That(configuration
+                .GetSection("TaskOutlineClipboard")
+                .GetSection("CopyAsMarkdown")
+                .Get<bool>())
+            .IsTrue();
+        await Assert.That(configuration
+                .GetSection("TaskOutlineClipboard")
+                .GetSection("CopyDescription")
+                .Get<bool>())
+            .IsTrue();
+
+        var reloaded = new SettingsViewModel(configuration);
+        await Assert.That(reloaded.CopyTaskOutlineAsMarkdown).IsTrue();
+        await Assert.That(reloaded.CopyTaskOutlineDescription).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task Updates_AreDisabled_WhenUpdateServiceIsUnsupported()
     {
         IConfigurationRoot configuration = CreateConfiguration();

@@ -442,6 +442,11 @@ public static class UnlimotionAppLaunchHost
             noAction?.Invoke();
         }
 
+        public Task<bool> ConfirmTaskOutlinePasteAsync(TaskOutlinePastePreview preview)
+        {
+            return Task.FromResult(false);
+        }
+
         public void ErrorToast(string message)
         {
         }
