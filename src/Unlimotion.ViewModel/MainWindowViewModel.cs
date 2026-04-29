@@ -1403,7 +1403,7 @@ namespace Unlimotion.ViewModel
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {
                 ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
-                    L10n.Format("RemoveTaskMessage", task.TaskItem.Title),
+                    GetRemoveTaskMessage(task.TaskItem),
                     async () =>
                     {
                         if (await task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
@@ -1424,7 +1424,7 @@ namespace Unlimotion.ViewModel
         private async Task RemoveTaskItem(TaskItemViewModel task)
         {
             ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
-                L10n.Format("RemoveTaskMessage", task.Title),
+                GetRemoveTaskMessage(task),
                 async () =>
                 {
                     if (task.Parents?.Count > 0)
@@ -1461,8 +1461,99 @@ namespace Unlimotion.ViewModel
 
             ManagerWrapper.Ask(
                 L10n.Get("RemoveTasksHeader"),
-                L10n.Format("RemoveTasksMessage", orderedWrappers.Count),
+                GetRemoveTasksMessage(orderedWrappers),
                 async () => await RemoveWrappersInternalAsync(orderedWrappers));
+        }
+
+        private static string GetRemoveTaskMessage(TaskItemViewModel task)
+        {
+            var containedTaskCount = CountContainedTasks(task);
+            return containedTaskCount > 0
+                ? L10n.Format("RemoveTaskWithContainedTasksMessage", task.Title, containedTaskCount)
+                : L10n.Format("RemoveTaskMessage", task.Title);
+        }
+
+        private static string GetRemoveTasksMessage(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            var containedTaskCount = CountContainedTasks(wrappers);
+            return containedTaskCount > 0
+                ? L10n.Format("RemoveTasksWithContainedTasksMessage", wrappers.Count, containedTaskCount)
+                : L10n.Format("RemoveTasksMessage", wrappers.Count);
+        }
+
+        private static int CountContainedTasks(TaskItemViewModel task)
+        {
+            var containedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var child in task.ContainsTasks)
+            {
+                CollectTaskAndContainedTaskIds(child, containedTaskIds);
+            }
+
+            return containedTaskIds.Count;
+        }
+
+        private static int CountContainedTasks(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        {
+            var selectedTaskIds = wrappers
+                .Select(static wrapper => wrapper.TaskItem?.Id)
+                .Where(static id => !string.IsNullOrWhiteSpace(id))
+                .Select(static id => id!)
+                .ToHashSet(StringComparer.Ordinal);
+            var selectedParentCountsByTaskId = wrappers
+                .Where(static wrapper => !string.IsNullOrWhiteSpace(wrapper.TaskItem?.Id) &&
+                                         !string.IsNullOrWhiteSpace(wrapper.Parent?.TaskItem?.Id))
+                .GroupBy(static wrapper => wrapper.TaskItem.Id!)
+                .ToDictionary(
+                    static group => group.Key,
+                    static group => group
+                        .Select(static wrapper => wrapper.Parent!.TaskItem.Id!)
+                        .Distinct(StringComparer.Ordinal)
+                        .Count(),
+                    StringComparer.Ordinal);
+            var cascadeTaskIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var wrapper in wrappers)
+            {
+                if (WillDeleteTaskInBatch(wrapper, selectedParentCountsByTaskId))
+                {
+                    CollectTaskAndContainedTaskIds(wrapper.TaskItem, cascadeTaskIds);
+                }
+            }
+
+            cascadeTaskIds.ExceptWith(selectedTaskIds);
+            return cascadeTaskIds.Count;
+        }
+
+        private static bool WillDeleteTaskInBatch(
+            TaskWrapperViewModel wrapper,
+            IReadOnlyDictionary<string, int> selectedParentCountsByTaskId)
+        {
+            if (string.IsNullOrWhiteSpace(wrapper.TaskItem?.Id))
+            {
+                return false;
+            }
+
+            if (wrapper.Parent == null)
+            {
+                return true;
+            }
+
+            var parentCount = wrapper.TaskItem.Parents.Count;
+            return parentCount <= 1 ||
+                   selectedParentCountsByTaskId.GetValueOrDefault(wrapper.TaskItem.Id) >= parentCount;
+        }
+
+        private static void CollectTaskAndContainedTaskIds(TaskItemViewModel? task, ISet<string> taskIds)
+        {
+            if (task == null || string.IsNullOrWhiteSpace(task.Id) || !taskIds.Add(task.Id))
+            {
+                return;
+            }
+
+            foreach (var child in task.ContainsTasks)
+            {
+                CollectTaskAndContainedTaskIds(child, taskIds);
+            }
         }
 
         private async Task RemoveWrappersInternalAsync(IReadOnlyList<TaskWrapperViewModel> wrappers)

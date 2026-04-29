@@ -184,8 +184,10 @@
   <data name="Remove" xml:space="preserve"><value>Удалить</value></data>
   <data name="RemoveTaskHeader" xml:space="preserve"><value>Удалить задачу</value></data>
   <data name="RemoveTaskMessage" xml:space="preserve"><value>Удалить задачу "{0}" с диска?</value></data>
+  <data name="RemoveTaskWithContainedTasksMessage" xml:space="preserve"><value>Удалить задачу "{0}" и {1} вложенных задач с диска?</value></data>
   <data name="RemoveTasksHeader" xml:space="preserve"><value>Удалить задачи</value></data>
   <data name="RemoveTasksMessage" xml:space="preserve"><value>Удалить {0} выбранных записей задач?</value></data>
+  <data name="RemoveTasksWithContainedTasksMessage" xml:space="preserve"><value>Удалить {0} выбранных записей задач и {1} вложенных задач?</value></data>
   <data name="RepeaterTemplates" xml:space="preserve"><value>Шаблоны повторения</value></data>
   <data name="Repository" xml:space="preserve"><value>Репозиторий</value></data>
   <data name="RepositoryConnected" xml:space="preserve"><value>Репозиторий подключен.</value></data>

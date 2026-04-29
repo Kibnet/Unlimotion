@@ -851,7 +851,7 @@ namespace Unlimotion.Test
         }
 
         [Test]
-        public async Task DeleteTask_ShouldUnblockChild_WhenStorageLoadsDetachedInstances()
+        public async Task DeleteTask_WithoutStorageDelete_ShouldUnblockChild_WhenStorageLoadsDetachedInstances()
         {
             var storage = new DetachedLoadStorage();
             var manager = new TaskTreeManager(storage);
@@ -888,16 +888,94 @@ namespace Unlimotion.Test
             await Assert.That(blockedChild).IsNotNull();
             await Assert.That(blockedChild.IsCanBeCompleted).IsFalse();
 
-            await manager.DeleteTask(parent);
+            await manager.DeleteTask(parent, deleteInStorage: false);
 
-            var deletedParent = await storage.Load("parent");
             var updatedChild = await storage.Load("child");
 
-            await Assert.That(deletedParent).IsNull();
             await Assert.That(updatedChild).IsNotNull();
             await Assert.That(updatedChild.ParentTasks).IsEmpty();
             await Assert.That(updatedChild.IsCanBeCompleted).IsTrue();
             await Assert.That(updatedChild.UnlockedDateTime).IsNotNull();
+        }
+
+        [Test]
+        public async Task DeleteTask_ShouldCascadeDeleteContainedTasks_WhenDeletingFromStorage()
+        {
+            var storage = new DetachedLoadStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "child" }
+            };
+            var externalParent = new TaskItem
+            {
+                Id = "external-parent",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "child" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                ParentTasks = new List<string> { "parent", "external-parent" },
+                ContainsTasks = new List<string> { "grandchild" }
+            };
+            var grandchild = new TaskItem
+            {
+                Id = "grandchild",
+                IsCompleted = false,
+                ParentTasks = new List<string> { "child" }
+            };
+
+            await storage.Save(parent);
+            await storage.Save(externalParent);
+            await storage.Save(child);
+            await storage.Save(grandchild);
+
+            await manager.DeleteTask(parent);
+
+            var deletedParent = await storage.Load("parent");
+            var deletedChild = await storage.Load("child");
+            var deletedGrandchild = await storage.Load("grandchild");
+            var updatedExternalParent = await storage.Load("external-parent");
+
+            await Assert.That(deletedParent).IsNull();
+            await Assert.That(deletedChild).IsNull();
+            await Assert.That(deletedGrandchild).IsNull();
+            await Assert.That(updatedExternalParent).IsNotNull();
+            await Assert.That(updatedExternalParent.ContainsTasks).DoesNotContain("child");
+        }
+
+        [Test]
+        public async Task DeleteTask_ShouldRemoveContainedTaskById_WhenContainedTaskLoadFails()
+        {
+            var storage = new DetachedLoadStorage();
+            var manager = new TaskTreeManager(storage);
+
+            var parent = new TaskItem
+            {
+                Id = "parent",
+                IsCompleted = false,
+                ContainsTasks = new List<string> { "child" }
+            };
+            var child = new TaskItem
+            {
+                Id = "child",
+                IsCompleted = false,
+                ParentTasks = new List<string> { "parent" }
+            };
+
+            await storage.Save(parent);
+            await storage.Save(child);
+            storage.FailLoadFor("child");
+
+            await manager.DeleteTask(parent);
+
+            await Assert.That(storage.ContainsStoredTask("parent")).IsFalse();
+            await Assert.That(storage.ContainsStoredTask("child")).IsFalse();
         }
 
         [Test]
@@ -957,6 +1035,7 @@ namespace Unlimotion.Test
         private sealed class DetachedLoadStorage : IStorage
         {
             private readonly Dictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
+            private readonly HashSet<string> _failedLoadTaskIds = new(StringComparer.Ordinal);
 
             public event EventHandler<TaskStorageUpdateEventArgs> Updating
             {
@@ -983,7 +1062,22 @@ namespace Unlimotion.Test
 
             public Task<TaskItem?> Load(string itemId)
             {
+                if (_failedLoadTaskIds.Contains(itemId))
+                {
+                    return Task.FromResult<TaskItem?>(null);
+                }
+
                 return Task.FromResult(_tasks.TryGetValue(itemId, out var task) ? CloneTask(task) : null);
+            }
+
+            public void FailLoadFor(string taskId)
+            {
+                _failedLoadTaskIds.Add(taskId);
+            }
+
+            public bool ContainsStoredTask(string taskId)
+            {
+                return _tasks.ContainsKey(taskId);
             }
 
             public async IAsyncEnumerable<TaskItem> GetAll()
