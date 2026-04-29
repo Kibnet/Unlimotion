@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test
 {
@@ -960,13 +961,15 @@ namespace Unlimotion.Test
             {
                 var parent = viewModel.CurrentAllTasksItems
                     .First(i => i.Id == MainWindowViewModelFixture.RootTask4Id);
-                var subTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
+                var childTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask41Id);
+                var unrelatedSubTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
 
                 ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
-                await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), repository, -1);
+                await TestHelpers.ActionNotCreateItems(() => parent.RemoveCommand.Execute(null), repository, -2);
 
                 await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, parent.Id)).IsNull();
-                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, subTask.Id)).IsNotNull();
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, childTask.Id)).IsNull();
+                await Assert.That(TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, unrelatedSubTask.Id)).IsNotNull();
             });
         }
 
@@ -994,6 +997,29 @@ namespace Unlimotion.Test
                 await Assert.That(taskFile).IsNull();
                 await Assert.That(root2Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
                 await Assert.That(root3Stored!.ContainsTasks).DoesNotContain(MainWindowViewModelFixture.SubTask22Id);
+            });
+        }
+
+        [Test]
+        public async Task RemoveSelectedWrappers_RelationOnlyTaskWithContainedTask_DoesNotCountCascadeInConfirmation()
+        {
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var multiParentTask = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.SubTask22Id);
+                var containedTask = await TestHelpers.CreateAndReturnNewTaskItem(viewModel.Create, repository);
+                await containedTask.CopyInto(multiParentTask);
+                await TestHelpers.WaitThrottleTime();
+
+                var root1Wrapper = viewModel.CurrentAllTasksItems
+                    .First(wrapper => wrapper.TaskItem.Id == MainWindowViewModelFixture.RootTask1Id);
+                var relationOnlyWrapper = FindWrappersByTaskId(viewModel.CurrentAllTasksItems, MainWindowViewModelFixture.SubTask22Id)
+                    .First(wrapper => wrapper.Parent?.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id);
+                var notificationManager = (NotificationManagerWrapperMock)viewModel.ManagerWrapper;
+
+                notificationManager.AskResult = false;
+                viewModel.RemoveSelectedWrappers([root1Wrapper, relationOnlyWrapper]);
+
+                await Assert.That(notificationManager.LastAskMessage).IsEqualTo(L10n.Format("RemoveTasksMessage", 2));
             });
         }
 
@@ -1188,10 +1214,10 @@ namespace Unlimotion.Test
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -1);
+            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -2);
             
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
-            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id)).IsNotNull();
+            await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id)).IsNull();
         }
 
         /// <summary>

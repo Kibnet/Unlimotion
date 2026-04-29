@@ -150,13 +150,53 @@ public class UnifiedTaskStorage : ITaskStorage
 
     public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
     {
+        var deletedTaskIds = deleteInStorage
+            ? GetTaskAndContainedTaskIds(change)
+            : new List<string> { change.Id };
         var connectedItemList = await TaskTreeManager.DeleteTask(change.Model, deleteInStorage);
 
         foreach (var task in connectedItemList) UpdateCache(task);
-        Tasks.Remove(change);
+        RemoveTasksFromCache(deletedTaskIds);
         RefreshRelations();
 
         return true;
+    }
+
+    private static List<string> GetTaskAndContainedTaskIds(TaskItemViewModel change)
+    {
+        var result = new List<string>();
+        var visitedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<TaskItemViewModel>();
+        queue.Enqueue(change);
+
+        while (queue.TryDequeue(out var current))
+        {
+            if (current == null || string.IsNullOrWhiteSpace(current.Id) || !visitedTaskIds.Add(current.Id))
+            {
+                continue;
+            }
+
+            result.Add(current.Id);
+
+            foreach (var child in current.ContainsTasks)
+            {
+                queue.Enqueue(child);
+            }
+        }
+
+        return result;
+    }
+
+    private void RemoveTasksFromCache(IEnumerable<string> taskIds)
+    {
+        foreach (var taskId in taskIds.Distinct(StringComparer.Ordinal))
+        {
+            var cachedTask = Tasks.Lookup(taskId);
+            if (cachedTask.HasValue)
+            {
+                Tasks.Remove(cachedTask.Value);
+            }
+        }
     }
 
     public async Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent)

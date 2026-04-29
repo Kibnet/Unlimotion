@@ -184,8 +184,10 @@
   <data name="Remove" xml:space="preserve"><value>Remove</value></data>
   <data name="RemoveTaskHeader" xml:space="preserve"><value>Remove task</value></data>
   <data name="RemoveTaskMessage" xml:space="preserve"><value>Are you sure you want to remove the task "{0}" from disk?</value></data>
+  <data name="RemoveTaskWithContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to remove the task "{0}" and {1} contained tasks from disk?</value></data>
   <data name="RemoveTasksHeader" xml:space="preserve"><value>Remove tasks</value></data>
   <data name="RemoveTasksMessage" xml:space="preserve"><value>Are you sure you want to remove {0} selected task entries?</value></data>
+  <data name="RemoveTasksWithContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to remove {0} selected task entries and {1} contained tasks?</value></data>
   <data name="RepeaterTemplates" xml:space="preserve"><value>Repeater templates</value></data>
   <data name="Repository" xml:space="preserve"><value>Repository</value></data>
   <data name="RepositoryConnected" xml:space="preserve"><value>Repository connected.</value></data>

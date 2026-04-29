@@ -130,6 +130,73 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
+        if (!deleteInStorage)
+        {
+            return await DeleteSingleTask(change, false);
+        }
+
+        var tasksToDelete = await GetTaskAndContainedTasksForDelete(change);
+        if (tasksToDelete.Count <= 1)
+        {
+            return await DeleteSingleTask(change);
+        }
+
+        var result = new Dictionary<string, TaskItem>();
+        var deletedTaskIds = tasksToDelete
+            .Select(static task => task.Id)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var taskToDelete in tasksToDelete.AsEnumerable().Reverse())
+        {
+            result.AddOrUpdateRange(
+                (await DeleteSingleTask(taskToDelete))
+                .Where(task => !deletedTaskIds.Contains(task.Id)));
+            result.Remove(taskToDelete.Id);
+        }
+
+        return result.Values.ToList();
+    }
+
+    private async Task<List<TaskItem>> GetTaskAndContainedTasksForDelete(TaskItem change)
+    {
+        var result = new List<TaskItem>();
+        var visitedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<TaskItem>();
+        queue.Enqueue(change);
+
+        while (queue.TryDequeue(out var current))
+        {
+            if (current == null || string.IsNullOrWhiteSpace(current.Id) || !visitedTaskIds.Add(current.Id))
+            {
+                continue;
+            }
+
+            var currentFromStorage = await Storage.Load(current.Id) ?? current;
+            result.Add(currentFromStorage);
+
+            if (currentFromStorage.ContainsTasks?.Any() != true)
+            {
+                continue;
+            }
+
+            foreach (var childId in currentFromStorage.ContainsTasks)
+            {
+                if (string.IsNullOrWhiteSpace(childId))
+                {
+                    continue;
+                }
+
+                var child = await Storage.Load(childId);
+                queue.Enqueue(child ?? new TaskItem { Id = childId });
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<List<TaskItem>> DeleteSingleTask(TaskItem change, bool deleteInStorage = true)
+    {
         var result = new Dictionary<string, TaskItem>();
         var taskIdsToRecalculate = new HashSet<string>(StringComparer.Ordinal);
 
