@@ -70,6 +70,7 @@
   <data name="ContainingTasks" xml:space="preserve"><value>Содержащие задачи:</value></data>
   <data name="CopyPublicKey" xml:space="preserve"><value>Копировать публичный ключ</value></data>
   <data name="CopyServerTasksToLocal" xml:space="preserve"><value>Скопировать задачи с сервера в локальное хранилище</value></data>
+  <data name="CopyTaskOutline" xml:space="preserve"><value>Копировать задачу аутлайном</value></data>
   <data name="CopyTasksHeader" xml:space="preserve"><value>Копировать задачи</value></data>
   <data name="CopyTasksMessage" xml:space="preserve"><value>Копировать {0} выбранных задач в "{1}"?</value></data>
   <data name="CreatedLabelFormat" xml:space="preserve"><value>Создано: {0:yyyy.MM.dd HH:mm}</value></data>
@@ -161,6 +162,7 @@
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Параметры сохранены. Нажмите "Подключить репозиторий".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Родительские задачи:</value></data>
   <data name="Password" xml:space="preserve"><value>Пароль</value></data>
+  <data name="PasteTaskOutline" xml:space="preserve"><value>Вставить задачу аутлайном</value></data>
   <data name="Period" xml:space="preserve"><value>Период</value></data>
   <data name="PlannedBegin" xml:space="preserve"><value>Планируемое начало</value></data>
   <data name="PlannedDuration" xml:space="preserve"><value>Планируемая длительность</value></data>

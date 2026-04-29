@@ -136,6 +136,13 @@ namespace Unlimotion.Test
             return editor.Suggestions.Select(candidate => candidate.Task.Id).ToHashSet();
         }
 
+        private static string? NormalizeNewLines(string? text)
+        {
+            return text?
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+        }
+
         private static async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
             CreateThreeLevelTreeCommandBranchAsync(MainWindowViewModel viewModel, ITaskStorage repository)
         {
@@ -317,6 +324,56 @@ namespace Unlimotion.Test
             await Assert.That(newTask.Wanted).IsTrue();
             await Assert.That(storedTask).IsNotNull();
             await Assert.That(storedTask!.Wanted).IsTrue();
+        }
+
+        [Test]
+        public async Task CopyTaskOutline_WritesCurrentTaskSubtreeToClipboard()
+        {
+            var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var child = await taskRepository.AddChild(parent!);
+            child.Title = "Outline VM copy child";
+            await taskRepository.Update(child);
+            var grandchild = await taskRepository.AddChild(child);
+            grandchild.Title = "Outline VM copy grandchild";
+            await taskRepository.Update(grandchild);
+
+            string? clipboardText = null;
+            mainWindowVM.SetClipboardTextAsync = text =>
+            {
+                clipboardText = text;
+                return Task.CompletedTask;
+            };
+
+            await mainWindowVM.CopyTaskOutline(parent);
+
+            await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                $"{parent.Title}\n\tOutline VM copy child\n\t\tOutline VM copy grandchild");
+        }
+
+        [Test]
+        public async Task PasteTaskOutline_CreatesNestedTasksUnderCurrentTask()
+        {
+            var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            const string outline =
+                "Outline VM paste root\n" +
+                "\tOutline VM paste child\n" +
+                "\t\tOutline VM paste grandchild";
+            mainWindowVM.GetClipboardTextAsync = () => Task.FromResult<string?>(outline);
+
+            var countBefore = taskRepository.Tasks.Count;
+            await mainWindowVM.PasteTaskOutline(parent);
+
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(countBefore + 3);
+
+            var pastedRoot = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste root");
+            var pastedChild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste child");
+            var pastedGrandchild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste grandchild");
+
+            await Assert.That(parent!.Contains).Contains(pastedRoot.Id);
+            await Assert.That(pastedRoot.Parents).Contains(parent.Id);
+            await Assert.That(pastedRoot.Contains).Contains(pastedChild.Id);
+            await Assert.That(pastedChild.Contains).Contains(pastedGrandchild.Id);
+            await Assert.That(pastedGrandchild.Parents).Contains(pastedChild.Id);
         }
 
         [Test]

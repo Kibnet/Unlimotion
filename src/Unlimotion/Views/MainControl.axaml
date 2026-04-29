@@ -79,6 +79,17 @@ x:Class="Unlimotion.Views.MainControl">
                                   InputGesture="Ctrl+Alt+Left"
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
+                        <Separator/>
+                        <MenuItem Header="{DynamicResource CopyTaskOutline}"
+                                  Tag="CopyOutline"
+                                  InputGesture="Ctrl+Shift+C"
+                                  Click="TaskTreeContextMenuItem_OnClick"
+                                  AutomationProperties.AutomationId="CopyTaskOutlineTreeMenuItem"/>
+                        <MenuItem Header="{DynamicResource PasteTaskOutline}"
+                                  Tag="PasteOutline"
+                                  InputGesture="Ctrl+Shift+V"
+                                  Click="TaskTreeContextMenuItem_OnClick"
+                                  AutomationProperties.AutomationId="PasteTaskOutlineTreeMenuItem"/>
                     </ContextMenu>
                 </Setter.Value>
             </Setter>
@@ -147,6 +158,8 @@ Content="❌"
         <KeyBinding Gesture="Ctrl+Shift+Left" Command="{Binding CollapseCurrentNestedCommand}"/>
         <KeyBinding Gesture="Ctrl+Alt+Right" Command="{Binding ExpandAllTreeNodesCommand}"/>
         <KeyBinding Gesture="Ctrl+Alt+Left" Command="{Binding CollapseAllTreeNodesCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyTaskOutlineTreeCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+V" Command="{Binding PasteTaskOutlineTreeCommand}"/>
     </UserControl.KeyBindings>
 
     <Grid RowDefinitions="Auto,*">

@@ -110,6 +110,254 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                var child = await vm.taskRepository!.AddChild(parent!);
+                child.Title = "Outline UI copy child";
+                await vm.taskRepository.Update(child);
+                var grandchild = await vm.taskRepository.AddChild(child);
+                grandchild.Title = "Outline UI copy grandchild";
+                await vm.taskRepository.Update(grandchild);
+
+                var wrappersReady = WaitFor(() =>
+                    vm.FindTaskWrapperViewModel(parent!, vm.CurrentAllTasksItems) != null &&
+                    vm.FindTaskWrapperViewModel(child, vm.CurrentAllTasksItems) != null);
+                await Assert.That(wrappersReady).IsTrue();
+
+                var parentWrapper = vm.FindTaskWrapperViewModel(parent!, vm.CurrentAllTasksItems);
+                var childWrapper = vm.FindTaskWrapperViewModel(child, vm.CurrentAllTasksItems);
+                await Assert.That(parentWrapper).IsNotNull();
+                await Assert.That(childWrapper).IsNotNull();
+                parentWrapper!.IsExpanded = true;
+                childWrapper!.IsExpanded = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                string? clipboardText = null;
+                vm.SetClipboardTextAsync = text =>
+                {
+                    clipboardText = text;
+                    return Task.CompletedTask;
+                };
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+
+                var childControl = FindWrapperControl(allTasksTree!, child.Id);
+                await ClickControlAsync(window, childControl);
+                PressHotkey(window, Key.C, PhysicalKey.C, RawInputModifiers.Control | RawInputModifiers.Shift);
+
+                var copiedChild = WaitFor(() => clipboardText != null);
+                await Assert.That(copiedChild).IsTrue();
+                await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                    $"Outline UI copy child\n\tOutline UI copy grandchild");
+
+                clipboardText = null;
+                var parentControl = FindWrapperControl(allTasksTree, parent!.Id);
+                await ClickControlAsync(window, parentControl, MouseButton.Right);
+                var copyMenuItem = FindContextMenuItem(allTasksTree.ContextMenu!, "CopyOutline");
+                InvokeMenuItemClick(copyMenuItem);
+
+                var copiedParent = WaitFor(() => clipboardText != null);
+                await Assert.That(copiedParent).IsTrue();
+                await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                    $"{parent.Title}\n\tOutline UI copy child\n\t\tOutline UI copy grandchild");
+
+                clipboardText = "unchanged";
+                var titleTextBox = view.FindControl<TextBox>("CurrentTaskTitleTextBox");
+                await Assert.That(titleTextBox).IsNotNull();
+                titleTextBox!.Focus();
+                PressHotkey(window, Key.C, PhysicalKey.C, RawInputModifiers.Control);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(clipboardText).IsEqualTo("unchanged");
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.CurrentSortDefinition = vm.SortDefinitions.First(definition => definition.Id == "title-ascending");
+
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                var zuluChild = await vm.taskRepository!.AddChild(parent!);
+                zuluChild.Title = "Zulu visible outline child";
+                await vm.taskRepository.Update(zuluChild);
+
+                var hiddenChild = await vm.taskRepository.AddChild(parent);
+                hiddenChild.Title = "\u274C Alpha hidden excluded outline child";
+                await vm.taskRepository.Update(hiddenChild);
+
+                var alphaChild = await vm.taskRepository.AddChild(parent);
+                alphaChild.Title = "Alpha visible outline child";
+                await vm.taskRepository.Update(alphaChild);
+
+                var excludeFilterReady = WaitFor(() => vm.EmojiExcludeFilters.Any(filter => filter.Emoji == "\u274C"));
+                await Assert.That(excludeFilterReady).IsTrue();
+                vm.EmojiExcludeFilters.First(filter => filter.Emoji == "\u274C").ShowTasks = true;
+
+                var wrapperReady = WaitFor(() =>
+                {
+                    var wrapper = vm.FindTaskWrapperViewModel(parent!, vm.CurrentAllTasksItems);
+                    return wrapper?.SubTasks.Select(child => child.TaskItem.Title).SequenceEqual([
+                        "Alpha visible outline child",
+                        "Zulu visible outline child"
+                    ]) == true;
+                });
+                await Assert.That(wrapperReady).IsTrue();
+                await Assert.That(NormalizeNewLines(TaskOutlineClipboardService.BuildOutline(parent)))
+                    .Contains("Alpha hidden excluded outline child");
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                string? clipboardText = null;
+                vm.SetClipboardTextAsync = text =>
+                {
+                    clipboardText = text;
+                    return Task.CompletedTask;
+                };
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+
+                var parentControl = FindWrapperControl(allTasksTree!, parent!.Id);
+                await ClickControlAsync(window, parentControl);
+                PressHotkey(window, Key.C, PhysicalKey.C, RawInputModifiers.Control | RawInputModifiers.Shift);
+
+                var copied = WaitFor(() => clipboardText != null);
+                await Assert.That(copied).IsTrue();
+                await Assert.That(NormalizeNewLines(clipboardText)).IsEqualTo(
+                    $"{parent.Title}\n\tAlpha visible outline child\n\tZulu visible outline child");
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                var parentWrapper = vm.FindTaskWrapperViewModel(parent!, vm.CurrentAllTasksItems);
+                await Assert.That(parentWrapper).IsNotNull();
+                parentWrapper!.IsExpanded = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                const string outline =
+                    "Outline UI paste root\n" +
+                    "\tOutline UI paste child\n" +
+                    "\t\tOutline UI paste grandchild\n" +
+                    "Outline UI paste sibling";
+                var clipboardReadCount = 0;
+                vm.GetClipboardTextAsync = () =>
+                {
+                    clipboardReadCount++;
+                    return Task.FromResult<string?>(outline);
+                };
+
+                var countBefore = vm.taskRepository!.Tasks.Count;
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+
+                var titleTextBox = view.FindControl<TextBox>("CurrentTaskTitleTextBox");
+                await Assert.That(titleTextBox).IsNotNull();
+                titleTextBox!.Focus();
+                PressHotkey(window, Key.V, PhysicalKey.V, RawInputModifiers.Control);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(clipboardReadCount).IsEqualTo(0);
+                await Assert.That(vm.taskRepository.Tasks.Count).IsEqualTo(countBefore);
+
+                var parentControl = FindWrapperControl(allTasksTree!, parent!.Id);
+                await ClickControlAsync(window, parentControl);
+                PressHotkey(window, Key.V, PhysicalKey.V, RawInputModifiers.Control | RawInputModifiers.Shift);
+
+                var pasted = WaitFor(() =>
+                    vm.taskRepository.Tasks.Count == countBefore + 4 &&
+                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste root") &&
+                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste child") &&
+                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste grandchild") &&
+                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste sibling"));
+                await Assert.That(pasted).IsTrue();
+                await Assert.That(clipboardReadCount).IsEqualTo(1);
+
+                var pastedRoot = FindTaskByTitle(vm, "Outline UI paste root");
+                var pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
+                var pastedGrandchild = FindTaskByTitle(vm, "Outline UI paste grandchild");
+                var pastedSibling = FindTaskByTitle(vm, "Outline UI paste sibling");
+
+                await Assert.That(parent.Contains).Contains(pastedRoot.Id);
+                await Assert.That(parent.Contains).Contains(pastedSibling.Id);
+                await Assert.That(pastedRoot.Parents).Contains(parent.Id);
+                await Assert.That(pastedRoot.Contains).Contains(pastedChild.Id);
+                await Assert.That(pastedChild.Contains).Contains(pastedGrandchild.Id);
+                await Assert.That(pastedGrandchild.Parents).Contains(pastedChild.Id);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_Hotkey_UsesSelectedItem_NotLastClickedWrapper()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -291,7 +539,7 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(vm.LastCreatedItems.All(IsExpandedRecursive)).IsTrue();
 
                 await ClickControlAsync(window, lastCreatedTree, MouseButton.Right);
-                var collapseAllMenuItem = lastCreatedTree.ContextMenu!.Items.OfType<MenuItem>().Last();
+                var collapseAllMenuItem = FindContextMenuItem(lastCreatedTree.ContextMenu!, "CollapseAll");
                 InvokeMenuItemClick(collapseAllMenuItem);
 
                 await Assert.That(vm.LastCreatedItems.All(IsCollapsedRecursive)).IsTrue();
@@ -715,7 +963,7 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(roots.All(IsExpandedRecursive)).IsTrue();
 
                 await ClickControlAsync(window, tree, MouseButton.Right);
-                var collapseAllMenuItem = tree.ContextMenu.Items.OfType<MenuItem>().Last();
+                var collapseAllMenuItem = FindContextMenuItem(tree.ContextMenu, "CollapseAll");
                 InvokeMenuItemClick(collapseAllMenuItem);
 
                 await Assert.That(roots.All(IsCollapsedRecursive)).IsTrue();
@@ -760,7 +1008,7 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(relationTree).IsNotNull();
                 await Assert.That(titleTextBox).IsNotNull();
                 await Assert.That(relationTree!.ContextMenu).IsNotNull();
-                await Assert.That(relationTree.ContextMenu!.Items.OfType<MenuItem>().Count()).IsEqualTo(4);
+                await Assert.That(relationTree.ContextMenu!.Items.OfType<MenuItem>().Count()).IsEqualTo(6);
 
                 var childWrapper = vm.CurrentItemContains.SubTasks.First(wrapper => wrapper.TaskItem.Id == childTask.Id);
                 var grandchildWrapper = childWrapper.SubTasks.First(wrapper => wrapper.TaskItem.Id == grandchildTask.Id);
@@ -989,6 +1237,8 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(menuItems["CollapseCurrentNested"].InputGesture?.ToString()).IsEqualTo("Ctrl+Shift+Left");
                 await Assert.That(menuItems["ExpandAll"].InputGesture?.ToString()).IsEqualTo("Ctrl+Alt+Right");
                 await Assert.That(menuItems["CollapseAll"].InputGesture?.ToString()).IsEqualTo("Ctrl+Alt+Left");
+                await Assert.That(menuItems["CopyOutline"].InputGesture?.ToString()).IsEqualTo("Ctrl+Shift+C");
+                await Assert.That(menuItems["PasteOutline"].InputGesture?.ToString()).IsEqualTo("Ctrl+Shift+V");
             }
             finally
             {
@@ -1389,6 +1639,26 @@ public class MainControlTreeCommandsUiTests
     {
         menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
         Dispatcher.UIThread.RunJobs();
+    }
+
+    private static MenuItem FindContextMenuItem(ContextMenu contextMenu, string tag)
+    {
+        return contextMenu.Items
+            .OfType<MenuItem>()
+            .First(item => string.Equals(item.Tag?.ToString(), tag, StringComparison.Ordinal));
+    }
+
+    private static string? NormalizeNewLines(string? text)
+    {
+        return text?
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n');
+    }
+
+    private static TaskItemViewModel FindTaskByTitle(MainWindowViewModel vm, string title)
+    {
+        return vm.taskRepository!.Tasks.Items
+            .First(task => string.Equals(task.Title, title, StringComparison.Ordinal));
     }
 
     private static void ClearStoredTreeCommandContext(MainControl view)
