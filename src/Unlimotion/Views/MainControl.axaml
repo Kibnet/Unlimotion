@@ -104,7 +104,7 @@ x:Class="Unlimotion.Views.MainControl">
                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
-                <TextBlock Grid.Column="2" Text="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
+                <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
