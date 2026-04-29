@@ -1,19 +1,19 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-xmlns:unlimotion="clr-namespace:Unlimotion"
-xmlns:views="clr-namespace:Unlimotion.Views"
-xmlns:converters="clr-namespace:Unlimotion.Converters"
-xmlns:behavior="clr-namespace:Unlimotion.Behavior"
-xmlns:Interaction="using:Avalonia.Xaml.Interactivity"
-xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
-xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
-mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-x:DataType="viewModel:MainWindowViewModel"
-        Name="mainControl"
-x:Class="Unlimotion.Views.MainControl">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:unlimotion="clr-namespace:Unlimotion"
+             xmlns:views="clr-namespace:Unlimotion.Views"
+             xmlns:converters="clr-namespace:Unlimotion.Converters"
+             xmlns:behavior="clr-namespace:Unlimotion.Behavior"
+             xmlns:Interaction="using:Avalonia.Xaml.Interactivity"
+             xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
+             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:DataType="viewModel:MainWindowViewModel"
+             Name="mainControl"
+             x:Class="Unlimotion.Views.MainControl">
 
     <Design.DataContext>
         <viewModel:MainWindowViewModel/>
@@ -64,6 +64,7 @@ x:Class="Unlimotion.Views.MainControl">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Opacity" Value="0"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
         </Style>
         <Style Selector="TextBox.InlineTaskTitleEditor:focus">
             <Setter Property="Opacity" Value="1"/>
@@ -117,8 +118,8 @@ x:Class="Unlimotion.Views.MainControl">
             <Setter Property="IsExpanded">
                 <Setter.Value>
                     <Binding Path="((viewModel:TaskWrapperViewModel)DataContext)?.IsExpanded"
-                              Mode="TwoWay"
-                              RelativeSource="{RelativeSource Mode=Self}"/>
+                             Mode="TwoWay"
+                             RelativeSource="{RelativeSource Mode=Self}"/>
                 </Setter.Value>
             </Setter>
         </Style>
@@ -147,10 +148,10 @@ x:Class="Unlimotion.Views.MainControl">
             <Grid Background="Transparent">
                 <ContentControl Content="{Binding TaskItem}"/>
                 <Button Background="#00000000"
-Content="❌"
- BorderThickness="0"
- HorizontalAlignment="Right"
- Command="{Binding RemoveCommand}"/>
+                        Content="❌"
+                        BorderThickness="0"
+                        HorizontalAlignment="Right"
+                        Command="{Binding RemoveCommand}"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskRelationCandidateViewModel">
@@ -230,23 +231,23 @@ Content="❌"
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
-                                <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
-                                <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
-                                <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
-                                <CheckBox Content="{DynamicResource Completed}" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
-                                <CheckBox Content="{DynamicResource Archived}" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
+                                    <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
+                                    <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
+                                    <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
+                                    <CheckBox Content="{DynamicResource Completed}" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
+                                    <CheckBox Content="{DynamicResource Archived}" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
-                                       ItemsSource="{Binding CurrentAllTasksItems}"
-                                       SelectedItem="{Binding CurrentAllTasksItem}"
-                                       SelectionMode= "Multiple"
-                                       Classes="TaskTree"
-                                       PointerPressed="TaskTree_OnPointerPressed"
-                                       KeyDown="TaskTree_OnKeyDown"
-                                       AutomationProperties.AutomationId="AllTasksTree"
-                                       x:Name="AllTasksTree">
+                                      ItemsSource="{Binding CurrentAllTasksItems}"
+                                      SelectedItem="{Binding CurrentAllTasksItem}"
+                                      SelectionMode= "Multiple"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
+                                      AutomationProperties.AutomationId="AllTasksTree"
+                                      x:Name="AllTasksTree">
                                 <TreeView.ItemTemplate>
                                     <TreeDataTemplate DataType= "viewModel:TaskWrapperViewModel" ItemsSource= "{Binding SubTasks}">
                                         <ContentControl Content= "{Binding .}" PointerPressed= "InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased" DoubleTapped= "TaskTree_OnDoubleTapped"/>
@@ -261,22 +262,22 @@ Content="❌"
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
-                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <Label Content="{DynamicResource From}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
-                                                    SelectedDate="{Binding LastCreatedDateFilter.From}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="{DynamicResource To}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                    SelectedDate="{Binding LastCreatedDateFilter.To}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
+                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <Label Content="{DynamicResource From}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
+                                                        SelectedDate="{Binding LastCreatedDateFilter.From}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <Label Content="{DynamicResource To}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                        SelectedDate="{Binding LastCreatedDateFilter.To}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
+                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -322,7 +323,7 @@ Content="❌"
                             </TreeView>
                         </Grid>
                     </TabItem>
-                     <!--Last Updated-->
+                    <!--Last Updated-->
                     <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="LastUpdatedTabItem">
                         <Grid RowDefinitions="Auto,*">
@@ -395,12 +396,12 @@ Content="❌"
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
-                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
-                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
-                                <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
+                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
+                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
+                                    <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
+                                    <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -451,20 +452,20 @@ Content="❌"
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
-                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <Label Content="{DynamicResource From}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                    SelectedDate="{Binding CompletedDateFilter.From}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="{DynamicResource To}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                    SelectedDate="{Binding CompletedDateFilter.To}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
+                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <Label Content="{DynamicResource From}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                        SelectedDate="{Binding CompletedDateFilter.From}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <Label Content="{DynamicResource To}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                        SelectedDate="{Binding CompletedDateFilter.To}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -517,20 +518,20 @@ Content="❌"
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
                                 <WrapPanel Classes="FilterToolbarItems">
-                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
-                                <Label Content="{DynamicResource From}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                    SelectedDate="{Binding ArchivedDateFilter.From}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <Label Content="{DynamicResource To}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                    SelectedDate="{Binding ArchivedDateFilter.To}"
-                                                    IsTodayHighlighted="True"
-                                                    DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
+                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
+                                    <Label Content="{DynamicResource From}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                        SelectedDate="{Binding ArchivedDateFilter.From}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <Label Content="{DynamicResource To}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
+                                                        SelectedDate="{Binding ArchivedDateFilter.To}"
+                                                        IsTodayHighlighted="True"
+                                                        DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                    <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
