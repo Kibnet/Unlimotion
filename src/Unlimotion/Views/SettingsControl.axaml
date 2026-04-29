@@ -115,6 +115,25 @@
 
             <Border Classes="SettingsSection">
                 <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource TaskOutlineClipboardSettingsTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource TaskOutlineClipboardSettingsHint}" />
+
+                    <StackPanel Classes="FieldGroup">
+                        <CheckBox IsChecked="{Binding CopyTaskOutlineAsMarkdown}"
+                                  Content="{DynamicResource CopyTaskOutlineAsMarkdown}"
+                                  AutomationProperties.AutomationId="CopyTaskOutlineAsMarkdownCheckBox" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <CheckBox IsChecked="{Binding CopyTaskOutlineDescription}"
+                                  Content="{DynamicResource CopyTaskOutlineDescription}"
+                                  AutomationProperties.AutomationId="CopyTaskOutlineDescriptionCheckBox" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource UpdatesTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource UpdatesHint}" />
 

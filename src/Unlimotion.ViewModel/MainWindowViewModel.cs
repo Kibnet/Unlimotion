@@ -1617,7 +1617,7 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            var outline = TaskOutlineClipboardService.BuildOutline(source);
+            var outline = TaskOutlineClipboardService.BuildOutline(source, GetTaskOutlineClipboardOptions());
             await SetClipboardTextAsync(outline);
         }
 
@@ -1635,7 +1635,7 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            var outline = TaskOutlineClipboardService.BuildOutline(wrapper);
+            var outline = TaskOutlineClipboardService.BuildOutline(wrapper, GetTaskOutlineClipboardOptions());
             await SetClipboardTextAsync(outline);
         }
 
@@ -1661,6 +1661,27 @@ namespace Unlimotion.ViewModel
             }
 
             var parent = destination ?? CurrentTaskItem;
+            var capturedParentId = parent?.Id;
+            var preview = CreateTaskOutlinePastePreview(nodes, parent);
+            if (!await ManagerWrapper.ConfirmTaskOutlinePasteAsync(preview))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(capturedParentId))
+            {
+                parent = FindTaskById(capturedParentId);
+                if (parent == null)
+                {
+                    ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
+                    return;
+                }
+            }
+            else
+            {
+                parent = null;
+            }
+
             TaskItemViewModel? firstCreated = null;
 
             foreach (var node in nodes)
@@ -1688,7 +1709,25 @@ namespace Unlimotion.ViewModel
                 : await taskRepository!.AddChild(parent);
 
             created.Title = node.Title;
-            await taskRepository.Update(created);
+            if (!string.IsNullOrWhiteSpace(node.Description))
+            {
+                created.Description = node.Description;
+            }
+
+            if (node.IsCompleted.HasValue)
+            {
+                created.IsCompleted = node.IsCompleted.Value;
+                created.ArchiveDateTime = null;
+                created.CompletedDateTime = node.IsCompleted.Value
+                    ? created.CompletedDateTime ?? DateTimeOffset.UtcNow
+                    : null;
+            }
+
+            var createdId = created.Id;
+            var updated = await taskRepository.Update(created);
+            created = updated?.Id == createdId
+                ? updated
+                : FindTaskById(createdId) ?? created;
 
             foreach (var child in node.Children)
             {
@@ -1696,6 +1735,40 @@ namespace Unlimotion.ViewModel
             }
 
             return created;
+        }
+
+        private TaskOutlineClipboardOptions GetTaskOutlineClipboardOptions()
+        {
+            return new TaskOutlineClipboardOptions(
+                Settings.CopyTaskOutlineAsMarkdown,
+                Settings.CopyTaskOutlineDescription);
+        }
+
+        private TaskOutlinePastePreview CreateTaskOutlinePastePreview(
+            IReadOnlyList<TaskOutlineNode> nodes,
+            TaskItemViewModel? destination)
+        {
+            var destinationLabel = destination == null
+                ? L10n.Get("PasteTaskOutlineDestinationRoot")
+                : L10n.Format("PasteTaskOutlineDestinationInto", GetTaskOutlineDestinationName(destination));
+            var taskCount = TaskOutlineClipboardService.CountNodes(nodes);
+
+            return new TaskOutlinePastePreview(
+                L10n.Get("PasteTaskOutlineConfirmHeader"),
+                destinationLabel,
+                L10n.Format("PasteTaskOutlineTaskCount", taskCount),
+                TaskOutlineClipboardService.BuildPreviewText(nodes),
+                taskCount);
+        }
+
+        private static string GetTaskOutlineDestinationName(TaskItemViewModel destination)
+        {
+            if (!string.IsNullOrWhiteSpace(destination.Title))
+            {
+                return destination.Title;
+            }
+
+            return string.IsNullOrWhiteSpace(destination.Id) ? "?" : destination.Id;
         }
 
         private TaskItemViewModel? FindTaskById(string taskId)

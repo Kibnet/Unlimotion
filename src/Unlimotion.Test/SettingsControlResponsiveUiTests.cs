@@ -3,9 +3,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion;
@@ -16,6 +18,47 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class SettingsControlResponsiveUiTests
 {
+    [Test]
+    public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var markdownCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineAsMarkdownCheckBox");
+                var descriptionCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineDescriptionCheckBox");
+
+                await Assert.That(markdownCheckBox.IsChecked).IsFalse();
+                await Assert.That(descriptionCheckBox.IsChecked).IsFalse();
+
+                await ClickControlAsync(window, markdownCheckBox);
+                await ClickControlAsync(window, descriptionCheckBox);
+
+                await Assert.That(settings.CopyTaskOutlineAsMarkdown).IsTrue();
+                await Assert.That(settings.CopyTaskOutlineDescription).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
@@ -93,6 +136,31 @@ public class SettingsControlResponsiveUiTests
             Height = height,
             Content = content
         };
+    }
+
+    private static async Task ClickControlAsync(Window window, Control control)
+    {
+        var point = control.TranslatePoint(
+            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
+            window);
+
+        if (!point.HasValue)
+        {
+            throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
+        }
+
+        window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+        window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        await Task.CompletedTask;
+    }
+
+    private static T FindControlByAutomationId<T>(Control root, string automationId)
+        where T : Control
+    {
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .First(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
     private static bool IsVisibleAndArranged(Control control)

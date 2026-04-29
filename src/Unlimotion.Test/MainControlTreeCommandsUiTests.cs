@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -23,6 +24,57 @@ namespace Unlimotion.Test;
 public class MainControlTreeCommandsUiTests
 {
     [Test]
+    public async Task TaskOutlinePastePreviewDialog_LargePreview_IsScrollableAndShowsLastTask()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            Window? window = null;
+
+            try
+            {
+                var previewLines = Enumerable.Range(1, 100)
+                    .Select(index => $"- Preview task {index:000}");
+                var preview = new TaskOutlinePastePreview(
+                    "Paste task outline?",
+                    "Into: Root",
+                    "Tasks to create: 100",
+                    string.Join(Environment.NewLine, previewLines),
+                    100);
+                var view = new TaskOutlinePastePreviewControl
+                {
+                    DataContext = new TaskOutlinePastePreviewDialogViewModel(preview)
+                };
+
+                window = CreateWindow(view);
+                window.Width = 760;
+                window.Height = 420;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(
+                    view,
+                    "TaskOutlinePastePreviewScrollViewer");
+                var previewText = FindControlByAutomationId<TextBlock>(
+                    view,
+                    "TaskOutlinePastePreviewText");
+
+                await Assert.That(previewText.Text).Contains("Preview task 100");
+                await Assert.That(scrollViewer.Bounds.Height).IsLessThan(previewText.Bounds.Height);
+
+                scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(scrollViewer.Offset.Y).IsGreaterThan(0);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_Hotkey_UsesStickyActiveTabTreeAfterFocusMoves()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -36,6 +88,7 @@ public class MainControlTreeCommandsUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
                 vm.AllTasksMode = true;
+                ((NotificationManagerWrapperMock)vm.ManagerWrapper).AskResult = true;
                 vm.CollapseAllNodes(vm.CurrentAllTasksItems);
 
                 var view = new MainControl { DataContext = vm };
@@ -336,6 +389,8 @@ public class MainControlTreeCommandsUiTests
                     vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste sibling"));
                 await Assert.That(pasted).IsTrue();
                 await Assert.That(clipboardReadCount).IsEqualTo(1);
+                await Assert.That(((NotificationManagerWrapperMock)vm.ManagerWrapper).LastTaskOutlinePastePreview).IsNotNull();
+                await Assert.That(((NotificationManagerWrapperMock)vm.ManagerWrapper).LastTaskOutlinePastePreview!.TaskCount).IsEqualTo(4);
 
                 var pastedRoot = FindTaskByTitle(vm, "Outline UI paste root");
                 var pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
@@ -1713,6 +1768,14 @@ public class MainControlTreeCommandsUiTests
         }, timeoutMilliseconds);
 
         return ready ? wrapper : null;
+    }
+
+    private static T FindControlByAutomationId<T>(Control root, string automationId)
+        where T : Control
+    {
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .First(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
     private static Control FindWrapperControl(TreeView tree, string taskId)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Test
@@ -11,7 +12,10 @@ namespace Unlimotion.Test
         public string? LastSuccessMessage { get; private set; }
         public string? LastAskHeader { get; private set; }
         public string? LastAskMessage { get; private set; }
+        public TaskOutlinePastePreview? LastTaskOutlinePastePreview { get; private set; }
         public int AskCount { get; private set; }
+        public int TaskOutlinePasteConfirmationCount { get; private set; }
+        public Func<TaskOutlinePastePreview, Task<bool>>? ConfirmTaskOutlinePasteHandler { get; set; }
         public List<string> ErrorMessages { get; } = new();
         public List<string> SuccessMessages { get; } = new();
 
@@ -29,6 +33,13 @@ namespace Unlimotion.Test
             {
                 noAction?.Invoke();
             }
+        }
+
+        public Task<bool> ConfirmTaskOutlinePasteAsync(TaskOutlinePastePreview preview)
+        {
+            TaskOutlinePasteConfirmationCount++;
+            LastTaskOutlinePastePreview = preview;
+            return ConfirmTaskOutlinePasteHandler?.Invoke(preview) ?? Task.FromResult(AskResult);
         }
 
         public void ErrorToast(string message)
@@ -49,7 +60,10 @@ namespace Unlimotion.Test
             LastSuccessMessage = null;
             LastAskHeader = null;
             LastAskMessage = null;
+            LastTaskOutlinePastePreview = null;
             AskCount = 0;
+            TaskOutlinePasteConfirmationCount = 0;
+            ConfirmTaskOutlinePasteHandler = null;
             ErrorMessages.Clear();
             SuccessMessages.Clear();
         }

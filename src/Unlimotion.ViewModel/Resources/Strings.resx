@@ -70,6 +70,8 @@
   <data name="ContainingTasks" xml:space="preserve"><value>Containing tasks:</value></data>
   <data name="CopyPublicKey" xml:space="preserve"><value>Copy public key</value></data>
   <data name="CopyServerTasksToLocal" xml:space="preserve"><value>Copy tasks from server to local storage</value></data>
+  <data name="CopyTaskOutlineAsMarkdown" xml:space="preserve"><value>Copy in Markdown format</value></data>
+  <data name="CopyTaskOutlineDescription" xml:space="preserve"><value>Copy description</value></data>
   <data name="CopyTaskOutline" xml:space="preserve"><value>Copy task outline</value></data>
   <data name="CopyTasksHeader" xml:space="preserve"><value>Copy tasks</value></data>
   <data name="CopyTasksMessage" xml:space="preserve"><value>Are you sure you want to copy {0} selected tasks into "{1}"?</value></data>
@@ -163,6 +165,11 @@
   <data name="ParentsTasks" xml:space="preserve"><value>Parent tasks:</value></data>
   <data name="Password" xml:space="preserve"><value>Password</value></data>
   <data name="PasteTaskOutline" xml:space="preserve"><value>Paste task outline</value></data>
+  <data name="PasteTaskOutlineConfirmHeader" xml:space="preserve"><value>Paste task outline?</value></data>
+  <data name="PasteTaskOutlineDestinationInto" xml:space="preserve"><value>Into: {0}</value></data>
+  <data name="PasteTaskOutlineDestinationRoot" xml:space="preserve"><value>Into the task list root</value></data>
+  <data name="PasteTaskOutlineDestinationUnavailable" xml:space="preserve"><value>The paste destination is no longer available.</value></data>
+  <data name="PasteTaskOutlineTaskCount" xml:space="preserve"><value>Tasks to create: {0}</value></data>
   <data name="Period" xml:space="preserve"><value>Period</value></data>
   <data name="PlannedBegin" xml:space="preserve"><value>Planned Begin</value></data>
   <data name="PlannedDuration" xml:space="preserve"><value>Planned Duration</value></data>
@@ -267,6 +274,8 @@
   <data name="SyncErrorToast" xml:space="preserve"><value>Could not synchronize repository: {0}</value></data>
   <data name="SyncNow" xml:space="preserve"><value>Synchronize now</value></data>
   <data name="SyncingRepository" xml:space="preserve"><value>Synchronizing with repository...</value></data>
+  <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Choose how task outlines are copied. Pasted outlines are recognized automatically.</value></data>
+  <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Task outline clipboard</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 days</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 minutes</value></data>
