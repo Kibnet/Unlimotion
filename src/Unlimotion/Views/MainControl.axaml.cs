@@ -100,9 +100,21 @@ namespace Unlimotion.Views
         public MainControl()
         {
             InitializeComponent();
+            AddHandler(KeyDownEvent, MainControl_OnKeyDown, RoutingStrategies.Tunnel);
             AddHandler(DragDrop.DropEvent, Drop);
             AddHandler(DragDrop.DragOverEvent, DragOver);
             DataContextChanged += MainWindow_DataContextChanged;
+        }
+
+        private void MainControl_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Handled || !IsSelectAllHotkey(e) || IsTextInputFocused())
+            {
+                return;
+            }
+
+            ExecuteTreeCommand(TreeCommandKind.SelectAll);
+            e.Handled = true;
         }
 
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
@@ -1029,6 +1041,11 @@ namespace Unlimotion.Views
                 ClearInlineTitleClickState();
                 e.Handled = FocusCurrentTaskInlineTitleEditor(tree, vm.CurrentTaskItem?.Id);
             }
+        }
+
+        private static bool IsSelectAllHotkey(KeyEventArgs e)
+        {
+            return e.KeyModifiers == KeyModifiers.Control && e.Key == Key.A;
         }
 
         private static bool IsInlineTitleEditKey(KeyEventArgs e)

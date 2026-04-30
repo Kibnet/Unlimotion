@@ -170,7 +170,6 @@
 
     <UserControl.KeyBindings>
         <KeyBinding Gesture="Shift+Delete" Command="{Binding DeleteSelectedTreeItemsCommand}"/>
-        <KeyBinding Gesture="Ctrl+A" Command="{Binding SelectAllTreeItemsCommand}"/>
         <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
         <KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
         <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
