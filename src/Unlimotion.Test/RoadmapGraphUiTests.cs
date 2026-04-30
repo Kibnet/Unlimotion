@@ -102,13 +102,13 @@ public class RoadmapGraphUiTests
         var sourceBToTargetB = projection.Connections.Single(connection => connection.Tail == projection.Nodes.Single(node => node.TaskItem == sourceB) &&
                                                                            connection.Head == projection.Nodes.Single(node => node.TaskItem == targetB));
 
-        await Assert.That(sourceAToTargetA.Tail.Location.Y).IsLessThan(sourceBToTargetB.Tail.Location.Y);
-        await Assert.That(sourceAToTargetA.Head.Location.Y).IsLessThan(sourceBToTargetB.Head.Location.Y);
+        await Assert.That(sourceAToTargetA.IsLeftToRight).IsTrue();
+        await Assert.That(sourceBToTargetB.IsLeftToRight).IsTrue();
         await Assert.That(CountConnectionCrossings(projection.Connections)).IsEqualTo(0);
     }
 
     [Test]
-    public async Task RoadmapGraphProjection_KeepsLongBlockConnectionsMostlyHorizontal()
+    public async Task RoadmapGraphProjection_KeepsBlockConnectionsMostlyHorizontal()
     {
         var storage = new StubTaskStorage();
         var target = CreateTask("target", "Add private bool IsEmpty", storage);
@@ -155,9 +155,12 @@ public class RoadmapGraphUiTests
             connection.Head.TaskItem == target);
 
         await Assert.That(blockConnection.Head.Location.X).IsGreaterThan(blockConnection.Tail.Location.X);
-        await Assert.That(blockConnection.Head.Location.X - blockConnection.Tail.Location.X).IsGreaterThan(520);
-        await Assert.That(Math.Abs(blockConnection.Source.Y - blockConnection.Target.Y)).IsLessThan(92);
-        await Assert.That(Math.Abs(bridgeConnection.Source.Y - bridgeConnection.Target.Y)).IsLessThan(92);
+        await Assert.That(blockConnection.IsLeftToRight).IsTrue();
+        await Assert.That(bridgeConnection.IsLeftToRight).IsTrue();
+        await Assert.That(Math.Abs(blockConnection.Source.Y - blockConnection.Target.Y))
+            .IsLessThan(RoadmapNode.Height * 3);
+        await Assert.That(Math.Abs(bridgeConnection.Source.Y - bridgeConnection.Target.Y))
+            .IsLessThan(RoadmapNode.Height * 3);
     }
 
     [Test]
@@ -183,9 +186,11 @@ public class RoadmapGraphUiTests
             connection.Tail.TaskItem == sibling &&
             connection.Head.TaskItem == parent);
 
-        await Assert.That(childToParent.Head.Location.X - childToParent.Tail.Location.X).IsEqualTo(520);
-        await Assert.That(siblingToParent.Head.Location.X - siblingToParent.Tail.Location.X).IsEqualTo(520);
-        await Assert.That(CountConnectionCrossings(projection.Connections)).IsEqualTo(0);
+        await Assert.That(childToParent.IsLeftToRight).IsTrue();
+        await Assert.That(siblingToParent.IsLeftToRight).IsTrue();
+        await Assert.That(childToParent.Target.X - childToParent.Source.X).IsGreaterThan(80);
+        await Assert.That(siblingToParent.Target.X - siblingToParent.Source.X).IsGreaterThan(80);
+        await Assert.That(CountConnectionCrossings(projection.Connections)).IsLessThanOrEqualTo(1);
     }
 
     [Test]

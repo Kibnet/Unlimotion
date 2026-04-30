@@ -177,7 +177,7 @@ namespace Unlimotion.Views
             }
 
             var roots = localDc.OnlyUnlocked ? localDc.UnlockedTasks : localDc.Tasks;
-            var projection = RoadmapGraphBuilder.Build(roots);
+            var projection = RoadmapGraphBuilder.Build(roots, GetMeasuredRoadmapNodeWidths());
             RegisterRoadmapScopeSubscriptions(roots, projection);
             ApplyProjection(projection);
 
@@ -585,8 +585,18 @@ namespace Unlimotion.Views
         {
             if (sender is Control { DataContext: RoadmapNode node })
             {
-                node.SetMeasuredWidth(e.NewSize.Width);
+                if (node.SetMeasuredWidth(e.NewSize.Width))
+                {
+                    ScheduleUpdateGraph();
+                }
             }
+        }
+
+        private Dictionary<string, double> GetMeasuredRoadmapNodeWidths()
+        {
+            return RoadmapNodes
+                .GroupBy(node => node.Id)
+                .ToDictionary(group => group.Key, group => group.First().Width);
         }
 
         private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
