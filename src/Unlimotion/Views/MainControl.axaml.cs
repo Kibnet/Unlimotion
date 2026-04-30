@@ -8,8 +8,10 @@ using AutoMapper;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
@@ -49,6 +51,9 @@ namespace Unlimotion.Views
         private TreeView? _contextMenuTree;
         private TaskWrapperViewModel? _contextMenuWrapper;
         private PendingTreeDragContext? _pendingTreeDrag;
+        private TextBox? _activeInlineTitleEditor;
+        private TreeView? _lastInlineTitleClickTree;
+        private string? _lastInlineTitleClickTaskId;
         private bool _treeDragInProgress;
 
         private sealed class PendingTreeDragContext(
@@ -117,6 +122,7 @@ namespace Unlimotion.Views
             _activeTaskTree = null;
             _contextMenuTree = null;
             _contextMenuWrapper = null;
+            ClearInlineTitleEditState();
 
             if (DataContext is MainWindowViewModel vm)
             {
@@ -951,6 +957,249 @@ namespace Unlimotion.Views
             UpdateContextMenuContext(tree, e);
         }
 
+        private void InlineTaskTitleText_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (e.Handled ||
+                sender is not Control control ||
+                e.KeyModifiers != KeyModifiers.None ||
+                !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            var tree = TryGetTaskTree(control);
+            if (tree == null || !IsKnownMainTaskTree(tree))
+            {
+                return;
+            }
+
+            var task = TryGetTaskItem(control.DataContext);
+            if (task == null || string.IsNullOrWhiteSpace(task.Id))
+            {
+                return;
+            }
+
+            if (e.ClickCount > 1)
+            {
+                ClearInlineTitleClickState();
+                return;
+            }
+
+            var isRepeatedTitleClick =
+                ReferenceEquals(_lastInlineTitleClickTree, tree) &&
+                string.Equals(_lastInlineTitleClickTaskId, task.Id, StringComparison.Ordinal);
+
+            if (TryGetWrapper(control) is { } wrapper)
+            {
+                SelectSingleWrapper(tree, wrapper);
+            }
+            else if (DataContext is MainWindowViewModel vm && vm.CurrentTaskItem != task)
+            {
+                vm.CurrentTaskItem = task;
+            }
+
+            if (isRepeatedTitleClick && FocusCurrentTaskInlineTitleEditor(tree, task.Id))
+            {
+                ClearInlineTitleClickState();
+                e.Handled = true;
+                return;
+            }
+
+            _lastInlineTitleClickTree = tree;
+            _lastInlineTitleClickTaskId = task.Id;
+        }
+
+        private void TaskTree_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Handled ||
+                sender is not TreeView tree ||
+                DataContext is not MainWindowViewModel vm ||
+                IsTextInputFocused())
+            {
+                return;
+            }
+
+            if (!KnownMainTaskTreeNames.Contains(tree.Name, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.None && IsInlineTitleEditKey(e))
+            {
+                ClearInlineTitleClickState();
+                e.Handled = FocusCurrentTaskInlineTitleEditor(tree, vm.CurrentTaskItem?.Id);
+            }
+        }
+
+        private static bool IsInlineTitleEditKey(KeyEventArgs e)
+        {
+            return e.Key == Key.F2;
+        }
+
+        private bool FocusCurrentTaskInlineTitleEditor(TreeView tree, string? currentTaskId)
+        {
+            if (string.IsNullOrWhiteSpace(currentTaskId))
+            {
+                return false;
+            }
+
+            var titleEditor = FindInlineTitleEditor(tree, currentTaskId) ??
+                              CreateInlineTitleEditor(tree, currentTaskId);
+
+            if (titleEditor == null)
+            {
+                return false;
+            }
+
+            if (!FocusInlineTitleEditor(titleEditor))
+            {
+                if (ReferenceEquals(_activeInlineTitleEditor, titleEditor))
+                {
+                    ClearActiveInlineTitleEditor();
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private TextBox? CreateInlineTitleEditor(TreeView tree, string currentTaskId)
+        {
+            var titleText = FindInlineTitleTextBlock(tree, currentTaskId);
+            var task = TryGetTaskItem(titleText?.DataContext);
+            if (titleText?.Parent is not Panel parent || task == null)
+            {
+                return null;
+            }
+
+            ClearActiveInlineTitleEditor();
+
+            var titleEditor = new TextBox
+            {
+                DataContext = task,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = titleText.VerticalAlignment,
+                MinWidth = Math.Max(titleText.Bounds.Width, 48)
+            };
+            titleEditor.Classes.Add("InlineTaskTitleEditor");
+            if (task.Wanted)
+            {
+                titleEditor.Classes.Add("IsWanted");
+            }
+
+            if (!task.IsCanBeCompleted)
+            {
+                titleEditor.Classes.Add("IsCanBeCompleted");
+            }
+
+            AutomationProperties.SetAutomationId(titleEditor, "InlineTaskTitleTextBox");
+            titleEditor.Bind(
+                TextBox.TextProperty,
+                new Binding(nameof(TaskItemViewModel.Title))
+                {
+                    Mode = BindingMode.TwoWay,
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                });
+
+            Grid.SetColumn(titleEditor, Grid.GetColumn(titleText));
+            Grid.SetColumnSpan(titleEditor, Grid.GetColumnSpan(titleText));
+            Grid.SetRow(titleEditor, Grid.GetRow(titleText));
+            Grid.SetRowSpan(titleEditor, Grid.GetRowSpan(titleText));
+
+            titleEditor.LostFocus += InlineTitleEditor_OnLostFocus;
+            parent.Children.Add(titleEditor);
+            _activeInlineTitleEditor = titleEditor;
+
+            return titleEditor;
+        }
+
+        private static TextBlock? FindInlineTitleTextBlock(TreeView tree, string currentTaskId)
+        {
+            return tree.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "InlineTaskTitleTextBlock",
+                        StringComparison.Ordinal) &&
+                    TryGetTaskItem(control.DataContext)?.Id == currentTaskId &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+        }
+
+        private static TextBox? FindInlineTitleEditor(TreeView tree, string currentTaskId)
+        {
+            return tree.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "InlineTaskTitleTextBox",
+                        StringComparison.Ordinal) &&
+                    TryGetTaskItem(control.DataContext)?.Id == currentTaskId &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+        }
+
+        private static bool FocusInlineTitleEditor(TextBox titleEditor)
+        {
+            if (!titleEditor.Focus())
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(titleEditor.Text))
+            {
+                titleEditor.SelectAll();
+            }
+            else
+            {
+                titleEditor.CaretIndex = 0;
+            }
+
+            return true;
+        }
+
+        private void InlineTitleEditor_OnLostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (ReferenceEquals(sender, _activeInlineTitleEditor))
+            {
+                ClearActiveInlineTitleEditor();
+            }
+        }
+
+        private void ClearInlineTitleEditState()
+        {
+            ClearInlineTitleClickState();
+            ClearActiveInlineTitleEditor();
+        }
+
+        private void ClearInlineTitleClickState()
+        {
+            _lastInlineTitleClickTree = null;
+            _lastInlineTitleClickTaskId = null;
+        }
+
+        private void ClearActiveInlineTitleEditor()
+        {
+            var titleEditor = _activeInlineTitleEditor;
+            if (titleEditor == null)
+            {
+                return;
+            }
+
+            titleEditor.LostFocus -= InlineTitleEditor_OnLostFocus;
+            if (titleEditor.Parent is Panel parent)
+            {
+                parent.Children.Remove(titleEditor);
+            }
+
+            _activeInlineTitleEditor = null;
+        }
+
         private void TaskTreeContextMenuItem_OnClick(object? sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem menuItem ||
@@ -1265,6 +1514,16 @@ namespace Unlimotion.Views
         private static bool IsKnownMainTaskTree(TreeView tree)
         {
             return KnownMainTaskTreeNames.Contains(tree.Name, StringComparer.Ordinal);
+        }
+
+        private static TaskItemViewModel? TryGetTaskItem(object? source)
+        {
+            return source switch
+            {
+                TaskItemViewModel taskItem => taskItem,
+                TaskWrapperViewModel wrapper => wrapper.TaskItem,
+                _ => null
+            };
         }
 
         private bool TryGetVisibleMainTaskTree(out TreeView tree)
