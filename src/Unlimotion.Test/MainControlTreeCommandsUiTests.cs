@@ -413,7 +413,7 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeCommandUi_InlineTitleEdit_FocusesOnlyFromHotkeyOrTitleText()
+    public async Task TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
@@ -445,18 +445,29 @@ public class MainControlTreeCommandsUiTests
                     view,
                     MainWindowViewModelFixture.RootTask2Id,
                     "AllTasksTree");
-                var inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(titleText.Bounds.Width).IsGreaterThan(0);
-                await Assert.That(inlineEditor.IsHitTestVisible).IsFalse();
+                await Assert.That(FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id)).IsNull();
 
                 allTasksTree!.Focus();
                 Dispatcher.UIThread.RunJobs();
 
                 await ClickPointAsync(window, GetPointRightOfControl(window, titleText, 48));
-                await Assert.That(IsFocused(window, inlineEditor)).IsFalse();
+                await Assert.That(FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id)).IsNull();
 
                 await ClickControlAsync(window, titleText);
+                await Assert.That(FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id)).IsNull();
 
+                await ClickControlAsync(window, titleText);
+                await Assert.That(FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                await Task.Delay(650);
+                await ClickControlAsync(window, titleText);
+                await Assert.That(FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                await Task.Delay(650);
+                await ClickControlAsync(window, titleText);
+
+                var inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
                 var clickFocused = WaitFor(() => IsFocused(window, inlineEditor));
                 await Assert.That(clickFocused).IsTrue();
 
@@ -466,10 +477,12 @@ public class MainControlTreeCommandsUiTests
 
                 allTasksTree.Focus();
                 Dispatcher.UIThread.RunJobs();
-                await Assert.That(IsFocused(window, inlineEditor)).IsFalse();
+                await Assert.That(WaitFor(() => FindInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id) == null))
+                    .IsTrue();
 
-                PressHotkey(window, Key.None, PhysicalKey.E, RawInputModifiers.None, "\u0443");
+                PressHotkey(window, Key.F2, PhysicalKey.F2, RawInputModifiers.None);
 
+                inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
                 var hotkeyFocused = WaitFor(() => IsFocused(window, inlineEditor));
                 await Assert.That(hotkeyFocused).IsTrue();
             }
@@ -1928,17 +1941,7 @@ public class MainControlTreeCommandsUiTests
         TextBox? textBox = null;
         var ready = WaitFor(() =>
         {
-            textBox = root.GetVisualDescendants()
-                .OfType<TextBox>()
-                .FirstOrDefault(candidate =>
-                    string.Equals(
-                        AutomationProperties.GetAutomationId(candidate),
-                        "InlineTaskTitleTextBox",
-                        StringComparison.Ordinal) &&
-                    TryGetTaskItem(candidate.DataContext)?.Id == taskId &&
-                    candidate.IsAttachedToVisualTree() &&
-                    candidate.IsVisible &&
-                    candidate.IsEnabled);
+            textBox = FindInlineTitleEditor(root, taskId);
 
             return textBox != null;
         }, timeoutMilliseconds);
@@ -1949,6 +1952,21 @@ public class MainControlTreeCommandsUiTests
         }
 
         return textBox;
+    }
+
+    private static TextBox? FindInlineTitleEditor(Control root, string taskId)
+    {
+        return root.GetVisualDescendants()
+            .OfType<TextBox>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(candidate),
+                    "InlineTaskTitleTextBox",
+                    StringComparison.Ordinal) &&
+                TryGetTaskItem(candidate.DataContext)?.Id == taskId &&
+                candidate.IsAttachedToVisualTree() &&
+                candidate.IsVisible &&
+                candidate.IsEnabled);
     }
 
     private static bool IsVisibleInVisualTree(Control control)

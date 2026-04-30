@@ -136,12 +136,6 @@
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
                 <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
-                <TextBox Grid.Column="2"
-                         Classes="InlineTaskTitleEditor"
-                         Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         Classes.IsWanted="{Binding Wanted}"
-                         Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"
-                         AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -306,10 +300,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
@@ -373,10 +363,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
@@ -429,10 +415,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="3" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
@@ -495,10 +477,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
@@ -561,10 +539,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
@@ -610,11 +584,6 @@
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" VerticalAlignment="Center">
                                                     <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
-                                                    <TextBox Classes="InlineTaskTitleEditor"
-                                                             Text="{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                             Classes.IsWanted="{Binding TaskItem.Wanted}"
-                                                             Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}"
-                                                             AutomationProperties.AutomationId="InlineTaskTitleTextBox"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Background="#00000000"
