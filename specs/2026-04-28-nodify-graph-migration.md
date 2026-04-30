@@ -422,6 +422,23 @@ Outcome contract:
   - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-repeater-minimap-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/TaskListRepeaterMarkerUiTests/*"` (3/3)
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-headless-minimap-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
 
+### Follow-up 2026-05-01: Sugiyama-like roadmap layout
+- Причина: пользователь попросил вернуть ощущение старой road map, где движение по задачам слева направо приводит к целям, а старый control выглядел правильно за счет horizontal `SugiyamaScheme`.
+- Изменения:
+  - `RoadmapGraphBuilder` получил segmented internal layout graph: длинные связи временно разбиваются на invisible dummy vertices for ordering, как в Sugiyama-style layered layout;
+  - crossing minimization теперь работает не только по прямым real-node edges, но и по adjacent layer segments, поэтому длинные стрелки участвуют в сортировке промежуточных слоев;
+  - добавлен bounded adjacent-transpose pass, который локально переставляет узлы внутри слоя только когда это уменьшает weighted crossings;
+  - row compaction использует меньший безопасный row gap, сохраняя читаемость узлов и уменьшая вертикальную компоненту длинных стрелок;
+  - regression test для длинной block-связи теперь строит span через несколько колонок и проверяет, что она остается преимущественно горизонтальной.
+- Verification:
+  - PASS `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-layout-compile\ -p:UseSharedCompilation=false`
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-layout-app-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-layout-roadmap-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (11/11)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-layout-importance-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/TaskImportanceUiTests/*"` (4/4)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-layout-repeater-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/TaskListRepeaterMarkerUiTests/*"` (3/3)
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-layout-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check`
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -440,3 +457,4 @@ Outcome contract:
 | EXEC | Снизить частоту пересборок and shorten arrows | 0.88 | Нет | Завершить задачу | Нет | Да, пользователь сообщил performance/layout follow-up | Content-only task changes now update bindings/highlights without projection rebuild; structural rebuilds preserve node/connection instances; layout pulls connected rows together with stronger weight for block edges | `TaskItemViewModel.cs`, `GraphControl.axaml.cs`, `RoadmapConnection.cs`, `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Исправить filter-triggered rebuild and compact long edges | 0.88 | Нет | Завершить задачу | Нет | Да, пользователь сообщил follow-up дефекты | Graph now listens to filter ShowTasks changes directly; layer compaction shortens directed edges by moving tails right when safe | `GraphControl.axaml.cs`, `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Добавить minimap and viewport controls | 0.9 | Нет | Завершить задачу | Нет | Да, пользователь подтвердил добавление | Nodify Minimap is bound to the editor viewport; overlay buttons expose zoom, fit, reset and pan controls with UI coverage | `GraphControl.axaml`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Вернуть Sugiyama-like road map layout | 0.88 | Визуальный screenshot на реальных данных может потребовать product-tuning | Завершить задачу | Нет | Да, пользователь попросил выполнять | Internal dummy segments and adjacent transposes make long edges participate in layer ordering while keeping bounded layout cost | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
