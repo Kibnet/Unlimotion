@@ -7,15 +7,20 @@
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
-        <x:Double x:Key="AppFontSize">12</x:Double>
-        <x:Double x:Key="AppSmallFontSize">10</x:Double>
-        <x:Double x:Key="AppTabFontSize">14</x:Double>
-        <x:Double x:Key="AppTabMinHeight">28</x:Double>
-        <x:Double x:Key="AppSearchControlHeight">36</x:Double>
-        <x:Double x:Key="AppSearchClearButtonSize">30</x:Double>
-        <x:Double x:Key="AppSearchClearIconFontSize">14</x:Double>
-        <x:Double x:Key="AppSearchBarMinWidth">328</x:Double>
-        <x:Double x:Key="AppFloatingControlMinHeight">42</x:Double>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://Nodify/Theme.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <x:Double x:Key="AppFontSize">12</x:Double>
+            <x:Double x:Key="AppSmallFontSize">10</x:Double>
+            <x:Double x:Key="AppTabFontSize">14</x:Double>
+            <x:Double x:Key="AppTabMinHeight">28</x:Double>
+            <x:Double x:Key="AppSearchControlHeight">36</x:Double>
+            <x:Double x:Key="AppSearchClearButtonSize">30</x:Double>
+            <x:Double x:Key="AppSearchClearIconFontSize">14</x:Double>
+            <x:Double x:Key="AppSearchBarMinWidth">328</x:Double>
+            <x:Double x:Key="AppFloatingControlMinHeight">42</x:Double>
+        </ResourceDictionary>
     </Application.Resources>
 
 	<Application.DataTemplates>

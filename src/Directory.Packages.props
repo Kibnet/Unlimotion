@@ -49,7 +49,7 @@
     <PackageVersion Include="SignalR.EasyUse.Client" Version="0.2.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" />
-    <PackageVersion Include="AvaloniaGraphControl" Version="0.6.1" />
+    <PackageVersion Include="NodifyAvalonia" Version="6.6.0" />
     <PackageVersion Include="LibGit2Sharp" Version="0.31.0" />
 	<PackageVersion Include="LibGit2Sharp.NativeBinaries" Version="2.0.324-android.5" />
     <PackageVersion Include="Mileeena.Notification.Avalonia" Version="2.1.2" />

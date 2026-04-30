@@ -1,84 +1,248 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
-			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-			 xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
-             xmlns:avaloniaGraphControl="clr-namespace:AvaloniaGraphControl;assembly=AvaloniaGraphControl"
-			 xmlns:local="clr-namespace:Unlimotion.Views.Graph"
-			 xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
-			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-			 x:Class="Unlimotion.Views.GraphControl"
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:local="clr-namespace:Unlimotion.Views.Graph"
+             xmlns:nodify="https://miroiu.github.io/nodify"
+             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
+             mc:Ignorable="d"
+             d:DesignWidth="800"
+             d:DesignHeight="450"
+             x:Class="Unlimotion.Views.GraphControl"
+             x:Name="Root"
+             x:CompileBindings="False"
              AutomationProperties.AutomationId="RoadmapRoot"
              Focusable="True">
     <UserControl.Styles>
         <Style Selector="TextBlock.highlighted">
-            <Setter Property="Foreground" Value="#2F80ED"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#2F80ED" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="Button.roadmapViewportButton">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="#3A3A3A" />
+            <Setter Property="BorderBrush" Value="#707070" />
+            <Setter Property="Foreground" Value="White" />
         </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,*">
-		<WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
+        <WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
             <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
-            <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-            <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0" IsVisible="{Binding OnlyUnlocked}"/>
-            <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
-			<CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}"/>
-            <CheckBox Content="{DynamicResource GraphOnlyUnlocked}" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,10,0"/>
-            <!--Поиск-->
-            <searchControl:SearchControl
-                SearchText="{Binding Search.SearchText, Mode=TwoWay}"
-                Watermark="{DynamicResource Search}"/>
-            <Button Content="{DynamicResource ResetFilters}"
-                    Command="{Binding ResetTaskFiltersCommand}"
-                    Margin="0,0,10,0"
-                    AutomationProperties.AutomationId="RoadmapResetFiltersButton"/>
+            <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2" />
+            <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0" IsVisible="{Binding OnlyUnlocked}" />
+            <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}" />
+            <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0" IsVisible="{Binding !OnlyUnlocked}" />
+            <CheckBox Content="{DynamicResource GraphOnlyUnlocked}" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,10,0" />
+                <searchControl:SearchControl
+                    SearchText="{Binding Search.SearchText, Mode=TwoWay}"
+                    Watermark="{DynamicResource Search}" />
+                <Button Content="{DynamicResource ResetFilters}"
+                        Command="{Binding ResetTaskFiltersCommand}"
+                        Margin="0,0,10,0"
+                        AutomationProperties.AutomationId="RoadmapResetFiltersButton" />
         </WrapPanel>
-		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-					  HorizontalScrollBarVisibility="Auto">
-			<ZoomBorder Name="ZoomBorder" Stretch="None" ZoomSpeed="1.1"
-                            AutomationProperties.AutomationId="RoadmapZoomBorder"
-							ClipToBounds="True" Focusable="True" PanButton="Right"
-							VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-				<avaloniaGraphControl:GraphPanel x:Name="Graph"
-								LayoutMethod="SugiyamaScheme">
-					<avaloniaGraphControl:GraphPanel.DataTemplates>
-						<DataTemplate DataType="{x:Type local:BlockEdge}">
-							<avaloniaGraphControl:Connection Brush="Red"/>
-						</DataTemplate>
-						<DataTemplate DataType="{x:Type local:ContainEdge}">
-							<avaloniaGraphControl:Connection Brush="Green" />
-						</DataTemplate>
-						<DataTemplate DataType="{x:Type viewModel:TaskItemViewModel}">
-							<Grid ColumnDefinitions="Auto, Auto, Auto, *" Margin="5,0" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" DoubleTapped="TaskTree_OnDoubleTapped">
-								<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-								<Label Grid.Column="1" Content="{Binding GetAllEmoji}" VerticalAlignment="Center" />
+
+        <Grid Grid.Row="1">
+            <nodify:NodifyEditor x:Name="RoadmapEditor"
+                                 AutomationProperties.AutomationId="RoadmapZoomBorder"
+                                 ItemsSource="{Binding RoadmapNodes, ElementName=Root}"
+                                 Connections="{Binding RoadmapConnections, ElementName=Root}"
+                                 ConnectionTemplate="{StaticResource RoadmapConnectionTemplate}"
+                                 Background="Transparent"
+                                 ClipToBounds="True"
+                                 Focusable="True"
+                                 MinViewportZoom="0.1"
+                                 MaxViewportZoom="2"
+                                 GridCellSize="1"
+                                 DisableAutoPanning="True"
+                                 DisplayConnectionsOnTop="False">
+                <nodify:NodifyEditor.Resources>
+                    <DataTemplate x:Key="RoadmapConnectionTemplate" DataType="{x:Type local:RoadmapConnection}">
+                        <nodify:LineConnection Source="{Binding Source}"
+                                               Target="{Binding Target}"
+                                               Stroke="{Binding Stroke}"
+                                               Fill="{Binding Stroke}"
+                                               StrokeThickness="2"
+                                               ArrowEnds="End"
+                                               ArrowSize="10,7"
+                                               CornerRadius="8"
+                                               SourceOrientation="Horizontal"
+                                               TargetOrientation="Horizontal"
+                                               Spacing="24"
+                                               SourceOffsetMode="None"
+                                               TargetOffsetMode="None" />
+                    </DataTemplate>
+                </nodify:NodifyEditor.Resources>
+
+                <nodify:NodifyEditor.DataTemplates>
+                    <DataTemplate DataType="{x:Type local:RoadmapNode}">
+                        <Border MinWidth="{x:Static local:RoadmapNode.MinWidth}"
+                                MaxWidth="{x:Static local:RoadmapNode.MaxWidth}"
+                                MinHeight="{x:Static local:RoadmapNode.Height}"
+                                Padding="5,3"
+                                Background="Transparent"
+                                DragDrop.AllowDrop="True"
+                                SizeChanged="RoadmapNode_OnSizeChanged"
+                                PointerPressed="InputElement_OnPointerPressed"
+                                DoubleTapped="TaskTree_OnDoubleTapped">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+                                <CheckBox DataContext="{Binding TaskItem}"
+                                          IsChecked="{Binding IsCompleted}"
+                                          VerticalAlignment="Center"
+                                          IsEnabled="{Binding IsCanBeCompleted}" />
+                                <Label Grid.Column="1"
+                                       DataContext="{Binding TaskItem}"
+                                       Content="{Binding GetAllEmoji}"
+                                       VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="2"
+                                           DataContext="{Binding TaskItem}"
                                            Text="{Binding RepeaterListMarker}"
                                            IsVisible="{Binding IsHaveRepeater}"
                                            ToolTip.Tip="{Binding RepeaterListMarkerToolTip}"
                                            AutomationProperties.AutomationId="TaskRepeaterGraphMarker"
                                            Margin="4,0,4,0"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3" Text="{Binding TitleWithoutEmoji}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.highlighted="{Binding IsHighlighted}" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"/>
-							</Grid>
-							<!--<Border BorderBrush="Gray" CornerRadius="4" BorderThickness="1" Background="Transparent" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed">
-								<Grid ColumnDefinitions="Auto, *" Margin="5,0">
-									<CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
-									<TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" MaxWidth="300"  VerticalAlignment="Center" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"  />
-								</Grid>
-							</Border>-->
-						</DataTemplate>
-						<DataTemplate DataType="{x:Type local:CompositeItem}">
-							<avaloniaGraphControl:TextSticker Text="{Binding Name}"
-											 Shape="RoundedRectangle"
-											 HorizontalAlignment="Stretch"
-											 BorderForeground="White"
-											 TextForeground="White"
-											 VerticalAlignment="Stretch" />
-						</DataTemplate>
-					</avaloniaGraphControl:GraphPanel.DataTemplates>
-				</avaloniaGraphControl:GraphPanel>
-			</ZoomBorder>
-		</ScrollViewer>
-	</Grid>
+                                <TextBlock Grid.Column="3"
+                                           DataContext="{Binding TaskItem}"
+                                           Text="{Binding TitleWithoutEmoji}"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="300"
+                                           VerticalAlignment="Center"
+                                           Classes.highlighted="{Binding IsHighlighted}"
+                                           Classes.IsWanted="{Binding Wanted}"
+                                           Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </nodify:NodifyEditor.DataTemplates>
+
+                <nodify:NodifyEditor.ItemContainerTheme>
+                    <ControlTheme TargetType="{x:Type nodify:ItemContainer}"
+                                  BasedOn="{StaticResource {x:Type nodify:ItemContainer}}">
+                        <Setter Property="Location" Value="{Binding Location}" />
+                        <Setter Property="IsDraggable" Value="False" />
+                        <Setter Property="IsSelectable" Value="False" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="SelectedBorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="0" />
+                    </ControlTheme>
+                </nodify:NodifyEditor.ItemContainerTheme>
+            </nodify:NodifyEditor>
+
+            <Border HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
+                    Margin="10"
+                    Padding="6"
+                    CornerRadius="4"
+                    Background="#CC1E1E1E"
+                    BorderBrush="#666666"
+                    BorderThickness="1"
+                    AutomationProperties.AutomationId="RoadmapViewportToolbar">
+                <Grid ColumnDefinitions="Auto,8,Auto" RowDefinitions="Auto">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Classes="roadmapViewportButton"
+                                Content="+"
+                                Click="RoadmapZoomIn_OnClick"
+                                ToolTip.Tip="Zoom in"
+                                AutomationProperties.AutomationId="RoadmapZoomInButton" />
+                        <Button Classes="roadmapViewportButton"
+                                Content="-"
+                                Click="RoadmapZoomOut_OnClick"
+                                ToolTip.Tip="Zoom out"
+                                AutomationProperties.AutomationId="RoadmapZoomOutButton" />
+                        <Button Classes="roadmapViewportButton"
+                                Content="[]"
+                                Click="RoadmapFit_OnClick"
+                                ToolTip.Tip="Fit"
+                                AutomationProperties.AutomationId="RoadmapFitButton" />
+                        <Button Classes="roadmapViewportButton"
+                                Content="0"
+                                Click="RoadmapResetViewport_OnClick"
+                                ToolTip.Tip="Reset"
+                                AutomationProperties.AutomationId="RoadmapResetViewportButton" />
+                    </StackPanel>
+
+                    <Grid Grid.Column="2"
+                          Width="86"
+                          Height="86"
+                          RowDefinitions="*,*,*"
+                          ColumnDefinitions="*,*,*">
+                        <Button Grid.Row="0"
+                                Grid.Column="1"
+                                Classes="roadmapViewportButton"
+                                Content="^"
+                                Click="RoadmapPanUp_OnClick"
+                                ToolTip.Tip="Pan up"
+                                AutomationProperties.AutomationId="RoadmapPanUpButton" />
+                        <Button Grid.Row="1"
+                                Grid.Column="0"
+                                Classes="roadmapViewportButton"
+                                Content="&lt;"
+                                Click="RoadmapPanLeft_OnClick"
+                                ToolTip.Tip="Pan left"
+                                AutomationProperties.AutomationId="RoadmapPanLeftButton" />
+                        <Button Grid.Row="1"
+                                Grid.Column="2"
+                                Classes="roadmapViewportButton"
+                                Content="&gt;"
+                                Click="RoadmapPanRight_OnClick"
+                                ToolTip.Tip="Pan right"
+                                AutomationProperties.AutomationId="RoadmapPanRightButton" />
+                        <Button Grid.Row="2"
+                                Grid.Column="1"
+                                Classes="roadmapViewportButton"
+                                Content="v"
+                                Click="RoadmapPanDown_OnClick"
+                                ToolTip.Tip="Pan down"
+                                AutomationProperties.AutomationId="RoadmapPanDownButton" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Width="260"
+                    Height="170"
+                    Margin="10"
+                    Padding="5"
+                    CornerRadius="4"
+                    Background="#CC1E1E1E"
+                    BorderBrush="#666666"
+                    BorderThickness="1"
+                    AutomationProperties.AutomationId="RoadmapMinimapPanel">
+                <nodify:Minimap x:Name="RoadmapMinimap"
+                                AutomationProperties.AutomationId="RoadmapMinimap"
+                                ItemsSource="{Binding RoadmapNodes, ElementName=Root}"
+                                ViewportLocation="{Binding ViewportLocation, ElementName=RoadmapEditor, Mode=TwoWay}"
+                                ViewportSize="{Binding ViewportSize, ElementName=RoadmapEditor}"
+                                ResizeToViewport="True"
+                                Zoom="RoadmapMinimap_OnZoom"
+                                Background="#202020">
+                    <nodify:Minimap.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:RoadmapNode}">
+                            <Border Background="#808080"
+                                    BorderBrush="#B0B0B0"
+                                    BorderThickness="1"
+                                    CornerRadius="1" />
+                        </DataTemplate>
+                    </nodify:Minimap.ItemTemplate>
+
+                    <nodify:Minimap.ItemContainerTheme>
+                        <ControlTheme TargetType="{x:Type nodify:MinimapItem}"
+                                      BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
+                            <Setter Property="Location" Value="{Binding Location}" />
+                            <Setter Property="Width" Value="{Binding Width}" />
+                            <Setter Property="Height" Value="{x:Static local:RoadmapNode.Height}" />
+                        </ControlTheme>
+                    </nodify:Minimap.ItemContainerTheme>
+                </nodify:Minimap>
+            </Border>
+        </Grid>
+    </Grid>
 </UserControl>
