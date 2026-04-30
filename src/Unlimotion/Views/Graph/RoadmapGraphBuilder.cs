@@ -15,8 +15,9 @@ public static class RoadmapGraphBuilder
     private const double VerticalSpacing = 92;
     private const double RootSpacingRows = 0.75;
     private const int CrossingMinimizationPasses = 4;
+    private const int AdjacentTransposePasses = 3;
     private const int EdgeLengthMinimizationPasses = 6;
-    private const double MinimumRowGap = 1;
+    private const double MinimumRowGap = 0.75;
     private const double RowInertiaWeight = 0.35;
     private const double ContainsEdgeWeight = 1;
     private const double BlocksEdgeWeight = 4;
@@ -327,14 +328,8 @@ public static class RoadmapGraphBuilder
         IReadOnlyDictionary<TaskItemViewModel, double> initialRows,
         IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
     {
-        var layerOrder = tasks
-            .GroupBy(task => depths.GetValueOrDefault(task))
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderBy(task => initialRows.GetValueOrDefault(task))
-                    .ThenBy(task => firstSeen[task])
-                    .ToList());
+        var layout = BuildSegmentedLayoutGraph(tasks, connections, depths, initialRows, firstSeen);
+        var layerOrder = layout.LayerOrder;
 
         if (layerOrder.Count < 2)
         {
@@ -349,29 +344,25 @@ public static class RoadmapGraphBuilder
             for (var depth = minDepth + 1; depth <= maxDepth; depth++)
             {
                 ReorderLayer(depth, useIncoming: true);
+                ImproveLayerByAdjacentTransposes(layerOrder, layout.Segments, depth);
             }
 
             for (var depth = maxDepth - 1; depth >= minDepth; depth--)
             {
                 ReorderLayer(depth, useIncoming: false);
+                ImproveLayerByAdjacentTransposes(layerOrder, layout.Segments, depth);
             }
         }
 
-        var result = new Dictionary<TaskItemViewModel, double>();
-        foreach (var (depth, orderedTasks) in layerOrder)
-        {
-            var rowSlots = orderedTasks
-                .Select(task => initialRows.GetValueOrDefault(task))
-                .OrderBy(row => row)
-                .ToArray();
+        var vertexRows = AssignRowsPreservingLayerOrder(layerOrder);
+        vertexRows = MinimizeSegmentLengths(layout, vertexRows);
 
-            for (var index = 0; index < orderedTasks.Count; index++)
-            {
-                result[orderedTasks[index]] = rowSlots[index];
-            }
-        }
+        var result = layout.RealVertices.ToDictionary(
+            pair => pair.Key,
+            pair => vertexRows.GetValueOrDefault(pair.Value, pair.Value.InitialRow));
+        NormalizeRows(result);
 
-        return MinimizeEdgeLengths(tasks, connections, depths, result, firstSeen);
+        return result;
 
         void ReorderLayer(int depth, bool useIncoming)
         {
@@ -382,46 +373,52 @@ public static class RoadmapGraphBuilder
 
             var positions = BuildCurrentPositions();
             layerOrder[depth] = layer
-                .Select((task, index) => new
+                .Select((vertex, index) => new
                 {
-                    Task = task,
+                    Vertex = vertex,
                     CurrentIndex = index,
-                    Weight = GetBarycenter(task, depth, useIncoming, positions)
+                    Weight = GetBarycenter(vertex, useIncoming, positions)
                 })
                 .OrderBy(item => item.Weight)
                 .ThenBy(item => item.CurrentIndex)
-                .ThenBy(item => firstSeen[item.Task])
-                .Select(item => item.Task)
+                .ThenBy(item => item.Vertex.StableIndex)
+                .Select(item => item.Vertex)
                 .ToList();
         }
 
-        Dictionary<TaskItemViewModel, double> BuildCurrentPositions()
+        Dictionary<LayoutVertex, double> BuildCurrentPositions()
         {
             return layerOrder
-                .SelectMany(pair => pair.Value.Select((task, index) => new { task, index }))
-                .ToDictionary(item => item.task, item => (double)item.index);
+                .SelectMany(pair => pair.Value.Select((vertex, index) => new { vertex, index }))
+                .ToDictionary(item => item.vertex, item => (double)item.index);
         }
 
         double GetBarycenter(
-            TaskItemViewModel task,
-            int depth,
+            LayoutVertex vertex,
             bool useIncoming,
-            IReadOnlyDictionary<TaskItemViewModel, double> positions)
+            IReadOnlyDictionary<LayoutVertex, double> positions)
         {
-            var neighbors = connections
-                .Where(connection => useIncoming
-                    ? connection.Head == task && depths.GetValueOrDefault(connection.Tail) < depth
-                    : connection.Tail == task && depths.GetValueOrDefault(connection.Head) > depth)
-                .Select(connection => useIncoming ? connection.Tail : connection.Head)
-                .Where(positions.ContainsKey)
-                .Select(neighbor => positions[neighbor])
+            var weightedRows = layout.Segments
+                .Where(segment => useIncoming ? ReferenceEquals(segment.Head, vertex) : ReferenceEquals(segment.Tail, vertex))
+                .Select(segment => new
+                {
+                    Neighbor = useIncoming ? segment.Tail : segment.Head,
+                    Weight = GetConnectionWeight(segment.Kind)
+                })
+                .Where(item => positions.ContainsKey(item.Neighbor))
                 .ToArray();
 
-            return neighbors.Length == 0 ? positions[task] : neighbors.Average();
+            if (weightedRows.Length == 0)
+            {
+                return positions[vertex];
+            }
+
+            var totalWeight = weightedRows.Sum(item => item.Weight);
+            return weightedRows.Sum(item => positions[item.Neighbor] * item.Weight) / totalWeight;
         }
     }
 
-    private static Dictionary<TaskItemViewModel, double> MinimizeEdgeLengths(
+    private static SegmentedLayoutGraph BuildSegmentedLayoutGraph(
         IEnumerable<TaskItemViewModel> tasks,
         IReadOnlyList<ConnectionDefinition> connections,
         IReadOnlyDictionary<TaskItemViewModel, int> depths,
@@ -429,38 +426,125 @@ public static class RoadmapGraphBuilder
         IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
     {
         var nodes = tasks.ToList();
-        var rows = initialRows.ToDictionary(pair => pair.Key, pair => pair.Value);
-        var neighborsByTask = nodes.ToDictionary(task => task, _ => new List<WeightedNeighbor>());
-        var layerOrder = nodes
-            .GroupBy(task => depths.GetValueOrDefault(task))
+        var nextStableIndex = nodes.Count;
+        var realVertices = nodes.ToDictionary(
+            task => task,
+            task => new LayoutVertex(
+                task,
+                depths.GetValueOrDefault(task),
+                initialRows.GetValueOrDefault(task),
+                firstSeen.GetValueOrDefault(task)));
+        var layerOrder = realVertices.Values
+            .GroupBy(vertex => vertex.Layer)
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .OrderBy(task => rows.GetValueOrDefault(task))
-                    .ThenBy(task => firstSeen[task])
+                    .OrderBy(vertex => vertex.InitialRow)
+                    .ThenBy(vertex => vertex.StableIndex)
                     .ToList());
+        var segments = new List<LayoutSegment>();
 
         foreach (var connection in connections)
         {
-            if (!neighborsByTask.ContainsKey(connection.Tail) ||
-                !neighborsByTask.ContainsKey(connection.Head))
+            if (!realVertices.TryGetValue(connection.Tail, out var tail) ||
+                !realVertices.TryGetValue(connection.Head, out var head))
             {
                 continue;
             }
 
-            var weight = GetConnectionWeight(connection.Kind);
-            neighborsByTask[connection.Tail].Add(new WeightedNeighbor(connection.Head, weight));
-            neighborsByTask[connection.Head].Add(new WeightedNeighbor(connection.Tail, weight));
+            var span = head.Layer - tail.Layer;
+            if (span <= 1)
+            {
+                segments.Add(new LayoutSegment(tail, head, connection.Kind));
+                continue;
+            }
+
+            var previous = tail;
+            for (var layer = tail.Layer + 1; layer < head.Layer; layer++)
+            {
+                var ratio = (double)(layer - tail.Layer) / span;
+                var dummy = new LayoutVertex(
+                    null,
+                    layer,
+                    Lerp(tail.InitialRow, head.InitialRow, ratio),
+                    nextStableIndex++);
+
+                if (!layerOrder.TryGetValue(layer, out var layerVertices))
+                {
+                    layerVertices = new List<LayoutVertex>();
+                    layerOrder.Add(layer, layerVertices);
+                }
+
+                layerVertices.Add(dummy);
+                segments.Add(new LayoutSegment(previous, dummy, connection.Kind));
+                previous = dummy;
+            }
+
+            segments.Add(new LayoutSegment(previous, head, connection.Kind));
         }
 
-        if (connections.Count == 0 || layerOrder.Count < 2)
+        foreach (var depth in layerOrder.Keys.ToArray())
+        {
+            layerOrder[depth] = layerOrder[depth]
+                .OrderBy(vertex => vertex.InitialRow)
+                .ThenBy(vertex => vertex.StableIndex)
+                .ToList();
+        }
+
+        return new SegmentedLayoutGraph(layerOrder, segments, realVertices);
+    }
+
+    private static Dictionary<LayoutVertex, double> AssignRowsPreservingLayerOrder(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder)
+    {
+        var rows = new Dictionary<LayoutVertex, double>();
+
+        foreach (var orderedVertices in layerOrder.Values)
+        {
+            var rowSlots = orderedVertices
+                .Select(vertex => vertex.InitialRow)
+                .OrderBy(row => row)
+                .ToArray();
+
+            for (var index = 0; index < orderedVertices.Count; index++)
+            {
+                rows[orderedVertices[index]] = rowSlots[index];
+            }
+        }
+
+        return rows;
+    }
+
+    private static Dictionary<LayoutVertex, double> MinimizeSegmentLengths(
+        SegmentedLayoutGraph layout,
+        IReadOnlyDictionary<LayoutVertex, double> initialRows)
+    {
+        var rows = initialRows.ToDictionary(pair => pair.Key, pair => pair.Value);
+        var neighborsByVertex = layout.LayerOrder
+            .SelectMany(pair => pair.Value)
+            .ToDictionary(vertex => vertex, _ => new List<WeightedLayoutNeighbor>());
+
+        foreach (var segment in layout.Segments)
+        {
+            if (!neighborsByVertex.ContainsKey(segment.Tail) ||
+                !neighborsByVertex.ContainsKey(segment.Head))
+            {
+                continue;
+            }
+
+            var weight = GetConnectionWeight(segment.Kind);
+            neighborsByVertex[segment.Tail].Add(new WeightedLayoutNeighbor(segment.Head, weight));
+            neighborsByVertex[segment.Head].Add(new WeightedLayoutNeighbor(segment.Tail, weight));
+        }
+
+        if (layout.Segments.Count == 0 || layout.LayerOrder.Count < 2)
         {
             NormalizeRows(rows);
             return rows;
         }
 
-        var minDepth = layerOrder.Keys.Min();
-        var maxDepth = layerOrder.Keys.Max();
+        var minDepth = layout.LayerOrder.Keys.Min();
+        var maxDepth = layout.LayerOrder.Keys.Max();
 
         for (var pass = 0; pass < EdgeLengthMinimizationPasses; pass++)
         {
@@ -481,7 +565,7 @@ public static class RoadmapGraphBuilder
 
         void AdjustLayer(int depth)
         {
-            if (!layerOrder.TryGetValue(depth, out var layer) || layer.Count == 0)
+            if (!layout.LayerOrder.TryGetValue(depth, out var layer) || layer.Count == 0)
             {
                 return;
             }
@@ -491,13 +575,13 @@ public static class RoadmapGraphBuilder
 
             for (var index = 0; index < layer.Count; index++)
             {
-                var task = layer[index];
-                var weightedRowSum = rows.GetValueOrDefault(task) * RowInertiaWeight;
+                var vertex = layer[index];
+                var weightedRowSum = rows.GetValueOrDefault(vertex) * RowInertiaWeight;
                 var totalWeight = RowInertiaWeight;
 
-                foreach (var neighbor in neighborsByTask[task])
+                foreach (var neighbor in neighborsByVertex[vertex])
                 {
-                    if (!rows.TryGetValue(neighbor.Task, out var neighborRow))
+                    if (!rows.TryGetValue(neighbor.Vertex, out var neighborRow))
                     {
                         continue;
                     }
@@ -520,6 +604,93 @@ public static class RoadmapGraphBuilder
                 rows[layer[index]] = adjustedRows[index];
             }
         }
+    }
+
+    private static void ImproveLayerByAdjacentTransposes(
+        Dictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutSegment> segments,
+        int depth)
+    {
+        if (!layerOrder.TryGetValue(depth, out var layer) || layer.Count <= 1)
+        {
+            return;
+        }
+
+        var improved = true;
+        var attempts = 0;
+
+        while (improved && attempts++ < AdjacentTransposePasses)
+        {
+            improved = false;
+            var currentScore = CountCrossingsAroundLayer(layerOrder, segments, depth);
+            for (var index = 0; index < layer.Count - 1; index++)
+            {
+                (layer[index], layer[index + 1]) = (layer[index + 1], layer[index]);
+                var after = CountCrossingsAroundLayer(layerOrder, segments, depth);
+
+                if (after < currentScore)
+                {
+                    currentScore = after;
+                    improved = true;
+                    continue;
+                }
+
+                (layer[index], layer[index + 1]) = (layer[index + 1], layer[index]);
+            }
+        }
+    }
+
+    private static double CountCrossingsAroundLayer(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutSegment> segments,
+        int depth)
+    {
+        return CountAdjacentLayerCrossings(layerOrder, segments, depth - 1) +
+               CountAdjacentLayerCrossings(layerOrder, segments, depth);
+    }
+
+    private static double CountAdjacentLayerCrossings(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutSegment> segments,
+        int leftDepth)
+    {
+        if (!layerOrder.ContainsKey(leftDepth) ||
+            !layerOrder.ContainsKey(leftDepth + 1))
+        {
+            return 0;
+        }
+
+        var positions = layerOrder
+            .SelectMany(pair => pair.Value.Select((vertex, index) => new { vertex, index }))
+            .ToDictionary(item => item.vertex, item => item.index);
+        var adjacentSegments = segments
+            .Where(segment => segment.Tail.Layer == leftDepth &&
+                              segment.Head.Layer == leftDepth + 1)
+            .ToArray();
+        var crossings = 0d;
+
+        for (var i = 0; i < adjacentSegments.Length; i++)
+        {
+            for (var j = i + 1; j < adjacentSegments.Length; j++)
+            {
+                var first = adjacentSegments[i];
+                var second = adjacentSegments[j];
+                var tailOrder = positions[first.Tail].CompareTo(positions[second.Tail]);
+                var headOrder = positions[first.Head].CompareTo(positions[second.Head]);
+
+                if (tailOrder != 0 && headOrder != 0 && tailOrder != headOrder)
+                {
+                    crossings += GetConnectionWeight(first.Kind) * GetConnectionWeight(second.Kind);
+                }
+            }
+        }
+
+        return crossings;
+    }
+
+    private static double Lerp(double from, double to, double ratio)
+    {
+        return from + (to - from) * ratio;
     }
 
     private static double GetConnectionWeight(RoadmapConnectionKind kind)
@@ -589,6 +760,25 @@ public static class RoadmapGraphBuilder
         }
     }
 
+    private static void NormalizeRows(Dictionary<LayoutVertex, double> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var minRow = rows.Values.Min();
+        if (Math.Abs(minRow) < 0.0001)
+        {
+            return;
+        }
+
+        foreach (var vertex in rows.Keys.ToArray())
+        {
+            rows[vertex] -= minRow;
+        }
+    }
+
     private static void ApplyLayout(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyDictionary<TaskItemViewModel, int> depths,
@@ -613,7 +803,54 @@ public static class RoadmapGraphBuilder
         double Weight,
         double Value);
 
-    private readonly record struct WeightedNeighbor(
-        TaskItemViewModel Task,
+    private sealed class LayoutVertex
+    {
+        public LayoutVertex(
+            TaskItemViewModel? task,
+            int layer,
+            double initialRow,
+            int stableIndex)
+        {
+            Task = task;
+            Layer = layer;
+            InitialRow = initialRow;
+            StableIndex = stableIndex;
+        }
+
+        public TaskItemViewModel? Task { get; }
+
+        public int Layer { get; }
+
+        public double InitialRow { get; }
+
+        public int StableIndex { get; }
+    }
+
+    private sealed class SegmentedLayoutGraph
+    {
+        public SegmentedLayoutGraph(
+            Dictionary<int, List<LayoutVertex>> layerOrder,
+            IReadOnlyList<LayoutSegment> segments,
+            IReadOnlyDictionary<TaskItemViewModel, LayoutVertex> realVertices)
+        {
+            LayerOrder = layerOrder;
+            Segments = segments;
+            RealVertices = realVertices;
+        }
+
+        public Dictionary<int, List<LayoutVertex>> LayerOrder { get; }
+
+        public IReadOnlyList<LayoutSegment> Segments { get; }
+
+        public IReadOnlyDictionary<TaskItemViewModel, LayoutVertex> RealVertices { get; }
+    }
+
+    private readonly record struct LayoutSegment(
+        LayoutVertex Tail,
+        LayoutVertex Head,
+        RoadmapConnectionKind Kind);
+
+    private readonly record struct WeightedLayoutNeighbor(
+        LayoutVertex Vertex,
         double Weight);
 }

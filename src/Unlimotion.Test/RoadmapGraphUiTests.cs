@@ -112,30 +112,52 @@ public class RoadmapGraphUiTests
     {
         var storage = new StubTaskStorage();
         var target = CreateTask("target", "Add private bool IsEmpty", storage);
+        var prerequisite = CreateTask("prerequisite", "Document reusable set checks", storage);
+        var bridge = CreateTask("bridge", "Extract common IntSet helper", storage);
+        var nearTarget = CreateTask("near-target", "Add small guard", storage);
         var fillerA = CreateTask("filler-a", "SortedSetComparable", storage);
         var fillerB = CreateTask("filler-b", "IsFullSet", storage);
         var fillerC = CreateTask("filler-c", "Document IntSet ordering", storage);
         var blocker = CreateTask("blocker", "123", storage);
 
-        blocker.ApplyRelations(
+        prerequisite.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { bridge },
+            Array.Empty<TaskItemViewModel>());
+        bridge.ApplyRelations(
             Array.Empty<TaskItemViewModel>(),
             Array.Empty<TaskItemViewModel>(),
             new[] { target },
+            Array.Empty<TaskItemViewModel>());
+        blocker.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { target, nearTarget },
             Array.Empty<TaskItemViewModel>());
 
         var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
             target,
             fillerA,
             fillerB,
+            prerequisite,
             fillerC,
+            bridge,
+            nearTarget,
             blocker));
         var blockConnection = projection.Connections.Single(connection =>
             connection.Kind == RoadmapConnectionKind.Blocks &&
             connection.Tail.TaskItem == blocker &&
             connection.Head.TaskItem == target);
+        var bridgeConnection = projection.Connections.Single(connection =>
+            connection.Kind == RoadmapConnectionKind.Blocks &&
+            connection.Tail.TaskItem == bridge &&
+            connection.Head.TaskItem == target);
 
         await Assert.That(blockConnection.Head.Location.X).IsGreaterThan(blockConnection.Tail.Location.X);
+        await Assert.That(blockConnection.Head.Location.X - blockConnection.Tail.Location.X).IsGreaterThan(520);
         await Assert.That(Math.Abs(blockConnection.Source.Y - blockConnection.Target.Y)).IsLessThan(92);
+        await Assert.That(Math.Abs(bridgeConnection.Source.Y - bridgeConnection.Target.Y)).IsLessThan(92);
     }
 
     [Test]
