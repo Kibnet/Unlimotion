@@ -41,6 +41,9 @@ namespace Unlimotion.ViewModel
         private bool _isRoadmapTabInitialized;
         private bool _isUnlockedTabInitialized;
         private bool _isLastOpenedTabInitialized;
+        private readonly bool _defaultShowCompleted;
+        private readonly bool _defaultShowArchived;
+        private readonly bool? _defaultShowWanted;
         private static readonly ReadOnlyObservableCollection<TaskWrapperViewModel> EmptyTaskWrappers =
             new(new ObservableCollectionExtended<TaskWrapperViewModel>());
 
@@ -71,10 +74,15 @@ namespace Unlimotion.ViewModel
             LastOpenedItems = EmptyTaskWrappers;
             Graph.SetMainWindowViewModel(this);
             Graph.Search = Search;
+            ResetTaskFiltersCommand = ReactiveCommand.Create(ConfirmResetTaskFilters)
+                .AddToDisposeAndReturn(this);
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
             ShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             ShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
+            _defaultShowCompleted = ShowCompleted;
+            _defaultShowArchived = ShowArchived;
+            _defaultShowWanted = ShowWanted;
             var sortName = _configuration?.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             var sortNameForUnlocked = _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortName)) ?? SortDefinitions.First();
@@ -1412,6 +1420,178 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        public void ConfirmResetTaskFilters()
+        {
+            ManagerWrapper.Ask(
+                L10n.Get("ResetFiltersConfirmHeader"),
+                L10n.Get("ResetFiltersConfirmMessage"),
+                ResetCurrentTabFilters);
+        }
+
+        public void ResetCurrentTabFilters()
+        {
+            if (AllTasksMode)
+            {
+                ResetAllTasksTabFilters();
+            }
+            else if (LastCreatedMode)
+            {
+                ResetLastCreatedTabFilters();
+            }
+            else if (LastUpdatedMode)
+            {
+                ResetLastUpdatedTabFilters();
+            }
+            else if (UnlockedMode)
+            {
+                ResetUnlockedTabFilters();
+            }
+            else if (CompletedMode)
+            {
+                ResetCompletedTabFilters();
+            }
+            else if (ArchivedMode)
+            {
+                ResetArchivedTabFilters();
+            }
+            else if (LastOpenedMode)
+            {
+                ResetSearchFilter();
+            }
+            else if (GraphMode)
+            {
+                ResetRoadmapTabFilters();
+            }
+        }
+
+        private void ResetAllTasksTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetCompletionVisibilityFilters();
+        }
+
+        private void ResetLastCreatedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetCompletionVisibilityFilters();
+            ResetDateFilter(LastCreatedDateFilter);
+        }
+
+        private void ResetLastUpdatedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetCompletionVisibilityFilters();
+            ResetDateFilter(LastUpdatedDateFilter);
+        }
+
+        private void ResetUnlockedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ShowWanted = _defaultShowWanted;
+            ResetToggleFilters(UnlockedTimeFilters);
+            ResetToggleFilters(DurationFilters);
+        }
+
+        private void ResetCompletedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetDateFilter(CompletedDateFilter);
+        }
+
+        private void ResetArchivedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetDateFilter(ArchivedDateFilter);
+        }
+
+        private void ResetRoadmapTabFilters()
+        {
+            var onlyUnlocked = Graph.OnlyUnlocked;
+
+            ResetSearchFilter();
+            ResetEmojiFilters();
+
+            if (onlyUnlocked)
+            {
+                ShowWanted = _defaultShowWanted;
+            }
+            else
+            {
+                ResetCompletionVisibilityFilters();
+            }
+
+            Graph.OnlyUnlocked = false;
+        }
+
+        private void ResetSearchFilter()
+        {
+            Search.SearchText = string.Empty;
+        }
+
+        private void ResetEmojiFilters()
+        {
+            ResetToggleFilters(EmojiFilters);
+            ResetToggleFilters(EmojiExcludeFilters);
+        }
+
+        private void ResetCompletionVisibilityFilters()
+        {
+            ShowCompleted = _defaultShowCompleted;
+            ShowArchived = _defaultShowArchived;
+        }
+
+        private static void ResetToggleFilters(IEnumerable<EmojiFilter>? filters)
+        {
+            if (filters == null)
+            {
+                return;
+            }
+
+            foreach (var filter in filters)
+            {
+                filter.ShowTasks = false;
+            }
+        }
+
+        private static void ResetToggleFilters(IEnumerable<UnlockedTimeFilter>? filters)
+        {
+            if (filters == null)
+            {
+                return;
+            }
+
+            foreach (var filter in filters)
+            {
+                filter.ShowTasks = false;
+            }
+        }
+
+        private static void ResetToggleFilters(IEnumerable<DurationFilter>? filters)
+        {
+            if (filters == null)
+            {
+                return;
+            }
+
+            foreach (var filter in filters)
+            {
+                filter.ShowTasks = false;
+            }
+        }
+
+        private static void ResetDateFilter(DateFilter filter)
+        {
+            filter.IsCustom = false;
+            filter.CurrentOption = DateFilterDefinition.Today;
+            filter.SetDateTimes(DateFilterDefinition.Today);
+        }
+
         private async void RemoveTask(TaskWrapperViewModel task)
         {
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
@@ -2038,6 +2218,8 @@ namespace Unlimotion.ViewModel
         public ICommand CopyTaskOutlineCommand { get; set; }
 
         public ICommand PasteTaskOutlineCommand { get; set; }
+
+        public ICommand ResetTaskFiltersCommand { get; set; }
 
         public Action<TreeCommandKind>? ExecuteTreeCommandAction { get; set; }
 

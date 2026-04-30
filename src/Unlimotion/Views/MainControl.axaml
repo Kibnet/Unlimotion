@@ -230,6 +230,10 @@
                                     <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
                                     <CheckBox Content="{DynamicResource Completed}" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
                                     <CheckBox Content="{DynamicResource Archived}" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="AllTasksResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -272,6 +276,10 @@
                                     <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                     <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                     <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="LastCreatedResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -335,6 +343,10 @@
                                     <ComboBox IsVisible="{Binding !LastUpdatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastUpdatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                     <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
                                     <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="LastUpdatedResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -388,6 +400,10 @@
                                     <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
                                     <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
                                     <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="UnlockedResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -448,6 +464,10 @@
                                                         IsTodayHighlighted="True"
                                                         DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                     <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="CompletedResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -510,6 +530,10 @@
                                                         IsTodayHighlighted="True"
                                                         DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                     <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="ArchivedResetFiltersButton"/>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -557,6 +581,12 @@
                              AutomationProperties.AutomationId="LastOpenedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <WrapPanel Classes="FilterToolbarItems">
+                                    <Button Content="{DynamicResource ResetFilters}"
+                                            Command="{Binding ResetTaskFiltersCommand}"
+                                            Margin="0,0,10,0"
+                                            AutomationProperties.AutomationId="LastOpenedResetFiltersButton"/>
+                                </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
