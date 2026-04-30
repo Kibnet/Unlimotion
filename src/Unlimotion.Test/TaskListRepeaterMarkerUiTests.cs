@@ -87,7 +87,7 @@ public class TaskListRepeaterMarkerUiTests
     {
         var xaml = File.ReadAllText(FindViewXamlPath("MainControl.axaml"));
 
-        var inlineTitleCount = CountOccurrences(xaml, "Text=\"{Binding TaskItem.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"");
+        var inlineTitleCount = CountOccurrences(xaml, "EmojiText=\"{Binding TaskItem.Title}\"");
         var inlineMarkerCount = CountOccurrences(xaml, "Text=\"{Binding TaskItem.RepeaterListMarker}\"");
 
         await Assert.That(xaml).Contains("Text=\"{Binding RepeaterListMarker}\"");
@@ -105,6 +105,7 @@ public class TaskListRepeaterMarkerUiTests
         await Assert.That(xaml).Contains("IsVisible=\"{Binding IsHaveRepeater}\"");
         await Assert.That(xaml).Contains("ToolTip.Tip=\"{Binding RepeaterListMarkerToolTip}\"");
         await Assert.That(xaml).Contains("AutomationProperties.AutomationId=\"TaskRepeaterGraphMarker\"");
+        await Assert.That(xaml).Contains("nodify:NodifyEditor");
         await Assert.That(xaml.IndexOf("Text=\"{Binding RepeaterListMarker}\"", StringComparison.Ordinal))
             .IsLessThan(xaml.IndexOf("Text=\"{Binding TitleWithoutEmoji}\"", StringComparison.Ordinal));
     }
