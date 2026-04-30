@@ -63,17 +63,19 @@ public sealed class RoadmapNode : INotifyPropertyChanged
 
     public Point RightAnchor => new(Location.X + Width, Location.Y + Height / 2);
 
-    public void SetMeasuredWidth(double measuredWidth)
+    public bool SetMeasuredWidth(double measuredWidth)
     {
         if (double.IsNaN(measuredWidth) || double.IsInfinity(measuredWidth) || measuredWidth <= 0)
         {
-            return;
+            return false;
         }
 
+        var previousWidth = Width;
         Width = Math.Clamp(
             Math.Ceiling(measuredWidth),
             MinWidth,
             MaxWidth);
+        return Math.Abs(previousWidth - Width) >= 0.5;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

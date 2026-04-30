@@ -439,6 +439,22 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-layout-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check`
 
+### Follow-up 2026-05-01: MSAGL Sugiyama layout-only
+- Причина: пользователь не принял ручную эвристику и спросил, есть ли built-in Sugiyama в Nodify. Проверка показала, что Nodify предоставляет editor/canvas/minimap/pan/zoom, но не layout engine; старый `AvaloniaGraphControl` использовал MSAGL internally.
+- Изменения:
+  - добавлены direct dependencies `Microsoft.Msagl` and `Microsoft.Msagl.Drawing`;
+  - `RoadmapGraphBuilder` теперь строит MSAGL `Drawing.Graph`, задает `LayerDirection.LR`, считает координаты через `SugiyamaLayoutSettings`, затем передает positions в Nodify nodes;
+  - ширина узлов передается в layout из уже измеренных `RoadmapNode.Width`; при изменении фактической ширины узла `SizeChanged` планирует повторную раскладку;
+  - ручная segmented/dummy/transposition эвристика удалена из production path;
+  - UI tests переведены с fixed-pixel layout expectations на roadmap properties: left-to-right, compactness, bounded crossing count and live width updates.
+- Verification:
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-roadmap-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (11/11)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-importance-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/TaskImportanceUiTests/*"` (4/4)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-repeater-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/TaskListRepeaterMarkerUiTests/*"` (3/3)
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -458,3 +474,4 @@ Outcome contract:
 | EXEC | Исправить filter-triggered rebuild and compact long edges | 0.88 | Нет | Завершить задачу | Нет | Да, пользователь сообщил follow-up дефекты | Graph now listens to filter ShowTasks changes directly; layer compaction shortens directed edges by moving tails right when safe | `GraphControl.axaml.cs`, `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Добавить minimap and viewport controls | 0.9 | Нет | Завершить задачу | Нет | Да, пользователь подтвердил добавление | Nodify Minimap is bound to the editor viewport; overlay buttons expose zoom, fit, reset and pan controls with UI coverage | `GraphControl.axaml`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Вернуть Sugiyama-like road map layout | 0.88 | Визуальный screenshot на реальных данных может потребовать product-tuning | Завершить задачу | Нет | Да, пользователь попросил выполнять | Internal dummy segments and adjacent transposes make long edges participate in layer ordering while keeping bounded layout cost | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Replace manual layout with MSAGL Sugiyama layout-only | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь подтвердил | Nodify remains renderer; MSAGL computes left-to-right Sugiyama positions using measured node widths | `Directory.Packages.props`, `Unlimotion.csproj`, `RoadmapGraphBuilder.cs`, `RoadmapNode.cs`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
