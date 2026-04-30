@@ -28,6 +28,10 @@
             <searchControl:SearchControl
                 SearchText="{Binding Search.SearchText, Mode=TwoWay}"
                 Watermark="{DynamicResource Search}"/>
+            <Button Content="{DynamicResource ResetFilters}"
+                    Command="{Binding ResetTaskFiltersCommand}"
+                    Margin="0,0,10,0"
+                    AutomationProperties.AutomationId="RoadmapResetFiltersButton"/>
         </WrapPanel>
 		<ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
 					  HorizontalScrollBarVisibility="Auto">

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
 using DynamicData.Binding;
 using PropertyChanged;
 
@@ -75,4 +76,6 @@ public class GraphViewModel
     }
 
     public SearchDefinition Search { get; set; } = new();
+
+    public ICommand? ResetTaskFiltersCommand => _mainWindowViewModel?.ResetTaskFiltersCommand;
 }

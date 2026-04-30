@@ -204,6 +204,9 @@
   <data name="RepositoryConnectErrorStatus" xml:space="preserve"><value>Ошибка подключения репозитория: {0}</value></data>
   <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Не удалось подключить репозиторий: {0}</value></data>
   <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Рабочая папка репозитория недоступна.</value></data>
+  <data name="ResetFilters" xml:space="preserve"><value>Сбросить фильтры</value></data>
+  <data name="ResetFiltersConfirmHeader" xml:space="preserve"><value>Сбросить фильтры?</value></data>
+  <data name="ResetFiltersConfirmMessage" xml:space="preserve"><value>Фильтры на текущей вкладке будут сброшены к значениям по умолчанию. Продолжить?</value></data>
   <data name="ResaveAllTasks" xml:space="preserve"><value>Пересохранить все задачи</value></data>
   <data name="ResaveConfirmHeader" xml:space="preserve"><value>Пересохранить все задачи</value></data>
   <data name="ResaveConfirmMessage" xml:space="preserve"><value>Все задачи будут перечитаны и сохранены заново в локальном хранилище. Продолжить?</value></data>

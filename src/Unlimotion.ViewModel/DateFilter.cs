@@ -74,6 +74,7 @@ namespace Unlimotion.ViewModel
     public static class DateFilterDefinition
     {
         public static readonly DateFilterOption Today = new("Today", "DateFilterToday");
+        public static readonly DateFilterOption AllTime = new("All Time", "DateFilterAllTime");
 
         public static ReadOnlyObservableCollection<DateFilterOption> GetDefinitions()
         {
@@ -88,7 +89,7 @@ namespace Unlimotion.ViewModel
                 new("Last Week", "DateFilterLastWeek"),
                 new("Last Month", "DateFilterLastMonth"),
                 new("Last Year", "DateFilterLastYear"),
-                new("All Time", "DateFilterAllTime")
+                AllTime
             });
         }
 
