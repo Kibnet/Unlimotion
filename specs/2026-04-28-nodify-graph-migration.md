@@ -455,6 +455,19 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-msagl-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-01: roadmap path pruning
+- Причина: пользователь указал, что карта должна показывать пути достижения целей, а не все короткие прямые связи, если цель уже достигается через обязательные промежуточные задачи.
+- Изменения:
+  - `RoadmapGraphBuilder` перед layout выполняет transitive reduction для directed roadmap connections;
+  - прямое ребро `A -> C` скрывается, если существует альтернативный путь `A -> B -> ... -> C` через хотя бы один промежуточный узел;
+  - MSAGL получает уже очищенный graph, поэтому redundant short edges не влияют на layout и не захламляют карту;
+  - `RoadmapGraphUiTests` покрывает сценарий block-chain, где прямой short path скрывается в пользу полного achievement path.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-path-prune-roadmap-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (12/12)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-path-prune-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-path-prune-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -475,3 +488,4 @@ Outcome contract:
 | EXEC | Добавить minimap and viewport controls | 0.9 | Нет | Завершить задачу | Нет | Да, пользователь подтвердил добавление | Nodify Minimap is bound to the editor viewport; overlay buttons expose zoom, fit, reset and pan controls with UI coverage | `GraphControl.axaml`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Вернуть Sugiyama-like road map layout | 0.88 | Визуальный screenshot на реальных данных может потребовать product-tuning | Завершить задачу | Нет | Да, пользователь попросил выполнять | Internal dummy segments and adjacent transposes make long edges participate in layer ordering while keeping bounded layout cost | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Replace manual layout with MSAGL Sugiyama layout-only | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь подтвердил | Nodify remains renderer; MSAGL computes left-to-right Sugiyama positions using measured node widths | `Directory.Packages.props`, `Unlimotion.csproj`, `RoadmapGraphBuilder.cs`, `RoadmapNode.cs`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Hide redundant short roadmap paths | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь попросил перенести механизм старого graph | Projection now removes direct edges that are reachable through a longer directed achievement path | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
