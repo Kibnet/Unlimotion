@@ -84,11 +84,12 @@ public static class RoadmapGraphBuilder
             }
         }
 
-        var nodes = ApplySugiyamaLayout(nodesByTask.Values, connections, firstSeen);
+        var visibleConnections = RemoveRedundantConnections(connections);
+        var nodes = ApplySugiyamaLayout(nodesByTask.Values, visibleConnections, firstSeen);
 
         return new RoadmapGraphProjection(
             nodes,
-            connections
+            visibleConnections
                 .Select(connection => new RoadmapConnection(
                     nodesByTask[connection.Tail],
                     nodesByTask[connection.Head],
@@ -127,6 +128,72 @@ public static class RoadmapGraphBuilder
                 connections.Add(new ConnectionDefinition(tail, head, kind));
             }
         }
+    }
+
+    private static IReadOnlyList<ConnectionDefinition> RemoveRedundantConnections(
+        IReadOnlyList<ConnectionDefinition> connections)
+    {
+        var outgoing = connections
+            .GroupBy(connection => connection.Tail)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        return connections
+            .Where(connection => !HasAlternativePath(connection, outgoing))
+            .ToList();
+    }
+
+    private static bool HasAlternativePath(
+        ConnectionDefinition candidate,
+        IReadOnlyDictionary<TaskItemViewModel, List<ConnectionDefinition>> outgoing)
+    {
+        if (!outgoing.TryGetValue(candidate.Tail, out var firstEdges))
+        {
+            return false;
+        }
+
+        var visited = new HashSet<TaskItemViewModel> { candidate.Tail };
+        var queue = new Queue<TaskItemViewModel>();
+
+        foreach (var edge in firstEdges)
+        {
+            if (edge.Equals(candidate) || edge.Head == candidate.Head)
+            {
+                continue;
+            }
+
+            if (visited.Add(edge.Head))
+            {
+                queue.Enqueue(edge.Head);
+            }
+        }
+
+        while (queue.TryDequeue(out var task))
+        {
+            if (!outgoing.TryGetValue(task, out var edges))
+            {
+                continue;
+            }
+
+            foreach (var edge in edges)
+            {
+                if (edge.Equals(candidate))
+                {
+                    continue;
+                }
+
+                if (edge.Head == candidate.Head)
+                {
+                    return true;
+                }
+
+                if (visited.Add(edge.Head))
+                {
+                    queue.Enqueue(edge.Head);
+                }
+            }
+        }
+
+        return false;
     }
 
     private static List<RoadmapNode> ApplySugiyamaLayout(

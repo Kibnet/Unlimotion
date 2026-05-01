@@ -164,6 +164,41 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_HidesDirectConnectionWhenLongerAchievementPathExists()
+    {
+        var storage = new StubTaskStorage();
+        var start = CreateTask("start", "Start", storage);
+        var middle = CreateTask("middle", "Middle", storage);
+        var goal = CreateTask("goal", "Goal", storage);
+
+        start.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { middle, goal },
+            Array.Empty<TaskItemViewModel>());
+        middle.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { goal },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(start, middle, goal));
+
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Kind == RoadmapConnectionKind.Blocks &&
+            connection.Tail.TaskItem == start &&
+            connection.Head.TaskItem == middle)).IsTrue();
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Kind == RoadmapConnectionKind.Blocks &&
+            connection.Tail.TaskItem == middle &&
+            connection.Head.TaskItem == goal)).IsTrue();
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Kind == RoadmapConnectionKind.Blocks &&
+            connection.Tail.TaskItem == start &&
+            connection.Head.TaskItem == goal)).IsFalse();
+    }
+
+    [Test]
     public async Task RoadmapGraphProjection_CompactsLayersToShortenContainConnections()
     {
         var storage = new StubTaskStorage();
