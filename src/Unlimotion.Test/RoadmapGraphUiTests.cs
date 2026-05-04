@@ -82,8 +82,10 @@ public class RoadmapGraphUiTests
         var storage = new StubTaskStorage();
         var sourceA = CreateTask("source-a", "Source A", storage);
         var sourceB = CreateTask("source-b", "Source B", storage);
+        var sourceC = CreateTask("source-c", "Source C", storage);
         var targetA = CreateTask("target-a", "Target A", storage);
         var targetB = CreateTask("target-b", "Target B", storage);
+        var targetC = CreateTask("target-c", "Target C", storage);
 
         sourceA.ApplyRelations(
             Array.Empty<TaskItemViewModel>(),
@@ -95,15 +97,29 @@ public class RoadmapGraphUiTests
             Array.Empty<TaskItemViewModel>(),
             new[] { targetB },
             Array.Empty<TaskItemViewModel>());
+        sourceC.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { targetC },
+            Array.Empty<TaskItemViewModel>());
 
-        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(sourceA, sourceB, targetB, targetA));
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
+            sourceA,
+            sourceB,
+            sourceC,
+            targetC,
+            targetB,
+            targetA));
         var sourceAToTargetA = projection.Connections.Single(connection => connection.Tail == projection.Nodes.Single(node => node.TaskItem == sourceA) &&
                                                                            connection.Head == projection.Nodes.Single(node => node.TaskItem == targetA));
         var sourceBToTargetB = projection.Connections.Single(connection => connection.Tail == projection.Nodes.Single(node => node.TaskItem == sourceB) &&
                                                                            connection.Head == projection.Nodes.Single(node => node.TaskItem == targetB));
+        var sourceCToTargetC = projection.Connections.Single(connection => connection.Tail == projection.Nodes.Single(node => node.TaskItem == sourceC) &&
+                                                                           connection.Head == projection.Nodes.Single(node => node.TaskItem == targetC));
 
         await Assert.That(sourceAToTargetA.IsLeftToRight).IsTrue();
         await Assert.That(sourceBToTargetB.IsLeftToRight).IsTrue();
+        await Assert.That(sourceCToTargetC.IsLeftToRight).IsTrue();
         await Assert.That(CountConnectionCrossings(projection.Connections)).IsEqualTo(0);
     }
 

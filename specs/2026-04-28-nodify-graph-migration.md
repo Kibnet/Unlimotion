@@ -482,6 +482,20 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-relax-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: crossing-aware layer ordering
+- Причина: пользовательский screenshot показал, что row relaxation не решает главный дефект: если порядок задач внутри колонок зафиксирован неудачно, стрелки продолжают пересекаться.
+- Изменения:
+  - перед назначением рядов `RoadmapGraphBuilder` теперь выполняет отдельную фазу layer ordering;
+  - порядок каждого слоя уточняется несколькими barycentric sweeps слева-направо and справа-налево по связанным соседям;
+  - после sweep выполняются локальные adjacent swaps, и swap сохраняется только если снижает weighted crossing count для затронутых связей;
+  - при равном barycenter сохраняется текущий порядок слоя, чтобы последующие sweeps не откатывали локально найденные улучшения;
+  - UI/projection test на crossing minimization расширен до трех пар source-target с обратным исходным порядком target-узлов и ожидает `0` пересечений.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-crossing-order-bin-2\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (12/12)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-crossing-order-build-2\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-crossing-order-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -504,3 +518,4 @@ Outcome contract:
 | EXEC | Replace manual layout with MSAGL Sugiyama layout-only | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь подтвердил | Nodify remains renderer; MSAGL computes left-to-right Sugiyama positions using measured node widths | `Directory.Packages.props`, `Unlimotion.csproj`, `RoadmapGraphBuilder.cs`, `RoadmapNode.cs`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Hide redundant short roadmap paths | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь попросил перенести механизм старого graph | Projection now removes direct edges that are reachable through a longer directed achievement path | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Improve roadmap node placement with row relaxation | 0.86 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с layout defect | MSAGL order is retained but final columns/rows are optimized for Nodify two-point connections | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Sort roadmap layers to reduce arrow crossings | 0.86 | Реальная большая карта может иметь неизбежные пересечения из-за плотных many-to-many dependencies | Завершить задачу | Нет | Да, пользователь прислал screenshots с crossing defect | Layer order now uses barycentric sweeps plus accepted adjacent swaps before row relaxation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |

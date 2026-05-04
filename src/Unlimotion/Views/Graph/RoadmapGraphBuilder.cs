@@ -28,6 +28,8 @@ public static class RoadmapGraphBuilder
     private const double EmojiWidth = 24;
     private const int BlocksEdgeWeight = 20;
     private const int ContainsEdgeWeight = 1;
+    private const int LayerOrderingPasses = 24;
+    private const int AdjacentSwapPasses = 4;
     private const int RowRelaxationPasses = 16;
 
     public static RoadmapGraphProjection Build(
@@ -310,6 +312,7 @@ public static class RoadmapGraphBuilder
                     .OrderBy(node => node.Location.Y)
                     .ThenBy(node => firstSeen[node.TaskItem])
                     .ToList());
+        OptimizeLayerOrder(layerOrder, connections, firstSeen);
         var rows = BuildInitialRows(layerOrder);
 
         RelaxRows(nodes, connections, layerOrder, rows);
@@ -322,6 +325,257 @@ public static class RoadmapGraphBuilder
                 layerX[layers.GetValueOrDefault(node.TaskItem)],
                 StartY + rows[node]);
         }
+    }
+
+    private static void OptimizeLayerOrder(
+        Dictionary<int, List<RoadmapNode>> layerOrder,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+    {
+        if (layerOrder.Count < 2 || connections.Count == 0)
+        {
+            return;
+        }
+
+        var nodesByTask = layerOrder
+            .SelectMany(group => group.Value)
+            .ToDictionary(node => node.TaskItem);
+        var layersByTask = layerOrder
+            .SelectMany(group => group.Value.Select(node => new { node.TaskItem, Layer = group.Key }))
+            .ToDictionary(item => item.TaskItem, item => item.Layer);
+        var layoutConnections = connections
+            .Where(connection =>
+                connection.Tail != connection.Head &&
+                nodesByTask.ContainsKey(connection.Tail) &&
+                nodesByTask.ContainsKey(connection.Head) &&
+                layersByTask[connection.Tail] != layersByTask[connection.Head])
+            .ToList();
+
+        if (layoutConnections.Count == 0)
+        {
+            return;
+        }
+
+        var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
+        var orderByTask = BuildOrderByTask(layerOrder);
+
+        for (var pass = 0; pass < LayerOrderingPasses; pass++)
+        {
+            foreach (var layerIndex in orderedLayers.Skip(1))
+            {
+                ReorderLayerByNeighborBarycenter(
+                    layerOrder[layerIndex],
+                    layoutConnections,
+                    layersByTask,
+                    orderByTask,
+                    firstSeen,
+                    preferLowerLayers: true);
+                orderByTask = BuildOrderByTask(layerOrder);
+            }
+
+            foreach (var layerIndex in orderedLayers.Reverse().Skip(1))
+            {
+                ReorderLayerByNeighborBarycenter(
+                    layerOrder[layerIndex],
+                    layoutConnections,
+                    layersByTask,
+                    orderByTask,
+                    firstSeen,
+                    preferLowerLayers: false);
+                orderByTask = BuildOrderByTask(layerOrder);
+            }
+
+            ApplyAdjacentCrossingSwaps(layerOrder, layoutConnections, orderByTask);
+        }
+    }
+
+    private static Dictionary<TaskItemViewModel, int> BuildOrderByTask(
+        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder)
+    {
+        return layerOrder
+            .SelectMany(group => group.Value.Select((node, index) => new { node.TaskItem, Index = index }))
+            .ToDictionary(item => item.TaskItem, item => item.Index);
+    }
+
+    private static void ReorderLayerByNeighborBarycenter(
+        List<RoadmapNode> layer,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<TaskItemViewModel, int> layersByTask,
+        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask,
+        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen,
+        bool preferLowerLayers)
+    {
+        if (layer.Count < 2)
+        {
+            return;
+        }
+
+        var desiredOrderByTask = new Dictionary<TaskItemViewModel, WeightedOrder>();
+        var currentLayerByTask = layer.ToDictionary(node => node.TaskItem, node => layersByTask[node.TaskItem]);
+
+        foreach (var connection in connections)
+        {
+            AddNeighbor(connection.Tail, connection.Head, connection.Kind);
+            AddNeighbor(connection.Head, connection.Tail, connection.Kind);
+        }
+
+        layer.Sort((left, right) =>
+        {
+            var leftOrder = desiredOrderByTask.TryGetValue(left.TaskItem, out var leftWeightedOrder)
+                ? leftWeightedOrder.Value
+                : orderByTask[left.TaskItem];
+            var rightOrder = desiredOrderByTask.TryGetValue(right.TaskItem, out var rightWeightedOrder)
+                ? rightWeightedOrder.Value
+                : orderByTask[right.TaskItem];
+            var orderComparison = leftOrder.CompareTo(rightOrder);
+            if (orderComparison != 0)
+            {
+                return orderComparison;
+            }
+
+            var currentOrderComparison = orderByTask[left.TaskItem].CompareTo(orderByTask[right.TaskItem]);
+            return currentOrderComparison != 0
+                ? currentOrderComparison
+                : firstSeen[left.TaskItem].CompareTo(firstSeen[right.TaskItem]);
+        });
+
+        void AddNeighbor(
+            TaskItemViewModel task,
+            TaskItemViewModel neighbor,
+            RoadmapConnectionKind kind)
+        {
+            if (!currentLayerByTask.TryGetValue(task, out var taskLayer) ||
+                !layersByTask.TryGetValue(neighbor, out var neighborLayer))
+            {
+                return;
+            }
+
+            if (preferLowerLayers != neighborLayer < taskLayer)
+            {
+                return;
+            }
+
+            var weight = GetConnectionWeight(kind);
+            var weightedOrder = desiredOrderByTask.GetValueOrDefault(task);
+            desiredOrderByTask[task] = new WeightedOrder(
+                weightedOrder.WeightedSum + orderByTask[neighbor] * weight,
+                weightedOrder.Weight + weight);
+        }
+    }
+
+    private static void ApplyAdjacentCrossingSwaps(
+        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder,
+        IReadOnlyList<ConnectionDefinition> connections,
+        Dictionary<TaskItemViewModel, int> orderByTask)
+    {
+        var connectionsByTask = connections
+            .SelectMany(connection => new[]
+            {
+                new { Task = connection.Tail, Connection = connection },
+                new { Task = connection.Head, Connection = connection }
+            })
+            .GroupBy(item => item.Task)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.Connection).Distinct().ToList());
+
+        for (var pass = 0; pass < AdjacentSwapPasses; pass++)
+        {
+            var improved = false;
+
+            foreach (var layer in layerOrder.OrderBy(group => group.Key).Select(group => group.Value))
+            {
+                if (layer.Count < 2)
+                {
+                    continue;
+                }
+
+                for (var index = 0; index < layer.Count - 1; index++)
+                {
+                    var first = layer[index];
+                    var second = layer[index + 1];
+                    var affectedConnections = GetAffectedConnections(first.TaskItem, second.TaskItem);
+                    var before = CountAffectedCrossings(affectedConnections, connections, orderByTask);
+
+                    layer[index] = second;
+                    layer[index + 1] = first;
+                    orderByTask[first.TaskItem] = index + 1;
+                    orderByTask[second.TaskItem] = index;
+
+                    var after = CountAffectedCrossings(affectedConnections, connections, orderByTask);
+                    if (after < before)
+                    {
+                        improved = true;
+                        continue;
+                    }
+
+                    layer[index] = first;
+                    layer[index + 1] = second;
+                    orderByTask[first.TaskItem] = index;
+                    orderByTask[second.TaskItem] = index + 1;
+                }
+            }
+
+            if (!improved)
+            {
+                return;
+            }
+        }
+
+        List<ConnectionDefinition> GetAffectedConnections(
+            TaskItemViewModel first,
+            TaskItemViewModel second)
+        {
+            var affected = new HashSet<ConnectionDefinition>();
+            if (connectionsByTask.TryGetValue(first, out var firstConnections))
+            {
+                affected.UnionWith(firstConnections);
+            }
+
+            if (connectionsByTask.TryGetValue(second, out var secondConnections))
+            {
+                affected.UnionWith(secondConnections);
+            }
+
+            return affected.ToList();
+        }
+    }
+
+    private static long CountAffectedCrossings(
+        IReadOnlyList<ConnectionDefinition> affectedConnections,
+        IReadOnlyList<ConnectionDefinition> allConnections,
+        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask)
+    {
+        long crossings = 0;
+
+        foreach (var affectedConnection in affectedConnections)
+        {
+            foreach (var connection in allConnections)
+            {
+                if (affectedConnection.Equals(connection) ||
+                    !HasOrderCrossing(affectedConnection, connection, orderByTask))
+                {
+                    continue;
+                }
+
+                crossings += GetConnectionWeight(affectedConnection.Kind) * GetConnectionWeight(connection.Kind);
+            }
+        }
+
+        return crossings;
+    }
+
+    private static bool HasOrderCrossing(
+        ConnectionDefinition first,
+        ConnectionDefinition second,
+        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask)
+    {
+        var sourceOrder = orderByTask[first.Tail].CompareTo(orderByTask[second.Tail]);
+        var targetOrder = orderByTask[first.Head].CompareTo(orderByTask[second.Head]);
+
+        return sourceOrder != 0 &&
+               targetOrder != 0 &&
+               sourceOrder != targetOrder;
     }
 
     private static Dictionary<RoadmapNode, double> BuildInitialRows(
@@ -621,6 +875,13 @@ public static class RoadmapGraphBuilder
     private readonly record struct WeightedNodeNeighbor(
         RoadmapNode Node,
         int Weight);
+
+    private readonly record struct WeightedOrder(
+        double WeightedSum,
+        double Weight)
+    {
+        public double Value => Weight <= 0 ? 0 : WeightedSum / Weight;
+    }
 
     private readonly record struct RowBlock(
         int Start,
