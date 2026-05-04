@@ -124,6 +124,55 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_AnchorsColumnsFromGoalsInsteadOfSources()
+    {
+        var storage = new StubTaskStorage();
+        var longStart = CreateTask("long-start", "Long start", storage);
+        var longMiddle = CreateTask("long-middle", "Long middle", storage);
+        var longEnd = CreateTask("long-end", "Long end", storage);
+        var sharedGoal = CreateTask("shared-goal", "Shared goal", storage);
+        var shortStart = CreateTask("short-start", "Short start", storage);
+        var shortGoal = CreateTask("short-goal", "Short goal", storage);
+
+        longStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { longMiddle },
+            Array.Empty<TaskItemViewModel>());
+        longMiddle.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { longEnd },
+            Array.Empty<TaskItemViewModel>());
+        longEnd.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { sharedGoal },
+            Array.Empty<TaskItemViewModel>());
+        shortStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { shortGoal },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
+            longStart,
+            longMiddle,
+            longEnd,
+            sharedGoal,
+            shortStart,
+            shortGoal));
+        var longStartNode = projection.Nodes.Single(node => node.TaskItem == longStart);
+        var shortStartNode = projection.Nodes.Single(node => node.TaskItem == shortStart);
+        var sharedGoalNode = projection.Nodes.Single(node => node.TaskItem == sharedGoal);
+        var shortGoalNode = projection.Nodes.Single(node => node.TaskItem == shortGoal);
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(shortStartNode.Location.X).IsGreaterThan(longStartNode.Location.X);
+        await Assert.That(shortGoalNode.Location.X).IsEqualTo(sharedGoalNode.Location.X);
+    }
+
+    [Test]
     public async Task RoadmapGraphProjection_KeepsBlockConnectionsMostlyHorizontal()
     {
         var storage = new StubTaskStorage();

@@ -496,6 +496,20 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-crossing-order-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: goal-anchored columns
+- Причина: пользователь определил корневую проблему: все задачи без входящих связей попадали в крайний левый столбец, хотя такого требования нет. Для road map корректнее строить колонки справа от целей, чтобы короткие независимые пути не прижимались к левому краю.
+- Изменения:
+  - `BuildFallbackLayers` теперь сначала пытается построить DAG layers от правых целей: узлы без outgoing-связей становятся правым goal-столбцом, а предшественники сдвигаются влево по расстоянию до цели;
+  - короткие цепочки сдвигаются вправо относительно длинных цепочек, если их цель находится в том же правом goal-столбце;
+  - для циклов сохранен source-anchored fallback, потому что строгий left-to-right порядок для цикла невозможен;
+  - после crossing-aware ordering добавлена tree balancing фаза: слои проходятся слева-направо and справа-налево по фактическим row позициям соседей, а перестановка принимается только если не увеличивает weighted crossing count;
+  - `RoadmapGraphUiTests` расширены до 13 tests: добавлен regression test, который доказывает, что короткая независимая цепочка больше не остается в крайнем левом столбце только потому, что ее стартовая задача не имеет входящих связей.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-goal-layers-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (13/13)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-goal-layers-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-goal-layers-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -519,3 +533,4 @@ Outcome contract:
 | EXEC | Hide redundant short roadmap paths | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь попросил перенести механизм старого graph | Projection now removes direct edges that are reachable through a longer directed achievement path | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Improve roadmap node placement with row relaxation | 0.86 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с layout defect | MSAGL order is retained but final columns/rows are optimized for Nodify two-point connections | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Sort roadmap layers to reduce arrow crossings | 0.86 | Реальная большая карта может иметь неизбежные пересечения из-за плотных many-to-many dependencies | Завершить задачу | Нет | Да, пользователь прислал screenshots с crossing defect | Layer order now uses barycentric sweeps plus accepted adjacent swaps before row relaxation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Anchor roadmap columns from goals | 0.9 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь указал, что leftmost sources column is the root cause | Layers are now derived from distance to right-side goals; tree balancing can lift independent chains without worsening crossings | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
