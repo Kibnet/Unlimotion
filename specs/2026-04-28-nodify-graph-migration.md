@@ -542,6 +542,19 @@ Outcome contract:
   - TIMEOUT `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-bin\` after 10 minutes; targeted roadmap/UI checks passed.
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: connected left-source priority
+- Причина: пользовательский screenshot после left-chain tightening всё ещё показывал дефект слева: несвязанные/слабо связанные элементы могли удерживать верхнюю строку слоя, а полезная prerequisite-ветка оставалась ниже, хотя это не уменьшало пересечения и ухудшало читаемость дорожной карты.
+- Изменения:
+  - tree balancing теперь сортирует связанные layout vertices выше полностью несвязанных элементов внутри слоя, если такой порядок не увеличивает weighted crossing count;
+  - добавлена length-aware adjacent swap фаза: при равном количестве пересечений соседний обмен принимается, если он сокращает weighted vertical edge length;
+  - добавлен projection regression test, который фиксирует случай, когда связанный левый source не должен оставаться под несвязанным sibling.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-source-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/RoadmapGraphProjection_PullsConnectedLeftSourceAboveUnrelatedSibling"` (1/1)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-source-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (18/18)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-source-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-source-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -568,3 +581,4 @@ Outcome contract:
 | EXEC | Anchor roadmap columns from goals | 0.9 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь указал, что leftmost sources column is the root cause | Layers are now derived from distance to right-side goals; tree balancing can lift independent chains without worsening crossings | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Add dummy-segmented ordering and UI coverage | 0.88 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь попросил покрыть UI tests and continue until layout is good | Long edges now reserve internal dummy lanes across intermediate columns; UI/projection tests cover dense chain readability | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Tighten left prerequisite chains | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с left-side defect | Contains edges now pull mixed prerequisite chains toward their goal band, while compact dummy lanes avoid invisible vertical inflation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Prioritize connected left sources | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с remaining left-side defect | Connected vertices now outrank disconnected siblings when crossing count is not worse, and equal-crossing swaps can shorten arrows | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |

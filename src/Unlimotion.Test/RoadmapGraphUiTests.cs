@@ -446,6 +446,35 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_PullsConnectedLeftSourceAboveUnrelatedSibling()
+    {
+        var storage = new StubTaskStorage();
+        var unrelated = CreateTask("left-unrelated", "Unrelated left item", storage);
+        var source = CreateTask("left-source", "Connected left source", storage);
+        var target = CreateTask("left-target", "Goal near the top", storage);
+
+        source.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { target },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
+            unrelated,
+            source,
+            target));
+        var unrelatedNode = projection.Nodes.Single(node => node.TaskItem == unrelated);
+        var sourceNode = projection.Nodes.Single(node => node.TaskItem == source);
+        var sourceToTarget = projection.Connections.Single(connection =>
+            connection.Tail.TaskItem == source &&
+            connection.Head.TaskItem == target);
+
+        await Assert.That(sourceNode.Location.Y).IsLessThan(unrelatedNode.Location.Y);
+        await Assert.That(Math.Abs(sourceToTarget.Source.Y - sourceToTarget.Target.Y))
+            .IsLessThan(RoadmapNode.Height);
+    }
+
+    [Test]
     public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));

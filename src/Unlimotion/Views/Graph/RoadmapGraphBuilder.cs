@@ -31,8 +31,10 @@ public static class RoadmapGraphBuilder
     private const int ContainsEdgeWeight = 5;
     private const int LayerOrderingPasses = 24;
     private const int AdjacentSwapPasses = 4;
+    private const int LengthAwareSwapPasses = 4;
     private const int TreeBalancingPasses = 8;
     private const int RowRelaxationPasses = 16;
+    private const double EdgeLengthSwapTolerance = 0.5;
 
     public static RoadmapGraphProjection Build(
         ReadOnlyObservableCollection<TaskWrapperViewModel> roots,
@@ -466,6 +468,7 @@ public static class RoadmapGraphBuilder
             var changed = false;
             changed |= BalanceSweep(orderedLayers.Skip(1), preferLowerLayers: true);
             changed |= BalanceSweep(orderedLayers.Reverse().Skip(1), preferLowerLayers: false);
+            changed |= ImproveLayerOrderByEdgeLength(layerOrder, layoutConnections, rows);
 
             if (!changed)
             {
@@ -495,7 +498,8 @@ public static class RoadmapGraphBuilder
                 }
 
                 var candidate = layer
-                    .OrderBy(node => GetDesiredNeighborRow(node, preferLowerLayers))
+                    .OrderBy(GetLayerConnectivityRank)
+                    .ThenBy(node => GetDesiredNeighborRow(node, preferLowerLayers))
                     .ThenBy(node => rows[node])
                     .ThenBy(node => orderByVertex[node])
                     .ThenBy(node => node.StableIndex)
@@ -557,6 +561,11 @@ public static class RoadmapGraphBuilder
             }
 
             return weightedRow.Weight > 0 ? weightedRow.Value : rows[node];
+        }
+
+        int GetLayerConnectivityRank(LayoutVertex node)
+        {
+            return connectionsByTask.ContainsKey(node) ? 0 : 1;
         }
     }
 
@@ -789,6 +798,131 @@ public static class RoadmapGraphBuilder
 
             return affected.ToList();
         }
+    }
+
+    private static bool ImproveLayerOrderByEdgeLength(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutEdge> connections,
+        Dictionary<LayoutVertex, double> rows)
+    {
+        if (connections.Count == 0)
+        {
+            return false;
+        }
+
+        var connectionsByVertex = connections
+            .SelectMany(connection => new[]
+            {
+                new { Vertex = connection.Tail, Connection = connection },
+                new { Vertex = connection.Head, Connection = connection }
+            })
+            .GroupBy(item => item.Vertex)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.Connection).Distinct().ToList());
+        var orderByVertex = BuildOrderByVertex(layerOrder);
+        var changed = false;
+
+        for (var pass = 0; pass < LengthAwareSwapPasses; pass++)
+        {
+            var improved = false;
+
+            foreach (var layer in layerOrder.OrderBy(group => group.Key).Select(group => group.Value))
+            {
+                if (layer.Count < 2)
+                {
+                    continue;
+                }
+
+                for (var index = 0; index < layer.Count - 1; index++)
+                {
+                    var first = layer[index];
+                    var second = layer[index + 1];
+                    var affectedConnections = GetAffectedConnections(first, second);
+                    if (affectedConnections.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var firstRow = rows[first];
+                    var secondRow = rows[second];
+                    var beforeCrossings = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
+                    var beforeLength = CountWeightedVerticalLength(affectedConnections, rows);
+
+                    layer[index] = second;
+                    layer[index + 1] = first;
+                    orderByVertex[first] = index + 1;
+                    orderByVertex[second] = index;
+                    rows[first] = secondRow;
+                    rows[second] = firstRow;
+
+                    var afterCrossings = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
+                    var afterLength = CountWeightedVerticalLength(affectedConnections, rows);
+                    if (afterCrossings < beforeCrossings ||
+                        afterCrossings == beforeCrossings &&
+                        afterLength + EdgeLengthSwapTolerance < beforeLength)
+                    {
+                        improved = true;
+                        changed = true;
+                        continue;
+                    }
+
+                    layer[index] = first;
+                    layer[index + 1] = second;
+                    orderByVertex[first] = index;
+                    orderByVertex[second] = index + 1;
+                    rows[first] = firstRow;
+                    rows[second] = secondRow;
+                }
+            }
+
+            if (!improved)
+            {
+                break;
+            }
+        }
+
+        return changed;
+
+        List<LayoutEdge> GetAffectedConnections(
+            LayoutVertex first,
+            LayoutVertex second)
+        {
+            var affected = new HashSet<LayoutEdge>();
+            if (connectionsByVertex.TryGetValue(first, out var firstConnections))
+            {
+                affected.UnionWith(firstConnections);
+            }
+
+            if (connectionsByVertex.TryGetValue(second, out var secondConnections))
+            {
+                affected.UnionWith(secondConnections);
+            }
+
+            return affected.ToList();
+        }
+    }
+
+    private static double CountWeightedVerticalLength(
+        IEnumerable<LayoutEdge> connections,
+        IReadOnlyDictionary<LayoutVertex, double> rows)
+    {
+        var length = 0d;
+        var visited = new HashSet<LayoutEdge>();
+
+        foreach (var connection in connections)
+        {
+            if (!visited.Add(connection) ||
+                !rows.TryGetValue(connection.Tail, out var tailRow) ||
+                !rows.TryGetValue(connection.Head, out var headRow))
+            {
+                continue;
+            }
+
+            length += Math.Abs(tailRow - headRow) * GetConnectionWeight(connection.Kind);
+        }
+
+        return length;
     }
 
     private static long CountAffectedCrossings(
