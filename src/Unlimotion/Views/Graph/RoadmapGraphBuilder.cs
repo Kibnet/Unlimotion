@@ -20,12 +20,15 @@ public static class RoadmapGraphBuilder
     private const double StartY = 24;
     private const double NodeSeparation = 10;
     private const double LayerSeparation = 140;
+    private const double MinimumRowGap = RoadmapNode.Height + NodeSeparation;
+    private const double RowInertiaWeight = 0.2;
     private const double EstimatedTextCharacterWidth = 7.4;
     private const double NodeChromeWidth = 54;
     private const double RepeaterMarkerWidth = 24;
     private const double EmojiWidth = 24;
     private const int BlocksEdgeWeight = 20;
     private const int ContainsEdgeWeight = 1;
+    private const int RowRelaxationPasses = 16;
 
     public static RoadmapGraphProjection Build(
         ReadOnlyObservableCollection<TaskWrapperViewModel> roots,
@@ -263,6 +266,7 @@ public static class RoadmapGraphBuilder
                 null);
 
             ApplyMsaglLocations(nodes, drawingNodesByTask, graph.GeometryGraph.BoundingBox);
+            ApplyRoadmapLocations(nodes, connections, firstSeen);
         }
         catch (Exception exception)
         {
@@ -290,6 +294,213 @@ public static class RoadmapGraphBuilder
             NoGainAdjacentSwapStepsBound = 8,
             RepetitionCoefficientForOrdering = 8
         };
+    }
+
+    private static void ApplyRoadmapLocations(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+    {
+        var layers = BuildFallbackLayers(nodes.Select(node => node.TaskItem), connections, firstSeen);
+        var layerOrder = nodes
+            .GroupBy(node => layers.GetValueOrDefault(node.TaskItem))
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(node => node.Location.Y)
+                    .ThenBy(node => firstSeen[node.TaskItem])
+                    .ToList());
+        var rows = BuildInitialRows(layerOrder);
+
+        RelaxRows(nodes, connections, layerOrder, rows);
+        NormalizeRows(rows);
+
+        var layerX = BuildLayerPositions(layerOrder);
+        foreach (var node in nodes)
+        {
+            node.Location = new Avalonia.Point(
+                layerX[layers.GetValueOrDefault(node.TaskItem)],
+                StartY + rows[node]);
+        }
+    }
+
+    private static Dictionary<RoadmapNode, double> BuildInitialRows(
+        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder)
+    {
+        var rows = new Dictionary<RoadmapNode, double>();
+
+        foreach (var layer in layerOrder.Values)
+        {
+            for (var index = 0; index < layer.Count; index++)
+            {
+                rows[layer[index]] = index * MinimumRowGap;
+            }
+        }
+
+        return rows;
+    }
+
+    private static Dictionary<int, double> BuildLayerPositions(
+        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder)
+    {
+        var positions = new Dictionary<int, double>();
+        var maxLayer = layerOrder.Keys.DefaultIfEmpty(0).Max();
+        var x = StartX;
+
+        for (var layer = 0; layer <= maxLayer; layer++)
+        {
+            positions[layer] = x;
+            var layerWidth = layerOrder.TryGetValue(layer, out var nodes) && nodes.Count > 0
+                ? nodes.Max(node => node.Width)
+                : RoadmapNode.MinWidth;
+
+            x += layerWidth + LayerSeparation;
+        }
+
+        return positions;
+    }
+
+    private static void RelaxRows(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder,
+        Dictionary<RoadmapNode, double> rows)
+    {
+        var nodesByTask = nodes.ToDictionary(node => node.TaskItem);
+        var neighbors = nodes.ToDictionary(node => node, _ => new List<WeightedNodeNeighbor>());
+
+        foreach (var connection in connections)
+        {
+            if (!nodesByTask.TryGetValue(connection.Tail, out var tail) ||
+                !nodesByTask.TryGetValue(connection.Head, out var head))
+            {
+                continue;
+            }
+
+            var weight = GetConnectionWeight(connection.Kind);
+            neighbors[tail].Add(new WeightedNodeNeighbor(head, weight));
+            neighbors[head].Add(new WeightedNodeNeighbor(tail, weight));
+        }
+
+        if (connections.Count == 0 || layerOrder.Count < 2)
+        {
+            return;
+        }
+
+        var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
+        for (var pass = 0; pass < RowRelaxationPasses; pass++)
+        {
+            foreach (var layer in orderedLayers)
+            {
+                RelaxLayer(layer);
+            }
+
+            foreach (var layer in orderedLayers.Reverse())
+            {
+                RelaxLayer(layer);
+            }
+
+            NormalizeRows(rows);
+        }
+
+        void RelaxLayer(int layerIndex)
+        {
+            if (!layerOrder.TryGetValue(layerIndex, out var layer) || layer.Count == 0)
+            {
+                return;
+            }
+
+            var desiredRows = new double[layer.Count];
+            var desiredWeights = new double[layer.Count];
+
+            for (var index = 0; index < layer.Count; index++)
+            {
+                var node = layer[index];
+                var weightedRowSum = rows[node] * RowInertiaWeight;
+                var totalWeight = RowInertiaWeight;
+
+                foreach (var neighbor in neighbors[node])
+                {
+                    weightedRowSum += rows[neighbor.Node] * neighbor.Weight;
+                    totalWeight += neighbor.Weight;
+                }
+
+                desiredRows[index] = weightedRowSum / totalWeight;
+                desiredWeights[index] = totalWeight;
+            }
+
+            var adjustedRows = ProjectRowsPreservingOrder(
+                desiredRows,
+                desiredWeights,
+                MinimumRowGap);
+
+            for (var index = 0; index < layer.Count; index++)
+            {
+                rows[layer[index]] = adjustedRows[index];
+            }
+        }
+    }
+
+    private static double[] ProjectRowsPreservingOrder(
+        IReadOnlyList<double> desiredRows,
+        IReadOnlyList<double> desiredWeights,
+        double minimumGap)
+    {
+        if (desiredRows.Count == 0)
+        {
+            return Array.Empty<double>();
+        }
+
+        var blocks = new List<RowBlock>();
+        for (var index = 0; index < desiredRows.Count; index++)
+        {
+            blocks.Add(new RowBlock(
+                index,
+                index,
+                Math.Max(desiredWeights[index], 0.0001),
+                desiredRows[index] - index * minimumGap));
+
+            while (blocks.Count >= 2 && blocks[^2].Value > blocks[^1].Value)
+            {
+                var current = blocks[^1];
+                var previous = blocks[^2];
+                var weight = previous.Weight + current.Weight;
+                var value = (previous.Value * previous.Weight + current.Value * current.Weight) / weight;
+
+                blocks[^2] = new RowBlock(previous.Start, current.End, weight, value);
+                blocks.RemoveAt(blocks.Count - 1);
+            }
+        }
+
+        var result = new double[desiredRows.Count];
+        foreach (var block in blocks)
+        {
+            for (var index = block.Start; index <= block.End; index++)
+            {
+                result[index] = block.Value + index * minimumGap;
+            }
+        }
+
+        return result;
+    }
+
+    private static void NormalizeRows(Dictionary<RoadmapNode, double> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var minRow = rows.Values.Min();
+        if (Math.Abs(minRow) < 0.0001)
+        {
+            return;
+        }
+
+        foreach (var node in rows.Keys.ToArray())
+        {
+            rows[node] -= minRow;
+        }
     }
 
     private static void ApplyMsaglLocations(
@@ -406,4 +617,14 @@ public static class RoadmapGraphBuilder
         TaskItemViewModel Tail,
         TaskItemViewModel Head,
         RoadmapConnectionKind Kind);
+
+    private readonly record struct WeightedNodeNeighbor(
+        RoadmapNode Node,
+        int Weight);
+
+    private readonly record struct RowBlock(
+        int Start,
+        int End,
+        double Weight,
+        double Value);
 }

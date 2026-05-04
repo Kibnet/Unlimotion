@@ -158,9 +158,9 @@ public class RoadmapGraphUiTests
         await Assert.That(blockConnection.IsLeftToRight).IsTrue();
         await Assert.That(bridgeConnection.IsLeftToRight).IsTrue();
         await Assert.That(Math.Abs(blockConnection.Source.Y - blockConnection.Target.Y))
-            .IsLessThan(RoadmapNode.Height * 3);
+            .IsLessThan(RoadmapNode.Height * 2);
         await Assert.That(Math.Abs(bridgeConnection.Source.Y - bridgeConnection.Target.Y))
-            .IsLessThan(RoadmapNode.Height * 3);
+            .IsLessThan(RoadmapNode.Height * 2);
     }
 
     [Test]

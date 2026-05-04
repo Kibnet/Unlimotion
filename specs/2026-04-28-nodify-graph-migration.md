@@ -468,6 +468,20 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-path-prune-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: roadmap row relaxation
+- Причина: пользовательский screenshot показал, что чистые MSAGL positions не подходят напрямую для Nodify `LineConnection`: MSAGL учитывает routing/waypoints, а Nodify рисует прямую связь между anchors, из-за чего длинные зеленые связи выглядят как почти вертикальные стены.
+- Изменения:
+  - MSAGL остается источником порядка узлов внутри каждого слоя, чтобы сохранять Sugiyama-style crossing minimization;
+  - финальные координаты снова приводятся к явным left-to-right колонкам, построенным по directed roadmap layers;
+  - новый row relaxation подтягивает связанные узлы к общим горизонтальным рядам, сохраняя порядок внутри слоя и минимальный вертикальный зазор;
+  - block-связи получают больший вес при выравнивании рядов, потому что визуально сильнее задают путь достижения;
+  - projection test для long block/bridge connections ужесточен: вертикальная разница теперь должна быть меньше `RoadmapNode.Height * 2`.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-relax-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (12/12)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-relax-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-relax-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -489,3 +503,4 @@ Outcome contract:
 | EXEC | Вернуть Sugiyama-like road map layout | 0.88 | Визуальный screenshot на реальных данных может потребовать product-tuning | Завершить задачу | Нет | Да, пользователь попросил выполнять | Internal dummy segments and adjacent transposes make long edges participate in layer ordering while keeping bounded layout cost | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Replace manual layout with MSAGL Sugiyama layout-only | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь подтвердил | Nodify remains renderer; MSAGL computes left-to-right Sugiyama positions using measured node widths | `Directory.Packages.props`, `Unlimotion.csproj`, `RoadmapGraphBuilder.cs`, `RoadmapNode.cs`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Hide redundant short roadmap paths | 0.9 | Визуальная проверка на большой пользовательской карте всё еще важна | Завершить задачу | Нет | Да, пользователь попросил перенести механизм старого graph | Projection now removes direct edges that are reachable through a longer directed achievement path | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Improve roadmap node placement with row relaxation | 0.86 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с layout defect | MSAGL order is retained but final columns/rows are optimized for Nodify two-point connections | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
