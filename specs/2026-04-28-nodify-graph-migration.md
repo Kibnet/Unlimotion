@@ -510,6 +510,23 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-goal-layers-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: dummy-segmented goal layout
+- Причина: пользовательский screenshot после goal anchoring всё ещё показывал странности на плотной карте: длинные связи через несколько колонок могли проходить сквозь промежуточные ветки, потому что intermediate columns не учитывали эти связи как отдельные дорожки.
+- Изменения:
+  - `RoadmapGraphBuilder` теперь строит internal layout graph с invisible dummy vertices для связей, которые проходят через несколько слоев;
+  - crossing ordering и row relaxation работают по adjacent dummy segments, а не только по real-node endpoints;
+  - dummy vertices не попадают в `RoadmapNodes`, но резервируют порядок и row lanes для длинных стрелок;
+  - для dummy-dummy соседей используется компактный зазор, а real nodes сохраняют прежний безопасный вертикальный зазор;
+  - `RoadmapGraphUiTests` расширены до 16 tests: добавлены projection и Avalonia.Headless проверки dense block-chain band readability and long-edge crossing avoidance.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (16/16)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-bin\ -- --treenode-filter "/*/*/TaskImportanceUiTests/*"` (4/4)
+  - PASS `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-bin\ -- --treenode-filter "/*/*/TaskListRepeaterMarkerUiTests/*"` (3/3)
+  - TIMEOUT `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-bin\` after 10 minutes; targeted roadmap/UI checks passed.
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -534,3 +551,4 @@ Outcome contract:
 | EXEC | Improve roadmap node placement with row relaxation | 0.86 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с layout defect | MSAGL order is retained but final columns/rows are optimized for Nodify two-point connections | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Sort roadmap layers to reduce arrow crossings | 0.86 | Реальная большая карта может иметь неизбежные пересечения из-за плотных many-to-many dependencies | Завершить задачу | Нет | Да, пользователь прислал screenshots с crossing defect | Layer order now uses barycentric sweeps plus accepted adjacent swaps before row relaxation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Anchor roadmap columns from goals | 0.9 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь указал, что leftmost sources column is the root cause | Layers are now derived from distance to right-side goals; tree balancing can lift independent chains without worsening crossings | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Add dummy-segmented ordering and UI coverage | 0.88 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь попросил покрыть UI tests and continue until layout is good | Long edges now reserve internal dummy lanes across intermediate columns; UI/projection tests cover dense chain readability | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |

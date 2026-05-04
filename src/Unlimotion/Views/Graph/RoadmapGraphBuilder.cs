@@ -21,6 +21,7 @@ public static class RoadmapGraphBuilder
     private const double NodeSeparation = 10;
     private const double LayerSeparation = 140;
     private const double MinimumRowGap = RoadmapNode.Height + NodeSeparation;
+    private const double DummyRowGap = NodeSeparation;
     private const double RowInertiaWeight = 0.2;
     private const double EstimatedTextCharacterWidth = 7.4;
     private const double NodeChromeWidth = 54;
@@ -305,53 +306,140 @@ public static class RoadmapGraphBuilder
         IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
     {
         var layers = BuildFallbackLayers(nodes.Select(node => node.TaskItem), connections, firstSeen);
-        var layerOrder = nodes
-            .GroupBy(node => layers.GetValueOrDefault(node.TaskItem))
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderBy(node => node.Location.Y)
-                    .ThenBy(node => firstSeen[node.TaskItem])
-                    .ToList());
-        OptimizeLayerOrder(layerOrder, connections, firstSeen);
-        var rows = BuildInitialRows(layerOrder);
+        var layoutGraph = BuildLayoutGraph(nodes, connections, layers, firstSeen);
+        OptimizeLayerOrder(layoutGraph.LayerOrder, layoutGraph.Edges);
+        var rows = BuildInitialRows(layoutGraph.LayerOrder);
 
-        RelaxRows(nodes, connections, layerOrder, rows);
-        rows = BalanceLayerOrderByNeighborRows(layerOrder, connections, firstSeen, rows);
+        RelaxRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
+        rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
         NormalizeRows(rows);
 
+        var layerOrder = layoutGraph.LayerOrder.ToDictionary(
+            group => group.Key,
+            group => group.Value
+                .Where(vertex => vertex.Node != null)
+                .Select(vertex => vertex.Node!)
+                .ToList());
         var layerX = BuildLayerPositions(layerOrder);
         foreach (var node in nodes)
         {
+            var vertex = layoutGraph.VertexByNode[node];
             node.Location = new Avalonia.Point(
                 layerX[layers.GetValueOrDefault(node.TaskItem)],
-                StartY + rows[node]);
+                StartY + rows[vertex]);
         }
     }
 
-    private static Dictionary<RoadmapNode, double> BalanceLayerOrderByNeighborRows(
-        Dictionary<int, List<RoadmapNode>> layerOrder,
+    private static LayoutGraph BuildLayoutGraph(
+        IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen,
-        Dictionary<RoadmapNode, double> rows)
+        IReadOnlyDictionary<TaskItemViewModel, int> layers,
+        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+    {
+        var nextStableIndex = 0;
+        var vertexByNode = new Dictionary<RoadmapNode, LayoutVertex>();
+        var vertexByTask = new Dictionary<TaskItemViewModel, LayoutVertex>();
+        var layerOrder = new Dictionary<int, List<LayoutVertex>>();
+
+        foreach (var node in nodes.OrderBy(node => firstSeen[node.TaskItem]))
+        {
+            var layer = layers.GetValueOrDefault(node.TaskItem);
+            var vertex = new LayoutVertex(
+                node,
+                layer,
+                node.Location.Y,
+                nextStableIndex++);
+            vertexByNode[node] = vertex;
+            vertexByTask[node.TaskItem] = vertex;
+
+            if (!layerOrder.TryGetValue(layer, out var layerVertices))
+            {
+                layerVertices = new List<LayoutVertex>();
+                layerOrder[layer] = layerVertices;
+            }
+
+            layerVertices.Add(vertex);
+        }
+
+        foreach (var layer in layerOrder.Values)
+        {
+            layer.Sort((left, right) =>
+            {
+                var locationComparison = left.InitialY.CompareTo(right.InitialY);
+                return locationComparison != 0
+                    ? locationComparison
+                    : left.StableIndex.CompareTo(right.StableIndex);
+            });
+        }
+
+        var layoutEdges = new List<LayoutEdge>();
+        foreach (var connection in connections)
+        {
+            if (!vertexByTask.TryGetValue(connection.Tail, out var tail) ||
+                !vertexByTask.TryGetValue(connection.Head, out var head) ||
+                tail.Layer >= head.Layer)
+            {
+                continue;
+            }
+
+            var previous = tail;
+            for (var layer = tail.Layer + 1; layer < head.Layer; layer++)
+            {
+                var progress = (double)(layer - tail.Layer) / (head.Layer - tail.Layer);
+                var dummy = new LayoutVertex(
+                    null,
+                    layer,
+                    tail.InitialY + (head.InitialY - tail.InitialY) * progress,
+                    nextStableIndex++);
+
+                if (!layerOrder.TryGetValue(layer, out var layerVertices))
+                {
+                    layerVertices = new List<LayoutVertex>();
+                    layerOrder[layer] = layerVertices;
+                }
+
+                layerVertices.Add(dummy);
+                layoutEdges.Add(new LayoutEdge(previous, dummy, connection.Kind));
+                previous = dummy;
+            }
+
+            layoutEdges.Add(new LayoutEdge(previous, head, connection.Kind));
+        }
+
+        foreach (var layer in layerOrder.Values)
+        {
+            layer.Sort((left, right) =>
+            {
+                var locationComparison = left.InitialY.CompareTo(right.InitialY);
+                return locationComparison != 0
+                    ? locationComparison
+                    : left.StableIndex.CompareTo(right.StableIndex);
+            });
+        }
+
+        return new LayoutGraph(layerOrder, vertexByNode, layoutEdges);
+    }
+
+    private static Dictionary<LayoutVertex, double> BalanceLayerOrderByNeighborRows(
+        Dictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutEdge> connections,
+        Dictionary<LayoutVertex, double> rows)
     {
         if (layerOrder.Count < 2 || connections.Count == 0)
         {
             return rows;
         }
 
-        var nodesByTask = layerOrder
-            .SelectMany(group => group.Value)
-            .ToDictionary(node => node.TaskItem);
-        var layersByTask = layerOrder
-            .SelectMany(group => group.Value.Select(node => new { node.TaskItem, Layer = group.Key }))
-            .ToDictionary(item => item.TaskItem, item => item.Layer);
+        var vertices = layerOrder.SelectMany(group => group.Value).ToList();
+        var layersByVertex = layerOrder
+            .SelectMany(group => group.Value.Select(vertex => new { Vertex = vertex, Layer = group.Key }))
+            .ToDictionary(item => item.Vertex, item => item.Layer);
         var layoutConnections = connections
             .Where(connection =>
                 connection.Tail != connection.Head &&
-                nodesByTask.ContainsKey(connection.Tail) &&
-                nodesByTask.ContainsKey(connection.Head) &&
-                layersByTask[connection.Tail] != layersByTask[connection.Head])
+                layersByVertex.ContainsKey(connection.Tail) &&
+                layersByVertex.ContainsKey(connection.Head) &&
+                layersByVertex[connection.Tail] != layersByVertex[connection.Head])
             .ToList();
 
         if (layoutConnections.Count == 0)
@@ -362,16 +450,16 @@ public static class RoadmapGraphBuilder
         var connectionsByTask = layoutConnections
             .SelectMany(connection => new[]
             {
-                new { Task = connection.Tail, Connection = connection },
-                new { Task = connection.Head, Connection = connection }
+                new { Vertex = connection.Tail, Connection = connection },
+                new { Vertex = connection.Head, Connection = connection }
             })
-            .GroupBy(item => item.Task)
+            .GroupBy(item => item.Vertex)
             .ToDictionary(
                 group => group.Key,
                 group => group.Select(item => item.Connection).Distinct().ToList());
         var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
-        var orderByTask = BuildOrderByTask(layerOrder);
-        var currentCrossings = CountWeightedCrossings(layoutConnections, orderByTask);
+        var orderByVertex = BuildOrderByVertex(layerOrder);
+        var currentCrossings = CountWeightedCrossings(layoutConnections, orderByVertex);
 
         for (var pass = 0; pass < TreeBalancingPasses; pass++)
         {
@@ -386,9 +474,8 @@ public static class RoadmapGraphBuilder
 
             rows = BuildInitialRows(layerOrder);
             RelaxRows(
-                nodesByTask.Values.ToList(),
-                layoutConnections,
                 layerOrder,
+                layoutConnections,
                 rows);
         }
 
@@ -410,8 +497,8 @@ public static class RoadmapGraphBuilder
                 var candidate = layer
                     .OrderBy(node => GetDesiredNeighborRow(node, preferLowerLayers))
                     .ThenBy(node => rows[node])
-                    .ThenBy(node => orderByTask[node.TaskItem])
-                    .ThenBy(node => firstSeen[node.TaskItem])
+                    .ThenBy(node => orderByVertex[node])
+                    .ThenBy(node => node.StableIndex)
                     .ToList();
 
                 if (HasSameOrder(layer, candidate))
@@ -423,12 +510,12 @@ public static class RoadmapGraphBuilder
                 layer.Clear();
                 layer.AddRange(candidate);
 
-                var candidateOrderByTask = BuildOrderByTask(layerOrder);
-                var candidateCrossings = CountWeightedCrossings(layoutConnections, candidateOrderByTask);
+                var candidateOrderByVertex = BuildOrderByVertex(layerOrder);
+                var candidateCrossings = CountWeightedCrossings(layoutConnections, candidateOrderByVertex);
                 if (candidateCrossings <= currentCrossings)
                 {
                     currentCrossings = candidateCrossings;
-                    orderByTask = candidateOrderByTask;
+                    orderByVertex = candidateOrderByVertex;
                     changed = true;
                     continue;
                 }
@@ -441,22 +528,22 @@ public static class RoadmapGraphBuilder
         }
 
         double GetDesiredNeighborRow(
-            RoadmapNode node,
+            LayoutVertex node,
             bool preferLowerLayers)
         {
-            if (!connectionsByTask.TryGetValue(node.TaskItem, out var nodeConnections))
+            if (!connectionsByTask.TryGetValue(node, out var nodeConnections))
             {
                 return rows[node];
             }
 
             var weightedRow = default(WeightedRow);
-            var nodeLayer = layersByTask[node.TaskItem];
+            var nodeLayer = layersByVertex[node];
             foreach (var connection in nodeConnections)
             {
-                var neighborTask = connection.Tail == node.TaskItem
+                var neighbor = connection.Tail == node
                     ? connection.Head
                     : connection.Tail;
-                var neighborLayer = layersByTask[neighborTask];
+                var neighborLayer = layersByVertex[neighbor];
 
                 if (preferLowerLayers != neighborLayer < nodeLayer)
                 {
@@ -465,7 +552,7 @@ public static class RoadmapGraphBuilder
 
                 var weight = GetConnectionWeight(connection.Kind);
                 weightedRow = new WeightedRow(
-                    weightedRow.WeightedSum + rows[nodesByTask[neighborTask]] * weight,
+                    weightedRow.WeightedSum + rows[neighbor] * weight,
                     weightedRow.Weight + weight);
             }
 
@@ -474,27 +561,26 @@ public static class RoadmapGraphBuilder
     }
 
     private static void OptimizeLayerOrder(
-        Dictionary<int, List<RoadmapNode>> layerOrder,
-        IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        Dictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutEdge> connections)
     {
         if (layerOrder.Count < 2 || connections.Count == 0)
         {
             return;
         }
 
-        var nodesByTask = layerOrder
+        var vertices = layerOrder
             .SelectMany(group => group.Value)
-            .ToDictionary(node => node.TaskItem);
-        var layersByTask = layerOrder
-            .SelectMany(group => group.Value.Select(node => new { node.TaskItem, Layer = group.Key }))
-            .ToDictionary(item => item.TaskItem, item => item.Layer);
+            .ToHashSet();
+        var layersByVertex = layerOrder
+            .SelectMany(group => group.Value.Select(vertex => new { Vertex = vertex, Layer = group.Key }))
+            .ToDictionary(item => item.Vertex, item => item.Layer);
         var layoutConnections = connections
             .Where(connection =>
                 connection.Tail != connection.Head &&
-                nodesByTask.ContainsKey(connection.Tail) &&
-                nodesByTask.ContainsKey(connection.Head) &&
-                layersByTask[connection.Tail] != layersByTask[connection.Head])
+                vertices.Contains(connection.Tail) &&
+                vertices.Contains(connection.Head) &&
+                layersByVertex[connection.Tail] != layersByVertex[connection.Head])
             .ToList();
 
         if (layoutConnections.Count == 0)
@@ -503,7 +589,7 @@ public static class RoadmapGraphBuilder
         }
 
         var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
-        var orderByTask = BuildOrderByTask(layerOrder);
+        var orderByVertex = BuildOrderByVertex(layerOrder);
 
         for (var pass = 0; pass < LayerOrderingPasses; pass++)
         {
@@ -512,11 +598,10 @@ public static class RoadmapGraphBuilder
                 ReorderLayerByNeighborBarycenter(
                     layerOrder[layerIndex],
                     layoutConnections,
-                    layersByTask,
-                    orderByTask,
-                    firstSeen,
+                    layersByVertex,
+                    orderByVertex,
                     preferLowerLayers: true);
-                orderByTask = BuildOrderByTask(layerOrder);
+                orderByVertex = BuildOrderByVertex(layerOrder);
             }
 
             foreach (var layerIndex in orderedLayers.Reverse().Skip(1))
@@ -524,28 +609,27 @@ public static class RoadmapGraphBuilder
                 ReorderLayerByNeighborBarycenter(
                     layerOrder[layerIndex],
                     layoutConnections,
-                    layersByTask,
-                    orderByTask,
-                    firstSeen,
+                    layersByVertex,
+                    orderByVertex,
                     preferLowerLayers: false);
-                orderByTask = BuildOrderByTask(layerOrder);
+                orderByVertex = BuildOrderByVertex(layerOrder);
             }
 
-            ApplyAdjacentCrossingSwaps(layerOrder, layoutConnections, orderByTask);
+            ApplyAdjacentCrossingSwaps(layerOrder, layoutConnections, orderByVertex);
         }
     }
 
-    private static Dictionary<TaskItemViewModel, int> BuildOrderByTask(
-        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder)
+    private static Dictionary<LayoutVertex, int> BuildOrderByVertex(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder)
     {
         return layerOrder
-            .SelectMany(group => group.Value.Select((node, index) => new { node.TaskItem, Index = index }))
-            .ToDictionary(item => item.TaskItem, item => item.Index);
+            .SelectMany(group => group.Value.Select((vertex, index) => new { Vertex = vertex, Index = index }))
+            .ToDictionary(item => item.Vertex, item => item.Index);
     }
 
     private static bool HasSameOrder(
-        IReadOnlyList<RoadmapNode> first,
-        IReadOnlyList<RoadmapNode> second)
+        IReadOnlyList<LayoutVertex> first,
+        IReadOnlyList<LayoutVertex> second)
     {
         if (first.Count != second.Count)
         {
@@ -564,11 +648,10 @@ public static class RoadmapGraphBuilder
     }
 
     private static void ReorderLayerByNeighborBarycenter(
-        List<RoadmapNode> layer,
-        IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> layersByTask,
-        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen,
+        List<LayoutVertex> layer,
+        IReadOnlyList<LayoutEdge> connections,
+        IReadOnlyDictionary<LayoutVertex, int> layersByVertex,
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex,
         bool preferLowerLayers)
     {
         if (layer.Count < 2)
@@ -576,8 +659,8 @@ public static class RoadmapGraphBuilder
             return;
         }
 
-        var desiredOrderByTask = new Dictionary<TaskItemViewModel, WeightedOrder>();
-        var currentLayerByTask = layer.ToDictionary(node => node.TaskItem, node => layersByTask[node.TaskItem]);
+        var desiredOrderByVertex = new Dictionary<LayoutVertex, WeightedOrder>();
+        var currentLayer = layer.ToHashSet();
 
         foreach (var connection in connections)
         {
@@ -587,60 +670,61 @@ public static class RoadmapGraphBuilder
 
         layer.Sort((left, right) =>
         {
-            var leftOrder = desiredOrderByTask.TryGetValue(left.TaskItem, out var leftWeightedOrder)
+            var leftOrder = desiredOrderByVertex.TryGetValue(left, out var leftWeightedOrder)
                 ? leftWeightedOrder.Value
-                : orderByTask[left.TaskItem];
-            var rightOrder = desiredOrderByTask.TryGetValue(right.TaskItem, out var rightWeightedOrder)
+                : orderByVertex[left];
+            var rightOrder = desiredOrderByVertex.TryGetValue(right, out var rightWeightedOrder)
                 ? rightWeightedOrder.Value
-                : orderByTask[right.TaskItem];
+                : orderByVertex[right];
             var orderComparison = leftOrder.CompareTo(rightOrder);
             if (orderComparison != 0)
             {
                 return orderComparison;
             }
 
-            var currentOrderComparison = orderByTask[left.TaskItem].CompareTo(orderByTask[right.TaskItem]);
+            var currentOrderComparison = orderByVertex[left].CompareTo(orderByVertex[right]);
             return currentOrderComparison != 0
                 ? currentOrderComparison
-                : firstSeen[left.TaskItem].CompareTo(firstSeen[right.TaskItem]);
+                : left.StableIndex.CompareTo(right.StableIndex);
         });
 
         void AddNeighbor(
-            TaskItemViewModel task,
-            TaskItemViewModel neighbor,
+            LayoutVertex vertex,
+            LayoutVertex neighbor,
             RoadmapConnectionKind kind)
         {
-            if (!currentLayerByTask.TryGetValue(task, out var taskLayer) ||
-                !layersByTask.TryGetValue(neighbor, out var neighborLayer))
+            if (!currentLayer.Contains(vertex) ||
+                !layersByVertex.TryGetValue(vertex, out var vertexLayer) ||
+                !layersByVertex.TryGetValue(neighbor, out var neighborLayer))
             {
                 return;
             }
 
-            if (preferLowerLayers != neighborLayer < taskLayer)
+            if (preferLowerLayers != neighborLayer < vertexLayer)
             {
                 return;
             }
 
             var weight = GetConnectionWeight(kind);
-            var weightedOrder = desiredOrderByTask.GetValueOrDefault(task);
-            desiredOrderByTask[task] = new WeightedOrder(
-                weightedOrder.WeightedSum + orderByTask[neighbor] * weight,
+            var weightedOrder = desiredOrderByVertex.GetValueOrDefault(vertex);
+            desiredOrderByVertex[vertex] = new WeightedOrder(
+                weightedOrder.WeightedSum + orderByVertex[neighbor] * weight,
                 weightedOrder.Weight + weight);
         }
     }
 
     private static void ApplyAdjacentCrossingSwaps(
-        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder,
-        IReadOnlyList<ConnectionDefinition> connections,
-        Dictionary<TaskItemViewModel, int> orderByTask)
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutEdge> connections,
+        Dictionary<LayoutVertex, int> orderByVertex)
     {
-        var connectionsByTask = connections
+        var connectionsByVertex = connections
             .SelectMany(connection => new[]
             {
-                new { Task = connection.Tail, Connection = connection },
-                new { Task = connection.Head, Connection = connection }
+                new { Vertex = connection.Tail, Connection = connection },
+                new { Vertex = connection.Head, Connection = connection }
             })
-            .GroupBy(item => item.Task)
+            .GroupBy(item => item.Vertex)
             .ToDictionary(
                 group => group.Key,
                 group => group.Select(item => item.Connection).Distinct().ToList());
@@ -660,15 +744,15 @@ public static class RoadmapGraphBuilder
                 {
                     var first = layer[index];
                     var second = layer[index + 1];
-                    var affectedConnections = GetAffectedConnections(first.TaskItem, second.TaskItem);
-                    var before = CountAffectedCrossings(affectedConnections, connections, orderByTask);
+                    var affectedConnections = GetAffectedConnections(first, second);
+                    var before = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
 
                     layer[index] = second;
                     layer[index + 1] = first;
-                    orderByTask[first.TaskItem] = index + 1;
-                    orderByTask[second.TaskItem] = index;
+                    orderByVertex[first] = index + 1;
+                    orderByVertex[second] = index;
 
-                    var after = CountAffectedCrossings(affectedConnections, connections, orderByTask);
+                    var after = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
                     if (after < before)
                     {
                         improved = true;
@@ -677,8 +761,8 @@ public static class RoadmapGraphBuilder
 
                     layer[index] = first;
                     layer[index + 1] = second;
-                    orderByTask[first.TaskItem] = index;
-                    orderByTask[second.TaskItem] = index + 1;
+                    orderByVertex[first] = index;
+                    orderByVertex[second] = index + 1;
                 }
             }
 
@@ -688,17 +772,17 @@ public static class RoadmapGraphBuilder
             }
         }
 
-        List<ConnectionDefinition> GetAffectedConnections(
-            TaskItemViewModel first,
-            TaskItemViewModel second)
+        List<LayoutEdge> GetAffectedConnections(
+            LayoutVertex first,
+            LayoutVertex second)
         {
-            var affected = new HashSet<ConnectionDefinition>();
-            if (connectionsByTask.TryGetValue(first, out var firstConnections))
+            var affected = new HashSet<LayoutEdge>();
+            if (connectionsByVertex.TryGetValue(first, out var firstConnections))
             {
                 affected.UnionWith(firstConnections);
             }
 
-            if (connectionsByTask.TryGetValue(second, out var secondConnections))
+            if (connectionsByVertex.TryGetValue(second, out var secondConnections))
             {
                 affected.UnionWith(secondConnections);
             }
@@ -708,9 +792,9 @@ public static class RoadmapGraphBuilder
     }
 
     private static long CountAffectedCrossings(
-        IReadOnlyList<ConnectionDefinition> affectedConnections,
-        IReadOnlyList<ConnectionDefinition> allConnections,
-        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask)
+        IReadOnlyList<LayoutEdge> affectedConnections,
+        IReadOnlyList<LayoutEdge> allConnections,
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex)
     {
         long crossings = 0;
 
@@ -719,7 +803,7 @@ public static class RoadmapGraphBuilder
             foreach (var connection in allConnections)
             {
                 if (affectedConnection.Equals(connection) ||
-                    !HasOrderCrossing(affectedConnection, connection, orderByTask))
+                    !HasOrderCrossing(affectedConnection, connection, orderByVertex))
                 {
                     continue;
                 }
@@ -732,8 +816,8 @@ public static class RoadmapGraphBuilder
     }
 
     private static long CountWeightedCrossings(
-        IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask)
+        IReadOnlyList<LayoutEdge> connections,
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex)
     {
         long crossings = 0;
 
@@ -743,7 +827,7 @@ public static class RoadmapGraphBuilder
             {
                 var first = connections[firstIndex];
                 var second = connections[secondIndex];
-                if (HasOrderCrossing(first, second, orderByTask))
+                if (HasOrderCrossing(first, second, orderByVertex))
                 {
                     crossings += GetConnectionWeight(first.Kind) * GetConnectionWeight(second.Kind);
                 }
@@ -754,28 +838,35 @@ public static class RoadmapGraphBuilder
     }
 
     private static bool HasOrderCrossing(
-        ConnectionDefinition first,
-        ConnectionDefinition second,
-        IReadOnlyDictionary<TaskItemViewModel, int> orderByTask)
+        LayoutEdge first,
+        LayoutEdge second,
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex)
     {
-        var sourceOrder = orderByTask[first.Tail].CompareTo(orderByTask[second.Tail]);
-        var targetOrder = orderByTask[first.Head].CompareTo(orderByTask[second.Head]);
+        if (first.Tail.Layer != second.Tail.Layer ||
+            first.Head.Layer != second.Head.Layer)
+        {
+            return false;
+        }
+
+        var sourceOrder = orderByVertex[first.Tail].CompareTo(orderByVertex[second.Tail]);
+        var targetOrder = orderByVertex[first.Head].CompareTo(orderByVertex[second.Head]);
 
         return sourceOrder != 0 &&
                targetOrder != 0 &&
                sourceOrder != targetOrder;
     }
 
-    private static Dictionary<RoadmapNode, double> BuildInitialRows(
-        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder)
+    private static Dictionary<LayoutVertex, double> BuildInitialRows(
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder)
     {
-        var rows = new Dictionary<RoadmapNode, double>();
+        var rows = new Dictionary<LayoutVertex, double>();
 
         foreach (var layer in layerOrder.Values)
         {
+            var offsets = BuildRowOffsets(layer);
             for (var index = 0; index < layer.Count; index++)
             {
-                rows[layer[index]] = index * MinimumRowGap;
+                rows[layer[index]] = offsets[index];
             }
         }
 
@@ -803,25 +894,24 @@ public static class RoadmapGraphBuilder
     }
 
     private static void RelaxRows(
-        IReadOnlyList<RoadmapNode> nodes,
-        IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<int, List<RoadmapNode>> layerOrder,
-        Dictionary<RoadmapNode, double> rows)
+        IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
+        IReadOnlyList<LayoutEdge> connections,
+        Dictionary<LayoutVertex, double> rows)
     {
-        var nodesByTask = nodes.ToDictionary(node => node.TaskItem);
-        var neighbors = nodes.ToDictionary(node => node, _ => new List<WeightedNodeNeighbor>());
+        var vertices = layerOrder.SelectMany(group => group.Value).ToHashSet();
+        var neighbors = vertices.ToDictionary(vertex => vertex, _ => new List<WeightedVertexNeighbor>());
 
         foreach (var connection in connections)
         {
-            if (!nodesByTask.TryGetValue(connection.Tail, out var tail) ||
-                !nodesByTask.TryGetValue(connection.Head, out var head))
+            if (!vertices.Contains(connection.Tail) ||
+                !vertices.Contains(connection.Head))
             {
                 continue;
             }
 
             var weight = GetConnectionWeight(connection.Kind);
-            neighbors[tail].Add(new WeightedNodeNeighbor(head, weight));
-            neighbors[head].Add(new WeightedNodeNeighbor(tail, weight));
+            neighbors[connection.Tail].Add(new WeightedVertexNeighbor(connection.Head, weight));
+            neighbors[connection.Head].Add(new WeightedVertexNeighbor(connection.Tail, weight));
         }
 
         if (connections.Count == 0 || layerOrder.Count < 2)
@@ -854,16 +944,17 @@ public static class RoadmapGraphBuilder
 
             var desiredRows = new double[layer.Count];
             var desiredWeights = new double[layer.Count];
+            var rowOffsets = BuildRowOffsets(layer);
 
             for (var index = 0; index < layer.Count; index++)
             {
-                var node = layer[index];
-                var weightedRowSum = rows[node] * RowInertiaWeight;
+                var vertex = layer[index];
+                var weightedRowSum = rows[vertex] * RowInertiaWeight;
                 var totalWeight = RowInertiaWeight;
 
-                foreach (var neighbor in neighbors[node])
+                foreach (var neighbor in neighbors[vertex])
                 {
-                    weightedRowSum += rows[neighbor.Node] * neighbor.Weight;
+                    weightedRowSum += rows[neighbor.Vertex] * neighbor.Weight;
                     totalWeight += neighbor.Weight;
                 }
 
@@ -874,7 +965,7 @@ public static class RoadmapGraphBuilder
             var adjustedRows = ProjectRowsPreservingOrder(
                 desiredRows,
                 desiredWeights,
-                MinimumRowGap);
+                rowOffsets);
 
             for (var index = 0; index < layer.Count; index++)
             {
@@ -883,10 +974,33 @@ public static class RoadmapGraphBuilder
         }
     }
 
+    private static double[] BuildRowOffsets(IReadOnlyList<LayoutVertex> layer)
+    {
+        if (layer.Count == 0)
+        {
+            return Array.Empty<double>();
+        }
+
+        var offsets = new double[layer.Count];
+        for (var index = 1; index < layer.Count; index++)
+        {
+            offsets[index] = offsets[index - 1] + GetMinimumRowGap(layer[index - 1], layer[index]);
+        }
+
+        return offsets;
+    }
+
+    private static double GetMinimumRowGap(LayoutVertex first, LayoutVertex second)
+    {
+        return first.IsDummy && second.IsDummy
+            ? DummyRowGap
+            : MinimumRowGap;
+    }
+
     private static double[] ProjectRowsPreservingOrder(
         IReadOnlyList<double> desiredRows,
         IReadOnlyList<double> desiredWeights,
-        double minimumGap)
+        IReadOnlyList<double> rowOffsets)
     {
         if (desiredRows.Count == 0)
         {
@@ -900,7 +1014,7 @@ public static class RoadmapGraphBuilder
                 index,
                 index,
                 Math.Max(desiredWeights[index], 0.0001),
-                desiredRows[index] - index * minimumGap));
+                desiredRows[index] - rowOffsets[index]));
 
             while (blocks.Count >= 2 && blocks[^2].Value > blocks[^1].Value)
             {
@@ -919,14 +1033,14 @@ public static class RoadmapGraphBuilder
         {
             for (var index = block.Start; index <= block.End; index++)
             {
-                result[index] = block.Value + index * minimumGap;
+                result[index] = block.Value + rowOffsets[index];
             }
         }
 
         return result;
     }
 
-    private static void NormalizeRows(Dictionary<RoadmapNode, double> rows)
+    private static void NormalizeRows(Dictionary<LayoutVertex, double> rows)
     {
         if (rows.Count == 0)
         {
@@ -1134,8 +1248,43 @@ public static class RoadmapGraphBuilder
         TaskItemViewModel Head,
         RoadmapConnectionKind Kind);
 
-    private readonly record struct WeightedNodeNeighbor(
-        RoadmapNode Node,
+    private sealed class LayoutVertex
+    {
+        public LayoutVertex(
+            RoadmapNode? node,
+            int layer,
+            double initialY,
+            int stableIndex)
+        {
+            Node = node;
+            Layer = layer;
+            InitialY = initialY;
+            StableIndex = stableIndex;
+        }
+
+        public RoadmapNode? Node { get; }
+
+        public int Layer { get; }
+
+        public double InitialY { get; }
+
+        public int StableIndex { get; }
+
+        public bool IsDummy => Node == null;
+    }
+
+    private readonly record struct LayoutEdge(
+        LayoutVertex Tail,
+        LayoutVertex Head,
+        RoadmapConnectionKind Kind);
+
+    private readonly record struct LayoutGraph(
+        Dictionary<int, List<LayoutVertex>> LayerOrder,
+        Dictionary<RoadmapNode, LayoutVertex> VertexByNode,
+        IReadOnlyList<LayoutEdge> Edges);
+
+    private readonly record struct WeightedVertexNeighbor(
+        LayoutVertex Vertex,
         int Weight);
 
     private readonly record struct WeightedOrder(

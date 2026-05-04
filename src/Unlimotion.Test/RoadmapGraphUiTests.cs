@@ -294,6 +294,141 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_KeepsBlockChainInGoalBand()
+    {
+        var storage = new StubTaskStorage();
+        var fixture = CreateDenseRoadmapFixture(storage);
+
+        var projection = RoadmapGraphBuilder.Build(fixture.Roots);
+        var chainNodes = fixture.Chain
+            .Select(task => projection.Nodes.Single(node => node.TaskItem == task))
+            .ToArray();
+        var chainConnections = projection.Connections
+            .Where(connection =>
+                connection.Kind == RoadmapConnectionKind.Blocks &&
+                fixture.Chain.Contains(connection.Tail.TaskItem) &&
+                fixture.Chain.Contains(connection.Head.TaskItem))
+            .ToArray();
+        var unrelatedContains = projection.Connections
+            .Where(connection =>
+                connection.Kind == RoadmapConnectionKind.Contains &&
+                fixture.Fillers.Contains(connection.Tail.TaskItem) &&
+                connection.Head.TaskItem == fixture.Root)
+            .ToArray();
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(chainConnections.Length).IsEqualTo(2);
+        await Assert.That(GetVerticalSpan(chainNodes)).IsLessThan(RoadmapNode.Height * 4);
+        await Assert.That(CountSegmentCrossings(chainConnections, unrelatedContains)).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task RoadmapGraphProjection_AvoidsCrossingLongEdgesThroughIntermediateLayers()
+    {
+        var storage = new StubTaskStorage();
+        var start = CreateTask("start", "Start", storage);
+        var mainFirst = CreateTask("main-first", "Main first", storage);
+        var mainSecond = CreateTask("main-second", "Main second", storage);
+        var mainGoal = CreateTask("main-goal", "Main goal", storage);
+        var sideFirst = CreateTask("side-first", "Side first", storage);
+        var sideSecond = CreateTask("side-second", "Side second", storage);
+        var sideGoal = CreateTask("side-goal", "Side goal", storage);
+
+        start.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { mainFirst, sideGoal },
+            Array.Empty<TaskItemViewModel>());
+        mainFirst.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { mainSecond },
+            Array.Empty<TaskItemViewModel>());
+        mainSecond.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { mainGoal },
+            Array.Empty<TaskItemViewModel>());
+        sideFirst.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { sideSecond },
+            Array.Empty<TaskItemViewModel>());
+        sideSecond.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { sideGoal },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
+            mainGoal,
+            sideGoal,
+            mainSecond,
+            sideSecond,
+            mainFirst,
+            sideFirst,
+            start));
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(CountSegmentCrossings(projection.Connections)).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var storage = new StubTaskStorage();
+            var fixture = CreateDenseRoadmapFixture(storage);
+            var graphViewModel = new GraphViewModel
+            {
+                Tasks = fixture.Roots,
+                UnlockedTasks = fixture.Roots
+            };
+            Window? window = null;
+
+            try
+            {
+                var view = new GraphControl { DataContext = graphViewModel };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var graphControl = WaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+
+                var expectedNodeCount = 1 + fixture.Chain.Length + fixture.Fillers.Length;
+                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count == expectedNodeCount);
+                await Assert.That(nodesReady).IsTrue();
+
+                var chainNodes = fixture.Chain
+                    .Select(task => graphControl!.RoadmapNodes.Single(node => node.TaskItem == task))
+                    .ToArray();
+                var chainConnections = graphControl!.RoadmapConnections
+                    .Where(connection =>
+                        connection.Kind == RoadmapConnectionKind.Blocks &&
+                        fixture.Chain.Contains(connection.Tail.TaskItem) &&
+                        fixture.Chain.Contains(connection.Head.TaskItem))
+                    .ToArray();
+                var unrelatedContains = graphControl.RoadmapConnections
+                    .Where(connection =>
+                        connection.Kind == RoadmapConnectionKind.Contains &&
+                        fixture.Fillers.Contains(connection.Tail.TaskItem) &&
+                        connection.Head.TaskItem == fixture.Root)
+                    .ToArray();
+
+                await Assert.That(GetVerticalSpan(chainNodes)).IsLessThan(RoadmapNode.Height * 4);
+                await Assert.That(CountSegmentCrossings(chainConnections, unrelatedContains)).IsEqualTo(0);
+            }
+            finally
+            {
+                window?.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task RoadmapGraph_NodifyView_RendersTasksAndKeepsAutomationIds()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -901,6 +1036,54 @@ public class RoadmapGraphUiTests
         return wrapper;
     }
 
+    private static DenseRoadmapFixture CreateDenseRoadmapFixture(ITaskStorage storage)
+    {
+        var root = CreateTask("roadmap-root", "Roadmap root", storage);
+        var chainStart = CreateTask("chain-start", "Clarify business rule", storage);
+        var chainMiddle = CreateTask("chain-middle", "Prototype rule check", storage);
+        var chainGoal = CreateTask("chain-goal", "Ship rule automation", storage);
+        var fillers = Enumerable.Range(0, 12)
+            .Select(index => CreateTask(
+                $"filler-{index}",
+                $"Independent roadmap item {index}",
+                storage))
+            .ToArray();
+
+        chainStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { chainMiddle },
+            Array.Empty<TaskItemViewModel>());
+        chainMiddle.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { chainGoal },
+            Array.Empty<TaskItemViewModel>());
+
+        var rootWrapper = CreateWrapper(
+            root,
+            new[] { CreateWrapper(chainGoal) }
+                .Concat(fillers.Select(task => CreateWrapper(task)))
+                .Concat(new[]
+                {
+                    CreateWrapper(chainMiddle),
+                    CreateWrapper(chainStart)
+                })
+                .ToArray());
+
+        return new DenseRoadmapFixture(
+            CreateRootWrappersFromWrappers(rootWrapper),
+            root,
+            new[] { chainStart, chainMiddle, chainGoal },
+            fillers);
+    }
+
+    private static double GetVerticalSpan(IEnumerable<RoadmapNode> nodes)
+    {
+        var rows = nodes.Select(node => node.Location.Y).ToArray();
+        return rows.Max() - rows.Min();
+    }
+
     private static int CountConnectionCrossings(IEnumerable<RoadmapConnection> connections)
     {
         var orderedConnections = connections.ToList();
@@ -924,6 +1107,84 @@ public class RoadmapGraphUiTests
 
         return crossings;
     }
+
+    private static int CountSegmentCrossings(
+        IEnumerable<RoadmapConnection> firstConnections,
+        IEnumerable<RoadmapConnection> secondConnections)
+    {
+        var first = firstConnections.ToArray();
+        var second = secondConnections.ToArray();
+        var crossings = 0;
+
+        foreach (var left in first)
+        {
+            foreach (var right in second)
+            {
+                if (SegmentsIntersect(left.Source, left.Target, right.Source, right.Target))
+                {
+                    crossings++;
+                }
+            }
+        }
+
+        return crossings;
+    }
+
+    private static int CountSegmentCrossings(IEnumerable<RoadmapConnection> connections)
+    {
+        var orderedConnections = connections.ToArray();
+        var crossings = 0;
+
+        for (var firstIndex = 0; firstIndex < orderedConnections.Length; firstIndex++)
+        {
+            for (var secondIndex = firstIndex + 1; secondIndex < orderedConnections.Length; secondIndex++)
+            {
+                var first = orderedConnections[firstIndex];
+                var second = orderedConnections[secondIndex];
+                if (first.Tail == second.Tail ||
+                    first.Tail == second.Head ||
+                    first.Head == second.Tail ||
+                    first.Head == second.Head)
+                {
+                    continue;
+                }
+
+                if (SegmentsIntersect(first.Source, first.Target, second.Source, second.Target))
+                {
+                    crossings++;
+                }
+            }
+        }
+
+        return crossings;
+    }
+
+    private static bool SegmentsIntersect(
+        Avalonia.Point firstStart,
+        Avalonia.Point firstEnd,
+        Avalonia.Point secondStart,
+        Avalonia.Point secondEnd)
+    {
+        return GetOrientation(firstStart, firstEnd, secondStart) *
+               GetOrientation(firstStart, firstEnd, secondEnd) < 0 &&
+               GetOrientation(secondStart, secondEnd, firstStart) *
+               GetOrientation(secondStart, secondEnd, firstEnd) < 0;
+    }
+
+    private static double GetOrientation(
+        Avalonia.Point first,
+        Avalonia.Point second,
+        Avalonia.Point third)
+    {
+        return (second.X - first.X) * (third.Y - first.Y) -
+               (second.Y - first.Y) * (third.X - first.X);
+    }
+
+    private sealed record DenseRoadmapFixture(
+        ReadOnlyObservableCollection<TaskWrapperViewModel> Roots,
+        TaskItemViewModel Root,
+        TaskItemViewModel[] Chain,
+        TaskItemViewModel[] Fillers);
 
     private sealed class StubTaskStorage : ITaskStorage
     {
