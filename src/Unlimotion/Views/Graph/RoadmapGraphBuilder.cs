@@ -28,7 +28,7 @@ public static class RoadmapGraphBuilder
     private const double RepeaterMarkerWidth = 24;
     private const double EmojiWidth = 24;
     private const int BlocksEdgeWeight = 20;
-    private const int ContainsEdgeWeight = 1;
+    private const int ContainsEdgeWeight = 5;
     private const int LayerOrderingPasses = 24;
     private const int AdjacentSwapPasses = 4;
     private const int TreeBalancingPasses = 8;
@@ -982,19 +982,29 @@ public static class RoadmapGraphBuilder
         }
 
         var offsets = new double[layer.Count];
+        double? previousRealOffset = layer[0].IsDummy ? null : 0;
         for (var index = 1; index < layer.Count; index++)
         {
-            offsets[index] = offsets[index - 1] + GetMinimumRowGap(layer[index - 1], layer[index]);
+            var current = layer[index];
+            var compactGap = layer[index - 1].IsDummy || current.IsDummy
+                ? DummyRowGap
+                : MinimumRowGap;
+            var offset = offsets[index - 1] + compactGap;
+
+            if (!current.IsDummy)
+            {
+                if (previousRealOffset.HasValue)
+                {
+                    offset = Math.Max(offset, previousRealOffset.Value + MinimumRowGap);
+                }
+
+                previousRealOffset = offset;
+            }
+
+            offsets[index] = offset;
         }
 
         return offsets;
-    }
-
-    private static double GetMinimumRowGap(LayoutVertex first, LayoutVertex second)
-    {
-        return first.IsDummy && second.IsDummy
-            ? DummyRowGap
-            : MinimumRowGap;
     }
 
     private static double[] ProjectRowsPreservingOrder(

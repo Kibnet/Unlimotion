@@ -374,6 +374,78 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_KeepsMixedPrerequisiteChainNearItsGoal()
+    {
+        var storage = new StubTaskStorage();
+        var root = CreateTask("mixed-root", "Root goal", storage);
+        var feature = CreateTask("mixed-feature", "Feature goal", storage);
+        var goal = CreateTask("mixed-goal", "Mobile release goal", storage);
+        var blockedByBuild = CreateTask("mixed-blocked-by-build", "Publish Android package", storage);
+        var buildScript = CreateTask("mixed-build-script", "Add Android build script", storage);
+        var leftStart = CreateTask("mixed-left-start", "Fix libgit2 Android build", storage);
+        var rootFillers = Enumerable.Range(0, 12)
+            .Select(index => CreateTask(
+                $"mixed-root-filler-{index}",
+                $"Root sibling {index}",
+                storage))
+            .ToArray();
+        var featureFillers = Enumerable.Range(0, 10)
+            .Select(index => CreateTask(
+                $"mixed-feature-filler-{index}",
+                $"Feature sibling {index}",
+                storage))
+            .ToArray();
+
+        leftStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { buildScript },
+            Array.Empty<TaskItemViewModel>());
+        goal.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { blockedByBuild },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappersFromWrappers(
+            CreateWrapper(
+                root,
+                rootFillers
+                    .Select(task => CreateWrapper(task))
+                    .Concat(new[]
+                    {
+                        CreateWrapper(
+                            feature,
+                            featureFillers
+                                .Select(task => CreateWrapper(task))
+                                .Concat(new[]
+                                {
+                                    CreateWrapper(goal, CreateWrapper(buildScript)),
+                                    CreateWrapper(blockedByBuild)
+                                })
+                                .ToArray()),
+                        CreateWrapper(leftStart)
+                    })
+                    .ToArray())));
+        var chainNodes = new[] { leftStart, buildScript, goal, blockedByBuild }
+            .Select(task => projection.Nodes.Single(node => node.TaskItem == task))
+            .ToArray();
+        var buildScriptToGoal = projection.Connections.Single(connection =>
+            connection.Tail.TaskItem == buildScript &&
+            connection.Head.TaskItem == goal);
+        var goalToBlocked = projection.Connections.Single(connection =>
+            connection.Tail.TaskItem == goal &&
+            connection.Head.TaskItem == blockedByBuild);
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(GetVerticalSpan(chainNodes)).IsLessThan(RoadmapNode.Height * 5);
+        await Assert.That(Math.Abs(buildScriptToGoal.Source.Y - buildScriptToGoal.Target.Y))
+            .IsLessThan(RoadmapNode.Height * 2);
+        await Assert.That(Math.Abs(goalToBlocked.Source.Y - goalToBlocked.Target.Y))
+            .IsLessThan(RoadmapNode.Height * 2);
+    }
+
+    [Test]
     public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));

@@ -527,6 +527,21 @@ Outcome contract:
   - TIMEOUT `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-dummy-bin\` after 10 minutes; targeted roadmap/UI checks passed.
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-04: left prerequisite chain tightening
+- Причина: пользовательский screenshot после dummy-segmented layout показал, что левая часть roadmap всё ещё может выглядеть слишком оторванной: смешанные block/contains prerequisite-цепочки выстраиваются в правильном направлении, но green contains segments недостаточно подтягивают задачи к их ближайшим целям.
+- Изменения:
+  - `ContainsEdgeWeight` повышен с 1 до 5: contains-связи остаются слабее block-связей, но теперь участвуют в горизонтальном выравнивании цепочек как реальные path edges;
+  - dummy vertices больше не создают полный vertical gap рядом с real nodes; полный `MinimumRowGap` гарантируется только между visible real nodes, а dummy lanes остаются компактными;
+  - добавлен projection regression test для mixed red/green prerequisite chain inside dense tree, чтобы левая цепочка оставалась рядом со своей goal-band.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (17/17)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-bin\ -- --treenode-filter "/*/*/TaskImportanceUiTests/*"` (4/4)
+  - PASS `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-bin\ -- --treenode-filter "/*/*/TaskListRepeaterMarkerUiTests/*"` (3/3)
+  - TIMEOUT `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-chain-bin\` after 10 minutes; targeted roadmap/UI checks passed.
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -552,3 +567,4 @@ Outcome contract:
 | EXEC | Sort roadmap layers to reduce arrow crossings | 0.86 | Реальная большая карта может иметь неизбежные пересечения из-за плотных many-to-many dependencies | Завершить задачу | Нет | Да, пользователь прислал screenshots с crossing defect | Layer order now uses barycentric sweeps plus accepted adjacent swaps before row relaxation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Anchor roadmap columns from goals | 0.9 | Визуальная проверка на реальной большой карте всё ещё важна | Завершить задачу | Нет | Да, пользователь указал, что leftmost sources column is the root cause | Layers are now derived from distance to right-side goals; tree balancing can lift independent chains without worsening crossings | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Add dummy-segmented ordering and UI coverage | 0.88 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь попросил покрыть UI tests and continue until layout is good | Long edges now reserve internal dummy lanes across intermediate columns; UI/projection tests cover dense chain readability | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Tighten left prerequisite chains | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с left-side defect | Contains edges now pull mixed prerequisite chains toward their goal band, while compact dummy lanes avoid invisible vertical inflation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
