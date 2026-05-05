@@ -1477,13 +1477,112 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                var completedCheckBox = view.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .First(control => string.Equals(control.Content?.ToString(), "Completed", StringComparison.Ordinal));
                 await Assert.That(allTasksTree).IsNotNull();
 
                 await ClickControlAsync(window, allTasksTree!);
+                completedCheckBox.Focus();
                 PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(GetSelectedWrappers(allTasksTree).Count).IsEqualTo(CountWrappers(vm.CurrentAllTasksItems));
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(relationTree).IsNotNull();
+                await Assert.That(CountWrappers(vm.CurrentItemContains.SubTasks)).IsGreaterThan(0);
+
+                await ClickControlAsync(window, allTasksTree!);
+                var focused = relationTree!.Focus();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(focused).IsTrue();
+
+                PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(GetSelectedWrappers(relationTree).Count)
+                    .IsEqualTo(CountWrappers(vm.CurrentItemContains.SubTasks));
+                await Assert.That(GetSelectedWrappers(allTasksTree).Count)
+                    .IsNotEqualTo(CountWrappers(vm.CurrentAllTasksItems));
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_CtrlA_SelectsTextWhenTextInputFocused()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = true;
+                var currentTask = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(currentTask).IsNotNull();
+                currentTask!.Title = "Ctrl A text selection";
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                var titleTextBox = view.FindControl<TextBox>("CurrentTaskTitleTextBox");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(titleTextBox).IsNotNull();
+
+                titleTextBox!.Focus();
+                titleTextBox.CaretIndex = 5;
+                titleTextBox.ClearSelection();
+                PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(titleTextBox.SelectedText).IsEqualTo(titleTextBox.Text);
+                await Assert.That(GetSelectedWrappers(allTasksTree!).Count).IsNotEqualTo(CountWrappers(vm.CurrentAllTasksItems));
             }
             finally
             {
