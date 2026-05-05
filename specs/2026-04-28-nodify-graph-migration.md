@@ -555,6 +555,19 @@ Outcome contract:
   - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-left-source-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
   - PASS `git diff --check` (only LF/CRLF warnings)
 
+### Follow-up 2026-05-05: visible-edge row alignment
+- Причина: пользовательский screenshot на `1ce54d3` показал, что самые левые пути всё ещё визуально блуждают. Причина в том, что dummy vertices хорошо помогают crossing ordering, но Nodify рисует реальную связь как прямой endpoint-to-endpoint connection, поэтому финальная row alignment должна учитывать не только dummy-сегменты, но и видимые реальные связи.
+- Изменения:
+  - после dummy-based ordering строится дополнительный набор `LayoutEdge` для реальных видимых connections между настоящими узлами;
+  - финальная `BalanceLayerOrderByNeighborRows` работает по dummy+visible edges, а завершающий `RelaxRows` подтягивает узлы по visible edges напрямую;
+  - добавлен projection regression для длинного левого block path, ведущего в плотную target-band.
+- Verification:
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-real-edge-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/RoadmapGraphProjection_KeepsLongLeftPathNearDenseTargetBand"` (1/1)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-real-edge-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (19/19)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-real-edge-build\ -p:UseSharedCompilation=false`
+  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-real-edge-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `git diff --check` (only LF/CRLF warnings)
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -582,3 +595,4 @@ Outcome contract:
 | EXEC | Add dummy-segmented ordering and UI coverage | 0.88 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь попросил покрыть UI tests and continue until layout is good | Long edges now reserve internal dummy lanes across intermediate columns; UI/projection tests cover dense chain readability | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Tighten left prerequisite chains | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с left-side defect | Contains edges now pull mixed prerequisite chains toward their goal band, while compact dummy lanes avoid invisible vertical inflation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Prioritize connected left sources | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с remaining left-side defect | Connected vertices now outrank disconnected siblings when crossing count is not worse, and equal-crossing swaps can shorten arrows | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Align visible long roadmap edges | 0.84 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с wandering left paths | Final row balancing now includes real visible endpoint-to-endpoint edges in addition to dummy segments | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |

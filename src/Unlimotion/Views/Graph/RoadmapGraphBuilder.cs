@@ -311,9 +311,17 @@ public static class RoadmapGraphBuilder
         var layoutGraph = BuildLayoutGraph(nodes, connections, layers, firstSeen);
         OptimizeLayerOrder(layoutGraph.LayerOrder, layoutGraph.Edges);
         var rows = BuildInitialRows(layoutGraph.LayerOrder);
+        var visibleEdges = BuildVisibleLayoutEdges(connections, layoutGraph.VertexByNode);
 
         RelaxRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
         rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
+        if (visibleEdges.Count > 0)
+        {
+            var rowBalancingEdges = layoutGraph.Edges.Concat(visibleEdges).ToArray();
+            rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, rowBalancingEdges, rows);
+            RelaxRows(layoutGraph.LayerOrder, visibleEdges, rows);
+        }
+
         NormalizeRows(rows);
 
         var layerOrder = layoutGraph.LayerOrder.ToDictionary(
@@ -420,6 +428,30 @@ public static class RoadmapGraphBuilder
         }
 
         return new LayoutGraph(layerOrder, vertexByNode, layoutEdges);
+    }
+
+    private static List<LayoutEdge> BuildVisibleLayoutEdges(
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<RoadmapNode, LayoutVertex> vertexByNode)
+    {
+        var vertexByTask = vertexByNode.ToDictionary(
+            item => item.Key.TaskItem,
+            item => item.Value);
+        var visibleEdges = new List<LayoutEdge>();
+
+        foreach (var connection in connections)
+        {
+            if (!vertexByTask.TryGetValue(connection.Tail, out var tail) ||
+                !vertexByTask.TryGetValue(connection.Head, out var head) ||
+                tail.Layer >= head.Layer)
+            {
+                continue;
+            }
+
+            visibleEdges.Add(new LayoutEdge(tail, head, connection.Kind));
+        }
+
+        return visibleEdges;
     }
 
     private static Dictionary<LayoutVertex, double> BalanceLayerOrderByNeighborRows(

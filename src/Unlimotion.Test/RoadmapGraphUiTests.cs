@@ -446,6 +446,79 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_KeepsLongLeftPathNearDenseTargetBand()
+    {
+        var storage = new StubTaskStorage();
+        var root = CreateTask("dense-root", "Root goal", storage);
+        var feature = CreateTask("dense-feature", "Feature branch", storage);
+        var target = CreateTask("dense-target", "Dense target", storage);
+        var leftStart = CreateTask("dense-left-start", "Left start", storage);
+        var leftMiddle = CreateTask("dense-left-middle", "Left middle", storage);
+        var leftEnd = CreateTask("dense-left-end", "Left end", storage);
+        var rootFillers = Enumerable.Range(0, 24)
+            .Select(index => CreateTask(
+                $"dense-root-filler-{index}",
+                $"Root filler {index}",
+                storage))
+            .ToArray();
+        var featureFillers = Enumerable.Range(0, 24)
+            .Select(index => CreateTask(
+                $"dense-feature-filler-{index}",
+                $"Feature filler {index}",
+                storage))
+            .ToArray();
+
+        leftStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { leftMiddle },
+            Array.Empty<TaskItemViewModel>());
+        leftMiddle.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { leftEnd },
+            Array.Empty<TaskItemViewModel>());
+        leftEnd.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { target },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappersFromWrappers(
+            CreateWrapper(
+                root,
+                new[]
+                {
+                    CreateWrapper(
+                        feature,
+                        new[] { CreateWrapper(target) }
+                            .Concat(featureFillers.Select(task => CreateWrapper(task)))
+                            .ToArray())
+                }
+                    .Concat(rootFillers.Select(task => CreateWrapper(task)))
+                    .Concat(new[]
+                    {
+                        CreateWrapper(leftStart),
+                        CreateWrapper(leftMiddle),
+                        CreateWrapper(leftEnd)
+                    })
+                    .ToArray())));
+        var chainConnections = projection.Connections
+            .Where(connection =>
+                connection.Kind == RoadmapConnectionKind.Blocks &&
+                (connection.Tail.TaskItem == leftStart ||
+                 connection.Tail.TaskItem == leftMiddle ||
+                 connection.Tail.TaskItem == leftEnd))
+            .ToArray();
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(chainConnections.Length).IsEqualTo(3);
+        await Assert.That(chainConnections.Max(connection =>
+                Math.Abs(connection.Source.Y - connection.Target.Y)))
+            .IsLessThan(RoadmapNode.Height);
+    }
+
+    [Test]
     public async Task RoadmapGraphProjection_PullsConnectedLeftSourceAboveUnrelatedSibling()
     {
         var storage = new StubTaskStorage();
