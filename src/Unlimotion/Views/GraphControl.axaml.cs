@@ -27,13 +27,22 @@ namespace Unlimotion.Views
         private readonly DisposableList disposableList = new DisposableListRealization();
         private readonly SerialDisposable roadmapScopeSubscriptions = new();
         private readonly SerialDisposable roadmapFilterSubscriptions = new();
+        private readonly DispatcherTimer graphUpdateTimer;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
         private const double RoadmapPanStep = 240;
+        private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
 
         public GraphControl()
         {
+            graphUpdateTimer = new DispatcherTimer
+            {
+                Interval = RoadmapGraphUpdateDelay
+            };
+            graphUpdateTimer.Tick += GraphUpdateTimer_OnTick;
+
             DataContextChanged += GraphControl_DataContextChanged;
+            DetachedFromVisualTree += (_, _) => CancelScheduledGraphUpdate();
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
@@ -44,6 +53,12 @@ namespace Unlimotion.Views
         public ObservableCollection<RoadmapNode> RoadmapNodes { get; } = new();
 
         public ObservableCollection<RoadmapConnection> RoadmapConnections { get; } = new();
+
+        public int RoadmapGraphUpdateCount { get; private set; }
+
+        public TimeSpan RoadmapLastBuildTime { get; private set; }
+
+        public TimeSpan RoadmapLastApplyProjectionTime { get; private set; }
 
         private void GraphControl_DataContextChanged(object? sender, EventArgs e)
         {
@@ -58,6 +73,7 @@ namespace Unlimotion.Views
             disposableList.Disposables.Clear();
             roadmapScopeSubscriptions.Disposable = Disposable.Empty;
             roadmapFilterSubscriptions.Disposable = Disposable.Empty;
+            CancelScheduledGraphUpdate();
             ClearRoadmapProjection();
 
             if (dc == null)
@@ -134,17 +150,33 @@ namespace Unlimotion.Views
 
         private void ScheduleUpdateGraph()
         {
-            if (graphUpdateQueued)
+            if (!Dispatcher.UIThread.CheckAccess())
             {
+                Dispatcher.UIThread.Post(ScheduleUpdateGraph);
                 return;
             }
 
             graphUpdateQueued = true;
-            Dispatcher.UIThread.Post(() =>
+            graphUpdateTimer.Stop();
+            graphUpdateTimer.Start();
+        }
+
+        private void GraphUpdateTimer_OnTick(object? sender, EventArgs e)
+        {
+            graphUpdateTimer.Stop();
+            if (!graphUpdateQueued)
             {
-                graphUpdateQueued = false;
-                UpdateGraph();
-            });
+                return;
+            }
+
+            graphUpdateQueued = false;
+            UpdateGraph();
+        }
+
+        private void CancelScheduledGraphUpdate()
+        {
+            graphUpdateTimer.Stop();
+            graphUpdateQueued = false;
         }
 
         private void ScheduleUpdateHighlights()
@@ -170,6 +202,8 @@ namespace Unlimotion.Views
                 return;
             }
 
+            CancelScheduledGraphUpdate();
+
             var localDc = dc;
             if (localDc == null)
             {
@@ -177,9 +211,18 @@ namespace Unlimotion.Views
             }
 
             var roots = localDc.OnlyUnlocked ? localDc.UnlockedTasks : localDc.Tasks;
+            var buildStopwatch = Stopwatch.StartNew();
             var projection = RoadmapGraphBuilder.Build(roots, GetMeasuredRoadmapNodeWidths());
+            buildStopwatch.Stop();
+
+            var applyStopwatch = Stopwatch.StartNew();
             RegisterRoadmapScopeSubscriptions(roots, projection);
             ApplyProjection(projection);
+            applyStopwatch.Stop();
+
+            RoadmapLastBuildTime = buildStopwatch.Elapsed;
+            RoadmapLastApplyProjectionTime = applyStopwatch.Elapsed;
+            RoadmapGraphUpdateCount++;
 
             UpdateHighlights();
         }

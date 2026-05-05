@@ -784,6 +784,69 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedRebuilds()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = false;
+                vm.GraphMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var graphControl = WaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+
+                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
+                await Assert.That(nodesReady).IsTrue();
+                WaitForStableRoadmapUpdates(graphControl!);
+
+                var updateCountBeforePulse = graphControl!.RoadmapGraphUpdateCount;
+
+                for (var index = 0; index < 3; index++)
+                {
+                    vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
+                    Dispatcher.UIThread.RunJobs();
+                    Thread.Sleep(40);
+                    Dispatcher.UIThread.RunJobs();
+                }
+
+                await Assert.That(graphControl.RoadmapGraphUpdateCount).IsEqualTo(updateCountBeforePulse);
+
+                var rebuilt = WaitFor(
+                    () => graphControl.RoadmapGraphUpdateCount > updateCountBeforePulse,
+                    5000);
+                await Assert.That(rebuilt).IsTrue();
+
+                var updateCountAfterPulse = graphControl.RoadmapGraphUpdateCount;
+                var extraRebuild = WaitFor(
+                    () => graphControl.RoadmapGraphUpdateCount > updateCountAfterPulse,
+                    400);
+
+                await Assert.That(updateCountAfterPulse).IsEqualTo(updateCountBeforePulse + 1);
+                await Assert.That(extraRebuild).IsFalse();
+                await Assert.That(graphControl.RoadmapLastBuildTime).IsGreaterThan(TimeSpan.Zero);
+                await Assert.That(graphControl.RoadmapLastApplyProjectionTime).IsGreaterThan(TimeSpan.Zero);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task RoadmapGraph_NodeWidthFollowsRenderedTitleAfterRename()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1208,6 +1271,30 @@ public class RoadmapGraphUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
+    private static int WaitForStableRoadmapUpdates(
+        GraphControl graphControl,
+        int quietMilliseconds = 350,
+        int timeoutMilliseconds = 3000)
+    {
+        var lastCount = graphControl.RoadmapGraphUpdateCount;
+        var stableSince = DateTime.UtcNow;
+
+        SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            var currentCount = graphControl.RoadmapGraphUpdateCount;
+            if (currentCount != lastCount)
+            {
+                lastCount = currentCount;
+                stableSince = DateTime.UtcNow;
+            }
+
+            return DateTime.UtcNow - stableSince >= TimeSpan.FromMilliseconds(quietMilliseconds);
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        return lastCount;
     }
 
     private static TaskItemViewModel CreateTask(string id, string title, ITaskStorage storage)
