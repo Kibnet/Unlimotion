@@ -569,16 +569,16 @@ Outcome contract:
   - PASS `git diff --check` (only LF/CRLF warnings)
 
 ### Follow-up 2026-05-05: aligned outgoing bends
-- Причина: пользовательский screenshot показал, что у коротких задач исходящие стрелки начинают изгибаться сразу после текста, поэтому изгибы внутри одного столбца не выровнены по общей правой границе.
+- Причина: пользовательский screenshot показал, что у коротких задач исходящие стрелки начинают изгибаться сразу после текста, поэтому изгибы внутри одного столбца не выровнены по общей правой границе. Первая реализация через динамический `LineConnection.Spacing` выровняла левый изгиб, но симметрично растянула и правый заход к целевому узлу, что создавало лишние возвраты.
 - Изменения:
   - визуальная ширина `RoadmapNode.Width` остается content-based, но добавлена отдельная `ConnectionWidth` для правой линии выхода связей;
-  - `RoadmapConnection.Source` остается на фактическом `RightAnchor`, а `LineConnection.Spacing` теперь рассчитывается как базовый отступ плюс недостающая ширина до `ConnectionWidth`, поэтому видимый горизонтальный участок короткой задачи доходит до общей max-width линии;
+  - connection template разделен на две части: короткий безстрелочный extension `RightAnchor -> ConnectionRightAnchor` и основной `LineConnection ConnectionRightAnchor -> Target`;
+  - основной `LineConnection.Spacing` снова фиксирован (`RoadmapConnection.BendSpacing`), поэтому правая часть у целевого узла не удлиняется вместе с левым extension;
   - X-позиции слоев теперь считаются по `RoadmapNode.MaxWidth`, чтобы выровненный bend не пересекался со следующим столбцом;
-  - UI/projection tests проверяют, что при rename короткого заголовка визуальная ширина узла уменьшается, но bend исходящей стрелки остается на max-width линии.
+  - UI/projection tests проверяют, что при rename короткого заголовка визуальная ширина узла уменьшается, а routed source исходящей стрелки остается на max-width линии.
 - Verification:
-  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-anchor-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (20/20)
-  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-anchor-build\ -p:UseSharedCompilation=false`
-  - PASS `dotnet run --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-anchor-headless-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/MainWindowHeadlessTests/Major_tabs_can_be_opened_from_main_window"` (1/1)
+  - PASS `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-fixed-target-bin\ -p:UseSharedCompilation=false -- --treenode-filter "/*/*/RoadmapGraphUiTests/*"` (20/20)
+  - PASS `dotnet build src\Unlimotion\Unlimotion.csproj --nologo -v:minimal -p:BaseOutputPath=<workspace>\artifacts\codex-roadmap-fixed-target-build\ -p:UseSharedCompilation=false`
   - PASS `git diff --check` (only LF/CRLF warnings)
 
 ## Approval
@@ -609,4 +609,4 @@ Outcome contract:
 | EXEC | Tighten left prerequisite chains | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с left-side defect | Contains edges now pull mixed prerequisite chains toward their goal band, while compact dummy lanes avoid invisible vertical inflation | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Prioritize connected left sources | 0.86 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с remaining left-side defect | Connected vertices now outrank disconnected siblings when crossing count is not worse, and equal-crossing swaps can shorten arrows | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Align visible long roadmap edges | 0.84 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с wandering left paths | Final row balancing now includes real visible endpoint-to-endpoint edges in addition to dummy segments | `RoadmapGraphBuilder.cs`, `RoadmapGraphUiTests.cs` |
-| EXEC | Align outgoing roadmap arrow bends | 0.9 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshot с uneven outgoing bends | Short nodes keep content width, but their outgoing `LineConnection.Spacing` extends the horizontal segment to a shared max-width bend lane | `RoadmapNode.cs`, `RoadmapConnection.cs`, `RoadmapGraphBuilder.cs`, `GraphControl.axaml`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Align outgoing roadmap arrow bends | 0.9 | Визуальная проверка на пользовательской карте всё ещё важна | Завершить задачу | Нет | Да, пользователь прислал screenshots с uneven bends and symmetric spacing defect | Short nodes keep content width; a separate horizontal extension reaches the shared max-width lane, while the main arrow keeps fixed target-side spacing | `RoadmapNode.cs`, `RoadmapConnection.cs`, `RoadmapGraphBuilder.cs`, `GraphControl.axaml`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |

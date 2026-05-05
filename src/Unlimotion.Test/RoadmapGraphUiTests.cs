@@ -77,7 +77,7 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
-    public async Task RoadmapGraphProjection_AlignsOutgoingBendsByMaxNodeWidth()
+    public async Task RoadmapGraphProjection_AlignsOutgoingRoutesByMaxNodeWidth()
     {
         var storage = new StubTaskStorage();
         var shortSource = CreateTask("short-source", "Short", storage);
@@ -109,17 +109,17 @@ public class RoadmapGraphUiTests
 
         var shortConnection = projection.Connections.Single(connection => connection.Tail.Id == shortSource.Id);
         var longConnection = projection.Connections.Single(connection => connection.Tail.Id == longSource.Id);
-        var shortBendX = shortConnection.Source.X + shortConnection.SourceSpacing;
-        var longBendX = longConnection.Source.X + longConnection.SourceSpacing;
 
         await Assert.That(shortConnection.Tail.Width).IsLessThan(longConnection.Tail.Width);
         await Assert.That(shortConnection.Source.X).IsEqualTo(shortConnection.Tail.RightAnchor.X);
-        await Assert.That(longConnection.SourceSpacing).IsEqualTo(RoadmapConnection.BendSpacing);
-        await Assert.That(shortConnection.SourceSpacing).IsGreaterThan(longConnection.SourceSpacing);
-        await Assert.That(Math.Abs(shortBendX - longBendX)).IsLessThan(0.5);
+        await Assert.That(shortConnection.RoutedSource.X).IsGreaterThan(shortConnection.Source.X);
+        await Assert.That(longConnection.RoutedSource.X).IsEqualTo(longConnection.Source.X);
+        await Assert.That(shortConnection.HasSourceExtension).IsTrue();
+        await Assert.That(longConnection.HasSourceExtension).IsFalse();
+        await Assert.That(Math.Abs(shortConnection.RoutedSource.X - longConnection.RoutedSource.X)).IsLessThan(0.5);
         await Assert.That(Math.Abs(
-            shortBendX -
-            (shortConnection.Tail.Location.X + RoadmapNode.MaxWidth + RoadmapConnection.BendSpacing))).IsLessThan(0.5);
+            shortConnection.RoutedSource.X -
+            (shortConnection.Tail.Location.X + RoadmapNode.MaxWidth))).IsLessThan(0.5);
     }
 
     [Test]
@@ -844,10 +844,10 @@ public class RoadmapGraphUiTests
                            Math.Abs(taskNodeWidth(text) - node.Width) < 0.5 &&
                            Math.Abs(node.RightAnchor.X - (node.Location.X + node.Width)) < 0.5 &&
                            Math.Abs(outgoingConnection.Source.X - node.RightAnchor.X) < 0.5 &&
-                           outgoingConnection.SourceSpacing > RoadmapConnection.BendSpacing &&
+                           outgoingConnection.HasSourceExtension &&
                            Math.Abs(
-                               outgoingConnection.Source.X + outgoingConnection.SourceSpacing -
-                               (node.Location.X + RoadmapNode.MaxWidth + RoadmapConnection.BendSpacing)) < 0.5;
+                               outgoingConnection.RoutedSource.X -
+                               (node.Location.X + RoadmapNode.MaxWidth)) < 0.5;
                 });
                 await Assert.That(narrowReady).IsTrue();
                 await Assert.That(ReferenceEquals(

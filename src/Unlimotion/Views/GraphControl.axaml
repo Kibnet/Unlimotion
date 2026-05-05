@@ -64,19 +64,33 @@
                                  DisplayConnectionsOnTop="False">
                 <nodify:NodifyEditor.Resources>
                     <DataTemplate x:Key="RoadmapConnectionTemplate" DataType="{x:Type local:RoadmapConnection}">
-                        <nodify:LineConnection Source="{Binding Source}"
-                                               Target="{Binding Target}"
-                                               Stroke="{Binding Stroke}"
-                                               Fill="{Binding Stroke}"
-                                               StrokeThickness="2"
-                                               ArrowEnds="End"
-                                               ArrowSize="10,7"
-                                               CornerRadius="8"
-                                               SourceOrientation="Horizontal"
-                                               TargetOrientation="Horizontal"
-                                               Spacing="{Binding SourceSpacing}"
-                                               SourceOffsetMode="None"
-                                               TargetOffsetMode="None" />
+                        <Grid>
+                            <nodify:LineConnection Source="{Binding Source}"
+                                                   Target="{Binding RoutedSource}"
+                                                   Stroke="{Binding Stroke}"
+                                                   StrokeThickness="2"
+                                                   ArrowEnds="None"
+                                                   CornerRadius="0"
+                                                   SourceOrientation="Horizontal"
+                                                   TargetOrientation="Horizontal"
+                                                   Spacing="0"
+                                                   SourceOffsetMode="None"
+                                                   TargetOffsetMode="None"
+                                                   IsVisible="{Binding HasSourceExtension}" />
+                            <nodify:LineConnection Source="{Binding RoutedSource}"
+                                                   Target="{Binding Target}"
+                                                   Stroke="{Binding Stroke}"
+                                                   Fill="{Binding Stroke}"
+                                                   StrokeThickness="2"
+                                                   ArrowEnds="End"
+                                                   ArrowSize="10,7"
+                                                   CornerRadius="8"
+                                                   SourceOrientation="Horizontal"
+                                                   TargetOrientation="Horizontal"
+                                                   Spacing="{x:Static local:RoadmapConnection.BendSpacing}"
+                                                   SourceOffsetMode="None"
+                                                   TargetOffsetMode="None" />
+                        </Grid>
                     </DataTemplate>
                 </nodify:NodifyEditor.Resources>
 

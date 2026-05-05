@@ -1,4 +1,3 @@
-using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia;
@@ -32,11 +31,13 @@ public sealed class RoadmapConnection : INotifyPropertyChanged, System.IDisposab
 
     public Point Source => Tail.RightAnchor;
 
+    public Point RoutedSource => Tail.ConnectionRightAnchor;
+
     public Point Target => Head.LeftAnchor;
 
-    public double SourceSpacing => BendSpacing + Math.Max(0, Tail.ConnectionWidth - Tail.Width);
+    public bool HasSourceExtension => RoutedSource.X > Source.X + 0.5;
 
-    public bool IsLeftToRight => Source.X < Target.X;
+    public bool IsLeftToRight => RoutedSource.X < Target.X;
 
     public IBrush Stroke => Kind == RoadmapConnectionKind.Blocks ? Brushes.Red : Brushes.Green;
 
@@ -64,8 +65,9 @@ public sealed class RoadmapConnection : INotifyPropertyChanged, System.IDisposab
         }
 
         OnPropertyChanged(nameof(Source));
+        OnPropertyChanged(nameof(RoutedSource));
         OnPropertyChanged(nameof(Target));
-        OnPropertyChanged(nameof(SourceSpacing));
+        OnPropertyChanged(nameof(HasSourceExtension));
         OnPropertyChanged(nameof(IsLeftToRight));
     }
 
