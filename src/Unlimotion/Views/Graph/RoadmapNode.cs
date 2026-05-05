@@ -14,6 +14,7 @@ public sealed class RoadmapNode : INotifyPropertyChanged
 
     private Point location;
     private double width = MinWidth;
+    private double connectionWidth = MaxWidth;
 
     public RoadmapNode(TaskItemViewModel taskItem)
     {
@@ -42,6 +43,22 @@ public sealed class RoadmapNode : INotifyPropertyChanged
         }
     }
 
+    public double ConnectionWidth
+    {
+        get => connectionWidth;
+        private set
+        {
+            if (Math.Abs(connectionWidth - value) < 0.5)
+            {
+                return;
+            }
+
+            connectionWidth = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ConnectionRightAnchor));
+        }
+    }
+
     public Point Location
     {
         get => location;
@@ -56,12 +73,15 @@ public sealed class RoadmapNode : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(LeftAnchor));
             OnPropertyChanged(nameof(RightAnchor));
+            OnPropertyChanged(nameof(ConnectionRightAnchor));
         }
     }
 
     public Point LeftAnchor => new(Location.X, Location.Y + Height / 2);
 
     public Point RightAnchor => new(Location.X + Width, Location.Y + Height / 2);
+
+    public Point ConnectionRightAnchor => new(Location.X + ConnectionWidth, Location.Y + Height / 2);
 
     public bool SetMeasuredWidth(double measuredWidth)
     {
@@ -76,6 +96,21 @@ public sealed class RoadmapNode : INotifyPropertyChanged
             MinWidth,
             MaxWidth);
         return Math.Abs(previousWidth - Width) >= 0.5;
+    }
+
+    public bool SetConnectionWidth(double width)
+    {
+        if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0)
+        {
+            return false;
+        }
+
+        var previousWidth = ConnectionWidth;
+        ConnectionWidth = Math.Clamp(
+            Math.Ceiling(Math.Max(width, Width)),
+            MinWidth,
+            MaxWidth);
+        return Math.Abs(previousWidth - ConnectionWidth) >= 0.5;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

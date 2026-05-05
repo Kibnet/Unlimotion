@@ -77,6 +77,52 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_AlignsOutgoingBendsByMaxNodeWidth()
+    {
+        var storage = new StubTaskStorage();
+        var shortSource = CreateTask("short-source", "Short", storage);
+        var longSource = CreateTask(
+            "long-source",
+            "Long source title that reaches the roadmap node maximum width",
+            storage);
+        var shortTarget = CreateTask("short-target", "Short target", storage);
+        var longTarget = CreateTask("long-target", "Long target", storage);
+
+        shortSource.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { shortTarget },
+            Array.Empty<TaskItemViewModel>());
+        longSource.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { longTarget },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(
+            CreateRootWrappers(shortSource, longSource, shortTarget, longTarget),
+            new Dictionary<string, double>
+            {
+                [shortSource.Id] = RoadmapNode.MinWidth,
+                [longSource.Id] = RoadmapNode.MaxWidth
+            });
+
+        var shortConnection = projection.Connections.Single(connection => connection.Tail.Id == shortSource.Id);
+        var longConnection = projection.Connections.Single(connection => connection.Tail.Id == longSource.Id);
+        var shortBendX = shortConnection.Source.X + shortConnection.SourceSpacing;
+        var longBendX = longConnection.Source.X + longConnection.SourceSpacing;
+
+        await Assert.That(shortConnection.Tail.Width).IsLessThan(longConnection.Tail.Width);
+        await Assert.That(shortConnection.Source.X).IsEqualTo(shortConnection.Tail.RightAnchor.X);
+        await Assert.That(longConnection.SourceSpacing).IsEqualTo(RoadmapConnection.BendSpacing);
+        await Assert.That(shortConnection.SourceSpacing).IsGreaterThan(longConnection.SourceSpacing);
+        await Assert.That(Math.Abs(shortBendX - longBendX)).IsLessThan(0.5);
+        await Assert.That(Math.Abs(
+            shortBendX -
+            (shortConnection.Tail.Location.X + RoadmapNode.MaxWidth + RoadmapConnection.BendSpacing))).IsLessThan(0.5);
+    }
+
+    [Test]
     public async Task RoadmapGraphProjection_OrdersLayersToReduceConnectionCrossings()
     {
         var storage = new StubTaskStorage();
@@ -788,12 +834,20 @@ public class RoadmapGraphUiTests
                 {
                     var text = FindTaskTitleTextBlock(graphControl!, MainWindowViewModelFixture.RootTask2Id);
                     var node = FindRoadmapNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
+                    var outgoingConnection = graphControl!.RoadmapConnections
+                        .FirstOrDefault(connection => connection.Tail.Id == MainWindowViewModelFixture.RootTask2Id);
                     return text?.Text == rootTask.TitleWithoutEmoji &&
                            node != null &&
+                           outgoingConnection != null &&
                            node.Width < wideWidth - 150 &&
                            node.Width <= RoadmapNode.MinWidth + 1 &&
                            Math.Abs(taskNodeWidth(text) - node.Width) < 0.5 &&
-                           Math.Abs(node.RightAnchor.X - (node.Location.X + node.Width)) < 0.5;
+                           Math.Abs(node.RightAnchor.X - (node.Location.X + node.Width)) < 0.5 &&
+                           Math.Abs(outgoingConnection.Source.X - node.RightAnchor.X) < 0.5 &&
+                           outgoingConnection.SourceSpacing > RoadmapConnection.BendSpacing &&
+                           Math.Abs(
+                               outgoingConnection.Source.X + outgoingConnection.SourceSpacing -
+                               (node.Location.X + RoadmapNode.MaxWidth + RoadmapConnection.BendSpacing)) < 0.5;
                 });
                 await Assert.That(narrowReady).IsTrue();
                 await Assert.That(ReferenceEquals(

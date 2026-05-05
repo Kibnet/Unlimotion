@@ -199,6 +199,7 @@ namespace Unlimotion.Views
                     : projectedNode;
 
                 node.Location = projectedNode.Location;
+                node.SetConnectionWidth(projectedNode.ConnectionWidth);
                 desiredNodes.Add(node);
                 desiredNodesById[node.Id] = node;
             }

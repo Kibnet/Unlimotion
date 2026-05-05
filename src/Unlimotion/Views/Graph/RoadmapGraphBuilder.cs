@@ -334,6 +334,7 @@ public static class RoadmapGraphBuilder
         foreach (var node in nodes)
         {
             var vertex = layoutGraph.VertexByNode[node];
+            node.SetConnectionWidth(RoadmapNode.MaxWidth);
             node.Location = new Avalonia.Point(
                 layerX[layers.GetValueOrDefault(node.TaskItem)],
                 StartY + rows[vertex]);
@@ -1049,11 +1050,7 @@ public static class RoadmapGraphBuilder
         for (var layer = 0; layer <= maxLayer; layer++)
         {
             positions[layer] = x;
-            var layerWidth = layerOrder.TryGetValue(layer, out var nodes) && nodes.Count > 0
-                ? nodes.Max(node => node.Width)
-                : RoadmapNode.MinWidth;
-
-            x += layerWidth + LayerSeparation;
+            x += RoadmapNode.MaxWidth + LayerSeparation;
         }
 
         return positions;
@@ -1268,6 +1265,7 @@ public static class RoadmapGraphBuilder
         {
             var layer = layers.GetValueOrDefault(node.TaskItem);
             var row = rowsByLayer[layer][node.TaskItem];
+            node.SetConnectionWidth(RoadmapNode.MaxWidth);
             node.Location = new Avalonia.Point(
                 StartX + layer * (RoadmapNode.MaxWidth + LayerSeparation),
                 StartY + row * (RoadmapNode.Height + NodeSeparation));
