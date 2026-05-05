@@ -34,6 +34,7 @@ public static class RoadmapGraphBuilder
     private const int LengthAwareSwapPasses = 4;
     private const int TreeBalancingPasses = 8;
     private const int RowRelaxationPasses = 16;
+    private const int AlternativePathCacheMinOutgoing = 5;
     private const double EdgeLengthSwapTolerance = 0.5;
 
     public static RoadmapGraphProjection Build(
@@ -145,54 +146,39 @@ public static class RoadmapGraphBuilder
         var outgoing = connections
             .GroupBy(connection => connection.Tail)
             .ToDictionary(group => group.Key, group => group.ToList());
+        var alternativeHeadsByTail = new Dictionary<TaskItemViewModel, HashSet<TaskItemViewModel>>();
 
         return connections
-            .Where(connection => !HasAlternativePath(connection, outgoing))
+            .Where(connection => !HasAlternativePath(connection))
             .ToList();
-    }
 
-    private static bool HasAlternativePath(
-        ConnectionDefinition candidate,
-        IReadOnlyDictionary<TaskItemViewModel, List<ConnectionDefinition>> outgoing)
-    {
-        if (!outgoing.TryGetValue(candidate.Tail, out var firstEdges))
+        bool HasAlternativePath(ConnectionDefinition candidate)
         {
-            return false;
+            if (!outgoing.TryGetValue(candidate.Tail, out var firstEdges))
+            {
+                return false;
+            }
+
+            if (firstEdges.Count < AlternativePathCacheMinOutgoing)
+            {
+                return HasAlternativePathWithEarlyExit(candidate, firstEdges);
+            }
+
+            return GetAlternativeHeads(candidate.Tail, firstEdges).Contains(candidate.Head);
         }
 
-        var visited = new HashSet<TaskItemViewModel> { candidate.Tail };
-        var queue = new Queue<TaskItemViewModel>();
-
-        foreach (var edge in firstEdges)
+        bool HasAlternativePathWithEarlyExit(
+            ConnectionDefinition candidate,
+            IReadOnlyList<ConnectionDefinition> firstEdges)
         {
-            if (edge.Equals(candidate) || edge.Head == candidate.Head)
-            {
-                continue;
-            }
+            var visited = new HashSet<TaskItemViewModel> { candidate.Tail };
+            var queue = new Queue<TaskItemViewModel>();
 
-            if (visited.Add(edge.Head))
+            foreach (var edge in firstEdges)
             {
-                queue.Enqueue(edge.Head);
-            }
-        }
-
-        while (queue.TryDequeue(out var task))
-        {
-            if (!outgoing.TryGetValue(task, out var edges))
-            {
-                continue;
-            }
-
-            foreach (var edge in edges)
-            {
-                if (edge.Equals(candidate))
+                if (edge.Equals(candidate) || edge.Head == candidate.Head)
                 {
                     continue;
-                }
-
-                if (edge.Head == candidate.Head)
-                {
-                    return true;
                 }
 
                 if (visited.Add(edge.Head))
@@ -200,9 +186,86 @@ public static class RoadmapGraphBuilder
                     queue.Enqueue(edge.Head);
                 }
             }
+
+            while (queue.TryDequeue(out var task))
+            {
+                if (!outgoing.TryGetValue(task, out var edges))
+                {
+                    continue;
+                }
+
+                foreach (var edge in edges)
+                {
+                    if (edge.Equals(candidate))
+                    {
+                        continue;
+                    }
+
+                    if (edge.Head == candidate.Head)
+                    {
+                        return true;
+                    }
+
+                    if (visited.Add(edge.Head))
+                    {
+                        queue.Enqueue(edge.Head);
+                    }
+                }
+            }
+
+            return false;
         }
 
-        return false;
+        HashSet<TaskItemViewModel> GetAlternativeHeads(
+            TaskItemViewModel tail,
+            IReadOnlyList<ConnectionDefinition> firstEdges)
+        {
+            if (alternativeHeadsByTail.TryGetValue(tail, out var cached))
+            {
+                return cached;
+            }
+
+            var alternativeHeads = new HashSet<TaskItemViewModel>();
+            alternativeHeadsByTail[tail] = alternativeHeads;
+
+            foreach (var firstHead in firstEdges.Select(edge => edge.Head).Distinct())
+            {
+                AddAlternativeHeadsReachableThrough(tail, firstHead, alternativeHeads);
+            }
+
+            return alternativeHeads;
+        }
+
+        void AddAlternativeHeadsReachableThrough(
+            TaskItemViewModel tail,
+            TaskItemViewModel firstHead,
+            HashSet<TaskItemViewModel> alternativeHeads)
+        {
+            var visited = new HashSet<TaskItemViewModel> { tail, firstHead };
+            var queue = new Queue<TaskItemViewModel>();
+            queue.Enqueue(firstHead);
+
+            while (queue.TryDequeue(out var task))
+            {
+                if (!outgoing.TryGetValue(task, out var edges))
+                {
+                    continue;
+                }
+
+                foreach (var edge in edges)
+                {
+                    if (edge.Head != firstHead)
+                    {
+                        alternativeHeads.Add(edge.Head);
+                    }
+
+                    if (visited.Add(edge.Head))
+                    {
+                        queue.Enqueue(edge.Head);
+                    }
+                }
+            }
+        }
     }
 
     private static List<RoadmapNode> ApplySugiyamaLayout(
