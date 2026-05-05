@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -411,7 +412,7 @@ public class UnifiedTaskStorage : ITaskStorage
             if (reportTaskCount != tasksProcessed)
                 return false;
 
-            var reportTimestamp = reportJson["Timestamp"]?.Value<DateTimeOffset?>();
+            var reportTimestamp = ReadReportTimestamp(reportJson["Timestamp"]);
             if (reportTimestamp is null)
                 return false;
 
@@ -421,6 +422,34 @@ public class UnifiedTaskStorage : ITaskStorage
         {
             return false;
         }
+    }
+
+    private static DateTimeOffset? ReadReportTimestamp(JToken? timestampToken)
+    {
+        if (timestampToken is null || timestampToken.Type == JTokenType.Null)
+            return null;
+
+        if (timestampToken is JValue { Value: DateTimeOffset timestampOffset })
+            return timestampOffset;
+
+        if (timestampToken is JValue { Value: DateTime timestampDateTime })
+        {
+            return timestampDateTime.Kind == DateTimeKind.Unspecified
+                ? new DateTimeOffset(DateTime.SpecifyKind(timestampDateTime, DateTimeKind.Utc))
+                : new DateTimeOffset(timestampDateTime);
+        }
+
+        var timestampText = timestampToken.Type == JTokenType.String
+            ? timestampToken.Value<string>()
+            : timestampToken.ToString();
+
+        return DateTimeOffset.TryParse(
+            timestampText,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsedTimestamp)
+            ? parsedTimestamp
+            : null;
     }
 
     private static (int Count, DateTime? LatestWriteUtc) GetTaskFilesMetadata(string tasksPath)

@@ -175,6 +175,57 @@ public class UnifiedTaskStorageMigrationRegressionTests
         }
     }
 
+    [Test]
+    public async Task UnifiedTaskStorage_Init_ShouldSkipAvailabilityRecheck_WhenReportTimestampParsesAsDateTime()
+    {
+        var tempDir = CreateTempDirectory();
+
+        try
+        {
+            var fileStorage = new FileStorage(tempDir, watcher: false);
+            var manager = new TaskTreeManager(fileStorage);
+            var unified = new UnifiedTaskStorage(manager);
+            var reportTimestamp = DateTimeOffset.UtcNow.AddMinutes(5);
+
+            var task = new TaskItem
+            {
+                Id = "task",
+                Version = 1,
+                IsCompleted = false,
+                ContainsTasks = new List<string>(),
+                ParentTasks = new List<string>(),
+                BlocksTasks = new List<string>(),
+                BlockedByTasks = new List<string>(),
+                IsCanBeCompleted = false,
+                UnlockedDateTime = null
+            };
+
+            await fileStorage.Save(task);
+            File.SetLastWriteTimeUtc(
+                Path.Combine(tempDir, task.Id),
+                reportTimestamp.UtcDateTime.AddMinutes(-1));
+
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "migration.report"),
+                "{\"Version\":1,\"Timestamp\":\"2026-01-01T00:00:00Z\"}");
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "availability.migration.report"),
+                $$"""{"Version":2,"Timestamp":"{{reportTimestamp:O}}","TasksProcessed":1}""");
+
+            await unified.Init();
+
+            var storedTask = await fileStorage.Load(task.Id, forced: true);
+
+            await Assert.That(storedTask).IsNotNull();
+            await Assert.That(storedTask!.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedTask.UnlockedDateTime).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "unified-migration-regression-" + Guid.NewGuid().ToString("N"));
