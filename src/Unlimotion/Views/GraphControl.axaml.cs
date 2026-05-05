@@ -6,6 +6,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -28,6 +30,9 @@ namespace Unlimotion.Views
         private readonly SerialDisposable roadmapScopeSubscriptions = new();
         private readonly SerialDisposable roadmapFilterSubscriptions = new();
         private readonly DispatcherTimer graphUpdateTimer;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel>? roadmapScopeSubscriptionRoots;
+        private string? roadmapScopeSubscriptionSignature;
+        private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
         private const double RoadmapPanStep = 240;
@@ -60,6 +65,8 @@ namespace Unlimotion.Views
 
         public TimeSpan RoadmapLastApplyProjectionTime { get; private set; }
 
+        public int RoadmapScopeSubscriptionRefreshCount { get; private set; }
+
         private void GraphControl_DataContextChanged(object? sender, EventArgs e)
         {
             var newdc = DataContext as GraphViewModel;
@@ -73,6 +80,7 @@ namespace Unlimotion.Views
             disposableList.Disposables.Clear();
             roadmapScopeSubscriptions.Disposable = Disposable.Empty;
             roadmapFilterSubscriptions.Disposable = Disposable.Empty;
+            ResetRoadmapScopeSubscriptionCache();
             CancelScheduledGraphUpdate();
             ClearRoadmapProjection();
 
@@ -92,7 +100,7 @@ namespace Unlimotion.Views
             dc.WhenAnyValue(
                     m => m.Tasks,
                     m => m.UnlockedTasks)
-                .Subscribe(_ => ScheduleUpdateGraph())
+                .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate())
                 .AddToDispose(disposableList);
 
             dc.WhenAnyValue(
@@ -107,12 +115,12 @@ namespace Unlimotion.Views
 
             dc.UnlockedTasks.ObserveCollectionChanges()
                 .Throttle(TimeSpan.FromMilliseconds(100))
-                .Subscribe(_ => ScheduleUpdateGraph())
+                .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate())
                 .AddToDispose(disposableList);
 
             dc.Tasks.ObserveCollectionChanges()
                 .Throttle(TimeSpan.FromMilliseconds(100))
-                .Subscribe(_ => ScheduleUpdateGraph())
+                .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate())
                 .AddToDispose(disposableList);
 
             dc.WhenAnyValue(m => m.UpdateGraph)
@@ -177,6 +185,25 @@ namespace Unlimotion.Views
         {
             graphUpdateTimer.Stop();
             graphUpdateQueued = false;
+        }
+
+        private void InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate);
+                return;
+            }
+
+            roadmapScopeSubscriptionsDirty = true;
+            ScheduleUpdateGraph();
+        }
+
+        private void ResetRoadmapScopeSubscriptionCache()
+        {
+            roadmapScopeSubscriptionsDirty = true;
+            roadmapScopeSubscriptionRoots = null;
+            roadmapScopeSubscriptionSignature = null;
         }
 
         private void ScheduleUpdateHighlights()
@@ -382,6 +409,14 @@ namespace Unlimotion.Views
             ReadOnlyObservableCollection<TaskWrapperViewModel> roots,
             RoadmapGraphProjection projection)
         {
+            var scopeSignature = BuildRoadmapScopeSubscriptionSignature(projection);
+            if (!roadmapScopeSubscriptionsDirty &&
+                ReferenceEquals(roadmapScopeSubscriptionRoots, roots) &&
+                string.Equals(roadmapScopeSubscriptionSignature, scopeSignature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             var subscriptions = new CompositeDisposable();
             var rebuildTrigger = TimeSpan.FromMilliseconds(100);
 
@@ -426,6 +461,29 @@ namespace Unlimotion.Views
             }
 
             roadmapScopeSubscriptions.Disposable = subscriptions;
+            roadmapScopeSubscriptionRoots = roots;
+            roadmapScopeSubscriptionSignature = scopeSignature;
+            roadmapScopeSubscriptionsDirty = false;
+            RoadmapScopeSubscriptionRefreshCount++;
+        }
+
+        private static string BuildRoadmapScopeSubscriptionSignature(RoadmapGraphProjection projection)
+        {
+            var builder = new StringBuilder();
+            foreach (var task in projection.Nodes
+                         .Select(node => node.TaskItem)
+                         .GroupBy(task => task.Id)
+                         .Select(group => group.First())
+                         .OrderBy(task => task.Id, StringComparer.Ordinal))
+            {
+                builder
+                    .Append(task.Id)
+                    .Append('#')
+                    .Append(RuntimeHelpers.GetHashCode(task))
+                    .Append(';');
+            }
+
+            return builder.ToString();
         }
 
         private bool ShouldRebuildRoadmapOnTaskProperty(string? propertyName)
@@ -484,7 +542,7 @@ namespace Unlimotion.Views
             subscriptions.Add(collection
                 .ObserveCollectionChanges()
                 .Throttle(throttle)
-                .Subscribe(_ => ScheduleUpdateGraph()));
+                .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()));
         }
 
         private void AddCollectionSubscription<T>(
@@ -495,7 +553,7 @@ namespace Unlimotion.Views
             subscriptions.Add(collection
                 .ObserveCollectionChanges()
                 .Throttle(throttle)
-                .Subscribe(_ => ScheduleUpdateGraph()));
+                .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()));
         }
 
         private void AddFilterCollectionSubscription(

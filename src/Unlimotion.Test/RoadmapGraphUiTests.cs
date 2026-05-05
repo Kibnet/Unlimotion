@@ -812,6 +812,7 @@ public class RoadmapGraphUiTests
                 WaitForStableRoadmapUpdates(graphControl!);
 
                 var updateCountBeforePulse = graphControl!.RoadmapGraphUpdateCount;
+                var subscriptionRefreshCountBeforePulse = graphControl.RoadmapScopeSubscriptionRefreshCount;
 
                 for (var index = 0; index < 3; index++)
                 {
@@ -834,6 +835,8 @@ public class RoadmapGraphUiTests
                     400);
 
                 await Assert.That(updateCountAfterPulse).IsEqualTo(updateCountBeforePulse + 1);
+                await Assert.That(graphControl.RoadmapScopeSubscriptionRefreshCount)
+                    .IsEqualTo(subscriptionRefreshCountBeforePulse);
                 await Assert.That(extraRebuild).IsFalse();
                 await Assert.That(graphControl.RoadmapLastBuildTime).IsGreaterThan(TimeSpan.Zero);
                 await Assert.That(graphControl.RoadmapLastApplyProjectionTime).IsGreaterThan(TimeSpan.Zero);
