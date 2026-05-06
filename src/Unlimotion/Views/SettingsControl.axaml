@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
              xmlns:localization="clr-namespace:Unlimotion.ViewModel.Localization;assembly=Unlimotion.ViewModel"
+             xmlns:behavior="clr-namespace:Unlimotion.Behavior"
              mc:Ignorable="d"
              d:DesignWidth="900"
              d:DesignHeight="700"
@@ -64,7 +65,8 @@
         </Style>
     </UserControl.Styles>
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  behavior:KeyboardAwareScrollViewer.IsEnabled="True">
         <StackPanel Margin="16">
             <TextBlock Classes="SectionTitle" Text="{DynamicResource SettingsTitle}" />
             <TextBlock Classes="SectionHint"

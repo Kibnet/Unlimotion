@@ -642,7 +642,13 @@
                 <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ColumnDefinitions="*,Auto">
                     <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding !DetailsAreOpen}"
                                   AutomationProperties.AutomationId="DetailsPaneToggleButton"></ToggleButton>
-                    <ScrollViewer IsVisible="{Binding DetailsAreOpen}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top">
+                    <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
+                                  AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
+                                  IsVisible="{Binding DetailsAreOpen}"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  VerticalContentAlignment="Top"
+                                  behavior:KeyboardAwareScrollViewer.IsEnabled="True">
                         <StackPanel Margin="10">
                             <WrapPanel>
                                 <Button Command="{Binding Create}" Content="{DynamicResource NewTask}" />
