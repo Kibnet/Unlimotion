@@ -505,6 +505,7 @@ namespace Unlimotion.ViewModel
         }
 
         public string Id { get; set; } = "";
+        [AlsoNotifyFor(nameof(TitleWithoutEmoji), nameof(Emoji), nameof(OnlyTextTitle))]
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
         public bool IsCanBeCompleted { get; set; }

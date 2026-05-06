@@ -80,7 +80,9 @@
 			<IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
 			<PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
 		</PackageReference>
-		<PackageReference Include="AvaloniaGraphControl" />
+		<PackageReference Include="NodifyAvalonia" />
+		<PackageReference Include="Microsoft.Msagl" />
+		<PackageReference Include="Microsoft.Msagl.Drawing" />
 		<PackageReference Include="LibGit2Sharp" />
 		<PackageReference Include="Mileeena.Notification.Avalonia" />
 		<PackageReference Include="Quartz" />
