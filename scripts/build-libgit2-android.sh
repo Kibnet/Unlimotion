@@ -25,6 +25,7 @@ OPENSSL_CRYPTO_LIBRARY="${OPENSSL_CRYPTO_LIBRARY:-$OPENSSL_ROOT_DIR/lib/libcrypt
 LIBSSH2_ROOT_DIR="${LIBSSH2_ROOT_DIR:-$ROOT_DIR/artifacts/android-native/libssh2-$LIBSSH2_VERSION-$ANDROID_RID/prefix}"
 LIBSSH2_INCLUDE_DIR="${LIBSSH2_INCLUDE_DIR:-$LIBSSH2_ROOT_DIR/include}"
 LIBSSH2_LIBRARY="${LIBSSH2_LIBRARY:-$LIBSSH2_ROOT_DIR/lib/libssh2.so}"
+EMPTY_PKG_CONFIG_DIR="$BUILD_DIR/pkgconfig-empty"
 
 if [ ! -d "$SRC_DIR" ] || ! git -C "$SRC_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "Missing submodule at $SRC_DIR. Run: git submodule update --init --recursive"
@@ -103,7 +104,11 @@ if [ "$LIBGIT2_USE_SSH" = "ON" ]; then
   )
 fi
 
-cmake "${CMAKE_ARGS[@]}"
+mkdir -p "$EMPTY_PKG_CONFIG_DIR"
+
+PKG_CONFIG_LIBDIR="$EMPTY_PKG_CONFIG_DIR" \
+PKG_CONFIG_PATH="" \
+  cmake "${CMAKE_ARGS[@]}"
 
 cmake --build "$BUILD_DIR" --target libgit2package
 

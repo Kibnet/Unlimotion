@@ -93,6 +93,7 @@ Assert-Match $buildLibgit2Script '-DBUILD_CLI=OFF' 'build-libgit2-android.sh mus
 Assert-Match $buildLibgit2Script '-DUSE_SSH="\$LIBGIT2_USE_SSH"' 'build-libgit2-android.sh must enable SSH through libssh2 for Android builds.'
 Assert-Match $buildLibgit2Script '-DLIBSSH2_INCLUDE_DIR="\$LIBSSH2_INCLUDE_DIR"' 'build-libgit2-android.sh must pass libssh2 headers to libgit2 CMake.'
 Assert-Match $buildLibgit2Script '-DLIBSSH2_LIBRARY="\$LIBSSH2_LIBRARY"' 'build-libgit2-android.sh must pass libssh2 library to libgit2 CMake.'
+Assert-Match $buildLibgit2Script 'PKG_CONFIG_LIBDIR="\$EMPTY_PKG_CONFIG_DIR"' 'build-libgit2-android.sh must isolate pkg-config so libgit2 uses the explicit Android libssh2 paths.'
 Assert-Match $buildLibgit2Script '--target libgit2package' 'build-libgit2-android.sh must build the shared libgit2 package target.'
 Assert-Match $buildLibssh2Script 'CRYPTO_BACKEND=OpenSSL' 'build-libssh2-android.sh must build libssh2 against OpenSSL.'
 Assert-Match $buildLibssh2Script '-DBUILD_EXAMPLES=OFF' 'build-libssh2-android.sh must disable libssh2 examples for Android packaging.'
