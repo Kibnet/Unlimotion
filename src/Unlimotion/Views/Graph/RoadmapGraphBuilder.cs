@@ -14,6 +14,56 @@ using MsaglDrawing = Microsoft.Msagl.Drawing;
 
 namespace Unlimotion.Views.Graph;
 
+internal sealed class RoadmapGraphBuildInput
+{
+    public RoadmapGraphBuildInput(
+        IReadOnlyList<RoadmapGraphNodeInput> nodes,
+        IReadOnlyList<RoadmapGraphConnectionInput> connections)
+    {
+        Nodes = nodes;
+        Connections = connections;
+    }
+
+    public IReadOnlyList<RoadmapGraphNodeInput> Nodes { get; }
+
+    public IReadOnlyList<RoadmapGraphConnectionInput> Connections { get; }
+}
+
+internal sealed class RoadmapGraphNodeInput
+{
+    public RoadmapGraphNodeInput(TaskItemViewModel taskItem, string id, double width)
+    {
+        TaskItem = taskItem;
+        Id = id;
+        Width = width;
+    }
+
+    public TaskItemViewModel TaskItem { get; }
+
+    public string Id { get; }
+
+    public double Width { get; }
+}
+
+internal sealed class RoadmapGraphConnectionInput
+{
+    public RoadmapGraphConnectionInput(
+        RoadmapGraphNodeInput tail,
+        RoadmapGraphNodeInput head,
+        RoadmapConnectionKind kind)
+    {
+        Tail = tail;
+        Head = head;
+        Kind = kind;
+    }
+
+    public RoadmapGraphNodeInput Tail { get; }
+
+    public RoadmapGraphNodeInput Head { get; }
+
+    public RoadmapConnectionKind Kind { get; }
+}
+
 public static class RoadmapGraphBuilder
 {
     private const double StartX = 24;
@@ -41,13 +91,18 @@ public static class RoadmapGraphBuilder
         ReadOnlyObservableCollection<TaskWrapperViewModel> roots,
         IReadOnlyDictionary<string, double>? measuredNodeWidths = null)
     {
-        var nodesByTask = new Dictionary<TaskItemViewModel, RoadmapNode>();
-        var firstSeen = new Dictionary<TaskItemViewModel, int>();
+        return Build(Capture(roots, measuredNodeWidths));
+    }
+
+    internal static RoadmapGraphBuildInput Capture(
+        ReadOnlyObservableCollection<TaskWrapperViewModel> roots,
+        IReadOnlyDictionary<string, double>? measuredNodeWidths = null)
+    {
+        var nodesByTask = new Dictionary<TaskItemViewModel, RoadmapGraphNodeInput>();
         var processed = new HashSet<TaskItemViewModel>();
         var queue = new Queue<TaskWrapperViewModel>();
-        var connections = new List<ConnectionDefinition>();
+        var connections = new List<RoadmapGraphConnectionInput>();
         var connectionKeys = new HashSet<string>();
-        var nextSeenIndex = 0;
 
         foreach (var root in roots)
         {
@@ -65,16 +120,19 @@ public static class RoadmapGraphBuilder
                 continue;
             }
 
-            var containsTaskIds = task.SubTasks.Select(e => e.TaskItem.Id).ToArray();
+            var subTasks = task.SubTasks.ToArray();
+            var containsTaskIds = subTasks.Select(e => e.TaskItem.Id).ToArray();
+            var blockedByIds = taskItem.BlockedBy.ToHashSet(StringComparer.Ordinal);
 
-            foreach (var containsTask in task.SubTasks)
+            foreach (var containsTask in subTasks)
             {
                 var child = containsTask.TaskItem;
                 EnsureNode(child);
 
-                var childBlocksAnotherChild = child.Blocks.Any(item =>
+                var childBlocks = child.Blocks.ToArray();
+                var childBlocksAnotherChild = childBlocks.Any(item =>
                     containsTaskIds.Where(id => id != child.Id).Contains(item));
-                var hasChildBlocksBlocker = child.Blocks.Any(item => taskItem.BlockedBy.Contains(item));
+                var hasChildBlocksBlocker = childBlocks.Any(blockedByIds.Contains);
 
                 if (!hasChildBlocksBlocker && !childBlocksAnotherChild)
                 {
@@ -87,36 +145,28 @@ public static class RoadmapGraphBuilder
                 }
             }
 
-            foreach (var blockedTask in taskItem.BlocksTasks)
+            foreach (var blockedTask in taskItem.BlocksTasks.ToArray())
             {
                 EnsureNode(blockedTask);
                 AddConnection(taskItem, blockedTask, RoadmapConnectionKind.Blocks);
             }
         }
 
-        var visibleConnections = RemoveRedundantConnections(connections);
-        var nodes = ApplySugiyamaLayout(nodesByTask.Values, visibleConnections, firstSeen);
+        return new RoadmapGraphBuildInput(nodesByTask.Values.ToList(), connections);
 
-        return new RoadmapGraphProjection(
-            nodes,
-            visibleConnections
-                .Select(connection => new RoadmapConnection(
-                    nodesByTask[connection.Tail],
-                    nodesByTask[connection.Head],
-                    connection.Kind))
-                .ToList());
-
-        void EnsureNode(TaskItemViewModel taskItem)
+        RoadmapGraphNodeInput EnsureNode(TaskItemViewModel taskItem)
         {
-            if (nodesByTask.ContainsKey(taskItem))
+            if (nodesByTask.TryGetValue(taskItem, out var node))
             {
-                return;
+                return node;
             }
 
-            var node = new RoadmapNode(taskItem);
-            node.SetMeasuredWidth(ResolveNodeWidth(taskItem));
+            node = new RoadmapGraphNodeInput(
+                taskItem,
+                taskItem.Id,
+                ResolveNodeWidth(taskItem));
             nodesByTask.Add(taskItem, node);
-            firstSeen.Add(taskItem, nextSeenIndex++);
+            return node;
         }
 
         double ResolveNodeWidth(TaskItemViewModel taskItem)
@@ -135,9 +185,49 @@ public static class RoadmapGraphBuilder
             var key = $"{kind}:{tail.Id}->{head.Id}";
             if (connectionKeys.Add(key))
             {
-                connections.Add(new ConnectionDefinition(tail, head, kind));
+                connections.Add(new RoadmapGraphConnectionInput(
+                    EnsureNode(tail),
+                    EnsureNode(head),
+                    kind));
             }
         }
+    }
+
+    internal static RoadmapGraphProjection Build(RoadmapGraphBuildInput input)
+    {
+        var firstSeen = new Dictionary<RoadmapNode, int>();
+        var nodesByInput = new Dictionary<RoadmapGraphNodeInput, RoadmapNode>();
+        var nextSeenIndex = 0;
+
+        foreach (var inputNode in input.Nodes)
+        {
+            var node = new RoadmapNode(inputNode.TaskItem);
+            node.SetMeasuredWidth(inputNode.Width);
+            nodesByInput.Add(inputNode, node);
+            firstSeen.Add(node, nextSeenIndex++);
+        }
+
+        var connections = input.Connections
+            .Where(connection =>
+                nodesByInput.ContainsKey(connection.Tail) &&
+                nodesByInput.ContainsKey(connection.Head))
+            .Select(connection => new ConnectionDefinition(
+                nodesByInput[connection.Tail],
+                nodesByInput[connection.Head],
+                connection.Kind))
+            .ToList();
+
+        var visibleConnections = RemoveRedundantConnections(connections);
+        var nodes = ApplySugiyamaLayout(nodesByInput.Values, visibleConnections, firstSeen);
+
+        return new RoadmapGraphProjection(
+            nodes,
+            visibleConnections
+                .Select(connection => new RoadmapConnection(
+                    connection.Tail,
+                    connection.Head,
+                    connection.Kind))
+                .ToList());
     }
 
     private static IReadOnlyList<ConnectionDefinition> RemoveRedundantConnections(
@@ -146,7 +236,7 @@ public static class RoadmapGraphBuilder
         var outgoing = connections
             .GroupBy(connection => connection.Tail)
             .ToDictionary(group => group.Key, group => group.ToList());
-        var alternativeHeadsByTail = new Dictionary<TaskItemViewModel, HashSet<TaskItemViewModel>>();
+        var alternativeHeadsByTail = new Dictionary<RoadmapNode, HashSet<RoadmapNode>>();
 
         return connections
             .Where(connection => !HasAlternativePath(connection))
@@ -171,8 +261,8 @@ public static class RoadmapGraphBuilder
             ConnectionDefinition candidate,
             IReadOnlyList<ConnectionDefinition> firstEdges)
         {
-            var visited = new HashSet<TaskItemViewModel> { candidate.Tail };
-            var queue = new Queue<TaskItemViewModel>();
+            var visited = new HashSet<RoadmapNode> { candidate.Tail };
+            var queue = new Queue<RoadmapNode>();
 
             foreach (var edge in firstEdges)
             {
@@ -216,8 +306,8 @@ public static class RoadmapGraphBuilder
             return false;
         }
 
-        HashSet<TaskItemViewModel> GetAlternativeHeads(
-            TaskItemViewModel tail,
+        HashSet<RoadmapNode> GetAlternativeHeads(
+            RoadmapNode tail,
             IReadOnlyList<ConnectionDefinition> firstEdges)
         {
             if (alternativeHeadsByTail.TryGetValue(tail, out var cached))
@@ -225,7 +315,7 @@ public static class RoadmapGraphBuilder
                 return cached;
             }
 
-            var alternativeHeads = new HashSet<TaskItemViewModel>();
+            var alternativeHeads = new HashSet<RoadmapNode>();
             alternativeHeadsByTail[tail] = alternativeHeads;
 
             foreach (var firstHead in firstEdges.Select(edge => edge.Head).Distinct())
@@ -237,12 +327,12 @@ public static class RoadmapGraphBuilder
         }
 
         void AddAlternativeHeadsReachableThrough(
-            TaskItemViewModel tail,
-            TaskItemViewModel firstHead,
-            HashSet<TaskItemViewModel> alternativeHeads)
+            RoadmapNode tail,
+            RoadmapNode firstHead,
+            HashSet<RoadmapNode> alternativeHeads)
         {
-            var visited = new HashSet<TaskItemViewModel> { tail, firstHead };
-            var queue = new Queue<TaskItemViewModel>();
+            var visited = new HashSet<RoadmapNode> { tail, firstHead };
+            var queue = new Queue<RoadmapNode>();
             queue.Enqueue(firstHead);
 
             while (queue.TryDequeue(out var task))
@@ -271,7 +361,7 @@ public static class RoadmapGraphBuilder
     private static List<RoadmapNode> ApplySugiyamaLayout(
         IEnumerable<RoadmapNode> sourceNodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
         var nodes = sourceNodes.ToList();
         if (nodes.Count == 0)
@@ -286,13 +376,13 @@ public static class RoadmapGraphBuilder
         graph.Attr.LayerDirection = MsaglDrawing.LayerDirection.LR;
 
         var nodeIds = nodes.ToDictionary(
-            node => node.TaskItem,
-            node => "n" + firstSeen[node.TaskItem].ToString(CultureInfo.InvariantCulture));
-        var drawingNodesByTask = new Dictionary<TaskItemViewModel, MsaglDrawing.Node>();
+            node => node,
+            node => "n" + firstSeen[node].ToString(CultureInfo.InvariantCulture));
+        var drawingNodesByNode = new Dictionary<RoadmapNode, MsaglDrawing.Node>();
 
-        foreach (var node in nodes.OrderBy(node => firstSeen[node.TaskItem]))
+        foreach (var node in nodes.OrderBy(node => firstSeen[node]))
         {
-            drawingNodesByTask[node.TaskItem] = graph.AddNode(nodeIds[node.TaskItem]);
+            drawingNodesByNode[node] = graph.AddNode(nodeIds[node]);
         }
 
         var drawingEdges = new List<(MsaglDrawing.Edge Edge, RoadmapConnectionKind Kind)>();
@@ -314,7 +404,7 @@ public static class RoadmapGraphBuilder
 
             foreach (var node in nodes)
             {
-                var drawingNode = drawingNodesByTask[node.TaskItem];
+                var drawingNode = drawingNodesByNode[node];
                 drawingNode.GeometryNode.BoundaryCurve = CurveFactory.CreateRectangle(
                     node.Width,
                     RoadmapNode.Height,
@@ -334,7 +424,7 @@ public static class RoadmapGraphBuilder
                 graph.LayoutAlgorithmSettings,
                 null);
 
-            ApplyMsaglLocations(nodes, drawingNodesByTask, graph.GeometryGraph.BoundingBox);
+            ApplyMsaglLocations(nodes, drawingNodesByNode, graph.GeometryGraph.BoundingBox);
             ApplyRoadmapLocations(nodes, connections, firstSeen);
         }
         catch (Exception exception)
@@ -346,7 +436,7 @@ public static class RoadmapGraphBuilder
         return nodes
             .OrderBy(node => node.Location.X)
             .ThenBy(node => node.Location.Y)
-            .ThenBy(node => firstSeen[node.TaskItem])
+            .ThenBy(node => firstSeen[node])
             .ToList();
     }
 
@@ -368,9 +458,9 @@ public static class RoadmapGraphBuilder
     private static void ApplyRoadmapLocations(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
-        var layers = BuildFallbackLayers(nodes.Select(node => node.TaskItem), connections, firstSeen);
+        var layers = BuildFallbackLayers(nodes, connections, firstSeen);
         var layoutGraph = BuildLayoutGraph(nodes, connections, layers, firstSeen);
         OptimizeLayerOrder(layoutGraph.LayerOrder, layoutGraph.Edges);
         var rows = BuildInitialRows(layoutGraph.LayerOrder);
@@ -399,7 +489,7 @@ public static class RoadmapGraphBuilder
             var vertex = layoutGraph.VertexByNode[node];
             node.SetConnectionWidth(RoadmapNode.MaxWidth);
             node.Location = new Avalonia.Point(
-                layerX[layers.GetValueOrDefault(node.TaskItem)],
+                layerX[layers.GetValueOrDefault(node)],
                 StartY + rows[vertex]);
         }
     }
@@ -407,24 +497,22 @@ public static class RoadmapGraphBuilder
     private static LayoutGraph BuildLayoutGraph(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> layers,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> layers,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
         var nextStableIndex = 0;
         var vertexByNode = new Dictionary<RoadmapNode, LayoutVertex>();
-        var vertexByTask = new Dictionary<TaskItemViewModel, LayoutVertex>();
         var layerOrder = new Dictionary<int, List<LayoutVertex>>();
 
-        foreach (var node in nodes.OrderBy(node => firstSeen[node.TaskItem]))
+        foreach (var node in nodes.OrderBy(node => firstSeen[node]))
         {
-            var layer = layers.GetValueOrDefault(node.TaskItem);
+            var layer = layers.GetValueOrDefault(node);
             var vertex = new LayoutVertex(
                 node,
                 layer,
                 node.Location.Y,
                 nextStableIndex++);
             vertexByNode[node] = vertex;
-            vertexByTask[node.TaskItem] = vertex;
 
             if (!layerOrder.TryGetValue(layer, out var layerVertices))
             {
@@ -449,8 +537,8 @@ public static class RoadmapGraphBuilder
         var layoutEdges = new List<LayoutEdge>();
         foreach (var connection in connections)
         {
-            if (!vertexByTask.TryGetValue(connection.Tail, out var tail) ||
-                !vertexByTask.TryGetValue(connection.Head, out var head) ||
+            if (!vertexByNode.TryGetValue(connection.Tail, out var tail) ||
+                !vertexByNode.TryGetValue(connection.Head, out var head) ||
                 tail.Layer >= head.Layer)
             {
                 continue;
@@ -498,15 +586,12 @@ public static class RoadmapGraphBuilder
         IReadOnlyList<ConnectionDefinition> connections,
         IReadOnlyDictionary<RoadmapNode, LayoutVertex> vertexByNode)
     {
-        var vertexByTask = vertexByNode.ToDictionary(
-            item => item.Key.TaskItem,
-            item => item.Value);
         var visibleEdges = new List<LayoutEdge>();
 
         foreach (var connection in connections)
         {
-            if (!vertexByTask.TryGetValue(connection.Tail, out var tail) ||
-                !vertexByTask.TryGetValue(connection.Head, out var head) ||
+            if (!vertexByNode.TryGetValue(connection.Tail, out var tail) ||
+                !vertexByNode.TryGetValue(connection.Head, out var head) ||
                 tail.Layer >= head.Layer)
             {
                 continue;
@@ -1297,12 +1382,12 @@ public static class RoadmapGraphBuilder
 
     private static void ApplyMsaglLocations(
         IEnumerable<RoadmapNode> nodes,
-        IReadOnlyDictionary<TaskItemViewModel, MsaglDrawing.Node> drawingNodesByTask,
+        IReadOnlyDictionary<RoadmapNode, MsaglDrawing.Node> drawingNodesByNode,
         MsaglRectangle graphBounds)
     {
         foreach (var node in nodes)
         {
-            var nodeBounds = drawingNodesByTask[node.TaskItem].GeometryNode.BoundingBox;
+            var nodeBounds = drawingNodesByNode[node].GeometryNode.BoundingBox;
             node.Location = new Avalonia.Point(
                 StartX + nodeBounds.Left - graphBounds.Left,
                 StartY + graphBounds.Top - nodeBounds.Top);
@@ -1312,22 +1397,22 @@ public static class RoadmapGraphBuilder
     private static void ApplyFallbackLayout(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
-        var layers = BuildFallbackLayers(nodes.Select(node => node.TaskItem), connections, firstSeen);
+        var layers = BuildFallbackLayers(nodes, connections, firstSeen);
         var rowsByLayer = nodes
-            .GroupBy(node => layers.GetValueOrDefault(node.TaskItem))
+            .GroupBy(node => layers.GetValueOrDefault(node))
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .OrderBy(node => firstSeen[node.TaskItem])
+                    .OrderBy(node => firstSeen[node])
                     .Select((node, index) => new { node, index })
-                    .ToDictionary(item => item.node.TaskItem, item => item.index));
+                    .ToDictionary(item => item.node, item => item.index));
 
         foreach (var node in nodes)
         {
-            var layer = layers.GetValueOrDefault(node.TaskItem);
-            var row = rowsByLayer[layer][node.TaskItem];
+            var layer = layers.GetValueOrDefault(node);
+            var row = rowsByLayer[layer][node];
             node.SetConnectionWidth(RoadmapNode.MaxWidth);
             node.Location = new Avalonia.Point(
                 StartX + layer * (RoadmapNode.MaxWidth + LayerSeparation),
@@ -1335,15 +1420,15 @@ public static class RoadmapGraphBuilder
         }
     }
 
-    private static Dictionary<TaskItemViewModel, int> BuildFallbackLayers(
-        IEnumerable<TaskItemViewModel> tasks,
+    private static Dictionary<RoadmapNode, int> BuildFallbackLayers(
+        IEnumerable<RoadmapNode> tasks,
         IEnumerable<ConnectionDefinition> connections,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
         var nodes = tasks.ToList();
-        var outgoing = nodes.ToDictionary(task => task, _ => new List<TaskItemViewModel>());
+        var outgoing = nodes.ToDictionary(task => task, _ => new List<RoadmapNode>());
         var incomingCount = nodes.ToDictionary(task => task, _ => 0);
-        var incoming = nodes.ToDictionary(task => task, _ => new List<TaskItemViewModel>());
+        var incoming = nodes.ToDictionary(task => task, _ => new List<RoadmapNode>());
 
         foreach (var connection in connections)
         {
@@ -1372,11 +1457,11 @@ public static class RoadmapGraphBuilder
                    firstSeen);
     }
 
-    private static Dictionary<TaskItemViewModel, int>? TryBuildGoalAnchoredLayers(
-        IReadOnlyList<TaskItemViewModel> nodes,
-        IReadOnlyDictionary<TaskItemViewModel, List<TaskItemViewModel>> outgoing,
-        IReadOnlyDictionary<TaskItemViewModel, List<TaskItemViewModel>> incoming,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+    private static Dictionary<RoadmapNode, int>? TryBuildGoalAnchoredLayers(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> incoming,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
         var connected = nodes
             .Where(task => outgoing[task].Count > 0 || incoming[task].Count > 0)
@@ -1388,10 +1473,10 @@ public static class RoadmapGraphBuilder
 
         var heights = nodes.ToDictionary(task => task, _ => 0);
         var remainingOutgoing = nodes.ToDictionary(task => task, task => outgoing[task].Count);
-        var queue = new Queue<TaskItemViewModel>(connected
+        var queue = new Queue<RoadmapNode>(connected
             .Where(task => remainingOutgoing[task] == 0)
             .OrderBy(task => firstSeen[task]));
-        var processed = new HashSet<TaskItemViewModel>();
+        var processed = new HashSet<RoadmapNode>();
 
         while (queue.TryDequeue(out var task))
         {
@@ -1424,18 +1509,18 @@ public static class RoadmapGraphBuilder
                 : maxHeight - heights[task]);
     }
 
-    private static Dictionary<TaskItemViewModel, int> BuildSourceAnchoredLayers(
-        IReadOnlyList<TaskItemViewModel> nodes,
-        IReadOnlyDictionary<TaskItemViewModel, List<TaskItemViewModel>> outgoing,
-        IReadOnlyDictionary<TaskItemViewModel, int> incomingCount,
-        IReadOnlyDictionary<TaskItemViewModel, int> firstSeen)
+    private static Dictionary<RoadmapNode, int> BuildSourceAnchoredLayers(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
+        IReadOnlyDictionary<RoadmapNode, int> incomingCount,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
     {
         var layers = nodes.ToDictionary(task => task, _ => 0);
         var remainingIncoming = incomingCount.ToDictionary(item => item.Key, item => item.Value);
-        var queue = new Queue<TaskItemViewModel>(nodes
+        var queue = new Queue<RoadmapNode>(nodes
             .Where(task => remainingIncoming[task] == 0)
             .OrderBy(task => firstSeen[task]));
-        var processed = new HashSet<TaskItemViewModel>();
+        var processed = new HashSet<RoadmapNode>();
 
         while (queue.TryDequeue(out var task))
         {
@@ -1481,8 +1566,8 @@ public static class RoadmapGraphBuilder
     }
 
     private readonly record struct ConnectionDefinition(
-        TaskItemViewModel Tail,
-        TaskItemViewModel Head,
+        RoadmapNode Tail,
+        RoadmapNode Head,
         RoadmapConnectionKind Kind);
 
     private sealed class LayoutVertex

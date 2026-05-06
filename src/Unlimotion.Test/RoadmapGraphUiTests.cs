@@ -784,7 +784,7 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
-    public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedRebuilds()
+    public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedBackgroundRebuilds()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
@@ -813,6 +813,10 @@ public class RoadmapGraphUiTests
 
                 var updateCountBeforePulse = graphControl!.RoadmapGraphUpdateCount;
                 var subscriptionRefreshCountBeforePulse = graphControl.RoadmapScopeSubscriptionRefreshCount;
+                var backgroundBuildStartCountBeforePulse = graphControl.RoadmapGraphBackgroundBuildStartCount;
+
+                await Assert.That(backgroundBuildStartCountBeforePulse).IsGreaterThan(0);
+                await Assert.That(graphControl.RoadmapLastBuildRanOnUiThread).IsFalse();
 
                 for (var index = 0; index < 3; index++)
                 {
@@ -835,6 +839,9 @@ public class RoadmapGraphUiTests
                     400);
 
                 await Assert.That(updateCountAfterPulse).IsEqualTo(updateCountBeforePulse + 1);
+                await Assert.That(graphControl.RoadmapGraphBackgroundBuildStartCount)
+                    .IsEqualTo(backgroundBuildStartCountBeforePulse + 1);
+                await Assert.That(graphControl.RoadmapLastBuildRanOnUiThread).IsFalse();
                 await Assert.That(graphControl.RoadmapScopeSubscriptionRefreshCount)
                     .IsEqualTo(subscriptionRefreshCountBeforePulse);
                 await Assert.That(extraRebuild).IsFalse();
@@ -1294,7 +1301,8 @@ public class RoadmapGraphUiTests
                 stableSince = DateTime.UtcNow;
             }
 
-            return DateTime.UtcNow - stableSince >= TimeSpan.FromMilliseconds(quietMilliseconds);
+            return DateTime.UtcNow - stableSince >= TimeSpan.FromMilliseconds(quietMilliseconds) &&
+                   !graphControl.RoadmapGraphBuildInProgress;
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
 
         return lastCount;

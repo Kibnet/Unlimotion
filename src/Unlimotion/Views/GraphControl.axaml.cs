@@ -8,6 +8,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -35,6 +36,9 @@ namespace Unlimotion.Views
         private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
+        private bool roadmapBuildRunning;
+        private int roadmapBuildRequestVersion;
+        private RoadmapBuildRequest? pendingRoadmapBuildRequest;
         private const double RoadmapPanStep = 240;
         private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
 
@@ -47,7 +51,11 @@ namespace Unlimotion.Views
             graphUpdateTimer.Tick += GraphUpdateTimer_OnTick;
 
             DataContextChanged += GraphControl_DataContextChanged;
-            DetachedFromVisualTree += (_, _) => CancelScheduledGraphUpdate();
+            DetachedFromVisualTree += (_, _) =>
+            {
+                CancelScheduledGraphUpdate();
+                CancelPendingRoadmapBuilds();
+            };
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
@@ -67,6 +75,12 @@ namespace Unlimotion.Views
 
         public int RoadmapScopeSubscriptionRefreshCount { get; private set; }
 
+        public bool RoadmapGraphBuildInProgress { get; private set; }
+
+        public bool RoadmapLastBuildRanOnUiThread { get; private set; }
+
+        public int RoadmapGraphBackgroundBuildStartCount { get; private set; }
+
         private void GraphControl_DataContextChanged(object? sender, EventArgs e)
         {
             var newdc = DataContext as GraphViewModel;
@@ -82,6 +96,7 @@ namespace Unlimotion.Views
             roadmapFilterSubscriptions.Disposable = Disposable.Empty;
             ResetRoadmapScopeSubscriptionCache();
             CancelScheduledGraphUpdate();
+            CancelPendingRoadmapBuilds();
             ClearRoadmapProjection();
 
             if (dc == null)
@@ -187,6 +202,16 @@ namespace Unlimotion.Views
             graphUpdateQueued = false;
         }
 
+        private void CancelPendingRoadmapBuilds()
+        {
+            roadmapBuildRequestVersion++;
+            pendingRoadmapBuildRequest = null;
+            if (!roadmapBuildRunning)
+            {
+                RoadmapGraphBuildInProgress = false;
+            }
+        }
+
         private void InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()
         {
             if (!Dispatcher.UIThread.CheckAccess())
@@ -238,20 +263,115 @@ namespace Unlimotion.Views
             }
 
             var roots = localDc.OnlyUnlocked ? localDc.UnlockedTasks : localDc.Tasks;
+            var input = RoadmapGraphBuilder.Capture(roots, GetMeasuredRoadmapNodeWidths());
+            QueueRoadmapBuild(new RoadmapBuildRequest(
+                ++roadmapBuildRequestVersion,
+                roots,
+                input));
+        }
+
+        private void QueueRoadmapBuild(RoadmapBuildRequest request)
+        {
+            pendingRoadmapBuildRequest = request;
+            if (!roadmapBuildRunning)
+            {
+                StartNextRoadmapBuild();
+            }
+        }
+
+        private void StartNextRoadmapBuild()
+        {
+            if (pendingRoadmapBuildRequest == null)
+            {
+                RoadmapGraphBuildInProgress = false;
+                return;
+            }
+
+            var request = pendingRoadmapBuildRequest;
+            pendingRoadmapBuildRequest = null;
+            roadmapBuildRunning = true;
+            RoadmapGraphBuildInProgress = true;
+            RoadmapGraphBackgroundBuildStartCount++;
+            _ = RunRoadmapBuildAsync(request);
+        }
+
+        private async Task RunRoadmapBuildAsync(RoadmapBuildRequest request)
+        {
+            RoadmapGraphProjection? projection = null;
             var buildStopwatch = Stopwatch.StartNew();
-            var projection = RoadmapGraphBuilder.Build(roots, GetMeasuredRoadmapNodeWidths());
-            buildStopwatch.Stop();
+            var buildRanOnUiThread = false;
+
+            try
+            {
+                projection = await Task.Run(() =>
+                {
+                    buildRanOnUiThread = Dispatcher.UIThread.CheckAccess();
+                    return RoadmapGraphBuilder.Build(request.Input);
+                }).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                Trace.TraceError("Roadmap graph background build failed: {0}", exception);
+            }
+            finally
+            {
+                buildStopwatch.Stop();
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    CompleteRoadmapBuild(
+                        request,
+                        projection,
+                        buildStopwatch.Elapsed,
+                        buildRanOnUiThread);
+                }
+                finally
+                {
+                    roadmapBuildRunning = false;
+                    StartNextRoadmapBuild();
+                }
+            });
+        }
+
+        private void CompleteRoadmapBuild(
+            RoadmapBuildRequest request,
+            RoadmapGraphProjection? projection,
+            TimeSpan buildTime,
+            bool buildRanOnUiThread)
+        {
+            if (projection == null)
+            {
+                return;
+            }
+
+            if (request.Version != roadmapBuildRequestVersion || dc == null)
+            {
+                DisposeProjection(projection);
+                return;
+            }
 
             var applyStopwatch = Stopwatch.StartNew();
-            RegisterRoadmapScopeSubscriptions(roots, projection);
+            RegisterRoadmapScopeSubscriptions(request.Roots, projection);
             ApplyProjection(projection);
             applyStopwatch.Stop();
 
-            RoadmapLastBuildTime = buildStopwatch.Elapsed;
+            RoadmapLastBuildTime = buildTime;
             RoadmapLastApplyProjectionTime = applyStopwatch.Elapsed;
+            RoadmapLastBuildRanOnUiThread = buildRanOnUiThread;
             RoadmapGraphUpdateCount++;
 
             UpdateHighlights();
+        }
+
+        private static void DisposeProjection(RoadmapGraphProjection projection)
+        {
+            foreach (var connection in projection.Connections)
+            {
+                connection.Dispose();
+            }
         }
 
         private void ApplyProjection(RoadmapGraphProjection projection)
@@ -833,5 +953,10 @@ namespace Unlimotion.Views
                 Debug.WriteLine($"UpdateHighlights failed: {ex.Message}");
             }
         }
+
+        private sealed record RoadmapBuildRequest(
+            int Version,
+            ReadOnlyObservableCollection<TaskWrapperViewModel> Roots,
+            RoadmapGraphBuildInput Input);
     }
 }
