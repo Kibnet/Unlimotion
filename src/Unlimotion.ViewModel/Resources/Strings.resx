@@ -341,6 +341,7 @@
   <data name="Wednesday" xml:space="preserve"><value>Wednesday</value></data>
   <data name="AllTasksResaved" xml:space="preserve"><value>All tasks were resaved.</value></data>
   <data name="AndroidAllFilesHint" xml:space="preserve"><value> Check the "All files access" permission.</value></data>
+  <data name="AndroidAllFilesAccessRequired" xml:space="preserve"><value>All files access is required for this folder.</value></data>
   <data name="BackupConnectCanceledNonEmpty" xml:space="preserve"><value>Connection canceled: the local tasks folder and the remote repository are not empty.</value></data>
   <data name="CannotResolveCloneDirectory" xml:space="preserve"><value>Cannot resolve clone directory for {0}.</value></data>
   <data name="CloneOrUpdateRepositoryFailed" xml:space="preserve"><value>Could not clone or update the repository: {0}</value></data>

@@ -149,6 +149,11 @@ public class App : Application
             settings.SetStorageConnectionState(SettingsConnectionState.Connecting);
             try
             {
+                if (!settings.IsServerMode)
+                {
+                    await PrepareFileStoragePathAsync(settings.TaskStoragePath);
+                }
+
                 _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
                 WireSettingsToCurrentStorage(settings);
                 if (_mainWindowViewModel != null)
@@ -350,10 +355,20 @@ public class App : Application
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
             if (_dialogs == null) return;
-            var path = await _dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerDataFolder"));
-            if (!string.IsNullOrWhiteSpace(path))
+            try
             {
-                settings.TaskStoragePath = path;
+                var path = await _dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerDataFolder"));
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    await PrepareFileStoragePathAsync(path);
+                    settings.TaskStoragePath = path;
+                }
+            }
+            catch (Exception ex)
+            {
+                settings.SetStorageConnectionState(SettingsConnectionState.Error);
+                var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
+                _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
             }
         });
 
@@ -512,10 +527,19 @@ public class App : Application
             return;
         }
 
+        await PrepareFileStoragePathAsync(settings.TaskStoragePath);
         _storageFactory.SwitchStorage(isServerMode: false, _configuration);
         WireSettingsToCurrentStorage(settings);
         await _mainWindowViewModel.Connect();
         settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+    }
+
+    private static Task PrepareFileStoragePathAsync(string? path)
+    {
+        var prepareFileStoragePathAsync = TaskStorageFactory.PrepareFileStoragePathAsync;
+        return prepareFileStoragePathAsync == null
+            ? Task.CompletedTask
+            : prepareFileStoragePathAsync(path);
     }
 
     private void ConfirmAndRun(

@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.TaskTree;
@@ -12,6 +14,7 @@ public class TaskStorageFactory : ITaskStorageFactory
     private readonly INotificationManagerWrapper? _notificationManager;
     
     public static string DefaultStoragePath { get; set; } = string.Empty;
+    public static Func<string?, Task>? PrepareFileStoragePathAsync { get; set; }
     
     public ITaskStorage? CurrentStorage { get; private set; }
     public IDatabaseWatcher? CurrentWatcher { get; private set; }

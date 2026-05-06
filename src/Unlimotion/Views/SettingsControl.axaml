@@ -184,6 +184,7 @@
                                 <TextBox Text="{Binding TaskStoragePath}"
                                          ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
                                 <Button Grid.Column="1"
+                                        AutomationProperties.AutomationId="BrowseTaskStoragePathButton"
                                         Content="{DynamicResource Browse}"
                                         Command="{Binding BrowseTaskStoragePathCommand}" />
                             </Grid>
