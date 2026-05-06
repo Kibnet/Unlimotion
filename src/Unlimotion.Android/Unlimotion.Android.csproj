@@ -10,7 +10,7 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
-    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidUseSharedRuntime>false</AndroidUseSharedRuntime>
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
     <AndroidAapt2NoCompress>dll;pdb</AndroidAapt2NoCompress>
@@ -31,11 +31,12 @@
   </ItemGroup>
 
   <ItemGroup>
-  </ItemGroup>
-
-  <ItemGroup>
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so.3" />
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libcrypto.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssh2.so" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssh2.so" />
   </ItemGroup>
 
   <ItemGroup>

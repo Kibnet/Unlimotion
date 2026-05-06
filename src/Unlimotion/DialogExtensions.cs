@@ -11,8 +11,16 @@ namespace Unlimotion;
 
 public class Dialogs : IDialogs
 {
+    public static Func<string?, string?, Task<string?>>? PlatformOpenFolderDialogAsync { get; set; }
+
     public async Task<string> ShowOpenFolderDialogAsync(string title = null, string directory = null)
     {
+        var platformOpenFolderDialogAsync = PlatformOpenFolderDialogAsync;
+        if (platformOpenFolderDialogAsync != null)
+        {
+            return await platformOpenFolderDialogAsync(title, directory) ?? string.Empty;
+        }
+
         var topLevel = DialogExtensions.GetTopLevel();
         var storageProvider = topLevel?.StorageProvider;
         if (storageProvider != null && storageProvider.CanPickFolder)
@@ -46,7 +54,8 @@ public class Dialogs : IDialogs
             dialog.Directory = directory;
         }
 
-        return await dialog.ShowAsync() ?? string.Empty;
+        var resultTask = dialog.ShowAsync();
+        return resultTask == null ? string.Empty : await resultTask ?? string.Empty;
     }
 }
 
@@ -54,7 +63,12 @@ public static class DialogExtensions
 {
     public static Task<string?>? ShowAsync(this OpenFolderDialog? dlg)
     {
-        var lifetime = App.Current.ApplicationLifetime;
+        if (dlg == null)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        var lifetime = App.Current?.ApplicationLifetime;
 
         Window window = null;
         switch (lifetime)

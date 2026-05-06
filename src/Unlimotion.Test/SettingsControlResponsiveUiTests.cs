@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using ReactiveUI;
 using Unlimotion;
 using Unlimotion.Views;
 
@@ -122,6 +124,54 @@ public class SettingsControlResponsiveUiTests
             }
             finally
             {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SettingsControl_BrowseTaskStoragePath_UpdatesPathFromFolderPicker()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
+                Dialogs.PlatformOpenFolderDialogAsync = (_, _) => Task.FromResult<string?>(selectedPath);
+                settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async () =>
+                {
+                    var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder");
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        settings.TaskStoragePath = path;
+                    }
+                });
+
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var browseButton = FindControlByAutomationId<Button>(view, "BrowseTaskStoragePathButton");
+                await ClickControlAsync(window, browseButton);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(settings.TaskStoragePath).IsEqualTo(selectedPath);
+            }
+            finally
+            {
+                Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
                 window?.Close();
                 fixture.CleanTasks();
             }

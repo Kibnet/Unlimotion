@@ -205,6 +205,7 @@
   <data name="RepositoryConnectErrorStatus" xml:space="preserve"><value>Ошибка подключения репозитория: {0}</value></data>
   <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Не удалось подключить репозиторий: {0}</value></data>
   <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Рабочая папка репозитория недоступна.</value></data>
+  <data name="RepositoryHeadUnavailable" xml:space="preserve"><value>HEAD репозитория недоступен.</value></data>
   <data name="ResetFilters" xml:space="preserve"><value>Сбросить фильтры</value></data>
   <data name="ResetFiltersConfirmHeader" xml:space="preserve"><value>Сбросить фильтры?</value></data>
   <data name="ResetFiltersConfirmMessage" xml:space="preserve"><value>Фильтры на текущей вкладке будут сброшены к значениям по умолчанию. Продолжить?</value></data>
@@ -341,6 +342,7 @@
   <data name="Wednesday" xml:space="preserve"><value>Среда</value></data>
   <data name="AllTasksResaved" xml:space="preserve"><value>Все задачи пересохранены.</value></data>
   <data name="AndroidAllFilesHint" xml:space="preserve"><value> Проверьте разрешение "Доступ ко всем файлам".</value></data>
+  <data name="AndroidAllFilesAccessRequired" xml:space="preserve"><value>Для этой папки нужен доступ ко всем файлам.</value></data>
   <data name="BackupConnectCanceledNonEmpty" xml:space="preserve"><value>Подключение отменено: локальная папка задач и удаленный репозиторий не пустые.</value></data>
   <data name="CannotResolveCloneDirectory" xml:space="preserve"><value>Не удалось определить папку клонирования для {0}.</value></data>
   <data name="CloneOrUpdateRepositoryFailed" xml:space="preserve"><value>Не удалось клонировать или обновить репозиторий: {0}</value></data>

@@ -3,6 +3,8 @@
 using System;
 using System.IO;
 using System.Runtime.Versioning;
+using System.Threading;
+using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
@@ -16,6 +18,7 @@ using Avalonia.Android;
 using Avalonia.ReactiveUI;
 using Unlimotion;
 using Unlimotion.Services;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Android;
 
@@ -24,11 +27,17 @@ namespace Unlimotion.Android;
     Theme = "@style/MyTheme.NoActionBar",
     Icon = "@drawable/icon",
     MainLauncher = true,
+    LaunchMode = LaunchMode.SingleTask,
     ResizeableActivity = true,
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
 public class MainActivity : AvaloniaMainActivity<App>
 {
+    private const int OpenTaskFolderRequestCode = 4201;
+    private const int ManageExternalStorageRequestCode = 4202;
+    private TaskCompletionSource<string?>? _openTaskFolderCompletion;
+    private TaskCompletionSource<bool>? _manageExternalStorageCompletion;
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
@@ -61,6 +70,8 @@ public class MainActivity : AvaloniaMainActivity<App>
             }
 
             App.Init(configPath);
+            Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
+            TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
 
             return base.CustomizeAppBuilder(builder)
                 .WithCustomFont()
@@ -89,6 +100,256 @@ public class MainActivity : AvaloniaMainActivity<App>
         }
 
         throw new InvalidOperationException("Could not resolve app data directory.");
+    }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+        CompleteManageExternalStorageRequestIfPending();
+    }
+
+    private async Task<string?> ShowOpenDocumentTreeAsync(string? title, string? directory)
+    {
+        var path = await OpenDocumentTreeAsync();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            await EnsureFileStoragePathAccessAsync(path);
+        }
+
+        return path;
+    }
+
+    private Task<string?> OpenDocumentTreeAsync()
+    {
+        var completion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var previousCompletion = Interlocked.Exchange(ref _openTaskFolderCompletion, completion);
+        previousCompletion?.TrySetResult(null);
+
+        try
+        {
+            var intent = new Intent(Intent.ActionOpenDocumentTree);
+            intent.AddFlags(
+                ActivityFlags.GrantReadUriPermission |
+                ActivityFlags.GrantWriteUriPermission |
+                ActivityFlags.GrantPersistableUriPermission |
+                ActivityFlags.GrantPrefixUriPermission);
+
+            StartActivityForResult(intent, OpenTaskFolderRequestCode);
+        }
+        catch (Exception ex)
+        {
+            Interlocked.CompareExchange(ref _openTaskFolderCompletion, null, completion);
+            completion.TrySetException(ex);
+        }
+
+        return completion.Task;
+    }
+
+    private async Task EnsureFileStoragePathAccessAsync(string? path)
+    {
+        if (!RequiresManageExternalStorage(path) || HasManageExternalStorageAccess())
+        {
+            return;
+        }
+
+        await RequestManageExternalStorageAccessAsync();
+        if (!HasManageExternalStorageAccess())
+        {
+            throw new InvalidOperationException(L10n.Get("AndroidAllFilesAccessRequired"));
+        }
+    }
+
+    private bool RequiresManageExternalStorage(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !OperatingSystem.IsAndroidVersionAtLeast(30))
+        {
+            return false;
+        }
+
+        var normalizedPath = NormalizeAndroidPath(path);
+        if (string.IsNullOrWhiteSpace(normalizedPath))
+        {
+            return false;
+        }
+
+        var externalFilesDir = GetExternalFilesDir(null)?.AbsolutePath;
+        if (IsPathWithinDirectory(normalizedPath, NormalizeAndroidPath(externalFilesDir)))
+        {
+            return false;
+        }
+
+        var internalFilesDir = ApplicationContext?.FilesDir?.AbsolutePath;
+        if (IsPathWithinDirectory(normalizedPath, NormalizeAndroidPath(internalFilesDir)))
+        {
+            return false;
+        }
+
+        return normalizedPath.StartsWith("/storage/", StringComparison.Ordinal) ||
+               normalizedPath.StartsWith("/sdcard/", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeAndroidPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path)
+            ? string.Empty
+            : path.Replace('\\', '/').TrimEnd('/');
+    }
+
+    private static bool IsPathWithinDirectory(string path, string directory)
+    {
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(directory))
+        {
+            return false;
+        }
+
+        if (string.Equals(path, directory, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return path.StartsWith(directory + "/", StringComparison.Ordinal);
+    }
+
+    private static bool HasManageExternalStorageAccess()
+    {
+        return !OperatingSystem.IsAndroidVersionAtLeast(30) ||
+               global::Android.OS.Environment.IsExternalStorageManager;
+    }
+
+    private Task RequestManageExternalStorageAccessAsync()
+    {
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var previousCompletion = Interlocked.Exchange(ref _manageExternalStorageCompletion, completion);
+        previousCompletion?.TrySetResult(HasManageExternalStorageAccess());
+
+        try
+        {
+            StartActivityForResult(CreateManageExternalStorageSettingsIntent(), ManageExternalStorageRequestCode);
+        }
+        catch
+        {
+            try
+            {
+                StartActivityForResult(new Intent(Settings.ActionManageAllFilesAccessPermission), ManageExternalStorageRequestCode);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.CompareExchange(ref _manageExternalStorageCompletion, null, completion);
+                completion.TrySetException(ex);
+            }
+        }
+
+        return completion.Task;
+    }
+
+    private Intent CreateManageExternalStorageSettingsIntent()
+    {
+        var intent = new Intent(Settings.ActionManageAppAllFilesAccessPermission);
+        intent.SetData(global::Android.Net.Uri.Parse($"package:{PackageName}"));
+        return intent;
+    }
+
+    private void CompleteManageExternalStorageRequestIfPending()
+    {
+        var completion = _manageExternalStorageCompletion;
+        if (completion == null)
+        {
+            return;
+        }
+
+        new Handler(Looper.MainLooper!).PostDelayed(() =>
+        {
+            var pendingCompletion = Interlocked.Exchange(ref _manageExternalStorageCompletion, null);
+            pendingCompletion?.TrySetResult(HasManageExternalStorageAccess());
+        }, 250);
+    }
+
+    protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+    {
+        base.OnActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == ManageExternalStorageRequestCode)
+        {
+            CompleteManageExternalStorageRequestIfPending();
+            return;
+        }
+
+        if (requestCode != OpenTaskFolderRequestCode)
+        {
+            return;
+        }
+
+        var completion = Interlocked.Exchange(ref _openTaskFolderCompletion, null);
+        if (completion == null)
+        {
+            return;
+        }
+
+        if (resultCode != Result.Ok || data?.Data == null)
+        {
+            completion.TrySetResult(null);
+            return;
+        }
+
+        var uri = data.Data;
+        TryPersistFolderAccess(data, uri);
+        completion.TrySetResult(TryResolveDocumentTreeToPath(uri));
+    }
+
+    private void TryPersistFolderAccess(Intent data, global::Android.Net.Uri uri)
+    {
+        try
+        {
+            var flags = data.Flags & (ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantWriteUriPermission);
+            if (flags != 0)
+            {
+                ContentResolver?.TakePersistableUriPermission(uri, flags);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static string? TryResolveDocumentTreeToPath(global::Android.Net.Uri uri)
+    {
+        try
+        {
+            var documentId = DocumentsContract.GetTreeDocumentId(uri);
+            if (string.IsNullOrWhiteSpace(documentId))
+            {
+                return null;
+            }
+
+            var separatorIndex = documentId.IndexOf(':');
+            if (separatorIndex < 0)
+            {
+                return null;
+            }
+
+            var volume = documentId[..separatorIndex];
+            var relative = documentId[(separatorIndex + 1)..].TrimStart('/');
+            var rootPath = volume switch
+            {
+                var value when string.Equals(value, "primary", StringComparison.OrdinalIgnoreCase)
+                    => "/storage/emulated/0",
+                var value when string.Equals(value, "home", StringComparison.OrdinalIgnoreCase)
+                    => "/storage/emulated/0/Documents",
+                _ => $"/storage/{volume}"
+            };
+
+            return string.IsNullOrWhiteSpace(relative)
+                ? rootPath
+                : $"{rootPath}/{relative}";
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void WriteStartupError(Exception ex)

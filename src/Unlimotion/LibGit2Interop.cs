@@ -5,16 +5,18 @@ namespace Unlimotion;
 
 public static class LibGit2Interop
 {
+    public const string NativeLibraryName = "git2-3f4182d";
+
     private const int GitOptSetOwnerValidation = 36;
     private const int GitOptSetSslCertLocations = 12;
 
-    [DllImport("git2", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl)]
     private static extern int git_libgit2_init();
 
-    [DllImport("git2", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl)]
     private static extern int git_libgit2_opts(int option, __arglist);
 
-    [DllImport("git2", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl)]
     private static extern int git_libgit2_opts(int option, IntPtr value1, IntPtr value2);
 
     internal static void DisableOwnerValidationOnAndroid()
