@@ -123,6 +123,7 @@
   <data name="FuzzySearch" xml:space="preserve"><value>Умный поиск</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Только разблокированные</value></data>
+  <data name="RoadmapRebuilding" xml:space="preserve"><value>Обновление карты...</value></data>
   <data name="Importance" xml:space="preserve"><value>Важность</value></data>
   <data name="InvalidRelation" xml:space="preserve"><value>Нельзя добавить выбранную связь.</value></data>
   <data name="LanguageEnglish" xml:space="preserve"><value>Английский</value></data>

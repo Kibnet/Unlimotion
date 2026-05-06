@@ -811,6 +811,13 @@ public class RoadmapGraphUiTests
                 await Assert.That(nodesReady).IsTrue();
                 WaitForStableRoadmapUpdates(graphControl!);
 
+                var buildIndicator = WaitForAutomationControl<Border>(view, "RoadmapBuildIndicator");
+                var buildProgressBar = WaitForAutomationControl<ProgressBar>(view, "RoadmapBuildProgressBar");
+                var buildProgressText = WaitForAutomationControl<TextBlock>(view, "RoadmapBuildProgressText");
+
+                await Assert.That(buildIndicator.IsVisible).IsFalse();
+                await Assert.That(buildProgressBar.Maximum).IsEqualTo(100);
+
                 var updateCountBeforePulse = graphControl!.RoadmapGraphUpdateCount;
                 var subscriptionRefreshCountBeforePulse = graphControl.RoadmapScopeSubscriptionRefreshCount;
                 var backgroundBuildStartCountBeforePulse = graphControl.RoadmapGraphBackgroundBuildStartCount;
@@ -826,6 +833,12 @@ public class RoadmapGraphUiTests
                     Dispatcher.UIThread.RunJobs();
                 }
 
+                var indicatorVisible = WaitFor(() =>
+                    buildIndicator.IsVisible &&
+                    graphControl.RoadmapGraphBuildInProgress &&
+                    buildProgressBar.Value >= 0 &&
+                    buildProgressText.Text?.EndsWith("%", StringComparison.Ordinal) == true);
+                await Assert.That(indicatorVisible).IsTrue();
                 await Assert.That(graphControl.RoadmapGraphUpdateCount).IsEqualTo(updateCountBeforePulse);
 
                 var rebuilt = WaitFor(
@@ -845,11 +858,123 @@ public class RoadmapGraphUiTests
                 await Assert.That(graphControl.RoadmapScopeSubscriptionRefreshCount)
                     .IsEqualTo(subscriptionRefreshCountBeforePulse);
                 await Assert.That(extraRebuild).IsFalse();
+                await Assert.That(buildIndicator.IsVisible).IsFalse();
                 await Assert.That(graphControl.RoadmapLastBuildTime).IsGreaterThan(TimeSpan.Zero);
                 await Assert.That(graphControl.RoadmapLastApplyProjectionTime).IsGreaterThan(TimeSpan.Zero);
             }
             finally
             {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task RoadmapGraph_FilterChange_CancelsRunningBackgroundRebuildAndStartsLatest()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            GraphControl? graphControl = null;
+            using var firstBuildEntered = new ManualResetEventSlim();
+            using var firstBuildCanFinish = new ManualResetEventSlim();
+            var buildCalls = 0;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = false;
+                vm.GraphMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                graphControl = WaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+
+                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
+                await Assert.That(nodesReady).IsTrue();
+                WaitForStableRoadmapUpdates(graphControl!);
+
+                var filterReady = WaitFor(() =>
+                    vm.Graph.EmojiExcludeFilters.Any(filter =>
+                        !string.IsNullOrEmpty(filter.Emoji) &&
+                        !filter.ShowTasks &&
+                        filter.Source != null &&
+                        FindRoadmapNode(graphControl!, filter.Source.Id) != null));
+                await Assert.That(filterReady).IsTrue();
+
+                var excludeFilter = vm.Graph.EmojiExcludeFilters.First(filter =>
+                    !string.IsNullOrEmpty(filter.Emoji) &&
+                    !filter.ShowTasks &&
+                    filter.Source != null &&
+                    FindRoadmapNode(graphControl!, filter.Source.Id) != null);
+                var filteredTaskId = excludeFilter.Source!.Id;
+                var updateCountBeforeFilter = graphControl!.RoadmapGraphUpdateCount;
+                var startCountBeforeFilter = graphControl.RoadmapGraphBackgroundBuildStartCount;
+                var cancelRequestCountBeforeFilter = graphControl.RoadmapGraphBackgroundBuildCancelRequestCount;
+                var canceledCountBeforeFilter = graphControl.RoadmapGraphBackgroundBuildCanceledCount;
+
+                graphControl.RoadmapGraphBuildOverride = (input, progress, cancellationToken) =>
+                {
+                    var call = Interlocked.Increment(ref buildCalls);
+                    if (call == 1)
+                    {
+                        firstBuildEntered.Set();
+                        while (!firstBuildCanFinish.Wait(10))
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                    }
+
+                    return RoadmapGraphBuilder.Build(input, progress, cancellationToken);
+                };
+
+                excludeFilter.ShowTasks = true;
+                Dispatcher.UIThread.RunJobs();
+
+                var firstBuildStarted = WaitFor(() => firstBuildEntered.IsSet);
+                await Assert.That(firstBuildStarted).IsTrue();
+                await Assert.That(Volatile.Read(ref buildCalls)).IsEqualTo(1);
+
+                excludeFilter.ShowTasks = false;
+                Dispatcher.UIThread.RunJobs();
+
+                var latestStartedBeforeFirstWasReleased = WaitFor(() =>
+                    Volatile.Read(ref buildCalls) >= 2 &&
+                    graphControl.RoadmapGraphBackgroundBuildCancelRequestCount > cancelRequestCountBeforeFilter);
+                await Assert.That(latestStartedBeforeFirstWasReleased).IsTrue();
+                await Assert.That(firstBuildCanFinish.IsSet).IsFalse();
+
+                firstBuildCanFinish.Set();
+
+                var firstBuildCanceled = WaitFor(() =>
+                    graphControl.RoadmapGraphBackgroundBuildCanceledCount > canceledCountBeforeFilter);
+                await Assert.That(firstBuildCanceled).IsTrue();
+
+                var latestApplied = WaitFor(() =>
+                    graphControl.RoadmapGraphUpdateCount > updateCountBeforeFilter &&
+                    FindRoadmapNode(graphControl, filteredTaskId) != null,
+                    5000);
+                await Assert.That(latestApplied).IsTrue();
+                await Assert.That(graphControl.RoadmapGraphBackgroundBuildStartCount)
+                    .IsGreaterThanOrEqualTo(startCountBeforeFilter + 2);
+                await Assert.That(graphControl.RoadmapGraphBuildInProgress).IsFalse();
+            }
+            finally
+            {
+                firstBuildCanFinish.Set();
+                if (graphControl != null)
+                {
+                    graphControl.RoadmapGraphBuildOverride = null;
+                }
+
                 window?.Close();
                 fixture.CleanTasks();
             }

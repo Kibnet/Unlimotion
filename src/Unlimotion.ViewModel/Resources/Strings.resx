@@ -123,6 +123,7 @@
   <data name="FuzzySearch" xml:space="preserve"><value>Smart search</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Could not merge local tasks with the remote repository: Git conflicts were found.</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Only Unlocked</value></data>
+  <data name="RoadmapRebuilding" xml:space="preserve"><value>Updating roadmap...</value></data>
   <data name="Importance" xml:space="preserve"><value>Importance</value></data>
   <data name="InvalidRelation" xml:space="preserve"><value>The selected relation cannot be added.</value></data>
   <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>

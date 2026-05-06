@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Avalonia;
 using Microsoft.Msagl.Core.Geometry.Curves;
 using Microsoft.Msagl.Layout.Layered;
@@ -193,19 +194,27 @@ public static class RoadmapGraphBuilder
         }
     }
 
-    internal static RoadmapGraphProjection Build(RoadmapGraphBuildInput input)
+    internal static RoadmapGraphProjection Build(
+        RoadmapGraphBuildInput input,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var firstSeen = new Dictionary<RoadmapNode, int>();
         var nodesByInput = new Dictionary<RoadmapGraphNodeInput, RoadmapNode>();
         var nextSeenIndex = 0;
 
         foreach (var inputNode in input.Nodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var node = new RoadmapNode(inputNode.TaskItem);
             node.SetMeasuredWidth(inputNode.Width);
             nodesByInput.Add(inputNode, node);
             firstSeen.Add(node, nextSeenIndex++);
         }
+
+        progress?.Report(18);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var connections = input.Connections
             .Where(connection =>
@@ -217,8 +226,23 @@ public static class RoadmapGraphBuilder
                 connection.Kind))
             .ToList();
 
-        var visibleConnections = RemoveRedundantConnections(connections);
-        var nodes = ApplySugiyamaLayout(nodesByInput.Values, visibleConnections, firstSeen);
+        progress?.Report(28);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var visibleConnections = RemoveRedundantConnections(connections, cancellationToken);
+
+        progress?.Report(36);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var nodes = ApplySugiyamaLayout(
+            nodesByInput.Values,
+            visibleConnections,
+            firstSeen,
+            progress,
+            cancellationToken);
+
+        progress?.Report(88);
+        cancellationToken.ThrowIfCancellationRequested();
 
         return new RoadmapGraphProjection(
             nodes,
@@ -231,7 +255,8 @@ public static class RoadmapGraphBuilder
     }
 
     private static IReadOnlyList<ConnectionDefinition> RemoveRedundantConnections(
-        IReadOnlyList<ConnectionDefinition> connections)
+        IReadOnlyList<ConnectionDefinition> connections,
+        CancellationToken cancellationToken)
     {
         var outgoing = connections
             .GroupBy(connection => connection.Tail)
@@ -244,6 +269,7 @@ public static class RoadmapGraphBuilder
 
         bool HasAlternativePath(ConnectionDefinition candidate)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!outgoing.TryGetValue(candidate.Tail, out var firstEdges))
             {
                 return false;
@@ -279,6 +305,7 @@ public static class RoadmapGraphBuilder
 
             while (queue.TryDequeue(out var task))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!outgoing.TryGetValue(task, out var edges))
                 {
                     continue;
@@ -337,6 +364,7 @@ public static class RoadmapGraphBuilder
 
             while (queue.TryDequeue(out var task))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!outgoing.TryGetValue(task, out var edges))
                 {
                     continue;
@@ -361,13 +389,19 @@ public static class RoadmapGraphBuilder
     private static List<RoadmapNode> ApplySugiyamaLayout(
         IEnumerable<RoadmapNode> sourceNodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        IProgress<double>? progress,
+        CancellationToken cancellationToken)
     {
         var nodes = sourceNodes.ToList();
         if (nodes.Count == 0)
         {
+            progress?.Report(88);
             return nodes;
         }
+
+        progress?.Report(42);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var graph = new MsaglDrawing.Graph
         {
@@ -382,12 +416,14 @@ public static class RoadmapGraphBuilder
 
         foreach (var node in nodes.OrderBy(node => firstSeen[node]))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             drawingNodesByNode[node] = graph.AddNode(nodeIds[node]);
         }
 
         var drawingEdges = new List<(MsaglDrawing.Edge Edge, RoadmapConnectionKind Kind)>();
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (connection.Tail == connection.Head ||
                 !nodeIds.TryGetValue(connection.Tail, out var tailId) ||
                 !nodeIds.TryGetValue(connection.Head, out var headId))
@@ -404,6 +440,7 @@ public static class RoadmapGraphBuilder
 
             foreach (var node in nodes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var drawingNode = drawingNodesByNode[node];
                 drawingNode.GeometryNode.BoundaryCurve = CurveFactory.CreateRectangle(
                     node.Width,
@@ -419,20 +456,33 @@ public static class RoadmapGraphBuilder
                 }
             }
 
+            progress?.Report(52);
+            cancellationToken.ThrowIfCancellationRequested();
+
             LayoutHelpers.CalculateLayout(
                 graph.GeometryGraph,
                 graph.LayoutAlgorithmSettings,
                 null);
 
+            progress?.Report(68);
+            cancellationToken.ThrowIfCancellationRequested();
+
             ApplyMsaglLocations(nodes, drawingNodesByNode, graph.GeometryGraph.BoundingBox);
-            ApplyRoadmapLocations(nodes, connections, firstSeen);
+            ApplyRoadmapLocations(nodes, connections, firstSeen, cancellationToken);
+            progress?.Report(82);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception exception)
         {
             Trace.TraceError("MSAGL Sugiyama roadmap layout failed: {0}", exception);
-            ApplyFallbackLayout(nodes, connections, firstSeen);
+            ApplyFallbackLayout(nodes, connections, firstSeen, cancellationToken);
+            progress?.Report(82);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return nodes
             .OrderBy(node => node.Location.X)
             .ThenBy(node => node.Location.Y)
@@ -458,21 +508,23 @@ public static class RoadmapGraphBuilder
     private static void ApplyRoadmapLocations(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
-        var layers = BuildFallbackLayers(nodes, connections, firstSeen);
-        var layoutGraph = BuildLayoutGraph(nodes, connections, layers, firstSeen);
-        OptimizeLayerOrder(layoutGraph.LayerOrder, layoutGraph.Edges);
+        cancellationToken.ThrowIfCancellationRequested();
+        var layers = BuildFallbackLayers(nodes, connections, firstSeen, cancellationToken);
+        var layoutGraph = BuildLayoutGraph(nodes, connections, layers, firstSeen, cancellationToken);
+        OptimizeLayerOrder(layoutGraph.LayerOrder, layoutGraph.Edges, cancellationToken);
         var rows = BuildInitialRows(layoutGraph.LayerOrder);
-        var visibleEdges = BuildVisibleLayoutEdges(connections, layoutGraph.VertexByNode);
+        var visibleEdges = BuildVisibleLayoutEdges(connections, layoutGraph.VertexByNode, cancellationToken);
 
-        RelaxRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
-        rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows);
+        RelaxRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows, cancellationToken);
+        rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, layoutGraph.Edges, rows, cancellationToken);
         if (visibleEdges.Count > 0)
         {
             var rowBalancingEdges = layoutGraph.Edges.Concat(visibleEdges).ToArray();
-            rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, rowBalancingEdges, rows);
-            RelaxRows(layoutGraph.LayerOrder, visibleEdges, rows);
+            rows = BalanceLayerOrderByNeighborRows(layoutGraph.LayerOrder, rowBalancingEdges, rows, cancellationToken);
+            RelaxRows(layoutGraph.LayerOrder, visibleEdges, rows, cancellationToken);
         }
 
         NormalizeRows(rows);
@@ -486,6 +538,7 @@ public static class RoadmapGraphBuilder
         var layerX = BuildLayerPositions(layerOrder);
         foreach (var node in nodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var vertex = layoutGraph.VertexByNode[node];
             node.SetConnectionWidth(RoadmapNode.MaxWidth);
             node.Location = new Avalonia.Point(
@@ -498,7 +551,8 @@ public static class RoadmapGraphBuilder
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
         IReadOnlyDictionary<RoadmapNode, int> layers,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
         var nextStableIndex = 0;
         var vertexByNode = new Dictionary<RoadmapNode, LayoutVertex>();
@@ -506,6 +560,7 @@ public static class RoadmapGraphBuilder
 
         foreach (var node in nodes.OrderBy(node => firstSeen[node]))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var layer = layers.GetValueOrDefault(node);
             var vertex = new LayoutVertex(
                 node,
@@ -537,6 +592,7 @@ public static class RoadmapGraphBuilder
         var layoutEdges = new List<LayoutEdge>();
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!vertexByNode.TryGetValue(connection.Tail, out var tail) ||
                 !vertexByNode.TryGetValue(connection.Head, out var head) ||
                 tail.Layer >= head.Layer)
@@ -547,6 +603,7 @@ public static class RoadmapGraphBuilder
             var previous = tail;
             for (var layer = tail.Layer + 1; layer < head.Layer; layer++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var progress = (double)(layer - tail.Layer) / (head.Layer - tail.Layer);
                 var dummy = new LayoutVertex(
                     null,
@@ -584,12 +641,14 @@ public static class RoadmapGraphBuilder
 
     private static List<LayoutEdge> BuildVisibleLayoutEdges(
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<RoadmapNode, LayoutVertex> vertexByNode)
+        IReadOnlyDictionary<RoadmapNode, LayoutVertex> vertexByNode,
+        CancellationToken cancellationToken)
     {
         var visibleEdges = new List<LayoutEdge>();
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!vertexByNode.TryGetValue(connection.Tail, out var tail) ||
                 !vertexByNode.TryGetValue(connection.Head, out var head) ||
                 tail.Layer >= head.Layer)
@@ -606,7 +665,8 @@ public static class RoadmapGraphBuilder
     private static Dictionary<LayoutVertex, double> BalanceLayerOrderByNeighborRows(
         Dictionary<int, List<LayoutVertex>> layerOrder,
         IReadOnlyList<LayoutEdge> connections,
-        Dictionary<LayoutVertex, double> rows)
+        Dictionary<LayoutVertex, double> rows,
+        CancellationToken cancellationToken)
     {
         if (layerOrder.Count < 2 || connections.Count == 0)
         {
@@ -642,14 +702,15 @@ public static class RoadmapGraphBuilder
                 group => group.Select(item => item.Connection).Distinct().ToList());
         var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
         var orderByVertex = BuildOrderByVertex(layerOrder);
-        var currentCrossings = CountWeightedCrossings(layoutConnections, orderByVertex);
+        var currentCrossings = CountWeightedCrossings(layoutConnections, orderByVertex, cancellationToken);
 
         for (var pass = 0; pass < TreeBalancingPasses; pass++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var changed = false;
             changed |= BalanceSweep(orderedLayers.Skip(1), preferLowerLayers: true);
             changed |= BalanceSweep(orderedLayers.Reverse().Skip(1), preferLowerLayers: false);
-            changed |= ImproveLayerOrderByEdgeLength(layerOrder, layoutConnections, rows);
+            changed |= ImproveLayerOrderByEdgeLength(layerOrder, layoutConnections, rows, cancellationToken);
 
             if (!changed)
             {
@@ -660,7 +721,8 @@ public static class RoadmapGraphBuilder
             RelaxRows(
                 layerOrder,
                 layoutConnections,
-                rows);
+                rows,
+                cancellationToken);
         }
 
         return rows;
@@ -673,6 +735,7 @@ public static class RoadmapGraphBuilder
 
             foreach (var layerIndex in layerIndexes)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!layerOrder.TryGetValue(layerIndex, out var layer) || layer.Count < 2)
                 {
                     continue;
@@ -696,7 +759,10 @@ public static class RoadmapGraphBuilder
                 layer.AddRange(candidate);
 
                 var candidateOrderByVertex = BuildOrderByVertex(layerOrder);
-                var candidateCrossings = CountWeightedCrossings(layoutConnections, candidateOrderByVertex);
+                var candidateCrossings = CountWeightedCrossings(
+                    layoutConnections,
+                    candidateOrderByVertex,
+                    cancellationToken);
                 if (candidateCrossings <= currentCrossings)
                 {
                     currentCrossings = candidateCrossings;
@@ -752,7 +818,8 @@ public static class RoadmapGraphBuilder
 
     private static void OptimizeLayerOrder(
         Dictionary<int, List<LayoutVertex>> layerOrder,
-        IReadOnlyList<LayoutEdge> connections)
+        IReadOnlyList<LayoutEdge> connections,
+        CancellationToken cancellationToken)
     {
         if (layerOrder.Count < 2 || connections.Count == 0)
         {
@@ -783,6 +850,7 @@ public static class RoadmapGraphBuilder
 
         for (var pass = 0; pass < LayerOrderingPasses; pass++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var layerIndex in orderedLayers.Skip(1))
             {
                 ReorderLayerByNeighborBarycenter(
@@ -790,22 +858,25 @@ public static class RoadmapGraphBuilder
                     layoutConnections,
                     layersByVertex,
                     orderByVertex,
-                    preferLowerLayers: true);
+                    preferLowerLayers: true,
+                    cancellationToken);
                 orderByVertex = BuildOrderByVertex(layerOrder);
             }
 
             foreach (var layerIndex in orderedLayers.Reverse().Skip(1))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 ReorderLayerByNeighborBarycenter(
                     layerOrder[layerIndex],
                     layoutConnections,
                     layersByVertex,
                     orderByVertex,
-                    preferLowerLayers: false);
+                    preferLowerLayers: false,
+                    cancellationToken);
                 orderByVertex = BuildOrderByVertex(layerOrder);
             }
 
-            ApplyAdjacentCrossingSwaps(layerOrder, layoutConnections, orderByVertex);
+            ApplyAdjacentCrossingSwaps(layerOrder, layoutConnections, orderByVertex, cancellationToken);
         }
     }
 
@@ -842,7 +913,8 @@ public static class RoadmapGraphBuilder
         IReadOnlyList<LayoutEdge> connections,
         IReadOnlyDictionary<LayoutVertex, int> layersByVertex,
         IReadOnlyDictionary<LayoutVertex, int> orderByVertex,
-        bool preferLowerLayers)
+        bool preferLowerLayers,
+        CancellationToken cancellationToken)
     {
         if (layer.Count < 2)
         {
@@ -854,6 +926,7 @@ public static class RoadmapGraphBuilder
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             AddNeighbor(connection.Tail, connection.Head, connection.Kind);
             AddNeighbor(connection.Head, connection.Tail, connection.Kind);
         }
@@ -906,7 +979,8 @@ public static class RoadmapGraphBuilder
     private static void ApplyAdjacentCrossingSwaps(
         IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
         IReadOnlyList<LayoutEdge> connections,
-        Dictionary<LayoutVertex, int> orderByVertex)
+        Dictionary<LayoutVertex, int> orderByVertex,
+        CancellationToken cancellationToken)
     {
         var connectionsByVertex = connections
             .SelectMany(connection => new[]
@@ -921,10 +995,12 @@ public static class RoadmapGraphBuilder
 
         for (var pass = 0; pass < AdjacentSwapPasses; pass++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var improved = false;
 
             foreach (var layer in layerOrder.OrderBy(group => group.Key).Select(group => group.Value))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (layer.Count < 2)
                 {
                     continue;
@@ -935,14 +1011,22 @@ public static class RoadmapGraphBuilder
                     var first = layer[index];
                     var second = layer[index + 1];
                     var affectedConnections = GetAffectedConnections(first, second);
-                    var before = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
+                    var before = CountAffectedCrossings(
+                        affectedConnections,
+                        connections,
+                        orderByVertex,
+                        cancellationToken);
 
                     layer[index] = second;
                     layer[index + 1] = first;
                     orderByVertex[first] = index + 1;
                     orderByVertex[second] = index;
 
-                    var after = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
+                    var after = CountAffectedCrossings(
+                        affectedConnections,
+                        connections,
+                        orderByVertex,
+                        cancellationToken);
                     if (after < before)
                     {
                         improved = true;
@@ -984,7 +1068,8 @@ public static class RoadmapGraphBuilder
     private static bool ImproveLayerOrderByEdgeLength(
         IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
         IReadOnlyList<LayoutEdge> connections,
-        Dictionary<LayoutVertex, double> rows)
+        Dictionary<LayoutVertex, double> rows,
+        CancellationToken cancellationToken)
     {
         if (connections.Count == 0)
         {
@@ -1006,10 +1091,12 @@ public static class RoadmapGraphBuilder
 
         for (var pass = 0; pass < LengthAwareSwapPasses; pass++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var improved = false;
 
             foreach (var layer in layerOrder.OrderBy(group => group.Key).Select(group => group.Value))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (layer.Count < 2)
                 {
                     continue;
@@ -1027,8 +1114,15 @@ public static class RoadmapGraphBuilder
 
                     var firstRow = rows[first];
                     var secondRow = rows[second];
-                    var beforeCrossings = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
-                    var beforeLength = CountWeightedVerticalLength(affectedConnections, rows);
+                    var beforeCrossings = CountAffectedCrossings(
+                        affectedConnections,
+                        connections,
+                        orderByVertex,
+                        cancellationToken);
+                    var beforeLength = CountWeightedVerticalLength(
+                        affectedConnections,
+                        rows,
+                        cancellationToken);
 
                     layer[index] = second;
                     layer[index + 1] = first;
@@ -1037,8 +1131,15 @@ public static class RoadmapGraphBuilder
                     rows[first] = secondRow;
                     rows[second] = firstRow;
 
-                    var afterCrossings = CountAffectedCrossings(affectedConnections, connections, orderByVertex);
-                    var afterLength = CountWeightedVerticalLength(affectedConnections, rows);
+                    var afterCrossings = CountAffectedCrossings(
+                        affectedConnections,
+                        connections,
+                        orderByVertex,
+                        cancellationToken);
+                    var afterLength = CountWeightedVerticalLength(
+                        affectedConnections,
+                        rows,
+                        cancellationToken);
                     if (afterCrossings < beforeCrossings ||
                         afterCrossings == beforeCrossings &&
                         afterLength + EdgeLengthSwapTolerance < beforeLength)
@@ -1086,13 +1187,15 @@ public static class RoadmapGraphBuilder
 
     private static double CountWeightedVerticalLength(
         IEnumerable<LayoutEdge> connections,
-        IReadOnlyDictionary<LayoutVertex, double> rows)
+        IReadOnlyDictionary<LayoutVertex, double> rows,
+        CancellationToken cancellationToken)
     {
         var length = 0d;
         var visited = new HashSet<LayoutEdge>();
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!visited.Add(connection) ||
                 !rows.TryGetValue(connection.Tail, out var tailRow) ||
                 !rows.TryGetValue(connection.Head, out var headRow))
@@ -1109,12 +1212,14 @@ public static class RoadmapGraphBuilder
     private static long CountAffectedCrossings(
         IReadOnlyList<LayoutEdge> affectedConnections,
         IReadOnlyList<LayoutEdge> allConnections,
-        IReadOnlyDictionary<LayoutVertex, int> orderByVertex)
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex,
+        CancellationToken cancellationToken)
     {
         long crossings = 0;
 
         foreach (var affectedConnection in affectedConnections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var connection in allConnections)
             {
                 if (affectedConnection.Equals(connection) ||
@@ -1132,12 +1237,14 @@ public static class RoadmapGraphBuilder
 
     private static long CountWeightedCrossings(
         IReadOnlyList<LayoutEdge> connections,
-        IReadOnlyDictionary<LayoutVertex, int> orderByVertex)
+        IReadOnlyDictionary<LayoutVertex, int> orderByVertex,
+        CancellationToken cancellationToken)
     {
         long crossings = 0;
 
         for (var firstIndex = 0; firstIndex < connections.Count; firstIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (var secondIndex = firstIndex + 1; secondIndex < connections.Count; secondIndex++)
             {
                 var first = connections[firstIndex];
@@ -1207,13 +1314,15 @@ public static class RoadmapGraphBuilder
     private static void RelaxRows(
         IReadOnlyDictionary<int, List<LayoutVertex>> layerOrder,
         IReadOnlyList<LayoutEdge> connections,
-        Dictionary<LayoutVertex, double> rows)
+        Dictionary<LayoutVertex, double> rows,
+        CancellationToken cancellationToken)
     {
         var vertices = layerOrder.SelectMany(group => group.Value).ToHashSet();
         var neighbors = vertices.ToDictionary(vertex => vertex, _ => new List<WeightedVertexNeighbor>());
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!vertices.Contains(connection.Tail) ||
                 !vertices.Contains(connection.Head))
             {
@@ -1233,6 +1342,7 @@ public static class RoadmapGraphBuilder
         var orderedLayers = layerOrder.Keys.OrderBy(layer => layer).ToArray();
         for (var pass = 0; pass < RowRelaxationPasses; pass++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var layer in orderedLayers)
             {
                 RelaxLayer(layer);
@@ -1248,6 +1358,7 @@ public static class RoadmapGraphBuilder
 
         void RelaxLayer(int layerIndex)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!layerOrder.TryGetValue(layerIndex, out var layer) || layer.Count == 0)
             {
                 return;
@@ -1259,6 +1370,7 @@ public static class RoadmapGraphBuilder
 
             for (var index = 0; index < layer.Count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var vertex = layer[index];
                 var weightedRowSum = rows[vertex] * RowInertiaWeight;
                 var totalWeight = RowInertiaWeight;
@@ -1397,9 +1509,10 @@ public static class RoadmapGraphBuilder
     private static void ApplyFallbackLayout(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
-        var layers = BuildFallbackLayers(nodes, connections, firstSeen);
+        var layers = BuildFallbackLayers(nodes, connections, firstSeen, cancellationToken);
         var rowsByLayer = nodes
             .GroupBy(node => layers.GetValueOrDefault(node))
             .ToDictionary(
@@ -1411,6 +1524,7 @@ public static class RoadmapGraphBuilder
 
         foreach (var node in nodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var layer = layers.GetValueOrDefault(node);
             var row = rowsByLayer[layer][node];
             node.SetConnectionWidth(RoadmapNode.MaxWidth);
@@ -1423,7 +1537,8 @@ public static class RoadmapGraphBuilder
     private static Dictionary<RoadmapNode, int> BuildFallbackLayers(
         IEnumerable<RoadmapNode> tasks,
         IEnumerable<ConnectionDefinition> connections,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
         var nodes = tasks.ToList();
         var outgoing = nodes.ToDictionary(task => task, _ => new List<RoadmapNode>());
@@ -1432,6 +1547,7 @@ public static class RoadmapGraphBuilder
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (connection.Tail == connection.Head ||
                 !outgoing.ContainsKey(connection.Tail) ||
                 !incomingCount.ContainsKey(connection.Head) ||
@@ -1449,19 +1565,22 @@ public static class RoadmapGraphBuilder
                    nodes,
                    outgoing,
                    incoming,
-                   firstSeen)
+                   firstSeen,
+                   cancellationToken)
                ?? BuildSourceAnchoredLayers(
                    nodes,
                    outgoing,
                    incomingCount,
-                   firstSeen);
+                   firstSeen,
+                   cancellationToken);
     }
 
     private static Dictionary<RoadmapNode, int>? TryBuildGoalAnchoredLayers(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
         IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> incoming,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
         var connected = nodes
             .Where(task => outgoing[task].Count > 0 || incoming[task].Count > 0)
@@ -1480,6 +1599,7 @@ public static class RoadmapGraphBuilder
 
         while (queue.TryDequeue(out var task))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!processed.Add(task))
             {
                 continue;
@@ -1513,7 +1633,8 @@ public static class RoadmapGraphBuilder
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
         IReadOnlyDictionary<RoadmapNode, int> incomingCount,
-        IReadOnlyDictionary<RoadmapNode, int> firstSeen)
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
         var layers = nodes.ToDictionary(task => task, _ => 0);
         var remainingIncoming = incomingCount.ToDictionary(item => item.Key, item => item.Value);
@@ -1524,6 +1645,7 @@ public static class RoadmapGraphBuilder
 
         while (queue.TryDequeue(out var task))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!processed.Add(task))
             {
                 continue;

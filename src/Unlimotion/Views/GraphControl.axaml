@@ -150,6 +150,42 @@
             </nodify:NodifyEditor>
 
             <Border HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    MinWidth="210"
+                    Margin="10"
+                    Padding="8"
+                    CornerRadius="4"
+                    Background="#E61E1E1E"
+                    BorderBrush="#666666"
+                    BorderThickness="1"
+                    IsVisible="{Binding RoadmapGraphBuildInProgress, ElementName=Root}"
+                    IsHitTestVisible="False"
+                    AutomationProperties.AutomationId="RoadmapBuildIndicator">
+                <Grid RowDefinitions="Auto,6,Auto"
+                      ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{DynamicResource RoadmapRebuilding}"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Margin="12,0,0,0"
+                               Text="{Binding RoadmapGraphBuildProgressText, ElementName=Root}"
+                               Foreground="#E0E0E0"
+                               VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="RoadmapBuildProgressText" />
+                    <ProgressBar Grid.Row="2"
+                                 Grid.ColumnSpan="2"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Height="4"
+                                 Value="{Binding RoadmapGraphBuildProgress, ElementName=Root}"
+                                 Foreground="#2F80ED"
+                                 Background="#505050"
+                                 AutomationProperties.AutomationId="RoadmapBuildProgressBar" />
+                </Grid>
+            </Border>
+
+            <Border HorizontalAlignment="Left"
                     VerticalAlignment="Bottom"
                     Margin="10"
                     Padding="6"
