@@ -145,8 +145,10 @@ Assert-Match $packScript 'Compress-Archive' 'pack-libgit2sharp-nativebinaries-an
 
 Assert-Match $nugetConfig '\.\./artifacts/nuget-local' 'src/nuget.config must reference repo-local NuGet feed.'
 Assert-Match $androidProject '<RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>' 'Unlimotion.Android.csproj must build both arm64 and x64 Android runtimes.'
+Assert-Match $androidProject 'runtimes\\android-arm64\\native\\libssh2\.so' 'Unlimotion.Android.csproj must explicitly package Android arm64 libssh2.so.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libcrypto\.so\.3' 'Unlimotion.Android.csproj must explicitly package Android x64 libcrypto.so.3.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssl\.so\.3' 'Unlimotion.Android.csproj must explicitly package Android x64 libssl.so.3.'
+Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssh2\.so' 'Unlimotion.Android.csproj must explicitly package Android x64 libssh2.so.'
 Assert-Match $gitattributes '(?m)^\*\.sh\s+text\s+eol=lf\s*$' '.gitattributes must pin shell scripts to LF line endings.'
 Assert-Match $workflow 'ANDROID_PLATFORM:\s+android-36' 'android-packaging workflow must install Android platform 36 for the current .NET Android workload.'
 Assert-Match $workflow 'artifacts/android artifacts/android-native artifacts/nuget-local' 'android-packaging workflow must create repo-local feed directory.'
