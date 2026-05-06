@@ -224,6 +224,107 @@ public sealed class BackupViaGitServiceTests : IDisposable
         await Assert.That(remote.Branches["main"].Tip.Tree["availability.migration.report"]).IsNull();
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task GetCredentials_ReturnsSshPrivateKeyCredentialsForConfiguredSshUrl()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "id_unlimotion");
+        var publicKeyPath = $"{privateKeyPath}.pub";
+        File.WriteAllText(privateKeyPath, "private key");
+        File.WriteAllText(publicKeyPath, "public key");
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        var service = new BackupViaGitService(configuration);
+
+        var credentials = service.GetCredentials(new GitSettings
+        {
+            SshPrivateKeyPath = privateKeyPath,
+            SshPublicKeyPath = publicKeyPath
+        })("git@github.com:owner/repo.git", "git", SupportedCredentialTypes.Default);
+
+        await Assert.That(credentials.GetType()).IsEqualTo(typeof(SshPrivateKeyCredentials));
+        var sshCredentials = (SshPrivateKeyCredentials)credentials;
+        await Assert.That(sshCredentials.Username).IsEqualTo("git");
+        await Assert.That(sshCredentials.PrivateKeyPath).IsEqualTo(privateKeyPath);
+        await Assert.That(sshCredentials.PublicKeyPath).IsEqualTo(publicKeyPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetCredentials_ThrowsForSshUrlWhenPrivateKeyIsMissing()
+    {
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        var service = new BackupViaGitService(configuration);
+        var credentials = service.GetCredentials(new GitSettings
+        {
+            SshPrivateKeyPath = Path.Combine(_rootPath, "missing-key")
+        });
+
+        await Assert.That(() => credentials("git@github.com:owner/repo.git", "git", SupportedCredentialTypes.Default))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GenerateManagedRsaSshKey_CreatesPemPrivateKeyAndOpenSshPublicKey()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "managed_rsa");
+        var publicKeyPath = $"{privateKeyPath}.pub";
+
+        BackupViaGitService.GenerateManagedRsaSshKey(privateKeyPath, publicKeyPath);
+
+        await Assert.That(File.ReadAllText(privateKeyPath)).Contains("BEGIN RSA PRIVATE KEY");
+        await Assert.That(File.ReadAllText(publicKeyPath)).Contains("ssh-rsa ");
+        await Assert.That(File.ReadAllText(publicKeyPath)).Contains(" unlimotion");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task IsKnownGitHubSshHostKey_AcceptsKnownGitHubFingerprint()
+    {
+        var ed25519Sha1 = Convert.FromHexString("E9619E2ED56C2F2A71729DB80BACC2CE9CCCE8D4");
+
+        await Assert.That(BackupViaGitService.IsKnownGitHubSshHostKey("github.com", ed25519Sha1)).IsTrue();
+        await Assert.That(BackupViaGitService.IsKnownGitHubSshHostKey("ssh.github.com:443", ed25519Sha1)).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task IsKnownGitHubSshHostKey_RejectsUnknownHostAndUnknownFingerprint()
+    {
+        var ed25519Sha1 = Convert.FromHexString("E9619E2ED56C2F2A71729DB80BACC2CE9CCCE8D4");
+        var unknownSha1 = Convert.FromHexString("0000000000000000000000000000000000000000");
+
+        await Assert.That(BackupViaGitService.IsKnownGitHubSshHostKey("gitlab.com", ed25519Sha1)).IsFalse();
+        await Assert.That(BackupViaGitService.IsKnownGitHubSshHostKey("github.com", unknownSha1)).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task IsKnownOrTrustFirstUseSshHostKey_StoresFirstSeenFingerprint()
+    {
+        var knownHostsPath = Path.Combine(_rootPath, ".ssh", "known_hosts_unlimotion");
+        var sha1 = Convert.FromHexString("1111111111111111111111111111111111111111");
+
+        await Assert.That(BackupViaGitService.IsKnownOrTrustFirstUseSshHostKey(knownHostsPath, "example.com:22", sha1)).IsTrue();
+        await Assert.That(File.ReadAllText(knownHostsPath)).Contains("example.com 1111111111111111111111111111111111111111");
+        await Assert.That(BackupViaGitService.IsKnownOrTrustFirstUseSshHostKey(knownHostsPath, "example.com", sha1)).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task IsKnownOrTrustFirstUseSshHostKey_RejectsChangedFingerprint()
+    {
+        var knownHostsPath = Path.Combine(_rootPath, ".ssh", "known_hosts_unlimotion");
+        var originalSha1 = Convert.FromHexString("1111111111111111111111111111111111111111");
+        var changedSha1 = Convert.FromHexString("2222222222222222222222222222222222222222");
+
+        await Assert.That(BackupViaGitService.IsKnownOrTrustFirstUseSshHostKey(knownHostsPath, "example.com", originalSha1)).IsTrue();
+        await Assert.That(BackupViaGitService.IsKnownOrTrustFirstUseSshHostKey(knownHostsPath, "example.com", changedSha1)).IsFalse();
+    }
+
     private string CreateLocalTaskFolder()
     {
         var localPath = Path.Combine(_rootPath, "Tasks");

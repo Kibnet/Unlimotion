@@ -2,50 +2,25 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/android-native-common.sh"
+
 OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
 ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
-ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 OPENSSL_BASE_URL="${OPENSSL_BASE_URL:-https://www.openssl.org/source}"
-BUILD_ROOT="${OPENSSL_BUILD_ROOT:-$ROOT_DIR/artifacts/android-native/openssl-$OPENSSL_VERSION-android-arm64}"
+
+android_native_select_abi
+android_native_find_ndk
+
+BUILD_ROOT="${OPENSSL_BUILD_ROOT:-$ROOT_DIR/artifacts/android-native/openssl-$OPENSSL_VERSION-$ANDROID_RID}"
 DOWNLOAD_DIR="$BUILD_ROOT/downloads"
 SOURCE_PARENT_DIR="$BUILD_ROOT/src"
 SOURCE_DIR="$SOURCE_PARENT_DIR/openssl-$OPENSSL_VERSION"
 INSTALL_DIR="${OPENSSL_OUTPUT_DIR:-$BUILD_ROOT/prefix}"
 ARCHIVE_PATH="$DOWNLOAD_DIR/openssl-$OPENSSL_VERSION.tar.gz"
-
-cpu_count() {
-  if command -v nproc >/dev/null 2>&1; then
-    nproc
-    return
-  fi
-
-  sysctl -n hw.ncpu
-}
-
-host_tag() {
-  case "$(uname -s)" in
-    Linux)
-      echo "linux-x86_64"
-      ;;
-    Darwin)
-      if [ "$(uname -m)" = "arm64" ]; then
-        echo "darwin-arm64"
-      else
-        echo "darwin-x86_64"
-      fi
-      ;;
-    MINGW*|MSYS*|CYGWIN*)
-      echo "windows-x86_64"
-      ;;
-    *)
-      echo "Unsupported host OS: $(uname -s)" >&2
-      exit 1
-      ;;
-  esac
-}
+OPENSSL_MAKE_JOBS="${OPENSSL_MAKE_JOBS:-$(android_native_cpu_count)}"
 
 ensure_perl() {
-  if perl -MLocale::Maketext::Simple -e1 >/dev/null 2>&1; then
+  if perl -MLocale::Maketext::Simple -MExtUtils::MakeMaker -MPod::Usage -e1 >/dev/null 2>&1; then
     return
   fi
 
@@ -78,30 +53,10 @@ ensure_perl() {
   esac
 }
 
-if [ -z "$ANDROID_SDK_ROOT" ]; then
-  echo "ANDROID_SDK_ROOT or ANDROID_HOME must be set"
-  exit 1
-fi
-
-if [ -z "${ANDROID_NDK_ROOT:-}" ]; then
-  if [ -d "$ANDROID_SDK_ROOT/ndk" ]; then
-    ANDROID_NDK_ROOT="$(ls -d "$ANDROID_SDK_ROOT/ndk/"* 2>/dev/null | sort -V | tail -1)"
-  elif [ -d "$ANDROID_SDK_ROOT/ndk-bundle" ]; then
-    ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk-bundle"
-  else
-    echo "ANDROID_NDK_ROOT not set and no NDK found under $ANDROID_SDK_ROOT"
-    exit 1
-  fi
-fi
-
-TOOLCHAIN_DIR="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$(host_tag)"
-if [ ! -d "$TOOLCHAIN_DIR" ]; then
-  echo "Android LLVM toolchain not found: $TOOLCHAIN_DIR"
-  exit 1
-fi
+TOOLCHAIN_DIR="$(android_native_toolchain_dir)"
 
 if [ -f "$INSTALL_DIR/lib/libssl.so.3" ] && [ -f "$INSTALL_DIR/lib/libcrypto.so.3" ] && [ "${FORCE_REBUILD:-0}" != "1" ]; then
-  echo "Reusing existing Android OpenSSL build in $INSTALL_DIR"
+  echo "Reusing existing Android OpenSSL $ANDROID_ABI build in $INSTALL_DIR"
   exit 0
 fi
 
@@ -123,6 +78,9 @@ fi
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 export ANDROID_NDK_ROOT
 export MSYS2_ENV_CONV_EXCL="PERL5LIB${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}"
+export CC="$TOOLCHAIN_DIR/bin/${ANDROID_CLANG_TARGET}${ANDROID_API_LEVEL}-clang"
+export AR="$TOOLCHAIN_DIR/bin/llvm-ar"
+export RANLIB="$TOOLCHAIN_DIR/bin/llvm-ranlib"
 export STRIP="$TOOLCHAIN_DIR/bin/llvm-strip"
 
 if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
@@ -134,7 +92,7 @@ ensure_perl
 
 pushd "$SOURCE_DIR" >/dev/null
 perl ./Configure \
-  android-arm64 \
+  "$ANDROID_OPENSSL_TARGET" \
   "-D__ANDROID_API__=$ANDROID_API_LEVEL" \
   shared \
   no-tests \
@@ -142,13 +100,31 @@ perl ./Configure \
   --prefix="$INSTALL_DIR" \
   --openssldir="$INSTALL_DIR/ssl"
 
-if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
-  make -j"$(cpu_count)" build_generated libcrypto.a libssl.a libcrypto.ld libssl.ld crypto/libssl-shlib-packet.o
+if [ ! -f Makefile ]; then
+  echo "OpenSSL Configure did not produce $SOURCE_DIR/Makefile"
+  exit 1
+fi
 
-  if [ ! -f "crypto/libssl-shlib-packet.o" ]; then
-    echo "Expected OpenSSL shared packet object was not generated: $SOURCE_DIR/crypto/libssl-shlib-packet.o"
-    exit 1
-  fi
+if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
+  make -j"$OPENSSL_MAKE_JOBS" \
+    build_generated \
+    libcrypto.a \
+    libssl.a \
+    libcrypto.ld \
+    libssl.ld \
+    crypto/libssl-shlib-packet.o \
+    ssl/libdefault-lib-s3_cbc.o \
+    ssl/record/libcommon-lib-tls_pad.o
+
+  for object_file in \
+    crypto/libssl-shlib-packet.o \
+    ssl/libdefault-lib-s3_cbc.o \
+    ssl/record/libcommon-lib-tls_pad.o; do
+    if [ ! -f "$object_file" ]; then
+      echo "Expected OpenSSL object was not generated: $SOURCE_DIR/$object_file"
+      exit 1
+    fi
+  done
 
   for generated_file in libcrypto.ld libssl.ld; do
     if [ ! -f "$generated_file" ]; then
@@ -157,7 +133,7 @@ if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
     fi
   done
 
-  "$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" \
+  "$TOOLCHAIN_DIR/bin/${ANDROID_CLANG_TARGET}${ANDROID_API_LEVEL}-clang" \
     -fPIC \
     -pthread \
     -Wa,--noexecstack \
@@ -167,6 +143,7 @@ if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
     -Wl,-znodelete \
     -shared \
     -Wl,-Bsymbolic \
+    -Wl,--no-undefined \
     -Wl,-soname=libcrypto.so.3 \
     -o libcrypto.so.3 \
     -Wl,--version-script=libcrypto.ld \
@@ -175,7 +152,7 @@ if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
     -ldl \
     -pthread
 
-  "$TOOLCHAIN_DIR/bin/aarch64-linux-android${ANDROID_API_LEVEL}-clang" \
+  "$TOOLCHAIN_DIR/bin/${ANDROID_CLANG_TARGET}${ANDROID_API_LEVEL}-clang" \
     -fPIC \
     -pthread \
     -Wa,--noexecstack \
@@ -185,10 +162,13 @@ if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
     -Wl,-znodelete \
     -shared \
     -Wl,-Bsymbolic \
+    -Wl,--no-undefined \
     -Wl,-soname=libssl.so.3 \
     -o libssl.so.3 \
     -Wl,--version-script=libssl.ld \
     crypto/libssl-shlib-packet.o \
+    ssl/libdefault-lib-s3_cbc.o \
+    ssl/record/libcommon-lib-tls_pad.o \
     -Wl,--whole-archive libssl.a \
     -Wl,--no-whole-archive \
     ./libcrypto.so.3 \
@@ -202,7 +182,7 @@ if [[ "$(uname -s)" =~ ^(MINGW|MSYS|CYGWIN) ]]; then
 else
   # Android packaging only needs the shared libraries and headers; building the
   # full software bundle also pulls in target-side programs we never ship.
-  make -j"$(cpu_count)" build_generated libcrypto.so libssl.so
+  make -j"$OPENSSL_MAKE_JOBS" build_generated libcrypto.so libssl.so
 
   mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
   cp -R include/openssl "$INSTALL_DIR/include/"
@@ -210,6 +190,14 @@ else
   install -m 0644 libssl.so "$INSTALL_DIR/lib/libssl.so.3"
 fi
 popd >/dev/null
+
+READELF="$(android_native_readelf "$TOOLCHAIN_DIR")"
+if [ -n "$READELF" ] &&
+  "$READELF" --dyn-syms "$INSTALL_DIR/lib/libssl.so.3" |
+    grep -E 'UND .* (ssl3_cbc_remove_padding_and_mac|tls1_cbc_remove_padding_and_mac|ssl3_cbc_digest_record)$' >/dev/null; then
+  echo "Built libssl.so.3 still contains unresolved OpenSSL CBC symbols."
+  exit 1
+fi
 
 "$STRIP" --strip-unneeded "$INSTALL_DIR/lib/libssl.so.3" "$INSTALL_DIR/lib/libcrypto.so.3"
 echo "Wrote $INSTALL_DIR/lib/libssl.so.3"

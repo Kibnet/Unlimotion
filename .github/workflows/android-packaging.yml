@@ -20,7 +20,8 @@ env:
   ANDROID_BUILD_TOOLS: 35.0.0
   ANDROID_NDK_VERSION: 27.2.12479018
   OPENSSL_VERSION: 3.0.14
-  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.5
+  LIBSSH2_VERSION: 1.11.1
+  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.6
 
 jobs:
   android-build:
@@ -71,42 +72,41 @@ jobs:
 
     - name: Build Android Native Dependencies
       run: |
-        bash ./scripts/build-openssl-android.sh
-        export OPENSSL_ROOT_DIR="${GITHUB_WORKSPACE}/artifacts/android-native/openssl-${OPENSSL_VERSION}-android-arm64/prefix"
-        export OPENSSL_INCLUDE_DIR="${OPENSSL_ROOT_DIR}/include"
-        export OPENSSL_SSL_LIBRARY="${OPENSSL_ROOT_DIR}/lib/libssl.so.3"
-        export OPENSSL_CRYPTO_LIBRARY="${OPENSSL_ROOT_DIR}/lib/libcrypto.so.3"
-        export LIB_OUTPUT_PATH="${GITHUB_WORKSPACE}/artifacts/android-native/libgit2-3f4182d.so"
-        export LIBGIT2_PATH="$LIB_OUTPUT_PATH"
-        bash ./scripts/build-libgit2-android.sh
+        for abi in arm64-v8a x86_64; do
+          export ANDROID_ABI="$abi"
+          bash ./scripts/build-openssl-android.sh
+          bash ./scripts/build-libssh2-android.sh
+          bash ./scripts/build-libgit2-android.sh
+        done
+        export ANDROID_ABIS="arm64-v8a x86_64"
         bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
 
-    - name: Build Android APK
+    - name: Build Android APKs
       run: |
-        dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
-          -c Release \
-          -t:Package \
-          -p:RuntimeIdentifier=android-arm64 \
-          -p:ContinuousIntegrationBuild=true \
-          -p:GitHubRefName="${GITHUB_REF_NAME}" \
-          -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
-          -p:JavaSdkDirectory="${JAVA_HOME}"
+        for rid in android-arm64 android-x64; do
+          rm -rf "src/Unlimotion.Android/bin/Release/net10.0-android"
+          dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
+            -c Release \
+            -t:Package \
+            -p:RuntimeIdentifier="$rid" \
+            -p:ContinuousIntegrationBuild=true \
+            -p:GitHubRefName="${GITHUB_REF_NAME}" \
+            -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
+            -p:JavaSdkDirectory="${JAVA_HOME}"
 
-    - name: Stage APK Artifact
-      run: |
-        apk_path="$(find src/Unlimotion.Android/bin/Release -type f -name '*-Signed.apk' | head -n 1)"
-        if [ -z "$apk_path" ]; then
-          echo "Signed APK not found under src/Unlimotion.Android/bin/Release" >&2
-          exit 1
-        fi
+          apk_path="$(find src/Unlimotion.Android/bin/Release -type f -name '*-Signed.apk' | head -n 1)"
+          if [ -z "$apk_path" ]; then
+            echo "Signed APK not found for $rid under src/Unlimotion.Android/bin/Release" >&2
+            exit 1
+          fi
 
-        asset_name="Unlimotion-android-arm64.apk"
-        if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
-          asset_name="Unlimotion-${GITHUB_REF_NAME}-android-arm64.apk"
-        fi
+          asset_name="Unlimotion-${rid}.apk"
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            asset_name="Unlimotion-${GITHUB_REF_NAME}-${rid}.apk"
+          fi
 
-        cp "$apk_path" "artifacts/android/${asset_name}"
-        echo "APK_ASSET_PATH=artifacts/android/${asset_name}" >> "$GITHUB_ENV"
+          cp "$apk_path" "artifacts/android/${asset_name}"
+        done
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
@@ -119,4 +119,4 @@ jobs:
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: ${{ env.APK_ASSET_PATH }}
+        files: artifacts/android/*.apk
