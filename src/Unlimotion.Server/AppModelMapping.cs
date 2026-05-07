@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
@@ -15,7 +16,7 @@ namespace Unlimotion.Server
         {
             var cfg = new MapperConfigurationExpression();
             ConfigureModelMapping(cfg);
-            var mapperConfiguration = new MapperConfiguration(cfg);
+            var mapperConfiguration = new MapperConfiguration(cfg, NullLoggerFactory.Instance);
             mapperConfiguration.AssertConfigurationIsValid();
             mapperConfiguration.CompileMappings();
             var mapper = new Mapper(mapperConfiguration);
