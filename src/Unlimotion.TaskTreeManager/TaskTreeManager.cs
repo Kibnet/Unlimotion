@@ -405,7 +405,6 @@ public class TaskTreeManager
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
         var result = new Dictionary<string, TaskItem>();
-        string newTaskId = null;
 
         await IsCompletedAsync(async Task<bool> () =>
         {
@@ -676,7 +675,7 @@ public class TaskTreeManager
                     result.AddOrUpdate(blockingTask);
                 }
 
-                if (taskToBlock != null && !taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
+                if (taskToBlock != null && blockingTask != null && !taskToBlock.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToBlock.BlockedByTasks.Add(blockingTask.Id);
                     await Storage.Save(taskToBlock);
@@ -717,7 +716,7 @@ public class TaskTreeManager
                     result.AddOrUpdate(blockingTask);
                 }
 
-                if (taskToUnblock != null && taskToUnblock.BlockedByTasks.Contains(blockingTask.Id))
+                if (taskToUnblock != null && blockingTask != null && taskToUnblock.BlockedByTasks.Contains(blockingTask.Id))
                 {
                     taskToUnblock.BlockedByTasks.Remove(blockingTask.Id);
                     await Storage.Save(taskToUnblock);

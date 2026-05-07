@@ -20,8 +20,8 @@ namespace Unlimotion.Server.ServiceInterface
         private const string UserPrefix = "User/";
         private const string SecretPostfix = "/secret";
 
-        public IAsyncDocumentSession RavenSession { get; set; }
-        public IMapper Mapper { get; set; }
+        public IAsyncDocumentSession RavenSession { get; set; } = null!;
+        public IMapper Mapper { get; set; } = null!;
 
         #region Методы эндпоинтов
         public async Task<TokenResult> Post(RegisterNewUser request)
@@ -164,7 +164,7 @@ namespace Unlimotion.Server.ServiceInterface
             //Можно запросить время жизни токена не больше чем 'defaultAccessExpire'
             var accExpSpan = (customAccessExpire ?? defaultAccessExpire) >= defaultAccessExpire
                 ? defaultAccessExpire
-                : customAccessExpire.Value;
+                : customAccessExpire!.Value;
 
             var body = JwtAuthProvider.CreateJwtPayload(new AuthUserSession
             {
@@ -184,7 +184,7 @@ namespace Unlimotion.Server.ServiceInterface
             var defaultRefreshExpire = jwtProvider.ExpireRefreshTokensIn;
             var refExpSpan = (customRefreshExpire ?? defaultRefreshExpire) >= defaultRefreshExpire
                 ? defaultRefreshExpire
-                : customRefreshExpire.Value;
+                : customRefreshExpire!.Value;
 
             var refreshBody = JwtAuthProvider.CreateJwtPayload(new AuthUserSession
             {
@@ -221,14 +221,14 @@ namespace Unlimotion.Server.ServiceInterface
             return user;
         }
 
-        private async Task<User> CreateUser(string login, string userName, string password = null)
+        private async Task<User> CreateUser(string login, string userName, string? password = null)
         {
             var uid = $"{UserPrefix}{Guid.NewGuid()}";
             var user = new User
             {
                 Id = uid,
                 Login = login,
-                DisplayName = String.IsNullOrWhiteSpace(userName)? null: userName,
+                DisplayName = String.IsNullOrWhiteSpace(userName) ? string.Empty : userName,
                 RegisteredTime = DateTimeOffset.UtcNow,
             };
             await RavenSession.StoreAsync(user);

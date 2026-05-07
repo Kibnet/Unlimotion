@@ -4,11 +4,11 @@ namespace Unlimotion.Domain
 {
     public class Attachment
     {
-        public string Id { get; set; }
-        public string SenderId { get; set; }
-        public string FileName { get; set; }
+        public string Id { get; set; } = null!;
+        public string SenderId { get; set; } = null!;
+        public string FileName { get; set; } = null!;
         public DateTimeOffset UploadDateTime { get; set; }
-        public string Hash { get; set; }
+        public string Hash { get; set; } = null!;
         public long Size { get; set; }
     }
 }

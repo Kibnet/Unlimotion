@@ -14,14 +14,14 @@ namespace Unlimotion.Server.ServiceInterface
 {
     public class AttachmentService : Service
     {
-        public IAsyncDocumentSession RavenSession { get; set; }
-        public IMapper Mapper { get; set; }
+        public IAsyncDocumentSession RavenSession { get; set; } = null!;
+        public IMapper Mapper { get; set; } = null!;
         private string pref { get; set; }
         private string dirPatch { get; set; }
 
         public AttachmentService(IConfiguration configuration) 
         {
-            dirPatch = configuration["FilesPath"];
+            dirPatch = configuration["FilesPath"] ?? string.Empty;
             pref = "attachment/";
         }
 
@@ -46,13 +46,13 @@ namespace Unlimotion.Server.ServiceInterface
 
             if (file == null) throw HttpError.BadRequest("Error: No file to download");
 
-            var stream = file?.InputStream;
+            var stream = file.InputStream;
             var fileId = $"{pref}{Guid.NewGuid()}";
 
             var fileUpload = new Attachment
             {
                 Id = fileId,
-                FileName = file?.FileName,
+                FileName = file.FileName,
                 SenderId = session.UserAuthId,
                 Hash = SaveFile(fileId.Replace(pref, string.Empty), stream),
                 UploadDateTime = DateTimeOffset.Now,

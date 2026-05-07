@@ -8,14 +8,14 @@ namespace Unlimotion.Server.ServiceInterface
 {
     public class SettingsService : Service
     {
-        public IAsyncDocumentSession RavenSession { get; set; }
+        public IAsyncDocumentSession RavenSession { get; set; } = null!;
 
         [Authenticate]
         public async Task<LoginHistory> Get(GetLoginAudit request)
         {
             var session = Request.ThrowIfUnauthorized();
-            var loginAuditId = session?.UserAuthId + "/loginAudit";
-            var сurrentSessionId = session?.Id;
+            var loginAuditId = session.UserAuthId + "/loginAudit";
+            var сurrentSessionId = session.Id;
 
             var history = new LoginHistory
             {

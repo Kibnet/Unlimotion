@@ -13,8 +13,8 @@ namespace Unlimotion.Server.ServiceInterface
 {
     public class ProfileService : Service
     {
-        public IAsyncDocumentSession RavenSession { get; set; }
-        public IMapper Mapper { get; set; }
+        public IAsyncDocumentSession RavenSession { get; set; } = null!;
+        public IMapper Mapper { get; set; } = null!;
 
         [Authenticate]
         public async Task<UserProfileMold> Get(GetProfile request)
