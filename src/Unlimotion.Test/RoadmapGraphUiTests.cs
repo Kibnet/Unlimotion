@@ -1288,7 +1288,7 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
-    public async Task RoadmapGraph_NodeClickSelectsTaskAndDoubleTapOpensDetailsWithoutStaticSingleton()
+    public async Task RoadmapGraph_NodeClickSelectsTaskAndDoubleTapTogglesDetailsWithoutStaticSingleton()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
@@ -1332,10 +1332,11 @@ public class RoadmapGraphUiTests
                 vm.DetailsAreOpen = true;
                 var otherTask = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask1Id);
                 await Assert.That(otherTask).IsNotNull();
+                await Task.Delay(550);
 
                 taskNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
 
-                await Assert.That(vm.DetailsAreOpen).IsTrue();
+                await Assert.That(vm.DetailsAreOpen).IsFalse();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
             }
             finally
@@ -1408,6 +1409,82 @@ public class RoadmapGraphUiTests
                     topLevel.MouseUp(
                         GetControlCenterPoint(topLevel, taskNode),
                         MouseButton.Left,
+                        RawInputModifiers.None);
+                    Dispatcher.UIThread.RunJobs();
+                }
+
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task RoadmapGraph_NodeRightDrag_PansViewportWithoutSelectingTask()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            Control? taskNode = null;
+            var mouseIsDown = false;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = false;
+                vm.GraphMode = true;
+                vm.DetailsAreOpen = false;
+                vm.CurrentTaskItem = null;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var graphControl = WaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+                taskNode = WaitForTaskNode(
+                    graphControl!,
+                    MainWindowViewModelFixture.RootTask2Id);
+
+                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+                var startLocation = (Point)locationProperty.GetValue(editor)!;
+                var startPoint = GetControlCenterPoint(window, taskNode);
+                var movePoint = new Point(startPoint.X + 80, startPoint.Y + 36);
+
+                window.MouseDown(startPoint, MouseButton.Right, RawInputModifiers.None);
+                mouseIsDown = true;
+                Dispatcher.UIThread.RunJobs();
+
+                window.MouseMove(movePoint, RawInputModifiers.RightMouseButton);
+                Dispatcher.UIThread.RunJobs();
+
+                var panned = WaitFor(() =>
+                {
+                    var currentLocation = (Point)locationProperty.GetValue(editor)!;
+                    return Math.Abs(currentLocation.X - startLocation.X) > 1 ||
+                           Math.Abs(currentLocation.Y - startLocation.Y) > 1;
+                });
+                await Assert.That(panned).IsTrue();
+
+                window.MouseUp(movePoint, MouseButton.Right, RawInputModifiers.RightMouseButton);
+                mouseIsDown = false;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(vm.CurrentTaskItem).IsNull();
+                await Assert.That(vm.DetailsAreOpen).IsFalse();
+            }
+            finally
+            {
+                if (mouseIsDown && window is { } topLevel && taskNode != null)
+                {
+                    topLevel.MouseUp(
+                        GetControlCenterPoint(topLevel, taskNode),
+                        MouseButton.Right,
                         RawInputModifiers.None);
                     Dispatcher.UIThread.RunJobs();
                 }
@@ -1516,8 +1593,9 @@ public class RoadmapGraphUiTests
                 await Assert.That(selectedTask).IsNotNull();
 
                 var selectedNode = WaitForTaskNode(graphControl!, selectedTask!.Id);
-                selectedNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
+                await ClickControlAsync(window, selectedNode);
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
+                await Assert.That(vm.DetailsAreOpen).IsTrue();
 
                 var countBefore = vm.taskRepository!.Tasks.Count;
                 var createRootButton = FindButtonForCommand(view, vm.Create);
@@ -1527,20 +1605,23 @@ public class RoadmapGraphUiTests
                 await Assert.That(rootCreated).IsNotNull();
                 await Assert.That(rootCreated!.Parents).IsEmpty();
 
-                selectedNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
+                await ClickControlAsync(window, selectedNode);
+                await Assert.That(vm.DetailsAreOpen).IsTrue();
                 countBefore = vm.taskRepository.Tasks.Count;
                 var createSiblingButton = FindButtonForCommand(view, vm.CreateSibling);
                 await ClickControlAsync(window, createSiblingButton);
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
 
-                selectedNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
+                await ClickControlAsync(window, selectedNode);
+                await Assert.That(vm.DetailsAreOpen).IsTrue();
                 countBefore = vm.taskRepository.Tasks.Count;
                 var createBlockedSiblingButton = FindButtonForCommand(view, vm.CreateBlockedSibling);
                 await ClickControlAsync(window, createBlockedSiblingButton);
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
                 await Assert.That(selectedTask.Blocks).Contains(vm.CurrentTaskItem!.Id);
 
-                selectedNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
+                await ClickControlAsync(window, selectedNode);
+                await Assert.That(vm.DetailsAreOpen).IsTrue();
                 countBefore = vm.taskRepository.Tasks.Count;
                 var createInnerButton = FindButtonForCommand(view, vm.CreateInner);
                 await ClickControlAsync(window, createInnerButton);

@@ -33,12 +33,15 @@ namespace Unlimotion.Views
         private readonly SerialDisposable roadmapScopeSubscriptions = new();
         private readonly SerialDisposable roadmapFilterSubscriptions = new();
         private readonly DispatcherTimer graphUpdateTimer;
+        private DateTime lastRoadmapPointerDoubleTapAt = DateTime.MinValue;
+        private string? lastRoadmapPointerDoubleTapTaskId;
         private ReadOnlyObservableCollection<TaskWrapperViewModel>? roadmapScopeSubscriptionRoots;
         private string? roadmapScopeSubscriptionSignature;
         private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
         private PendingRoadmapDragContext? pendingRoadmapDrag;
+        private PendingRoadmapPanContext? pendingRoadmapPan;
         private bool roadmapDragInProgress;
         private int roadmapBuildRequestVersion;
         private int roadmapActiveBuildCount;
@@ -72,6 +75,8 @@ namespace Unlimotion.Views
             {
                 CancelScheduledGraphUpdate();
                 CancelPendingRoadmapBuilds();
+                ClearPendingRoadmapDrag();
+                ClearPendingRoadmapPan();
             };
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
@@ -1063,39 +1068,63 @@ namespace Unlimotion.Views
         private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var pointer = e.GetCurrentPoint(this);
+            var control = sender as Control;
+            var gestureControl = control ?? (e.Source as Control);
+
+            if (pointer.Properties.IsRightButtonPressed &&
+                TryGetRoadmapTaskItem(gestureControl, out _))
+            {
+                ClearPendingRoadmapDrag();
+                e.Pointer.Capture(gestureControl ?? this);
+                pendingRoadmapPan = new PendingRoadmapPanContext(
+                    gestureControl ?? this,
+                    e.Pointer,
+                    e.GetPosition(RoadmapEditor),
+                    RoadmapEditor.ViewportLocation);
+                e.Handled = true;
+                return;
+            }
+
             if (!pointer.Properties.IsLeftButtonPressed)
             {
                 ClearPendingRoadmapDrag();
+                ClearPendingRoadmapPan();
                 return;
             }
 
-            var control = sender as Control;
-            var dragControl = control ?? (e.Source as Control);
-            if (!TryGetRoadmapTaskItem(dragControl, out var taskItem))
+            ClearPendingRoadmapPan();
+            if (!TryGetRoadmapTaskItem(gestureControl, out var taskItem))
             {
                 ClearPendingRoadmapDrag();
                 return;
             }
 
-            SelectRoadmapTask(dragControl, taskItem);
+            SelectRoadmapTask(gestureControl, taskItem);
             if (e.ClickCount > 1)
             {
-                OpenRoadmapTaskDetails(dragControl, taskItem);
+                ToggleRoadmapTaskDetails(gestureControl, taskItem);
+                lastRoadmapPointerDoubleTapAt = DateTime.UtcNow;
+                lastRoadmapPointerDoubleTapTaskId = taskItem.Id;
                 ClearPendingRoadmapDrag();
                 e.Handled = true;
                 return;
             }
 
-            e.Pointer.Capture(dragControl);
+            e.Pointer.Capture(gestureControl ?? this);
             pendingRoadmapDrag = new PendingRoadmapDragContext(
-                dragControl ?? this,
+                gestureControl ?? this,
                 e.Pointer,
                 taskItem,
-                e.GetPosition(dragControl ?? this));
+                e.GetPosition(gestureControl ?? this));
         }
 
         private async void InputElement_OnPointerMoved(object? sender, PointerEventArgs e)
         {
+            if (TryHandlePendingRoadmapPan(e))
+            {
+                return;
+            }
+
             var pending = pendingRoadmapDrag;
             if (pending == null ||
                 roadmapDragInProgress ||
@@ -1134,6 +1163,14 @@ namespace Unlimotion.Views
 
         private void InputElement_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
+            if (pendingRoadmapPan != null &&
+                ReferenceEquals(e.Pointer, pendingRoadmapPan.Pointer))
+            {
+                ClearPendingRoadmapPan();
+                e.Handled = true;
+                return;
+            }
+
             if (pendingRoadmapDrag != null &&
                 !ReferenceEquals(e.Pointer, pendingRoadmapDrag.Pointer))
             {
@@ -1141,6 +1178,31 @@ namespace Unlimotion.Views
             }
 
             ClearPendingRoadmapDrag();
+        }
+
+        private bool TryHandlePendingRoadmapPan(PointerEventArgs e)
+        {
+            var pending = pendingRoadmapPan;
+            if (pending == null || !ReferenceEquals(e.Pointer, pending.Pointer))
+            {
+                return false;
+            }
+
+            if (!e.GetCurrentPoint(pending.Control).Properties.IsRightButtonPressed)
+            {
+                ClearPendingRoadmapPan();
+                return true;
+            }
+
+            var zoom = RoadmapEditor.ViewportZoom;
+            var scale = Math.Abs(zoom) < 0.001 ? 1 : zoom;
+            var currentPoint = e.GetPosition(RoadmapEditor);
+            var delta = currentPoint - pending.StartPoint;
+            RoadmapEditor.ViewportLocation = new Point(
+                pending.StartViewportLocation.X - delta.X / scale,
+                pending.StartViewportLocation.Y - delta.Y / scale);
+            e.Handled = true;
+            return true;
         }
 
         private static bool HasExceededRoadmapDragThreshold(Point startPoint, Point currentPoint)
@@ -1179,6 +1241,12 @@ namespace Unlimotion.Views
             pendingRoadmapDrag = null;
         }
 
+        private void ClearPendingRoadmapPan()
+        {
+            pendingRoadmapPan?.Pointer.Capture(null);
+            pendingRoadmapPan = null;
+        }
+
         private void TaskTree_OnDoubleTapped(object? sender, TappedEventArgs e)
         {
             var control = sender as Control;
@@ -1187,16 +1255,28 @@ namespace Unlimotion.Views
                 return;
             }
 
-            OpenRoadmapTaskDetails(control, taskItem);
+            if (ShouldIgnoreDuplicateRoadmapDoubleTap(taskItem))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            ToggleRoadmapTaskDetails(control, taskItem);
             e.Handled = true;
         }
 
-        private MainWindowViewModel? OpenRoadmapTaskDetails(Control? context, TaskItemViewModel taskItem)
+        private bool ShouldIgnoreDuplicateRoadmapDoubleTap(TaskItemViewModel taskItem)
+        {
+            return lastRoadmapPointerDoubleTapTaskId == taskItem.Id &&
+                   DateTime.UtcNow - lastRoadmapPointerDoubleTapAt < TimeSpan.FromMilliseconds(500);
+        }
+
+        private MainWindowViewModel? ToggleRoadmapTaskDetails(Control? context, TaskItemViewModel taskItem)
         {
             var owner = SelectRoadmapTask(context, taskItem);
             if (owner != null)
             {
-                owner.DetailsAreOpen = true;
+                owner.DetailsAreOpen = !owner.DetailsAreOpen;
             }
 
             return owner;
@@ -1258,6 +1338,21 @@ namespace Unlimotion.Views
             public TaskItemViewModel TaskItem { get; } = taskItem;
 
             public Point StartPoint { get; } = startPoint;
+        }
+
+        private sealed class PendingRoadmapPanContext(
+            Control control,
+            IPointer pointer,
+            Point startPoint,
+            Point startViewportLocation)
+        {
+            public Control Control { get; } = control;
+
+            public IPointer Pointer { get; } = pointer;
+
+            public Point StartPoint { get; } = startPoint;
+
+            public Point StartViewportLocation { get; } = startViewportLocation;
         }
 
         private bool Matches(TaskItemViewModel task, string normalizedQuery, bool isFuzzy)

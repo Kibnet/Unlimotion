@@ -16,7 +16,7 @@
 - создание связей drag-and-drop между задачами на карте;
 - создание sibling / blocked sibling / inner task через глобальные клавиши;
 - создание задач кнопками в карточке текущей задачи после выбора задачи на карте.
-- открытие карточки задачи двойным кликом по задаче на карте.
+- переключение карточки задачи двойным кликом по задаче на карте.
 
 Outcome contract:
 - Success means: пользователь выбирает задачу на карте, после чего те же команды создания и связи работают с этой задачей как с выбранной задачей в task-tree вкладках.
@@ -31,7 +31,7 @@ Outcome contract:
 - `GraphControl` имеет свой drag format `application/xxx-unlimotion-task-item` и делегирует `Drop`/`DragOver` в static методы `MainControl`.
 - `MainControl.TryGetDropTargetTask` сейчас не распознаёт `RoadmapNode` как target task. При drop на roadmap node event source часто является `Border` с `DataContext = RoadmapNode`, поэтому операция получает `None`.
 - `GraphControl.InputElement_OnPointerPressed` выбирает задачу через `TaskItemViewModel.MainWindowInstance`, а не через visual tree owner `MainWindowViewModel`. Это хрупко для headless UI tests и для embedded/control scenarios.
-- `GraphControl.TaskTree_OnDoubleTapped` сейчас меняет `DetailsAreOpen` через `TaskItemViewModel.MainWindowInstance` и делает toggle; если карточка уже открыта, двойной клик может закрыть её, а не открыть карточку выбранной roadmap task.
+- `GraphControl.TaskTree_OnDoubleTapped` сейчас меняет `DetailsAreOpen` через `TaskItemViewModel.MainWindowInstance`; поведение должно совпадать с обычными вкладками, но выбор clicked task не должен зависеть от stale static singleton.
 - `GraphControl.RoadmapEditor_KeyDown` обрабатывает только viewport keys (`F/U/T/R`, `R`) и не маршрутизирует команды создания задач из фокуса карты.
 - В UI tests уже есть `RoadmapGraphUiTests` для rendering/graph state и `MainControlTreeCommandsUiTests` / `MainControlRelationPickerUiTests` для обычных вкладок, но нет regression coverage на создание задач и drag-drop прямо из roadmap.
 
@@ -74,8 +74,9 @@ Roadmap graph визуально показывает те же задачи, н
   - не ломать существующие viewport keys и не перехватывать ввод из текстовых controls.
 - Для double click по roadmap node:
   - переиспользовать тот же helper выбора roadmap task;
-  - установить `DetailsAreOpen = true`, а не переключать значение;
-  - после double click карточка должна показывать именно clicked task.
+  - переключать `DetailsAreOpen` как в обычных вкладках;
+  - если карточка была закрыта, после double click она должна открыться и показывать clicked task;
+  - если карточка была открыта, после double click она должна закрыться, а clicked task остаться текущей.
 - Для drag-drop target:
   - расширить `TryGetDropTargetTask` так, чтобы `Control.DataContext is RoadmapNode` или ancestor с `RoadmapNode` возвращал `node.TaskItem`;
   - оставить `TaskWrapperViewModel` / `TaskItemViewModel` пути без изменений.
@@ -97,7 +98,8 @@ Roadmap graph визуально показывает те же задачи, н
 
 ## 8. Точки интеграции и триггеры
 - Roadmap node `PointerPressed` -> выбрать текущую задачу через owner VM.
-- Roadmap node `DoubleTapped` -> выбрать текущую задачу и открыть details/card pane.
+- Roadmap node right-button drag -> pan roadmap viewport even when the pointer starts over a task node.
+- Roadmap node `DoubleTapped` -> выбрать текущую задачу и переключить details/card pane.
 - Roadmap node drag source -> existing `GraphControl.CustomFormat`.
 - Roadmap node drop target -> `MainControl.Drop` / `DragOver` через `RoadmapNode` DataContext.
 - Roadmap editor `KeyDown` -> existing create commands.
@@ -120,14 +122,15 @@ Roadmap graph визуально показывает те же задачи, н
   3. На Roadmap `Shift+Enter` создаёт ровно один blocked sibling с blocking relation как на других вкладках.
   4. На Roadmap `Ctrl+Tab` создаёт ровно один inner task под выбранной roadmap task.
   5. Кнопки `NewTask`, `NewSibling`, `NewBlockedSibling`, `NewInner` в карточке задачи после выбора roadmap task создают задачи через существующие commands; relative-кнопки создают задачи относительно выбранной roadmap task, `NewTask` создаёт root task.
-  6. Двойной клик по roadmap node выбирает clicked task и открывает карточку задачи; если карточка уже открыта, она остаётся открытой и переключается на clicked task.
+  6. Двойной клик по roadmap node выбирает clicked task и переключает карточку задачи: закрытая карточка открывается, открытая карточка закрывается как в обычных вкладках.
   7. Drag-drop roadmap node -> roadmap node с `Ctrl` создаёт blocking relation source blocks target.
-  8. Существующие tree command и roadmap rendering tests не регрессируют.
+  8. Правая кнопка мыши двигает карту задач, даже если drag начинается поверх задачи, и не выбирает задачу.
+  9. Существующие tree command и roadmap rendering tests не регрессируют.
 - Какие тесты добавить/изменить:
   - Добавить Avalonia.Headless tests в `RoadmapGraphUiTests` или новый `RoadmapTaskActionsUiTests`.
-  - Reproducing tests должны сначала падать до фикса: selection without static singleton, double click opens card without closing, create hotkey/button и drag-drop target на `RoadmapNode`.
+  - Reproducing tests должны сначала падать до фикса: selection without static singleton, double click toggles card like other tabs, create hotkey/button и drag-drop target на `RoadmapNode`.
   - Selection regression test должен временно сбросить или подменить `TaskItemViewModel.MainWindowInstance`, чтобы старый static path не мог замаскировать баг.
-  - Double-click regression test должен проверить два состояния: `DetailsAreOpen = false` перед double click открывается; `DetailsAreOpen = true` перед double click не закрывается и current task становится clicked task.
+  - Double-click regression test должен проверить два состояния: `DetailsAreOpen = false` перед double click открывается; `DetailsAreOpen = true` перед double click закрывается и current task становится clicked task.
   - Hotkey regression tests должны проверять прирост числа задач строго на `+1` для каждого нажатия.
   - При необходимости использовать reflection только для private static drop helpers нельзя; предпочтительно UI-level event/controls. Если headless drag API не позволяет полный `DoDragDrop`, допустим targeted handler-level test через реальные `MainControl.Drop`/`MainControl.DragOver`, `DataObject` с `GraphControl.CustomFormat` и assert по `Blocks`/`BlockedBy` в VM/storage. Такой fallback не считается достаточным, если он не проходит через existing drop pipeline и не проверяет mutation результата.
 - Characterization tests:
@@ -146,7 +149,7 @@ Roadmap graph визуально показывает те же задачи, н
 ## 12. Риски и edge cases
 - `Ctrl+Tab` может конфликтовать с tab navigation. Нужно подтверждать headless test и при необходимости обрабатывать на `GraphControl` до стандартной навигации.
 - Roadmap hotkeys могут выполниться дважды из-за bubbling/handler duplication. EXEC должен выставлять `e.Handled` и проверять `+1` mutation tests.
-- Double click сейчас похож на toggle. EXEC должен заменить его на idempotent open, чтобы пользователь не закрывал карточку случайно.
+- Double click должен оставаться toggle как в обычных вкладках; EXEC должен только исправить выбор clicked task и routing, не превращая его в idempotent open.
 - `GraphControl.RoadmapEditor_KeyDown` сейчас реагирует на `F/U/T/R` без проверки modifiers; при правке нельзя сломать viewport shortcuts.
 - Static `TaskItemViewModel.MainWindowInstance` может быть stale в tests; новый resolver должен предпочитать owner/visual context.
 - Drop на child text внутри node может уже работать через `TaskItemViewModel`; drop на border с `RoadmapNode` должен работать одинаково.
@@ -183,7 +186,7 @@ Roadmap graph визуально показывает те же задачи, н
 | Область | Было | Стало |
 | --- | --- | --- |
 | Выбор roadmap task | Через static `TaskItemViewModel.MainWindowInstance` | Через visual owner VM resolver с static fallback |
-| Double click roadmap task | Toggle details pane через static singleton | Выбирает clicked task и открывает карточку idempotently |
+| Double click roadmap task | Toggle details pane через static singleton | Выбирает clicked task через owner resolver и переключает карточку как обычные вкладки |
 | Roadmap create hotkeys | Нет явного routing из `GraphControl` | `Ctrl+Enter`, `Shift+Enter`, `Ctrl+Tab` вызывают существующие commands ровно один раз |
 | Roadmap drag-drop target | `RoadmapNode` не распознаётся как target task | `RoadmapNode.TaskItem` используется как target |
 | Card create buttons после выбора roadmap node | Зависят от хрупкого selection path | Работают после надёжного выбора текущей задачи |
@@ -248,3 +251,5 @@ Roadmap graph визуально показывает те же задачи, н
 | EXEC | Исправление double-click и drag source | 0.94 | Нет | Финальный статус пользователю | Нет | Да, пользователь сообщил о регрессии | Double click теперь дополнительно обрабатывается через `PointerPressed.ClickCount`, если routed `DoubleTapped` не приходит до шаблона node; drag source захватывает pointer до threshold и освобождает его перед `DoDragDrop`, чтобы move events не терялись при выходе курсора за границы node | `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
 | EXEC | Верификация follow-up исправления | 0.95 | Нет | Финальный статус пользователю | Нет | Нет | Добавлен source-side UI test для pointer drag на roadmap node; `RoadmapGraphUiTests` прошли 32/32 после пересборки, ранее после production-code изменений прошли `MainControlTreeCommandsUiTests` 34/34 | `RoadmapGraphUiTests.cs`, build/test commands |
 | EXEC | Повторное исправление roadmap drag source | 0.93 | Нет | Финальный статус пользователю | Нет | Да, пользователь сообщил, что drag всё ещё не стартует | `GraphControl` теперь слушает `PointerMoved/Released` на своём уровне с `handledEventsToo`, чтобы `NodifyEditor`/контейнеры не теряли pending drag; pointer capture больше не сбрасывается перед `DoDragDrop`, а освобождается после завершения операции. UI test теперь проверяет инкремент `RoadmapDragStartCount` после движения за threshold | `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
+| EXEC | Возврат double-click toggle | 0.95 | Нет | Проверить targeted UI tests | Нет | Да, пользователь уточнил parity с обычными вкладками | Double click на roadmap node снова переключает `DetailsAreOpen`: закрытая карточка открывается, открытая закрывается; выбор clicked task остаётся через owner resolver, а `ClickCount` fallback защищён от duplicate `DoubleTapped` toggle | `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs`, `specs/2026-05-07-roadmap-task-actions-parity.md` |
+| EXEC | Правый drag поверх roadmap task | 0.93 | Нет | Проверить targeted UI tests | Нет | Да, пользователь сообщил о пропавшем pan gesture | Правый drag, начатый на задаче, теперь обрабатывается в `GraphControl`: pointer захватывается, `ViewportLocation` меняется вручную с учётом zoom, задача не выбирается. Добавлен UI test на pan поверх node | `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs`, `specs/2026-05-07-roadmap-task-actions-parity.md` |
