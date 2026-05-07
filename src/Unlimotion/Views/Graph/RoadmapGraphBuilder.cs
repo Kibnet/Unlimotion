@@ -1,17 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Avalonia;
-using Microsoft.Msagl.Core.Geometry.Curves;
-using Microsoft.Msagl.Layout.Layered;
-using Microsoft.Msagl.Miscellaneous;
 using Unlimotion.ViewModel;
-using MsaglRectangle = Microsoft.Msagl.Core.Geometry.Rectangle;
-using MsaglDrawing = Microsoft.Msagl.Drawing;
 
 namespace Unlimotion.Views.Graph;
 
@@ -229,12 +222,21 @@ public static class RoadmapGraphBuilder
         progress?.Report(28);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var visibleConnections = RemoveRedundantConnections(connections, cancellationToken);
+        var acyclicConnections = RemoveCyclicConnections(
+            nodesByInput.Values.ToList(),
+            connections,
+            firstSeen,
+            cancellationToken);
 
         progress?.Report(36);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var nodes = ApplySugiyamaLayout(
+        var visibleConnections = RemoveRedundantConnections(acyclicConnections, cancellationToken);
+
+        progress?.Report(40);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var nodes = ApplyTableLayout(
             nodesByInput.Values,
             visibleConnections,
             firstSeen,
@@ -386,7 +388,139 @@ public static class RoadmapGraphBuilder
         }
     }
 
-    private static List<RoadmapNode> ApplySugiyamaLayout(
+    private static IReadOnlyList<ConnectionDefinition> RemoveCyclicConnections(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
+    {
+        if (nodes.Count == 0 || connections.Count == 0)
+        {
+            return connections;
+        }
+
+        var outgoing = nodes.ToDictionary(node => node, _ => new List<RoadmapNode>());
+        var incoming = nodes.ToDictionary(node => node, _ => new List<RoadmapNode>());
+        var hasSelfLoop = new HashSet<RoadmapNode>();
+
+        foreach (var connection in connections)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!outgoing.ContainsKey(connection.Tail) ||
+                !incoming.ContainsKey(connection.Head))
+            {
+                continue;
+            }
+
+            if (connection.Tail == connection.Head)
+            {
+                hasSelfLoop.Add(connection.Tail);
+                continue;
+            }
+
+            outgoing[connection.Tail].Add(connection.Head);
+            incoming[connection.Head].Add(connection.Tail);
+        }
+
+        var finishOrder = BuildFinishOrder(nodes, outgoing, cancellationToken);
+        var componentByNode = new Dictionary<RoadmapNode, int>();
+        var componentSizes = new List<int>();
+
+        foreach (var node in finishOrder.AsEnumerable().Reverse())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (componentByNode.ContainsKey(node))
+            {
+                continue;
+            }
+
+            var component = componentSizes.Count;
+            var size = 0;
+            var stack = new Stack<RoadmapNode>();
+            stack.Push(node);
+            componentByNode[node] = component;
+
+            while (stack.TryPop(out var current))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                size++;
+
+                foreach (var previous in incoming[current])
+                {
+                    if (componentByNode.ContainsKey(previous))
+                    {
+                        continue;
+                    }
+
+                    componentByNode[previous] = component;
+                    stack.Push(previous);
+                }
+            }
+
+            componentSizes.Add(size);
+        }
+
+        // A stable component-local order keeps useful cycle edges while guaranteeing acyclic left-to-right routing.
+        return connections
+            .Where(connection =>
+                connection.Tail != connection.Head &&
+                componentByNode.TryGetValue(connection.Tail, out var tailComponent) &&
+                componentByNode.TryGetValue(connection.Head, out var headComponent) &&
+                (tailComponent != headComponent ||
+                 componentSizes[tailComponent] == 1 && !hasSelfLoop.Contains(connection.Tail) ||
+                 IsForwardInsideComponent(connection)))
+            .ToList();
+
+        bool IsForwardInsideComponent(ConnectionDefinition connection)
+        {
+            return componentSizes[componentByNode[connection.Tail]] > 1 &&
+                   firstSeen[connection.Tail] < firstSeen[connection.Head];
+        }
+    }
+
+    private static List<RoadmapNode> BuildFinishOrder(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
+        CancellationToken cancellationToken)
+    {
+        var visited = new HashSet<RoadmapNode>();
+        var finishOrder = new List<RoadmapNode>(nodes.Count);
+
+        foreach (var start in nodes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!visited.Add(start))
+            {
+                continue;
+            }
+
+            var stack = new Stack<FinishOrderFrame>();
+            stack.Push(new FinishOrderFrame(start, outgoing[start]));
+
+            while (stack.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var frame = stack.Peek();
+
+                if (frame.NextIndex >= frame.Outgoing.Count)
+                {
+                    stack.Pop();
+                    finishOrder.Add(frame.Node);
+                    continue;
+                }
+
+                var next = frame.Outgoing[frame.NextIndex++];
+                if (visited.Add(next))
+                {
+                    stack.Push(new FinishOrderFrame(next, outgoing[next]));
+                }
+            }
+        }
+
+        return finishOrder;
+    }
+
+    private static List<RoadmapNode> ApplyTableLayout(
         IEnumerable<RoadmapNode> sourceNodes,
         IReadOnlyList<ConnectionDefinition> connections,
         IReadOnlyDictionary<RoadmapNode, int> firstSeen,
@@ -403,84 +537,16 @@ public static class RoadmapGraphBuilder
         progress?.Report(42);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var graph = new MsaglDrawing.Graph
-        {
-            LayoutAlgorithmSettings = CreateSugiyamaLayoutSettings()
-        };
-        graph.Attr.LayerDirection = MsaglDrawing.LayerDirection.LR;
+        var columns = BuildTableColumns(nodes, connections, firstSeen, cancellationToken);
+        progress?.Report(54);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var nodeIds = nodes.ToDictionary(
-            node => node,
-            node => "n" + firstSeen[node].ToString(CultureInfo.InvariantCulture));
-        var drawingNodesByNode = new Dictionary<RoadmapNode, MsaglDrawing.Node>();
+        var rows = BuildTableRows(nodes, connections, columns, firstSeen, cancellationToken);
+        progress?.Report(70);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var node in nodes.OrderBy(node => firstSeen[node]))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            drawingNodesByNode[node] = graph.AddNode(nodeIds[node]);
-        }
-
-        var drawingEdges = new List<(MsaglDrawing.Edge Edge, RoadmapConnectionKind Kind)>();
-        foreach (var connection in connections)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (connection.Tail == connection.Head ||
-                !nodeIds.TryGetValue(connection.Tail, out var tailId) ||
-                !nodeIds.TryGetValue(connection.Head, out var headId))
-            {
-                continue;
-            }
-
-            drawingEdges.Add((graph.AddEdge(tailId, headId), connection.Kind));
-        }
-
-        try
-        {
-            graph.CreateGeometryGraph();
-
-            foreach (var node in nodes)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var drawingNode = drawingNodesByNode[node];
-                drawingNode.GeometryNode.BoundaryCurve = CurveFactory.CreateRectangle(
-                    node.Width,
-                    RoadmapNode.Height,
-                    new Microsoft.Msagl.Core.Geometry.Point());
-            }
-
-            foreach (var (edge, kind) in drawingEdges)
-            {
-                if (edge.GeometryEdge != null)
-                {
-                    edge.GeometryEdge.Weight = GetConnectionWeight(kind);
-                }
-            }
-
-            progress?.Report(52);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            LayoutHelpers.CalculateLayout(
-                graph.GeometryGraph,
-                graph.LayoutAlgorithmSettings,
-                null);
-
-            progress?.Report(68);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            ApplyMsaglLocations(nodes, drawingNodesByNode, graph.GeometryGraph.BoundingBox);
-            ApplyRoadmapLocations(nodes, connections, firstSeen, cancellationToken);
-            progress?.Report(82);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            Trace.TraceError("MSAGL Sugiyama roadmap layout failed: {0}", exception);
-            ApplyFallbackLayout(nodes, connections, firstSeen, cancellationToken);
-            progress?.Report(82);
-        }
+        ApplyTableLocations(nodes, columns, rows, cancellationToken);
+        progress?.Report(82);
 
         cancellationToken.ThrowIfCancellationRequested();
         return nodes
@@ -490,19 +556,276 @@ public static class RoadmapGraphBuilder
             .ToList();
     }
 
-    private static SugiyamaLayoutSettings CreateSugiyamaLayoutSettings()
+    private static Dictionary<RoadmapNode, int> BuildTableColumns(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
     {
-        return new SugiyamaLayoutSettings
+        var outgoing = nodes.ToDictionary(node => node, _ => new List<RoadmapNode>());
+        var incoming = nodes.ToDictionary(node => node, _ => new List<RoadmapNode>());
+        var connected = nodes.ToDictionary(node => node, _ => false);
+
+        foreach (var connection in connections)
         {
-            LayerSeparation = LayerSeparation,
-            NodeSeparation = NodeSeparation,
-            MinNodeWidth = RoadmapNode.MinWidth,
-            MinNodeHeight = RoadmapNode.Height,
-            RandomSeedForOrdering = 0,
-            MaxNumberOfPassesInOrdering = 24,
-            NoGainAdjacentSwapStepsBound = 8,
-            RepetitionCoefficientForOrdering = 8
-        };
+            cancellationToken.ThrowIfCancellationRequested();
+            if (connection.Tail == connection.Head ||
+                !outgoing.ContainsKey(connection.Tail) ||
+                !outgoing.ContainsKey(connection.Head))
+            {
+                continue;
+            }
+
+            outgoing[connection.Tail].Add(connection.Head);
+            incoming[connection.Head].Add(connection.Tail);
+            connected[connection.Tail] = true;
+            connected[connection.Head] = true;
+        }
+
+        var heightByNode = BuildRightDepths(
+            nodes,
+            outgoing,
+            incoming,
+            firstSeen,
+            cancellationToken);
+
+        var rightmostColumn = nodes
+            .Where(node => connected[node])
+            .Select(node => heightByNode[node])
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return nodes.ToDictionary(
+            node => node,
+            node => connected[node] ? rightmostColumn - heightByNode[node] : 0);
+    }
+
+    private static Dictionary<RoadmapNode, int> BuildTableRows(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyList<ConnectionDefinition> connections,
+        IReadOnlyDictionary<RoadmapNode, int> columns,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
+    {
+        var incomingByHead = nodes.ToDictionary(node => node, _ => new List<ConnectionDefinition>());
+        var outgoingCount = nodes.ToDictionary(node => node, _ => 0);
+        var incomingCount = nodes.ToDictionary(node => node, _ => 0);
+
+        foreach (var connection in connections)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (connection.Tail == connection.Head ||
+                !incomingByHead.ContainsKey(connection.Head) ||
+                !incomingByHead.ContainsKey(connection.Tail))
+            {
+                continue;
+            }
+
+            incomingByHead[connection.Head].Add(connection);
+            outgoingCount[connection.Tail]++;
+            incomingCount[connection.Head]++;
+        }
+
+        var incomingDepth = BuildIncomingDepth(nodes, incomingByHead, cancellationToken);
+        var orderedIncomingByHead = nodes.ToDictionary(
+            node => node,
+            node => GetOrderedIncomingConnections(node).ToList());
+        var rowByNode = new Dictionary<RoadmapNode, int>();
+        var occupiedRowsByColumn = new Dictionary<int, HashSet<int>>();
+        var nextRow = 0;
+        var traversalRoots = nodes
+            .OrderBy(GetTraversalRank)
+            .ThenByDescending(node => incomingDepth[node])
+            .ThenBy(node => firstSeen[node])
+            .ToArray();
+
+        foreach (var root in traversalRoots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (rowByNode.ContainsKey(root))
+            {
+                continue;
+            }
+
+            PlaceBranch(root, nextRow);
+        }
+
+        return rowByNode;
+
+        int GetTraversalRank(RoadmapNode node)
+        {
+            if (outgoingCount[node] == 0 && incomingCount[node] > 0)
+            {
+                return 0;
+            }
+
+            if (outgoingCount[node] > 0 || incomingCount[node] > 0)
+            {
+                return 1;
+            }
+
+            return 2;
+        }
+
+        void PlaceBranch(RoadmapNode node, int preferredRow)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (rowByNode.ContainsKey(node))
+            {
+                return;
+            }
+
+            var row = ReserveRow(node, preferredRow);
+            var stack = new Stack<TableRowFrame>();
+            stack.Push(new TableRowFrame(row, orderedIncomingByHead[node]));
+
+            while (stack.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var frame = stack.Pop();
+
+                while (frame.NextConnectionIndex < frame.Incoming.Count)
+                {
+                    var connection = frame.Incoming[frame.NextConnectionIndex++];
+                    var predecessor = connection.Tail;
+                    if (rowByNode.ContainsKey(predecessor))
+                    {
+                        continue;
+                    }
+
+                    var predecessorRow = frame.CurrentRowBranchUsed ? nextRow : frame.Row;
+                    frame.CurrentRowBranchUsed = true;
+                    stack.Push(frame);
+
+                    var reservedRow = ReserveRow(predecessor, predecessorRow);
+                    stack.Push(new TableRowFrame(
+                        reservedRow,
+                        orderedIncomingByHead[predecessor]));
+                    break;
+                }
+            }
+        }
+
+        int ReserveRow(RoadmapNode node, int preferredRow)
+        {
+            var column = columns[node];
+            if (!occupiedRowsByColumn.TryGetValue(column, out var occupiedRows))
+            {
+                occupiedRows = new HashSet<int>();
+                occupiedRowsByColumn[column] = occupiedRows;
+            }
+
+            var row = Math.Max(0, preferredRow);
+            while (occupiedRows.Contains(row))
+            {
+                row++;
+            }
+
+            occupiedRows.Add(row);
+            rowByNode[node] = row;
+            nextRow = Math.Max(nextRow, row + 1);
+            return row;
+        }
+
+        IEnumerable<ConnectionDefinition> GetOrderedIncomingConnections(RoadmapNode node)
+        {
+            return incomingByHead[node]
+                .Where(connection => columns[connection.Tail] < columns[connection.Head])
+                .GroupBy(connection => connection.Tail)
+                .Select(group => group
+                    .OrderByDescending(connection => GetConnectionWeight(connection.Kind))
+                    .ThenBy(connection => firstSeen[connection.Tail])
+                    .First())
+                .OrderByDescending(connection => incomingDepth[connection.Tail])
+                .ThenByDescending(connection => GetConnectionWeight(connection.Kind))
+                .ThenBy(connection => columns[connection.Tail])
+                .ThenBy(connection => firstSeen[connection.Tail]);
+        }
+    }
+
+    private static Dictionary<RoadmapNode, int> BuildIncomingDepth(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, List<ConnectionDefinition>> incomingByHead,
+        CancellationToken cancellationToken)
+    {
+        var depthByNode = nodes.ToDictionary(node => node, _ => 0);
+        var outgoingByTail = nodes.ToDictionary(node => node, _ => new List<RoadmapNode>());
+        var remainingIncoming = nodes.ToDictionary(node => node, _ => 0);
+
+        foreach (var node in nodes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var connection in incomingByHead[node])
+            {
+                outgoingByTail[connection.Tail].Add(node);
+                remainingIncoming[node]++;
+            }
+        }
+
+        var queue = new Queue<RoadmapNode>(nodes
+            .Where(node => remainingIncoming[node] == 0));
+
+        while (queue.TryDequeue(out var node))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var head in outgoingByTail[node])
+            {
+                depthByNode[head] = Math.Max(depthByNode[head], depthByNode[node] + 1);
+                remainingIncoming[head]--;
+                if (remainingIncoming[head] == 0)
+                {
+                    queue.Enqueue(head);
+                }
+            }
+        }
+
+        return depthByNode;
+    }
+
+    private static Dictionary<RoadmapNode, int> BuildRightDepths(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> outgoing,
+        IReadOnlyDictionary<RoadmapNode, List<RoadmapNode>> incoming,
+        IReadOnlyDictionary<RoadmapNode, int> firstSeen,
+        CancellationToken cancellationToken)
+    {
+        var depths = nodes.ToDictionary(node => node, _ => 0);
+        var remainingOutgoing = nodes.ToDictionary(node => node, node => outgoing[node].Count);
+        var queue = new Queue<RoadmapNode>(nodes
+            .Where(node => remainingOutgoing[node] == 0)
+            .OrderBy(node => firstSeen[node]));
+
+        while (queue.TryDequeue(out var node))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var tail in incoming[node].OrderBy(item => firstSeen[item]))
+            {
+                depths[tail] = Math.Max(depths[tail], depths[node] + 1);
+                remainingOutgoing[tail]--;
+                if (remainingOutgoing[tail] == 0)
+                {
+                    queue.Enqueue(tail);
+                }
+            }
+        }
+
+        return depths;
+    }
+
+    private static void ApplyTableLocations(
+        IReadOnlyList<RoadmapNode> nodes,
+        IReadOnlyDictionary<RoadmapNode, int> columns,
+        IReadOnlyDictionary<RoadmapNode, int> rows,
+        CancellationToken cancellationToken)
+    {
+        foreach (var node in nodes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            node.SetConnectionWidth(RoadmapNode.MaxWidth);
+            node.Location = new Avalonia.Point(
+                StartX + columns[node] * (RoadmapNode.MaxWidth + LayerSeparation),
+                StartY + rows[node] * MinimumRowGap);
+        }
     }
 
     private static void ApplyRoadmapLocations(
@@ -1492,20 +1815,6 @@ public static class RoadmapGraphBuilder
         }
     }
 
-    private static void ApplyMsaglLocations(
-        IEnumerable<RoadmapNode> nodes,
-        IReadOnlyDictionary<RoadmapNode, MsaglDrawing.Node> drawingNodesByNode,
-        MsaglRectangle graphBounds)
-    {
-        foreach (var node in nodes)
-        {
-            var nodeBounds = drawingNodesByNode[node].GeometryNode.BoundingBox;
-            node.Location = new Avalonia.Point(
-                StartX + nodeBounds.Left - graphBounds.Left,
-                StartY + graphBounds.Top - nodeBounds.Top);
-        }
-    }
-
     private static void ApplyFallbackLayout(
         IReadOnlyList<RoadmapNode> nodes,
         IReadOnlyList<ConnectionDefinition> connections,
@@ -1691,6 +2000,42 @@ public static class RoadmapGraphBuilder
         RoadmapNode Tail,
         RoadmapNode Head,
         RoadmapConnectionKind Kind);
+
+    private sealed class FinishOrderFrame
+    {
+        public FinishOrderFrame(
+            RoadmapNode node,
+            IReadOnlyList<RoadmapNode> outgoing)
+        {
+            Node = node;
+            Outgoing = outgoing;
+        }
+
+        public RoadmapNode Node { get; }
+
+        public IReadOnlyList<RoadmapNode> Outgoing { get; }
+
+        public int NextIndex { get; set; }
+    }
+
+    private sealed class TableRowFrame
+    {
+        public TableRowFrame(
+            int row,
+            IReadOnlyList<ConnectionDefinition> incoming)
+        {
+            Row = row;
+            Incoming = incoming;
+        }
+
+        public int Row { get; }
+
+        public IReadOnlyList<ConnectionDefinition> Incoming { get; }
+
+        public int NextConnectionIndex { get; set; }
+
+        public bool CurrentRowBranchUsed { get; set; }
+    }
 
     private sealed class LayoutVertex
     {

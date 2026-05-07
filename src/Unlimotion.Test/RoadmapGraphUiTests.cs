@@ -219,6 +219,137 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraphProjection_SharedPrerequisiteUsesLeftmostRequiredColumn()
+    {
+        var storage = new StubTaskStorage();
+        var sharedStart = CreateTask("shared-start", "Shared start", storage);
+        var middle = CreateTask("shared-middle", "Middle branch", storage);
+        var deepGoal = CreateTask("shared-deep-goal", "Deep goal", storage);
+        var shortGoal = CreateTask("shared-short-goal", "Short goal", storage);
+
+        sharedStart.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { shortGoal, middle },
+            Array.Empty<TaskItemViewModel>());
+        middle.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { deepGoal },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(
+            sharedStart,
+            shortGoal,
+            middle,
+            deepGoal));
+        var sharedStartNode = projection.Nodes.Single(node => node.TaskItem == sharedStart);
+        var middleNode = projection.Nodes.Single(node => node.TaskItem == middle);
+        var deepGoalNode = projection.Nodes.Single(node => node.TaskItem == deepGoal);
+        var shortGoalNode = projection.Nodes.Single(node => node.TaskItem == shortGoal);
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(sharedStartNode.Location.X).IsLessThan(middleNode.Location.X);
+        await Assert.That(middleNode.Location.X).IsLessThan(deepGoalNode.Location.X);
+        await Assert.That(shortGoalNode.Location.X).IsEqualTo(deepGoalNode.Location.X);
+    }
+
+    [Test]
+    public async Task RoadmapGraphProjection_KeepsAcyclicCycleSubsetLeftToRight()
+    {
+        var storage = new StubTaskStorage();
+        var first = CreateTask("cycle-first", "Cycle first", storage);
+        var second = CreateTask("cycle-second", "Cycle second", storage);
+
+        first.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { second },
+            Array.Empty<TaskItemViewModel>());
+        second.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { first },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(first, second));
+
+        var keptConnection = projection.Connections.Single();
+
+        await Assert.That(projection.Nodes.Any(node => node.TaskItem == first)).IsTrue();
+        await Assert.That(projection.Nodes.Any(node => node.TaskItem == second)).IsTrue();
+        await Assert.That(keptConnection.Tail.TaskItem).IsEqualTo(first);
+        await Assert.That(keptConnection.Head.TaskItem).IsEqualTo(second);
+        await Assert.That(keptConnection.IsLeftToRight).IsTrue();
+    }
+
+    [Test]
+    public async Task RoadmapGraphProjection_RemovesRedundantConnectionsAfterBreakingCycles()
+    {
+        var storage = new StubTaskStorage();
+        var source = CreateTask("cycle-source", "Cycle source", storage);
+        var first = CreateTask("cycle-first-target", "Cycle first target", storage);
+        var second = CreateTask("cycle-second-target", "Cycle second target", storage);
+
+        source.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { first, second },
+            Array.Empty<TaskItemViewModel>());
+        first.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { second },
+            Array.Empty<TaskItemViewModel>());
+        second.ApplyRelations(
+            Array.Empty<TaskItemViewModel>(),
+            Array.Empty<TaskItemViewModel>(),
+            new[] { first },
+            Array.Empty<TaskItemViewModel>());
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(source, first, second));
+
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Tail.TaskItem == source &&
+            connection.Head.TaskItem == first)).IsTrue();
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Tail.TaskItem == first &&
+            connection.Head.TaskItem == second)).IsTrue();
+        await Assert.That(projection.Connections.Any(connection =>
+            connection.Tail.TaskItem == second &&
+            connection.Head.TaskItem == first)).IsFalse();
+    }
+
+    [Test]
+    public async Task RoadmapGraphProjection_HandlesDeepDependencyChainWithoutRecursiveLayout()
+    {
+        const int TaskCount = 4096;
+        var storage = new StubTaskStorage();
+        var tasks = Enumerable.Range(0, TaskCount)
+            .Select(index => CreateTask($"deep-chain-{index}", $"Deep chain {index}", storage))
+            .ToArray();
+
+        for (var index = 0; index < tasks.Length - 1; index++)
+        {
+            tasks[index].ApplyRelations(
+                Array.Empty<TaskItemViewModel>(),
+                Array.Empty<TaskItemViewModel>(),
+                new[] { tasks[index + 1] },
+                Array.Empty<TaskItemViewModel>());
+        }
+
+        var projection = RoadmapGraphBuilder.Build(CreateRootWrappers(tasks));
+        var firstNode = projection.Nodes.Single(node => node.TaskItem == tasks[0]);
+        var lastNode = projection.Nodes.Single(node => node.TaskItem == tasks[^1]);
+
+        await Assert.That(projection.Nodes.Count).IsEqualTo(TaskCount);
+        await Assert.That(projection.Connections.Count).IsEqualTo(TaskCount - 1);
+        await Assert.That(projection.Connections.All(connection => connection.IsLeftToRight)).IsTrue();
+        await Assert.That(firstNode.Location.X).IsLessThan(lastNode.Location.X);
+    }
+
+    [Test]
     public async Task RoadmapGraphProjection_KeepsBlockConnectionsMostlyHorizontal()
     {
         var storage = new StubTaskStorage();
