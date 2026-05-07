@@ -167,7 +167,7 @@ Assert-Match $workflow 'for abi in arm64-v8a x86_64' 'android-packaging workflow
 Assert-Match $workflow 'expected_package="artifacts/nuget-local/LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"' 'android-packaging workflow must reuse a cached local Android native NuGet package when present.'
 Assert-Match $workflow 'Using cached Android native package' 'android-packaging workflow must skip rebuilding Android native dependencies on native package cache hits.'
 Assert-Match $workflow 'bash ./scripts/build-openssl-android\.sh[\s\S]*bash ./scripts/build-libssh2-android\.sh[\s\S]*bash ./scripts/build-libgit2-android\.sh' 'android-packaging workflow must build Android OpenSSL and libssh2 before libgit2.'
-Assert-Match $workflow 'Restore Android Project[\s\S]*dotnet restore src/Unlimotion\.Android/Unlimotion\.Android\.csproj[\s\S]*-p:RuntimeIdentifiers="android-arm64;android-x64"' 'android-packaging workflow must restore the Android project once for both RIDs before packaging.'
+Assert-Match $workflow 'Restore Android Project[\s\S]*dotnet restore src/Unlimotion\.Android/Unlimotion\.Android\.csproj[\s\S]*-p:RuntimeIdentifiers=android-arm64%3Bandroid-x64' 'android-packaging workflow must restore the Android project once for both RIDs before packaging.'
 Assert-Match $workflow 'Resolve Android App Version' 'android-packaging workflow must resolve Android app version before building APKs.'
 Assert-Match $workflow 'display_version="\$\{GITHUB_REF_NAME#v\}"' 'android-packaging workflow must derive release ApplicationDisplayVersion from the release tag.'
 Assert-Match $workflow 'version_code="\$\{GITHUB_RUN_NUMBER\}"' 'android-packaging workflow must use a monotonic GitHub run number for Android ApplicationVersion.'
