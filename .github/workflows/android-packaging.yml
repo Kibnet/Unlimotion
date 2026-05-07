@@ -163,10 +163,13 @@ jobs:
 
     - name: Restore Android Project
       run: |
-        dotnet restore src/Unlimotion.Android/Unlimotion.Android.csproj \
-          -p:RuntimeIdentifiers=android-arm64%3Bandroid-x64 \
-          -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
-          -p:JavaSdkDirectory="${JAVA_HOME}"
+        for rid in android-arm64 android-x64; do
+          dotnet restore src/Unlimotion.Android/Unlimotion.Android.csproj \
+            -p:RuntimeIdentifier="$rid" \
+            -p:RuntimeIdentifiers="$rid" \
+            -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
+            -p:JavaSdkDirectory="${JAVA_HOME}"
+        done
 
     - name: Build Android APKs
       env:
