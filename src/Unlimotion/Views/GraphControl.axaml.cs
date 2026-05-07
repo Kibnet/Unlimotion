@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -37,11 +38,14 @@ namespace Unlimotion.Views
         private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
+        private PendingRoadmapDragContext? pendingRoadmapDrag;
+        private bool roadmapDragInProgress;
         private int roadmapBuildRequestVersion;
         private int roadmapActiveBuildCount;
         private CancellationTokenSource? currentRoadmapBuildCancellation;
         private RoadmapBuildRequest? pendingRoadmapBuildRequest;
         private const double RoadmapPanStep = 240;
+        private const double RoadmapDragThreshold = 4;
         private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
 
         public static readonly StyledProperty<bool> RoadmapGraphBuildInProgressProperty =
@@ -72,6 +76,16 @@ namespace Unlimotion.Views
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
+            AddHandler(
+                PointerMovedEvent,
+                InputElement_OnPointerMoved,
+                RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+                true);
+            AddHandler(
+                PointerReleasedEvent,
+                InputElement_OnPointerReleased,
+                RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+                true);
             KeyDown += RoadmapEditor_KeyDown;
             RoadmapEditor.KeyDown += RoadmapEditor_KeyDown;
         }
@@ -113,6 +127,8 @@ namespace Unlimotion.Views
         public int RoadmapGraphBackgroundBuildCancelRequestCount { get; private set; }
 
         public int RoadmapGraphBackgroundBuildCanceledCount { get; private set; }
+
+        internal int RoadmapDragStartCount { get; private set; }
 
         internal Func<RoadmapGraphBuildInput, IProgress<double>?, CancellationToken, RoadmapGraphProjection>? RoadmapGraphBuildOverride { get; set; }
 
@@ -756,8 +772,12 @@ namespace Unlimotion.Views
 
             if (propertyName is nameof(TaskItemViewModel.Title)
                 or nameof(TaskItemViewModel.TitleWithoutEmoji)
-                or nameof(TaskItemViewModel.OnlyTextTitle)
-                or nameof(TaskItemViewModel.Emoji)
+                or nameof(TaskItemViewModel.OnlyTextTitle))
+            {
+                return false;
+            }
+
+            if (propertyName is nameof(TaskItemViewModel.Emoji)
                 or nameof(TaskItemViewModel.GetAllEmoji))
             {
                 return HasActiveEmojiFilter();
@@ -848,6 +868,16 @@ namespace Unlimotion.Views
 
         private void RoadmapEditor_KeyDown(object? sender, KeyEventArgs e)
         {
+            if (e.Handled || IsTextInputEventSource(e.Source))
+            {
+                return;
+            }
+
+            if (TryExecuteRoadmapCreateHotkey(sender, e))
+            {
+                return;
+            }
+
             switch (e.Key)
             {
                 case Key.F:
@@ -861,6 +891,77 @@ namespace Unlimotion.Views
                     e.Handled = true;
                     break;
             }
+        }
+
+        private bool TryExecuteRoadmapCreateHotkey(object? sender, KeyEventArgs e)
+        {
+            var owner = ResolveMainWindowViewModel(sender as Control ?? e.Source as Control);
+            if (owner == null || !TryGetRoadmapCreateCommand(owner, e, out var command))
+            {
+                return false;
+            }
+
+            if (!command.CanExecute(null))
+            {
+                return false;
+            }
+
+            command.Execute(null);
+            e.Handled = true;
+            return true;
+        }
+
+        private static bool TryGetRoadmapCreateCommand(
+            MainWindowViewModel owner,
+            KeyEventArgs e,
+            out ICommand command)
+        {
+            command = null!;
+
+            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Enter)
+            {
+                command = owner.CreateSibling;
+                return true;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Shift && e.Key == Key.Enter)
+            {
+                command = owner.CreateBlockedSibling;
+                return true;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Tab)
+            {
+                command = owner.CreateInner;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsTextInputEventSource(object? source)
+        {
+            return source is Control control &&
+                   (IsControlOrAncestor<TextBox>(control) ||
+                    IsControlOrAncestor<AutoCompleteBox>(control) ||
+                    IsControlOrAncestor<NumericUpDown>(control));
+        }
+
+        private static bool IsControlOrAncestor<TControl>(Control control)
+            where TControl : Control
+        {
+            Control? current = control;
+            while (current != null)
+            {
+                if (current is TControl)
+                {
+                    return true;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return false;
         }
 
         private void FitRoadmapToScreen()
@@ -948,10 +1049,7 @@ namespace Unlimotion.Views
         {
             if (sender is Control { DataContext: RoadmapNode node })
             {
-                if (node.SetMeasuredWidth(e.NewSize.Width))
-                {
-                    ScheduleUpdateGraph();
-                }
+                node.SetMeasuredWidth(e.NewSize.Width);
             }
         }
 
@@ -962,46 +1060,204 @@ namespace Unlimotion.Views
                 .ToDictionary(group => group.Key, group => group.First().Width);
         }
 
-        private async void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var pointer = e.GetCurrentPoint(this);
             if (!pointer.Properties.IsLeftButtonPressed)
             {
+                ClearPendingRoadmapDrag();
                 return;
             }
 
             var control = sender as Control;
-            var taskItem = control?.DataContext switch
+            var dragControl = control ?? (e.Source as Control);
+            if (!TryGetRoadmapTaskItem(dragControl, out var taskItem))
             {
-                TaskItemViewModel item => item,
-                RoadmapNode node => node.TaskItem,
-                _ => null
-            };
+                ClearPendingRoadmapDrag();
+                return;
+            }
 
-            if (taskItem == null)
+            SelectRoadmapTask(dragControl, taskItem);
+            if (e.ClickCount > 1)
+            {
+                OpenRoadmapTaskDetails(dragControl, taskItem);
+                ClearPendingRoadmapDrag();
+                e.Handled = true;
+                return;
+            }
+
+            e.Pointer.Capture(dragControl);
+            pendingRoadmapDrag = new PendingRoadmapDragContext(
+                dragControl ?? this,
+                e.Pointer,
+                taskItem,
+                e.GetPosition(dragControl ?? this));
+        }
+
+        private async void InputElement_OnPointerMoved(object? sender, PointerEventArgs e)
+        {
+            var pending = pendingRoadmapDrag;
+            if (pending == null ||
+                roadmapDragInProgress ||
+                !ReferenceEquals(e.Pointer, pending.Pointer))
             {
                 return;
             }
 
-            var mwm = TaskItemViewModel.MainWindowInstance;
-            if (mwm != null)
+            if (!e.GetCurrentPoint(pending.Control).Properties.IsLeftButtonPressed)
             {
-                mwm.CurrentTaskItem = taskItem;
+                ClearPendingRoadmapDrag();
+                return;
             }
 
-            var dragData = new DataObject();
-            dragData.Set(CustomFormat, taskItem);
+            if (!HasExceededRoadmapDragThreshold(
+                    pending.StartPoint,
+                    e.GetPosition(pending.Control)))
+            {
+                return;
+            }
 
-            await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            pendingRoadmapDrag = null;
+            roadmapDragInProgress = true;
+            e.Handled = true;
+
+            try
+            {
+                await StartRoadmapDragAsync(pending, e);
+            }
+            finally
+            {
+                roadmapDragInProgress = false;
+                ClearPendingRoadmapDrag();
+            }
+        }
+
+        private void InputElement_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+        {
+            if (pendingRoadmapDrag != null &&
+                !ReferenceEquals(e.Pointer, pendingRoadmapDrag.Pointer))
+            {
+                return;
+            }
+
+            ClearPendingRoadmapDrag();
+        }
+
+        private static bool HasExceededRoadmapDragThreshold(Point startPoint, Point currentPoint)
+        {
+            return Math.Abs(currentPoint.X - startPoint.X) >= RoadmapDragThreshold ||
+                   Math.Abs(currentPoint.Y - startPoint.Y) >= RoadmapDragThreshold;
+        }
+
+        private static async Task StartRoadmapDragAsync(PendingRoadmapDragContext pending, PointerEventArgs e)
+        {
+            var dragData = new DataObject();
+            dragData.Set(CustomFormat, pending.TaskItem);
+
+            var graphControl = pending.Control.FindParent<GraphControl>();
+            if (graphControl != null)
+            {
+                graphControl.RoadmapDragStartCount++;
+            }
+
+            try
+            {
+                await DragDrop.DoDragDrop(
+                    e,
+                    dragData,
+                    DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            }
+            finally
+            {
+                pending.Pointer.Capture(null);
+            }
+        }
+
+        private void ClearPendingRoadmapDrag()
+        {
+            pendingRoadmapDrag?.Pointer.Capture(null);
+            pendingRoadmapDrag = null;
         }
 
         private void TaskTree_OnDoubleTapped(object? sender, TappedEventArgs e)
         {
-            var mwm = TaskItemViewModel.MainWindowInstance;
-            if (mwm != null)
+            var control = sender as Control;
+            if (!TryGetRoadmapTaskItem(control ?? (e.Source as Control), out var taskItem))
             {
-                mwm.DetailsAreOpen = !mwm.DetailsAreOpen;
+                return;
             }
+
+            OpenRoadmapTaskDetails(control, taskItem);
+            e.Handled = true;
+        }
+
+        private MainWindowViewModel? OpenRoadmapTaskDetails(Control? context, TaskItemViewModel taskItem)
+        {
+            var owner = SelectRoadmapTask(context, taskItem);
+            if (owner != null)
+            {
+                owner.DetailsAreOpen = true;
+            }
+
+            return owner;
+        }
+
+        private MainWindowViewModel? SelectRoadmapTask(Control? context, TaskItemViewModel taskItem)
+        {
+            var owner = ResolveMainWindowViewModel(context);
+            if (owner == null)
+            {
+                return null;
+            }
+
+            owner.CurrentTaskItem = taskItem;
+            if (owner.GraphMode)
+            {
+                owner.SelectCurrentTask();
+            }
+
+            return owner;
+        }
+
+        private MainWindowViewModel? ResolveMainWindowViewModel(Control? context)
+        {
+            return context?.FindParentDataContext<MainWindowViewModel>() ??
+                   this.FindParentDataContext<MainWindowViewModel>() ??
+                   TaskItemViewModel.MainWindowInstance;
+        }
+
+        private static bool TryGetRoadmapTaskItem(Control? control, out TaskItemViewModel taskItem)
+        {
+            taskItem = null!;
+            if (control == null)
+            {
+                return false;
+            }
+
+            taskItem = (control.DataContext switch
+            {
+                TaskItemViewModel item => item,
+                RoadmapNode node => node.TaskItem,
+                _ => control.FindParentDataContext<RoadmapNode>()?.TaskItem ??
+                     control.FindParentDataContext<TaskItemViewModel>(),
+            })!;
+
+            return taskItem != null;
+        }
+
+        private sealed class PendingRoadmapDragContext(
+            Control control,
+            IPointer pointer,
+            TaskItemViewModel taskItem,
+            Point startPoint)
+        {
+            public Control Control { get; } = control;
+
+            public IPointer Pointer { get; } = pointer;
+
+            public TaskItemViewModel TaskItem { get; } = taskItem;
+
+            public Point StartPoint { get; } = startPoint;
         }
 
         private bool Matches(TaskItemViewModel task, string normalizedQuery, bool isFuzzy)

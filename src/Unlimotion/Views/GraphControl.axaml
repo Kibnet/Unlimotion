@@ -104,6 +104,8 @@
                                 DragDrop.AllowDrop="True"
                                 SizeChanged="RoadmapNode_OnSizeChanged"
                                 PointerPressed="InputElement_OnPointerPressed"
+                                PointerMoved="InputElement_OnPointerMoved"
+                                PointerReleased="InputElement_OnPointerReleased"
                                 DoubleTapped="TaskTree_OnDoubleTapped">
                             <Grid ColumnDefinitions="Auto,Auto,Auto,*">
                                 <CheckBox DataContext="{Binding TaskItem}"

@@ -17,6 +17,7 @@ using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using Unlimotion.Views.Graph;
 using SearchBarView = Unlimotion.Views.SearchControl.SearchBar;
 using SearchControlView = Unlimotion.Views.SearchControl.SearchControl;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
@@ -773,9 +774,26 @@ namespace Unlimotion.Views
         private static bool TryGetDropTargetTask(DragEventArgs e, out TaskItemViewModel targetTask)
         {
             var control = e.Source as Control;
-            targetTask = control?.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
-                         control?.FindParentDataContext<TaskItemViewModel>()!;
+            targetTask = TryGetDropTargetTask(control)!;
             return targetTask != null;
+        }
+
+        private static TaskItemViewModel? TryGetDropTargetTask(Control? control)
+        {
+            if (control == null)
+            {
+                return null;
+            }
+
+            return control.DataContext switch
+            {
+                TaskWrapperViewModel wrapper => wrapper.TaskItem,
+                TaskItemViewModel task => task,
+                RoadmapNode node => node.TaskItem,
+                _ => control.FindParentDataContext<TaskWrapperViewModel>()?.TaskItem ??
+                     control.FindParentDataContext<TaskItemViewModel>() ??
+                     control.FindParentDataContext<RoadmapNode>()?.TaskItem
+            };
         }
 
         private bool TryBuildOperationItems(
