@@ -17,6 +17,7 @@ using Avalonia;
 using Avalonia.Android;
 using Avalonia.ReactiveUI;
 using Unlimotion;
+using Unlimotion.Android.Services;
 using Unlimotion.Services;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
@@ -70,6 +71,7 @@ public class MainActivity : AvaloniaMainActivity<App>
             }
 
             App.Init(configPath);
+            App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
             TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
 

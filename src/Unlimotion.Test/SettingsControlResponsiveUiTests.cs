@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -13,6 +14,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion;
+using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
 namespace Unlimotion.Test;
@@ -52,6 +54,85 @@ public class SettingsControlResponsiveUiTests
 
                 await Assert.That(settings.CopyTaskOutlineAsMarkdown).IsTrue();
                 await Assert.That(settings.CopyTaskOutlineDescription).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var updateService = new FakeApplicationUpdateService
+                {
+                    CurrentVersion = "1.2.3",
+                    NextUpdate = new ApplicationUpdateInfo("1.2.4")
+                };
+                settings.ConfigureUpdateService(updateService);
+                settings.CheckForUpdatesCommand = new TestAsyncCommand(() => settings.CheckForUpdatesAsync());
+                settings.DownloadUpdateCommand = new TestAsyncCommand(() => settings.DownloadUpdateAsync());
+                settings.ApplyUpdateCommand = new TestAsyncCommand(settings.ApplyUpdateAsync);
+
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var currentVersionText = FindControlByAutomationId<TextBlock>(view, "CurrentApplicationVersionText");
+                var availableVersionText = FindControlByAutomationId<TextBlock>(view, "AvailableUpdateVersionText");
+                var checkButton = FindControlByAutomationId<Button>(view, "CheckForUpdatesButton");
+                var downloadButton = FindControlByAutomationId<Button>(view, "DownloadUpdateButton");
+                var applyButton = FindControlByAutomationId<Button>(view, "ApplyUpdateButton");
+
+                await Assert.That(currentVersionText.Text).IsEqualTo("1.2.3");
+                await Assert.That(checkButton.IsEnabled).IsTrue();
+                await Assert.That(downloadButton.IsEnabled).IsFalse();
+
+                await ClickControlAsync(window, checkButton);
+                await WaitForConditionAsync(
+                    () => settings.UpdateState == ApplicationUpdateState.UpdateAvailable,
+                    "Settings update section did not show an available update.");
+
+                await Assert.That(availableVersionText.Text).IsEqualTo("1.2.4");
+                await Assert.That(downloadButton.IsEnabled).IsTrue();
+
+                await ClickControlAsync(window, downloadButton);
+                await WaitForConditionAsync(
+                    () => settings.UpdateState == ApplicationUpdateState.ReadyToApply,
+                    "Settings update section did not switch to ready-to-apply after download.");
+
+                await Assert.That(updateService.DownloadCalls).IsEqualTo(1);
+                await Assert.That(applyButton.IsEnabled).IsTrue();
+
+                const string permissionStatus = "Grant install permission, then tap Install update again.";
+                updateService.ApplyException = new ApplicationUpdateUserActionRequiredException(permissionStatus);
+
+                await ClickControlAsync(window, applyButton);
+                await WaitForConditionAsync(
+                    () => settings.UpdateState == ApplicationUpdateState.ReadyToApply &&
+                          settings.UpdateStatusText == permissionStatus,
+                    "Settings update section did not remain ready after Android install permission redirect.");
+
+                var statusText = FindControlByAutomationId<TextBlock>(view, "UpdateStatusText");
+                await Assert.That(updateService.ApplyCalls).IsEqualTo(1);
+                await Assert.That(statusText.Text).IsEqualTo(permissionStatus);
+                await Assert.That(applyButton.IsEnabled).IsTrue();
             }
             finally
             {
@@ -205,6 +286,22 @@ public class SettingsControlResponsiveUiTests
         await Task.CompletedTask;
     }
 
+    private static async Task WaitForConditionAsync(Func<bool> condition, string failureMessage)
+    {
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(25);
+        }
+
+        throw new InvalidOperationException(failureMessage);
+    }
+
     private static T FindControlByAutomationId<T>(Control root, string automationId)
         where T : Control
     {
@@ -229,5 +326,63 @@ public class SettingsControlResponsiveUiTests
         }
 
         return point.Value.X;
+    }
+
+    private sealed class FakeApplicationUpdateService : IApplicationUpdateService
+    {
+        public bool IsSupported { get; set; } = true;
+        public string CurrentVersion { get; set; } = "1.0.0";
+        public ApplicationUpdateInfo? PendingUpdate { get; set; }
+        public ApplicationUpdateInfo? NextUpdate { get; set; }
+        public Exception? ApplyException { get; set; }
+        public int DownloadCalls { get; private set; }
+        public int ApplyCalls { get; private set; }
+
+        public Task<ApplicationUpdateInfo?> CheckForUpdatesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(NextUpdate);
+
+        public Task DownloadUpdateAsync(CancellationToken cancellationToken = default)
+        {
+            DownloadCalls++;
+            return Task.CompletedTask;
+        }
+
+        public void ApplyUpdateAndRestart()
+        {
+            ApplyCalls++;
+
+            if (ApplyException != null)
+            {
+                throw ApplyException;
+            }
+        }
+    }
+
+    private sealed class TestAsyncCommand : ICommand
+    {
+        private readonly Func<Task> _execute;
+
+        public TestAsyncCommand(Func<Task> execute)
+        {
+            _execute = execute;
+        }
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter)
+        {
+            _ = ExecuteAsync();
+        }
+
+        private async Task ExecuteAsync()
+        {
+            await _execute();
+        }
     }
 }

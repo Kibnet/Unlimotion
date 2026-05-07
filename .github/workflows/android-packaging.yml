@@ -70,6 +70,61 @@ jobs:
       run: |
         mkdir -p artifacts/android artifacts/android-native artifacts/nuget-local
 
+    - name: Resolve Android App Version
+      id: android_version
+      shell: bash
+      run: |
+        display_version="1.0"
+        if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+          display_version="${GITHUB_REF_NAME#v}"
+
+          if [[ ! "$display_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' cannot be used by the current Android workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
+            exit 1
+          fi
+
+          if [[ "$display_version" == "0.0.0" ]]; then
+            echo "Release tag '${GITHUB_REF_NAME}' cannot be used as an Android application version. Use 0.0.1 or greater." >&2
+            exit 1
+          fi
+        fi
+
+        version_code="${GITHUB_RUN_NUMBER}"
+        if [[ ! "$version_code" =~ ^[0-9]+$ ]] || [ "$version_code" -lt 1 ]; then
+          version_code="1"
+        fi
+
+        echo "display_version=$display_version" >> "$GITHUB_OUTPUT"
+        echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare Android Release Signing
+      if: github.event_name == 'release'
+      shell: bash
+      env:
+        ANDROID_SIGNING_KEYSTORE_BASE64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+        ANDROID_SIGNING_STORE_PASS: ${{ secrets.ANDROID_SIGNING_STORE_PASS }}
+        ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+        ANDROID_SIGNING_KEY_PASS: ${{ secrets.ANDROID_SIGNING_KEY_PASS }}
+      run: |
+        missing=0
+        for name in ANDROID_SIGNING_KEYSTORE_BASE64 ANDROID_SIGNING_STORE_PASS ANDROID_SIGNING_KEY_ALIAS ANDROID_SIGNING_KEY_PASS; do
+          if [ -z "${!name}" ]; then
+            echo "Missing required release signing secret: $name" >&2
+            missing=1
+          fi
+        done
+
+        if [ "$missing" -ne 0 ]; then
+          exit 1
+        fi
+
+        signing_dir="${RUNNER_TEMP}/android-signing"
+        mkdir -p "$signing_dir"
+        signing_keystore="${signing_dir}/unlimotion-release.keystore"
+        printf '%s' "$ANDROID_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$signing_keystore"
+
+        echo "ANDROID_SIGNING_KEYSTORE=$signing_keystore" >> "$GITHUB_ENV"
+
     - name: Build Android Native Dependencies
       run: |
         for abi in arm64-v8a x86_64; do
@@ -82,8 +137,23 @@ jobs:
         bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
 
     - name: Build Android APKs
+      env:
+        ANDROID_SIGNING_STORE_PASS: ${{ secrets.ANDROID_SIGNING_STORE_PASS }}
+        ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+        ANDROID_SIGNING_KEY_PASS: ${{ secrets.ANDROID_SIGNING_KEY_PASS }}
       run: |
         for rid in android-arm64 android-x64; do
+          build_args=()
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            build_args+=(
+              -p:AndroidKeyStore=true
+              -p:AndroidSigningKeyStore="${ANDROID_SIGNING_KEYSTORE}"
+              -p:AndroidSigningStorePass="${ANDROID_SIGNING_STORE_PASS}"
+              -p:AndroidSigningKeyAlias="${ANDROID_SIGNING_KEY_ALIAS}"
+              -p:AndroidSigningKeyPass="${ANDROID_SIGNING_KEY_PASS}"
+            )
+          fi
+
           rm -rf "src/Unlimotion.Android/bin/Release/net10.0-android"
           dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
             -c Release \
@@ -91,8 +161,12 @@ jobs:
             -p:RuntimeIdentifier="$rid" \
             -p:ContinuousIntegrationBuild=true \
             -p:GitHubRefName="${GITHUB_REF_NAME}" \
+            -p:ApplicationDisplayVersion="${{ steps.android_version.outputs.display_version }}" \
+            -p:ApplicationVersion="${{ steps.android_version.outputs.version_code }}" \
+            -p:Version="${{ steps.android_version.outputs.display_version }}" \
             -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
-            -p:JavaSdkDirectory="${JAVA_HOME}"
+            -p:JavaSdkDirectory="${JAVA_HOME}" \
+            "${build_args[@]}"
 
           apk_path="$(find src/Unlimotion.Android/bin/Release -type f -name '*-Signed.apk' | head -n 1)"
           if [ -z "$apk_path" ]; then
