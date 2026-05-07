@@ -13,7 +13,7 @@ namespace Unlimotion.Test
 {
     public static class TestHelpers
     {
-        public static TaskItemViewModel? SetCurrentTask(MainWindowViewModel viewModel, string taskId)
+        public static TaskItemViewModel SetCurrentTask(MainWindowViewModel viewModel, string taskId)
         {
             var task = GetTask(viewModel, taskId);
             viewModel.CurrentTaskItem = task;
@@ -94,7 +94,12 @@ namespace Unlimotion.Test
             return predicate();
         }
 
-        public static TaskItemViewModel? GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing = true)
+        public static TaskItemViewModel GetTask(MainWindowViewModel viewModel, string taskId)
+        {
+            return GetTask(viewModel, taskId, assertIfMissing: true)!;
+        }
+
+        public static TaskItemViewModel? GetTask(MainWindowViewModel viewModel, string taskId, bool assertIfMissing)
         {
             if (viewModel.taskRepository != null)
             {

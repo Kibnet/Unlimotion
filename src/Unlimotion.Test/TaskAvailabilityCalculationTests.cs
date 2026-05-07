@@ -424,7 +424,7 @@ namespace Unlimotion.Test
             await manager.UpdateTask(childTask);
 
             // Assert - parent should now be available
-            var updatedParent = await storage.Load("parent1");
+            var updatedParent = (await storage.Load("parent1"))!;
             await Assert.That(updatedParent.IsCanBeCompleted).IsTrue();
         }
 
@@ -484,9 +484,9 @@ namespace Unlimotion.Test
             var moveResult = await manager.MoveTaskToNewParent(childTask, newParentTask, originalParentTask);
 
             // Reload tasks to get updated state after move
-            var updatedChild = await storage.Load("child1");
-            updatedOriginalParent = await storage.Load("originalParent");
-            var updatedNewParent = await storage.Load("newParent");
+            var updatedChild = (await storage.Load("child1"))!;
+            updatedOriginalParent = (await storage.Load("originalParent"))!;
+            var updatedNewParent = (await storage.Load("newParent"))!;
 
             // Assert - Both parents should maintain correct blocked state
             // Original parent should now be unblocked (no children)
@@ -535,7 +535,7 @@ namespace Unlimotion.Test
 
             // Create parent-child relationship
             await manager.AddChildTask(childTask, parentTask);
-            var updatedParent = await storage.Load(parentTask.Id);
+            var updatedParent = (await storage.Load(parentTask.Id))!;
             await Assert.That(updatedParent.IsCanBeCompleted).IsFalse();
             await Assert.That(updatedParent.UnlockedDateTime).IsNull();
 
@@ -1043,7 +1043,11 @@ namespace Unlimotion.Test
                 remove { }
             }
 
-            public event Action<Exception?>? OnConnectionError;
+            public event Action<Exception?>? OnConnectionError
+            {
+                add { }
+                remove { }
+            }
 
             public Task<TaskItem> Save(TaskItem item)
             {
