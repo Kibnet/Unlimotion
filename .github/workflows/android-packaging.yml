@@ -161,16 +161,6 @@ jobs:
           bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
         fi
 
-    - name: Restore Android Project
-      run: |
-        for rid in android-arm64 android-x64; do
-          dotnet restore src/Unlimotion.Android/Unlimotion.Android.csproj \
-            -r "$rid" \
-            -p:RuntimeIdentifiers="$rid" \
-            -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
-            -p:JavaSdkDirectory="${JAVA_HOME}"
-        done
-
     - name: Build Android APKs
       env:
         ANDROID_SIGNING_STORE_PASS: ${{ secrets.ANDROID_SIGNING_STORE_PASS }}
@@ -231,7 +221,6 @@ jobs:
           dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
             -c Release \
             -t:Package \
-            --no-restore \
             -p:RuntimeIdentifier="$rid" \
             -p:RuntimeIdentifiers="$rid" \
             -p:ContinuousIntegrationBuild=true \
