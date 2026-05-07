@@ -15,7 +15,8 @@
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
     <AndroidAapt2NoCompress>dll;pdb</AndroidAapt2NoCompress>
     <AndroidUseAssemblyStore>false</AndroidUseAssemblyStore>
-    <AndroidEnableAssemblyCompression>false</AndroidEnableAssemblyCompression>
+    <AndroidEnableAssemblyCompression>true</AndroidEnableAssemblyCompression>
+    <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
     <AndroidStoreUncompressedFileExtensions>.dll;.pdb;$(AndroidStoreUncompressedFileExtensions)</AndroidStoreUncompressedFileExtensions>
     <AndroidSdkDirectory Condition="Exists('/data/data/com.termux/files/home/android-sdk')">/data/data/com.termux/files/home/android-sdk</AndroidSdkDirectory>
     <JavaSdkDirectory Condition="Exists('/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk')">/data/data/com.termux/files/usr/lib/jvm/java-17-openjdk</JavaSdkDirectory>

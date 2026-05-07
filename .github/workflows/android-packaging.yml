@@ -142,6 +142,45 @@ jobs:
         ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
         ANDROID_SIGNING_KEY_PASS: ${{ secrets.ANDROID_SIGNING_KEY_PASS }}
       run: |
+        validate_runtime_symbols() {
+          local apk_path="$1"
+          local abi="$2"
+          local readelf="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          local tmp_dir
+
+          if [ ! -x "$readelf" ]; then
+            echo "llvm-readelf not found at $readelf" >&2
+            exit 1
+          fi
+
+          tmp_dir="$(mktemp -d)"
+          unzip -p "$apk_path" "lib/${abi}/libmonodroid.so" > "$tmp_dir/libmonodroid.so"
+          unzip -p "$apk_path" "lib/${abi}/libxamarin-app.so" > "$tmp_dir/libxamarin-app.so"
+
+          local monodroid_symbols="$tmp_dir/libmonodroid.symbols.txt"
+          local xamarin_app_symbols="$tmp_dir/libxamarin-app.symbols.txt"
+          "$readelf" --dyn-symbols "$tmp_dir/libmonodroid.so" > "$monodroid_symbols"
+          "$readelf" --dyn-symbols "$tmp_dir/libxamarin-app.so" > "$xamarin_app_symbols"
+
+          local missing=0
+          for symbol in \
+            compressed_assembly_count \
+            compressed_assembly_descriptors \
+            uncompressed_assemblies_data_size \
+            uncompressed_assemblies_data_buffer; do
+            if grep -Eq "[[:space:]]UND[[:space:]]+${symbol}$" "$monodroid_symbols" &&
+               ! grep -Eq "[[:space:]]GLOBAL[[:space:]]+DEFAULT[[:space:]]+[0-9]+[[:space:]]+${symbol}$" "$xamarin_app_symbols"; then
+              echo "Android runtime symbol '${symbol}' is required by libmonodroid.so but missing from libxamarin-app.so in ${apk_path}." >&2
+              missing=1
+            fi
+          done
+
+          rm -rf "$tmp_dir"
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+        }
+
         for rid in android-arm64 android-x64; do
           build_args=()
           if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
@@ -159,6 +198,7 @@ jobs:
             -c Release \
             -t:Package \
             -p:RuntimeIdentifier="$rid" \
+            -p:RuntimeIdentifiers="$rid" \
             -p:ContinuousIntegrationBuild=true \
             -p:GitHubRefName="${GITHUB_REF_NAME}" \
             -p:ApplicationDisplayVersion="${{ steps.android_version.outputs.display_version }}" \
@@ -173,6 +213,17 @@ jobs:
             echo "Signed APK not found for $rid under src/Unlimotion.Android/bin/Release" >&2
             exit 1
           fi
+
+          case "$rid" in
+            android-arm64) abi="arm64-v8a" ;;
+            android-x64) abi="x86_64" ;;
+            *)
+              echo "Unexpected Android RID: $rid" >&2
+              exit 1
+              ;;
+          esac
+
+          validate_runtime_symbols "$apk_path" "$abi"
 
           asset_name="Unlimotion-${rid}.apk"
           if [ "${GITHUB_EVENT_NAME}" = "release" ]; then

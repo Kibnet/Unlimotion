@@ -146,6 +146,10 @@ Assert-Match $packScript 'Compress-Archive' 'pack-libgit2sharp-nativebinaries-an
 
 Assert-Match $nugetConfig '\.\./artifacts/nuget-local' 'src/nuget.config must reference repo-local NuGet feed.'
 Assert-Match $androidProject '<RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>' 'Unlimotion.Android.csproj must build both arm64 and x64 Android runtimes.'
+Assert-Match $androidProject '<AndroidEnableAssemblyCompression>true</AndroidEnableAssemblyCompression>' 'Unlimotion.Android.csproj must keep Android assembly compression enabled so libxamarin-app.so exports runtime symbols required by libmonodroid.so.'
+Assert-NotMatch $androidProject '<AndroidEnableAssemblyCompression>false</AndroidEnableAssemblyCompression>' 'Unlimotion.Android.csproj must not disable Android assembly compression because published APKs fail before startup on device.'
+Assert-Match $androidProject '<AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>' 'Unlimotion.Android.csproj must keep static Java callable wrapper registration because marshal-method registration leaves MainActivity native callbacks unregistered on device.'
+Assert-NotMatch $androidProject '<AndroidEnableMarshalMethods>true</AndroidEnableMarshalMethods>' 'Unlimotion.Android.csproj must not enable marshal-method registration for release APKs until device startup is verified.'
 Assert-Match $androidProject 'runtimes\\android-arm64\\native\\libssh2\.so' 'Unlimotion.Android.csproj must explicitly package Android arm64 libssh2.so.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libcrypto\.so\.3' 'Unlimotion.Android.csproj must explicitly package Android x64 libcrypto.so.3.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssl\.so\.3' 'Unlimotion.Android.csproj must explicitly package Android x64 libssl.so.3.'
@@ -169,6 +173,10 @@ Assert-Match $workflow '-p:AndroidSigningStorePass="\$\{ANDROID_SIGNING_STORE_PA
 Assert-Match $workflow '-p:AndroidSigningKeyAlias="\$\{ANDROID_SIGNING_KEY_ALIAS\}"' 'android-packaging workflow must pass the release key alias to MSBuild.'
 Assert-Match $workflow '-p:AndroidSigningKeyPass="\$\{ANDROID_SIGNING_KEY_PASS\}"' 'android-packaging workflow must pass the release key password to MSBuild.'
 Assert-Match $workflow 'for rid in android-arm64 android-x64' 'android-packaging workflow must build arm64 and x64 Android APKs.'
+Assert-Match $workflow '-p:RuntimeIdentifiers="\$rid"' 'android-packaging workflow must restrict each APK build to the current RID so arm64 builds do not package x64 intermediates.'
+Assert-Match $workflow 'validate_runtime_symbols' 'android-packaging workflow must validate Android runtime native symbols before publishing APK assets.'
+Assert-Match $workflow 'compressed_assembly_count' 'android-packaging workflow must catch APKs whose libxamarin-app.so is missing compressed assembly symbols required by libmonodroid.so.'
+Assert-Match $workflow 'libxamarin-app\.so' 'android-packaging workflow must inspect libxamarin-app.so before publishing Android APKs.'
 Assert-NotMatch $workflow '/storage/emulated/0/nuget-local' 'android-packaging workflow must not prepare Termux-only feed path.'
 
 foreach ($shellScript in $shellScripts) {
