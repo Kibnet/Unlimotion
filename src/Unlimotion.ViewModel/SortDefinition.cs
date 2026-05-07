@@ -30,11 +30,11 @@ public class SortDefinition
     {
         yield return Create("comfort", "Comfort", "SortComfort", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.CompletedDateTime),
-            new(w => w.TaskItem.ArchiveDateTime),
-            new(w => w.TaskItem.UnlockedDateTime),
+            new(w => w.TaskItem.CompletedDateTime!),
+            new(w => w.TaskItem.ArchiveDateTime!),
+            new(w => w.TaskItem.UnlockedDateTime!),
             new(w => w.TaskItem.CreatedDateTime),
-            new(w => w.TaskItem.UpdatedDateTime),
+            new(w => w.TaskItem.UpdatedDateTime!),
         });
 
         yield return Create("emoji", "Emodji", "SortEmoji", new SortExpressionComparer<TaskWrapperViewModel>
@@ -52,43 +52,43 @@ public class SortDefinition
         });
         yield return Create("updated-ascending", "Updated Ascending", "SortUpdatedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.UpdatedDateTime)
+            new(w => w.TaskItem.UpdatedDateTime!)
         });
         yield return Create("updated-descending", "Updated Descending", "SortUpdatedDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.UpdatedDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.UpdatedDateTime!, SortDirection.Descending)
         });
         yield return Create("unlocked-ascending", "Unlocked Ascending", "SortUnlockedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.UnlockedDateTime)
+            new(w => w.TaskItem.UnlockedDateTime!)
         });
         yield return Create("unlocked-descending", "Unlocked Descending", "SortUnlockedDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.UnlockedDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.UnlockedDateTime!, SortDirection.Descending)
         });
         yield return Create("archive-ascending", "Archive Ascending", "SortArchiveAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.ArchiveDateTime)
+            new(w => w.TaskItem.ArchiveDateTime!)
         });
         yield return Create("archive-descending", "Archive Descending", "SortArchiveDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.ArchiveDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.ArchiveDateTime!, SortDirection.Descending)
         });
         yield return Create("completed-ascending", "Completed Ascending", "SortCompletedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.CompletedDateTime)
+            new(w => w.TaskItem.CompletedDateTime!)
         });
         yield return Create("completed-descending", "Completed Descending", "SortCompletedDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.CompletedDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.CompletedDateTime!, SortDirection.Descending)
         });
         yield return Create("is-completed-ascending", "IsCompleted Ascending", "SortIsCompletedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.IsCompleted)
+            new(w => w.TaskItem.IsCompleted!)
         });
         yield return Create("is-completed-descending", "IsCompleted Descending", "SortIsCompletedDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.IsCompleted, SortDirection.Descending)
+            new(w => w.TaskItem.IsCompleted!, SortDirection.Descending)
         });
         yield return Create("is-can-be-completed-ascending", "IsCanBeCompleted Ascending", "SortIsCanBeCompletedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
@@ -116,27 +116,27 @@ public class SortDefinition
         });
         yield return Create("planned-begin-ascending", "Planned Begin Ascending", "SortPlannedBeginAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedBeginDateTime)
+            new(w => w.TaskItem.PlannedBeginDateTime!)
         });
         yield return Create("planned-begin-descending", "Planned Begin Descending", "SortPlannedBeginDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedBeginDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.PlannedBeginDateTime!, SortDirection.Descending)
         });
         yield return Create("planned-duration-ascending", "Planned Duration Ascending", "SortPlannedDurationAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedDuration)
+            new(w => w.TaskItem.PlannedDuration!)
         });
         yield return Create("planned-duration-descending", "Planned Duration Descending", "SortPlannedDurationDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedDuration, SortDirection.Descending)
+            new(w => w.TaskItem.PlannedDuration!, SortDirection.Descending)
         });
         yield return Create("planned-finish-ascending", "Planned Finish Ascending", "SortPlannedFinishAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedEndDateTime)
+            new(w => w.TaskItem.PlannedEndDateTime!)
         });
         yield return Create("planned-finish-descending", "Planned Finish descending", "SortPlannedFinishDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.PlannedEndDateTime, SortDirection.Descending)
+            new(w => w.TaskItem.PlannedEndDateTime!, SortDirection.Descending)
         });
     }
 

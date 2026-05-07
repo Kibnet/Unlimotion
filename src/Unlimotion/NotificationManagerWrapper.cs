@@ -23,7 +23,7 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
         _notificationManager = notificationManager;
     }
 
-    public void Ask(string header, string message, Action yesAction, Action noAction = null)
+    public void Ask(string header, string message, Action yesAction, Action? noAction = null)
     {
         var askViewModel = new AskViewModel
         {
@@ -95,10 +95,10 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
 
 public class AskViewModel
 {
-    public string Header { get; set; }
-    public string Message { get; set; }
-    public Action YesAction { get; set; }
-    public Action NoAction { get; set; }
+    public string Header { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public Action YesAction { get; set; } = () => { };
+    public Action? NoAction { get; set; }
     public ICommand YesCommand => ReactiveCommand.Create(() =>
     {
         YesAction?.Invoke();
@@ -109,7 +109,7 @@ public class AskViewModel
         NoAction?.Invoke();
         CloseAction?.Invoke();
     });
-    public Action CloseAction { get; set; }
+    public Action CloseAction { get; set; } = () => { };
 }
 
 public class TaskOutlinePastePreviewDialogViewModel
@@ -130,11 +130,11 @@ public class TaskOutlinePastePreviewDialogViewModel
 
     public string PreviewText { get; }
 
-    public Action ConfirmAction { get; set; }
+    public Action ConfirmAction { get; set; } = () => { };
 
-    public Action CancelAction { get; set; }
+    public Action CancelAction { get; set; } = () => { };
 
-    public Action CloseAction { get; set; }
+    public Action CloseAction { get; set; } = () => { };
 
     public ICommand ConfirmCommand => ReactiveCommand.Create(() =>
     {

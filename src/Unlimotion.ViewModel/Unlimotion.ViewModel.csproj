@@ -6,7 +6,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="PropertyChanged.Fody" />
+		<PackageReference Include="PropertyChanged.Fody" PrivateAssets="all" />
 		<PackageReference Include="ReactiveUI" />
 		<PackageReference Include="System.Runtime.Caching" />
 		<PackageReference Include="WritableJsonConfiguration" />

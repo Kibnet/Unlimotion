@@ -28,7 +28,11 @@ public class ServerStorage : IStorage
     public event Action? OnConnected;
     public event Action? OnDisconnected;
     public event EventHandler? OnSignOut;
-    public event EventHandler? OnSignIn;
+    public event EventHandler? OnSignIn
+    {
+        add { }
+        remove { }
+    }
 
     private readonly SemaphoreSlim _connectGate = new(1, 1);
     private CancellationTokenSource? _connectCts;
@@ -151,7 +155,7 @@ public class ServerStorage : IStorage
 
                         settings.AccessToken = tokens.AccessToken;
                         settings.RefreshToken = tokens.RefreshToken;
-                        settings.Login = storageSettings?.Login;
+                        settings.Login = storageSettings?.Login ?? string.Empty;
                         serviceClient.BearerToken = tokens.AccessToken;
                         if (configuration != null)
                         {
@@ -216,8 +220,8 @@ public class ServerStorage : IStorage
             _connection = null;
             _hub = null;
 
-            settings.AccessToken = null;
-            settings.RefreshToken = null;
+            settings.AccessToken = string.Empty;
+            settings.RefreshToken = string.Empty;
             if (configuration != null)
             {
                 configuration.Set("ClientSettings", settings);
@@ -253,7 +257,7 @@ public class ServerStorage : IStorage
             }
         }
 
-        return null;
+        return null!;
     }
 
     public async Task<bool> Remove(string itemId)

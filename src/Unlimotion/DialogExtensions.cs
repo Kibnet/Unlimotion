@@ -13,7 +13,7 @@ public class Dialogs : IDialogs
 {
     public static Func<string?, string?, Task<string?>>? PlatformOpenFolderDialogAsync { get; set; }
 
-    public async Task<string> ShowOpenFolderDialogAsync(string title = null, string directory = null)
+    public async Task<string> ShowOpenFolderDialogAsync(string? title = null, string? directory = null)
     {
         var platformOpenFolderDialogAsync = PlatformOpenFolderDialogAsync;
         if (platformOpenFolderDialogAsync != null)
@@ -70,7 +70,7 @@ public static class DialogExtensions
 
         var lifetime = App.Current?.ApplicationLifetime;
 
-        Window window = null;
+        Window? window = null;
         switch (lifetime)
         {
             case null:
@@ -82,7 +82,7 @@ public static class DialogExtensions
                 //TODO N/A
                 break;
             case ISingleViewApplicationLifetime singleViewApplicationLifetime:
-                window = singleViewApplicationLifetime.MainView.GetVisualRoot() as Window;
+                window = singleViewApplicationLifetime.MainView?.GetVisualRoot() as Window;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(lifetime));

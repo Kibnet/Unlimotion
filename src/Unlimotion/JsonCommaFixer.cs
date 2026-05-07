@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -21,7 +21,7 @@ public static class JsonRepairingReader
         {
             using var reader = File.OpenText(fullPath);
             using var jsonReader = new JsonTextReader(reader);
-            return jsonSerializer.Deserialize<T>(jsonReader);
+            return jsonSerializer.Deserialize<T>(jsonReader)!;
         }
         catch (JsonReaderException)
         {

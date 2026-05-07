@@ -15,7 +15,7 @@ namespace Unlimotion.ViewModel.Search
                 return 0;
 
             if (string.IsNullOrEmpty(a))
-                return (b?.Length ?? 0) <= maxDistance ? b.Length : maxDistance + 1;
+                return (b?.Length ?? 0) <= maxDistance ? b?.Length ?? 0 : maxDistance + 1;
 
             if (string.IsNullOrEmpty(b))
                 return a.Length <= maxDistance ? a.Length : maxDistance + 1;

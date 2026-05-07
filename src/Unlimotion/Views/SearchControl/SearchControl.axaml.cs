@@ -35,7 +35,7 @@ namespace Unlimotion.Views.SearchControl
 
         #endregion
 
-        private string _searchText;
+        private string _searchText = string.Empty;
         public string SearchText
         {
             get => _searchText;

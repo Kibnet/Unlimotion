@@ -33,7 +33,7 @@ public class UnifiedTaskStorage : ITaskStorage
 
     public TaskTreeManager TaskTreeManager { get; }
 
-    public event EventHandler<EventArgs> Initiated;
+    public event EventHandler<EventArgs>? Initiated;
 
     public async Task Init()
     {
@@ -113,7 +113,7 @@ public class UnifiedTaskStorage : ITaskStorage
         }
     }
 
-    public async Task<TaskItemViewModel> Add(TaskItemViewModel currentTask = null, bool isBlocked = false)
+    public async Task<TaskItemViewModel> Add(TaskItemViewModel? currentTask = null, bool isBlocked = false)
     {
         var createdTask = new TaskItem();
         var taskItemList = (await TaskTreeManager.AddTask(
@@ -232,14 +232,14 @@ public class UnifiedTaskStorage : ITaskStorage
         {
             UpdateCache(last);
             RefreshRelations();
-            return null;
+            return null!;
         }
     }
 
-    public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[] additionalParents)
+    public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
     {
         var additionalItemParents = new List<TaskItem>();
-        foreach (var newParent in additionalParents) additionalItemParents.Add(newParent.Model);
+        foreach (var newParent in additionalParents ?? []) additionalItemParents.Add(newParent.Model);
 
         var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.CreatedDateTime).ToList();
 
@@ -253,11 +253,14 @@ public class UnifiedTaskStorage : ITaskStorage
         return vm;
     }
 
-    public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents)
+    public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
     {
+        var additionalParent = additionalParents?.FirstOrDefault()
+            ?? throw new ArgumentException("At least one additional parent is required.", nameof(additionalParents));
+
         var taskItemList = await TaskTreeManager.AddNewParentToTask(
             change.Model,
-            additionalParents?.FirstOrDefault()?.Model);
+            additionalParent.Model);
 
         taskItemList.ForEach(UpdateCache);
         RefreshRelations();
@@ -266,11 +269,14 @@ public class UnifiedTaskStorage : ITaskStorage
     }
 
     public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents,
-        TaskItemViewModel currentTask)
+        TaskItemViewModel? currentTask)
     {
+        var newParent = additionalParents.FirstOrDefault()
+            ?? throw new ArgumentException("At least one new parent is required.", nameof(additionalParents));
+
         var taskItemList = await TaskTreeManager.MoveTaskToNewParent(
             change.Model,
-            additionalParents?.FirstOrDefault()?.Model,
+            newParent.Model,
             currentTask?.Model);
 
         taskItemList.ForEach(UpdateCache);
@@ -540,7 +546,7 @@ public class UnifiedTaskStorage : ITaskStorage
         return false;
     }
 
-    private async void TaskStorageOnUpdating(object sender, TaskStorageUpdateEventArgs e)
+    private async void TaskStorageOnUpdating(object? sender, TaskStorageUpdateEventArgs e)
     {
         switch (e.Type)
         {

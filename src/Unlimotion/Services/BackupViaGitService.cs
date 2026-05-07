@@ -38,7 +38,7 @@ public class BackupViaGitService : IRemoteBackupService
     };
 
     private static readonly object LockObject = new();
-    public static Func<string, string> GetAbsolutePath;
+    public static Func<string, string> GetAbsolutePath = null!;
 
     private readonly IConfiguration _configuration;
     private readonly INotificationManagerWrapper? _notificationManager;

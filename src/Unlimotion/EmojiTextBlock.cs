@@ -31,7 +31,13 @@ public class EmojiTextBlock : TextBlock
 
     private void UpdateInlines()
     {
-        Inlines.Clear();
+        var inlines = Inlines;
+        if (inlines == null)
+        {
+            return;
+        }
+
+        inlines.Clear();
 
         foreach (var segment in EmojiTextHelper.Split(EmojiText))
         {
@@ -43,7 +49,7 @@ public class EmojiTextBlock : TextBlock
                 run.FontWeight = FontWeight.Normal;
             }
 
-            Inlines.Add(run);
+            inlines.Add(run);
         }
     }
 }

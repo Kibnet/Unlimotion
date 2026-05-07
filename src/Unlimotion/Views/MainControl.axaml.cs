@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -628,7 +628,7 @@ namespace Unlimotion.Views
             ClearPendingTreeDrag();
         }
 
-        public static void DragOver(object sender, DragEventArgs e)
+        public static void DragOver(object? sender, DragEventArgs e)
         {
             var mainControl = TryResolveMainControl(sender, e.Source);
             if (mainControl == null || !ContainsSupportedDragData(e.Data))
@@ -1743,12 +1743,13 @@ namespace Unlimotion.Views
 
         private bool TryGetValidatedTree(TreeView? candidate, out TreeView tree)
         {
-            tree = candidate;
-            if (tree == null)
+            if (candidate == null)
             {
+                tree = null!;
                 return false;
             }
 
+            tree = candidate;
             if (!tree.IsAttachedToVisualTree() || !tree.IsEnabled || !IsVisibleInVisualTree(tree))
             {
                 return false;

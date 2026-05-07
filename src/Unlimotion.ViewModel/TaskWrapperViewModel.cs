@@ -13,9 +13,10 @@ namespace Unlimotion.ViewModel;
 
 public class TaskWrapperActions
 {
-    public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector;
-    public Action<TaskWrapperViewModel> RemoveAction;
-    public Func<TaskWrapperViewModel, string> GetBreadScrumbs;
+    public Func<TaskItemViewModel, IObservable<IChangeSet<TaskItemViewModel>>> ChildSelector =
+        _ => Observable.Empty<IChangeSet<TaskItemViewModel>>();
+    public Action<TaskWrapperViewModel>? RemoveAction;
+    public Func<TaskWrapperViewModel, string> GetBreadScrumbs = _ => string.Empty;
     public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
@@ -25,10 +26,11 @@ public static class BredScrumbsAlgorithms
     public static string WrapperParent(TaskWrapperViewModel current)
     {
         var nodes = new List<string>();
-        while (current != null)
+        TaskWrapperViewModel? node = current;
+        while (node != null)
         {
-            nodes.Insert(0, current.TaskItem.Title);
-            current = current.Parent;
+            nodes.Insert(0, node.TaskItem.Title);
+            node = node.Parent;
         }
 
         return String.Join(" / ", nodes);
@@ -70,12 +72,12 @@ public static class Filters
 [AddINotifyPropertyChangedInterface]
 public class TaskWrapperViewModel : DisposableList
 {
-    private ReadOnlyObservableCollection<TaskWrapperViewModel> _subTasks;
+    private ReadOnlyObservableCollection<TaskWrapperViewModel>? _subTasks;
     private readonly TaskWrapperActions _actions;
 
     public static bool DefaultIsExpanded { get; set; }
 
-    public TaskWrapperViewModel(TaskWrapperViewModel parent, TaskItemViewModel task, TaskWrapperActions actions)
+    public TaskWrapperViewModel(TaskWrapperViewModel? parent, TaskItemViewModel task, TaskWrapperActions actions)
     {
         TaskItem = task;
         Parent = parent;
@@ -91,11 +93,11 @@ public class TaskWrapperViewModel : DisposableList
     public ICommand RemoveCommand { get; }
 
     public TaskItemViewModel TaskItem { get; set; }
-    public string Id => TaskItem?.Id;
-    public TaskWrapperViewModel Parent { get; set; }
+    public string Id => TaskItem.Id;
+    public TaskWrapperViewModel? Parent { get; set; }
     public DateTimeOffset? SpecialDateTime { get; set; }
 
-    public string BreadScrumbs => _actions?.GetBreadScrumbs?.Invoke(this);
+    public string BreadScrumbs => _actions.GetBreadScrumbs.Invoke(this);
 
     public bool IsExpanded { get; set; }
 
