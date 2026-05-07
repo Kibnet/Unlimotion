@@ -696,10 +696,14 @@ public class App : Application
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
+            var vm = GetMainWindowViewModel();
             singleViewPlatform.MainView = new MainScreen
             {
-                DataContext = GetMainWindowViewModel(),
+                DataContext = vm,
             };
+            Dispatcher.UIThread.Post(
+                () => _ = CheckForUpdatesOnStartupAsync(vm.Settings),
+                DispatcherPriority.Background);
         }
 
         RxApp.DefaultExceptionHandler = Observer.Create<Exception>(HandleReactiveException);

@@ -141,27 +141,34 @@
 
                     <StackPanel Classes="FieldGroup">
                         <TextBlock Classes="FieldLabel" Text="{DynamicResource UpdateCurrentVersion}" />
-                        <TextBlock Text="{Binding CurrentApplicationVersion}" />
+                        <TextBlock Text="{Binding CurrentApplicationVersion}"
+                                   AutomationProperties.AutomationId="CurrentApplicationVersionText" />
                     </StackPanel>
 
                     <StackPanel Classes="FieldGroup"
                                 IsVisible="{Binding HasAvailableUpdate}">
                         <TextBlock Classes="FieldLabel" Text="{DynamicResource UpdateAvailableVersion}" />
-                        <TextBlock Text="{Binding AvailableUpdateVersion}" />
+                        <TextBlock Text="{Binding AvailableUpdateVersion}"
+                                   AutomationProperties.AutomationId="AvailableUpdateVersionText" />
                     </StackPanel>
 
-                    <TextBlock Classes="StatusText" Text="{Binding UpdateStatusText}" />
+                    <TextBlock Classes="StatusText"
+                               Text="{Binding UpdateStatusText}"
+                               AutomationProperties.AutomationId="UpdateStatusText" />
 
                     <WrapPanel Classes="ActionButtons">
                         <Button Content="{DynamicResource UpdatesCheckNow}"
                                 Command="{Binding CheckForUpdatesCommand}"
-                                IsEnabled="{Binding CanCheckForUpdates}" />
+                                IsEnabled="{Binding CanCheckForUpdates}"
+                                AutomationProperties.AutomationId="CheckForUpdatesButton" />
                         <Button Content="{DynamicResource UpdateDownload}"
                                 Command="{Binding DownloadUpdateCommand}"
-                                IsEnabled="{Binding CanDownloadUpdate}" />
+                                IsEnabled="{Binding CanDownloadUpdate}"
+                                AutomationProperties.AutomationId="DownloadUpdateButton" />
                         <Button Content="{DynamicResource UpdateApply}"
                                 Command="{Binding ApplyUpdateCommand}"
-                                IsEnabled="{Binding CanApplyUpdate}" />
+                                IsEnabled="{Binding CanApplyUpdate}"
+                                AutomationProperties.AutomationId="ApplyUpdateButton" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

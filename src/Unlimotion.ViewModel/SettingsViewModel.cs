@@ -781,6 +781,10 @@ public class SettingsViewModel
         {
             updateService.ApplyUpdateAndRestart();
         }
+        catch (ApplicationUpdateUserActionRequiredException ex)
+        {
+            SetUpdateState(ApplicationUpdateState.ReadyToApply, ex.Message);
+        }
         catch (Exception ex)
         {
             SetUpdateState(

@@ -198,6 +198,28 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ApplyUpdateAsync_KeepsInstallAction_WhenUserActionIsRequired()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var updateService = new FakeApplicationUpdateService
+        {
+            NextUpdate = new ApplicationUpdateInfo("2.0.0"),
+            ApplyException = new ApplicationUpdateUserActionRequiredException("Grant install permission.")
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+
+        await settings.CheckForUpdatesAsync();
+        await settings.DownloadUpdateAsync();
+        await settings.ApplyUpdateAsync();
+
+        await Assert.That(updateService.ApplyCalls).IsEqualTo(1);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.ReadyToApply);
+        await Assert.That(settings.UpdateStatusText).IsEqualTo("Grant install permission.");
+        await Assert.That(settings.CanApplyUpdate).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task CheckForUpdatesAsync_IgnoresRepeatedCalls_WhileBusy()
     {
         IConfigurationRoot configuration = CreateConfiguration();
@@ -803,6 +825,7 @@ public class SettingsViewModelTests : IDisposable
         public ApplicationUpdateInfo? PendingUpdate { get; set; }
         public ApplicationUpdateInfo? NextUpdate { get; set; }
         public System.Threading.Tasks.TaskCompletionSource<ApplicationUpdateInfo?>? CheckCompletion { get; set; }
+        public Exception? ApplyException { get; set; }
         public int CheckCalls { get; private set; }
         public int DownloadCalls { get; private set; }
         public int ApplyCalls { get; private set; }
@@ -823,6 +846,11 @@ public class SettingsViewModelTests : IDisposable
         public void ApplyUpdateAndRestart()
         {
             ApplyCalls++;
+
+            if (ApplyException != null)
+            {
+                throw ApplyException;
+            }
         }
     }
 
