@@ -206,6 +206,7 @@
                    PanePlacement="Right">
             <Grid Margin="10,0,0,0">
                 <TabControl TabStripPlacement="Top" Margin="0" Padding="0"
+                            SelectionChanged="MainTabs_OnSelectionChanged"
                             AutomationProperties.AutomationId="MainTabs">
                     <TabControl.Styles>
                         <Style Selector="TabItem">

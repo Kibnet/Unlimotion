@@ -17,6 +17,8 @@ using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using SearchBarView = Unlimotion.Views.SearchControl.SearchBar;
+using SearchControlView = Unlimotion.Views.SearchControl.SearchControl;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Views
@@ -44,6 +46,8 @@ namespace Unlimotion.Views
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
         private const int MaxRelationEditorFocusRetries = 5;
+        private const double NarrowFilterToolbarMaxWidth = 520d;
+        private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private IDisposable? _titleFocusSubscription;
         private IDisposable? _relationEditorFocusSubscription;
         private MainWindowViewModel? _treeCommandViewModel;
@@ -55,6 +59,9 @@ namespace Unlimotion.Views
         private TreeView? _lastInlineTitleClickTree;
         private string? _lastInlineTitleClickTaskId;
         private bool _treeDragInProgress;
+        private bool _filterToolbarLayoutUpdateQueued;
+        private readonly HashSet<Grid> _observedFilterToolbars = [];
+        private readonly List<IDisposable> _filterToolbarBoundsSubscriptions = [];
 
         private sealed class PendingTreeDragContext(
             Control control,
@@ -104,6 +111,182 @@ namespace Unlimotion.Views
             AddHandler(DragDrop.DropEvent, Drop);
             AddHandler(DragDrop.DragOverEvent, DragOver);
             DataContextChanged += MainWindow_DataContextChanged;
+            AttachedToVisualTree += MainControl_OnAttachedToVisualTree;
+            DetachedFromVisualTree += MainControl_OnDetachedFromVisualTree;
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+
+            if (change.Property == BoundsProperty)
+            {
+                QueueFilterToolbarLayoutUpdate();
+            }
+        }
+
+        private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+        {
+            QueueFilterToolbarLayoutUpdate();
+        }
+
+        private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+        {
+            foreach (var subscription in _filterToolbarBoundsSubscriptions)
+            {
+                subscription.Dispose();
+            }
+
+            _filterToolbarBoundsSubscriptions.Clear();
+            _observedFilterToolbars.Clear();
+            _filterToolbarLayoutUpdateQueued = false;
+        }
+
+        private void MainTabs_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (ReferenceEquals(sender, e.Source))
+            {
+                QueueFilterToolbarLayoutUpdate();
+            }
+        }
+
+        private void QueueFilterToolbarLayoutUpdate()
+        {
+            if (_filterToolbarLayoutUpdateQueued)
+            {
+                return;
+            }
+
+            _filterToolbarLayoutUpdateQueued = true;
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    _filterToolbarLayoutUpdateQueued = false;
+                    UpdateFilterToolbarLayouts();
+                },
+                DispatcherPriority.Loaded);
+        }
+
+        private void UpdateFilterToolbarLayouts()
+        {
+            foreach (var toolbar in this.GetVisualDescendants().OfType<Grid>()
+                         .Where(static grid => grid.Classes.Contains("FilterToolbar")))
+            {
+                UpdateFilterToolbarLayout(toolbar);
+            }
+        }
+
+        private void UpdateFilterToolbarLayout(Grid toolbar)
+        {
+            ObserveFilterToolbarBounds(toolbar);
+
+            var toolbarWidth = toolbar.Bounds.Width > 0 ? toolbar.Bounds.Width : Bounds.Width;
+            if (toolbarWidth <= 0)
+            {
+                return;
+            }
+
+            var filterItems = toolbar.Children
+                .OfType<WrapPanel>()
+                .FirstOrDefault(static panel => panel.Classes.Contains("FilterToolbarItems"));
+            var searchBar = toolbar.Children.OfType<SearchBarView>().FirstOrDefault();
+
+            if (filterItems == null || searchBar == null)
+            {
+                return;
+            }
+
+            var isNarrow = toolbarWidth <= NarrowFilterToolbarMaxWidth;
+            var wasNarrow = toolbar.Classes.Contains(NarrowFilterToolbarClass);
+
+            if (wasNarrow != isNarrow)
+            {
+                ApplyFilterToolbarMode(toolbar, filterItems, searchBar, isNarrow);
+            }
+
+            ApplyFilterToolbarSearchWidth(searchBar, toolbarWidth, isNarrow);
+        }
+
+        private void ObserveFilterToolbarBounds(Grid toolbar)
+        {
+            if (!_observedFilterToolbars.Add(toolbar))
+            {
+                return;
+            }
+
+            _filterToolbarBoundsSubscriptions.Add(
+                toolbar.GetObservable(BoundsProperty)
+                    .Skip(1)
+                    .Subscribe(_ => QueueFilterToolbarLayoutUpdate()));
+        }
+
+        private static void ApplyFilterToolbarMode(
+            Grid toolbar,
+            WrapPanel filterItems,
+            SearchBarView searchBar,
+            bool isNarrow)
+        {
+            if (isNarrow)
+            {
+                toolbar.Classes.Add(NarrowFilterToolbarClass);
+                toolbar.ColumnDefinitions = new ColumnDefinitions("*");
+                toolbar.RowDefinitions = new RowDefinitions("Auto,Auto");
+                toolbar.ColumnSpacing = 0;
+
+                Grid.SetRow(searchBar, 0);
+                Grid.SetColumn(searchBar, 0);
+                Grid.SetRow(filterItems, 1);
+                Grid.SetColumn(filterItems, 0);
+
+                searchBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+                searchBar.VerticalAlignment = VerticalAlignment.Top;
+                searchBar.Margin = new Thickness(0, 0, 0, 8);
+                filterItems.HorizontalAlignment = HorizontalAlignment.Left;
+                return;
+            }
+
+            toolbar.Classes.Remove(NarrowFilterToolbarClass);
+            toolbar.ColumnDefinitions = new ColumnDefinitions("*,Auto");
+            toolbar.RowDefinitions = new RowDefinitions("Auto");
+            toolbar.ColumnSpacing = 12;
+
+            Grid.SetRow(filterItems, 0);
+            Grid.SetColumn(filterItems, 0);
+            Grid.SetRow(searchBar, 0);
+            Grid.SetColumn(searchBar, 1);
+
+            searchBar.HorizontalAlignment = HorizontalAlignment.Right;
+            searchBar.VerticalAlignment = VerticalAlignment.Top;
+            searchBar.Margin = new Thickness(0);
+            filterItems.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+
+        private static void ApplyFilterToolbarSearchWidth(
+            SearchBarView searchBar,
+            double toolbarWidth,
+            bool isNarrow)
+        {
+            var searchControl = searchBar.GetVisualDescendants().OfType<SearchControlView>().FirstOrDefault();
+            if (isNarrow)
+            {
+                searchBar.MinWidth = 0;
+                searchBar.MaxWidth = Math.Max(0, toolbarWidth);
+                if (searchControl != null)
+                {
+                    searchControl.MinWidth = 0;
+                    searchControl.MaxWidth = Math.Max(0, toolbarWidth);
+                }
+
+                return;
+            }
+
+            searchBar.ClearValue(MinWidthProperty);
+            searchBar.ClearValue(MaxWidthProperty);
+            if (searchControl != null)
+            {
+                searchControl.ClearValue(MinWidthProperty);
+                searchControl.ClearValue(MaxWidthProperty);
+            }
         }
 
         private void MainControl_OnKeyDown(object? sender, KeyEventArgs e)
