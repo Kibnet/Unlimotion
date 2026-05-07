@@ -918,6 +918,110 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraph_ViewportOverlays_CollapseToCompactButtonsAndRestore()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.Dispatch(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = false;
+                vm.GraphMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 420, 520);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var graphControl = WaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+
+                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
+                await Assert.That(nodesReady).IsTrue();
+
+                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                var toolbar = WaitForAutomationControl<Control>(view, "RoadmapViewportToolbar");
+                var minimapPanel = WaitForAutomationControl<Control>(view, "RoadmapMinimapPanel");
+                var minimap = WaitForAutomationControl<Control>(view, "RoadmapMinimap");
+                var toolbarCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarCollapseButton");
+                var minimapCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapCollapseButton");
+
+                await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
+                await Assert.That(IsVisibleAndArranged(minimapPanel)).IsTrue();
+                await Assert.That(IsVisibleAndArranged(minimap)).IsTrue();
+
+                await ClickControlAsync(window, minimapCollapseButton);
+                var minimapCollapsed = WaitFor(() => !minimapPanel.IsVisible);
+                await Assert.That(minimapCollapsed).IsTrue();
+
+                var minimapExpandButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapExpandButton");
+                await Assert.That(IsVisibleAndArranged(minimapExpandButton)).IsTrue();
+                await Assert.That(minimapExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
+                await Assert.That(minimapExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
+                await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
+
+                var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+                var panRightButton = WaitForAutomationControl<Button>(view, "RoadmapPanRightButton");
+                var locationBeforePan = (Avalonia.Point)locationProperty.GetValue(editor)!;
+
+                await ClickControlAsync(window, panRightButton);
+                var toolbarClickable = WaitFor(() =>
+                    ((Avalonia.Point)locationProperty.GetValue(editor)!).X > locationBeforePan.X);
+                await Assert.That(toolbarClickable).IsTrue();
+
+                await ClickControlAsync(window, toolbarCollapseButton);
+                var toolbarCollapsed = WaitFor(() => !toolbar.IsVisible);
+                await Assert.That(toolbarCollapsed).IsTrue();
+
+                var toolbarExpandButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarExpandButton");
+                await Assert.That(IsVisibleAndArranged(toolbarExpandButton)).IsTrue();
+                await Assert.That(toolbarExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
+                await Assert.That(toolbarExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
+
+                await ClickControlAsync(window, toolbarExpandButton);
+                var toolbarExpanded = WaitFor(() => IsVisibleAndArranged(toolbar));
+                await Assert.That(toolbarExpanded).IsTrue();
+
+                await ClickControlAsync(window, minimapExpandButton);
+                var minimapExpanded = WaitFor(() =>
+                    IsVisibleAndArranged(minimapPanel) &&
+                    IsVisibleAndArranged(minimap));
+                await Assert.That(minimapExpanded).IsTrue();
+
+                var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
+                var initialZoom = (double)zoomProperty.GetValue(editor)!;
+                var zoomInButton = WaitForAutomationControl<Button>(view, "RoadmapZoomInButton");
+                await ClickControlAsync(window, zoomInButton);
+                var zoomed = WaitFor(() => (double)zoomProperty.GetValue(editor)! > initialZoom);
+                await Assert.That(zoomed).IsTrue();
+
+                var expectedLocation = new Avalonia.Point(123, 45);
+                locationProperty.SetValue(editor, expectedLocation);
+                Dispatcher.UIThread.RunJobs();
+
+                var minimapLocationProperty = minimap.GetType().GetProperty("ViewportLocation")!;
+                var minimapBound = WaitFor(() =>
+                {
+                    var actual = (Avalonia.Point)minimapLocationProperty.GetValue(minimap)!;
+                    return Math.Abs(actual.X - expectedLocation.X) < 0.001 &&
+                           Math.Abs(actual.Y - expectedLocation.Y) < 0.001;
+                });
+                await Assert.That(minimapBound).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedBackgroundRebuilds()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1759,6 +1863,16 @@ public class RoadmapGraphUiTests
         };
     }
 
+    private static Window CreateWindow(Control content, double width, double height)
+    {
+        return new Window
+        {
+            Width = width,
+            Height = height,
+            Content = content
+        };
+    }
+
     private static async Task ClickControlAsync(
         Window window,
         Control control,
@@ -1956,6 +2070,13 @@ public class RoadmapGraphUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
+    private static bool IsVisibleAndArranged(Control control)
+    {
+        return control.IsVisible &&
+               control.Bounds.Width > 0 &&
+               control.Bounds.Height > 0;
     }
 
     private static int WaitForStableRoadmapUpdates(

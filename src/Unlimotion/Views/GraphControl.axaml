@@ -30,6 +30,18 @@
             <Setter Property="BorderBrush" Value="#707070" />
             <Setter Property="Foreground" Value="White" />
         </Style>
+        <Style Selector="Button.roadmapOverlayButton">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="#3A3A3A" />
+            <Setter Property="BorderBrush" Value="#707070" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,*">
         <WrapPanel Orientation="Horizontal" x:DataType="viewModel:GraphViewModel">
@@ -189,112 +201,153 @@
 
             <Border HorizontalAlignment="Left"
                     VerticalAlignment="Bottom"
-                    Margin="10"
-                    Padding="6"
+                    Margin="0"
+                    Padding="0"
                     CornerRadius="4"
                     Background="#CC1E1E1E"
                     BorderBrush="#666666"
                     BorderThickness="1"
+                    IsVisible="{Binding IsRoadmapViewportToolbarExpanded, ElementName=Root}"
                     AutomationProperties.AutomationId="RoadmapViewportToolbar">
-                <Grid ColumnDefinitions="Auto,8,Auto" RowDefinitions="Auto">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Classes="roadmapViewportButton"
-                                Content="+"
-                                Click="RoadmapZoomIn_OnClick"
-                                ToolTip.Tip="Zoom in"
-                                AutomationProperties.AutomationId="RoadmapZoomInButton" />
-                        <Button Classes="roadmapViewportButton"
-                                Content="-"
-                                Click="RoadmapZoomOut_OnClick"
-                                ToolTip.Tip="Zoom out"
-                                AutomationProperties.AutomationId="RoadmapZoomOutButton" />
-                        <Button Classes="roadmapViewportButton"
-                                Content="[]"
-                                Click="RoadmapFit_OnClick"
-                                ToolTip.Tip="Fit"
-                                AutomationProperties.AutomationId="RoadmapFitButton" />
-                        <Button Classes="roadmapViewportButton"
-                                Content="0"
-                                Click="RoadmapResetViewport_OnClick"
-                                ToolTip.Tip="Reset"
-                                AutomationProperties.AutomationId="RoadmapResetViewportButton" />
-                    </StackPanel>
+                <Grid>
+                    <Grid ColumnDefinitions="Auto,8,Auto" RowDefinitions="Auto">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Classes="roadmapViewportButton"
+                                    Content="+"
+                                    Click="RoadmapZoomIn_OnClick"
+                                    ToolTip.Tip="Zoom in"
+                                    AutomationProperties.AutomationId="RoadmapZoomInButton" />
+                            <Button Classes="roadmapViewportButton"
+                                    Content="-"
+                                    Click="RoadmapZoomOut_OnClick"
+                                    ToolTip.Tip="Zoom out"
+                                    AutomationProperties.AutomationId="RoadmapZoomOutButton" />
+                            <Button Classes="roadmapViewportButton"
+                                    Content="[]"
+                                    Click="RoadmapFit_OnClick"
+                                    ToolTip.Tip="Fit"
+                                    AutomationProperties.AutomationId="RoadmapFitButton" />
+                            <Button Classes="roadmapViewportButton"
+                                    Content="0"
+                                    Click="RoadmapResetViewport_OnClick"
+                                    ToolTip.Tip="Reset"
+                                    AutomationProperties.AutomationId="RoadmapResetViewportButton" />
+                        </StackPanel>
 
-                    <Grid Grid.Column="2"
-                          Width="86"
-                          Height="86"
-                          RowDefinitions="*,*,*"
-                          ColumnDefinitions="*,*,*">
-                        <Button Grid.Row="0"
-                                Grid.Column="1"
-                                Classes="roadmapViewportButton"
-                                Content="^"
-                                Click="RoadmapPanUp_OnClick"
-                                ToolTip.Tip="Pan up"
-                                AutomationProperties.AutomationId="RoadmapPanUpButton" />
-                        <Button Grid.Row="1"
-                                Grid.Column="0"
-                                Classes="roadmapViewportButton"
-                                Content="&lt;"
-                                Click="RoadmapPanLeft_OnClick"
-                                ToolTip.Tip="Pan left"
-                                AutomationProperties.AutomationId="RoadmapPanLeftButton" />
-                        <Button Grid.Row="1"
-                                Grid.Column="2"
-                                Classes="roadmapViewportButton"
-                                Content="&gt;"
-                                Click="RoadmapPanRight_OnClick"
-                                ToolTip.Tip="Pan right"
-                                AutomationProperties.AutomationId="RoadmapPanRightButton" />
-                        <Button Grid.Row="2"
-                                Grid.Column="1"
-                                Classes="roadmapViewportButton"
-                                Content="v"
-                                Click="RoadmapPanDown_OnClick"
-                                ToolTip.Tip="Pan down"
-                                AutomationProperties.AutomationId="RoadmapPanDownButton" />
+                        <Grid Grid.Column="2"
+                              Width="86"
+                              Height="86"
+                              RowDefinitions="*,*,*"
+                              ColumnDefinitions="*,*,*">
+                            <Button Grid.Row="0"
+                                    Grid.Column="1"
+                                    Classes="roadmapViewportButton"
+                                    Content="^"
+                                    Click="RoadmapPanUp_OnClick"
+                                    ToolTip.Tip="Pan up"
+                                    AutomationProperties.AutomationId="RoadmapPanUpButton" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="0"
+                                    Classes="roadmapViewportButton"
+                                    Content="&lt;"
+                                    Click="RoadmapPanLeft_OnClick"
+                                    ToolTip.Tip="Pan left"
+                                    AutomationProperties.AutomationId="RoadmapPanLeftButton" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="2"
+                                    Classes="roadmapViewportButton"
+                                    Content="&gt;"
+                                    Click="RoadmapPanRight_OnClick"
+                                    ToolTip.Tip="Pan right"
+                                    AutomationProperties.AutomationId="RoadmapPanRightButton" />
+                            <Button Grid.Row="2"
+                                    Grid.Column="1"
+                                    Classes="roadmapViewportButton"
+                                    Content="v"
+                                    Click="RoadmapPanDown_OnClick"
+                                    ToolTip.Tip="Pan down"
+                                    AutomationProperties.AutomationId="RoadmapPanDownButton" />
+                        </Grid>
                     </Grid>
+
+                    <Button Classes="roadmapOverlayButton"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Content="x"
+                            Click="RoadmapViewportToolbarCollapse_OnClick"
+                            ToolTip.Tip="Hide graph controls"
+                            AutomationProperties.AutomationId="RoadmapViewportToolbarCollapseButton" />
                 </Grid>
             </Border>
+
+            <Button HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
+                    Margin="0"
+                    Classes="roadmapOverlayButton"
+                    Content="T"
+                    Click="RoadmapViewportToolbarExpand_OnClick"
+                    IsVisible="{Binding !IsRoadmapViewportToolbarExpanded, ElementName=Root}"
+                    ToolTip.Tip="Show graph controls"
+                    AutomationProperties.AutomationId="RoadmapViewportToolbarExpandButton" />
 
             <Border HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
                     Width="260"
                     Height="170"
-                    Margin="10"
-                    Padding="5"
+                    Margin="0"
+                    Padding="0"
                     CornerRadius="4"
                     Background="#CC1E1E1E"
                     BorderBrush="#666666"
                     BorderThickness="1"
+                    IsVisible="{Binding IsRoadmapMinimapExpanded, ElementName=Root}"
                     AutomationProperties.AutomationId="RoadmapMinimapPanel">
-                <nodify:Minimap x:Name="RoadmapMinimap"
-                                AutomationProperties.AutomationId="RoadmapMinimap"
-                                ItemsSource="{Binding RoadmapNodes, ElementName=Root}"
-                                ViewportLocation="{Binding ViewportLocation, ElementName=RoadmapEditor, Mode=TwoWay}"
-                                ViewportSize="{Binding ViewportSize, ElementName=RoadmapEditor}"
-                                ResizeToViewport="True"
-                                Zoom="RoadmapMinimap_OnZoom"
-                                Background="#202020">
-                    <nodify:Minimap.ItemTemplate>
-                        <DataTemplate DataType="{x:Type local:RoadmapNode}">
-                            <Border Background="#808080"
-                                    BorderBrush="#B0B0B0"
-                                    BorderThickness="1"
-                                    CornerRadius="1" />
-                        </DataTemplate>
-                    </nodify:Minimap.ItemTemplate>
+                <Grid>
+                    <nodify:Minimap x:Name="RoadmapMinimap"
+                                    AutomationProperties.AutomationId="RoadmapMinimap"
+                                    ItemsSource="{Binding RoadmapNodes, ElementName=Root}"
+                                    ViewportLocation="{Binding ViewportLocation, ElementName=RoadmapEditor, Mode=TwoWay}"
+                                    ViewportSize="{Binding ViewportSize, ElementName=RoadmapEditor}"
+                                    ResizeToViewport="True"
+                                    Zoom="RoadmapMinimap_OnZoom"
+                                    Background="#202020">
+                        <nodify:Minimap.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:RoadmapNode}">
+                                <Border Background="#808080"
+                                        BorderBrush="#B0B0B0"
+                                        BorderThickness="1"
+                                        CornerRadius="1" />
+                            </DataTemplate>
+                        </nodify:Minimap.ItemTemplate>
 
-                    <nodify:Minimap.ItemContainerTheme>
-                        <ControlTheme TargetType="{x:Type nodify:MinimapItem}"
-                                      BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
-                            <Setter Property="Location" Value="{Binding Location}" />
-                            <Setter Property="Width" Value="{Binding Width}" />
-                            <Setter Property="Height" Value="{x:Static local:RoadmapNode.Height}" />
-                        </ControlTheme>
-                    </nodify:Minimap.ItemContainerTheme>
-                </nodify:Minimap>
+                        <nodify:Minimap.ItemContainerTheme>
+                            <ControlTheme TargetType="{x:Type nodify:MinimapItem}"
+                                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
+                                <Setter Property="Location" Value="{Binding Location}" />
+                                <Setter Property="Width" Value="{Binding Width}" />
+                                <Setter Property="Height" Value="{x:Static local:RoadmapNode.Height}" />
+                            </ControlTheme>
+                        </nodify:Minimap.ItemContainerTheme>
+                    </nodify:Minimap>
+
+                    <Button Classes="roadmapOverlayButton"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Content="x"
+                            Click="RoadmapMinimapCollapse_OnClick"
+                            ToolTip.Tip="Hide minimap"
+                            AutomationProperties.AutomationId="RoadmapMinimapCollapseButton" />
+                </Grid>
             </Border>
+
+            <Button HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Classes="roadmapOverlayButton"
+                    Content="M"
+                    Click="RoadmapMinimapExpand_OnClick"
+                    IsVisible="{Binding !IsRoadmapMinimapExpanded, ElementName=Root}"
+                    ToolTip.Tip="Show minimap"
+                    AutomationProperties.AutomationId="RoadmapMinimapExpandButton" />
         </Grid>
     </Grid>
 </UserControl>

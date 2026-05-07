@@ -62,6 +62,16 @@ namespace Unlimotion.Views
                 nameof(RoadmapGraphBuildProgressText),
                 "0%");
 
+        public static readonly StyledProperty<bool> IsRoadmapViewportToolbarExpandedProperty =
+            AvaloniaProperty.Register<GraphControl, bool>(
+                nameof(IsRoadmapViewportToolbarExpanded),
+                true);
+
+        public static readonly StyledProperty<bool> IsRoadmapMinimapExpandedProperty =
+            AvaloniaProperty.Register<GraphControl, bool>(
+                nameof(IsRoadmapMinimapExpanded),
+                true);
+
         public GraphControl()
         {
             graphUpdateTimer = new DispatcherTimer
@@ -123,6 +133,18 @@ namespace Unlimotion.Views
         {
             get => GetValue(RoadmapGraphBuildProgressTextProperty);
             private set => SetValue(RoadmapGraphBuildProgressTextProperty, value);
+        }
+
+        public bool IsRoadmapViewportToolbarExpanded
+        {
+            get => GetValue(IsRoadmapViewportToolbarExpandedProperty);
+            set => SetValue(IsRoadmapViewportToolbarExpandedProperty, value);
+        }
+
+        public bool IsRoadmapMinimapExpanded
+        {
+            get => GetValue(IsRoadmapMinimapExpandedProperty);
+            set => SetValue(IsRoadmapMinimapExpandedProperty, value);
         }
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }
@@ -1028,6 +1050,30 @@ namespace Unlimotion.Views
         private void RoadmapPanDown_OnClick(object? sender, RoutedEventArgs e)
         {
             PanRoadmapViewport(0, RoadmapPanStep);
+            e.Handled = true;
+        }
+
+        private void RoadmapViewportToolbarCollapse_OnClick(object? sender, RoutedEventArgs e)
+        {
+            IsRoadmapViewportToolbarExpanded = false;
+            e.Handled = true;
+        }
+
+        private void RoadmapViewportToolbarExpand_OnClick(object? sender, RoutedEventArgs e)
+        {
+            IsRoadmapViewportToolbarExpanded = true;
+            e.Handled = true;
+        }
+
+        private void RoadmapMinimapCollapse_OnClick(object? sender, RoutedEventArgs e)
+        {
+            IsRoadmapMinimapExpanded = false;
+            e.Handled = true;
+        }
+
+        private void RoadmapMinimapExpand_OnClick(object? sender, RoutedEventArgs e)
+        {
+            IsRoadmapMinimapExpanded = true;
             e.Handled = true;
         }
 
