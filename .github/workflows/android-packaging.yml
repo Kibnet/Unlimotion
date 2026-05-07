@@ -64,11 +64,31 @@ jobs:
         sudo apt-get install -y build-essential cmake ninja-build perl zip unzip
 
     - name: Install .NET Android Workload
-      run: dotnet workload install android
+      run: dotnet workload install android --skip-manifest-update
 
     - name: Prepare Local Android Feed
       run: |
         mkdir -p artifacts/android artifacts/android-native artifacts/nuget-local
+
+    - name: Resolve Android Native Cache Key
+      id: android_native_cache_key
+      shell: bash
+      run: |
+        echo "libgit2_sha=$(git -C .native/libgit2-src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Android Native Dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          artifacts/android-native
+          artifacts/nuget-local
+        key: android-native-${{ runner.os }}-ndk-${{ env.ANDROID_NDK_VERSION }}-openssl-${{ env.OPENSSL_VERSION }}-libssh2-${{ env.LIBSSH2_VERSION }}-libgit2pkg-${{ env.LIBGIT2_NATIVE_PACKAGE_VERSION }}-libgit2-${{ steps.android_native_cache_key.outputs.libgit2_sha }}-${{ hashFiles('scripts/android-native-common.sh', 'scripts/build-openssl-android.sh', 'scripts/build-libssh2-android.sh', 'scripts/build-libgit2-android.sh', 'scripts/pack-libgit2sharp-nativebinaries-android.sh') }}
+
+    - name: Cache NuGet Packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-sdk-${{ hashFiles('global.json') }}-projects-${{ hashFiles('src/Directory.Packages.props', 'src/nuget.config', 'src/**/*.csproj') }}-native-${{ env.ANDROID_NDK_VERSION }}-${{ env.OPENSSL_VERSION }}-${{ env.LIBSSH2_VERSION }}-${{ env.LIBGIT2_NATIVE_PACKAGE_VERSION }}-${{ steps.android_native_cache_key.outputs.libgit2_sha }}-${{ hashFiles('scripts/android-native-common.sh', 'scripts/build-openssl-android.sh', 'scripts/build-libssh2-android.sh', 'scripts/build-libgit2-android.sh', 'scripts/pack-libgit2sharp-nativebinaries-android.sh') }}
 
     - name: Resolve Android App Version
       id: android_version
@@ -127,14 +147,26 @@ jobs:
 
     - name: Build Android Native Dependencies
       run: |
-        for abi in arm64-v8a x86_64; do
-          export ANDROID_ABI="$abi"
-          bash ./scripts/build-openssl-android.sh
-          bash ./scripts/build-libssh2-android.sh
-          bash ./scripts/build-libgit2-android.sh
-        done
-        export ANDROID_ABIS="arm64-v8a x86_64"
-        bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
+        expected_package="artifacts/nuget-local/LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
+        if [ -f "$expected_package" ]; then
+          echo "Using cached Android native package: $expected_package"
+        else
+          for abi in arm64-v8a x86_64; do
+            export ANDROID_ABI="$abi"
+            bash ./scripts/build-openssl-android.sh
+            bash ./scripts/build-libssh2-android.sh
+            bash ./scripts/build-libgit2-android.sh
+          done
+          export ANDROID_ABIS="arm64-v8a x86_64"
+          bash ./scripts/pack-libgit2sharp-nativebinaries-android.sh
+        fi
+
+    - name: Restore Android Project
+      run: |
+        dotnet restore src/Unlimotion.Android/Unlimotion.Android.csproj \
+          -p:RuntimeIdentifiers="android-arm64;android-x64" \
+          -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
+          -p:JavaSdkDirectory="${JAVA_HOME}"
 
     - name: Build Android APKs
       env:
@@ -193,10 +225,10 @@ jobs:
             )
           fi
 
-          rm -rf "src/Unlimotion.Android/bin/Release/net10.0-android"
           dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj \
             -c Release \
             -t:Package \
+            --no-restore \
             -p:RuntimeIdentifier="$rid" \
             -p:RuntimeIdentifiers="$rid" \
             -p:ContinuousIntegrationBuild=true \
@@ -208,9 +240,10 @@ jobs:
             -p:JavaSdkDirectory="${JAVA_HOME}" \
             "${build_args[@]}"
 
-          apk_path="$(find src/Unlimotion.Android/bin/Release -type f -name '*-Signed.apk' | head -n 1)"
+          apk_search_root="src/Unlimotion.Android/bin/Release/net10.0-android/${rid}"
+          apk_path="$(find "$apk_search_root" -type f -name '*-Signed.apk' | head -n 1)"
           if [ -z "$apk_path" ]; then
-            echo "Signed APK not found for $rid under src/Unlimotion.Android/bin/Release" >&2
+            echo "Signed APK not found for $rid under $apk_search_root" >&2
             exit 1
           fi
 
