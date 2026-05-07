@@ -165,7 +165,7 @@ jobs:
       run: |
         for rid in android-arm64 android-x64; do
           dotnet restore src/Unlimotion.Android/Unlimotion.Android.csproj \
-            -p:RuntimeIdentifier="$rid" \
+            -r "$rid" \
             -p:RuntimeIdentifiers="$rid" \
             -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT}" \
             -p:JavaSdkDirectory="${JAVA_HOME}"
