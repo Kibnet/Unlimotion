@@ -36,6 +36,7 @@ public class MainActivity : AvaloniaMainActivity<App>
 {
     private const int OpenTaskFolderRequestCode = 4201;
     private const int ManageExternalStorageRequestCode = 4202;
+    private string? _dataDir;
     private TaskCompletionSource<string?>? _openTaskFolderCompletion;
     private TaskCompletionSource<bool>? _manageExternalStorageCompletion;
 
@@ -54,6 +55,7 @@ public class MainActivity : AvaloniaMainActivity<App>
         try
         {
             var dataDir = ResolveDataDirectory();
+            _dataDir = dataDir;
             Directory.CreateDirectory(dataDir);
 
             BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
@@ -71,6 +73,7 @@ public class MainActivity : AvaloniaMainActivity<App>
             }
 
             App.Init(configPath);
+            EnsureGitSafeDirectory(TaskStorageFactory.DefaultStoragePath);
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
             TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
@@ -151,16 +154,16 @@ public class MainActivity : AvaloniaMainActivity<App>
 
     private async Task EnsureFileStoragePathAccessAsync(string? path)
     {
-        if (!RequiresManageExternalStorage(path) || HasManageExternalStorageAccess())
+        if (RequiresManageExternalStorage(path) && !HasManageExternalStorageAccess())
         {
-            return;
+            await RequestManageExternalStorageAccessAsync();
+            if (!HasManageExternalStorageAccess())
+            {
+                throw new InvalidOperationException(L10n.Get("AndroidAllFilesAccessRequired"));
+            }
         }
 
-        await RequestManageExternalStorageAccessAsync();
-        if (!HasManageExternalStorageAccess())
-        {
-            throw new InvalidOperationException(L10n.Get("AndroidAllFilesAccessRequired"));
-        }
+        EnsureGitSafeDirectory(path);
     }
 
     private bool RequiresManageExternalStorage(string? path)
@@ -456,21 +459,39 @@ public class MainActivity : AvaloniaMainActivity<App>
         }
     }
 
-    private void EnsureGitSafeDirectory(string dataDir)
+    private void EnsureGitSafeDirectory(string? directoryPath)
     {
         try
         {
-            var configPath = Path.Combine(dataDir, ".gitconfig");
-            if (!File.Exists(configPath))
+            if (string.IsNullOrWhiteSpace(directoryPath))
             {
-                File.WriteAllText(configPath, "[safe]\n\tdirectory = *\n");
+                return;
             }
 
+            var dataDir = _dataDir ?? ResolveDataDirectory();
+            var configPath = Path.Combine(dataDir, ".gitconfig");
+            var safeDirectory = ResolveGitSafeDirectoryPath(dataDir, directoryPath);
+
+            GitSafeDirectoryConfig.EnsureSafeDirectory(configPath, safeDirectory);
             System.Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", configPath);
         }
         catch
         {
         }
+    }
+
+    private static string ResolveGitSafeDirectoryPath(string dataDir, string directoryPath)
+    {
+        var normalizedPath = NormalizeAndroidPath(directoryPath);
+        return IsAndroidAbsolutePath(normalizedPath)
+            ? normalizedPath
+            : NormalizeAndroidPath(Path.Combine(dataDir, normalizedPath));
+    }
+
+    private static bool IsAndroidAbsolutePath(string path)
+    {
+        return path.StartsWith("/", StringComparison.Ordinal) ||
+               Path.IsPathFullyQualified(path);
     }
 
     private void EnsureGitSslCertBundle(string dataDir)
