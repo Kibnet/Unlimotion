@@ -27,8 +27,12 @@ namespace Unlimotion
         public IDatabaseWatcher? Watcher => dbWatcher;
         private CompareLogic compareLogic;
 
-        public event EventHandler<TaskStorageUpdateEventArgs> Updating;
-        public event Action<Exception?>? OnConnectionError;
+        public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+        public event Action<Exception?>? OnConnectionError
+        {
+            add { }
+            remove { }
+        }
 
         public FileStorage(string path, bool watcher = false, INotificationManagerWrapper? notificationManager = null)
         {
@@ -69,7 +73,7 @@ namespace Unlimotion
 
         public async Task<TaskItem> Save(TaskItem taskItem)
         {
-            if (taskItem.Id != null)
+            if (!string.IsNullOrWhiteSpace(taskItem.Id))
             {
                 var exist = await Load(taskItem.Id, true);
                 var result = compareLogic.Compare(exist, taskItem);
@@ -80,9 +84,9 @@ namespace Unlimotion
             }
             var item = taskItem with {};
 
-            var id = item.Id ?? Guid.NewGuid().ToString();
+            var id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString() : item.Id;
             dbWatcher?.AddIgnoredTask(id);
-            item.Id ??= id;
+            item.Id = id;
 
             var directoryInfo = new DirectoryInfo(Path);
             var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
@@ -102,9 +106,9 @@ namespace Unlimotion
                 tasks.AddOrUpdate(taskItem.Id, item, (key, oldValue) => item);
                 return item;
             }
-            catch (Exception e)
+            catch
             {
-                return null;
+                return null!;
             }
         }
 
@@ -120,7 +124,7 @@ namespace Unlimotion
                 // Tasks.Remove(itemId);
                 return true;
             }
-            catch (Exception e)
+            catch
             {
                 return false;
             }
@@ -145,7 +149,7 @@ namespace Unlimotion
                 tasks.AddOrUpdate(item.Id, item, (s, oldValue) => item); 
                 return item;
             }
-            catch (Exception e)
+            catch
             {
                 return null;
             }
@@ -153,7 +157,7 @@ namespace Unlimotion
 
         protected virtual void OnUpdating(TaskStorageUpdateEventArgs e)
         {
-            Load(e.Id, true);
+            _ = Load(e.Id, true);
             Updating?.Invoke(this, e);
         }
 
@@ -184,7 +188,7 @@ namespace Unlimotion
                     {
                         fileInfo.Delete();
                     }
-                    catch (Exception e)
+                    catch
                     {
                     }
                     //throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");

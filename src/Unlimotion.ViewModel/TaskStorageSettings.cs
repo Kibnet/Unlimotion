@@ -2,14 +2,14 @@
 
 public class TaskStorageSettings
 {
-    public string Path { get; set; }
+    public string Path { get; set; } = string.Empty;
 
-    public string URL { get; set; }
+    public string URL { get; set; } = string.Empty;
 
-    public string Login { get; set; }
+    public string Login { get; set; } = string.Empty;
 
     //TODO стоит подумать над шифрованным хранением
-    public string Password { get; set; }
+    public string Password { get; set; } = string.Empty;
 
     public bool IsServerMode { get ; set ; }
     public bool IsFuzzySearch { get; set; }
@@ -20,7 +20,7 @@ public class GitSettings
     public bool BackupEnabled { get; set; } = false;
     public bool ShowStatusToasts { get; set; } = true;
 
-    public string RemoteUrl { get; set; }
+    public string RemoteUrl { get; set; } = string.Empty;
     public string Branch { get; set; } = "master";
     public string UserName { get; set; } = "YourEmail";
     public string Password { get; set; } = "YourToken";

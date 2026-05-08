@@ -30,10 +30,10 @@ public class DateCommands
 
         var hasEnd = item.WhenAny(m => m.PlannedEndDateTime, time => time.Value != null);
         SetEnd1Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime, hasBegin);
-        SetEnd5Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddDays(4), hasBegin);
-        SetEnd7Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddDays(6), hasBegin);
-        SetEnd10Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddDays(9), hasBegin);
-        SetEnd1Month = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime.Value.AddMonths(1), hasBegin);
+        SetEnd5Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime!.Value.AddDays(4), hasBegin);
+        SetEnd7Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime!.Value.AddDays(6), hasBegin);
+        SetEnd10Days = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime!.Value.AddDays(9), hasBegin);
+        SetEnd1Month = ReactiveCommand.Create(() => item.PlannedEndDateTime = item.PlannedBeginDateTime!.Value.AddMonths(1), hasBegin);
         SetEndNone = ReactiveCommand.Create(() => item.PlannedEndDateTime = null, hasEnd);
     }
 

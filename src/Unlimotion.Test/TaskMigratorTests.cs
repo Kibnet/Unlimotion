@@ -59,7 +59,10 @@ public class MigrateTests : IDisposable
     private static List<string> ReadIssues(string reportPath)
     {
         var j = JObject.Parse(File.ReadAllText(reportPath));
-        return j["Issues"]?.Values<string>().ToList() ?? new List<string>();
+        return j["Issues"]?.Values<string?>()
+            .Where(issue => issue is not null)
+            .Select(issue => issue!)
+            .ToList() ?? new List<string>();
     }
 
     private static (int parentsAdded, int childNormalized) ReadSummary(string reportPath)

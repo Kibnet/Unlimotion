@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,12 +18,12 @@ public class FileTaskMigrator
 
     private class LinkInfo
     {
-        public string Id;
-        public Func<TaskItem, List<string>> GetChild;
-        public Action<TaskItem, List<string>> SetChild;
+        public string Id = string.Empty;
+        public Func<TaskItem, List<string>> GetChild = _ => [];
+        public Action<TaskItem, List<string>> SetChild = (_, _) => { };
 
-        public Func<TaskItem, List<string>> GetParent;
-        public Action<TaskItem, List<string>> SetParent;
+        public Func<TaskItem, List<string>> GetParent = _ => [];
+        public Action<TaskItem, List<string>> SetParent = (_, _) => { };
 
         public ConcurrentDictionary<string, HashSet<string>> Children = new();
 

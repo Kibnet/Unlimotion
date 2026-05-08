@@ -1,4 +1,4 @@
-﻿//#define LIVE
+//#define LIVE
 
 using System;
 using System.Diagnostics;
@@ -81,7 +81,11 @@ public class App : Application
         ApplyConfiguredFontSize();
     }
 
-    public event EventHandler OnLoaded;
+    public event EventHandler OnLoaded
+    {
+        add { }
+        remove { }
+    }
 
     private MainWindowViewModel GetMainWindowViewModel()
     {
@@ -888,7 +892,7 @@ public class App : Application
             () => _ = settings.ApplyUpdateAsync());
     }
 
-    private const bool ShouldLogStartup = false;
+    private static readonly bool ShouldLogStartup = false;
 
     private void ApplyConfiguredTheme()
     {

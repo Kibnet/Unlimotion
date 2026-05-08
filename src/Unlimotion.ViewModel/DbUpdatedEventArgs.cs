@@ -5,7 +5,7 @@ namespace Unlimotion.ViewModel
 {
     public class DbUpdatedEventArgs : EventArgs
     {
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
         public UpdateType Type { get; set; }
     }
 }

@@ -28,7 +28,7 @@ public class TaskItemRepeaterListMarkerTests
 
         await Assert.That(taskWithDailyRepeater.IsHaveRepeater).IsTrue();
         await Assert.That(taskWithDailyRepeater.RepeaterListMarker).IsEqualTo("↻");
-        await Assert.That(taskWithDailyRepeater.RepeaterListMarkerToolTip).IsEqualTo(taskWithDailyRepeater.Repeater.Title);
+        await Assert.That(taskWithDailyRepeater.RepeaterListMarkerToolTip).IsEqualTo(taskWithDailyRepeater.Repeater!.Title);
     }
 
     [Test]

@@ -1,4 +1,4 @@
-﻿using System.Windows.Input;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -12,7 +12,7 @@ namespace Unlimotion
         {
             ExitCommand = ReactiveCommand.Create(() =>
             {
-                if (Application.Current.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
                 {
                     lifetime.Shutdown();
                 }
@@ -20,25 +20,33 @@ namespace Unlimotion
 
             ShowWindowCommand = ReactiveCommand.Create(() => 
             {
-                if (Application.Current.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lifetime)
                 {
-                    switch (lifetime.MainWindow.WindowState)
+                    var mainWindow = lifetime.MainWindow;
+                    if (mainWindow == null)
+                    {
+                        return;
+                    }
+
+                    switch (mainWindow.WindowState)
                     {
                         case WindowState.Normal:
-                            lifetime.MainWindow.WindowState = WindowState.Minimized;
+                            mainWindow.WindowState = WindowState.Minimized;
                             break;
                         case WindowState.Minimized:
-                            lifetime.MainWindow.WindowState = WindowState.Normal;
+                            mainWindow.WindowState = WindowState.Normal;
                             break;
                         case WindowState.Maximized:
-                            lifetime.MainWindow.WindowState = WindowState.Minimized;
+                            mainWindow.WindowState = WindowState.Minimized;
                             break;
                         case WindowState.FullScreen:
-                            lifetime.MainWindow.WindowState = WindowState.Minimized;
+                            mainWindow.WindowState = WindowState.Minimized;
                             break;
                     }
                 }
             });
+
+            ToggleCommand = ReactiveCommand.Create(() => { });
         }
 
         public ICommand ExitCommand { get; }

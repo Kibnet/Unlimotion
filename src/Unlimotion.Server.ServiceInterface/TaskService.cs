@@ -14,9 +14,9 @@ namespace Unlimotion.Server.ServiceInterface
 {
     public class TaskService : Service
     {
-        public IAsyncDocumentSession RavenSession { get; set; }
-        public IDocumentStore DocumentStore { get; set; }
-        public IMapper Mapper { get; set; }
+        public IAsyncDocumentSession RavenSession { get; set; } = null!;
+        public IDocumentStore DocumentStore { get; set; } = null!;
+        public IMapper Mapper { get; set; } = null!;
         private const string TaskPrefix = "TaskItem/";
 
         [Authenticate]

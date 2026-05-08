@@ -60,7 +60,7 @@ namespace Unlimotion.ViewModel
         private readonly SerialDisposable _repeaterPropertyChangedSubscription = new();
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
-        private DateCommands commands;
+        private DateCommands? commands;
         public SetDurationCommands SetDurationCommands { get; set; } = null!;
         public static TimeSpan DefaultThrottleTime = TimeSpan.FromSeconds(10);
         public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = DefaultThrottleTime;
@@ -86,7 +86,7 @@ namespace Unlimotion.ViewModel
                 // Use TaskTreeManager to handle IsCompleted changes
                 if (IsInitialized)
                 {
-                    SaveItemCommand.Execute();
+                    _ = SaveItemCommand.Execute();
                 }
             });
 
@@ -463,10 +463,10 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; } = null!;
-        public Func<TaskItemViewModel, Task<bool>> RemoveFunc { get; set; } = null!;
+        public Func<TaskItemViewModel?, Task<bool>> RemoveFunc { get; set; } = null!;
         public Func<TaskItemViewModel, Task<TaskItemViewModel>> CloneFunc { get; set; } = null!;
 
-        public bool RemoveRequiresConfirmation(string parentId) => parentId == null || (Parents.Contains(parentId) ? Parents.Count == 1 : Parents.Count == 0);
+        public bool RemoveRequiresConfirmation(string? parentId) => parentId == null || (Parents.Contains(parentId) ? Parents.Count == 1 : Parents.Count == 0);
 
         public TaskItem Model
         {
@@ -494,7 +494,7 @@ namespace Unlimotion.ViewModel
                     BlockedByTasks = BlockedBy.ToList(),
                     ContainsTasks = Contains.ToList(),
                     ParentTasks = Parents.ToList(),
-                    Repeater = Repeater?.Model,
+                    Repeater = Repeater?.Model!,
                 };
             }
             set
@@ -560,7 +560,7 @@ namespace Unlimotion.ViewModel
             await _taskStorage.CopyInto(this, [destination]);
         }
 
-        public async Task MoveInto(TaskItemViewModel destination, TaskItemViewModel source)
+        public async Task MoveInto(TaskItemViewModel destination, TaskItemViewModel? source)
         {
             await _taskStorage.MoveInto(this, [destination], source);
         }
@@ -632,13 +632,13 @@ namespace Unlimotion.ViewModel
         }
 
         [AlsoNotifyFor(nameof(IsHaveRepeater), nameof(RepeaterListMarker), nameof(RepeaterListMarkerToolTip))]
-        public RepeaterPatternViewModel Repeater { get; set; } = null!;
+        public RepeaterPatternViewModel? Repeater { get; set; }
 
         public bool IsHaveRepeater => Repeater != null && Repeater.Type != RepeaterType.None;
 
         public string RepeaterListMarker => IsHaveRepeater ? "↻" : string.Empty;
 
-        public string? RepeaterListMarkerToolTip => IsHaveRepeater ? Repeater.Title : null;
+        public string? RepeaterListMarkerToolTip => IsHaveRepeater ? Repeater!.Title : null;
 
         public List<RepeaterPatternViewModel> Repeaters => new()
         {

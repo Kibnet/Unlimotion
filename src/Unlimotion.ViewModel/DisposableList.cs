@@ -15,7 +15,7 @@ public abstract class DisposableList : IDisposable
             {
                 disposable.Dispose();
             }
-            catch (Exception e)
+            catch
             {
                 
             }

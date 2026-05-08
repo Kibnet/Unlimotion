@@ -9,6 +9,7 @@
 		<PackageReference Include="AutoMapper" />
 		<PackageReference Include="RavenDB.Client" />
 		<PackageReference Include="ServiceStack.Server" />
+		<PackageReference Include="System.Drawing.Common" />
 	</ItemGroup>
 
 	<ItemGroup>

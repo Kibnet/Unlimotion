@@ -4,11 +4,11 @@ namespace Unlimotion.Domain
 {
     public class LoginAudit
     {
-        public string Id { get; set; }
-        public string IpAddress { get; set; }
-        public string SessionId { get; set; }
-        public string NameVersionClient { get; set; }
-        public string OperatingSystem { get; set; }
+        public string Id { get; set; } = null!;
+        public string IpAddress { get; set; } = null!;
+        public string SessionId { get; set; } = null!;
+        public string NameVersionClient { get; set; } = null!;
+        public string OperatingSystem { get; set; } = null!;
         public DateTime DateOfEntry { get; set; }
     }
 }

@@ -46,6 +46,8 @@ namespace Unlimotion.ViewModel
         private readonly bool? _defaultShowWanted;
         private static readonly ReadOnlyObservableCollection<TaskWrapperViewModel> EmptyTaskWrappers =
             new(new ObservableCollectionExtended<TaskWrapperViewModel>());
+        private static readonly ReadOnlyObservableCollection<EmojiFilter> EmptyEmojiFilters =
+            new(new ObservableCollectionExtended<EmojiFilter>());
 
         public ITaskStorage? taskRepository;
         private readonly Func<ITaskStorage?>? _getTaskStorage;
@@ -174,7 +176,7 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
-                var newTask = await taskRepository?.Add();
+                var newTask = await taskRepository!.Add();
                 CurrentTaskItem = newTask;
                 SelectCurrentTask();
                 if (newTask != null)
@@ -183,7 +185,7 @@ namespace Unlimotion.ViewModel
                 }
 
             }).AddToDisposeAndReturn(connectionDisposableList);
-            CreateSibling = ReactiveCommand.CreateFromTask(async (bool isBlocked = false) =>
+            CreateSibling = ReactiveCommand.CreateFromTask<bool>(async isBlocked =>
             {
                 await CreateSiblingTaskAsync(isBlocked);
             }).AddToDisposeAndReturn(connectionDisposableList);
@@ -205,7 +207,7 @@ namespace Unlimotion.ViewModel
 
                 var parent = CurrentTaskItem;
                 
-                var newTask = await taskRepository?.AddChild(parent);
+                var newTask = await taskRepository!.AddChild(parent);
                 CurrentTaskItem = newTask;
                 SelectCurrentTask();
 
@@ -947,7 +949,7 @@ namespace Unlimotion.ViewModel
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
-                    .SortBy(m => m.TaskItem.CompletedDateTime, SortDirection.Descending)
+                    .SortBy(m => m.TaskItem.CompletedDateTime!, SortDirection.Descending)
                     .Bind(out _completedItems)
                     .Subscribe()
                     .AddToDispose(connectionDisposableList);
@@ -986,7 +988,7 @@ namespace Unlimotion.ViewModel
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
-                    .SortBy(m => m.TaskItem.ArchiveDateTime, SortDirection.Descending)
+                    .SortBy(m => m.TaskItem.ArchiveDateTime!, SortDirection.Descending)
                     .Bind(out _archivedItems)
                     .Subscribe()
                     .AddToDispose(connectionDisposableList);
@@ -1067,7 +1069,7 @@ namespace Unlimotion.ViewModel
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
-                    .SortBy(e => e.TaskItem.UpdatedDateTime, SortDirection.Descending)
+                    .SortBy(e => e.TaskItem.UpdatedDateTime!, SortDirection.Descending)
                     .Bind(out _lastUpdatedItems)
                     .Subscribe()
                     .AddToDispose(connectionDisposableList);
@@ -1250,7 +1252,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
 
-                                m.Parent.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
+                                m.Parent!.TaskItem.DeleteParentChildRelationCommand.Execute(m.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -1259,7 +1261,7 @@ namespace Unlimotion.ViewModel
                     }
                     else
                     {
-                        CurrentItemContains = null;
+                        CurrentItemContains = null!;
                     }
                 })
                 .AddToDispose(connectionDisposableList);
@@ -1277,7 +1279,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = m =>
                             {
 
-                                m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.DeleteParentChildRelationCommand.Execute(m.Parent!.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -1286,7 +1288,7 @@ namespace Unlimotion.ViewModel
                     }
                     else
                     {
-                        CurrentItemParents = null;
+                        CurrentItemParents = null!;
                     }
                 })
                 .AddToDispose(connectionDisposableList);
@@ -1302,7 +1304,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlocksTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                m.TaskItem.UnblockCommand.Execute(m.Parent.TaskItem);
+                                m.TaskItem.UnblockCommand.Execute(m.Parent!.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -1311,7 +1313,7 @@ namespace Unlimotion.ViewModel
                     }
                     else
                     {
-                        CurrentItemBlocks = null;
+                        CurrentItemBlocks = null!;
                     }
                 })
                 .AddToDispose(connectionDisposableList);
@@ -1327,7 +1329,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.BlockedByTasks.ToObservableChangeSet(),
                             RemoveAction = m =>
                             {
-                                m.Parent.TaskItem.UnblockCommand.Execute(m.TaskItem);
+                                m.Parent!.TaskItem.UnblockCommand.Execute(m.TaskItem);
                             },
                             SortComparer = sortObservable
                         };
@@ -1336,7 +1338,7 @@ namespace Unlimotion.ViewModel
                     }
                     else
                     {
-                        CurrentItemBlockedBy = null;
+                        CurrentItemBlockedBy = null!;
                     }
                 })
                 .AddToDispose(connectionDisposableList);
@@ -1615,8 +1617,13 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private async Task RemoveTaskItem(TaskItemViewModel task)
+        private async Task RemoveTaskItem(TaskItemViewModel? task)
         {
+            if (task == null)
+            {
+                return;
+            }
+
             ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
                 GetRemoveTaskMessage(task),
                 async () =>
@@ -2075,7 +2082,7 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public TaskWrapperViewModel FindTaskWrapperViewModel(TaskItemViewModel taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
+        public TaskWrapperViewModel? FindTaskWrapperViewModel(TaskItemViewModel? taskItemViewModel, ReadOnlyObservableCollection<TaskWrapperViewModel> source)
         {
             if (taskItemViewModel == null)
             {
@@ -2090,7 +2097,7 @@ namespace Unlimotion.ViewModel
             }
 
             //Поиск по родителям
-            var selected = source;
+            ReadOnlyObservableCollection<TaskWrapperViewModel>? selected = source;
             foreach (var parent in taskItemViewModel.GetFirstParentsPath())
             {
                 selected = selected?.FirstOrDefault(p => p.TaskItem == parent)?.SubTasks;
@@ -2100,7 +2107,7 @@ namespace Unlimotion.ViewModel
             return finded;
         }
 
-        private void ExpandParentNodesForTask(TaskItemViewModel taskItem)
+        private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)
         {
             if (taskItem == null)
                 return;
@@ -2140,45 +2147,45 @@ namespace Unlimotion.ViewModel
 
         public INotificationManagerWrapper ManagerWrapper { get; }
 
-        public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
+        public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs ?? string.Empty : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _archivedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> ArchivedItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _FilteredItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _FilteredItems = EmptyTaskWrappers;
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastCreatedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastCreatedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> LastCreatedItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastUpdatedItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _lastUpdatedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> LastUpdatedItems { get; set; }
 
-        public ReadOnlyObservableCollection<TaskWrapperViewModel> _lastOpenedItems;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> _lastOpenedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> LastOpenedItems { get; set; }
 
-        private ReadOnlyObservableCollection<TaskWrapperViewModel> _graphItems;
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _graphItems = EmptyTaskWrappers;
         
         public SourceList<TaskWrapperViewModel> LastOpenedSource { get; set; } = new SourceList<TaskWrapperViewModel>();
 
         public TaskItemViewModel? CurrentTaskItem { get; set; }
         public TaskItemViewModel LastTaskItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentAllTasksItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentUnlockedItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentCompletedItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentArchivedItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentLastCreated { get; set; } = null!;
-        public TaskWrapperViewModel CurrentLastUpdated { get; set; } = null!;
-        public TaskWrapperViewModel CurrentGraphItem { get; set; } = null!;
-        public TaskWrapperViewModel CurrentLastOpenedItem { get; set; } = null!;
+        public TaskWrapperViewModel? CurrentAllTasksItem { get; set; }
+        public TaskWrapperViewModel? CurrentUnlockedItem { get; set; }
+        public TaskWrapperViewModel? CurrentCompletedItem { get; set; }
+        public TaskWrapperViewModel? CurrentArchivedItem { get; set; }
+        public TaskWrapperViewModel? CurrentLastCreated { get; set; }
+        public TaskWrapperViewModel? CurrentLastUpdated { get; set; }
+        public TaskWrapperViewModel? CurrentGraphItem { get; set; }
+        public TaskWrapperViewModel? CurrentLastOpenedItem { get; set; }
 
         public TaskWrapperViewModel CurrentItemContains { get; private set; } = null!;
         public TaskWrapperViewModel CurrentItemParents { get; private set; } = null!;
@@ -2187,37 +2194,37 @@ namespace Unlimotion.ViewModel
         public TaskRelationEditorViewModel CurrentRelationEditor { get; }
         public SearchDefinition Search { get; set; } = new();
 
-        public ICommand Create { get; set; }
+        public ICommand Create { get; set; } = null!;
 
-        public ICommand CreateSibling { get; set; }
+        public ICommand CreateSibling { get; set; } = null!;
 
-        public ICommand CreateBlockedSibling { get; set; }
+        public ICommand CreateBlockedSibling { get; set; } = null!;
 
-        public ICommand CreateInner { get; set; }
+        public ICommand CreateInner { get; set; } = null!;
 
-        public ICommand MoveToPath { get; set; }
+        public ICommand MoveToPath { get; set; } = null!;
 
-        public ICommand Remove { get; set; }
+        public ICommand Remove { get; set; } = null!;
 
-        public ICommand ExpandCurrentNestedCommand { get; set; }
+        public ICommand ExpandCurrentNestedCommand { get; set; } = null!;
 
-        public ICommand CollapseCurrentNestedCommand { get; set; }
+        public ICommand CollapseCurrentNestedCommand { get; set; } = null!;
 
-        public ICommand ExpandAllTreeNodesCommand { get; set; }
+        public ICommand ExpandAllTreeNodesCommand { get; set; } = null!;
 
-        public ICommand CollapseAllTreeNodesCommand { get; set; }
+        public ICommand CollapseAllTreeNodesCommand { get; set; } = null!;
 
-        public ICommand DeleteSelectedTreeItemsCommand { get; set; }
+        public ICommand DeleteSelectedTreeItemsCommand { get; set; } = null!;
 
-        public ICommand SelectAllTreeItemsCommand { get; set; }
+        public ICommand SelectAllTreeItemsCommand { get; set; } = null!;
 
-        public ICommand CopyTaskOutlineTreeCommand { get; set; }
+        public ICommand CopyTaskOutlineTreeCommand { get; set; } = null!;
 
-        public ICommand PasteTaskOutlineTreeCommand { get; set; }
+        public ICommand PasteTaskOutlineTreeCommand { get; set; } = null!;
 
-        public ICommand CopyTaskOutlineCommand { get; set; }
+        public ICommand CopyTaskOutlineCommand { get; set; } = null!;
 
-        public ICommand PasteTaskOutlineCommand { get; set; }
+        public ICommand PasteTaskOutlineCommand { get; set; } = null!;
 
         public ICommand ResetTaskFiltersCommand { get; set; }
 
@@ -2230,8 +2237,8 @@ namespace Unlimotion.ViewModel
         private IConfiguration _configuration = null!;
 
         public ObservableCollection<SortDefinition> SortDefinitions { get; } = new(SortDefinition.GetDefinitions());
-        public SortDefinition CurrentSortDefinition { get; set; }
-        public SortDefinition CurrentSortDefinitionForUnlocked { get; set; }
+        public SortDefinition CurrentSortDefinition { get; set; } = null!;
+        public SortDefinition CurrentSortDefinitionForUnlocked { get; set; } = null!;
 
         public bool ShowCompleted { get; set; }
 
@@ -2242,13 +2249,13 @@ namespace Unlimotion.ViewModel
         public SettingsViewModel Settings { get; set; }
         public GraphViewModel Graph { get; set; }
 
-        private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters;
-        public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
+        private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters = EmptyEmojiFilters;
+        public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; } = EmptyEmojiFilters;
 
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 
-        private ReadOnlyObservableCollection<EmojiFilter> _emojiExcludeFilters;
-        public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; }
+        private ReadOnlyObservableCollection<EmojiFilter> _emojiExcludeFilters = EmptyEmojiFilters;
+        public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; } = EmptyEmojiFilters;
 
         public EmojiFilter AllEmojiExcludeFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 

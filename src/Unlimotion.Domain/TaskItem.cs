@@ -5,10 +5,10 @@ namespace Unlimotion.Domain
 {
     public record TaskItem
     {
-        public string Id { get; set; }
-        public string UserId { get; set; }
-        public string Title { get; set; }
-        public string Description { get; set; }
+        public string Id { get; set; } = null!;
+        public string UserId { get; set; } = null!;
+        public string Title { get; set; } = null!;
+        public string Description { get; set; } = null!;
         public bool? IsCompleted { get; set; } = false;
         public bool IsCanBeCompleted { get; set; } = true;
         public DateTimeOffset CreatedDateTime { get; set; } = DateTimeOffset.UtcNow;
@@ -23,7 +23,7 @@ namespace Unlimotion.Domain
         public List<string> ParentTasks { get; set; } = new();
         public List<string> BlocksTasks { get; set; } = new();
         public List<string> BlockedByTasks { get; set; } = new();
-        public RepeaterPattern Repeater { get; set; }
+        public RepeaterPattern? Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
         public int Version { get; set; } = 0;

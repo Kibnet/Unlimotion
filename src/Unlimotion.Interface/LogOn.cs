@@ -5,9 +5,9 @@ namespace Unlimotion.Interface
 {
     public class LogOn : IClientMethod
     {
-        public string Id { get; set; }
-        public string UserLogin { get; set; }
-        public string UserName { get; set; }
+        public string Id { get; set; } = null!;
+        public string UserLogin { get; set; } = null!;
+        public string UserName { get; set; } = null!;
         public DateTimeOffset ExpireTime { get; set; }
         public enum LogOnStatus
         {

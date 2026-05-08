@@ -235,8 +235,17 @@ public class MainScreenLoadingUiTests
             };
         }
 
-        public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
-        public event Action<Exception?>? OnConnectionError;
+        public event EventHandler<TaskStorageUpdateEventArgs> Updating
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<Exception?>? OnConnectionError
+        {
+            add { }
+            remove { }
+        }
 
         public Task<bool> Connect()
         {

@@ -14,9 +14,9 @@ namespace Unlimotion.ViewModel
         private const string GitLockPostfix = ".lock";
         private const string GitOrigPostfix = ".orig";
         private readonly MemoryCache ignoredTasks = MemoryCache.Default;
-        private readonly FileSystemWatcher watcher;
+        private readonly FileSystemWatcher? watcher;
         private readonly object itLock = new();
-        public event EventHandler<DbUpdatedEventArgs> OnUpdated;
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
         private bool isEnable;
@@ -130,14 +130,14 @@ namespace Unlimotion.ViewModel
                 case WatcherChangeTypes.Changed:
                     OnUpdated?.Invoke(this, new DbUpdatedEventArgs
                     {
-                        Id = e.Name,
+                        Id = e.Name ?? string.Empty,
                         Type = UpdateType.Saved
                     });
                     break;
                 case WatcherChangeTypes.Deleted:
                     OnUpdated?.Invoke(this, new DbUpdatedEventArgs
                     {
-                        Id = e.Name,
+                        Id = e.Name ?? string.Empty,
                         Type = UpdateType.Removed
                     });
                     break;

@@ -147,7 +147,6 @@ public class RepeaterPatternViewModel
                 }
 
                 return prev.AddDays(7 * Period);
-                break;
             case RepeaterType.Monthly:
                 return prev.AddMonths(Period);
             case RepeaterType.Yearly:
