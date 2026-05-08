@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -8,7 +9,9 @@ namespace Unlimotion;
 
 public class EmojiTextBlock : TextBlock
 {
-    private static readonly FontFamily EmojiFontFamily = new("avares://Unlimotion/Assets#Noto Color Emoji");
+    private static readonly FontFamily EmojiFontFamily = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        ? new FontFamily("fonts:SystemFonts#Segoe UI Emoji")
+        : new FontFamily("avares://Unlimotion/Assets#Noto Color Emoji");
 
     public static readonly StyledProperty<string?> EmojiTextProperty =
         AvaloniaProperty.Register<EmojiTextBlock, string?>(nameof(EmojiText));

@@ -76,6 +76,7 @@
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
         <Style Selector="TreeView.TaskTree">
+            <Setter Property="Focusable" Value="True"/>
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>

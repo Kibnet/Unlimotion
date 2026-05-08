@@ -44,14 +44,17 @@
         <Style Selector="Grid.FieldActionRow">
             <Setter Property="ColumnSpacing" Value="8" />
         </Style>
-        <Style Selector="UserControl ComboBox">
+        <Style Selector="ComboBox">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MinWidth" Value="140" />
         </Style>
-        <Style Selector="UserControl TextBox">
+        <Style Selector="TextBox">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MinWidth" Value="140" />
         </Style>
-        <Style Selector="UserControl NumericUpDown">
+        <Style Selector="NumericUpDown">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MinWidth" Value="140" />
         </Style>
         <Style Selector="WrapPanel.ActionButtons">
             <Setter Property="Orientation" Value="Horizontal" />
@@ -67,7 +70,7 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                   behavior:KeyboardAwareScrollViewer.IsEnabled="True">
-        <StackPanel Margin="16">
+        <StackPanel x:Name="SettingsContent" Margin="16">
             <TextBlock Classes="SectionTitle" Text="{DynamicResource SettingsTitle}" />
             <TextBlock Classes="SectionHint"
                        Text="{DynamicResource SettingsIntro}" />

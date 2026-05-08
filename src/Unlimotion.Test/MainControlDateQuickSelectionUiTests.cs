@@ -26,7 +26,7 @@ public class MainControlDateQuickSelectionUiTests
             localization.SetLanguage(LocalizationService.RussianLanguage);
 
             using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-            await session.Dispatch(async () =>
+            await session.DispatchAsync(async () =>
             {
                 MainWindowViewModelFixture? fixture = null;
                 Window? window = null;
@@ -69,10 +69,16 @@ public class MainControlDateQuickSelectionUiTests
         var flyout = button.Flyout as MenuFlyout;
         await Assert.That(flyout).IsNotNull();
 
+        flyout!.ShowAt(button);
+        Dispatcher.UIThread.RunJobs();
+
         var items = flyout!.Items.OfType<MenuItem>().ToArray();
         await Assert.That(items.Length).IsGreaterThanOrEqualTo(2);
         await Assert.That(items[0].Header?.ToString()).IsEqualTo(expectedToday);
         await Assert.That(items[1].Header?.ToString()).IsEqualTo(expectedTomorrow);
+
+        flyout.Hide();
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static DropDownButton GetDropDownButton(Control root, string content)

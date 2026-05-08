@@ -22,7 +22,7 @@ public class TaskImportanceUiTests
     public async Task WantedTaskTitle_ShouldBeBold_InAllTasksTreeAndParentRelationTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -75,7 +75,7 @@ public class TaskImportanceUiTests
     public async Task WantedTaskTitle_ShouldBeBold_InRoadmapGraph()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -119,7 +119,7 @@ public class TaskImportanceUiTests
     public async Task WantedTaskTitle_WithMiddleEmoji_ShouldRenderEmojiRunNormal_InAllTasksTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -157,7 +157,7 @@ public class TaskImportanceUiTests
                 var emojiRun = runs.SingleOrDefault(run => run.Text == "📚");
                 await Assert.That(emojiRun).IsNotNull();
                 await Assert.That(emojiRun!.FontWeight).IsEqualTo(FontWeight.Normal);
-                await Assert.That(emojiRun.FontFamily.ToString()).Contains("Noto Color Emoji");
+                await Assert.That(emojiRun.FontFamily.ToString()).Contains("Emoji");
             }
             finally
             {

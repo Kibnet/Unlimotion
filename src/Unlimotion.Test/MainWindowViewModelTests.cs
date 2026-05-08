@@ -60,7 +60,7 @@ namespace Unlimotion.Test
             Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
         {
             using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-            await session.Dispatch(async () =>
+            await session.DispatchAsync(async () =>
             {
                 var projectionFixture = new MainWindowViewModelFixture();
 

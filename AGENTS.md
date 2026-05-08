@@ -1,14 +1,13 @@
-# AGENTS
+ # AGENTS (local pointer)
 
-Этот репозиторий использует центральный каталог инструкций:
+  Этот репозиторий использует центральный каталог инструкций:
 
-При запуске на Windows:
-- `C:\Projects\My\Agents\AGENTS.md`
-При запуске на Unix:
-- './agents/AGENTS.MD'
+  - `C:\Projects\My\Agents\AGENTS.md`
 
-Для QUEST-задач:
+  Порядок применения:
+  1. Центральный `AGENTS.md` -> central stack
+  2. Локальный `AGENTS.override.md` -> дополнительные локальные инструкции поверх central stack; только ужесточение MUST
 
-- рабочие spec-файлы создаются в локальном `.\specs\`
-- canonical template всегда берётся из `C:\Projects\My\Agents\templates\specs\_template.md`
-```
+  Для QUEST-задач:
+  - рабочие spec-файлы создаются в локальном `.\specs\`
+  - canonical template берется из `C:\Projects\My\Agents\templates\specs\_template.md`

@@ -22,7 +22,7 @@ public class MainControlWantedUiTests
     public async Task CurrentTaskWantedCheckBox_WhenConfirmed_ShouldUpdateDescendants()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -51,12 +51,13 @@ public class MainControlWantedUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var wantedCheckBox = FindControlByAutomationId<CheckBox>(view, "CurrentTaskWantedCheckBox");
-                await ClickControlAsync(window, wantedCheckBox);
-                await TestHelpers.WaitThrottleTime();
+                var wantedCheckBoxReady = WaitFor(() => wantedCheckBox.IsChecked == false);
+                await Assert.That(wantedCheckBoxReady).IsTrue();
 
-                await Assert.That(parent.Wanted).IsTrue();
-                await Assert.That(child.Wanted).IsTrue();
-                await Assert.That(grandchild.Wanted).IsTrue();
+                await ClickControlAsync(window, wantedCheckBox);
+                var wantedUpdated = WaitFor(() => parent.Wanted && child.Wanted && grandchild.Wanted, 5000);
+
+                await Assert.That(wantedUpdated).IsTrue();
             }
             finally
             {
@@ -97,6 +98,15 @@ public class MainControlWantedUiTests
         window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;
+    }
+
+    private static bool WaitFor(Func<bool> predicate, int timeoutMilliseconds = 2000)
+    {
+        return SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            return predicate();
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
     }
 
     private static Point GetControlCenterPoint(Visual relativeTo, Control control)

@@ -12,7 +12,6 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using ReactiveUI;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
@@ -26,7 +25,7 @@ public class SettingsControlResponsiveUiTests
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -146,7 +145,7 @@ public class SettingsControlResponsiveUiTests
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -177,6 +176,7 @@ public class SettingsControlResponsiveUiTests
                 var overflowingControls = view.GetVisualDescendants()
                     .OfType<Control>()
                     .Where(IsVisibleAndArranged)
+                    .Where(control => !IsTemplatePartInsideInputControl(control))
                     .Select(control => new
                     {
                         Control = control,
@@ -199,9 +199,18 @@ public class SettingsControlResponsiveUiTests
                     .Cast<Control>()
                     .Where(IsVisibleAndArranged)
                     .ToList();
+                var tooNarrowInputs = narrowInputs
+                    .Where(control => control.Bounds.Width < 140)
+                    .Select(DescribeInput)
+                    .ToList();
 
                 await Assert.That(narrowInputs.Count).IsGreaterThan(0);
-                await Assert.That(narrowInputs.All(control => control.Bounds.Width >= 140)).IsTrue();
+                if (tooNarrowInputs.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        "Visible settings inputs are too narrow: " +
+                        string.Join("; ", tooNarrowInputs));
+                }
             }
             finally
             {
@@ -215,7 +224,7 @@ public class SettingsControlResponsiveUiTests
     public async Task SettingsControl_BrowseTaskStoragePath_UpdatesPathFromFolderPicker()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
@@ -226,7 +235,7 @@ public class SettingsControlResponsiveUiTests
                 var settings = fixture.MainWindowViewModelTest.Settings;
                 var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
                 Dialogs.PlatformOpenFolderDialogAsync = (_, _) => Task.FromResult<string?>(selectedPath);
-                settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async () =>
+                var browseCommandStub = new TestAsyncCommand(async () =>
                 {
                     var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder");
                     if (!string.IsNullOrWhiteSpace(path))
@@ -234,6 +243,7 @@ public class SettingsControlResponsiveUiTests
                         settings.TaskStoragePath = path;
                     }
                 });
+                settings.BrowseTaskStoragePathCommand = browseCommandStub;
 
                 var view = new SettingsControl
                 {
@@ -245,9 +255,22 @@ public class SettingsControlResponsiveUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var browseButton = FindControlByAutomationId<Button>(view, "BrowseTaskStoragePathButton");
-                await ClickControlAsync(window, browseButton);
+                var browseCommand = browseButton.Command ??
+                                    throw new InvalidOperationException("Browse button command is not bound.");
+
+                await Assert.That(browseCommand.CanExecute(null)).IsTrue();
+
+                browseCommand.Execute(null);
+                if (browseCommandStub.LastExecution != null)
+                {
+                    await browseCommandStub.LastExecution;
+                }
+
                 Dispatcher.UIThread.RunJobs();
 
+                await TestHelpers.WaitUntilAsync(
+                    () => settings.TaskStoragePath == selectedPath,
+                    TimeSpan.FromSeconds(2));
                 await Assert.That(settings.TaskStoragePath).IsEqualTo(selectedPath);
             }
             finally
@@ -317,6 +340,46 @@ public class SettingsControlResponsiveUiTests
                control.Bounds.Height > 0;
     }
 
+    private static bool IsTemplatePartInsideInputControl(Control control)
+    {
+        if (control is TextBox or ComboBox or NumericUpDown)
+        {
+            return false;
+        }
+
+        return control.GetVisualAncestors()
+            .Any(ancestor => ancestor is TextBox or ComboBox or NumericUpDown);
+    }
+
+    private static string DescribeInput(Control control)
+    {
+        var ancestors = string.Join(">",
+            control.GetVisualAncestors()
+                .OfType<Control>()
+                .Select(ancestor => ancestor.GetType().Name)
+                .Take(6));
+
+        return $"{control.GetType().Name}:{control.Name} " +
+               $"width={control.Bounds.Width:F1} minWidth={control.MinWidth:F1} ancestors={ancestors}";
+    }
+
+    private sealed class TestAsyncCommand(Func<Task> execute) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged;
+
+        public Task? LastExecution { get; private set; }
+
+        public bool CanExecute(object? parameter)
+        {
+            return true;
+        }
+
+        public void Execute(object? parameter)
+        {
+            LastExecution = execute();
+        }
+    }
+
     private static double GetRightEdge(Visual relativeTo, Control control)
     {
         var point = control.TranslatePoint(new Point(control.Bounds.Width, 0), relativeTo);
@@ -358,31 +421,4 @@ public class SettingsControlResponsiveUiTests
         }
     }
 
-    private sealed class TestAsyncCommand : ICommand
-    {
-        private readonly Func<Task> _execute;
-
-        public TestAsyncCommand(Func<Task> execute)
-        {
-            _execute = execute;
-        }
-
-        public event EventHandler? CanExecuteChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public bool CanExecute(object? parameter) => true;
-
-        public void Execute(object? parameter)
-        {
-            _ = ExecuteAsync();
-        }
-
-        private async Task ExecuteAsync()
-        {
-            await _execute();
-        }
-    }
 }

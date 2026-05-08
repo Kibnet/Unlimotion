@@ -72,7 +72,7 @@ namespace Unlimotion.Test
             configFile.Close();
 
             // Create configuration
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(uniqueConfigName);
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(uniqueConfigName, reloadOnChange: false);
             configurationDisposable = configuration as IDisposable;
 
             // Create mapper
@@ -135,6 +135,9 @@ namespace Unlimotion.Test
             }
 
             isCleaned = true;
+            var taskStorageDisposable = MainWindowViewModelTest.taskRepository as IDisposable;
+            MainWindowViewModelTest.Dispose();
+            taskStorageDisposable?.Dispose();
             configurationDisposable?.Dispose();
 
             if (File.Exists(uniqueConfigName))

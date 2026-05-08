@@ -731,7 +731,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var storage = new StubTaskStorage();
             var fixture = CreateDenseRoadmapFixture(storage);
@@ -786,7 +786,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_NodifyView_RendersTasksAndKeepsAutomationIds()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -849,7 +849,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_ViewportOverlay_ProvidesMinimapAndControls()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1025,7 +1025,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedBackgroundRebuilds()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1112,7 +1112,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_FilterChange_CancelsRunningBackgroundRebuildAndStartsLatest()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1223,7 +1223,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_TitleRename_UpdatesTextWithoutRebuildingMap()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1288,7 +1288,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_OpenView_ReflectsCreatedAndDeletedTasks()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1338,7 +1338,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_FilterChange_RebuildsOpenView()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1395,7 +1395,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_NodeClickSelectsTaskAndDoubleTapTogglesDetailsWithoutStaticSingleton()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             var previousMainWindow = TaskItemViewModel.MainWindowInstance;
@@ -1804,7 +1804,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
