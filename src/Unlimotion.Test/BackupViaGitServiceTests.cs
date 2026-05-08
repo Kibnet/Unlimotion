@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
@@ -253,6 +256,77 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ShouldUseGitCliSshTransport_UsesWindowsCliOnlyForSshRemotes()
+    {
+        await Assert.That(BackupViaGitService.ShouldUseGitCliSshTransport(
+                "git@github.com:owner/repo.git",
+                isWindows: true))
+            .IsTrue();
+        await Assert.That(BackupViaGitService.ShouldUseGitCliSshTransport(
+                "ssh://git@github.com/owner/repo.git",
+                isWindows: true))
+            .IsTrue();
+        await Assert.That(BackupViaGitService.ShouldUseGitCliSshTransport(
+                "https://github.com/owner/repo.git",
+                isWindows: true))
+            .IsFalse();
+        await Assert.That(BackupViaGitService.ShouldUseGitCliSshTransport(
+                "git@github.com:owner/repo.git",
+                isWindows: false))
+            .IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BuildGitFetchArguments_IncludesRemoteAndConfiguredRefSpecs()
+    {
+        var arguments = BackupViaGitService.BuildGitFetchArguments(
+            "github.com",
+            new[] { "+refs/heads/*:refs/remotes/github.com/*" });
+
+        await Assert.That(arguments).IsEquivalentTo(new[]
+        {
+            "fetch",
+            "github.com",
+            "+refs/heads/*:refs/remotes/github.com/*"
+        });
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "id_unlimotion_acl");
+        var publicKeyPath = $"{privateKeyPath}.pub";
+        File.WriteAllText(privateKeyPath, "private key");
+        File.WriteAllText(publicKeyPath, "public key");
+
+        if (!OperatingSystem.IsWindows())
+        {
+            await Assert.That(File.Exists(privateKeyPath)).IsTrue();
+            return;
+        }
+
+        var extraIdentity = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+        AddExplicitReadRule(privateKeyPath, extraIdentity);
+        await Assert.That(HasAccessRule(privateKeyPath, extraIdentity, includeInherited: false)).IsTrue();
+
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        var service = new BackupViaGitService(configuration);
+
+        _ = service.GetCredentials(new GitSettings
+        {
+            SshPrivateKeyPath = privateKeyPath,
+            SshPublicKeyPath = publicKeyPath
+        })("git@github.com:owner/repo.git", "git", SupportedCredentialTypes.Default);
+
+        await Assert.That(HasAccessRule(privateKeyPath, extraIdentity, includeInherited: true)).IsFalse();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task GetCredentials_ThrowsForSshUrlWhenPrivateKeyIsMissing()
     {
         var configuration = WritableJsonConfigurationFabric.Create(_configPath);
@@ -282,6 +356,24 @@ public sealed class BackupViaGitServiceTests : IDisposable
         await Assert.That(File.ReadAllText(privateKeyPath)).Contains("BEGIN RSA PRIVATE KEY");
         await Assert.That(File.ReadAllText(publicKeyPath)).Contains("ssh-rsa ");
         await Assert.That(File.ReadAllText(publicKeyPath)).Contains(" unlimotion");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "managed_rsa_acl");
+        var publicKeyPath = $"{privateKeyPath}.pub";
+
+        BackupViaGitService.GenerateManagedRsaSshKey(privateKeyPath, publicKeyPath);
+
+        await Assert.That(File.Exists(privateKeyPath)).IsTrue();
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var extraIdentity = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+        await Assert.That(HasAccessRule(privateKeyPath, extraIdentity, includeInherited: true)).IsFalse();
     }
 
     [Test]
@@ -409,6 +501,30 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
     private static Signature CreateSignature() =>
         new("Backuper", "backuper@example.com", DateTimeOffset.Now);
+
+    [SupportedOSPlatform("windows")]
+    private static void AddExplicitReadRule(string filePath, SecurityIdentifier identity)
+    {
+        var fileInfo = new FileInfo(filePath);
+        var security = fileInfo.GetAccessControl();
+        security.AddAccessRule(new FileSystemAccessRule(
+            identity,
+            FileSystemRights.Read,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        fileInfo.SetAccessControl(security);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool HasAccessRule(string filePath, SecurityIdentifier identity, bool includeInherited)
+    {
+        var security = new FileInfo(filePath).GetAccessControl();
+        var rules = security.GetAccessRules(includeExplicit: true, includeInherited, typeof(SecurityIdentifier));
+        return rules
+            .Cast<FileSystemAccessRule>()
+            .Any(rule => identity.Equals(rule.IdentityReference));
+    }
 
     private static void TryDeleteDirectory(string path)
     {

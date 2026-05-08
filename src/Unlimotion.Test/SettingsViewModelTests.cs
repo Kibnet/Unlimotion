@@ -287,6 +287,11 @@ public class SettingsViewModelTests : IDisposable
             {
                 ["origin"] = "HTTP",
                 ["backup"] = "SSH"
+            },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["origin"] = "https://github.com/org/origin.git",
+                ["backup"] = "git@github.com:org/backup.git"
             }
         };
 
@@ -297,6 +302,7 @@ public class SettingsViewModelTests : IDisposable
 
         await Assert.That(settings.BackupAuthMode).IsEqualTo(BackupAuthMode.Ssh);
         await Assert.That(settings.IsSshAuthSelected).IsTrue();
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/backup.git");
     }
 
     [Test]
@@ -562,6 +568,28 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ReloadGitMetadata_UpdatesRepositoryUrlWhenItBelongsToAnotherRemote()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin", "github.com" },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["origin"] = "https://github.com/Kibnet/Unlimotion.Tasks.git",
+                ["github.com"] = "git@github.com:Kibnet/Unlimotion.Tasks.git"
+            }
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("github.com");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl))
+            .Set("https://github.com/Kibnet/Unlimotion.Tasks.git");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:Kibnet/Unlimotion.Tasks.git");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadGitMetadata_SelectsSingleRemoteWhenStoredRemoteIsMissing()
     {
         var backupService = new FakeRemoteBackupService
@@ -754,6 +782,7 @@ public class SettingsViewModelTests : IDisposable
         await Assert.That(command).Contains("ssh -i");
         await Assert.That(command).Contains("id_ed25519");
         await Assert.That(command).Contains("IdentitiesOnly=yes");
+        await Assert.That(command).Contains("StrictHostKeyChecking=accept-new");
     }
 
     private sealed class FakeRemoteBackupService : IRemoteBackupService

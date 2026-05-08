@@ -245,7 +245,9 @@
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />
 
-                    <CheckBox IsChecked="{Binding GitBackupEnabled}" Content="{DynamicResource BackupAuto}" />
+                    <CheckBox IsChecked="{Binding GitBackupEnabled}"
+                              Content="{DynamicResource BackupAuto}"
+                              AutomationProperties.AutomationId="BackupAutoCheckBox" />
 
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
                         <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
@@ -254,6 +256,7 @@
                             <TextBlock Classes="FieldLabel" Text="{DynamicResource Repository}" />
                             <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
                                 <TextBox Text="{Binding GitRemoteUrl}"
+                                         AutomationProperties.AutomationId="GitRemoteUrlTextBox"
                                          ToolTip.Tip="{Binding GitRemoteUrl}" />
                                 <Button Grid.Column="1"
                                         Content="{DynamicResource Refresh}"
@@ -288,7 +291,8 @@
                         <Border Classes="SettingsSection"
                                 Padding="12"
                                 Margin="0,0,0,12"
-                                IsVisible="{Binding IsSshAuthSelected}">
+                                IsVisible="{Binding IsSshAuthSelected}"
+                                AutomationProperties.AutomationId="SshKeysSection">
                             <StackPanel>
                                 <TextBlock Classes="SectionTitle" Text="{DynamicResource SshKeys}" />
                                 <TextBlock Classes="SectionHint" Text="{DynamicResource SshKeysHint}" />
@@ -296,6 +300,7 @@
                                 <StackPanel Classes="FieldGroup">
                                     <TextBlock Classes="FieldLabel" Text="{DynamicResource ActiveKey}" />
                                     <ComboBox SelectedItem="{Binding SelectedSshPublicKeyPath}"
+                                              AutomationProperties.AutomationId="SelectedSshPublicKeyComboBox"
                                               ItemsSource="{Binding SshPublicKeys}" />
                                     <WrapPanel Classes="ActionButtons" Margin="0,8,0,0">
                                         <Button Content="{DynamicResource Refresh}"
@@ -318,21 +323,27 @@
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Classes="StatusText" Text="{Binding BackupStatusText}" />
+                        <TextBlock Classes="StatusText"
+                                   Text="{Binding BackupStatusText}"
+                                   AutomationProperties.AutomationId="BackupStatusText" />
 
                         <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource ConnectRepository}"
                                     Command="{Binding CloneCommand}"
-                                    IsEnabled="{Binding CanConnectRepository}" />
+                                    IsEnabled="{Binding CanConnectRepository}"
+                                    AutomationProperties.AutomationId="ConnectRepositoryButton" />
                             <Button Content="{DynamicResource SyncNow}"
                                     Command="{Binding SyncNowCommand}"
-                                    IsEnabled="{Binding CanSyncRepository}" />
+                                    IsEnabled="{Binding CanSyncRepository}"
+                                    AutomationProperties.AutomationId="SyncNowButton" />
                             <Button Content="{DynamicResource PullNow}"
                                     Command="{Binding PullCommand}"
-                                    IsEnabled="{Binding CanSyncRepository}" />
+                                    IsEnabled="{Binding CanSyncRepository}"
+                                    AutomationProperties.AutomationId="PullNowButton" />
                             <Button Content="{DynamicResource PushNow}"
                                     Command="{Binding PushCommand}"
-                                    IsEnabled="{Binding CanSyncRepository}" />
+                                    IsEnabled="{Binding CanSyncRepository}"
+                                    AutomationProperties.AutomationId="PushNowButton" />
                         </WrapPanel>
                     </StackPanel>
 

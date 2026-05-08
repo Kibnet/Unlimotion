@@ -68,6 +68,52 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
+    public async Task Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        _ = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SettingsRoot),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Settings root did not become available.")!;
+
+        Page.BackupAutoCheckBox.IsChecked = true;
+        var remoteUrlInput = WaitUntil(
+            () => TryResolveDuringWait(() => Page.GitRemoteUrlTextBox),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Git remote URL input did not become available.")!;
+        remoteUrlInput.Text = "git@github.com:org/unlimotion-backup.git";
+
+        var sshSection = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SshKeysSection),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "SSH keys section did not become available for an SSH remote.")!;
+        var connectButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.ConnectRepositoryButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Connect repository button did not become available.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(Page.BackupAutoCheckBox.IsChecked).IsTrue();
+            await Assert.That(remoteUrlInput.Text).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+            await Assert.That(sshSection.AutomationId).IsEqualTo("SshKeysSection");
+            await Assert.That(Page.SelectedSshPublicKeyComboBox.AutomationId)
+                .IsEqualTo("SelectedSshPublicKeyComboBox");
+            await Assert.That(connectButton.AutomationId).IsEqualTo("ConnectRepositoryButton");
+            await Assert.That(Page.SyncNowButton.AutomationId).IsEqualTo("SyncNowButton");
+            await Assert.That(Page.PullNowButton.AutomationId).IsEqualTo("PullNowButton");
+            await Assert.That(Page.PushNowButton.AutomationId).IsEqualTo("PushNowButton");
+        }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
     public async Task Card_relation_picker_can_be_opened_from_task_card()
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
