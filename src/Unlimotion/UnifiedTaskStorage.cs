@@ -14,11 +14,12 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion;
 
-public class UnifiedTaskStorage : ITaskStorage
+public class UnifiedTaskStorage : ITaskStorage, IDisposable
 {
     private const int AvailabilityMigrationVersion = 2;
     private const int InitialLoadBatchSize = 64;
     private readonly bool isFileStorage;
+    private bool disposed;
 
     public UnifiedTaskStorage(TaskTreeManager taskTreeManager)
     {
@@ -52,6 +53,23 @@ public class UnifiedTaskStorage : ITaskStorage
         TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
         OnInited();
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        if (TaskTreeManager.Storage is FileStorage fileStorage)
+        {
+            fileStorage.Watcher?.SetEnable(false);
+        }
+
+        TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
+        Tasks.Dispose();
     }
 
     private async Task<List<TaskItemViewModel>> BuildInitialTaskViewsAsync()

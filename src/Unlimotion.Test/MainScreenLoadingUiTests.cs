@@ -29,7 +29,7 @@ public class MainScreenLoadingUiTests
     public async Task MainScreen_TogglesTasksLoadingOverlay_WithLoadingState()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -67,7 +67,7 @@ public class MainScreenLoadingUiTests
     public async Task MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             using var context = TestMainWindowContext.Create(TimeSpan.FromMilliseconds(400));
             Window? window = null;

@@ -665,9 +665,13 @@ namespace Unlimotion.ViewModel
             //
             #region Поиск
 
-            var searchTopFilter = this.WhenAnyValue(vm => vm.Search.SearchText, vm => vm.Search.IsFuzzySearch)
-                .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxApp.MainThreadScheduler)
-                .DistinctUntilChanged()
+            var searchInput = this.WhenAnyValue(vm => vm.Search.SearchText, vm => vm.Search.IsFuzzySearch)
+                .DistinctUntilChanged();
+
+            var searchTopFilter = searchInput
+                .Publish(shared => shared.Take(1).Concat(
+                    shared.Skip(1)
+                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxApp.MainThreadScheduler)))
                 .Select(searchText =>
                 {
                     var userText = (searchText.Item1 ?? "").Trim();
@@ -1216,6 +1220,11 @@ namespace Unlimotion.ViewModel
                     if (DetailsAreOpen && item.Item1 != null && LastTaskItem != item.Item1)
                     {
                         LastTaskItem = item.Item1;
+                        if (LastOpenedMode && CurrentLastOpenedItem?.TaskItem == item.Item1)
+                        {
+                            return;
+                        }
+
                         var actions = new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
@@ -2090,7 +2099,7 @@ namespace Unlimotion.ViewModel
             }
 
             //Прямой поиск по коллекции
-            var finded = source.FirstOrDefault(t => t?.TaskItem == taskItemViewModel);
+            var finded = source.FirstOrDefault(t => IsSameTask(t?.TaskItem, taskItemViewModel));
             if (finded != null)
             {
                 return finded;
@@ -2100,11 +2109,22 @@ namespace Unlimotion.ViewModel
             ReadOnlyObservableCollection<TaskWrapperViewModel>? selected = source;
             foreach (var parent in taskItemViewModel.GetFirstParentsPath())
             {
-                selected = selected?.FirstOrDefault(p => p.TaskItem == parent)?.SubTasks;
+                selected = selected?.FirstOrDefault(p => IsSameTask(p.TaskItem, parent))?.SubTasks;
             }
 
-            finded = selected?.FirstOrDefault(p => p.TaskItem == taskItemViewModel);
+            finded = selected?.FirstOrDefault(p => IsSameTask(p.TaskItem, taskItemViewModel));
             return finded;
+        }
+
+        private static bool IsSameTask(TaskItemViewModel? left, TaskItemViewModel? right)
+        {
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            return ReferenceEquals(left, right) ||
+                   string.Equals(left.Id, right.Id, StringComparison.Ordinal);
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)

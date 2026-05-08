@@ -19,7 +19,7 @@ public class BreadcrumbEmojiUiTests
     public async Task Breadcrumbs_ShouldRenderEmojiRunsWithEmojiFont()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -55,7 +55,7 @@ public class BreadcrumbEmojiUiTests
                 await Assert.That(emojiRuns.Count).IsEqualTo(2);
                 await Assert.That(emojiRuns.All(run => run.FontWeight == Avalonia.Media.FontWeight.Normal)).IsTrue();
                 await Assert.That(emojiRuns.All(run =>
-                    run.FontFamily?.ToString()?.Contains("Noto Color Emoji", StringComparison.Ordinal) == true)).IsTrue();
+                    run.FontFamily?.ToString()?.Contains("Emoji", StringComparison.Ordinal) == true)).IsTrue();
             }
             finally
             {

@@ -40,6 +40,12 @@
 		<Style Selector="TextBlock.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
+        <Style Selector="local|EmojiTextBlock.IsWanted">
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+		<Style Selector="local|EmojiTextBlock.IsCanBeCompleted">
+			<Setter Property="Opacity" Value="0.4"/>
+		</Style>
 		<Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
 			<Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
 			<Setter Property="FontWeight" Value="Bold"/>

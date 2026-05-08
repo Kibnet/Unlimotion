@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
@@ -17,8 +18,8 @@ public class MainControlAvailabilityUiTests
     [Test]
     public async Task LastOpenedTaskTitle_ShouldBeDimmed_WhenTaskCannotBeCompleted()
     {
-        using var session = HeadlessUnitTestSession.StartNew(GetDesktopAppEntryPointType());
-        await session.Dispatch(async () =>
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -44,17 +45,20 @@ public class MainControlAvailabilityUiTests
 
                 SelectTab(view, "LastOpenedTabItem");
                 vm.DetailsAreOpen = true;
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                Dispatcher.UIThread.RunJobs();
                 TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                Dispatcher.UIThread.RunJobs();
 
                 var lastOpenedTree = view.FindControl<TreeView>("LastOpenedTree");
                 await Assert.That(lastOpenedTree).IsNotNull();
 
-                var titleLabel = WaitForWrapperTitleLabel(
+                var titleText = WaitForWrapperTitleText(
                     lastOpenedTree!,
                     MainWindowViewModelFixture.RootTask2Id,
                     blockedTask.Title);
 
-                await Assert.That(titleLabel.Opacity).IsEqualTo(0.4);
+                await Assert.That(titleText.Opacity).IsEqualTo(0.4);
             }
             finally
             {
@@ -67,8 +71,8 @@ public class MainControlAvailabilityUiTests
     [Test]
     public async Task DescendantCheckbox_ShouldBeDisabled_WhenAncestorHasIncompleteBlocker()
     {
-        using var session = HeadlessUnitTestSession.StartNew(GetDesktopAppEntryPointType());
-        await session.Dispatch(async () =>
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -90,8 +94,7 @@ public class MainControlAvailabilityUiTests
 
                 await vm.taskRepository!.Block(parentTask!, blockerTask!);
 
-                var rootWrapper = vm.FindTaskWrapperViewModel(parentTask, vm.CurrentAllTasksItems);
-                await Assert.That(rootWrapper).IsNotNull();
+                var rootWrapper = WaitForTaskWrapper(vm, parentTask!);
                 rootWrapper!.IsExpanded = true;
 
                 var view = new MainControl { DataContext = vm };
@@ -160,36 +163,52 @@ public class MainControlAvailabilityUiTests
         return checkBox;
     }
 
-    private static Label WaitForWrapperTitleLabel(
+    private static TaskWrapperViewModel WaitForTaskWrapper(
+        MainWindowViewModel vm,
+        TaskItemViewModel task,
+        int timeoutMilliseconds = 2000)
+    {
+        TaskWrapperViewModel? wrapper = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            wrapper = vm.FindTaskWrapperViewModel(task, vm.CurrentAllTasksItems);
+            return wrapper != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || wrapper == null)
+        {
+            throw new InvalidOperationException($"Wrapper for task '{task.Id}' was not found.");
+        }
+
+        return wrapper;
+    }
+
+    private static EmojiTextBlock WaitForWrapperTitleText(
         TreeView tree,
         string taskId,
         string title,
         int timeoutMilliseconds = 3000)
     {
-        Label? label = null;
+        EmojiTextBlock? titleText = null;
         var ready = SpinWait.SpinUntil(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            label = tree.GetVisualDescendants()
-                .OfType<Label>()
+            titleText = tree.GetVisualDescendants()
+                .OfType<EmojiTextBlock>()
                 .FirstOrDefault(control =>
                     control.DataContext is TaskWrapperViewModel wrapper &&
                     wrapper.TaskItem.Id == taskId &&
-                    Equals(control.Content?.ToString(), title));
-            return label != null;
+                    string.Equals(control.EmojiText, title, StringComparison.Ordinal));
+            return titleText != null;
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
 
-        if (!ready || label == null)
+        if (!ready || titleText == null)
         {
-            throw new InvalidOperationException($"Title label for task '{taskId}' was not found.");
+            throw new InvalidOperationException($"Title text for task '{taskId}' was not found.");
         }
 
-        return label;
+        return titleText;
     }
 
-    private static Type GetDesktopAppEntryPointType()
-    {
-        return Type.GetType("Unlimotion.Desktop.Program, Unlimotion.Desktop") ??
-               throw new InvalidOperationException("Unable to locate Unlimotion.Desktop.Program.");
-    }
 }

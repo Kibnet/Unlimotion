@@ -13,6 +13,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
+using Avalonia.ReactiveUI;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
@@ -74,6 +75,7 @@ public class App : Application
 
     public override void Initialize()
     {
+        RxApp.MainThreadScheduler = AvaloniaScheduler.Instance;
         AvaloniaXamlLoader.Load(this);
         ApplyLocalizedResources();
         LocalizationService.Current.CultureChanged += (_, __) => ApplyLocalizedResources();

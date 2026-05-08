@@ -73,7 +73,7 @@ public class MainControlNewTaskDeadlineUiTests
     public async Task NewSiblingTask_ShouldNotCopyPlannedDates_WhenCreatedByHotkeyFromFocusedDatePicker()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -141,7 +141,7 @@ public class MainControlNewTaskDeadlineUiTests
     public async Task NewRootTask_ShouldNotCopyPlannedDuration_FromFocusedPreviousTaskEditor()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -200,7 +200,7 @@ public class MainControlNewTaskDeadlineUiTests
     public async Task PlannedDurationEditor_ShouldCommitNewText_AfterFocusedDataContextSwitch()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             Window? window = null;
 
@@ -250,7 +250,7 @@ public class MainControlNewTaskDeadlineUiTests
         bool selectedTaskCreatedInFuture = false)
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;

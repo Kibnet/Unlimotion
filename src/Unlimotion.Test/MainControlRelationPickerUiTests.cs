@@ -17,7 +17,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[ParallelLimiter<SharedUiStateParallelLimit>]
+[NotInParallel]
 public class MainControlRelationPickerUiTests
 {
     [Test]
@@ -31,7 +31,7 @@ public class MainControlRelationPickerUiTests
         string inputAutomationId)
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -48,6 +48,7 @@ public class MainControlRelationPickerUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var addButton = WaitForControl<Button>(view, addButtonAutomationId);
@@ -75,7 +76,7 @@ public class MainControlRelationPickerUiTests
     public async Task TaskCardRelationEditor_AddParentFromCard_UpdatesStorage()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -92,6 +93,7 @@ public class MainControlRelationPickerUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var addButton = WaitForControl<Button>(view, "CurrentTaskParentsRelationAddButton");

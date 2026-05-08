@@ -27,7 +27,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TaskOutlinePastePreviewDialog_LargePreview_IsScrollableAndShowsLastTask()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             Window? window = null;
 
@@ -78,7 +78,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_UsesStickyActiveTabTreeAfterFocusMoves()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -97,13 +97,11 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
-                var completedCheckBox = view.GetVisualDescendants()
-                    .OfType<CheckBox>()
-                    .First(control => string.Equals(control.Content?.ToString(), "Completed", StringComparison.Ordinal));
+                var filterCheckBox = FindVisibleFilterCheckBox(view, vm);
 
                 await Assert.That(allTasksTree).IsNotNull();
                 await ClickControlAsync(window, allTasksTree!);
-                completedCheckBox.Focus();
+                filterCheckBox.Focus();
 
                 PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
                 Dispatcher.UIThread.RunJobs();
@@ -122,7 +120,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_IsIgnoredWhileTextInputFocused()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -166,7 +164,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -215,6 +213,11 @@ public class MainControlTreeCommandsUiTests
 
                 var childControl = FindWrapperControl(allTasksTree!, child.Id);
                 await ClickControlAsync(window, childControl);
+                var childSelected = WaitFor(() =>
+                    ReferenceEquals(vm.CurrentAllTasksItem, childWrapper) ||
+                    vm.CurrentAllTasksItem?.TaskItem.Id == child.Id);
+                await Assert.That(childSelected).IsTrue();
+
                 PressHotkey(window, Key.C, PhysicalKey.C, RawInputModifiers.Control | RawInputModifiers.Shift);
 
                 var copiedChild = WaitFor(() => clipboardText != null);
@@ -254,7 +257,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -331,7 +334,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -341,6 +344,7 @@ public class MainControlTreeCommandsUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
                 vm.AllTasksMode = true;
+                ((NotificationManagerWrapperMock)vm.ManagerWrapper).AskResult = true;
 
                 var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
                 var parentWrapper = vm.FindTaskWrapperViewModel(parent!, vm.CurrentAllTasksItems);
@@ -416,7 +420,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -498,7 +502,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_UsesSelectedItem_NotLastClickedWrapper()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -541,6 +545,8 @@ public class MainControlTreeCommandsUiTests
 
                 await ClickControlAsync(window, rootControl, MouseButton.Right);
                 vm.CurrentAllTasksItem = childWrapper;
+                allTasksTree.ContextMenu?.Close();
+                allTasksTree.Focus();
                 Dispatcher.UIThread.RunJobs();
 
                 PressHotkey(window, Key.Left, PhysicalKey.ArrowLeft, RawInputModifiers.Control | RawInputModifiers.Shift);
@@ -562,7 +568,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_UsesVisibleTabTreeAfterSwitchWithoutAdditionalTreeClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -582,7 +588,7 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(allTasksTree).IsNotNull();
                 await ClickControlAsync(window, allTasksTree!);
 
-                SelectTab(view, 2);
+                SelectTab(view, 3);
 
                 var unlockedReady = WaitFor(() => vm.UnlockedItems.Any());
                 await Assert.That(unlockedReady).IsTrue();
@@ -607,7 +613,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_UsesVisibleTabTreeWithoutPriorTreeActivation()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -622,7 +628,7 @@ public class MainControlTreeCommandsUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 2);
+                SelectTab(view, 3);
 
                 var unlockedReady = WaitFor(() => vm.UnlockedItems.Any());
                 await Assert.That(unlockedReady).IsTrue();
@@ -646,7 +652,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_LastCreatedTab_HotkeyAndContextMenu_Work()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -655,6 +661,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
                 vm.CollapseAllNodes(vm.LastCreatedItems);
 
                 var view = new MainControl { DataContext = vm };
@@ -693,7 +700,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_LastCreatedTab_Hotkey_WorksAfterSwitchFromAllTasksHeaderClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -702,6 +709,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
                 vm.CollapseAllNodes(vm.CurrentAllTasksItems);
 
                 var view = new MainControl { DataContext = vm };
@@ -744,7 +752,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_WorksOnFirstPressImmediatelyAfterTabHeaderClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -753,6 +761,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
@@ -793,7 +802,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_LastCreatedTab_CurrentCommands_WorkOnClickedItem()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -802,6 +811,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
 
                 var rootTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
@@ -834,9 +844,12 @@ public class MainControlTreeCommandsUiTests
                 grandchildWrapper!.IsExpanded = false;
                 Dispatcher.UIThread.RunJobs();
 
-                var childControl = lastCreatedTree!.GetVisualDescendants()
-                    .OfType<Control>()
-                    .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == childTask.Id);
+                var childControl = FindWrapperControl(lastCreatedTree!, childTask.Id);
+                var clickedChildWrapper = (TaskWrapperViewModel)childControl.DataContext!;
+                var clickedGrandchildWrapper = clickedChildWrapper.SubTasks
+                    .First(wrapper => wrapper.TaskItem.Id == grandchildTask.Id);
+                clickedChildWrapper.IsExpanded = false;
+                clickedGrandchildWrapper.IsExpanded = false;
 
                 await ClickControlAsync(window, childControl);
                 await Assert.That(vm.CurrentLastCreated?.TaskItem.Id).IsEqualTo(childTask.Id);
@@ -844,17 +857,17 @@ public class MainControlTreeCommandsUiTests
                 PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Shift);
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
-                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedChildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedGrandchildWrapper.IsExpanded).IsTrue();
 
-                childWrapper.IsExpanded = false;
-                grandchildWrapper.IsExpanded = false;
+                clickedChildWrapper.IsExpanded = false;
+                clickedGrandchildWrapper.IsExpanded = false;
                 await ClickControlAsync(window, childControl, MouseButton.Right);
                 var expandCurrentMenuItem = lastCreatedTree.ContextMenu!.Items.OfType<MenuItem>().First();
                 InvokeMenuItemClick(expandCurrentMenuItem);
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
-                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedChildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedGrandchildWrapper.IsExpanded).IsTrue();
             }
             finally
             {
@@ -868,7 +881,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_LastUpdatedTab_Hotkey_WorksAfterSwitchFromAllTasksHeaderClick()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -877,6 +890,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastUpdatedDateFilter);
                 vm.CollapseAllNodes(vm.CurrentAllTasksItems);
 
                 var view = new MainControl { DataContext = vm };
@@ -920,7 +934,7 @@ public class MainControlTreeCommandsUiTests
     public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -929,6 +943,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastUpdatedDateFilter);
 
                 var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(selectedTask).IsNotNull();
@@ -984,7 +999,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ShiftDelete_RemovesSelectedLastUpdatedTreeItem()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -993,6 +1008,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastUpdatedDateFilter);
                 ((NotificationManagerWrapperMock)vm.ManagerWrapper).AskResult = true;
 
                 var view = new MainControl { DataContext = vm };
@@ -1025,10 +1041,10 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    [Arguments(2, "UnlockedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.SubTask22Id)]
-    [Arguments(3, "CompletedTree", MainWindowViewModelFixture.CompletedTaskId, MainWindowViewModelFixture.CompletedTaskId)]
-    [Arguments(4, "ArchivedTree", MainWindowViewModelFixture.ArchivedTask1Id, MainWindowViewModelFixture.ArchivedTask11Id)]
-    [Arguments(5, "LastOpenedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.SubTask22Id)]
+    [Arguments(3, "UnlockedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.SubTask22Id)]
+    [Arguments(4, "CompletedTree", MainWindowViewModelFixture.CompletedTaskId, MainWindowViewModelFixture.CompletedTaskId)]
+    [Arguments(5, "ArchivedTree", MainWindowViewModelFixture.ArchivedTask1Id, MainWindowViewModelFixture.ArchivedTask11Id)]
+    [Arguments(6, "LastOpenedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.RootTask2Id)]
     public async Task TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work(
         int tabIndex,
         string treeName,
@@ -1036,7 +1052,7 @@ public class MainControlTreeCommandsUiTests
         string childTaskId)
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1071,9 +1087,23 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var currentTaskId = childWrapper.TaskItem.Id;
-                var currentControl = FindWrapperControl(tree!, currentTaskId);
+                var currentControl = FindWrapperControl(tree!, childWrapper);
                 await ClickControlAsync(window, currentControl);
-                await Assert.That(GetCurrentWrapperForTree(vm, treeName)?.TaskItem.Id).IsEqualTo(currentTaskId);
+                var currentReady = WaitFor(() =>
+                    GetCurrentWrapperForTree(vm, treeName)?.TaskItem.Id == currentTaskId,
+                    5000);
+                if (!currentReady)
+                {
+                    var selectedIds = string.Join(
+                        ",",
+                        GetSelectedWrappers(tree!).Select(wrapper => wrapper.TaskItem.Id));
+                    throw new InvalidOperationException(
+                        $"Current wrapper was not updated for {treeName}. " +
+                        $"Expected={currentTaskId}; " +
+                        $"Current={GetCurrentWrapperForTree(vm, treeName)?.TaskItem.Id ?? "<null>"}; " +
+                        $"CurrentTask={vm.CurrentTaskItem?.Id ?? "<null>"}; " +
+                        $"Selected=[{selectedIds}]");
+                }
 
                 PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Shift);
                 Dispatcher.UIThread.RunJobs();
@@ -1117,7 +1147,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ContextMenuClick_UsesClickedRelationItemEvenWhenTextInputFocused()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1152,17 +1182,18 @@ public class MainControlTreeCommandsUiTests
                 childWrapper.IsExpanded = false;
                 grandchildWrapper.IsExpanded = false;
 
-                var childControl = relationTree.GetVisualDescendants()
-                    .OfType<Control>()
-                    .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == childTask.Id);
+                var childControl = FindWrapperControl(relationTree, childWrapper);
 
                 await ClickControlAsync(window, childControl, MouseButton.Right);
+                relationTree.ContextMenu.PlacementTarget = childControl;
                 titleTextBox!.Focus();
                 var expandCurrentMenuItem = relationTree.ContextMenu.Items.OfType<MenuItem>().First();
                 InvokeMenuItemClick(expandCurrentMenuItem);
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
-                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                var expanded = WaitFor(
+                    () => childWrapper.IsExpanded && grandchildWrapper.IsExpanded,
+                    5000);
+                await Assert.That(expanded).IsTrue();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTask!.Id);
             }
             finally
@@ -1177,7 +1208,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_Hotkey_UsesFocusedRelationTreeWithoutPointerActivation()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1249,7 +1280,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_HotkeyRouting_PrefersFocusedRelationTreeOverStaleActiveTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1300,7 +1331,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetWithoutStoredTreeContext()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1315,7 +1346,7 @@ public class MainControlTreeCommandsUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 2);
+                SelectTab(view, 3);
                 var unlockedReady = WaitFor(() => vm.UnlockedItems.Any());
                 await Assert.That(unlockedReady).IsTrue();
 
@@ -1326,12 +1357,15 @@ public class MainControlTreeCommandsUiTests
                 vm.CollapseAllNodes(vm.UnlockedItems);
                 Dispatcher.UIThread.RunJobs();
 
-                ClearStoredTreeCommandContext(view);
                 unlockedTree.ContextMenu!.PlacementTarget = unlockedTree;
+                unlockedTree.ContextMenu.Open(unlockedTree);
+                Dispatcher.UIThread.RunJobs();
+                ClearStoredTreeCommandContext(view);
                 var expandAllMenuItem = unlockedTree.ContextMenu.Items
                     .OfType<MenuItem>()
                     .First(item => string.Equals(item.Tag?.ToString(), "ExpandAll", StringComparison.Ordinal));
                 InvokeMenuItemClick(expandAllMenuItem);
+                unlockedTree.ContextMenu.Close();
 
                 await Assert.That(vm.UnlockedItems.All(IsExpandedRecursive)).IsTrue();
             }
@@ -1347,7 +1381,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ContextMenu_DisplaysHotkeysForTreeCommands()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1389,7 +1423,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetItemWithoutStoredContextForCurrentCommand()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1398,6 +1432,7 @@ public class MainControlTreeCommandsUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
 
                 var rootTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
@@ -1429,23 +1464,29 @@ public class MainControlTreeCommandsUiTests
                 grandchildWrapper!.IsExpanded = false;
                 Dispatcher.UIThread.RunJobs();
 
-                var childControl = lastCreatedTree.GetVisualDescendants()
-                    .OfType<Control>()
-                    .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == childTask.Id);
+                var childControl = FindWrapperControl(lastCreatedTree, childTask.Id);
+                var clickedChildWrapper = (TaskWrapperViewModel)childControl.DataContext!;
+                var clickedGrandchildWrapper = clickedChildWrapper.SubTasks
+                    .First(wrapper => wrapper.TaskItem.Id == grandchildTask.Id);
+                clickedChildWrapper.IsExpanded = false;
+                clickedGrandchildWrapper.IsExpanded = false;
 
                 lastCreatedTree.SelectedItems?.Clear();
                 lastCreatedTree.SelectedItem = null;
                 vm.CurrentLastCreated = null!;
 
+                lastCreatedTree.ContextMenu!.Open(lastCreatedTree);
+                lastCreatedTree.ContextMenu.PlacementTarget = childControl;
+                Dispatcher.UIThread.RunJobs();
                 ClearStoredTreeCommandContext(view);
-                lastCreatedTree.ContextMenu!.PlacementTarget = childControl;
                 var expandCurrentMenuItem = lastCreatedTree.ContextMenu.Items
                     .OfType<MenuItem>()
                     .First(item => string.Equals(item.Tag?.ToString(), "ExpandCurrentNested", StringComparison.Ordinal));
                 InvokeMenuItemClick(expandCurrentMenuItem);
+                lastCreatedTree.ContextMenu.Close();
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
-                await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedChildWrapper.IsExpanded).IsTrue();
+                await Assert.That(clickedGrandchildWrapper.IsExpanded).IsTrue();
             }
             finally
             {
@@ -1459,7 +1500,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_CtrlA_SelectsAllItemsInActiveTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1477,13 +1518,11 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
-                var completedCheckBox = view.GetVisualDescendants()
-                    .OfType<CheckBox>()
-                    .First(control => string.Equals(control.Content?.ToString(), "Completed", StringComparison.Ordinal));
+                var filterCheckBox = FindVisibleFilterCheckBox(view, vm);
                 await Assert.That(allTasksTree).IsNotNull();
 
                 await ClickControlAsync(window, allTasksTree!);
-                completedCheckBox.Focus();
+                filterCheckBox.Focus();
                 PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
                 Dispatcher.UIThread.RunJobs();
 
@@ -1501,7 +1540,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1550,7 +1589,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_CtrlA_SelectsTextWhenTextInputFocused()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1596,7 +1635,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1615,8 +1654,8 @@ public class MainControlTreeCommandsUiTests
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
                 await Assert.That(allTasksTree).IsNotNull();
 
-                var root1Control = FindWrapperControl(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
-                var root4Control = FindWrapperControl(allTasksTree, MainWindowViewModelFixture.RootTask4Id);
+                var root1Control = FindWrapperTreeItem(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
+                var root4Control = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask4Id);
 
                 await ClickControlAsync(window, root1Control);
                 await ClickControlAsync(window, root4Control, modifiers: RawInputModifiers.Control);
@@ -1641,7 +1680,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_ShiftDelete_IgnoresRelationTree()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1687,7 +1726,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeCommandUi_RightClick_PreservesSelectedBatch_AndCollapsesOnUnselectedItem()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1706,9 +1745,9 @@ public class MainControlTreeCommandsUiTests
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
                 await Assert.That(allTasksTree).IsNotNull();
 
-                var root1Control = FindWrapperControl(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
-                var root3Control = FindWrapperControl(allTasksTree, MainWindowViewModelFixture.RootTask3Id);
-                var root4Control = FindWrapperControl(allTasksTree, MainWindowViewModelFixture.RootTask4Id);
+                var root1Control = FindWrapperTreeItem(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
+                var root3Control = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask3Id);
+                var root4Control = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask4Id);
 
                 await ClickControlAsync(window, root1Control);
                 await ClickControlAsync(window, root3Control, modifiers: RawInputModifiers.Control);
@@ -1740,7 +1779,7 @@ public class MainControlTreeCommandsUiTests
     public async Task TreeDragUi_DragPreparation_PreservesExistingMultiSelectionVisualState()
     {
         using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
@@ -1759,8 +1798,8 @@ public class MainControlTreeCommandsUiTests
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
                 await Assert.That(allTasksTree).IsNotNull();
 
-                var root1Control = FindWrapperControl(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
-                var root3Control = FindWrapperControl(allTasksTree, MainWindowViewModelFixture.RootTask3Id);
+                var root1Control = FindWrapperTreeItem(allTasksTree!, MainWindowViewModelFixture.RootTask1Id);
+                var root3Control = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask3Id);
 
                 await ClickControlAsync(window, root1Control);
                 await ClickControlAsync(window, root3Control, modifiers: RawInputModifiers.Control);
@@ -1768,8 +1807,8 @@ public class MainControlTreeCommandsUiTests
                 var selectedBefore = GetSelectedWrappers(allTasksTree);
                 await Assert.That(selectedBefore.Count).IsEqualTo(2);
 
-                var root1Item = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask1Id);
-                var root3Item = FindWrapperTreeItem(allTasksTree, MainWindowViewModelFixture.RootTask3Id);
+                var root1Item = root1Control;
+                var root3Item = root3Control;
                 await Assert.That(root1Item.IsSelected).IsTrue();
                 await Assert.That(root3Item.IsSelected).IsTrue();
 
@@ -1954,16 +1993,56 @@ public class MainControlTreeCommandsUiTests
     {
         var tabControl = view.GetVisualDescendants().OfType<TabControl>().First();
         tabControl.SelectedIndex = index;
+        tabControl.GetVisualDescendants()
+            .OfType<TabItem>()
+            .FirstOrDefault(item => item.IsSelected)
+            ?.Focus();
         Dispatcher.UIThread.RunJobs();
     }
 
     private static async Task ClickTabHeaderAsync(Window window, MainControl view, string header)
     {
-        var tabItem = view.GetVisualDescendants()
+        var tabItems = view.GetVisualDescendants()
             .OfType<TabItem>()
-            .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            .ToList();
+        var tabItem = tabItems.FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal)) ??
+                      tabItems.First(item => string.Equals(
+                          AutomationProperties.GetAutomationId(item),
+                          GetTabAutomationId(header),
+                          StringComparison.Ordinal));
 
         await ClickControlAsync(window, tabItem);
+        SelectTab(view, GetTabIndex(header));
+    }
+
+    private static string GetTabAutomationId(string header)
+    {
+        return header switch
+        {
+            "All Tasks" => "AllTasksTabItem",
+            "Last Created" => "LastCreatedTabItem",
+            "Last Updated" => "LastUpdatedTabItem",
+            "Unlocked" => "UnlockedTabItem",
+            "Completed" => "CompletedTabItem",
+            "Archived" => "ArchivedTabItem",
+            "Last Opened" => "LastOpenedTabItem",
+            _ => header
+        };
+    }
+
+    private static int GetTabIndex(string header)
+    {
+        return header switch
+        {
+            "All Tasks" => 0,
+            "Last Created" => 1,
+            "Last Updated" => 2,
+            "Unlocked" => 3,
+            "Completed" => 4,
+            "Archived" => 5,
+            "Last Opened" => 6,
+            _ => 0
+        };
     }
 
     private static bool WaitFor(Func<bool> predicate, int timeoutMilliseconds = 2000)
@@ -1987,6 +2066,12 @@ public class MainControlTreeCommandsUiTests
         return ready ? wrapper : null;
     }
 
+    private static void SetDateFilterAllTime(DateFilter filter)
+    {
+        filter.CurrentOption = DateFilterDefinition.AllTime;
+        filter.SetDateTimes(DateFilterDefinition.AllTime);
+    }
+
     private static T FindControlByAutomationId<T>(Control root, string automationId)
         where T : Control
     {
@@ -1995,11 +2080,76 @@ public class MainControlTreeCommandsUiTests
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
+    private static CheckBox FindVisibleFilterCheckBox(Control root, MainWindowViewModel viewModel)
+    {
+        return root.GetVisualDescendants()
+            .OfType<CheckBox>()
+            .First(control =>
+                ReferenceEquals(control.DataContext, viewModel) &&
+                control.Content != null &&
+                control.IsAttachedToVisualTree() &&
+                control.IsVisible &&
+                control.IsEnabled);
+    }
+
     private static Control FindWrapperControl(TreeView tree, string taskId)
     {
+        var titleControl = tree.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(control =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(control),
+                    "InlineTaskTitleTextBlock",
+                    StringComparison.Ordinal) &&
+                TryGetTaskItem(control.DataContext)?.Id == taskId &&
+                control.IsAttachedToVisualTree() &&
+                control.IsVisible &&
+                control.IsEnabled);
+
+        if (titleControl != null)
+        {
+            return titleControl;
+        }
+
         return tree.GetVisualDescendants()
             .OfType<Control>()
             .First(control => control.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == taskId);
+    }
+
+    private static Control FindWrapperControl(TreeView tree, TaskWrapperViewModel targetWrapper)
+    {
+        TreeViewItem? targetItem = null;
+        var itemReady = WaitFor(() =>
+        {
+            targetItem = tree.GetVisualDescendants()
+                .OfType<TreeViewItem>()
+                .FirstOrDefault(item => ReferenceEquals(item.DataContext, targetWrapper));
+            return targetItem != null;
+        });
+
+        if (!itemReady || targetItem == null)
+        {
+            throw new InvalidOperationException(
+                $"Tree item for task wrapper '{targetWrapper.TaskItem.Id}' was not found.");
+        }
+
+        var titleControl = targetItem.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(control =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(control),
+                    "InlineTaskTitleTextBlock",
+                    StringComparison.Ordinal) &&
+                control.IsAttachedToVisualTree() &&
+                control.IsVisible &&
+                control.IsEnabled);
+
+        if (titleControl != null)
+        {
+            return titleControl;
+        }
+
+        return targetItem;
     }
 
     private static TextBlock WaitForInlineTitleTextBlock(
@@ -2091,6 +2241,12 @@ public class MainControlTreeCommandsUiTests
         };
     }
 
+    private static TaskWrapperViewModel? TryGetWrapper(Control control)
+    {
+        return control.DataContext as TaskWrapperViewModel ??
+               control.FindParentDataContext<TaskWrapperViewModel>();
+    }
+
     private static bool HasVisualAncestorWithAutomationId(Control control, string automationId)
     {
         for (Control? current = control; current != null; current = current.GetVisualParent() as Control)
@@ -2162,7 +2318,9 @@ public class MainControlTreeCommandsUiTests
     {
         var rootWrapper = FindWrapper(vm, treeName, rootTaskId);
         return childTaskId == rootTaskId
-            ? rootWrapper?.SubTasks.FirstOrDefault()
+            ? treeName == "CompletedTree"
+                ? rootWrapper?.SubTasks.FirstOrDefault()
+                : rootWrapper
             : rootWrapper?.SubTasks.FirstOrDefault(wrapper => wrapper.TaskItem.Id == childTaskId);
     }
 
@@ -2170,8 +2328,21 @@ public class MainControlTreeCommandsUiTests
     {
         switch (treeName)
         {
+            case "UnlockedTree":
+            {
+                var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
+                await Assert.That(childTask).IsNotNull();
+
+                childTask!.IsCompleted = true;
+                childTask.CompletedDateTime = DateTimeOffset.UtcNow;
+                await vm.taskRepository!.Update(childTask);
+
+                break;
+            }
             case "CompletedTree":
             {
+                SetDateFilterAllTime(vm.CompletedDateFilter);
+
                 var completedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.CompletedTaskId);
                 var existingChild = completedTask?.ContainsTasks.FirstOrDefault();
                 if (completedTask != null && existingChild == null)
@@ -2189,6 +2360,11 @@ public class MainControlTreeCommandsUiTests
                 vm.DetailsAreOpen = true;
                 TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 await TestHelpers.WaitThrottleTime();
+                break;
+            }
+            case "ArchivedTree":
+            {
+                SetDateFilterAllTime(vm.ArchivedDateFilter);
                 break;
             }
         }

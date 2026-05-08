@@ -12,6 +12,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
@@ -59,8 +60,10 @@ namespace Unlimotion.Views
         private TextBox? _activeInlineTitleEditor;
         private TreeView? _lastInlineTitleClickTree;
         private string? _lastInlineTitleClickTaskId;
+        private DateTimeOffset? _lastInlineTitleClickAt;
         private bool _treeDragInProgress;
         private bool _filterToolbarLayoutUpdateQueued;
+        private int _selectionRestoreVersion;
         private readonly HashSet<Grid> _observedFilterToolbars = [];
         private readonly List<IDisposable> _filterToolbarBoundsSubscriptions = [];
 
@@ -109,6 +112,7 @@ namespace Unlimotion.Views
         {
             InitializeComponent();
             AddHandler(KeyDownEvent, MainControl_OnKeyDown, RoutingStrategies.Tunnel);
+            AddHandler(GotFocusEvent, MainControl_OnGotFocus, RoutingStrategies.Tunnel);
             AddHandler(DragDrop.DropEvent, Drop);
             AddHandler(DragDrop.DragOverEvent, DragOver);
             DataContextChanged += MainWindow_DataContextChanged;
@@ -124,6 +128,18 @@ namespace Unlimotion.Views
             {
                 QueueFilterToolbarLayoutUpdate();
             }
+        }
+
+        private void MainControl_OnGotFocus(object? sender, GotFocusEventArgs e)
+        {
+            if (_activeInlineTitleEditor == null ||
+                e.Source is not Control focused ||
+                IsControlOrDescendantOf(focused, _activeInlineTitleEditor))
+            {
+                return;
+            }
+
+            ClearActiveInlineTitleEditor();
         }
 
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -292,13 +308,76 @@ namespace Unlimotion.Views
 
         private void MainControl_OnKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Handled || !IsSelectAllHotkey(e) || IsTextInputFocused())
+            if (e.Handled || IsTextInputFocused())
             {
                 return;
             }
 
-            ExecuteTreeCommand(TreeCommandKind.SelectAll);
-            e.Handled = true;
+            if (TryGetTreeCommandHotkey(e, out var kind))
+            {
+                ExecuteTreeCommand(kind);
+                e.Handled = true;
+            }
+        }
+
+        private static bool TryGetTreeCommandHotkey(KeyEventArgs e, out TreeCommandKind kind)
+        {
+            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.A)
+            {
+                kind = TreeCommandKind.SelectAll;
+                return true;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Shift && e.Key == Key.Delete)
+            {
+                kind = TreeCommandKind.DeleteSelection;
+                return true;
+            }
+
+            if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+            {
+                if (e.Key == Key.Right)
+                {
+                    kind = TreeCommandKind.ExpandCurrentNested;
+                    return true;
+                }
+
+                if (e.Key == Key.Left)
+                {
+                    kind = TreeCommandKind.CollapseCurrentNested;
+                    return true;
+                }
+
+                if (e.Key == Key.C)
+                {
+                    kind = TreeCommandKind.CopyOutline;
+                    return true;
+                }
+
+                if (e.Key == Key.V)
+                {
+                    kind = TreeCommandKind.PasteOutline;
+                    return true;
+                }
+            }
+
+            if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
+            {
+                if (e.Key == Key.Right)
+                {
+                    kind = TreeCommandKind.ExpandAll;
+                    return true;
+                }
+
+                if (e.Key == Key.Left)
+                {
+                    kind = TreeCommandKind.CollapseAll;
+                    return true;
+                }
+            }
+
+            kind = default;
+            return false;
         }
 
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
@@ -475,7 +554,7 @@ namespace Unlimotion.Views
 
             Dispatcher.UIThread.Post(
                 () => TryFocusRelationEditor(requestVersion, automationId, retriesRemaining),
-                DispatcherPriority.Background);
+                DispatcherPriority.Loaded);
         }
 
         private void TryFocusRelationEditor(long requestVersion, string automationId, int retriesRemaining)
@@ -532,6 +611,7 @@ namespace Unlimotion.Views
         private const string CustomFormat = "application/xxx-unlimotion-task";
         private const string CustomBatchFormat = "application/xxx-unlimotion-task-batch";
         private const double TreeDragThreshold = 4;
+        private static readonly TimeSpan InlineTitleRepeatedClickDelay = TimeSpan.FromMilliseconds(500);
 
         private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
@@ -540,15 +620,31 @@ namespace Unlimotion.Views
                 return;
             }
 
+            unchecked
+            {
+                _selectionRestoreVersion++;
+            }
+
             UpdateActiveTreeContext(control);
 
             var tree = TryGetTaskTree(control);
-            var wrapper = TryGetWrapper(control) ?? TryGetWrapper(e.Source);
+            var wrapper = TryGetWrapper(e.Source) ?? TryGetWrapper(control);
             var point = e.GetCurrentPoint(control);
 
             if (tree != null && wrapper != null && point.Properties.IsRightButtonPressed)
             {
+                var wasContextWrapperSelected = ContainsWrapper(GetSelectedWrappersForTree(tree), wrapper);
                 NormalizeSelectionForContextMenu(tree, wrapper);
+                if (!wasContextWrapperSelected)
+                {
+                    QueueSingleWrapperSelectionRestore(tree, wrapper);
+                }
+
+                if (tree.ContextMenu != null)
+                {
+                    tree.ContextMenu.PlacementTarget = e.Source as Control ?? control;
+                }
+
                 _contextMenuTree = tree;
                 _contextMenuWrapper = wrapper;
                 ClearPendingTreeDrag();
@@ -561,6 +657,17 @@ namespace Unlimotion.Views
                 return;
             }
 
+            if (!IsInlineTitleTextSource(e.Source) &&
+                IsPointerOverInlineTitleText(tree, wrapper.TaskItem.Id, e))
+            {
+                HandleInlineTitleClick(tree, wrapper.TaskItem, wrapper, e);
+                if (e.Handled)
+                {
+                    ClearPendingTreeDrag();
+                    return;
+                }
+            }
+
             if (HasSelectionModifier(e.KeyModifiers))
             {
                 ClearPendingTreeDrag();
@@ -571,13 +678,21 @@ namespace Unlimotion.Views
             var wasSelected = ContainsWrapper(selectionSnapshot, wrapper);
             if (!wasSelected)
             {
+                SelectSingleWrapper(tree, wrapper);
+                QueueSingleWrapperSelectionRestore(tree, wrapper);
                 selectionSnapshot = [wrapper];
-            }
-            else if (selectionSnapshot.Count > 1)
-            {
-                // Prevent TreeView from collapsing an existing multi-selection to the drag source
-                // before the drag gesture crosses the threshold.
                 e.Handled = true;
+            }
+            else
+            {
+                SyncCurrentWrapperForTree(tree, wrapper);
+                e.Handled = true;
+
+                if (selectionSnapshot.Count > 1)
+                {
+                    // Prevent TreeView from collapsing an existing multi-selection to the drag source
+                    // before the drag gesture crosses the threshold.
+                }
             }
 
             _pendingTreeDrag = new PendingTreeDragContext(
@@ -1192,19 +1307,41 @@ namespace Unlimotion.Views
                 return;
             }
 
-            if (e.ClickCount > 1)
+            HandleInlineTitleClick(tree, task, TryGetWrapper(control), e);
+        }
+
+        private void HandleInlineTitleClick(
+            TreeView tree,
+            TaskItemViewModel task,
+            TaskWrapperViewModel? wrapper,
+            PointerPressedEventArgs e)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var lastClickElapsed = _lastInlineTitleClickAt == null
+                ? TimeSpan.MaxValue
+                : now - _lastInlineTitleClickAt.Value;
+            var isLastClickSameTitle =
+                ReferenceEquals(_lastInlineTitleClickTree, tree) &&
+                string.Equals(_lastInlineTitleClickTaskId, task.Id, StringComparison.Ordinal);
+            var isRapidRepeatedTitleClick =
+                isLastClickSameTitle && lastClickElapsed < InlineTitleRepeatedClickDelay;
+
+            if (isRapidRepeatedTitleClick ||
+                e.ClickCount > 1 && lastClickElapsed < InlineTitleRepeatedClickDelay)
             {
                 ClearInlineTitleClickState();
                 return;
             }
 
             var isRepeatedTitleClick =
-                ReferenceEquals(_lastInlineTitleClickTree, tree) &&
-                string.Equals(_lastInlineTitleClickTaskId, task.Id, StringComparison.Ordinal);
+                isLastClickSameTitle && lastClickElapsed >= InlineTitleRepeatedClickDelay;
 
-            if (TryGetWrapper(control) is { } wrapper)
+            if (wrapper != null)
             {
+                UpdateActiveTreeContext(tree);
                 SelectSingleWrapper(tree, wrapper);
+                QueueSingleWrapperSelectionRestore(tree, wrapper);
+                e.Handled = true;
             }
             else if (DataContext is MainWindowViewModel vm && vm.CurrentTaskItem != task)
             {
@@ -1220,6 +1357,7 @@ namespace Unlimotion.Views
 
             _lastInlineTitleClickTree = tree;
             _lastInlineTitleClickTaskId = task.Id;
+            _lastInlineTitleClickAt = now;
         }
 
         private void TaskTree_OnKeyDown(object? sender, KeyEventArgs e)
@@ -1271,15 +1409,21 @@ namespace Unlimotion.Views
 
             if (!FocusInlineTitleEditor(titleEditor))
             {
-                if (ReferenceEquals(_activeInlineTitleEditor, titleEditor))
-                {
-                    ClearActiveInlineTitleEditor();
-                }
-
-                return false;
+                QueueInlineTitleEditorFocus(titleEditor);
             }
 
             return true;
+        }
+
+        private void QueueInlineTitleEditorFocus(TextBox titleEditor)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_activeInlineTitleEditor, titleEditor))
+                {
+                    FocusInlineTitleEditor(titleEditor);
+                }
+            }, DispatcherPriority.Loaded);
         }
 
         private TextBox? CreateInlineTitleEditor(TreeView tree, string currentTaskId)
@@ -1347,6 +1491,30 @@ namespace Unlimotion.Views
                     control.IsEnabled);
         }
 
+        private static bool IsPointerOverInlineTitleText(TreeView tree, string currentTaskId, PointerEventArgs e)
+        {
+            var titleText = FindInlineTitleTextBlock(tree, currentTaskId);
+            if (titleText == null)
+            {
+                return false;
+            }
+
+            var point = e.GetPosition(titleText);
+            return point.X >= 0 &&
+                   point.Y >= 0 &&
+                   point.X <= titleText.Bounds.Width &&
+                   point.Y <= titleText.Bounds.Height;
+        }
+
+        private static bool IsInlineTitleTextSource(object? source)
+        {
+            return source is Control control &&
+                   string.Equals(
+                       AutomationProperties.GetAutomationId(control),
+                       "InlineTaskTitleTextBlock",
+                       StringComparison.Ordinal);
+        }
+
         private static TextBox? FindInlineTitleEditor(TreeView tree, string currentTaskId)
         {
             return tree.GetVisualDescendants()
@@ -1399,6 +1567,7 @@ namespace Unlimotion.Views
         {
             _lastInlineTitleClickTree = null;
             _lastInlineTitleClickTaskId = null;
+            _lastInlineTitleClickAt = null;
         }
 
         private void ClearActiveInlineTitleEditor()
@@ -1592,6 +1761,7 @@ namespace Unlimotion.Views
             }
 
             _activeTaskTree = tree;
+            tree.Focus();
         }
 
         private void UpdateContextMenuContext(TreeView tree, PointerPressedEventArgs e)
@@ -1670,27 +1840,18 @@ namespace Unlimotion.Views
                 return true;
             }
 
-            if (TryGetVisibleMainTaskTree(out tree))
-            {
-                return true;
-            }
-
             if (DataContext is not MainWindowViewModel vm)
             {
-                return false;
+                return TryGetVisibleMainTaskTree(out tree);
             }
 
-            return TryGetCurrentModeTree(vm, out tree);
+            return TryGetCurrentModeTree(vm, out tree) ||
+                   TryGetVisibleMainTaskTree(out tree);
         }
 
         private bool TryGetCurrentModeTree(MainWindowViewModel vm, out TreeView tree)
         {
             tree = null!;
-
-            if (TryGetVisibleMainTaskTree(out tree))
-            {
-                return true;
-            }
 
             if (!TryGetCurrentModeTreeName(vm, out var treeName))
             {
@@ -1706,6 +1867,12 @@ namespace Unlimotion.Views
             if (!IsKnownMainTaskTree(activeTree))
             {
                 return true;
+            }
+
+            if (DataContext is MainWindowViewModel vm &&
+                TryGetCurrentModeTreeName(vm, out var treeName))
+            {
+                return StringComparer.Ordinal.Equals(activeTree.Name, treeName);
             }
 
             return !TryGetVisibleMainTaskTree(out var visibleTree) ||
@@ -1809,7 +1976,8 @@ namespace Unlimotion.Views
                 return _contextMenuWrapper;
             }
 
-            return GetSelectedWrappersForTree(vm, tree).LastOrDefault();
+            return GetSelectedWrappersForTree(tree).LastOrDefault() ??
+                   GetBoundCurrentWrapperForTree(vm, tree);
         }
 
         private IReadOnlyList<TaskWrapperViewModel> GetSelectedWrappersForTree(MainWindowViewModel vm, TreeView tree)
@@ -1820,7 +1988,14 @@ namespace Unlimotion.Views
                 return selectedWrappers;
             }
 
-            var currentWrapper = tree.Name switch
+            var currentWrapper = GetBoundCurrentWrapperForTree(vm, tree);
+
+            return currentWrapper != null ? [currentWrapper] : Array.Empty<TaskWrapperViewModel>();
+        }
+
+        private static TaskWrapperViewModel? GetBoundCurrentWrapperForTree(MainWindowViewModel vm, TreeView tree)
+        {
+            return tree.Name switch
             {
                 "AllTasksTree" => vm.CurrentAllTasksItem,
                 "LastCreatedTree" => vm.CurrentLastCreated,
@@ -1831,8 +2006,6 @@ namespace Unlimotion.Views
                 "LastOpenedTree" => vm.CurrentLastOpenedItem,
                 _ => null
             };
-
-            return currentWrapper != null ? [currentWrapper] : Array.Empty<TaskWrapperViewModel>();
         }
 
         private static IReadOnlyList<TaskWrapperViewModel> GetSelectedWrappersForTree(TreeView tree)
@@ -1867,18 +2040,29 @@ namespace Unlimotion.Views
             SetTreeSelection(tree, [wrapper]);
         }
 
+        private void QueueSingleWrapperSelectionRestore(TreeView tree, TaskWrapperViewModel wrapper)
+        {
+            var restoreVersion = unchecked(++_selectionRestoreVersion);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (restoreVersion == _selectionRestoreVersion &&
+                    TryGetValidatedTree(tree, out _))
+                {
+                    SelectSingleWrapper(tree, wrapper);
+                }
+            }, DispatcherPriority.Normal);
+        }
+
         private void SetTreeSelection(TreeView tree, IReadOnlyList<TaskWrapperViewModel> wrappers)
         {
             var selectedItems = tree.SelectedItems;
-            if (selectedItems == null)
+            if (selectedItems != null)
             {
-                return;
-            }
-
-            selectedItems.Clear();
-            foreach (var wrapper in wrappers)
-            {
-                selectedItems.Add(wrapper);
+                selectedItems.Clear();
+                foreach (var wrapper in wrappers)
+                {
+                    selectedItems.Add(wrapper);
+                }
             }
 
             var currentWrapper = wrappers.LastOrDefault();
@@ -1937,14 +2121,59 @@ namespace Unlimotion.Views
 
         private void RestoreContextMenuContextFromPlacementTarget(MenuItem menuItem)
         {
-            var contextMenu = menuItem.FindParent<ContextMenu>();
+            var contextMenu = FindOwningContextMenu(menuItem);
             if (contextMenu?.PlacementTarget is not Control placementTarget)
             {
                 return;
             }
 
             _contextMenuTree = TryGetTaskTree(placementTarget) ?? _contextMenuTree;
-            _contextMenuWrapper ??= TryGetWrapper(placementTarget);
+
+            if (TryGetWrapper(placementTarget) is { } targetWrapper)
+            {
+                _contextMenuWrapper = targetWrapper;
+            }
+        }
+
+        private ContextMenu? FindOwningContextMenu(MenuItem menuItem)
+        {
+            var visualParent = menuItem.FindParent<ContextMenu>();
+            if (visualParent != null)
+            {
+                return visualParent;
+            }
+
+            var logicalParent = menuItem.FindLogicalAncestorOfType<ContextMenu>();
+            if (logicalParent != null)
+            {
+                return logicalParent;
+            }
+
+            var tag = menuItem.Tag?.ToString();
+            return GetTaskTrees()
+                .Select(tree => tree.ContextMenu)
+                .FirstOrDefault(contextMenu =>
+                    contextMenu?.Items
+                        .OfType<MenuItem>()
+                        .Any(item => ReferenceEquals(item, menuItem)) == true)
+                ?? GetTaskTrees()
+                    .Select(tree => tree.ContextMenu)
+                    .FirstOrDefault(contextMenu =>
+                        contextMenu?.PlacementTarget is Control &&
+                        !string.IsNullOrWhiteSpace(tag) &&
+                        contextMenu.Items
+                            .OfType<MenuItem>()
+                            .Any(item => string.Equals(item.Tag?.ToString(), tag, StringComparison.Ordinal)));
+        }
+
+        private IEnumerable<TreeView> GetTaskTrees()
+        {
+            return KnownMainTaskTreeNames
+                .Select(this.FindControl<TreeView>)
+                .Where(tree => tree != null)
+                .Cast<TreeView>()
+                .Concat(this.GetVisualDescendants().OfType<TreeView>())
+                .Distinct();
         }
 
         private static TaskWrapperViewModel? TryGetWrapper(object? source)
@@ -2006,6 +2235,22 @@ namespace Unlimotion.Views
             while (current != null)
             {
                 if (current is TControl)
+                {
+                    return true;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return false;
+        }
+
+        private static bool IsControlOrDescendantOf(Control control, Control ancestor)
+        {
+            Control? current = control;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, ancestor))
                 {
                     return true;
                 }
