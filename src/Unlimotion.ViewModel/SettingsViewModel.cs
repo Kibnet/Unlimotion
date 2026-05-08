@@ -417,7 +417,7 @@ public class SettingsViewModel
         {
             _gitRemoteName = value;
             _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
-            TryFillGitRemoteUrlFromSelectedRemote();
+            SyncGitRemoteUrlFromSelectedRemote(forceKnownRemoteUrl: true);
             RefreshBackupAuthMode();
             RefreshBackupState();
         }
@@ -619,7 +619,7 @@ public class SettingsViewModel
         Refs = _backupService?.Refs() ?? new List<string>();
         HasMultipleRemotes = RemotesWithAuthType.Count > 1;
         EnsureRemoteSelection();
-        TryFillGitRemoteUrlFromSelectedRemote();
+        SyncGitRemoteUrlFromSelectedRemote(forceKnownRemoteUrl: true);
         EnsureGitPushRefSpecSelection();
         RefreshBackupAuthMode();
         RefreshBackupState();
@@ -899,9 +899,9 @@ public class SettingsViewModel
                         ?? Remotes[0];
     }
 
-    private void TryFillGitRemoteUrlFromSelectedRemote()
+    private void SyncGitRemoteUrlFromSelectedRemote(bool forceKnownRemoteUrl)
     {
-        if (!string.IsNullOrWhiteSpace(GitRemoteUrl) || string.IsNullOrWhiteSpace(GitRemoteName))
+        if (string.IsNullOrWhiteSpace(GitRemoteName))
         {
             return;
         }
@@ -909,8 +909,30 @@ public class SettingsViewModel
         var remoteUrl = _backupService?.GetRemoteUrl(GitRemoteName);
         if (!string.IsNullOrWhiteSpace(remoteUrl))
         {
+            if (!string.IsNullOrWhiteSpace(GitRemoteUrl) &&
+                !string.Equals(GitRemoteUrl, remoteUrl, StringComparison.Ordinal) &&
+                (!forceKnownRemoteUrl || !IsKnownRemoteUrl(GitRemoteUrl)))
+            {
+                return;
+            }
+
             GitRemoteUrl = remoteUrl;
         }
+    }
+
+    private bool IsKnownRemoteUrl(string? remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl))
+        {
+            return false;
+        }
+
+        return Remotes.Any(remote =>
+        {
+            var existingRemoteUrl = _backupService?.GetRemoteUrl(remote);
+            return !string.IsNullOrWhiteSpace(existingRemoteUrl) &&
+                   string.Equals(existingRemoteUrl, remoteUrl, StringComparison.Ordinal);
+        });
     }
 
     private void EnsureGitPushRefSpecFallback()

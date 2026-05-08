@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using LibGit2Sharp;
@@ -205,6 +207,7 @@ public class BackupViaGitService : IRemoteBackupService
             throw new InvalidOperationException(L10n.Format("SshKeygenDidNotCreateFiles", sshDirectory));
         }
 
+        TrySetPrivateKeyPermissions(keyPaths.PrivateKeyPath);
         return keyPaths.PublicKeyPath;
     }
 
@@ -353,7 +356,7 @@ public class BackupViaGitService : IRemoteBackupService
     {
         var settings = GetSettings();
         var repositoryPath = GetRepositoryPath(settings.repositoryPath);
-        var remoteUrl = RequireRemoteUrl(settings.git);
+        var remoteUrl = ResolveRemoteUrl(settings.git, repositoryPath);
         var localRepositoryExists = Repository.IsValid(repositoryPath);
         var localFolderHasContent = HasLocalFolderContent(repositoryPath);
         var remoteHasContent = RemoteHasContent(remoteUrl, settings.git);
@@ -478,7 +481,7 @@ public class BackupViaGitService : IRemoteBackupService
                 {
                     dbwatcher?.SetEnable(false);
 
-                    repo.Network.Push(remote, settings.git.PushRefSpec, CreatePushOptions(settings.git));
+                    PushRemote(repo, path, settings.git, settings.git.PushRefSpec);
 
                     ShowUiMessage(L10n.Get("PushSuccessful"));
                 }
@@ -524,8 +527,7 @@ public class BackupViaGitService : IRemoteBackupService
             {
                 dbwatcher?.SetEnable(false);
 
-                var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
-                Commands.Fetch(repo, settings.git.RemoteName, refSpecs, CreateFetchOptions(settings.git), string.Empty);
+                FetchRemote(repo, path, settings.git);
 
                 var localBranch = repo.Branches[settings.git.PushRefSpec];
                 if (localBranch == null)
@@ -626,7 +628,7 @@ public class BackupViaGitService : IRemoteBackupService
         using var repo = new Repository(repositoryPath);
         EnsureRemote(repo, gitSettings.RemoteName, remoteUrl);
         EnsureCommitOnConfiguredBranch(repo, gitSettings, "Initial task backup");
-        PushConfiguredBranch(repo, gitSettings);
+        PushConfiguredBranch(repo, repositoryPath, gitSettings);
         ShowUiMessage(L10n.Get("RepositoryInitializedAndPushed"));
     }
 
@@ -656,7 +658,7 @@ public class BackupViaGitService : IRemoteBackupService
         DeleteIgnoredMigrationReportFiles(repo);
         if (hasCleanupCommit)
         {
-            PushConfiguredBranch(repo, gitSettings);
+            PushConfiguredBranch(repo, repositoryPath, gitSettings);
         }
 
         ShowUiMessage(L10n.Get("RepositoryConnected"));
@@ -685,7 +687,7 @@ public class BackupViaGitService : IRemoteBackupService
             RestoreIgnoredMigrationReports(repo, localMigrationReports);
         }
 
-        PushConfiguredBranch(repo, gitSettings);
+        PushConfiguredBranch(repo, repositoryPath, gitSettings);
         ShowUiMessage(L10n.Get("RepositoryConnectedAndMerged"));
     }
 
@@ -710,10 +712,21 @@ public class BackupViaGitService : IRemoteBackupService
     {
         var remote = repo.Network.Remotes[gitSettings.RemoteName]
                      ?? throw new InvalidOperationException(L10n.Format("RemoteNotFound", gitSettings.RemoteName));
+        var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification).ToArray();
+        if (ShouldUseGitCliSshTransport(remote.Url))
+        {
+            RunGitCommandWithConfiguredSshKey(
+                repositoryPath,
+                "git fetch",
+                gitSettings,
+                BuildGitFetchArguments(gitSettings.RemoteName, refSpecs));
+            return;
+        }
+
         Commands.Fetch(
             repo,
             gitSettings.RemoteName,
-            remote.FetchRefSpecs.Select(x => x.Specification),
+            refSpecs,
             CreateFetchOptions(gitSettings),
             string.Empty);
     }
@@ -823,11 +836,28 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
-    private void PushConfiguredBranch(Repository repo, GitSettings gitSettings)
+    private void PushConfiguredBranch(Repository repo, string repositoryPath, GitSettings gitSettings)
+    {
+        PushRemote(repo, repositoryPath, gitSettings, gitSettings.PushRefSpec);
+    }
+
+    private void PushRemote(Repository repo, string repositoryPath, GitSettings gitSettings, string pushRefSpec)
     {
         var remote = repo.Network.Remotes[gitSettings.RemoteName]
                      ?? throw new InvalidOperationException(L10n.Format("RemoteNotFound", gitSettings.RemoteName));
-        repo.Network.Push(remote, gitSettings.PushRefSpec, CreatePushOptions(gitSettings));
+        if (ShouldUseGitCliSshTransport(remote.Url))
+        {
+            RunGitCommandWithConfiguredSshKey(
+                repositoryPath,
+                "git push",
+                gitSettings,
+                "push",
+                gitSettings.RemoteName,
+                pushRefSpec);
+            return;
+        }
+
+        repo.Network.Push(remote, pushRefSpec, CreatePushOptions(gitSettings));
     }
 
     private Branch EnsureLocalBranch(Repository repo, GitSettings gitSettings, Commit targetCommit)
@@ -869,6 +899,11 @@ public class BackupViaGitService : IRemoteBackupService
 
     private List<string> GetRemoteHeadRefs(string remoteUrl, GitSettings gitSettings)
     {
+        if (ShouldUseGitCliSshTransport(remoteUrl))
+        {
+            return GetRemoteHeadRefsViaGitCli(remoteUrl, gitSettings);
+        }
+
         if (IsSshUrl(remoteUrl))
         {
             return GetRemoteHeadRefsViaFetch(remoteUrl, gitSettings);
@@ -915,6 +950,26 @@ public class BackupViaGitService : IRemoteBackupService
         {
             TryDeleteDirectory(tempRepositoryPath);
         }
+    }
+
+    private List<string> GetRemoteHeadRefsViaGitCli(string remoteUrl, GitSettings gitSettings)
+    {
+        var processResult = RunGitCommandWithConfiguredSshKey(
+            Path.GetTempPath(),
+            "git ls-remote",
+            gitSettings,
+            "ls-remote",
+            "--heads",
+            remoteUrl);
+
+        return processResult.StandardOutput
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(parts => parts.Length >= 2)
+            .Select(parts => parts[1])
+            .Where(reference => reference.StartsWith("refs/heads/", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static void TryDeleteDirectory(string path)
@@ -1208,6 +1263,29 @@ public class BackupViaGitService : IRemoteBackupService
         return gitSettings.RemoteUrl;
     }
 
+    private string ResolveRemoteUrl(GitSettings gitSettings, string repositoryPath)
+    {
+        if (!string.IsNullOrWhiteSpace(gitSettings.RemoteName) &&
+            Repository.IsValid(repositoryPath))
+        {
+            using var repo = new Repository(repositoryPath);
+            var remoteUrl = repo.Network.Remotes[gitSettings.RemoteName]?.Url;
+            if (!string.IsNullOrWhiteSpace(remoteUrl))
+            {
+                return remoteUrl;
+            }
+        }
+
+        return RequireRemoteUrl(gitSettings);
+    }
+
+    internal static string[] BuildGitFetchArguments(string remoteName, IReadOnlyCollection<string> refSpecs)
+    {
+        var arguments = new List<string> { "fetch", remoteName };
+        arguments.AddRange(refSpecs);
+        return arguments.ToArray();
+    }
+
     private static string GetBranchShortName(string canonicalBranchName)
     {
         const string headsPrefix = "refs/heads/";
@@ -1321,7 +1399,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         var normalizedPath = privateKeyPath.Replace('\\', '/').Replace("\"", "\\\"");
-        return $"ssh -i \"{normalizedPath}\" -o IdentitiesOnly=yes -o BatchMode=yes";
+        return $"ssh -i \"{normalizedPath}\" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new";
     }
 
     internal static void GenerateManagedRsaSshKey(string privateKeyPath, string publicKeyPath)
@@ -1385,20 +1463,77 @@ public class BackupViaGitService : IRemoteBackupService
 
     private static void TrySetPrivateKeyPermissions(string privateKeyPath)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                TrySetWindowsPrivateKeyPermissions(privateKeyPath);
+                return;
+            }
+
+            File.SetUnixFileMode(privateKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to set SSH private key permissions for '{privateKeyPath}': {ex}");
+        }
+    }
+
+    private static void TrySetWindowsPrivateKeyPermissions(string privateKeyPath)
+    {
+        var currentUserSid = WindowsIdentity.GetCurrent().User;
+        if (currentUserSid == null)
         {
             return;
         }
 
+        var systemSid = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var administratorsSid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        var allowedSidValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            currentUserSid.Value,
+            systemSid.Value,
+            administratorsSid.Value
+        };
+
+        var fileInfo = new FileInfo(privateKeyPath);
+        var security = fileInfo.GetAccessControl();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+
+        var accessRules = security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .ToList();
+        foreach (var rule in accessRules)
+        {
+            if (rule.IdentityReference is SecurityIdentifier identity &&
+                !allowedSidValues.Contains(identity.Value))
+            {
+                security.RemoveAccessRuleAll(rule);
+            }
+        }
+
         try
         {
-            File.SetUnixFileMode(privateKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            security.SetOwner(currentUserSid);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Android app-private storage already prevents other apps from reading the key.
+            Debug.WriteLine($"Failed to set SSH private key owner for '{privateKeyPath}': {ex}");
         }
+
+        security.ResetAccessRule(CreatePrivateKeyAccessRule(currentUserSid));
+        security.ResetAccessRule(CreatePrivateKeyAccessRule(systemSid));
+        security.ResetAccessRule(CreatePrivateKeyAccessRule(administratorsSid));
+        fileInfo.SetAccessControl(security);
     }
+
+    private static FileSystemAccessRule CreatePrivateKeyAccessRule(IdentityReference identity) =>
+        new(
+            identity,
+            FileSystemRights.FullControl,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Allow);
 
     private static string GetRepositoryPath(string? pathFromSettings)
     {
@@ -1459,6 +1594,12 @@ public class BackupViaGitService : IRemoteBackupService
                && remoteUrl.IndexOf("://", StringComparison.Ordinal) < 0;
     }
 
+    private static bool ShouldUseGitCliSshTransport(string? remoteUrl) =>
+        ShouldUseGitCliSshTransport(remoteUrl, RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+
+    internal static bool ShouldUseGitCliSshTransport(string? remoteUrl, bool isWindows) =>
+        isWindows && IsSshUrl(remoteUrl);
+
     private static (int ExitCode, string StandardOutput, string StandardError) RunGitCommand(
         string workingDirectory,
         string operationName,
@@ -1466,6 +1607,26 @@ public class BackupViaGitService : IRemoteBackupService
     {
         var startInfo = CreateProcessStartInfo("git", workingDirectory, arguments);
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+
+        var processResult = RunProcess(startInfo);
+        if (processResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(L10n.Format("GitOperationFailed", operationName, GetProcessError(processResult)));
+        }
+
+        return processResult;
+    }
+
+    private static (int ExitCode, string StandardOutput, string StandardError) RunGitCommandWithConfiguredSshKey(
+        string workingDirectory,
+        string operationName,
+        GitSettings gitSettings,
+        params string[] arguments)
+    {
+        var privateKeyPath = GetConfiguredSshPrivateKeyPath(gitSettings);
+        var startInfo = CreateProcessStartInfo("git", workingDirectory, arguments);
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        startInfo.Environment["GIT_SSH_COMMAND"] = BuildGitSshCommand(privateKeyPath);
 
         var processResult = RunProcess(startInfo);
         if (processResult.ExitCode != 0)
@@ -1489,6 +1650,7 @@ public class BackupViaGitService : IRemoteBackupService
             throw new InvalidOperationException(L10n.Format("SshPrivateKeyNotFound", privateKeyPath));
         }
 
+        TrySetPrivateKeyPermissions(privateKeyPath);
         return privateKeyPath;
     }
 
