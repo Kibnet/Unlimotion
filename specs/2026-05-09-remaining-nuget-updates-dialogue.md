@@ -26,6 +26,7 @@
 - `Avalonia.Controls.PanAndZoom 11.3.0` остается последней stable на NuGet и помечена deprecated; 12.x stable версии нет. Источник: https://www.nuget.org/packages/Avalonia.Controls.PanAndZoom/
 - `DialogHost.Avalonia 0.12.x` является следующей веткой после 0.11.x и требует рассматривать ее вместе с Avalonia 12. Источник: https://www.nuget.org/packages/DialogHost.Avalonia
 - `TUnit` latest stable на 2026-05-09 по локальному NuGet scan: `1.43.41`.
+- В Avalonia 12 пакет `Avalonia.Diagnostics` удален; официальная рекомендация - удалить reference и, если нужны Dev Tools, заменить на `AvaloniaUI.DiagnosticsSupport`. Источник: https://docs.avaloniaui.net/docs/avalonia12-breaking-changes
 
 ## 3. Гипотезы по путям обновления
 ### Путь A: Полная миграция UI на Avalonia 12
@@ -122,7 +123,11 @@
 - Статус 2026-05-09: начат легкий boundary.
   - Добавлен `IRoadmapViewportAdapter` и `NodifyRoadmapViewportAdapter`.
   - `GraphControl.axaml.cs` больше не обращается напрямую к `RoadmapEditor.ViewportZoom`, `ViewportLocation`, `ZoomIn()`, `ZoomOut()`, `ZoomAtPosition()`, `FitToScreen()`; эти операции идут через adapter.
-  - Прямая зависимость от Nodify все еще остается в XAML (`NodifyEditor`, `LineConnection`, `Minimap`) и в одной точке создания adapter. Значит blocker снижен, но не снят полностью.
+- Прямая зависимость от Nodify все еще остается в XAML (`NodifyEditor`, `LineConnection`, `Minimap`) и в одной точке создания adapter. Значит blocker снижен, но не снят полностью.
+- Пробный Avalonia 12 bump 2026-05-09 подтвердил, что это hard blocker:
+  - при наличии `ResourceInclude Source="avares://Nodify/Theme.axaml"` `App.Initialize()` зависает внутри `AvaloniaXamlLoader.Load(this)`;
+  - если убрать app-level Nodify theme, `MainControl.InitializeComponent()` все равно зависает на embedded `<views:GraphControl DataContext="{Binding Graph}"/>`;
+  - временная замена `GraphControl` на placeholder позволяет non-graph compatibility test пройти, значит блокер локализован в Nodify theme/surface, а не в общем Avalonia 12 runtime.
 
 ### `AppAutomation.TUnit` / TUnit
 - `src/Unlimotion.Test` использует TUnit напрямую и обновлен до latest patch `1.43.41`.
@@ -247,6 +252,32 @@
 - `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask" --no-progress` - pass: 1/1.
 - `rg -n "GetTextAsync|TryGetTextAsync" src/Unlimotion src/Unlimotion.Test -g "*.cs"` - only `TryGetTextAsync()` remains.
 
+### Шаг 6: пробный Avalonia 12 bump
+Статус: выполнено как investigation 2026-05-09; кодовые изменения пробного bump не оставлены в рабочей ветке.
+
+Что проверялось:
+- `Avalonia*` family `11.3.14 -> 12.0.2`.
+- `ReactiveUI.Avalonia 11.3.8 -> 12.0.1`.
+- `DialogHost.Avalonia 0.11.0 -> 0.12.2`.
+
+Найденные факты:
+- Restore сначала падал на `Avalonia.Diagnostics >= 12.0.2`: такой версии нет, потому что пакет удален в Avalonia 12.
+- После удаления diagnostics references restore проходил.
+- Compile blocker `GotFocusEventArgs` в `MainControl.axaml.cs` снимается заменой handler аргумента на `RoutedEventArgs`.
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` на Avalonia 12 проходил, но появлялись новые warnings по `Watermark -> PlaceholderText` и `UseFloatingWatermark -> UseFloatingPlaceholder`.
+- UI-test blocker 1: `HeadlessUnitTestSession` с синхронным `using` зависает на teardown; `await using` для session позволяет тесту завершиться.
+- UI-test blocker 2: `App.axaml` зависает при загрузке `avares://Nodify/Theme.axaml`.
+- UI-test blocker 3: без app-level Nodify theme `MainControl.axaml` зависает на `<views:GraphControl DataContext="{Binding Graph}"/>`.
+- Контрольная временная проверка: когда Nodify theme removed и `GraphControl` replaced by placeholder, `PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work` проходит на Avalonia 12 после `await using`.
+
+Вывод:
+- Avalonia 12 compile path почти открыт, но merge-ready bump пока невозможен из-за `NodifyAvalonia 6.6.0`.
+- Следующее решение по диалогу: выбрать один из трех путей для roadmap graph surface:
+  1. форкнуть/адаптировать `NodifyAvalonia` под Avalonia 12;
+  2. заменить `NodifyAvalonia` на другую graph/diagram библиотеку;
+  3. сделать локальный lightweight graph surface для текущих roadmap сценариев.
+- До выбранного решения Avalonia family, `ReactiveUI.Avalonia` и `DialogHost.Avalonia` остаются documented exceptions.
+
 ## 8. Журнал диалога
 | Время | Участник | Тезис / решение | Последствие |
 | --- | --- | --- | --- |
@@ -261,3 +292,4 @@
 | 2026-05-09 | Codex | Поднял TUnit до `1.43.41`, удалил `AppAutomation.TUnit` и заменил его локальным glue; package outdated для AppAutomation-проектов пустой | NuGet blocker по AppAutomation/TUnit снят; оставшееся зависание `Unlimotion.UiTests.Headless` выделено в отдельный lifecycle blocker |
 | 2026-05-09 | Codex | Перевел drag/drop код и tests с legacy `DataObject`/`DoDragDrop` на `IDataTransfer`/`DoDragDropAsync` | Drag/drop API blocker для Avalonia 12 снят; остался небольшой obsolete clipboard API и крупный `NodifyAvalonia` XAML blocker |
 | 2026-05-09 | Codex | Заменил obsolete clipboard read API `IClipboard.GetTextAsync()` на `TryGetTextAsync()` | Малый Avalonia API blocker снят; остается крупный `NodifyAvalonia` XAML blocker перед Avalonia 12 |
+| 2026-05-09 | Codex | Выполнил пробный Avalonia 12 bump; restore/build доводятся до pass, но UI initialization зависает на `Nodify` theme/surface | Подтвержден hard blocker: нужно форкнуть, заменить или локально реализовать roadmap graph surface до merge-ready Avalonia 12 update |
