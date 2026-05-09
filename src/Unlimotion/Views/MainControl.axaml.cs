@@ -10,6 +10,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
@@ -487,7 +488,7 @@ namespace Unlimotion.Views
                 return null;
             }
 
-            return await clipboard.GetTextAsync();
+            return await clipboard.TryGetTextAsync();
         }
 
         private void QueueTitleFocus(long requestVersion, string? targetTaskId, int retriesRemaining)

@@ -227,7 +227,25 @@
 
 Вывод:
 - Drag/drop API blocker для Avalonia 12 migration снят.
-- Следующий маленький API blocker: заменить obsolete clipboard read API.
+- Следующий маленький API blocker был `IClipboard.GetTextAsync()` в `MainControl.axaml.cs`.
+
+### Avalonia legacy clipboard API
+- До 2026-05-09 сборка показывала obsolete warning по `IClipboard.GetTextAsync()` в `MainControl.axaml.cs`.
+- Решение 2026-05-09: заменить чтение clipboard на extension `TryGetTextAsync()` из `Avalonia.Input.Platform`.
+- Статус: выполнено; прямых `GetTextAsync` usages в `src/Unlimotion` больше нет.
+
+### Шаг 5: Avalonia clipboard `TryGetTextAsync`
+Статус: выполнено 2026-05-09.
+
+Что сделано:
+- `MainControl.GetClipboardTextAsync()` переведен с obsolete `IClipboard.GetTextAsync()` на `TryGetTextAsync()`.
+- Поведение для недоступного clipboard не менялось: как и раньше, показывается `ClipboardUnavailable`, затем возвращается `null`.
+
+Проверки:
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work" --no-progress` - pass: 1/1.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask" --no-progress` - pass: 1/1.
+- `rg -n "GetTextAsync|TryGetTextAsync" src/Unlimotion src/Unlimotion.Test -g "*.cs"` - only `TryGetTextAsync()` remains.
 
 ## 8. Журнал диалога
 | Время | Участник | Тезис / решение | Последствие |
@@ -242,3 +260,4 @@
 | 2026-05-09 | Codex | Выполнил легкий boundary вокруг imperative API `NodifyEditor`: zoom/pan/fit вынесены в `IRoadmapViewportAdapter`, XAML surface пока остается на Nodify | Риск будущей Avalonia 12 миграции снижен; следующий выбор - глубокий XAML boundary или оценка fork/replacement `NodifyAvalonia` |
 | 2026-05-09 | Codex | Поднял TUnit до `1.43.41`, удалил `AppAutomation.TUnit` и заменил его локальным glue; package outdated для AppAutomation-проектов пустой | NuGet blocker по AppAutomation/TUnit снят; оставшееся зависание `Unlimotion.UiTests.Headless` выделено в отдельный lifecycle blocker |
 | 2026-05-09 | Codex | Перевел drag/drop код и tests с legacy `DataObject`/`DoDragDrop` на `IDataTransfer`/`DoDragDropAsync` | Drag/drop API blocker для Avalonia 12 снят; остался небольшой obsolete clipboard API и крупный `NodifyAvalonia` XAML blocker |
+| 2026-05-09 | Codex | Заменил obsolete clipboard read API `IClipboard.GetTextAsync()` на `TryGetTextAsync()` | Малый Avalonia API blocker снят; остается крупный `NodifyAvalonia` XAML blocker перед Avalonia 12 |
