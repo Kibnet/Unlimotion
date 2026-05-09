@@ -15,7 +15,6 @@
     <PackageVersion Include="Avalonia.Browser" Version="11.3.14" />
     <PackageVersion Include="Avalonia.Android" Version="11.3.14" />
     <PackageVersion Include="Avalonia.Headless" Version="11.3.14" />
-    <PackageVersion Include="Avalonia.Controls.PanAndZoom" Version="11.3.0" />
     <PackageVersion Include="ReactiveUI.Avalonia" Version="11.3.8" />
     <PackageVersion Include="TUnit" Version="1.43.38" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.2" />

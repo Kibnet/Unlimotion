@@ -1,0 +1,174 @@
+# Диалог по оставшимся необновленным NuGet-пакетам
+
+## 0. Контекст
+- Дата начала диалога: 2026-05-09.
+- База: локальный коммит `b4a3e5e Update NuGet packages to compatible stable versions`.
+- Цель: совместно решить, что нужно сделать, чтобы в итоге обновить оставшиеся direct NuGet-пакеты до latest stable.
+- Формат: этот файл фиксирует факты, вопросы, аргументы и принятые решения по ходу диалога.
+
+## 1. Текущий список оставшихся обновлений
+По свежему `dotnet list <project> package --outdated --no-restore`:
+
+| Группа | Сейчас | Latest stable | Где видно | Почему не обновлено сейчас |
+| --- | --- | --- | --- | --- |
+| Avalonia family | `11.3.14` | `12.0.2` | `Unlimotion`, `Android`, `Browser`, `Desktop`, `iOS`, `Unlimotion.Test` | Runtime/API несовместимость с частью UI-зависимостей |
+| `ReactiveUI.Avalonia` | `11.3.8` | `12.0.1` | `src/Unlimotion/Unlimotion.csproj` | `12.0.1` требует Avalonia `>= 12.0.1`, поэтому зависит от решения по Avalonia 12 |
+| `DialogHost.Avalonia` | `0.11.0` | `0.12.2` | `src/Unlimotion/Unlimotion.csproj` | 0.12.x находится в Avalonia 12-ветке, поэтому зависит от решения по Avalonia 12 |
+| `TUnit` main test stack | `1.43.38` | `1.43.41` | `src/Unlimotion.Test/Unlimotion.Test.csproj` | Новый patch появился после предыдущего EXEC-прохода |
+| `TUnit` in AppAutomation projects | `1.37.10` | `1.43.41` | `tests/Unlimotion.UiTests.*` | `AppAutomation.TUnit 1.5.6` падал с TUnit 1.43.x на `BeforeTestHooks`; нужен отдельный план |
+
+## 2. Факты из package metadata / источников
+- `Avalonia 12.0.2` опубликована 2026-04-28 и таргетит `.NET 8.0` с совместимостью для `.NET 10.0`; значит текущий `net10.0` сам по себе не блокер. Источник: https://www.nuget.org/packages/Avalonia
+- `ReactiveUI.Avalonia 12.0.1` зависит от `Avalonia >= 12.0.1`, поэтому ее нельзя обновить отдельно от Avalonia 12. Источник: https://www.nuget.org/packages/ReactiveUI.Avalonia/
+- `Avalonia.Controls.PanAndZoom 11.3.0` остается последней stable на NuGet и помечена deprecated; 12.x stable версии нет. Источник: https://www.nuget.org/packages/Avalonia.Controls.PanAndZoom/
+- `DialogHost.Avalonia 0.12.x` является следующей веткой после 0.11.x и требует рассматривать ее вместе с Avalonia 12. Источник: https://www.nuget.org/packages/DialogHost.Avalonia
+- `TUnit` latest stable на 2026-05-09 по локальному NuGet scan: `1.43.41`.
+
+## 3. Гипотезы по путям обновления
+### Путь A: Полная миграция UI на Avalonia 12
+Что нужно:
+- Обновить всю Avalonia family до `12.0.2`.
+- Обновить `ReactiveUI.Avalonia` до `12.0.1`.
+- Обновить `DialogHost.Avalonia` до `0.12.2`.
+- Решить blocker `NodifyAvalonia 6.6.0`: дождаться/найти Avalonia 12-compatible release, заменить библиотеку, форкнуть и адаптировать, либо убрать зависимость.
+- Решить blocker `Avalonia.Controls.PanAndZoom 11.3.0`: заменить библиотеку, форкнуть и адаптировать, либо переписать нужный zoom/pan surface локально.
+- Перейти с obsolete drag/drop API на Avalonia 12 `DataTransfer` API.
+- Прогнать обязательные UI-тесты по roadmap graph, drag/drop, zoom/pan, dialogs, mobile/browser startup.
+
+Плюсы:
+- Все UI-пакеты действительно уходят на latest stable.
+- Снимаются текущие obsolete warnings по Avalonia 11.3 drag/drop.
+
+Минусы:
+- Это уже не "dependency bump", а отдельная UI-platform migration.
+- Самый рискованный участок: graph editor и pan/zoom.
+
+### Путь B: Удержать Avalonia 11 до появления совместимых upstream-пакетов
+Что нужно:
+- Оставить Avalonia family, `ReactiveUI.Avalonia`, `DialogHost.Avalonia`, `PanAndZoom`, `NodifyAvalonia` как documented exceptions.
+- Периодически проверять релизы `NodifyAvalonia` и `Avalonia.Controls.PanAndZoom`.
+- Сейчас обновить только `TUnit` main test stack до `1.43.41`.
+
+Плюсы:
+- Самый дешевый и безопасный вариант.
+- Сохраняет текущую работоспособность UI.
+
+Минусы:
+- Запрос "в итоге обновить все" остается отложенным.
+- Deprecated `PanAndZoom` и Avalonia 11 остаются техническим долгом.
+
+### Путь C: Предварительная развязка от блокирующих UI-пакетов на Avalonia 11
+Что нужно:
+- На Avalonia 11 заменить или локализовать зависимости от `NodifyAvalonia`/`PanAndZoom` за отдельными internal adapter/control boundaries.
+- Добавить UI characterization tests вокруг graph editor, roadmap drag/drop, zoom/pan.
+- После этого пробовать Avalonia 12 миграцию с меньшим blast radius.
+
+Плюсы:
+- Снижает риск будущей Avalonia 12 миграции.
+- Позволяет принимать решения по библиотекам независимо.
+
+Минусы:
+- Больше работы до видимого обновления.
+- Нужно аккуратно не переписать graph editor сверх необходимости.
+
+### Путь D: AppAutomation/TUnit отдельно
+Что нужно:
+- Проверить, есть ли более новая `AppAutomation.TUnit`, совместимая с TUnit `1.43.41`.
+- Если нет, выбрать: удерживать TUnit `1.37.10` только в AppAutomation; форкнуть/patch-нуть `AppAutomation.TUnit`; отказаться от `AppAutomation.TUnit` glue и запускать через plain TUnit/MTP; либо мигрировать UI tests на другой runner.
+- Разобраться с текущим зависанием полного `Unlimotion.UiTests.Headless.exe`.
+
+Плюсы:
+- Тестовый стек можно чинить независимо от Avalonia 12.
+
+Минусы:
+- Зависание runner может быть отдельным багом test host/session lifecycle.
+
+## 4. Вопросы для решения
+1. Что выбираем как целевой маршрут по Avalonia: A, B или C?
+2. Готовы ли мы заменить/форкнуть `NodifyAvalonia` и `PanAndZoom`, если upstream не даст Avalonia 12-compatible stable в ближайшее время?
+3. Что важнее для AppAutomation: сохранить `AppAutomation.TUnit` и ждать совместимости, или убрать эту связку и контролировать runner самим?
+4. Обновляем ли `TUnit` main test stack `1.43.38 -> 1.43.41` сразу как quick win?
+
+## 5. Решения
+### Решение 1: сначала снимаем блокеры
+Принято пользователем 2026-05-09: сначала снимаем блокеры, а не делаем прямую полную миграцию на Avalonia 12.
+
+Практический смысл решения:
+- выбран маршрут C: подготовительная развязка от блокирующих UI-пакетов на Avalonia 11;
+- Avalonia 12 migration откладывается до тех пор, пока blockers будут сняты или изолированы;
+- блокеры считаются снятыми, если пакет либо удален из direct dependencies, либо заменен, либо изолирован за локальной границей так, чтобы Avalonia 12-миграция не зависела от его API напрямую.
+
+## 6. Инвентаризация блокеров по коду
+### `Avalonia.Controls.PanAndZoom`
+- По поиску `PanAndZoom`, `ZoomBorder`, `Zoom`, `Pan` прямое использование `Avalonia.Controls.PanAndZoom` в коде не найдено.
+- `src/Unlimotion/Unlimotion.csproj` содержит direct `PackageReference Include="Avalonia.Controls.PanAndZoom"`.
+- Фактический roadmap zoom/pan реализован через `NodifyEditor`:
+  - `src/Unlimotion/Views/GraphControl.axaml`: `nodify:NodifyEditor x:Name="RoadmapEditor"` с automation id `RoadmapZoomBorder`;
+  - `src/Unlimotion/Views/GraphControl.axaml.cs`: используются `RoadmapEditor.ViewportZoom`, `ViewportLocation`, `ZoomIn()`, `ZoomOut()`, `ZoomAtPosition()`, `FitToScreen()`.
+- Вывод: `PanAndZoom` выглядит как stale direct dependency и первый дешевый кандидат на снятие блокера через удаление reference + restore/build/UI tests.
+- Статус 2026-05-09: direct reference удален из `src/Unlimotion/Unlimotion.csproj`, central version удалена из `src/Directory.Packages.props`.
+- После удаления `dotnet list src\Unlimotion\Unlimotion.csproj package --outdated --no-restore` больше не показывает `Avalonia.Controls.PanAndZoom`.
+
+### `NodifyAvalonia`
+- Реальное использование сосредоточено в roadmap graph UI:
+  - `src/Unlimotion/Views/GraphControl.axaml`: `nodify:NodifyEditor`, `nodify:LineConnection`, templates for roadmap nodes/connections;
+  - `src/Unlimotion/Views/GraphControl.axaml.cs`: imperative access к `RoadmapEditor` для zoom/pan/fit и pointer interactions.
+- Уже есть существенная characterization coverage:
+  - `src/Unlimotion.Test/RoadmapGraphUiTests.cs` покрывает projection, render, automation ids, zoom/pan controls, minimap, node click/double tap, node drag, right-drag pan, drop behavior.
+- Вывод: это главный Avalonia 12 blocker. Его нельзя просто удалить; нужны adapter boundary, форк/замена, либо локальная реализация roadmap surface.
+
+### `AppAutomation.TUnit` / TUnit
+- `src/Unlimotion.Test` использует TUnit напрямую и может идти на latest patch.
+- `tests/Unlimotion.UiTests.Headless`, `tests/Unlimotion.UiTests.FlaUI`, `tests/Unlimotion.UiTests.Authoring` используют `AppAutomation.TUnit 1.5.6` и удерживают TUnit на `1.37.10`.
+- Предыдущая попытка поднять AppAutomation-проекты до TUnit 1.43.x падала на `BeforeTestHooks`.
+- Вывод: это отдельный тестовый blocker; он не блокирует Avalonia 12 напрямую, но блокирует "все packages latest stable" для AppAutomation test projects.
+
+## 7. Кандидаты на следующий шаг
+### Шаг 1: снять stale `PanAndZoom`
+Предлагаемое действие:
+- удалить `PackageReference Include="Avalonia.Controls.PanAndZoom"` из `src/Unlimotion/Unlimotion.csproj`;
+- удалить `PackageVersion Include="Avalonia.Controls.PanAndZoom"` из `src/Directory.Packages.props`;
+- выполнить `dotnet restore`, build `Unlimotion.Test` и targeted roadmap UI tests.
+
+Ожидаемый риск: низкий, потому что прямых usages не найдено.
+
+Статус: выполнено 2026-05-09.
+
+Проверки:
+- `dotnet restore src\Unlimotion.sln` - pass, с существующим `NU1608` по Android `LibGit2Sharp.NativeBinaries`.
+- `dotnet restore src\Unlimotion.Test\Unlimotion.Test.csproj` - pass.
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `RoadmapGraph_NodeRightDrag_PansViewportWithoutSelectingTask` - pass.
+- `PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work` - pass.
+- Обновлено 2026-05-09: roadmap characterization test gaps закрыты.
+  - `WaitForGraphControl` учитывает direct-root `GraphControl`.
+  - MainControl roadmap tests явно открывают `RoadmapTabItem`, потому что `GraphMode` связан через `OneWayToSource`.
+  - `WaitForTaskNode` больше не путает реальные task cards с decorative minimap nodes.
+  - Scheduled rebuild tests используют async waiting, чтобы headless dispatcher мог отработать `DispatcherTimer`.
+  - `GraphControl.ResolveMainWindowViewModel` сначала берет owner из `GraphViewModel`, и только потом падает назад на static singleton.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/*" --maximum-parallel-tests 1 --no-progress` - pass: 34/34.
+- `dotnet list src\Unlimotion\Unlimotion.csproj package --outdated --no-restore` - pass, `Avalonia.Controls.PanAndZoom` отсутствует в списке; остались Avalonia family, `DialogHost.Avalonia`, `ReactiveUI.Avalonia`.
+
+### Шаг 2: сделать boundary вокруг `NodifyEditor`
+Варианты:
+- легкий boundary: минимальная локальная обертка/контракт вокруг zoom/pan/fit operations и automation ids, без изменения XAML templates;
+- глубокий boundary: вынести весь roadmap surface в отдельный control/project, чтобы будущая замена Nodify не затрагивала `MainControl`/ViewModel;
+- прямой fork: оставить текущий API и адаптировать `NodifyAvalonia` под Avalonia 12, если лицензия и объем изменений приемлемы.
+
+Предварительная рекомендация Codex: начать с легкого boundary и characterization tests, затем оценить fork/replacement по фактическому объему.
+
+### Шаг 3: AppAutomation/TUnit
+Предлагаемое действие:
+- проверить, есть ли newer `AppAutomation.TUnit`, чем `1.5.6`;
+- если нет, решить между удержанием TUnit `1.37.10`, локальным patch/fork `AppAutomation.TUnit`, либо отказом от `AppAutomation.TUnit` glue.
+
+## 8. Журнал диалога
+| Время | Участник | Тезис / решение | Последствие |
+| --- | --- | --- | --- |
+| 2026-05-09 | Пользователь | Нужно обсудить оставшиеся необновленные пакеты в форме диалога и конспектировать результаты в файл | Создан этот файл |
+| 2026-05-09 | Codex | Сформировал текущую матрицу оставшихся updates и четыре возможных маршрута: Avalonia 12 сразу, ждать upstream, предварительно развязаться от UI-библиотек, AppAutomation/TUnit отдельно | Следующий шаг: выбрать стратегию по Avalonia и TUnit |
+| 2026-05-09 | Пользователь | Сначала снимаем блокеры | Выбран маршрут C: подготовительная развязка от блокирующих пакетов до Avalonia 12 |
+| 2026-05-09 | Codex | По коду `PanAndZoom` выглядит неиспользуемым direct reference; `NodifyAvalonia` является главным UI-блокером и сосредоточен в `GraphControl`; AppAutomation/TUnit остается отдельным тестовым блокером | Следующий рекомендуемый шаг: удалить stale `PanAndZoom`, затем заняться boundary вокруг `NodifyEditor` |
+| 2026-05-09 | Пользователь | Подтвердил удаление stale `PanAndZoom` | Выполнено удаление direct dependency |
+| 2026-05-09 | Codex | Удалил `Avalonia.Controls.PanAndZoom`; restore/build прошли; package outdated больше не показывает этот пакет; две устойчивые UI-проверки roadmap прошли, три старых roadmap tests падают независимо от наличия `PanAndZoom` | `PanAndZoom` blocker снят; перед следующим этапом желательно починить/обновить roadmap characterization tests или перейти к `NodifyEditor` boundary с учетом этих test gaps |
+| 2026-05-09 | Codex | Закрыл roadmap characterization test gaps: helper открытия roadmap tab, direct-root lookup, minimap-vs-card lookup, async ожидание scheduled rebuild, owner fallback через `GraphViewModel` | Полный `RoadmapGraphUiTests` проходит 34/34; `PanAndZoom` blocker снят без текущих UI-test gaps; следующий blocker - `NodifyAvalonia`/`NodifyEditor` boundary |
