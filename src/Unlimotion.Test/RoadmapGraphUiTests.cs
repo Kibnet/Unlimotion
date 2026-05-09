@@ -1801,8 +1801,7 @@ public class RoadmapGraphUiTests
                 await Assert.That(targetReady).IsTrue();
 
                 var targetNode = WaitForTaskNode(graphControl!, targetTask.Id);
-                var dragData = new DataObject();
-                dragData.Set(GraphControl.CustomFormat, sourceTask);
+                using var dragData = DragDataFormats.CreateTransfer(GraphControl.CustomDataFormat, sourceTask);
                 var dropArgs = new DragEventArgs(
                     DragDrop.DropEvent,
                     dragData,

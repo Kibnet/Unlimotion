@@ -612,6 +612,10 @@ namespace Unlimotion.Views
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
         private const string CustomBatchFormat = "application/xxx-unlimotion-task-batch";
+        private static readonly DataFormat<string> CustomDataFormat =
+            DataFormat.CreateStringPlatformFormat(CustomFormat);
+        private static readonly DataFormat<string> CustomBatchDataFormat =
+            DataFormat.CreateStringPlatformFormat(CustomBatchFormat);
         private const double TreeDragThreshold = 4;
         private static readonly TimeSpan InlineTitleRepeatedClickDelay = TimeSpan.FromMilliseconds(500);
 
@@ -750,7 +754,7 @@ namespace Unlimotion.Views
         public static void DragOver(object? sender, DragEventArgs e)
         {
             var mainControl = TryResolveMainControl(sender, e.Source);
-            if (mainControl == null || !ContainsSupportedDragData(e.Data))
+            if (mainControl == null || !ContainsSupportedDragData(e.DataTransfer))
             {
                 e.DragEffects = DragDropEffects.None;
                 return;
@@ -762,7 +766,7 @@ namespace Unlimotion.Views
         public static async Task Drop(object sender, DragEventArgs e)
         {
             var mainControl = TryResolveMainControl(sender, e.Source);
-            if (mainControl == null || !ContainsSupportedDragData(e.Data))
+            if (mainControl == null || !ContainsSupportedDragData(e.DataTransfer))
             {
                 e.DragEffects = DragDropEffects.None;
                 return;
@@ -783,7 +787,7 @@ namespace Unlimotion.Views
             EnsureTreeSelectionForDragStart(pending.Tree, wrappers, pending.WasSelected);
 
             var dragData = BuildTreeDragData(wrappers);
-                await DragDrop.DoDragDrop(
+                await DragDrop.DoDragDropAsync(
                     pending.PressEvent,
                     dragData,
                     DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
@@ -809,11 +813,13 @@ namespace Unlimotion.Views
             SelectSingleWrapper(tree, wrappers[0]);
         }
 
-        private static DataObject BuildTreeDragData(IReadOnlyList<TaskWrapperViewModel> wrappers)
+        private static InMemoryDragDataTransfer BuildTreeDragData(IReadOnlyList<TaskWrapperViewModel> wrappers)
         {
-            var dragData = new DataObject();
-            dragData.Set(CustomBatchFormat, new TaskTreeDragData(wrappers));
-            dragData.Set(CustomFormat, wrappers[0]);
+            var dragData = new InMemoryDragDataTransfer();
+            var item = new DataTransferItem();
+            item.Set(CustomBatchDataFormat, dragData.Track(new TaskTreeDragData(wrappers)));
+            item.Set(CustomDataFormat, dragData.Track(wrappers[0]));
+            dragData.Add(item);
             return dragData;
         }
 
@@ -882,11 +888,11 @@ namespace Unlimotion.Views
                    (source as Control)?.FindParent<MainControl>();
         }
 
-        private static bool ContainsSupportedDragData(IDataObject data)
+        private static bool ContainsSupportedDragData(IDataTransfer data)
         {
-            return data.Contains(CustomBatchFormat) ||
-                   data.Contains(CustomFormat) ||
-                   data.Contains(GraphControl.CustomFormat);
+            return data.Contains(CustomBatchDataFormat) ||
+                   data.Contains(CustomDataFormat) ||
+                   data.Contains(GraphControl.CustomDataFormat);
         }
 
         private static bool TryGetDropTargetTask(DragEventArgs e, out TaskItemViewModel targetTask)
@@ -922,7 +928,10 @@ namespace Unlimotion.Views
         {
             errorMessage = null;
 
-            if (e.Data.Get(CustomBatchFormat) is TaskTreeDragData batchData)
+            if (DragDataFormats.TryGetValue<TaskTreeDragData>(
+                    e.DataTransfer,
+                    CustomBatchDataFormat,
+                    out var batchData))
             {
                 var normalizedWrappers = operationKind == BatchDropOperationKind.MoveInto
                     ? batchData.Wrappers.NormalizeForMoveBatch()
@@ -955,7 +964,16 @@ namespace Unlimotion.Views
                 return items.Count > 0;
             }
 
-            var singleSource = e.Data.Get(CustomFormat) ?? e.Data.Get(GraphControl.CustomFormat);
+            object? singleSource = null;
+            if (!DragDataFormats.TryGetValue<object>(e.DataTransfer, CustomDataFormat, out singleSource))
+            {
+                DragDataFormats.TryGetValue<TaskItemViewModel>(
+                    e.DataTransfer,
+                    GraphControl.CustomDataFormat,
+                    out var graphSource);
+                singleSource = graphSource;
+            }
+
             if (!TryBuildSingleOperationItem(singleSource, operationKind, out var item, out errorMessage))
             {
                 items = Array.Empty<DragSourceOperationItem>();
@@ -1202,16 +1220,15 @@ namespace Unlimotion.Views
 
         private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var dragData = new DataObject();
             var dc = (DataContext as MainWindowViewModel)?.CurrentTaskItem;
             if (dc == null)
             {
                 return;
             }
 
-            dragData.Set(CustomFormat, dc);
+            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, dc);
 
-            var result = await DragDrop.DoDragDrop(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+            await DragDrop.DoDragDropAsync(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
         private void Task_OnDoubleTapped(object sender, TappedEventArgs e)

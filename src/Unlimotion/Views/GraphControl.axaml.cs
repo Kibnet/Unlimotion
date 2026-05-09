@@ -27,6 +27,8 @@ namespace Unlimotion.Views
     public partial class GraphControl : UserControl
     {
         public const string CustomFormat = "application/xxx-unlimotion-task-item";
+        internal static readonly DataFormat<string> CustomDataFormat =
+            DataFormat.CreateStringPlatformFormat(CustomFormat);
 
         private GraphViewModel? dc;
         private readonly DisposableList disposableList = new DisposableListRealization();
@@ -1257,8 +1259,7 @@ namespace Unlimotion.Views
 
         private static async Task StartRoadmapDragAsync(PendingRoadmapDragContext pending, PointerEventArgs e)
         {
-            var dragData = new DataObject();
-            dragData.Set(CustomFormat, pending.TaskItem);
+            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, pending.TaskItem);
 
             var graphControl = pending.Control.FindParent<GraphControl>();
             if (graphControl != null)
@@ -1268,7 +1269,7 @@ namespace Unlimotion.Views
 
             try
             {
-                await DragDrop.DoDragDrop(
+                await DragDrop.DoDragDropAsync(
                     pending.PressEvent,
                     dragData,
                     DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);

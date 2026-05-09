@@ -132,6 +132,14 @@
 - После этого `dotnet list ... package --outdated --no-restore` для `Unlimotion.UiTests.Headless`, `Unlimotion.UiTests.FlaUI`, `Unlimotion.UiTests.Authoring` больше не показывает updates.
 - Оставшийся не-NuGet blocker: реальный запуск `Unlimotion.UiTests.Headless` зависает в in-progress test и отменяется только по global timeout. Это уже задача lifecycle/headless test host, а не package compatibility blocker.
 
+### Avalonia legacy drag/drop API
+- До 2026-05-09 сборка показывала obsolete warnings по `DataObject`, `IDataObject`, `DragEventArgs.Data`, `DragDrop.DoDragDrop(...)`.
+- Эти API помечены в Avalonia 11.3 как legacy и заменяются на `IDataTransfer`/`DataTransfer`/`DragDrop.DoDragDropAsync(...)`.
+- Решение 2026-05-09: перейти на новый API до Avalonia 12 migration.
+- Для in-process object payloads добавлен локальный `InMemoryDragDataTransfer`: публичный `DataTransfer` API принимает string formats, поэтому object references хранятся через short-lived registry key внутри процесса.
+- После миграции поиск `DataObject`, `IDataObject`, `DragDrop.DoDragDrop(` в `src/Unlimotion` и `src/Unlimotion.Test` ничего не находит.
+- Оставшийся warning по Avalonia API: `IClipboard.GetTextAsync()` в `MainControl.axaml.cs`; это следующий небольшой API blocker, не связанный с drag/drop.
+
 ## 7. Кандидаты на следующий шаг
 ### Шаг 1: снять stale `PanAndZoom`
 Предлагаемое действие:
@@ -201,6 +209,26 @@
 - NuGet blocker по `AppAutomation.TUnit`/TUnit снят.
 - Отдельно нужно чинить зависание AppAutomation Headless runner, но оно больше не удерживает packages на старых версиях.
 
+### Шаг 4: Avalonia drag/drop `DataTransfer`
+Статус: выполнено 2026-05-09.
+
+Что сделано:
+- `DataObject` заменен на `IDataTransfer`-совместимый `InMemoryDragDataTransfer`.
+- `DragDrop.DoDragDrop(...)` заменен на `DragDrop.DoDragDropAsync(...)`.
+- `DragEventArgs.Data` заменен на `DragEventArgs.DataTransfer`.
+- Roadmap/package compatibility tests обновлены на constructor `DragEventArgs(..., IDataTransfer, ...)`.
+
+Проверки:
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work" --no-progress` - pass: 1/1.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/RoadmapGraph_DropWithControl_CreatesBlockingRelationBetweenRoadmapNodes" --no-progress` - pass: 1/1.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/*" --maximum-parallel-tests 1 --no-progress` - pass: 34/34.
+- `rg -n "\bDataObject\b|\bIDataObject\b|DragDrop\.DoDragDrop\(" src/Unlimotion src/Unlimotion.Test -g "*.cs"` - no matches.
+
+Вывод:
+- Drag/drop API blocker для Avalonia 12 migration снят.
+- Следующий маленький API blocker: заменить obsolete clipboard read API.
+
 ## 8. Журнал диалога
 | Время | Участник | Тезис / решение | Последствие |
 | --- | --- | --- | --- |
@@ -213,3 +241,4 @@
 | 2026-05-09 | Codex | Закрыл roadmap characterization test gaps: helper открытия roadmap tab, direct-root lookup, minimap-vs-card lookup, async ожидание scheduled rebuild, owner fallback через `GraphViewModel` | Полный `RoadmapGraphUiTests` проходит 34/34; `PanAndZoom` blocker снят без текущих UI-test gaps; следующий blocker - `NodifyAvalonia`/`NodifyEditor` boundary |
 | 2026-05-09 | Codex | Выполнил легкий boundary вокруг imperative API `NodifyEditor`: zoom/pan/fit вынесены в `IRoadmapViewportAdapter`, XAML surface пока остается на Nodify | Риск будущей Avalonia 12 миграции снижен; следующий выбор - глубокий XAML boundary или оценка fork/replacement `NodifyAvalonia` |
 | 2026-05-09 | Codex | Поднял TUnit до `1.43.41`, удалил `AppAutomation.TUnit` и заменил его локальным glue; package outdated для AppAutomation-проектов пустой | NuGet blocker по AppAutomation/TUnit снят; оставшееся зависание `Unlimotion.UiTests.Headless` выделено в отдельный lifecycle blocker |
+| 2026-05-09 | Codex | Перевел drag/drop код и tests с legacy `DataObject`/`DoDragDrop` на `IDataTransfer`/`DoDragDropAsync` | Drag/drop API blocker для Avalonia 12 снят; остался небольшой obsolete clipboard API и крупный `NodifyAvalonia` XAML blocker |

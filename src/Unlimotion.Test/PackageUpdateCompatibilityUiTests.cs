@@ -35,8 +35,7 @@ public class PackageUpdateCompatibilityUiTests
 
                 var view = new MainControl { DataContext = vm };
                 var targetControl = new ContentControl { DataContext = targetTask };
-                var dragData = new DataObject();
-                dragData.Set(GraphControl.CustomFormat, sourceTask);
+                using var dragData = DragDataFormats.CreateTransfer(GraphControl.CustomDataFormat, sourceTask);
                 var dropArgs = new DragEventArgs(
                     DragDrop.DropEvent,
                     dragData,
