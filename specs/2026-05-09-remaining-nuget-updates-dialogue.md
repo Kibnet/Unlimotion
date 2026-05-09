@@ -14,8 +14,11 @@
 | Avalonia family | `11.3.14` | `12.0.2` | `Unlimotion`, `Android`, `Browser`, `Desktop`, `iOS`, `Unlimotion.Test` | Runtime/API несовместимость с частью UI-зависимостей |
 | `ReactiveUI.Avalonia` | `11.3.8` | `12.0.1` | `src/Unlimotion/Unlimotion.csproj` | `12.0.1` требует Avalonia `>= 12.0.1`, поэтому зависит от решения по Avalonia 12 |
 | `DialogHost.Avalonia` | `0.11.0` | `0.12.2` | `src/Unlimotion/Unlimotion.csproj` | 0.12.x находится в Avalonia 12-ветке, поэтому зависит от решения по Avalonia 12 |
-| `TUnit` main test stack | `1.43.38` | `1.43.41` | `src/Unlimotion.Test/Unlimotion.Test.csproj` | Новый patch появился после предыдущего EXEC-прохода |
-| `TUnit` in AppAutomation projects | `1.37.10` | `1.43.41` | `tests/Unlimotion.UiTests.*` | `AppAutomation.TUnit 1.5.6` падал с TUnit 1.43.x на `BeforeTestHooks`; нужен отдельный план |
+
+Снято 2026-05-09:
+- `TUnit` main test stack обновлен до `1.43.41`.
+- `TUnit` in AppAutomation projects обновлен до `1.43.41`.
+- `AppAutomation.TUnit 1.5.6` удален из direct dependencies и заменен локальным совместимым glue в `tests/Unlimotion.UiTests.Authoring`.
 
 ## 2. Факты из package metadata / источников
 - `Avalonia 12.0.2` опубликована 2026-04-28 и таргетит `.NET 8.0` с совместимостью для `.NET 10.0`; значит текущий `net10.0` сам по себе не блокер. Источник: https://www.nuget.org/packages/Avalonia
@@ -122,10 +125,12 @@
   - Прямая зависимость от Nodify все еще остается в XAML (`NodifyEditor`, `LineConnection`, `Minimap`) и в одной точке создания adapter. Значит blocker снижен, но не снят полностью.
 
 ### `AppAutomation.TUnit` / TUnit
-- `src/Unlimotion.Test` использует TUnit напрямую и может идти на latest patch.
-- `tests/Unlimotion.UiTests.Headless`, `tests/Unlimotion.UiTests.FlaUI`, `tests/Unlimotion.UiTests.Authoring` используют `AppAutomation.TUnit 1.5.6` и удерживают TUnit на `1.37.10`.
-- Предыдущая попытка поднять AppAutomation-проекты до TUnit 1.43.x падала на `BeforeTestHooks`.
-- Вывод: это отдельный тестовый blocker; он не блокирует Avalonia 12 напрямую, но блокирует "все packages latest stable" для AppAutomation test projects.
+- `src/Unlimotion.Test` использует TUnit напрямую и обновлен до latest patch `1.43.41`.
+- `tests/Unlimotion.UiTests.Headless`, `tests/Unlimotion.UiTests.FlaUI`, `tests/Unlimotion.UiTests.Authoring` обновлены до TUnit `1.43.41`.
+- `AppAutomation.TUnit 1.5.6` был latest, но runtime-падал с TUnit 1.43.x на `MissingFieldException: TUnit.Core.Sources.BeforeTestHooks`.
+- Решение 2026-05-09: удалить `AppAutomation.TUnit` direct dependency и заменить только нужный glue (`IUiTestSession`, `UiAssert`, `UiTestBase`) локальной реализацией в `tests/Unlimotion.UiTests.Authoring`.
+- После этого `dotnet list ... package --outdated --no-restore` для `Unlimotion.UiTests.Headless`, `Unlimotion.UiTests.FlaUI`, `Unlimotion.UiTests.Authoring` больше не показывает updates.
+- Оставшийся не-NuGet blocker: реальный запуск `Unlimotion.UiTests.Headless` зависает в in-progress test и отменяется только по global timeout. Это уже задача lifecycle/headless test host, а не package compatibility blocker.
 
 ## 7. Кандидаты на следующий шаг
 ### Шаг 1: снять stale `PanAndZoom`
@@ -172,9 +177,29 @@
 - выбираем ли глубокий boundary для XAML surface или идем в оценку fork/replacement `NodifyAvalonia` под Avalonia 12.
 
 ### Шаг 3: AppAutomation/TUnit
-Предлагаемое действие:
-- проверить, есть ли newer `AppAutomation.TUnit`, чем `1.5.6`;
-- если нет, решить между удержанием TUnit `1.37.10`, локальным patch/fork `AppAutomation.TUnit`, либо отказом от `AppAutomation.TUnit` glue.
+Статус: выполнено 2026-05-09.
+
+Что сделано:
+- newer `AppAutomation.TUnit`, чем `1.5.6`, не найден через `dotnet list ... package --outdated`;
+- TUnit в AppAutomation-проектах поднят до `1.43.41`;
+- `AppAutomation.TUnit` удален и заменен локальным glue;
+- основной `src/Unlimotion.Test` также поднят с `TUnit 1.43.38` до `1.43.41`.
+
+Проверки:
+- `dotnet restore tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj` - pass.
+- `dotnet restore tests\Unlimotion.UiTests.FlaUI\Unlimotion.UiTests.FlaUI.csproj` - pass.
+- `dotnet build tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet build tests\Unlimotion.UiTests.FlaUI\Unlimotion.UiTests.FlaUI.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet run --no-build --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -- --list-tests` - pass, discovers 23 tests and no longer crashes on `BeforeTestHooks`.
+- `dotnet run --no-build --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj -- --treenode-filter "/*/*/MainWindowHeadlessTests/Main_window_loads_current_task_on_launch" --maximum-parallel-tests 1 --timeout 30s --output Detailed --show-stdout All --show-stderr All --diagnostic --diagnostic-output-directory artifacts\test-diagnostics\headless-tunit --diagnostic-file-prefix headless-tunit` - fails by global timeout; diagnostic shows the selected test entered `InProgressTestNodeStateProperty` and then was forcefully terminated.
+- `dotnet restore src\Unlimotion.Test\Unlimotion.Test.csproj` - pass.
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/*" --maximum-parallel-tests 1 --no-progress` - pass: 34/34.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work" --no-progress` - pass: 1/1.
+
+Вывод:
+- NuGet blocker по `AppAutomation.TUnit`/TUnit снят.
+- Отдельно нужно чинить зависание AppAutomation Headless runner, но оно больше не удерживает packages на старых версиях.
 
 ## 8. Журнал диалога
 | Время | Участник | Тезис / решение | Последствие |
@@ -187,3 +212,4 @@
 | 2026-05-09 | Codex | Удалил `Avalonia.Controls.PanAndZoom`; restore/build прошли; package outdated больше не показывает этот пакет; две устойчивые UI-проверки roadmap прошли, три старых roadmap tests падают независимо от наличия `PanAndZoom` | `PanAndZoom` blocker снят; перед следующим этапом желательно починить/обновить roadmap characterization tests или перейти к `NodifyEditor` boundary с учетом этих test gaps |
 | 2026-05-09 | Codex | Закрыл roadmap characterization test gaps: helper открытия roadmap tab, direct-root lookup, minimap-vs-card lookup, async ожидание scheduled rebuild, owner fallback через `GraphViewModel` | Полный `RoadmapGraphUiTests` проходит 34/34; `PanAndZoom` blocker снят без текущих UI-test gaps; следующий blocker - `NodifyAvalonia`/`NodifyEditor` boundary |
 | 2026-05-09 | Codex | Выполнил легкий boundary вокруг imperative API `NodifyEditor`: zoom/pan/fit вынесены в `IRoadmapViewportAdapter`, XAML surface пока остается на Nodify | Риск будущей Avalonia 12 миграции снижен; следующий выбор - глубокий XAML boundary или оценка fork/replacement `NodifyAvalonia` |
+| 2026-05-09 | Codex | Поднял TUnit до `1.43.41`, удалил `AppAutomation.TUnit` и заменил его локальным glue; package outdated для AppAutomation-проектов пустой | NuGet blocker по AppAutomation/TUnit снят; оставшееся зависание `Unlimotion.UiTests.Headless` выделено в отдельный lifecycle blocker |
