@@ -116,6 +116,10 @@
 - Уже есть существенная characterization coverage:
   - `src/Unlimotion.Test/RoadmapGraphUiTests.cs` покрывает projection, render, automation ids, zoom/pan controls, minimap, node click/double tap, node drag, right-drag pan, drop behavior.
 - Вывод: это главный Avalonia 12 blocker. Его нельзя просто удалить; нужны adapter boundary, форк/замена, либо локальная реализация roadmap surface.
+- Статус 2026-05-09: начат легкий boundary.
+  - Добавлен `IRoadmapViewportAdapter` и `NodifyRoadmapViewportAdapter`.
+  - `GraphControl.axaml.cs` больше не обращается напрямую к `RoadmapEditor.ViewportZoom`, `ViewportLocation`, `ZoomIn()`, `ZoomOut()`, `ZoomAtPosition()`, `FitToScreen()`; эти операции идут через adapter.
+  - Прямая зависимость от Nodify все еще остается в XAML (`NodifyEditor`, `LineConnection`, `Minimap`) и в одной точке создания adapter. Значит blocker снижен, но не снят полностью.
 
 ### `AppAutomation.TUnit` / TUnit
 - `src/Unlimotion.Test` использует TUnit напрямую и может идти на latest patch.
@@ -157,6 +161,16 @@
 
 Предварительная рекомендация Codex: начать с легкого boundary и characterization tests, затем оценить fork/replacement по фактическому объему.
 
+Статус: легкий boundary выполнен 2026-05-09.
+
+Проверки:
+- `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/*" --maximum-parallel-tests 1 --no-progress` - pass: 34/34.
+- `dotnet run --no-build --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work" --no-progress` - pass: 1/1.
+
+Оставшийся вопрос:
+- выбираем ли глубокий boundary для XAML surface или идем в оценку fork/replacement `NodifyAvalonia` под Avalonia 12.
+
 ### Шаг 3: AppAutomation/TUnit
 Предлагаемое действие:
 - проверить, есть ли newer `AppAutomation.TUnit`, чем `1.5.6`;
@@ -172,3 +186,4 @@
 | 2026-05-09 | Пользователь | Подтвердил удаление stale `PanAndZoom` | Выполнено удаление direct dependency |
 | 2026-05-09 | Codex | Удалил `Avalonia.Controls.PanAndZoom`; restore/build прошли; package outdated больше не показывает этот пакет; две устойчивые UI-проверки roadmap прошли, три старых roadmap tests падают независимо от наличия `PanAndZoom` | `PanAndZoom` blocker снят; перед следующим этапом желательно починить/обновить roadmap characterization tests или перейти к `NodifyEditor` boundary с учетом этих test gaps |
 | 2026-05-09 | Codex | Закрыл roadmap characterization test gaps: helper открытия roadmap tab, direct-root lookup, minimap-vs-card lookup, async ожидание scheduled rebuild, owner fallback через `GraphViewModel` | Полный `RoadmapGraphUiTests` проходит 34/34; `PanAndZoom` blocker снят без текущих UI-test gaps; следующий blocker - `NodifyAvalonia`/`NodifyEditor` boundary |
+| 2026-05-09 | Codex | Выполнил легкий boundary вокруг imperative API `NodifyEditor`: zoom/pan/fit вынесены в `IRoadmapViewportAdapter`, XAML surface пока остается на Nodify | Риск будущей Avalonia 12 миграции снижен; следующий выбор - глубокий XAML boundary или оценка fork/replacement `NodifyAvalonia` |

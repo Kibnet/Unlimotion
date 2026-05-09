@@ -40,6 +40,7 @@ namespace Unlimotion.Views
         private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
+        private IRoadmapViewportAdapter? roadmapViewport;
         private PendingRoadmapDragContext? pendingRoadmapDrag;
         private PendingRoadmapPanContext? pendingRoadmapPan;
         private bool roadmapDragInProgress;
@@ -102,7 +103,7 @@ namespace Unlimotion.Views
                 RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
                 true);
             KeyDown += RoadmapEditor_KeyDown;
-            RoadmapEditor.KeyDown += RoadmapEditor_KeyDown;
+            RoadmapViewport.Control.KeyDown += RoadmapEditor_KeyDown;
         }
 
         public ObservableCollection<RoadmapNode> RoadmapNodes { get; } = new();
@@ -146,6 +147,9 @@ namespace Unlimotion.Views
             get => GetValue(IsRoadmapMinimapExpandedProperty);
             set => SetValue(IsRoadmapMinimapExpandedProperty, value);
         }
+
+        private IRoadmapViewportAdapter RoadmapViewport =>
+            roadmapViewport ??= new NodifyRoadmapViewportAdapter(RoadmapEditor);
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }
 
@@ -993,27 +997,23 @@ namespace Unlimotion.Views
 
         private void FitRoadmapToScreen()
         {
-            Dispatcher.UIThread.Post(() => RoadmapEditor.FitToScreen());
+            Dispatcher.UIThread.Post(() => RoadmapViewport.FitToScreen());
         }
 
         private void ResetRoadmapViewport()
         {
-            Dispatcher.UIThread.Post(() =>
-            {
-                RoadmapEditor.ViewportZoom = 1;
-                RoadmapEditor.ViewportLocation = new Point(0, 0);
-            });
+            Dispatcher.UIThread.Post(() => RoadmapViewport.Reset());
         }
 
         private void RoadmapZoomIn_OnClick(object? sender, RoutedEventArgs e)
         {
-            RoadmapEditor.ZoomIn();
+            RoadmapViewport.ZoomIn();
             e.Handled = true;
         }
 
         private void RoadmapZoomOut_OnClick(object? sender, RoutedEventArgs e)
         {
-            RoadmapEditor.ZoomOut();
+            RoadmapViewport.ZoomOut();
             e.Handled = true;
         }
 
@@ -1084,16 +1084,13 @@ namespace Unlimotion.Views
 
             if (zoom is double zoomValue && location is Point locationValue)
             {
-                RoadmapEditor.ZoomAtPosition(zoomValue, locationValue);
+                RoadmapViewport.ZoomAtPosition(zoomValue, locationValue);
             }
         }
 
         private void PanRoadmapViewport(double deltaX, double deltaY)
         {
-            var current = RoadmapEditor.ViewportLocation;
-            RoadmapEditor.ViewportLocation = new Point(
-                current.X + deltaX,
-                current.Y + deltaY);
+            RoadmapViewport.PanBy(deltaX, deltaY);
         }
 
         private void RoadmapNode_OnSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -1125,8 +1122,8 @@ namespace Unlimotion.Views
                 pendingRoadmapPan = new PendingRoadmapPanContext(
                     gestureControl ?? this,
                     e.Pointer,
-                    e.GetPosition(RoadmapEditor),
-                    RoadmapEditor.ViewportLocation);
+                    e.GetPosition(RoadmapViewport.Control),
+                    RoadmapViewport.Location);
                 e.Handled = true;
                 return;
             }
@@ -1241,11 +1238,11 @@ namespace Unlimotion.Views
                 return true;
             }
 
-            var zoom = RoadmapEditor.ViewportZoom;
+            var zoom = RoadmapViewport.Zoom;
             var scale = Math.Abs(zoom) < 0.001 ? 1 : zoom;
-            var currentPoint = e.GetPosition(RoadmapEditor);
+            var currentPoint = e.GetPosition(RoadmapViewport.Control);
             var delta = currentPoint - pending.StartPoint;
-            RoadmapEditor.ViewportLocation = new Point(
+            RoadmapViewport.Location = new Point(
                 pending.StartViewportLocation.X - delta.X / scale,
                 pending.StartViewportLocation.Y - delta.Y / scale);
             e.Handled = true;
