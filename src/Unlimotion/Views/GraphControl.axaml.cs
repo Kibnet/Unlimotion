@@ -224,7 +224,7 @@ namespace Unlimotion.Views
                 .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
                 .Select(t => (t ?? "").Trim())
                 .DistinctUntilChanged()
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => UpdateHighlights())
                 .AddToDispose(disposableList);
 
@@ -872,7 +872,7 @@ namespace Unlimotion.Views
             subscriptions.Add(collection
                 .ObserveCollectionChanges()
                 .Throttle(throttle)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ =>
                 {
                     RegisterRoadmapFilterSubscriptions();
@@ -888,7 +888,7 @@ namespace Unlimotion.Views
                     .Where(change => string.IsNullOrEmpty(change.EventArgs.PropertyName) ||
                                      change.EventArgs.PropertyName == nameof(EmojiFilter.ShowTasks))
                     .Throttle(throttle)
-                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ => ScheduleUpdateGraph()));
             }
         }
@@ -1161,6 +1161,7 @@ namespace Unlimotion.Views
                 gestureControl ?? this,
                 e.Pointer,
                 taskItem,
+                e,
                 e.GetPosition(gestureControl ?? this));
         }
 
@@ -1271,7 +1272,7 @@ namespace Unlimotion.Views
             try
             {
                 await DragDrop.DoDragDrop(
-                    e,
+                    pending.PressEvent,
                     dragData,
                     DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
             }
@@ -1375,6 +1376,7 @@ namespace Unlimotion.Views
             Control control,
             IPointer pointer,
             TaskItemViewModel taskItem,
+            PointerPressedEventArgs pressEvent,
             Point startPoint)
         {
             public Control Control { get; } = control;
@@ -1382,6 +1384,8 @@ namespace Unlimotion.Views
             public IPointer Pointer { get; } = pointer;
 
             public TaskItemViewModel TaskItem { get; } = taskItem;
+
+            public PointerPressedEventArgs PressEvent { get; } = pressEvent;
 
             public Point StartPoint { get; } = startPoint;
         }

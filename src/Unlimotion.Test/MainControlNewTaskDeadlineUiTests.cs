@@ -8,7 +8,6 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Avalonia.Xaml.Interactivity;
 using Unlimotion.Behavior;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
@@ -210,8 +209,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var newTask = new object();
                 var durationTextBox = new TextBox { DataContext = previousTask };
                 var blurTarget = new Button { Content = "Blur target" };
-                var behavior = new LostFocusUpdateBindingBehavior { Text = "" };
-                Interaction.GetBehaviors(durationTextBox).Add(behavior);
+                LostFocusUpdateBindingBehavior.SetText(durationTextBox, "");
 
                 var root = new StackPanel();
                 root.Children.Add(durationTextBox);
@@ -234,7 +232,7 @@ public class MainControlNewTaskDeadlineUiTests
                 blurTarget.Focus();
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(behavior.Text).IsEqualTo("2h");
+                await Assert.That(LostFocusUpdateBindingBehavior.GetText(durationTextBox)).IsEqualTo("2h");
             }
             finally
             {

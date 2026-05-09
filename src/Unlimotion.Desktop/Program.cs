@@ -3,8 +3,8 @@ using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Logging;
-using Avalonia.ReactiveUI;
 using ServiceStack;
+using ReactiveUI.Avalonia;
 using Unlimotion.Desktop.Services;
 using Unlimotion.Services;
 using Velopack;
@@ -76,11 +76,11 @@ namespace Unlimotion.Desktop
 #if DEBUG
             return builder
                 .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
-                .UseReactiveUI();
+                .UseReactiveUI(App.ConfigureReactiveUIBuilder);
 #else
             return builder
                 .LogToTrace()
-                .UseReactiveUI();
+                .UseReactiveUI(App.ConfigureReactiveUIBuilder);
 #endif
         }
     }

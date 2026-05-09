@@ -7,7 +7,6 @@
              xmlns:views="clr-namespace:Unlimotion.Views"
              xmlns:converters="clr-namespace:Unlimotion.Converters"
              xmlns:behavior="clr-namespace:Unlimotion.Behavior"
-             xmlns:Interaction="using:Avalonia.Xaml.Interactivity"
              xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
              xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -722,14 +721,12 @@
                                                 </MenuFlyout>
                                             </DropDownButton.Flyout>
                                         </DropDownButton>
-                                        <TextBox Grid.Column="1"
-                                                 ToolTip.Tip="{DynamicResource DurationExample}"
-                                                 HorizontalAlignment="Stretch"
-                                                 Watermark="{DynamicResource PlannedDuration}" UseFloatingWatermark="True">
-                                            <Interaction.Behaviors>
-                                                <behavior:LostFocusUpdateBindingBehavior Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"/>
-                                            </Interaction.Behaviors>
-                                        </TextBox>
+                                         <TextBox Grid.Column="1"
+                                                  ToolTip.Tip="{DynamicResource DurationExample}"
+                                                  HorizontalAlignment="Stretch"
+                                                  behavior:LostFocusUpdateBindingBehavior.Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
+                                                  Watermark="{DynamicResource PlannedDuration}" UseFloatingWatermark="True">
+                                         </TextBox>
 
                                         <DropDownButton Content="{DynamicResource SetDuration}" Grid.Column="1" Grid.Row="1">
                                             <DropDownButton.Flyout>

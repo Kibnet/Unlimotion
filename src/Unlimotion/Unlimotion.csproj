@@ -69,13 +69,12 @@
 		<PackageReference Include="AutoMapper" />
 		<PackageReference Include="Avalonia" />
 		<PackageReference Include="CompareNETObjects" />
-		<PackageReference Include="Avalonia.Xaml.Behaviors" />
 		<PackageReference Include="Avalonia.Controls.PanAndZoom" />
 		<PackageReference Include="DialogHost.Avalonia" />
 		<PackageReference Include="Avalonia.Themes.Fluent" />
 		<PackageReference Include="Avalonia.Fonts.Inter" />
-		<PackageReference Include="Avalonia.ReactiveUI" />
-		<!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
+		<PackageReference Include="ReactiveUI.Avalonia" />
+		<!--Condition below is needed to remove Avalonia diagnostics support from build output in Release configuration.-->
 		<PackageReference Include="Avalonia.Diagnostics">
 			<IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
 			<PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>

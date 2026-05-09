@@ -6,20 +6,22 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reflection;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Notification;
-using Avalonia.ReactiveUI;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
@@ -75,12 +77,17 @@ public class App : Application
 
     public override void Initialize()
     {
-        RxApp.MainThreadScheduler = AvaloniaScheduler.Instance;
+        RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
         AvaloniaXamlLoader.Load(this);
         ApplyLocalizedResources();
         LocalizationService.Current.CultureChanged += (_, __) => ApplyLocalizedResources();
         ApplyConfiguredTheme();
         ApplyConfiguredFontSize();
+    }
+
+    public static void ConfigureReactiveUIBuilder(ReactiveUI.Builder.ReactiveUIBuilder builder)
+    {
+        builder.WithExceptionHandler(Observer.Create<Exception>(HandleReactiveException));
     }
 
     public event EventHandler OnLoaded
@@ -108,9 +115,6 @@ public class App : Application
         {
             wrapper.SetManager(_notificationMessageManager);
         }
-
-        // Set up exception handler
-        RxApp.DefaultExceptionHandler = new ObservableExceptionHandler(_notificationManager);
 
         // Create SettingsViewModel
         var settingsViewModel = new SettingsViewModel(
@@ -220,7 +224,7 @@ public class App : Application
             }
         });
 
-        settings.ObservableForProperty(m => m.GitBackupEnabled, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitBackupEnabled, false, true)
             .Subscribe(c =>
             {
                 EnsureScheduler();
@@ -232,7 +236,7 @@ public class App : Application
                     _scheduler.PauseAll();
             });
 
-        settings.ObservableForProperty(m => m.ThemeMode, skipInitial: true)
+        settings.ObservableForProperty(m => m.ThemeMode, false, true)
             .Subscribe(c => RequestedThemeVariant = c.Value switch
             {
                 ThemeMode.Dark => ThemeVariant.Dark,
@@ -240,10 +244,10 @@ public class App : Application
                 _ => ThemeVariant.Default
             });
 
-        settings.ObservableForProperty(m => m.FontSize, skipInitial: true)
+        settings.ObservableForProperty(m => m.FontSize, false, true)
             .Subscribe(c => ApplyFontSize(c.Value));
 
-        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, false, true)
             .Subscribe(c =>
             {
                 if (c.Value == 0) return;
@@ -255,7 +259,7 @@ public class App : Application
                 _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
             });
 
-        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, false, true)
             .Subscribe(c =>
             {
                 if (c.Value == 0) return;
@@ -712,8 +716,6 @@ public class App : Application
                 DispatcherPriority.Background);
         }
 
-        RxApp.DefaultExceptionHandler = Observer.Create<Exception>(HandleReactiveException);
-
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -851,13 +853,24 @@ public class App : Application
 
     private void DisableAvaloniaDataAnnotationValidation()
     {
-        // Get an array of plugins to remove
-        var dataValidationPluginsToRemove =
-            BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
-        // remove each entry found
+        var bindingPluginsType = typeof(AvaloniaObject).Assembly.GetType("Avalonia.Data.Core.Plugins.BindingPlugins");
+        var dataValidators = bindingPluginsType?
+            .GetProperty("DataValidators", BindingFlags.Public | BindingFlags.Static)?
+            .GetValue(null) as System.Collections.IList;
+
+        if (dataValidators == null)
+        {
+            return;
+        }
+
+        var dataValidationPluginsToRemove = dataValidators
+            .Cast<object>()
+            .OfType<DataAnnotationsValidationPlugin>()
+            .ToArray();
+
         foreach (var plugin in dataValidationPluginsToRemove)
         {
-            BindingPlugins.DataValidators.Remove(plugin);
+            dataValidators.Remove(plugin);
         }
     }
 

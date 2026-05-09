@@ -23,7 +23,6 @@
 		<PackageReference Include="RavenDB.Embedded" />
 		<PackageReference Include="Serilog.AspNetCore" />
 		<PackageReference Include="ServiceStack.Api.OpenApi" />
-		<PackageReference Include="ServiceStack.Api.Swagger" />
 		<PackageReference Include="SignalR.EasyUse.Server" />
 		<PackageReference Include="WritableJsonConfiguration" />
 	</ItemGroup>

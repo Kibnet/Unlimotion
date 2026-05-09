@@ -1,6 +1,8 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI.Avalonia;
+using ReactiveUI.Builder;
 using Unlimotion;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
@@ -20,6 +22,7 @@ public static class UnlimotionAppLaunchHost
     public const string CurrentTaskTitle = UnlimotionAutomationScenarioData.SmokeCurrentTaskTitle;
 
     public static Type AvaloniaAppType => typeof(App);
+    private static int _reactiveUiInitialized;
 
     private static readonly AvaloniaDesktopAppDescriptor DesktopApp = new(
         solutionFileNames:
@@ -170,6 +173,8 @@ public static class UnlimotionAppLaunchHost
 
     private static MainWindowViewModel CreateHeadlessViewModel(UnlimotionAutomationLaunchData launchData)
     {
+        EnsureReactiveUiInitialized();
+
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(launchData.ConfigPath);
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = new AutomationNotificationManager();
@@ -190,6 +195,20 @@ public static class UnlimotionAppLaunchHost
         TaskItemViewModel.MainWindowInstance = vm;
 
         return vm;
+    }
+
+    private static void EnsureReactiveUiInitialized()
+    {
+        if (Interlocked.Exchange(ref _reactiveUiInitialized, 1) == 1)
+        {
+            return;
+        }
+
+        var builder = RxAppBuilder.CreateReactiveUIBuilder();
+        builder.WithCoreServices();
+        builder.WithMainThreadScheduler(AvaloniaScheduler.Instance);
+        App.ConfigureReactiveUIBuilder(builder);
+        builder.BuildApp();
     }
 
     private static void SelectAutomationTask(MainWindowViewModel vm, string currentTaskId)

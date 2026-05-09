@@ -71,6 +71,7 @@ namespace Unlimotion.Views
             Control control,
             TreeView tree,
             TaskWrapperViewModel wrapper,
+            PointerPressedEventArgs pressEvent,
             Point startPoint,
             IReadOnlyList<TaskWrapperViewModel> selectionSnapshot,
             bool wasSelected)
@@ -78,6 +79,7 @@ namespace Unlimotion.Views
             public Control Control { get; } = control;
             public TreeView Tree { get; } = tree;
             public TaskWrapperViewModel Wrapper { get; } = wrapper;
+            public PointerPressedEventArgs PressEvent { get; } = pressEvent;
             public Point StartPoint { get; } = startPoint;
             public IReadOnlyList<TaskWrapperViewModel> SelectionSnapshot { get; } = selectionSnapshot;
             public bool WasSelected { get; } = wasSelected;
@@ -699,6 +701,7 @@ namespace Unlimotion.Views
                 control,
                 tree,
                 wrapper,
+                e,
                 e.GetPosition(control),
                 selectionSnapshot,
                 wasSelected);
@@ -731,7 +734,7 @@ namespace Unlimotion.Views
 
             try
             {
-                await StartTreeDragAsync(pending, e);
+                await StartTreeDragAsync(pending);
             }
             finally
             {
@@ -768,7 +771,7 @@ namespace Unlimotion.Views
             await mainControl.HandleDropAsync(e);
         }
 
-        private async Task StartTreeDragAsync(PendingTreeDragContext pending, PointerEventArgs e)
+        private async Task StartTreeDragAsync(PendingTreeDragContext pending)
         {
             var wrappers = GetWrappersForTreeDrag(pending);
 
@@ -780,10 +783,10 @@ namespace Unlimotion.Views
             EnsureTreeSelectionForDragStart(pending.Tree, wrappers, pending.WasSelected);
 
             var dragData = BuildTreeDragData(wrappers);
-            await DragDrop.DoDragDrop(
-                e,
-                dragData,
-                DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+                await DragDrop.DoDragDrop(
+                    pending.PressEvent,
+                    dragData,
+                    DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
         private static IReadOnlyList<TaskWrapperViewModel> GetWrappersForTreeDrag(PendingTreeDragContext pending)

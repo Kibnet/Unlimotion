@@ -10,12 +10,12 @@ using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Provider;
+using Android.Runtime;
 using Android.Util;
 using Android.Views;
-using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
-using Avalonia.ReactiveUI;
+using ReactiveUI.Avalonia;
 using Unlimotion;
 using Unlimotion.Android.Services;
 using Unlimotion.Services;
@@ -34,6 +34,8 @@ namespace Unlimotion.Android;
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
 public class MainActivity : AvaloniaMainActivity<App>
 {
+    private const string DefaultConfigName = "Settings.json";
+    private const string TasksFolderName = "Tasks";
     private const int OpenTaskFolderRequestCode = 4201;
     private const int ManageExternalStorageRequestCode = 4202;
     private string? _dataDir;
@@ -42,13 +44,10 @@ public class MainActivity : AvaloniaMainActivity<App>
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
-        base.OnCreate(savedInstanceState);
-
         HookCrashLogging();
-    }
 
-    private const string DefaultConfigName = "Settings.json";
-    private const string TasksFolderName = "Tasks";
+        base.OnCreate(savedInstanceState);
+    }
 
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
     {
@@ -74,13 +73,14 @@ public class MainActivity : AvaloniaMainActivity<App>
 
             App.Init(configPath);
             EnsureGitSafeDirectory(TaskStorageFactory.DefaultStoragePath);
+
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
             TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
 
             return base.CustomizeAppBuilder(builder)
                 .WithCustomFont()
-                .UseReactiveUI();
+                .UseReactiveUI(App.ConfigureReactiveUIBuilder);
         }
         catch (Exception ex)
         {
@@ -357,7 +357,7 @@ public class MainActivity : AvaloniaMainActivity<App>
         }
     }
 
-    private static void WriteStartupError(Exception ex)
+    internal static void WriteStartupError(Exception ex)
     {
         try
         {
