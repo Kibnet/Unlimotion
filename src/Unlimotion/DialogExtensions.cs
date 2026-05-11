@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -24,11 +25,7 @@ public class Dialogs : IDialogs
         var storageProvider = topLevel?.StorageProvider;
         if (storageProvider != null && storageProvider.CanPickFolder)
         {
-            var options = new FolderPickerOpenOptions
-            {
-                Title = title,
-                AllowMultiple = false
-            };
+            var options = await CreateFolderPickerOpenOptionsAsync(storageProvider, title, directory);
 
             var result = await storageProvider.OpenFolderPickerAsync(options);
             var folder = result?.FirstOrDefault();
@@ -43,6 +40,61 @@ public class Dialogs : IDialogs
         }
 
         return string.Empty;
+    }
+
+    internal static async Task<FolderPickerOpenOptions> CreateFolderPickerOpenOptionsAsync(
+        IStorageProvider storageProvider,
+        string? title,
+        string? directory)
+    {
+        return new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            SuggestedStartLocation = await TryResolveSuggestedStartLocationAsync(storageProvider, directory)
+        };
+    }
+
+    private static async Task<IStorageFolder?> TryResolveSuggestedStartLocationAsync(
+        IStorageProvider storageProvider,
+        string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return null;
+        }
+
+        var directoryUri = TryCreateStorageUri(directory);
+        if (directoryUri == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await storageProvider.TryGetFolderFromPathAsync(directoryUri);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static Uri? TryCreateStorageUri(string path)
+    {
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+        {
+            return uri;
+        }
+
+        try
+        {
+            return new Uri(Path.GetFullPath(path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or PathTooLongException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }
 

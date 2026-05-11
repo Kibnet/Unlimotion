@@ -233,11 +233,18 @@ public class SettingsControlResponsiveUiTests
             try
             {
                 var settings = fixture.MainWindowViewModelTest.Settings;
+                var initialPath = Path.Combine(fixture.DefaultTasksFolderPath, "Current");
                 var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
-                Dialogs.PlatformOpenFolderDialogAsync = (_, _) => Task.FromResult<string?>(selectedPath);
+                string? capturedDirectory = null;
+                settings.TaskStoragePath = initialPath;
+                Dialogs.PlatformOpenFolderDialogAsync = (_, directory) =>
+                {
+                    capturedDirectory = directory;
+                    return Task.FromResult<string?>(selectedPath);
+                };
                 var browseCommandStub = new TestAsyncCommand(async () =>
                 {
-                    var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder");
+                    var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder", settings.TaskStoragePath);
                     if (!string.IsNullOrWhiteSpace(path))
                     {
                         settings.TaskStoragePath = path;
@@ -271,6 +278,7 @@ public class SettingsControlResponsiveUiTests
                 await TestHelpers.WaitUntilAsync(
                     () => settings.TaskStoragePath == selectedPath,
                     TimeSpan.FromSeconds(2));
+                await Assert.That(capturedDirectory).IsEqualTo(initialPath);
                 await Assert.That(settings.TaskStoragePath).IsEqualTo(selectedPath);
             }
             finally

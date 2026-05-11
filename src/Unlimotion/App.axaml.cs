@@ -381,7 +381,9 @@ public class App : Application
             if (_dialogs == null) return;
             try
             {
-                var path = await _dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerDataFolder"));
+                var path = await _dialogs.ShowOpenFolderDialogAsync(
+                    L10n.Get("FolderPickerDataFolder"),
+                    settings.TaskStoragePath);
                 if (!string.IsNullOrWhiteSpace(path))
                 {
                     await PrepareFileStoragePathAsync(path);

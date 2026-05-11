@@ -22,6 +22,7 @@ public class PackageUpdateCompatibilityUiTests
         {
             var fixture = new MainWindowViewModelFixture();
             var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
+            Window? window = null;
 
             try
             {
@@ -59,12 +60,35 @@ public class PackageUpdateCompatibilityUiTests
                 var result = await new Dialogs().ShowOpenFolderDialogAsync("Data folder");
 
                 await Assert.That(result).IsEqualTo(selectedPath);
+
+                var startPath = Path.Combine(fixture.DefaultTasksFolderPath, "Start");
+                Directory.CreateDirectory(startPath);
+                window = new Window();
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var options = await Dialogs.CreateFolderPickerOpenOptionsAsync(
+                    window.StorageProvider,
+                    "Data folder",
+                    startPath);
+
+                await Assert.That(options.SuggestedStartLocation).IsNotNull();
+                var suggestedPath = DialogExtensions.TryGetLocalPath(options.SuggestedStartLocation!);
+                await Assert.That(suggestedPath).IsNotNull();
+                await Assert.That(NormalizePath(suggestedPath!)).IsEqualTo(NormalizePath(startPath));
             }
             finally
             {
                 Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
+                window?.Close();
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        return Path.GetFullPath(path)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 }

@@ -424,7 +424,10 @@ namespace Unlimotion.Views
                     var dialogs = DialogsInstance;
                     if (dialogs == null) return;
                     
-                    var path = await dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerTaskStoragePath"));
+                    var currentTaskStoragePath = (vm.taskRepository?.TaskTreeManager.Storage as FileStorage)?.Path;
+                    var path = await dialogs.ShowOpenFolderDialogAsync(
+                        L10n.Get("FolderPickerTaskStoragePath"),
+                        currentTaskStoragePath);
 
                     if (!string.IsNullOrWhiteSpace(path))
                     {
