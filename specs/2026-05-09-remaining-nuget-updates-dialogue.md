@@ -466,6 +466,15 @@ Break changes, которые реально касаются нас:
 - `dotnet build Nodify\Nodify.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
 - `dotnet build Nodify.sln -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass; остался один WebAssembly workload warning про native references при выключенных `WasmBuildNative`/`RunAOTCompilation`.
 
+Дополнение по compiled bindings:
+- После замечания пользователя широкие `x:CompileBindings="False"` overrides из example views убраны.
+- Calculator, Playground и StateMachine example roots типизированы через `x:DataType`.
+- Для Calculator добавлены точечные `x:DataType` на item container themes, где DataContext меняется на item view model.
+- Новый commit в fork: `a8c9a96 Type example XAML bindings`.
+- Повторные проверки:
+  - `dotnet build Nodify\Nodify.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass.
+  - `dotnet build Nodify.sln -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass; остался тот же WebAssembly workload warning.
+
 Решение:
 - Для текущего Avalonia 12 update upstream-кандидатом остается только `NodifyAvalonia`.
 - `Mileeena.Notification.Avalonia` не форкаем: зависимость удалена и заменена internal toast overlay.
@@ -497,3 +506,4 @@ Break changes, которые реально касаются нас:
 | 2026-05-11 | Пользователь | Сказал "выполняй" | Выполнена финализация package updates и regression gate |
 | 2026-05-11 | Codex | Закрыт FlaUI settings SSH blocker через преднастроенный SSH remote в automation config и явную UIA group для `SshKeysSection`; полный FlaUI повторно прошел 7/7, Headless прошел 23/23, Android full build прошел | Runtime blockers сняты; оставлен documented exception только для internal `NodifyAvalonia` fork/package source |
 | 2026-05-11 | Пользователь | Попросил форкнуть библиотеки, которые нужно upstream-нуть, сделать ветки и PR в родительские репозитории | Создан `Kibnet/nodify-avalonia`, ветка `codex/avalonia-12-support`; открыт upstream PR `BAndysc/nodify-avalonia#45`; зафиксировано, что остальные библиотеки в scope не upstream-ятся |
+| 2026-05-11 | Пользователь | Указал, что широкое отключение compiled bindings в Nodify examples ухудшает performance и попросил типизировать красиво | В fork удалены `x:CompileBindings="False"` из examples, добавлены `x:DataType`, PR `BAndysc/nodify-avalonia#45` обновлен commit `a8c9a96` |
