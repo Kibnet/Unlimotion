@@ -640,6 +640,7 @@ public class App : Application
 
     private void EnterConflictResolutionMode(SettingsViewModel settings)
     {
+        PauseBackupScheduler(settings);
         settings.SetBackupConnectionState(BackupStatusState.ConflictResolution);
         ShowConflictResolutionDialog(settings);
     }
@@ -691,6 +692,22 @@ public class App : Application
         {
             _ = _scheduler.Start();
         }
+    }
+
+    private void PauseBackupScheduler(SettingsViewModel settings)
+    {
+        if (!settings.GitBackupEnabled)
+        {
+            return;
+        }
+
+        EnsureScheduler();
+        if (_scheduler == null)
+        {
+            return;
+        }
+
+        _ = _scheduler.PauseAll();
     }
 
     private void CloseConflictResolutionDialog()
