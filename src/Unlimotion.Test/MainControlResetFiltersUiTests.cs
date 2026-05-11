@@ -35,7 +35,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task ResetFiltersButton_IsAvailableOnTaskTabs()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -65,7 +65,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task ResetFiltersButton_AsksConfirmation_AndCancelKeepsFilters()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -107,7 +107,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task AllTasksResetFilters_AfterConfirmation_ResetsOnlyAllTasksFiltersToDefaults()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -161,7 +161,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task LastCreatedResetFilters_AfterConfirmation_ResetsCurrentDateFilterToDefault()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -215,7 +215,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task RoadmapResetFilters_WhenCompletionFiltersAreVisible_DoesNotResetHiddenWantedFilter()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -270,7 +270,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task RoadmapResetFilters_WhenWantedFilterIsVisible_DoesNotResetHiddenCompletionFilters()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

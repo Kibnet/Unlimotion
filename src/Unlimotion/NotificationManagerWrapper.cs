@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Avalonia.Notification;
 using Avalonia.Threading;
 using DialogHostAvalonia;
 using ReactiveUI;
@@ -11,14 +10,14 @@ namespace Unlimotion;
 
 public class NotificationManagerWrapper : INotificationManagerWrapper
 {
-    private INotificationMessageManager? _notificationManager;
+    private AppToastNotificationManager? _notificationManager;
 
-    public NotificationManagerWrapper(INotificationMessageManager? notificationManager)
+    public NotificationManagerWrapper(AppToastNotificationManager? notificationManager)
     {
         _notificationManager = notificationManager;
     }
 
-    public void SetManager(INotificationMessageManager? notificationManager)
+    public void SetManager(AppToastNotificationManager? notificationManager)
     {
         _notificationManager = notificationManager;
     }
@@ -70,12 +69,7 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
     {
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            _notificationManager?.CreateMessage()
-            .Background("#DC483D")
-            .HasMessage(message)
-            .Dismiss().WithDelay(TimeSpan.FromSeconds(7))
-            .WithCloseButton()
-            .Queue();
+            _notificationManager?.ErrorToast(message);
         });
     }
 
@@ -83,12 +77,7 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
     {
         Dispatcher.UIThread.InvokeAsync(() =>
         {
-            _notificationManager?.CreateMessage()
-                .Background("#008800")
-                .HasMessage(message)
-                .Dismiss().WithDelay(TimeSpan.FromSeconds(7))
-                .WithCloseButton()
-                .Queue();
+            _notificationManager?.SuccessToast(message);
         });
     }
 }

@@ -258,7 +258,7 @@
                         <StackPanel Classes="FieldGroup">
                             <TextBlock Classes="FieldLabel" Text="{DynamicResource Repository}" />
                             <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
-                                <TextBox Text="{Binding GitRemoteUrl}"
+                                <TextBox Text="{Binding GitRemoteUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                          AutomationProperties.AutomationId="GitRemoteUrlTextBox"
                                          ToolTip.Tip="{Binding GitRemoteUrl}" />
                                 <Button Grid.Column="1"
@@ -295,7 +295,9 @@
                                 Padding="12"
                                 Margin="0,0,0,12"
                                 IsVisible="{Binding IsSshAuthSelected}"
-                                AutomationProperties.AutomationId="SshKeysSection">
+                                AutomationProperties.AutomationId="SshKeysSection"
+                                AutomationProperties.ControlTypeOverride="Group"
+                                AutomationProperties.IsControlElementOverride="True">
                             <StackPanel>
                                 <TextBlock Classes="SectionTitle" Text="{DynamicResource SshKeys}" />
                                 <TextBlock Classes="SectionHint" Text="{DynamicResource SshKeysHint}" />
@@ -317,7 +319,7 @@
                                     <TextBlock Classes="FieldLabel" Text="{DynamicResource NewKey}" />
                                     <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
                                         <TextBox Text="{Binding NewSshKeyName}"
-                                                 Watermark="id_ed25519_unlimotion" />
+                                                 PlaceholderText="id_ed25519_unlimotion" />
                                         <Button Grid.Column="1"
                                                 Content="{DynamicResource Create}"
                                                 Command="{Binding GenerateSshKeyCommand}" />

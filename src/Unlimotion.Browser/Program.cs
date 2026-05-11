@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Browser;
-using Avalonia.Notification;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI.Avalonia;
 using Unlimotion;
@@ -42,7 +41,7 @@ internal sealed class Program
         var dialogs = new Dialogs();
 
         // Create notification services
-        var notificationMessageManager = new NotificationMessageManager();
+        var notificationMessageManager = new AppToastNotificationManager();
         var notificationManager = new NotificationManagerWrapper(notificationMessageManager);
 
         // Create storage factory

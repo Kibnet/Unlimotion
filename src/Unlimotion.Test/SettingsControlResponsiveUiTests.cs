@@ -24,7 +24,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -65,7 +65,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -144,7 +144,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -223,7 +223,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_BrowseTaskStoragePath_UpdatesPathFromFolderPicker()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

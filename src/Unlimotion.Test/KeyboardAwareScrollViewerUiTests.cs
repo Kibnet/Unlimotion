@@ -17,7 +17,7 @@ public class KeyboardAwareScrollViewerUiTests
     [Test]
     public async Task FocusedTextBoxCoveredByKeyboardInset_ScrollsIntoVisibleArea()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             const double keyboardInset = 190;

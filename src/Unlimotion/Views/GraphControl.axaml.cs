@@ -257,9 +257,9 @@ namespace Unlimotion.Views
 
         private void ScheduleUpdateGraph()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(ScheduleUpdateGraph);
+                Dispatcher.Post(ScheduleUpdateGraph);
                 return;
             }
 
@@ -299,9 +299,9 @@ namespace Unlimotion.Views
 
         private void InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate);
+                Dispatcher.Post(InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate);
                 return;
             }
 
@@ -324,7 +324,7 @@ namespace Unlimotion.Views
             }
 
             highlightUpdateQueued = true;
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.Post(() =>
             {
                 highlightUpdateQueued = false;
                 UpdateHighlights();
@@ -333,9 +333,9 @@ namespace Unlimotion.Views
 
         private void UpdateGraph()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(UpdateGraph);
+                Dispatcher.Post(UpdateGraph);
                 return;
             }
 
@@ -400,7 +400,7 @@ namespace Unlimotion.Views
                 projection = await Task.Run(() =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    buildRanOnUiThread = Dispatcher.UIThread.CheckAccess();
+                    buildRanOnUiThread = Dispatcher.CheckAccess();
                     var build = RoadmapGraphBuildOverride ?? RoadmapGraphBuilder.Build;
                     return build(request.Input, progress, cancellationToken);
                 }).ConfigureAwait(false);
@@ -418,7 +418,7 @@ namespace Unlimotion.Views
                 buildStopwatch.Stop();
             }
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 try
                 {
@@ -488,9 +488,9 @@ namespace Unlimotion.Views
 
         private void ReportRoadmapBuildProgress(int requestVersion, double progress)
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => ReportRoadmapBuildProgress(requestVersion, progress));
+                Dispatcher.Post(() => ReportRoadmapBuildProgress(requestVersion, progress));
                 return;
             }
 
@@ -999,12 +999,12 @@ namespace Unlimotion.Views
 
         private void FitRoadmapToScreen()
         {
-            Dispatcher.UIThread.Post(() => RoadmapViewport.FitToScreen());
+            Dispatcher.Post(() => RoadmapViewport.FitToScreen());
         }
 
         private void ResetRoadmapViewport()
         {
-            Dispatcher.UIThread.Post(() => RoadmapViewport.Reset());
+            Dispatcher.Post(() => RoadmapViewport.Reset());
         }
 
         private void RoadmapZoomIn_OnClick(object? sender, RoutedEventArgs e)

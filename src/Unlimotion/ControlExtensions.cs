@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 
 namespace Unlimotion;
@@ -14,6 +15,15 @@ public static class ControlExtensions
                 return dc;
             }
         }
+
+        foreach (var descendant in control.GetLogicalAncestors())
+        {
+            if (descendant is Control desControl && desControl.DataContext is T dc)
+            {
+                return dc;
+            }
+        }
+
         return default;
     }
 
@@ -26,6 +36,7 @@ public static class ControlExtensions
                 return parent;
             }
         }
+
         return default;
     }
 }

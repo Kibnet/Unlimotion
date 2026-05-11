@@ -21,7 +21,7 @@ public class MainControlWantedUiTests
     [Test]
     public async Task CurrentTaskWantedCheckBox_WhenConfirmed_ShouldUpdateDescendants()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

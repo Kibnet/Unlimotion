@@ -87,7 +87,7 @@ public static class UnlimotionAppLaunchHost
 
         return new HeadlessAppLaunchOptions
         {
-            BeforeLaunchAsync = _ =>
+            BeforeLaunchAsync = async _ =>
             {
                 if (launchData.ExpandAllTaskTrees)
                 {
@@ -95,11 +95,10 @@ public static class UnlimotionAppLaunchHost
                 }
 
                 vm = CreateHeadlessViewModel(launchData);
-                vm.Connect().GetAwaiter().GetResult();
+                await vm.Connect();
                 SelectAutomationTask(vm, launchData.CurrentTaskId);
                 ApplyAutomationWindowTitle(vm, launchData);
                 afterViewModelPrepared?.Invoke(vm);
-                return ValueTask.CompletedTask;
             },
             CreateMainWindow = () =>
             {

@@ -133,7 +133,7 @@ namespace Unlimotion.Views
             }
         }
 
-        private void MainControl_OnGotFocus(object? sender, GotFocusEventArgs e)
+        private void MainControl_OnGotFocus(object? sender, RoutedEventArgs e)
         {
             if (_activeInlineTitleEditor == null ||
                 e.Source is not Control focused ||

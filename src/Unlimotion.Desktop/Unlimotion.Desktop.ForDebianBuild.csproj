@@ -19,8 +19,6 @@
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
-		<!--Condition below is needed to remove Avalonia diagnostics support from build output in Release configuration.-->
-		<PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" />
 		<PackageReference Include="Packaging.Targets" PrivateAssets="all" />
 		<PackageReference Include="Velopack" />
 	</ItemGroup>

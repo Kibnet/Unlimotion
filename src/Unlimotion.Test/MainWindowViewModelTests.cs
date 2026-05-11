@@ -59,7 +59,7 @@ namespace Unlimotion.Test
         protected async Task RunWithTreeProjectionAsync(
             Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
         {
-            using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
             await session.DispatchAsync(async () =>
             {
                 var projectionFixture = new MainWindowViewModelFixture();

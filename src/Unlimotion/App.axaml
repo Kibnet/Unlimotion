@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Unlimotion"
              x:Class="Unlimotion.App"
-             xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              RequestedThemeVariant="Default" >
 	<!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -46,19 +45,19 @@
 		<Style Selector="local|EmojiTextBlock.IsCanBeCompleted">
 			<Setter Property="Opacity" Value="0.4"/>
 		</Style>
-		<Style Selector="TextBox[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+		<Style Selector="TextBox[UseFloatingPlaceholder=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingPlaceholder">
 			<Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
 			<Setter Property="FontWeight" Value="Bold"/>
 		</Style>
-		<Style Selector="TextBox[UseFloatingWatermark=True]">
+		<Style Selector="TextBox[UseFloatingPlaceholder=True]">
 			<Setter Property="MinHeight" Value="{DynamicResource AppFloatingControlMinHeight}"/>
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
-		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingWatermark">
+		<Style Selector="CalendarDatePicker[UseFloatingPlaceholder=True]:not(TextBox:empty) /template/ TextBlock#PART_FloatingPlaceholder">
 			<Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
 			<Setter Property="FontWeight" Value="Bold"/>
 		</Style>
-		<Style Selector="CalendarDatePicker[UseFloatingWatermark=True]">
+		<Style Selector="CalendarDatePicker[UseFloatingPlaceholder=True]">
 			<Setter Property="MinHeight" Value="{DynamicResource AppFloatingControlMinHeight}"/>
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
@@ -92,7 +91,5 @@
 				</ControlTemplate>
 			</Setter>
 		</Style>
-		<dialogHostAvalonia:DialogHostStyles />
-        <StyleInclude Source="avares://Notification.Avalonia/Themes/Generic.xaml" />
-    </Application.Styles>
+	</Application.Styles>
 </Application>

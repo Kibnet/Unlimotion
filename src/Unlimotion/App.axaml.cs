@@ -14,9 +14,9 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
-using Avalonia.Notification;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using DialogHostAvalonia;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
@@ -57,7 +57,7 @@ public class App : Application
     private static IConfiguration? _configuration;
     private static IMapper? _mapper;
     private static IDialogs? _dialogs;
-    private static INotificationMessageManager? _notificationMessageManager;
+    private static AppToastNotificationManager? _toastNotificationManager;
     private static INotificationManagerWrapper? _notificationManager;
     private static IRemoteBackupService? _backupService;
     private static IApplicationUpdateService? _applicationUpdateService;
@@ -65,6 +65,7 @@ public class App : Application
     private static ITaskStorageFactory? _storageFactory;
     private static IScheduler? _scheduler;
     private static MainWindowViewModel? _mainWindowViewModel;
+    private static EventHandler? _cultureChangedHandler;
     private ServerStorage? _wiredServerStorage;
     private Action? _serverConnectedHandler;
     private Action<Exception?>? _serverConnectionErrorHandler;
@@ -80,9 +81,22 @@ public class App : Application
         RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
         AvaloniaXamlLoader.Load(this);
         ApplyLocalizedResources();
-        LocalizationService.Current.CultureChanged += (_, __) => ApplyLocalizedResources();
+        if (_cultureChangedHandler != null)
+        {
+            LocalizationService.Current.CultureChanged -= _cultureChangedHandler;
+        }
+
+        _cultureChangedHandler = (_, __) =>
+        {
+            if (ReferenceEquals(Current, this))
+            {
+                ApplyLocalizedResources();
+            }
+        };
+        LocalizationService.Current.CultureChanged += _cultureChangedHandler;
         ApplyConfiguredTheme();
         ApplyConfiguredFontSize();
+        Styles.Add(new DialogHostStyles());
     }
 
     public static void ConfigureReactiveUIBuilder(ReactiveUI.Builder.ReactiveUIBuilder builder)
@@ -104,16 +118,16 @@ public class App : Application
         }
 
         // Create notification message manager (requires Avalonia UI thread)
-        _notificationMessageManager ??= new NotificationMessageManager();
+        _toastNotificationManager ??= new AppToastNotificationManager();
 
         // Ensure wrapper exists and is wired to the UI manager
         if (_notificationManager == null)
         {
-            _notificationManager = new NotificationManagerWrapper(_notificationMessageManager);
+            _notificationManager = new NotificationManagerWrapper(_toastNotificationManager);
         }
         else if (_notificationManager is NotificationManagerWrapper wrapper)
         {
-            wrapper.SetManager(_notificationMessageManager);
+            wrapper.SetManager(_toastNotificationManager);
         }
 
         // Create SettingsViewModel
@@ -137,7 +151,7 @@ public class App : Application
             graphViewModel
         )
         {
-            ToastNotificationManager = _notificationMessageManager
+            ToastNotificationManager = _toastNotificationManager
         };
 
         // Set up commands on SettingsViewModel

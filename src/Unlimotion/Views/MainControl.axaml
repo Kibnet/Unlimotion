@@ -668,18 +668,18 @@
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
                                                  TextWrapping="Wrap"
                                                  Text="{Binding Title}"
-                                                 Watermark="{DynamicResource TitleWatermark}"
+                                                 PlaceholderText="{DynamicResource TitleWatermark}"
                                                  VerticalAlignment="Center"
                                                  VerticalContentAlignment="Center"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, Auto, Auto, *">
                                         <CheckBox IsChecked="{Binding WantedFromUi}" VerticalAlignment="Center" Content="{DynamicResource Wanted}"
                                                   AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
-                                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="{DynamicResource Importance}" Watermark="{DynamicResource Importance}" Grid.Column="1"/>
+                                        <NumericUpDown Value="{Binding Importance}" Minimum="0" Maximum="100" ToolTip.Tip="{DynamicResource Importance}" PlaceholderText="{DynamicResource Importance}" Grid.Column="1"/>
                                         <Button Grid.Column="2" Content="{DynamicResource Archive}" Command="{Binding ArchiveCommand}"/>
                                         <TextBox Grid.Column="3" Text="{Binding Id, Mode=OneWay}" IsReadOnly="True"/>
                                     </Grid>
-                                    <TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" Watermark="{DynamicResource Description}" UseFloatingWatermark="True"></TextBox>
+                                    <TextBox Text="{Binding Description}" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" PlaceholderText="{DynamicResource Description}" UseFloatingPlaceholder="True"></TextBox>
                                     <WrapPanel>
                                         <WrapPanel IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
                                             <Label Content="{DynamicResource CreatedPrefix}" Padding="0" VerticalAlignment="Center"/>
@@ -706,8 +706,8 @@
                                     <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,*">
                                         <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
                                                             IsTodayHighlighted="True"
-                                                            Watermark="{DynamicResource PlannedBegin}"
-                                                            UseFloatingWatermark="True"
+                                                            PlaceholderText="{DynamicResource PlannedBegin}"
+                                                            UseFloatingPlaceholder="True"
                                                             HorizontalAlignment="Stretch"
                                                             DisplayDate="{Binding PlannedBeginDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
                                         <DropDownButton Content="{DynamicResource SetBegin}" Grid.Row="1">
@@ -725,7 +725,7 @@
                                                   ToolTip.Tip="{DynamicResource DurationExample}"
                                                   HorizontalAlignment="Stretch"
                                                   behavior:LostFocusUpdateBindingBehavior.Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
-                                                  Watermark="{DynamicResource PlannedDuration}" UseFloatingWatermark="True">
+                                                  PlaceholderText="{DynamicResource PlannedDuration}" UseFloatingPlaceholder="True">
                                          </TextBox>
 
                                         <DropDownButton Content="{DynamicResource SetDuration}" Grid.Column="1" Grid.Row="1">
@@ -749,8 +749,8 @@
                                         </DropDownButton>
                                         <CalendarDatePicker Grid.Column="2" SelectedDate="{Binding PlannedEndDateTime}"
                                                             IsTodayHighlighted="True"
-                                                            Watermark="{DynamicResource PlannedEnd}"
-                                                            UseFloatingWatermark="True"
+                                                            PlaceholderText="{DynamicResource PlannedEnd}"
+                                                            UseFloatingPlaceholder="True"
                                                             HorizontalAlignment="Stretch"
                                                             DisplayDate="{Binding PlannedEndDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
                                         <DropDownButton Content="{DynamicResource SetEnd}" Grid.Column="2" Grid.Row="1">
@@ -781,7 +781,7 @@
                                         <Border IsVisible="{Binding IsHaveRepeater}">
                                             <WrapPanel DataContext="{Binding Repeater}" >
                                                 <ComboBox ItemsSource="{Binding RepeaterTypes}" SelectedItem="{Binding SelectedRepeaterType}" />
-                                                <NumericUpDown Value="{Binding Period}" Watermark="{DynamicResource Period}" ToolTip.Tip="{DynamicResource Period}"/>
+                                                <NumericUpDown Value="{Binding Period}" PlaceholderText="{DynamicResource Period}" ToolTip.Tip="{DynamicResource Period}"/>
                                                 <CheckBox IsChecked="{Binding AfterComplete}" Content="{DynamicResource AfterComplete}"/>
                                             </WrapPanel>
                                         </Border>
@@ -817,7 +817,7 @@
                                             <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
                                             <TextBox Classes="RelationEditorSearch"
                                                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     Watermark="{Binding Watermark}"
+                                                     PlaceholderText="{Binding Watermark}"
                                                      KeyDown="RelationEditorControl_OnKeyDown"
                                                      AutomationProperties.AutomationId="CurrentTaskParentsRelationAddInput"/>
                                             <ListBox Classes="RelationEditorSuggestions"
@@ -870,7 +870,7 @@
                                             <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
                                             <TextBox Classes="RelationEditorSearch"
                                                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     Watermark="{Binding Watermark}"
+                                                     PlaceholderText="{Binding Watermark}"
                                                      KeyDown="RelationEditorControl_OnKeyDown"
                                                      AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddInput"/>
                                             <ListBox Classes="RelationEditorSuggestions"
@@ -923,7 +923,7 @@
                                             <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
                                             <TextBox Classes="RelationEditorSearch"
                                                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     Watermark="{Binding Watermark}"
+                                                     PlaceholderText="{Binding Watermark}"
                                                      KeyDown="RelationEditorControl_OnKeyDown"
                                                      AutomationProperties.AutomationId="CurrentTaskContainingRelationAddInput"/>
                                             <ListBox Classes="RelationEditorSuggestions"
@@ -976,7 +976,7 @@
                                             <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
                                             <TextBox Classes="RelationEditorSearch"
                                                      Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     Watermark="{Binding Watermark}"
+                                                     PlaceholderText="{Binding Watermark}"
                                                      KeyDown="RelationEditorControl_OnKeyDown"
                                                      AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddInput"/>
                                             <ListBox Classes="RelationEditorSuggestions"

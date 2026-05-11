@@ -6,7 +6,6 @@
              xmlns:views="clr-namespace:Unlimotion.Views"
              xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              xmlns:unlimotion="clr-namespace:Unlimotion"
-             xmlns:controls="clr-namespace:Avalonia.Notification.Controls;assembly=Notification.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="Unlimotion.Views.MainScreen"
              FontSize="{DynamicResource AppFontSize}"
@@ -54,9 +53,49 @@
             <!-- put the content over which the dialog is shown here (e.g. your main window grid)-->
             <Panel>
                 <views:MainControl Name="MainControl"/>
-                <controls:NotificationMessageContainer
-                    Manager="{Binding ToastNotificationManager}"
-                    HorizontalAlignment="Center"/>
+                <ItemsControl x:CompileBindings="False"
+                              ItemsSource="{Binding ToastNotificationManager.Messages}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Top"
+                              Margin="16"
+                              AutomationProperties.AutomationId="ToastNotificationList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="8"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="unlimotion:AppToastNotification"
+                                      x:DataType="unlimotion:AppToastNotification">
+                            <Border MinWidth="280"
+                                    MaxWidth="560"
+                                    Padding="12,10"
+                                    CornerRadius="6"
+                                    Background="{Binding Background}"
+                                    AutomationProperties.AutomationId="{Binding AutomationId}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding Message}"
+                                               Foreground="White"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            MinWidth="28"
+                                            MinHeight="28"
+                                            Margin="12,0,0,0"
+                                            Padding="0"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Foreground="White"
+                                            HorizontalContentAlignment="Center"
+                                            VerticalContentAlignment="Center"
+                                            Content="x"
+                                            Command="{Binding CloseCommand}"
+                                            AutomationProperties.AutomationId="{Binding CloseAutomationId}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
                 <Grid x:Name="TasksLoadingOverlay"
                       IsVisible="{Binding IsTasksLoading}"
                       AutomationProperties.AutomationId="TasksLoadingOverlay">

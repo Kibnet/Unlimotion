@@ -30,7 +30,7 @@ public class MainControlRelationPickerUiTests
         string addButtonAutomationId,
         string inputAutomationId)
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -75,7 +75,7 @@ public class MainControlRelationPickerUiTests
     [Test]
     public async Task TaskCardRelationEditor_AddParentFromCard_UpdatesStorage()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

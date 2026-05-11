@@ -17,7 +17,7 @@
                 x:Name="SearchEditor"
                 Grid.Column="0"
                 Text="{Binding $parent[searchControl:SearchControl].SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                Watermark="{Binding $parent[searchControl:SearchControl].Watermark}"
+                PlaceholderText="{Binding $parent[searchControl:SearchControl].Watermark}"
                 VerticalAlignment="Center"
                 VerticalContentAlignment="Center"
                 Height="{DynamicResource AppSearchControlHeight}"

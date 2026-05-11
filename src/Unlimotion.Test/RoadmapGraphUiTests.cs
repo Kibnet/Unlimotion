@@ -730,7 +730,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var storage = new StubTaskStorage();
@@ -785,7 +785,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodifyView_RendersTasksAndKeepsAutomationIds()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -848,7 +848,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ViewportOverlay_ProvidesMinimapAndControls()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -920,7 +920,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ViewportOverlays_CollapseToCompactButtonsAndRestore()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1024,7 +1024,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedBackgroundRebuilds()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1110,7 +1110,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_FilterChange_CancelsRunningBackgroundRebuildAndStartsLatest()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1222,7 +1222,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_TitleRename_UpdatesTextWithoutRebuildingMap()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1287,7 +1287,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_OpenView_ReflectsCreatedAndDeletedTasks()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1355,7 +1355,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_FilterChange_RebuildsOpenView()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1425,7 +1425,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodeSelectionResolvesOwnerWithoutStaticSingleton()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1481,7 +1481,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodePointerDrag_StartsAfterMoveThresholdAndKeepsSelection()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1552,7 +1552,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodeRightDrag_PansViewportWithoutSelectingTask()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1633,7 +1633,7 @@ public class RoadmapGraphUiTests
         string hotkey,
         string selectedTaskId)
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1698,7 +1698,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_TaskCardButtons_AfterRoadmapSelection_CreateExpectedTasks()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1769,7 +1769,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_DropWithControl_CreatesBlockingRelationBetweenRoadmapNodes()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1828,7 +1828,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

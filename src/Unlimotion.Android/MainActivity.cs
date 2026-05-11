@@ -32,7 +32,7 @@ namespace Unlimotion.Android;
     ResizeableActivity = true,
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
-public class MainActivity : AvaloniaMainActivity<App>
+public class MainActivity : AvaloniaMainActivity
 {
     private const string DefaultConfigName = "Settings.json";
     private const string TasksFolderName = "Tasks";
@@ -45,11 +45,12 @@ public class MainActivity : AvaloniaMainActivity<App>
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         HookCrashLogging();
+        ConfigureAppServices();
 
         base.OnCreate(savedInstanceState);
     }
 
-    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
+    private void ConfigureAppServices()
     {
         try
         {
@@ -77,10 +78,6 @@ public class MainActivity : AvaloniaMainActivity<App>
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
             TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
-
-            return base.CustomizeAppBuilder(builder)
-                .WithCustomFont()
-                .UseReactiveUI(App.ConfigureReactiveUIBuilder);
         }
         catch (Exception ex)
         {
@@ -516,5 +513,21 @@ public class MainActivity : AvaloniaMainActivity<App>
         catch
         {
         }
+    }
+}
+
+[global::Android.App.Application]
+public class AndroidApp : AvaloniaAndroidApplication<App>
+{
+    protected AndroidApp(IntPtr javaReference, JniHandleOwnership transfer)
+        : base(javaReference, transfer)
+    {
+    }
+
+    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
+    {
+        return base.CustomizeAppBuilder(builder)
+            .WithCustomFont()
+            .UseReactiveUI(App.ConfigureReactiveUIBuilder);
     }
 }

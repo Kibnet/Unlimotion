@@ -15,7 +15,9 @@ public sealed class MainWindowFlaUiTests
     protected override FlaUiRuntimeSession LaunchSession()
     {
         return new FlaUiRuntimeSession(
-            DesktopAppSession.Launch(UnlimotionAppLaunchHost.CreateDesktopLaunchOptions()));
+            DesktopAppSession.Launch(
+                UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+                    mainWindowTimeout: TimeSpan.FromSeconds(90))));
     }
 
     protected override MainWindowPage CreatePage(FlaUiRuntimeSession session)

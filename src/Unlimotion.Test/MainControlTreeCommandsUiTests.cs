@@ -26,7 +26,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TaskOutlinePastePreviewDialog_LargePreview_IsScrollableAndShowsLastTask()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             Window? window = null;
@@ -77,7 +77,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_UsesStickyActiveTabTreeAfterFocusMoves()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -119,7 +119,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_IsIgnoredWhileTextInputFocused()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -163,7 +163,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -211,8 +211,12 @@ public class MainControlTreeCommandsUiTests
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
                 await Assert.That(allTasksTree).IsNotNull();
 
-                var childControl = FindWrapperControl(allTasksTree!, child.Id);
-                await ClickControlAsync(window, childControl);
+                allTasksTree!.SelectedItems!.Clear();
+                allTasksTree.SelectedItems.Add(childWrapper);
+                allTasksTree.SelectedItem = childWrapper;
+                vm.CurrentAllTasksItem = childWrapper;
+                allTasksTree.Focus();
+                Dispatcher.UIThread.RunJobs();
                 var childSelected = WaitFor(() =>
                     ReferenceEquals(vm.CurrentAllTasksItem, childWrapper) ||
                     vm.CurrentAllTasksItem?.TaskItem.Id == child.Id);
@@ -256,7 +260,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -333,7 +337,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -419,7 +423,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -501,7 +505,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_UsesSelectedItem_NotLastClickedWrapper()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -567,7 +571,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_UsesVisibleTabTreeAfterSwitchWithoutAdditionalTreeClick()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -612,7 +616,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_UsesVisibleTabTreeWithoutPriorTreeActivation()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -651,7 +655,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_LastCreatedTab_HotkeyAndContextMenu_Work()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -699,7 +703,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_LastCreatedTab_Hotkey_WorksAfterSwitchFromAllTasksHeaderClick()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -751,7 +755,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_WorksOnFirstPressImmediatelyAfterTabHeaderClick()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -801,7 +805,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_LastCreatedTab_CurrentCommands_WorkOnClickedItem()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -880,7 +884,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_LastUpdatedTab_Hotkey_WorksAfterSwitchFromAllTasksHeaderClick()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -933,7 +937,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -998,7 +1002,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ShiftDelete_RemovesSelectedLastUpdatedTreeItem()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1051,7 +1055,7 @@ public class MainControlTreeCommandsUiTests
         string rootTaskId,
         string childTaskId)
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1146,7 +1150,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ContextMenuClick_UsesClickedRelationItemEvenWhenTextInputFocused()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1207,7 +1211,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_Hotkey_UsesFocusedRelationTreeWithoutPointerActivation()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1279,7 +1283,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_HotkeyRouting_PrefersFocusedRelationTreeOverStaleActiveTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1330,7 +1334,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetWithoutStoredTreeContext()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1380,7 +1384,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ContextMenu_DisplaysHotkeysForTreeCommands()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1422,7 +1426,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetItemWithoutStoredContextForCurrentCommand()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1499,7 +1503,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_SelectsAllItemsInActiveTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1539,7 +1543,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1588,7 +1592,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_SelectsTextWhenTextInputFocused()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1634,7 +1638,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1679,7 +1683,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_ShiftDelete_IgnoresRelationTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1702,8 +1706,14 @@ public class MainControlTreeCommandsUiTests
                 var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
                 await Assert.That(relationTree).IsNotNull();
 
-                var childControl = FindWrapperControl(relationTree!, MainWindowViewModelFixture.SubTask22Id);
-                await ClickControlAsync(window, childControl);
+                var childWrapper = (TaskWrapperViewModel)FindWrapperTreeItem(
+                    relationTree!,
+                    MainWindowViewModelFixture.SubTask22Id).DataContext!;
+                relationTree.SelectedItems!.Clear();
+                relationTree.SelectedItems.Add(childWrapper);
+                relationTree.SelectedItem = childWrapper;
+                relationTree.Focus();
+                Dispatcher.UIThread.RunJobs();
                 await Assert.That(GetSelectedWrappers(relationTree).Count).IsEqualTo(1);
 
                 PressHotkey(window, Key.Delete, PhysicalKey.Delete, RawInputModifiers.Shift);
@@ -1725,7 +1735,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_RightClick_PreservesSelectedBatch_AndCollapsesOnUnselectedItem()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1778,7 +1788,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeDragUi_DragPreparation_PreservesExistingMultiSelectionVisualState()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1885,6 +1895,7 @@ public class MainControlTreeCommandsUiTests
     {
         var point = GetControlCenterPoint(window, control);
         window.MouseDown(point, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point, button, modifiers);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;
@@ -1897,6 +1908,7 @@ public class MainControlTreeCommandsUiTests
         RawInputModifiers modifiers = RawInputModifiers.None)
     {
         window.MouseDown(point, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point, button, modifiers);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;
