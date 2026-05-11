@@ -29,6 +29,8 @@ public class GraphViewModel
         _mainWindowViewModel = mainWindowViewModel;
     }
 
+    public MainWindowViewModel? MainWindowViewModel => _mainWindowViewModel;
+
     public ReadOnlyObservableCollection<TaskWrapperViewModel> Tasks { get; set; }
     public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedTasks { get; set; }
 

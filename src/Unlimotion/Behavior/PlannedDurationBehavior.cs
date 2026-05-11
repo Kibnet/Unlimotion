@@ -1,117 +1,131 @@
-﻿using System;
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Interactivity;
-using Avalonia.Xaml.Interactivity;
 
 namespace Unlimotion.Behavior
 {
-    public class LostFocusUpdateBindingBehavior : Behavior<TextBox>
+    public sealed class LostFocusUpdateBindingBehavior
     {
-        private object? changedTextDataContext;
-        private bool isUpdatingTextFromBinding;
-        private bool hasChangedTextForCurrentDataContext;
+        private LostFocusUpdateBindingBehavior()
+        {
+        }
+
+        public static readonly AttachedProperty<string?> TextProperty =
+            AvaloniaProperty.RegisterAttached<LostFocusUpdateBindingBehavior, TextBox, string?>(
+                "Text",
+                defaultBindingMode: BindingMode.TwoWay);
+
+        private static readonly AttachedProperty<LostFocusUpdateBindingState?> StateProperty =
+            AvaloniaProperty.RegisterAttached<LostFocusUpdateBindingBehavior, TextBox, LostFocusUpdateBindingState?>(
+                "State");
 
         static LostFocusUpdateBindingBehavior()
         {
             TextProperty.Changed.Subscribe(e =>
             {
-                ((LostFocusUpdateBindingBehavior) e.Sender).OnBindingValueChanged();
+                if (e.Sender is TextBox textBox)
+                {
+                    GetOrCreateState(textBox).OnBindingValueChanged();
+                }
             });
         }
-        
 
-        public static readonly StyledProperty<string?> TextProperty = AvaloniaProperty.Register<LostFocusUpdateBindingBehavior, string?>(
-            "Text", defaultBindingMode: BindingMode.TwoWay);
-
-        public string? Text
+        public static string? GetText(TextBox textBox)
         {
-            get => GetValue(TextProperty);
-            set => SetValue(TextProperty, value);
+            return textBox.GetValue(TextProperty);
         }
 
-        protected override void OnAttached()
+        public static void SetText(TextBox textBox, string? value)
         {
-            if (AssociatedObject != null)
+            textBox.SetValue(TextProperty, value);
+        }
+
+        private static LostFocusUpdateBindingState GetOrCreateState(TextBox textBox)
+        {
+            var state = textBox.GetValue(StateProperty);
+            if (state == null)
             {
-                AssociatedObject.GotFocus += OnGotFocus;
-                AssociatedObject.DataContextChanged += OnDataContextChanged;
-                AssociatedObject.TextChanged += OnTextChanged;
-                AssociatedObject.LostFocus += OnLostFocus;
+                state = new LostFocusUpdateBindingState(textBox);
+                textBox.SetValue(StateProperty, state);
+                state.Attach();
             }
 
-            base.OnAttached();
+            return state;
         }
 
-        protected override void OnDetaching()
+        private sealed class LostFocusUpdateBindingState
         {
-            if (AssociatedObject != null)
+            private readonly TextBox textBox;
+            private object? changedTextDataContext;
+            private bool isUpdatingTextFromBinding;
+            private bool hasChangedTextForCurrentDataContext;
+
+            public LostFocusUpdateBindingState(TextBox textBox)
             {
-                AssociatedObject.GotFocus -= OnGotFocus;
-                AssociatedObject.DataContextChanged -= OnDataContextChanged;
-                AssociatedObject.TextChanged -= OnTextChanged;
-                AssociatedObject.LostFocus -= OnLostFocus;
+                this.textBox = textBox;
             }
 
-            ClearChangedTextContext();
-            base.OnDetaching();
-        }
-
-        private void OnGotFocus(object? sender, RoutedEventArgs e)
-        {
-            ClearChangedTextContext();
-        }
-
-        private void OnDataContextChanged(object? sender, EventArgs e)
-        {
-            ClearChangedTextContext();
-            OnBindingValueChanged();
-        }
-
-        private void OnTextChanged(object? sender, TextChangedEventArgs e)
-        {
-            if (isUpdatingTextFromBinding)
+            public void Attach()
             {
-                return;
+                textBox.GotFocus += OnGotFocus;
+                textBox.DataContextChanged += OnDataContextChanged;
+                textBox.TextChanged += OnTextChanged;
+                textBox.LostFocus += OnLostFocus;
             }
 
-            changedTextDataContext = AssociatedObject?.DataContext;
-            hasChangedTextForCurrentDataContext = true;
-        }
-        
-        private void OnLostFocus(object? sender, RoutedEventArgs e)
-        {
-            if (AssociatedObject != null &&
-                hasChangedTextForCurrentDataContext &&
-                ReferenceEquals(changedTextDataContext, AssociatedObject.DataContext))
-            {
-                Text = AssociatedObject.Text;
-            }
-
-            ClearChangedTextContext();
-        }
-        
-        private void OnBindingValueChanged()
-        {
-            if (AssociatedObject != null)
+            public void OnBindingValueChanged()
             {
                 isUpdatingTextFromBinding = true;
                 try
                 {
-                    AssociatedObject.Text = Text;
+                    textBox.Text = GetText(textBox);
                 }
                 finally
                 {
                     isUpdatingTextFromBinding = false;
                 }
             }
-        }
 
-        private void ClearChangedTextContext()
-        {
-            changedTextDataContext = null;
-            hasChangedTextForCurrentDataContext = false;
+            private void OnGotFocus(object? sender, RoutedEventArgs e)
+            {
+                ClearChangedTextContext();
+            }
+
+            private void OnDataContextChanged(object? sender, EventArgs e)
+            {
+                ClearChangedTextContext();
+                OnBindingValueChanged();
+            }
+
+            private void OnTextChanged(object? sender, TextChangedEventArgs e)
+            {
+                if (isUpdatingTextFromBinding)
+                {
+                    return;
+                }
+
+                changedTextDataContext = textBox.DataContext;
+                hasChangedTextForCurrentDataContext = true;
+            }
+
+            private void OnLostFocus(object? sender, RoutedEventArgs e)
+            {
+                if (hasChangedTextForCurrentDataContext &&
+                    ReferenceEquals(changedTextDataContext, textBox.DataContext))
+                {
+                    SetText(textBox, textBox.Text);
+                }
+
+                ClearChangedTextContext();
+            }
+
+            private void ClearChangedTextContext()
+            {
+                changedTextDataContext = null;
+                hasChangedTextForCurrentDataContext = false;
+            }
         }
     }
 }

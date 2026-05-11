@@ -85,7 +85,10 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
             static control => control is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Git remote URL input did not become available.")!;
-        remoteUrlInput.Text = "git@github.com:org/unlimotion-backup.git";
+        remoteUrlInput.Enter("git@github.com:org/unlimotion-backup.git");
+        await UiAssert.TextEqualsAsync(
+            () => remoteUrlInput.Text,
+            "git@github.com:org/unlimotion-backup.git");
 
         var sshSection = WaitUntil(
             () => TryResolveDuringWait(() => Page.SshKeysSection),

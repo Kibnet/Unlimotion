@@ -6,20 +6,22 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reflection;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
-using Avalonia.Notification;
-using Avalonia.ReactiveUI;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using DialogHostAvalonia;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
@@ -55,7 +57,7 @@ public class App : Application
     private static IConfiguration? _configuration;
     private static IMapper? _mapper;
     private static IDialogs? _dialogs;
-    private static INotificationMessageManager? _notificationMessageManager;
+    private static AppToastNotificationManager? _toastNotificationManager;
     private static INotificationManagerWrapper? _notificationManager;
     private static IRemoteBackupService? _backupService;
     private static IApplicationUpdateService? _applicationUpdateService;
@@ -63,6 +65,7 @@ public class App : Application
     private static ITaskStorageFactory? _storageFactory;
     private static IScheduler? _scheduler;
     private static MainWindowViewModel? _mainWindowViewModel;
+    private static EventHandler? _cultureChangedHandler;
     private ServerStorage? _wiredServerStorage;
     private Action? _serverConnectedHandler;
     private Action<Exception?>? _serverConnectionErrorHandler;
@@ -75,12 +78,30 @@ public class App : Application
 
     public override void Initialize()
     {
-        RxApp.MainThreadScheduler = AvaloniaScheduler.Instance;
+        RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
         AvaloniaXamlLoader.Load(this);
         ApplyLocalizedResources();
-        LocalizationService.Current.CultureChanged += (_, __) => ApplyLocalizedResources();
+        if (_cultureChangedHandler != null)
+        {
+            LocalizationService.Current.CultureChanged -= _cultureChangedHandler;
+        }
+
+        _cultureChangedHandler = (_, __) =>
+        {
+            if (ReferenceEquals(Current, this))
+            {
+                ApplyLocalizedResources();
+            }
+        };
+        LocalizationService.Current.CultureChanged += _cultureChangedHandler;
         ApplyConfiguredTheme();
         ApplyConfiguredFontSize();
+        Styles.Add(new DialogHostStyles());
+    }
+
+    public static void ConfigureReactiveUIBuilder(ReactiveUI.Builder.ReactiveUIBuilder builder)
+    {
+        builder.WithExceptionHandler(Observer.Create<Exception>(HandleReactiveException));
     }
 
     public event EventHandler OnLoaded
@@ -97,20 +118,17 @@ public class App : Application
         }
 
         // Create notification message manager (requires Avalonia UI thread)
-        _notificationMessageManager ??= new NotificationMessageManager();
+        _toastNotificationManager ??= new AppToastNotificationManager();
 
         // Ensure wrapper exists and is wired to the UI manager
         if (_notificationManager == null)
         {
-            _notificationManager = new NotificationManagerWrapper(_notificationMessageManager);
+            _notificationManager = new NotificationManagerWrapper(_toastNotificationManager);
         }
         else if (_notificationManager is NotificationManagerWrapper wrapper)
         {
-            wrapper.SetManager(_notificationMessageManager);
+            wrapper.SetManager(_toastNotificationManager);
         }
-
-        // Set up exception handler
-        RxApp.DefaultExceptionHandler = new ObservableExceptionHandler(_notificationManager);
 
         // Create SettingsViewModel
         var settingsViewModel = new SettingsViewModel(
@@ -133,7 +151,7 @@ public class App : Application
             graphViewModel
         )
         {
-            ToastNotificationManager = _notificationMessageManager
+            ToastNotificationManager = _toastNotificationManager
         };
 
         // Set up commands on SettingsViewModel
@@ -220,7 +238,7 @@ public class App : Application
             }
         });
 
-        settings.ObservableForProperty(m => m.GitBackupEnabled, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitBackupEnabled, false, true)
             .Subscribe(c =>
             {
                 EnsureScheduler();
@@ -232,7 +250,7 @@ public class App : Application
                     _scheduler.PauseAll();
             });
 
-        settings.ObservableForProperty(m => m.ThemeMode, skipInitial: true)
+        settings.ObservableForProperty(m => m.ThemeMode, false, true)
             .Subscribe(c => RequestedThemeVariant = c.Value switch
             {
                 ThemeMode.Dark => ThemeVariant.Dark,
@@ -240,10 +258,10 @@ public class App : Application
                 _ => ThemeVariant.Default
             });
 
-        settings.ObservableForProperty(m => m.FontSize, skipInitial: true)
+        settings.ObservableForProperty(m => m.FontSize, false, true)
             .Subscribe(c => ApplyFontSize(c.Value));
 
-        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, false, true)
             .Subscribe(c =>
             {
                 if (c.Value == 0) return;
@@ -255,7 +273,7 @@ public class App : Application
                 _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
             });
 
-        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, skipInitial: true)
+        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, false, true)
             .Subscribe(c =>
             {
                 if (c.Value == 0) return;
@@ -363,7 +381,9 @@ public class App : Application
             if (_dialogs == null) return;
             try
             {
-                var path = await _dialogs.ShowOpenFolderDialogAsync(L10n.Get("FolderPickerDataFolder"));
+                var path = await _dialogs.ShowOpenFolderDialogAsync(
+                    L10n.Get("FolderPickerDataFolder"),
+                    settings.TaskStoragePath);
                 if (!string.IsNullOrWhiteSpace(path))
                 {
                     await PrepareFileStoragePathAsync(path);
@@ -712,8 +732,6 @@ public class App : Application
                 DispatcherPriority.Background);
         }
 
-        RxApp.DefaultExceptionHandler = Observer.Create<Exception>(HandleReactiveException);
-
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -851,13 +869,24 @@ public class App : Application
 
     private void DisableAvaloniaDataAnnotationValidation()
     {
-        // Get an array of plugins to remove
-        var dataValidationPluginsToRemove =
-            BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
-        // remove each entry found
+        var bindingPluginsType = typeof(AvaloniaObject).Assembly.GetType("Avalonia.Data.Core.Plugins.BindingPlugins");
+        var dataValidators = bindingPluginsType?
+            .GetProperty("DataValidators", BindingFlags.Public | BindingFlags.Static)?
+            .GetValue(null) as System.Collections.IList;
+
+        if (dataValidators == null)
+        {
+            return;
+        }
+
+        var dataValidationPluginsToRemove = dataValidators
+            .Cast<object>()
+            .OfType<DataAnnotationsValidationPlugin>()
+            .ToArray();
+
         foreach (var plugin in dataValidationPluginsToRemove)
         {
-            BindingPlugins.DataValidators.Remove(plugin);
+            dataValidators.Remove(plugin);
         }
     }
 

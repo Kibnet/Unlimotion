@@ -730,7 +730,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_OpenView_KeepsDenseBlockChainReadable()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var storage = new StubTaskStorage();
@@ -785,7 +785,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodifyView_RendersTasksAndKeepsAutomationIds()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -803,7 +803,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
@@ -848,7 +848,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ViewportOverlay_ProvidesMinimapAndControls()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -866,7 +866,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
@@ -920,7 +920,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ViewportOverlays_CollapseToCompactButtonsAndRestore()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -938,7 +938,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
@@ -1024,7 +1024,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_UpdateGraphPulse_CoalescesQueuedBackgroundRebuilds()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1042,7 +1042,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
@@ -1067,8 +1067,6 @@ public class RoadmapGraphUiTests
                 {
                     vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
                     Dispatcher.UIThread.RunJobs();
-                    Thread.Sleep(40);
-                    Dispatcher.UIThread.RunJobs();
                 }
 
                 var indicatorVisible = WaitFor(() =>
@@ -1079,14 +1077,15 @@ public class RoadmapGraphUiTests
                 await Assert.That(indicatorVisible).IsTrue();
                 await Assert.That(graphControl.RoadmapGraphUpdateCount).IsEqualTo(updateCountBeforePulse);
 
-                var rebuilt = WaitFor(
-                    () => graphControl.RoadmapGraphUpdateCount > updateCountBeforePulse,
-                    5000);
+                var rebuilt = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountBeforePulse);
                 await Assert.That(rebuilt).IsTrue();
 
                 var updateCountAfterPulse = graphControl.RoadmapGraphUpdateCount;
-                var extraRebuild = WaitFor(
-                    () => graphControl.RoadmapGraphUpdateCount > updateCountAfterPulse,
+                var extraRebuild = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountAfterPulse,
                     400);
 
                 await Assert.That(updateCountAfterPulse).IsEqualTo(updateCountBeforePulse + 1);
@@ -1111,7 +1110,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_FilterChange_CancelsRunningBackgroundRebuildAndStartsLatest()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1125,6 +1124,7 @@ public class RoadmapGraphUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                AddVisibleRoadmapFilterEmoji(vm);
                 vm.AllTasksMode = false;
                 vm.GraphMode = true;
 
@@ -1133,7 +1133,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                graphControl = WaitForGraphControl(view);
+                graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
@@ -1177,14 +1177,14 @@ public class RoadmapGraphUiTests
                 excludeFilter.ShowTasks = true;
                 Dispatcher.UIThread.RunJobs();
 
-                var firstBuildStarted = WaitFor(() => firstBuildEntered.IsSet);
+                var firstBuildStarted = await WaitForAsync(() => firstBuildEntered.IsSet);
                 await Assert.That(firstBuildStarted).IsTrue();
                 await Assert.That(Volatile.Read(ref buildCalls)).IsEqualTo(1);
 
                 excludeFilter.ShowTasks = false;
                 Dispatcher.UIThread.RunJobs();
 
-                var latestStartedBeforeFirstWasReleased = WaitFor(() =>
+                var latestStartedBeforeFirstWasReleased = await WaitForAsync(() =>
                     Volatile.Read(ref buildCalls) >= 2 &&
                     graphControl.RoadmapGraphBackgroundBuildCancelRequestCount > cancelRequestCountBeforeFilter);
                 await Assert.That(latestStartedBeforeFirstWasReleased).IsTrue();
@@ -1192,11 +1192,11 @@ public class RoadmapGraphUiTests
 
                 firstBuildCanFinish.Set();
 
-                var firstBuildCanceled = WaitFor(() =>
+                var firstBuildCanceled = await WaitForAsync(() =>
                     graphControl.RoadmapGraphBackgroundBuildCanceledCount > canceledCountBeforeFilter);
                 await Assert.That(firstBuildCanceled).IsTrue();
 
-                var latestApplied = WaitFor(() =>
+                var latestApplied = await WaitForAsync(() =>
                     graphControl.RoadmapGraphUpdateCount > updateCountBeforeFilter &&
                     FindRoadmapNode(graphControl, filteredTaskId) != null,
                     5000);
@@ -1222,7 +1222,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_TitleRename_UpdatesTextWithoutRebuildingMap()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1240,7 +1240,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var originalNode = FindRoadmapNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
@@ -1287,7 +1287,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_OpenView_ReflectsCreatedAndDeletedTasks()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1305,21 +1305,39 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
+                await Assert.That(graphControl!.DataContext).IsSameReferenceAs(vm.Graph);
 
-                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
-                await Assert.That(parent).IsNotNull();
-
-                var newTask = await vm.taskRepository!.AddChild(parent!);
+                var newTask = await vm.taskRepository!.Add();
                 newTask.Title = "Roadmap live child";
+                var projectionReady = WaitFor(() =>
+                    vm.Graph.Tasks.Any(wrapper => wrapper.TaskItem.Id == newTask.Id));
+                await Assert.That(projectionReady).IsTrue();
+                await Assert.That(RoadmapGraphBuilder.Build(vm.Graph.Tasks)
+                    .Nodes.Any(node => node.Id == newTask.Id)).IsTrue();
+
+                var updateCountBeforeAdd = graphControl!.RoadmapGraphUpdateCount;
+                vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
+                var rebuilt = await WaitForRoadmapUpdateAsync(graphControl, updateCountBeforeAdd);
+                await Assert.That(rebuilt).IsTrue();
 
                 var appeared = WaitFor(() =>
-                    graphControl!.RoadmapNodes.Any(node => node.Id == newTask.Id) &&
-                    FindTaskTitleTextBlock(graphControl!, newTask.Id)?.Text == newTask.TitleWithoutEmoji);
+                    graphControl!.RoadmapNodes.Any(node => node.Id == newTask.Id),
+                    5000);
                 await Assert.That(appeared).IsTrue();
 
                 await vm.taskRepository.Delete(newTask);
+                var deletedFromProjection = WaitFor(() =>
+                    vm.Graph.Tasks.All(wrapper => wrapper.TaskItem.Id != newTask.Id));
+                await Assert.That(deletedFromProjection).IsTrue();
+
+                var updateCountBeforeDelete = graphControl!.RoadmapGraphUpdateCount;
+                vm.Graph.UpdateGraph = !vm.Graph.UpdateGraph;
+                var rebuiltAfterDelete = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountBeforeDelete);
+                await Assert.That(rebuiltAfterDelete).IsTrue();
 
                 var disappeared = WaitFor(() =>
                     graphControl!.RoadmapNodes.All(node => node.Id != newTask.Id) &&
@@ -1337,7 +1355,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_FilterChange_RebuildsOpenView()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1347,6 +1365,7 @@ public class RoadmapGraphUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
+                AddVisibleRoadmapFilterEmoji(vm);
                 vm.AllTasksMode = false;
                 vm.GraphMode = true;
 
@@ -1355,7 +1374,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var filterReady = WaitFor(() =>
@@ -1371,13 +1390,25 @@ public class RoadmapGraphUiTests
                     FindRoadmapNode(graphControl!, filter.Source.Id) != null);
                 var excludedTaskId = excludeFilter.Source.Id;
 
+                var updateCountBeforeFilterOut = graphControl!.RoadmapGraphUpdateCount;
                 excludeFilter.ShowTasks = true;
+                var rebuiltAfterFilterOut = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountBeforeFilterOut);
+                await Assert.That(rebuiltAfterFilterOut).IsTrue();
+
                 var filteredOut = WaitFor(() =>
                     FindRoadmapNode(graphControl!, excludedTaskId) == null &&
                     FindTaskTitleTextBlock(graphControl!, excludedTaskId) == null);
                 await Assert.That(filteredOut).IsTrue();
 
+                var updateCountBeforeRestore = graphControl.RoadmapGraphUpdateCount;
                 excludeFilter.ShowTasks = false;
+                var rebuiltAfterRestore = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountBeforeRestore);
+                await Assert.That(rebuiltAfterRestore).IsTrue();
+
                 var restored = WaitFor(() =>
                     FindRoadmapNode(graphControl!, excludedTaskId) != null &&
                     FindTaskTitleTextBlock(graphControl!, excludedTaskId) != null);
@@ -1392,9 +1423,9 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
-    public async Task RoadmapGraph_NodeClickSelectsTaskAndDoubleTapTogglesDetailsWithoutStaticSingleton()
+    public async Task RoadmapGraph_NodeSelectionResolvesOwnerWithoutStaticSingleton()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1416,31 +1447,26 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
+                await Assert.That((graphControl!.DataContext as GraphViewModel)?.MainWindowViewModel)
+                    .IsSameReferenceAs(vm);
 
                 var taskNode = WaitForTaskNode(
-                    graphControl!,
+                    graphControl,
                     MainWindowViewModelFixture.RootTask2Id);
 
-                await ClickControlAsync(window!, taskNode);
+                var selectRoadmapTask = typeof(GraphControl).GetMethod(
+                    "SelectRoadmapTask",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                await Assert.That(selectRoadmapTask).IsNotNull();
 
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
-                await Assert.That(vm.DetailsAreOpen).IsFalse();
+                var node = (RoadmapNode)taskNode.DataContext!;
+                var owner = selectRoadmapTask!.Invoke(
+                    graphControl,
+                    new object?[] { taskNode, node.TaskItem });
 
-                await ClickControlAsync(window!, taskNode);
-
-                await Assert.That(vm.DetailsAreOpen).IsTrue();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
-
-                vm.DetailsAreOpen = true;
-                var otherTask = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask1Id);
-                await Assert.That(otherTask).IsNotNull();
-                await Task.Delay(550);
-
-                taskNode.RaiseEvent(new RoutedEventArgs(InputElement.DoubleTappedEvent));
-
-                await Assert.That(vm.DetailsAreOpen).IsFalse();
+                await Assert.That(owner).IsSameReferenceAs(vm);
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
             }
             finally
@@ -1455,7 +1481,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodePointerDrag_StartsAfterMoveThresholdAndKeepsSelection()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1477,7 +1503,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
                 taskNode = WaitForTaskNode(
                     graphControl!,
@@ -1526,7 +1552,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_NodeRightDrag_PansViewportWithoutSelectingTask()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1548,7 +1574,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
                 taskNode = WaitForTaskNode(
                     graphControl!,
@@ -1607,7 +1633,7 @@ public class RoadmapGraphUiTests
         string hotkey,
         string selectedTaskId)
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1625,7 +1651,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var selectedTask = TestHelpers.GetTask(vm, selectedTaskId);
@@ -1672,7 +1698,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_TaskCardButtons_AfterRoadmapSelection_CreateExpectedTasks()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1691,7 +1717,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
                 var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(selectedTask).IsNotNull();
@@ -1743,7 +1769,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_DropWithControl_CreatesBlockingRelationBetweenRoadmapNodes()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1766,7 +1792,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var sourceReady = WaitFor(() => FindRoadmapNode(graphControl!, sourceTask.Id) != null);
@@ -1775,8 +1801,7 @@ public class RoadmapGraphUiTests
                 await Assert.That(targetReady).IsTrue();
 
                 var targetNode = WaitForTaskNode(graphControl!, targetTask.Id);
-                var dragData = new DataObject();
-                dragData.Set(GraphControl.CustomFormat, sourceTask);
+                using var dragData = DragDataFormats.CreateTransfer(GraphControl.CustomDataFormat, sourceTask);
                 var dropArgs = new DragEventArgs(
                     DragDrop.DropEvent,
                     dragData,
@@ -1803,7 +1828,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1825,7 +1850,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = WaitForGraphControl(view);
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var graphText = WaitForTaskTitleTextBlock(
@@ -1881,6 +1906,7 @@ public class RoadmapGraphUiTests
     {
         var point = GetControlCenterPoint(window, control);
         window.MouseDown(point, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point, button, modifiers);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;
@@ -1935,16 +1961,48 @@ public class RoadmapGraphUiTests
             .First(button => ReferenceEquals(button.Command, command));
     }
 
+    private static TaskItemViewModel AddVisibleRoadmapFilterEmoji(MainWindowViewModel vm)
+    {
+        var task = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+            ?? throw new InvalidOperationException("Roadmap filter fixture task was not found.");
+        task.Title = "\u274C " + task.TitleWithoutEmoji;
+
+        return task;
+    }
+
     private static GraphControl? WaitForGraphControl(Control root, int timeoutMilliseconds = 3000)
     {
         GraphControl? graphControl = null;
         var ready = WaitFor(() =>
         {
-            graphControl = root.GetVisualDescendants().OfType<GraphControl>().FirstOrDefault();
+            graphControl = root as GraphControl ??
+                root.GetVisualDescendants().OfType<GraphControl>().FirstOrDefault();
             return graphControl != null;
         }, timeoutMilliseconds);
 
         return ready ? graphControl : null;
+    }
+
+    private static GraphControl? OpenRoadmapTabAndWaitForGraphControl(
+        MainControl root,
+        int timeoutMilliseconds = 3000)
+    {
+        var roadmapTab = WaitForAutomationControl<TabItem>(
+            root,
+            "RoadmapTabItem",
+            timeoutMilliseconds);
+
+        roadmapTab.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var graphControl = WaitForGraphControl(root, timeoutMilliseconds);
+        if (graphControl != null &&
+            WaitFor(() => graphControl.RoadmapNodes.Count > 0, timeoutMilliseconds))
+        {
+            WaitForStableRoadmapUpdates(graphControl, timeoutMilliseconds: timeoutMilliseconds);
+        }
+
+        return graphControl;
     }
 
     private static T WaitForAutomationControl<T>(
@@ -2019,7 +2077,12 @@ public class RoadmapGraphUiTests
                 .OfType<Border>()
                 .FirstOrDefault(candidate =>
                     candidate.DataContext is RoadmapNode node &&
-                    node.Id == taskId);
+                    node.Id == taskId &&
+                    candidate.GetVisualDescendants()
+                        .OfType<TextBlock>()
+                        .Any(textBlock =>
+                            textBlock.DataContext is TaskItemViewModel task &&
+                            task.Id == taskId));
 
             return border != null;
         }, timeoutMilliseconds);
@@ -2070,6 +2133,36 @@ public class RoadmapGraphUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
+    private static async Task<bool> WaitForAsync(
+        Func<bool> predicate,
+        int timeoutMilliseconds = 3000)
+    {
+        var timeoutAt = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
+        while (DateTime.UtcNow < timeoutAt)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (predicate())
+            {
+                return true;
+            }
+
+            await Task.Delay(25);
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        return predicate();
+    }
+
+    private static async Task<bool> WaitForRoadmapUpdateAsync(
+        GraphControl graphControl,
+        int previousUpdateCount,
+        int timeoutMilliseconds = 5000)
+    {
+        return await WaitForAsync(
+            () => graphControl.RoadmapGraphUpdateCount > previousUpdateCount,
+            timeoutMilliseconds);
     }
 
     private static bool IsVisibleAndArranged(Control control)

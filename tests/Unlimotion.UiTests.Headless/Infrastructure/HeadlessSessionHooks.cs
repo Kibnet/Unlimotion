@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using AppAutomation.Avalonia.Headless.Session;
 using Avalonia.Headless;
 using TUnit.Core;
@@ -17,10 +18,14 @@ public static class HeadlessSessionHooks
     }
 
     [After(TestSession)]
-    public static void CleanupSession()
+    public static async Task CleanupSession()
     {
         HeadlessRuntime.SetSession(null);
-        _session?.Dispose();
+        if (_session != null)
+        {
+            await _session.DisposeAsync();
+        }
+
         _session = null;
     }
 }

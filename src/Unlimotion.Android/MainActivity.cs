@@ -10,12 +10,12 @@ using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Provider;
+using Android.Runtime;
 using Android.Util;
 using Android.Views;
-using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
-using Avalonia.ReactiveUI;
+using ReactiveUI.Avalonia;
 using Unlimotion;
 using Unlimotion.Android.Services;
 using Unlimotion.Services;
@@ -32,8 +32,10 @@ namespace Unlimotion.Android;
     ResizeableActivity = true,
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
-public class MainActivity : AvaloniaMainActivity<App>
+public class MainActivity : AvaloniaMainActivity
 {
+    private const string DefaultConfigName = "Settings.json";
+    private const string TasksFolderName = "Tasks";
     private const int OpenTaskFolderRequestCode = 4201;
     private const int ManageExternalStorageRequestCode = 4202;
     private string? _dataDir;
@@ -42,15 +44,13 @@ public class MainActivity : AvaloniaMainActivity<App>
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
-        base.OnCreate(savedInstanceState);
-
         HookCrashLogging();
+        ConfigureAppServices();
+
+        base.OnCreate(savedInstanceState);
     }
 
-    private const string DefaultConfigName = "Settings.json";
-    private const string TasksFolderName = "Tasks";
-
-    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
+    private void ConfigureAppServices()
     {
         try
         {
@@ -74,13 +74,10 @@ public class MainActivity : AvaloniaMainActivity<App>
 
             App.Init(configPath);
             EnsureGitSafeDirectory(TaskStorageFactory.DefaultStoragePath);
+
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
             TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
-
-            return base.CustomizeAppBuilder(builder)
-                .WithCustomFont()
-                .UseReactiveUI();
         }
         catch (Exception ex)
         {
@@ -357,7 +354,7 @@ public class MainActivity : AvaloniaMainActivity<App>
         }
     }
 
-    private static void WriteStartupError(Exception ex)
+    internal static void WriteStartupError(Exception ex)
     {
         try
         {
@@ -516,5 +513,21 @@ public class MainActivity : AvaloniaMainActivity<App>
         catch
         {
         }
+    }
+}
+
+[global::Android.App.Application]
+public class AndroidApp : AvaloniaAndroidApplication<App>
+{
+    protected AndroidApp(IntPtr javaReference, JniHandleOwnership transfer)
+        : base(javaReference, transfer)
+    {
+    }
+
+    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
+    {
+        return base.CustomizeAppBuilder(builder)
+            .WithCustomFont()
+            .UseReactiveUI(App.ConfigureReactiveUIBuilder);
     }
 }

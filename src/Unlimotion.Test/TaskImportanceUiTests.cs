@@ -21,7 +21,7 @@ public class TaskImportanceUiTests
     [Test]
     public async Task WantedTaskTitle_ShouldBeBold_InAllTasksTreeAndParentRelationTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -74,7 +74,7 @@ public class TaskImportanceUiTests
     [Test]
     public async Task WantedTaskTitle_ShouldBeBold_InRoadmapGraph()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -118,7 +118,7 @@ public class TaskImportanceUiTests
     [Test]
     public async Task WantedTaskTitle_WithMiddleEmoji_ShouldRenderEmojiRunNormal_InAllTasksTree()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

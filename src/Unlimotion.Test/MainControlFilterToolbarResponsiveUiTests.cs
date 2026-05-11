@@ -30,7 +30,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_NarrowViewport_StacksSearchAboveFilters()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -78,7 +78,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_WideViewport_KeepsSearchBesideFilters()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -118,7 +118,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_DetailsPaneShrink_ReflowsToNarrowLayout()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

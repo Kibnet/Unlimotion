@@ -671,7 +671,7 @@ namespace Unlimotion.ViewModel
             var searchTopFilter = searchInput
                 .Publish(shared => shared.Take(1).Concat(
                     shared.Skip(1)
-                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxApp.MainThreadScheduler)))
+                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
                 .Select(searchText =>
                 {
                     var userText = (searchText.Item1 ?? "").Trim();

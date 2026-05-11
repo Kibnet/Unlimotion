@@ -27,6 +27,8 @@ namespace Unlimotion.Views
     public partial class GraphControl : UserControl
     {
         public const string CustomFormat = "application/xxx-unlimotion-task-item";
+        internal static readonly DataFormat<string> CustomDataFormat =
+            DataFormat.CreateStringPlatformFormat(CustomFormat);
 
         private GraphViewModel? dc;
         private readonly DisposableList disposableList = new DisposableListRealization();
@@ -40,6 +42,7 @@ namespace Unlimotion.Views
         private bool roadmapScopeSubscriptionsDirty = true;
         private bool graphUpdateQueued;
         private bool highlightUpdateQueued;
+        private IRoadmapViewportAdapter? roadmapViewport;
         private PendingRoadmapDragContext? pendingRoadmapDrag;
         private PendingRoadmapPanContext? pendingRoadmapPan;
         private bool roadmapDragInProgress;
@@ -102,7 +105,7 @@ namespace Unlimotion.Views
                 RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
                 true);
             KeyDown += RoadmapEditor_KeyDown;
-            RoadmapEditor.KeyDown += RoadmapEditor_KeyDown;
+            RoadmapViewport.Control.KeyDown += RoadmapEditor_KeyDown;
         }
 
         public ObservableCollection<RoadmapNode> RoadmapNodes { get; } = new();
@@ -146,6 +149,9 @@ namespace Unlimotion.Views
             get => GetValue(IsRoadmapMinimapExpandedProperty);
             set => SetValue(IsRoadmapMinimapExpandedProperty, value);
         }
+
+        private IRoadmapViewportAdapter RoadmapViewport =>
+            roadmapViewport ??= new NodifyRoadmapViewportAdapter(RoadmapEditor);
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }
 
@@ -224,7 +230,7 @@ namespace Unlimotion.Views
                 .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
                 .Select(t => (t ?? "").Trim())
                 .DistinctUntilChanged()
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => UpdateHighlights())
                 .AddToDispose(disposableList);
 
@@ -251,9 +257,9 @@ namespace Unlimotion.Views
 
         private void ScheduleUpdateGraph()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(ScheduleUpdateGraph);
+                Dispatcher.Post(ScheduleUpdateGraph);
                 return;
             }
 
@@ -293,9 +299,9 @@ namespace Unlimotion.Views
 
         private void InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate);
+                Dispatcher.Post(InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate);
                 return;
             }
 
@@ -318,7 +324,7 @@ namespace Unlimotion.Views
             }
 
             highlightUpdateQueued = true;
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.Post(() =>
             {
                 highlightUpdateQueued = false;
                 UpdateHighlights();
@@ -327,9 +333,9 @@ namespace Unlimotion.Views
 
         private void UpdateGraph()
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(UpdateGraph);
+                Dispatcher.Post(UpdateGraph);
                 return;
             }
 
@@ -394,7 +400,7 @@ namespace Unlimotion.Views
                 projection = await Task.Run(() =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    buildRanOnUiThread = Dispatcher.UIThread.CheckAccess();
+                    buildRanOnUiThread = Dispatcher.CheckAccess();
                     var build = RoadmapGraphBuildOverride ?? RoadmapGraphBuilder.Build;
                     return build(request.Input, progress, cancellationToken);
                 }).ConfigureAwait(false);
@@ -412,7 +418,7 @@ namespace Unlimotion.Views
                 buildStopwatch.Stop();
             }
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            await Dispatcher.InvokeAsync(() =>
             {
                 try
                 {
@@ -482,9 +488,9 @@ namespace Unlimotion.Views
 
         private void ReportRoadmapBuildProgress(int requestVersion, double progress)
         {
-            if (!Dispatcher.UIThread.CheckAccess())
+            if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => ReportRoadmapBuildProgress(requestVersion, progress));
+                Dispatcher.Post(() => ReportRoadmapBuildProgress(requestVersion, progress));
                 return;
             }
 
@@ -872,7 +878,7 @@ namespace Unlimotion.Views
             subscriptions.Add(collection
                 .ObserveCollectionChanges()
                 .Throttle(throttle)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ =>
                 {
                     RegisterRoadmapFilterSubscriptions();
@@ -888,7 +894,7 @@ namespace Unlimotion.Views
                     .Where(change => string.IsNullOrEmpty(change.EventArgs.PropertyName) ||
                                      change.EventArgs.PropertyName == nameof(EmojiFilter.ShowTasks))
                     .Throttle(throttle)
-                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ => ScheduleUpdateGraph()));
             }
         }
@@ -993,27 +999,23 @@ namespace Unlimotion.Views
 
         private void FitRoadmapToScreen()
         {
-            Dispatcher.UIThread.Post(() => RoadmapEditor.FitToScreen());
+            Dispatcher.Post(() => RoadmapViewport.FitToScreen());
         }
 
         private void ResetRoadmapViewport()
         {
-            Dispatcher.UIThread.Post(() =>
-            {
-                RoadmapEditor.ViewportZoom = 1;
-                RoadmapEditor.ViewportLocation = new Point(0, 0);
-            });
+            Dispatcher.Post(() => RoadmapViewport.Reset());
         }
 
         private void RoadmapZoomIn_OnClick(object? sender, RoutedEventArgs e)
         {
-            RoadmapEditor.ZoomIn();
+            RoadmapViewport.ZoomIn();
             e.Handled = true;
         }
 
         private void RoadmapZoomOut_OnClick(object? sender, RoutedEventArgs e)
         {
-            RoadmapEditor.ZoomOut();
+            RoadmapViewport.ZoomOut();
             e.Handled = true;
         }
 
@@ -1084,16 +1086,13 @@ namespace Unlimotion.Views
 
             if (zoom is double zoomValue && location is Point locationValue)
             {
-                RoadmapEditor.ZoomAtPosition(zoomValue, locationValue);
+                RoadmapViewport.ZoomAtPosition(zoomValue, locationValue);
             }
         }
 
         private void PanRoadmapViewport(double deltaX, double deltaY)
         {
-            var current = RoadmapEditor.ViewportLocation;
-            RoadmapEditor.ViewportLocation = new Point(
-                current.X + deltaX,
-                current.Y + deltaY);
+            RoadmapViewport.PanBy(deltaX, deltaY);
         }
 
         private void RoadmapNode_OnSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -1125,8 +1124,8 @@ namespace Unlimotion.Views
                 pendingRoadmapPan = new PendingRoadmapPanContext(
                     gestureControl ?? this,
                     e.Pointer,
-                    e.GetPosition(RoadmapEditor),
-                    RoadmapEditor.ViewportLocation);
+                    e.GetPosition(RoadmapViewport.Control),
+                    RoadmapViewport.Location);
                 e.Handled = true;
                 return;
             }
@@ -1161,6 +1160,7 @@ namespace Unlimotion.Views
                 gestureControl ?? this,
                 e.Pointer,
                 taskItem,
+                e,
                 e.GetPosition(gestureControl ?? this));
         }
 
@@ -1240,11 +1240,11 @@ namespace Unlimotion.Views
                 return true;
             }
 
-            var zoom = RoadmapEditor.ViewportZoom;
+            var zoom = RoadmapViewport.Zoom;
             var scale = Math.Abs(zoom) < 0.001 ? 1 : zoom;
-            var currentPoint = e.GetPosition(RoadmapEditor);
+            var currentPoint = e.GetPosition(RoadmapViewport.Control);
             var delta = currentPoint - pending.StartPoint;
-            RoadmapEditor.ViewportLocation = new Point(
+            RoadmapViewport.Location = new Point(
                 pending.StartViewportLocation.X - delta.X / scale,
                 pending.StartViewportLocation.Y - delta.Y / scale);
             e.Handled = true;
@@ -1259,8 +1259,7 @@ namespace Unlimotion.Views
 
         private static async Task StartRoadmapDragAsync(PendingRoadmapDragContext pending, PointerEventArgs e)
         {
-            var dragData = new DataObject();
-            dragData.Set(CustomFormat, pending.TaskItem);
+            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, pending.TaskItem);
 
             var graphControl = pending.Control.FindParent<GraphControl>();
             if (graphControl != null)
@@ -1270,8 +1269,8 @@ namespace Unlimotion.Views
 
             try
             {
-                await DragDrop.DoDragDrop(
-                    e,
+                await DragDrop.DoDragDropAsync(
+                    pending.PressEvent,
                     dragData,
                     DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
             }
@@ -1349,6 +1348,8 @@ namespace Unlimotion.Views
         {
             return context?.FindParentDataContext<MainWindowViewModel>() ??
                    this.FindParentDataContext<MainWindowViewModel>() ??
+                   (DataContext as GraphViewModel)?.MainWindowViewModel ??
+                   dc?.MainWindowViewModel ??
                    TaskItemViewModel.MainWindowInstance;
         }
 
@@ -1375,6 +1376,7 @@ namespace Unlimotion.Views
             Control control,
             IPointer pointer,
             TaskItemViewModel taskItem,
+            PointerPressedEventArgs pressEvent,
             Point startPoint)
         {
             public Control Control { get; } = control;
@@ -1382,6 +1384,8 @@ namespace Unlimotion.Views
             public IPointer Pointer { get; } = pointer;
 
             public TaskItemViewModel TaskItem { get; } = taskItem;
+
+            public PointerPressedEventArgs PressEvent { get; } = pressEvent;
 
             public Point StartPoint { get; } = startPoint;
         }

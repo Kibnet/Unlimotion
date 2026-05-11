@@ -1,10 +1,10 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
-using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion;
@@ -25,11 +25,7 @@ public class Dialogs : IDialogs
         var storageProvider = topLevel?.StorageProvider;
         if (storageProvider != null && storageProvider.CanPickFolder)
         {
-            var options = new FolderPickerOpenOptions
-            {
-                Title = title,
-                AllowMultiple = false
-            };
+            var options = await CreateFolderPickerOpenOptionsAsync(storageProvider, title, directory);
 
             var result = await storageProvider.OpenFolderPickerAsync(options);
             var folder = result?.FirstOrDefault();
@@ -43,59 +39,67 @@ public class Dialogs : IDialogs
             }
         }
 
-        var dialog = new OpenFolderDialog();
-        if (title != null)
+        return string.Empty;
+    }
+
+    internal static async Task<FolderPickerOpenOptions> CreateFolderPickerOpenOptionsAsync(
+        IStorageProvider storageProvider,
+        string? title,
+        string? directory)
+    {
+        return new FolderPickerOpenOptions
         {
-            dialog.Title = title;
+            Title = title,
+            AllowMultiple = false,
+            SuggestedStartLocation = await TryResolveSuggestedStartLocationAsync(storageProvider, directory)
+        };
+    }
+
+    private static async Task<IStorageFolder?> TryResolveSuggestedStartLocationAsync(
+        IStorageProvider storageProvider,
+        string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return null;
         }
 
-        if (directory != null)
+        var directoryUri = TryCreateStorageUri(directory);
+        if (directoryUri == null)
         {
-            dialog.Directory = directory;
+            return null;
         }
 
-        var resultTask = dialog.ShowAsync();
-        return resultTask == null ? string.Empty : await resultTask ?? string.Empty;
+        try
+        {
+            return await storageProvider.TryGetFolderFromPathAsync(directoryUri);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static Uri? TryCreateStorageUri(string path)
+    {
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+        {
+            return uri;
+        }
+
+        try
+        {
+            return new Uri(Path.GetFullPath(path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or PathTooLongException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }
 
 public static class DialogExtensions
 {
-    public static Task<string?>? ShowAsync(this OpenFolderDialog? dlg)
-    {
-        if (dlg == null)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        var lifetime = App.Current?.ApplicationLifetime;
-
-        Window? window = null;
-        switch (lifetime)
-        {
-            case null:
-                break;
-            case IClassicDesktopStyleApplicationLifetime classicDesktopStyleApplicationLifetime:
-                window = classicDesktopStyleApplicationLifetime.MainWindow;
-                break;
-            case IControlledApplicationLifetime controlledApplicationLifetime:
-                //TODO N/A
-                break;
-            case ISingleViewApplicationLifetime singleViewApplicationLifetime:
-                window = singleViewApplicationLifetime.MainView?.GetVisualRoot() as Window;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(lifetime));
-        }
-
-        if (window != null)
-        {
-            return dlg.ShowAsync(window);
-        }
-
-        return null;
-    }
-
     public static TopLevel? GetTopLevel()
     {
         var lifetime = App.Current?.ApplicationLifetime;

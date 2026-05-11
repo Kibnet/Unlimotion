@@ -4,9 +4,8 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
 using Avalonia.Browser;
-using Avalonia.Notification;
-using Avalonia.ReactiveUI;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI.Avalonia;
 using Unlimotion;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
@@ -17,7 +16,7 @@ internal sealed class Program
 {
     private static async Task Main(string[] args) => await BuildAvaloniaApp()
             .WithCustomFont()
-            .UseReactiveUI()
+            .UseReactiveUI(App.ConfigureReactiveUIBuilder)
             .StartBrowserAppAsync("out");
 
     public static AppBuilder BuildAvaloniaApp()
@@ -42,7 +41,7 @@ internal sealed class Program
         var dialogs = new Dialogs();
 
         // Create notification services
-        var notificationMessageManager = new NotificationMessageManager();
+        var notificationMessageManager = new AppToastNotificationManager();
         var notificationManager = new NotificationManagerWrapper(notificationMessageManager);
 
         // Create storage factory

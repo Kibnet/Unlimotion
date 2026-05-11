@@ -18,7 +18,7 @@ public class MainControlAvailabilityUiTests
     [Test]
     public async Task LastOpenedTaskTitle_ShouldBeDimmed_WhenTaskCannotBeCompleted()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -71,7 +71,7 @@ public class MainControlAvailabilityUiTests
     [Test]
     public async Task DescendantCheckbox_ShouldBeDisabled_WhenAncestorHasIncompleteBlocker()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

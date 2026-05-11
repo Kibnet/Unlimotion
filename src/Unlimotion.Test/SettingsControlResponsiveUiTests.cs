@@ -24,7 +24,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -65,7 +65,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.Dispatch(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -144,7 +144,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -223,7 +223,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_BrowseTaskStoragePath_UpdatesPathFromFolderPicker()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -233,11 +233,18 @@ public class SettingsControlResponsiveUiTests
             try
             {
                 var settings = fixture.MainWindowViewModelTest.Settings;
+                var initialPath = Path.Combine(fixture.DefaultTasksFolderPath, "Current");
                 var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
-                Dialogs.PlatformOpenFolderDialogAsync = (_, _) => Task.FromResult<string?>(selectedPath);
+                string? capturedDirectory = null;
+                settings.TaskStoragePath = initialPath;
+                Dialogs.PlatformOpenFolderDialogAsync = (_, directory) =>
+                {
+                    capturedDirectory = directory;
+                    return Task.FromResult<string?>(selectedPath);
+                };
                 var browseCommandStub = new TestAsyncCommand(async () =>
                 {
-                    var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder");
+                    var path = await new Dialogs().ShowOpenFolderDialogAsync("Data folder", settings.TaskStoragePath);
                     if (!string.IsNullOrWhiteSpace(path))
                     {
                         settings.TaskStoragePath = path;
@@ -271,6 +278,7 @@ public class SettingsControlResponsiveUiTests
                 await TestHelpers.WaitUntilAsync(
                     () => settings.TaskStoragePath == selectedPath,
                     TimeSpan.FromSeconds(2));
+                await Assert.That(capturedDirectory).IsEqualTo(initialPath);
                 await Assert.That(settings.TaskStoragePath).IsEqualTo(selectedPath);
             }
             finally

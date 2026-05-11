@@ -8,11 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AppAutomation.Abstractions" Version="1.5.2" />
-    <PackageReference Include="AppAutomation.Avalonia.Headless" Version="1.5.2" />
-    <PackageReference Include="AppAutomation.TUnit" Version="1.5.2" />
-    <PackageReference Include="Avalonia.Headless" Version="11.3.8" />
-    <PackageReference Include="TUnit" Version="1.15.0" />
+    <PackageReference Include="AppAutomation.Abstractions" Version="1.5.7" />
+    <PackageReference Include="AppAutomation.Avalonia.Headless" Version="1.5.7" />
+    <PackageReference Include="Avalonia.Headless" Version="12.0.3" />
+    <PackageReference Include="TUnit" Version="1.44.0" />
   </ItemGroup>
 
   <ItemGroup>

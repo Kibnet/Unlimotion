@@ -8,7 +8,6 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Avalonia.Xaml.Interactivity;
 using Unlimotion.Behavior;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
@@ -72,7 +71,7 @@ public class MainControlNewTaskDeadlineUiTests
     [Test]
     public async Task NewSiblingTask_ShouldNotCopyPlannedDates_WhenCreatedByHotkeyFromFocusedDatePicker()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -140,7 +139,7 @@ public class MainControlNewTaskDeadlineUiTests
     [Test]
     public async Task NewRootTask_ShouldNotCopyPlannedDuration_FromFocusedPreviousTaskEditor()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -199,7 +198,7 @@ public class MainControlNewTaskDeadlineUiTests
     [Test]
     public async Task PlannedDurationEditor_ShouldCommitNewText_AfterFocusedDataContextSwitch()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             Window? window = null;
@@ -210,8 +209,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var newTask = new object();
                 var durationTextBox = new TextBox { DataContext = previousTask };
                 var blurTarget = new Button { Content = "Blur target" };
-                var behavior = new LostFocusUpdateBindingBehavior { Text = "" };
-                Interaction.GetBehaviors(durationTextBox).Add(behavior);
+                LostFocusUpdateBindingBehavior.SetText(durationTextBox, "");
 
                 var root = new StackPanel();
                 root.Children.Add(durationTextBox);
@@ -234,7 +232,7 @@ public class MainControlNewTaskDeadlineUiTests
                 blurTarget.Focus();
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(behavior.Text).IsEqualTo("2h");
+                await Assert.That(LostFocusUpdateBindingBehavior.GetText(durationTextBox)).IsEqualTo("2h");
             }
             finally
             {
@@ -249,7 +247,7 @@ public class MainControlNewTaskDeadlineUiTests
         bool setDatesThroughPicker = false,
         bool selectedTaskCreatedInFuture = false)
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

@@ -51,11 +51,11 @@ public sealed class TaskRelationEditorViewModel : ReactiveObject, IDisposable
         _notificationManager = notificationManager;
         _localization = localizationService ?? LocalizationService.Current;
 
-        CancelCommand = ReactiveCommand.Create(Cancel, outputScheduler: RxApp.MainThreadScheduler);
+        CancelCommand = ReactiveCommand.Create(Cancel, outputScheduler: RxSchedulers.MainThreadScheduler);
         ConfirmCommand = ReactiveCommand.CreateFromTask(
             ConfirmAsync,
             this.WhenAnyValue(vm => vm.CanConfirm),
-            outputScheduler: RxApp.MainThreadScheduler);
+            outputScheduler: RxSchedulers.MainThreadScheduler);
         _cultureChangedHandler = (_, _) => RaiseLocalizationPropertiesChanged();
         _localization.CultureChanged += _cultureChangedHandler;
     }

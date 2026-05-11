@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.iOS;
-using Avalonia.ReactiveUI;
 using Foundation;
+using ReactiveUI.Avalonia;
 
 namespace Unlimotion.iOS;
 
@@ -17,6 +17,6 @@ public class AppDelegate : AvaloniaAppDelegate<App>
     {
         return base.CustomizeAppBuilder(builder)
             .WithCustomFont()
-            .UseReactiveUI();
+            .UseReactiveUI(App.ConfigureReactiveUIBuilder);
     }
 }

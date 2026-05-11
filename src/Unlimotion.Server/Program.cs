@@ -1,7 +1,7 @@
 ﻿using System;
-using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Raven.Client.Documents.Session;
 using Serilog;
 using WritableJsonConfiguration;
@@ -36,12 +36,16 @@ namespace Unlimotion.Server
             }
         }
 
-        public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
-            WebHost.CreateDefaultBuilder(args)
-                .UseStartup<Startup>()
-                .ConfigureAppConfiguration(builder =>
+        public static IHostBuilder CreateWebHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    builder.Add(new WritableJsonConfigurationSource { Path = "appsettings.json" });
+                    webBuilder
+                        .UseStartup<Startup>()
+                        .ConfigureAppConfiguration(builder =>
+                        {
+                            builder.Add(new WritableJsonConfigurationSource { Path = "appsettings.json" });
+                        });
                 })
                 .UseSerilog((hostingContext, loggerConfiguration) => loggerConfiguration
                     .ReadFrom.Configuration(hostingContext.Configuration));

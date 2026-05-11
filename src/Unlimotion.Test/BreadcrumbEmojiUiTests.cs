@@ -18,7 +18,7 @@ public class BreadcrumbEmojiUiTests
     [Test]
     public async Task Breadcrumbs_ShouldRenderEmojiRunsWithEmojiFont()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

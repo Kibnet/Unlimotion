@@ -135,7 +135,7 @@ public static class UnlimotionAutomationScenarioData
             {
                 BackupEnabled = "False",
                 ShowStatusToasts = "False",
-                RemoteUrl = string.Empty,
+                RemoteUrl = "git@github.com:org/unlimotion-backup.git",
                 Branch = "master",
                 UserName = "YourEmail",
                 Password = "YourToken",
