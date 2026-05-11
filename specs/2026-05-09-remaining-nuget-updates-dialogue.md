@@ -446,6 +446,32 @@ Break changes, которые реально касаются нас:
 - Перед финальным PR/merge остается организационный пункт: оформить воспроизводимый source/publish flow для `NodifyAvalonia 6.6.0-unlimotion.a12.1` и задокументировать upstream branch/commit/patch set.
 - Android warnings по `LibGit2Sharp.NativeBinaries` не блокируют Avalonia update, но их нужно оставить в known risks: это отдельный dependency/platform risk, связанный с Android 16 page size и custom native binaries.
 
+### Шаг 12: upstream PR для `NodifyAvalonia`
+Статус: выполнено 2026-05-11.
+
+Что сделано:
+- Создан fork `Kibnet/nodify-avalonia` от `BAndysc/nodify-avalonia`.
+- Создана ветка `codex/avalonia-12-support` от upstream `avalonia_port`.
+- Ветка включает cherry-pick трех коммитов из найденного ранее fork branch `JuenTingShie/nodify-avalonia:copilot/update-avalonia-packages-to-12` с сохранением author metadata:
+  - `feat: upgrade Avalonia packages from 11.1.0 to 12.0.1`;
+  - `fix: add x:CompileBindings=False to fix XAML compiled-binding errors in Examples`;
+  - `fix: connection lines not showing selected border`.
+- Поверх этого добавлен follow-up commit `Update Avalonia support to 12.0.3`:
+  - `Directory.Build.props`: `AvaloniaVersion` поднят до `12.0.3`;
+  - `Examples/Nodify.Shapes.Web`: browser target framework поднят до `net10.0-browser`, потому что `Avalonia.Browser 12.x` публикует browser assets под `net10.0-browser`;
+  - `README.md`: compatibility chart получил строку `unreleased -> 12.0.3`.
+- Открыт upstream PR: https://github.com/BAndysc/nodify-avalonia/pull/45
+
+Проверки в fork:
+- `dotnet build Nodify\Nodify.csproj -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass, warnings only.
+- `dotnet build Nodify.sln -m:1 /nr:false /p:UseSharedCompilation=false -v:minimal` - pass; остался один WebAssembly workload warning про native references при выключенных `WasmBuildNative`/`RunAOTCompilation`.
+
+Решение:
+- Для текущего Avalonia 12 update upstream-кандидатом остается только `NodifyAvalonia`.
+- `Mileeena.Notification.Avalonia` не форкаем: зависимость удалена и заменена internal toast overlay.
+- `Avalonia.Controls.PanAndZoom` не форкаем: direct dependency была stale и удалена.
+- `LibGit2Sharp.NativeBinaries` не входит в scope текущего Avalonia 12 upstreaming: Android warnings остаются отдельным dependency/platform risk.
+
 ## 11. Журнал диалога
 | Время | Участник | Тезис / решение | Последствие |
 | --- | --- | --- | --- |
@@ -470,3 +496,4 @@ Break changes, которые реально касаются нас:
 | 2026-05-11 | Пользователь | Спросил, что теперь нужно сделать, чтобы закончить обновление без деградации функции | Сформирован финальный checklist: Avalonia `12.0.3`, TUnit `1.44.0`, воспроизводимый `NodifyAvalonia` fork/package source, полный build/UI regression gate и documented exception для internal prerelease |
 | 2026-05-11 | Пользователь | Сказал "выполняй" | Выполнена финализация package updates и regression gate |
 | 2026-05-11 | Codex | Закрыт FlaUI settings SSH blocker через преднастроенный SSH remote в automation config и явную UIA group для `SshKeysSection`; полный FlaUI повторно прошел 7/7, Headless прошел 23/23, Android full build прошел | Runtime blockers сняты; оставлен documented exception только для internal `NodifyAvalonia` fork/package source |
+| 2026-05-11 | Пользователь | Попросил форкнуть библиотеки, которые нужно upstream-нуть, сделать ветки и PR в родительские репозитории | Создан `Kibnet/nodify-avalonia`, ветка `codex/avalonia-12-support`; открыт upstream PR `BAndysc/nodify-avalonia#45`; зафиксировано, что остальные библиотеки в scope не upstream-ятся |
