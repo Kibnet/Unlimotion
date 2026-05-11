@@ -697,6 +697,170 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ConflictResolutionMode_DisablesSyncAndEnablesSelectedConflictActions()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(
+                true,
+                new List<BackupConflictFile>
+                {
+                    new(
+                        "Tasks/task.json",
+                        true,
+                        true,
+                        new List<BackupConflictField>
+                        {
+                            new(
+                                "Title",
+                                "Title",
+                                "Base title",
+                                "Current title",
+                                "Incoming title",
+                                "Current title\nIncoming title",
+                                true,
+                                BackupConflictFieldSource.UseCurrent,
+                                BackupConflictFieldChangeKind.BothDifferent,
+                                true)
+                        })
+                })
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/repo.git");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/main");
+
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.HasBackupConflictFiles).IsTrue();
+        await Assert.That(settings.SelectedBackupConflict?.Path).IsEqualTo("Tasks/task.json");
+        await Assert.That(settings.CanSyncRepository).IsFalse();
+        await Assert.That(settings.CanResolveSelectedConflictUseCurrent).IsTrue();
+        await Assert.That(settings.CanResolveSelectedConflictUseIncoming).IsTrue();
+        await Assert.That(settings.CanResolveSelectedConflictByFields).IsTrue();
+        await Assert.That(settings.CanCommitConflictResolution).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ConflictResolutionMode_DeleteModifyConflict_AllowsSelectingDeletedSide()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(
+                true,
+                new List<BackupConflictFile>
+                {
+                    new("Tasks/deleted-task.json", true, false)
+                })
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.SelectedBackupConflict?.Path).IsEqualTo("Tasks/deleted-task.json");
+        await Assert.That(settings.CanResolveSelectedConflictUseCurrent).IsTrue();
+        await Assert.That(settings.CanResolveSelectedConflictUseIncoming).IsTrue();
+        await Assert.That(settings.CanResolveSelectedConflictByFields).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSelectedBackupConflictFieldSelections_ReturnsCurrentUiDecisions()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(
+                true,
+                new List<BackupConflictFile>
+                {
+                    new(
+                        "Tasks/task.json",
+                        true,
+                        true,
+                        new List<BackupConflictField>
+                        {
+                            new(
+                                "Title",
+                                "Title",
+                                "Base title",
+                                "Current title",
+                                "Incoming title",
+                                "Current title\nIncoming title",
+                                true,
+                                BackupConflictFieldSource.UseCurrent,
+                                BackupConflictFieldChangeKind.BothDifferent,
+                                true)
+                        })
+                })
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        settings.SelectedBackupConflictFields[0].IsMergeSelected = true;
+        settings.SelectedBackupConflictFields[0].EditedMergedValue = "Edited merged title";
+        var selections = settings.GetSelectedBackupConflictFieldSelections();
+
+        await Assert.That(selections.Count).IsEqualTo(1);
+        await Assert.That(selections[0].FieldPath).IsEqualTo("Title");
+        await Assert.That(selections[0].Source).IsEqualTo(BackupConflictFieldSource.Merge);
+        await Assert.That(selections[0].CustomValue).IsEqualTo("Edited merged title");
+        await Assert.That(settings.SelectedBackupConflictFields[0].SelectedValue)
+            .IsEqualTo("Edited merged title");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ConflictResolutionMode_AllConflictsResolved_EnablesFinishAction()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>())
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/repo.git");
+
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: localization);
+
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.HasBackupConflictFiles).IsFalse();
+        await Assert.That(settings.CanCommitConflictResolution).IsTrue();
+        await Assert.That(settings.BackupStatusText).IsEqualTo("All sync conflicts are resolved. Finish conflict resolution to continue.");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CompleteConflictResolution_ClearsConflictModeAndRestoresSyncAvailability()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>())
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/repo.git");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.PushRefSpec)).Set("refs/heads/main");
+
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: localization);
+
+        settings.CompleteConflictResolution();
+
+        await Assert.That(settings.IsConflictResolutionMode).IsFalse();
+        await Assert.That(settings.HasBackupConflictFiles).IsFalse();
+        await Assert.That(settings.CanCommitConflictResolution).IsFalse();
+        await Assert.That(settings.CanSyncRepository).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadSshPublicKeys_PreservesExistingSelectionWhenKeyStillExists()
     {
         var backupService = new FakeRemoteBackupService
@@ -792,6 +956,7 @@ public class SettingsViewModelTests : IDisposable
         public List<string> ReferenceNames { get; set; } = new();
         public Dictionary<string, string> RemoteAuthTypes { get; set; } = new();
         public Dictionary<string, string> RemoteUrls { get; set; } = new();
+        public BackupConflictStatus ConflictStatus { get; set; } = BackupConflictStatus.None;
 
         public List<string> Remotes() => new(RemoteNames);
         public string? GetRemoteAuthType(string remoteName) =>
@@ -802,6 +967,10 @@ public class SettingsViewModelTests : IDisposable
         public List<string> GetSshPublicKeys() => new(PublicKeys);
         public string GenerateSshKey(string keyName) => throw new NotSupportedException();
         public string? ReadPublicKey(string publicKeyPath) => throw new NotSupportedException();
+        public BackupConflictStatus GetConflictStatus() => ConflictStatus;
+        public void ResolveConflict(string path, BackupConflictResolution resolution) => throw new NotSupportedException();
+        public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections) => throw new NotSupportedException();
+        public void CommitResolvedConflicts(string message) => throw new NotSupportedException();
         public void Push(string msg) => throw new NotSupportedException();
         public void Pull() => throw new NotSupportedException();
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();

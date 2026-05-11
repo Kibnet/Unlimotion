@@ -27,5 +27,6 @@ public enum BackupStatusState
     Connecting = 1,
     Connected = 2,
     Syncing = 3,
-    Error = 4
+    Error = 4,
+    ConflictResolution = 5
 }

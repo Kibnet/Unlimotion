@@ -1,0 +1,285 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="1040"
+             d:DesignHeight="720"
+             x:Class="Unlimotion.Views.ConflictResolutionControl"
+             x:DataType="viewModel:SettingsViewModel"
+             AutomationProperties.AutomationId="ConflictResolutionDialog">
+    <Design.DataContext>
+        <viewModel:SettingsViewModel/>
+    </Design.DataContext>
+
+    <UserControl.Styles>
+        <Style Selector="Border.ConflictPane">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+        <Style Selector="Border.ConflictFieldRow">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style Selector="WrapPanel.ActionButtons">
+            <Setter Property="Orientation" Value="Horizontal" />
+        </Style>
+        <Style Selector="TextBlock.SectionTitle">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="{DynamicResource AppTabFontSize}" />
+        </Style>
+        <Style Selector="TextBlock.SectionHint">
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.FieldLabel">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.PrimaryConflictAction">
+            <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="12,6" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{DynamicResource ThemeControlLowBrush}"
+            Padding="16"
+            MaxWidth="1080"
+            MaxHeight="760"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+        <Grid RowDefinitions="Auto,*"
+              RowSpacing="14">
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="12">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle"
+                               Text="{DynamicResource SyncConflictsTitle}" />
+                    <TextBlock Classes="SectionHint"
+                               Margin="0,4,0,0"
+                               Text="{DynamicResource ConflictResolutionWindowHint}" />
+                    <TextBlock Classes="SectionHint"
+                               Margin="0,4,0,0"
+                               Text="{Binding BackupStatusText}"
+                               AutomationProperties.AutomationId="ConflictResolutionStatusText" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        VerticalAlignment="Top"
+                        Content="{DynamicResource Close}"
+                        Click="CloseButton_OnClick"
+                        AutomationProperties.AutomationId="ConflictResolutionCloseButton" />
+            </Grid>
+
+            <Grid x:Name="ResolverGrid"
+                  Grid.Row="1"
+                  RowDefinitions="*"
+                  ColumnDefinitions="280,*"
+                  RowSpacing="12"
+                  ColumnSpacing="14">
+                <Border x:Name="FileListPane"
+                        Classes="ConflictPane"
+                        AutomationProperties.AutomationId="ConflictResolutionFilePane">
+                    <Grid RowDefinitions="Auto,*">
+                        <TextBlock Classes="SectionTitle"
+                                   Text="{DynamicResource ConflictResolutionFilesTitle}" />
+                        <ListBox Grid.Row="1"
+                                 Margin="0,10,0,0"
+                                 MaxHeight="520"
+                                 ItemsSource="{Binding BackupConflicts}"
+                                 SelectedItem="{Binding SelectedBackupConflict, Mode=TwoWay}"
+                                 SelectedIndex="0"
+                                 IsVisible="{Binding HasBackupConflictFiles}"
+                                 AutomationProperties.AutomationId="ConflictResolutionFileList">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="viewModel:BackupConflictFile">
+                                    <StackPanel Margin="0,4">
+                                        <TextBlock Text="{Binding Path}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                        <WrapPanel Orientation="Horizontal"
+                                                   Margin="0,4,0,0">
+                                            <TextBlock Text="{DynamicResource ConflictCurrentVersion}"
+                                                       IsVisible="{Binding HasCurrentVersion}"
+                                                       Margin="0,0,10,0" />
+                                            <TextBlock Text="{DynamicResource ConflictDeletedVersion}"
+                                                       IsVisible="{Binding !HasCurrentVersion}"
+                                                       Margin="0,0,10,0" />
+                                            <TextBlock Text="{DynamicResource ConflictIncomingVersion}"
+                                                       IsVisible="{Binding HasIncomingVersion}"
+                                                       Margin="0,0,10,0" />
+                                            <TextBlock Text="{DynamicResource ConflictDeletedVersion}"
+                                                       IsVisible="{Binding !HasIncomingVersion}"
+                                                       Margin="0,0,10,0" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="DetailsPane"
+                        Grid.Column="1"
+                        Classes="ConflictPane"
+                        AutomationProperties.AutomationId="ConflictResolutionDetailPanel">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <StackPanel>
+                            <TextBlock Classes="SectionTitle"
+                                       Text="{Binding SelectedBackupConflict.Path}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="ConflictResolutionSelectedFilePath" />
+                            <TextBlock Classes="SectionHint"
+                                       Margin="0,4,0,0"
+                                       Text="{DynamicResource ConflictResolutionSelectedFileHint}" />
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1"
+                                      Margin="0,12,0,12"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <StackPanel IsVisible="{Binding SelectedBackupConflict.CanResolveByFields}"
+                                            AutomationProperties.AutomationId="ConflictResolutionFieldPanel">
+                                    <ItemsControl ItemsSource="{Binding SelectedBackupConflictFields}"
+                                                  AutomationProperties.AutomationId="ConflictResolutionFieldList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="viewModel:BackupConflictFieldDecision">
+                                                <Border Classes="ConflictFieldRow"
+                                                        AutomationProperties.AutomationId="ConflictResolutionFieldRow">
+                                                    <StackPanel>
+                                                        <WrapPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding DisplayName}"
+                                                                       FontWeight="SemiBold"
+                                                                       TextWrapping="Wrap"
+                                                                       Margin="0,0,8,0" />
+                                                            <TextBlock Text="{DynamicResource ConflictFieldRealConflict}"
+                                                                       FontWeight="SemiBold"
+                                                                       IsVisible="{Binding IsRealConflict}"
+                                                                       AutomationProperties.AutomationId="ConflictResolutionRealConflictBadge" />
+                                                        </WrapPanel>
+
+                                                        <Grid IsVisible="{Binding IsRealConflict}"
+                                                              RowDefinitions="Auto,Auto,Auto,Auto"
+                                                              ColumnDefinitions="120,*"
+                                                              ColumnSpacing="10"
+                                                              RowSpacing="6"
+                                                              Margin="0,8,0,0">
+                                                            <TextBlock Classes="FieldLabel"
+                                                                       Text="{DynamicResource ConflictAncestorVersion}" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding AncestorValue}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Row="1"
+                                                                       Classes="FieldLabel"
+                                                                       Text="{DynamicResource ConflictCurrentVersion}" />
+                                                            <TextBlock Grid.Row="1"
+                                                                       Grid.Column="1"
+                                                                       Text="{Binding CurrentValue}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Row="2"
+                                                                       Classes="FieldLabel"
+                                                                       Text="{DynamicResource ConflictIncomingVersion}" />
+                                                            <TextBlock Grid.Row="2"
+                                                                       Grid.Column="1"
+                                                                       Text="{Binding IncomingValue}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Row="3"
+                                                                       Classes="FieldLabel"
+                                                                       Text="{DynamicResource ConflictSelectedValue}" />
+                                                            <Grid Grid.Row="3"
+                                                                  Grid.Column="1">
+                                                                <TextBlock Text="{Binding SelectedValue}"
+                                                                           IsVisible="{Binding IsSelectedValueTextVisible}"
+                                                                           TextWrapping="Wrap"
+                                                                           AutomationProperties.AutomationId="ConflictResolutionSelectedValueTextBlock" />
+                                                                <TextBox Text="{Binding EditedMergedValue, Mode=TwoWay}"
+                                                                         IsVisible="{Binding IsEditableMergeSelected}"
+                                                                         AcceptsReturn="True"
+                                                                         MinHeight="72"
+                                                                         TextWrapping="Wrap"
+                                                                         Watermark="{DynamicResource ConflictEditMergedValue}"
+                                                                         AutomationProperties.AutomationId="ConflictResolutionEditedMergeTextBox" />
+                                                            </Grid>
+                                                        </Grid>
+
+                                                        <Grid IsVisible="{Binding IsNonConflictingChange}"
+                                                              ColumnDefinitions="120,*"
+                                                              ColumnSpacing="10"
+                                                              Margin="0,8,0,0"
+                                                              AutomationProperties.AutomationId="ConflictResolutionCompactFieldPanel">
+                                                            <TextBlock Classes="FieldLabel"
+                                                                       Text="{DynamicResource ConflictSelectedValue}" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding CompactValue}"
+                                                                       TextWrapping="Wrap"
+                                                                       AutomationProperties.AutomationId="ConflictResolutionCompactValueTextBlock" />
+                                                        </Grid>
+
+                                                        <WrapPanel Classes="ActionButtons"
+                                                                   Margin="0,10,0,0"
+                                                                   IsVisible="{Binding IsRealConflict}">
+                                                            <RadioButton Content="{DynamicResource UseCurrentConflictVersion}"
+                                                                         GroupName="{Binding FieldPath}"
+                                                                         IsChecked="{Binding IsCurrentSelected, Mode=TwoWay}" />
+                                                            <RadioButton Content="{DynamicResource UseIncomingConflictVersion}"
+                                                                         GroupName="{Binding FieldPath}"
+                                                                         IsChecked="{Binding IsIncomingSelected, Mode=TwoWay}" />
+                                                            <RadioButton Content="{DynamicResource ConflictMergeVersion}"
+                                                                         GroupName="{Binding FieldPath}"
+                                                                         IsEnabled="{Binding CanMerge}"
+                                                                         IsChecked="{Binding IsMergeSelected, Mode=TwoWay}"
+                                                                         AutomationProperties.AutomationId="ConflictResolutionMergeRadioButton" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <TextBlock Classes="SectionHint"
+                                           IsVisible="{Binding !SelectedBackupConflict.CanResolveByFields}"
+                                           Text="{DynamicResource ConflictResolutionWholeFileHint}"
+                                           AutomationProperties.AutomationId="ConflictResolutionWholeFileHint" />
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <WrapPanel Grid.Row="2"
+                                   Classes="ActionButtons">
+                            <Button Content="{DynamicResource UseCurrentConflictVersion}"
+                                    Command="{Binding ResolveConflictUseCurrentCommand}"
+                                    CommandParameter="{Binding SelectedBackupConflict}"
+                                    IsEnabled="{Binding CanResolveSelectedConflictUseCurrent}"
+                                    AutomationProperties.AutomationId="ConflictResolutionUseCurrentButton" />
+                            <Button Content="{DynamicResource UseIncomingConflictVersion}"
+                                    Command="{Binding ResolveConflictUseIncomingCommand}"
+                                    CommandParameter="{Binding SelectedBackupConflict}"
+                                    IsEnabled="{Binding CanResolveSelectedConflictUseIncoming}"
+                                    AutomationProperties.AutomationId="ConflictResolutionUseIncomingButton" />
+                            <Button Content="{DynamicResource ApplyConflictFieldResolution}"
+                                    Command="{Binding ResolveConflictUseFieldSelectionCommand}"
+                                    CommandParameter="{Binding SelectedBackupConflict}"
+                                    IsEnabled="{Binding CanResolveSelectedConflictByFields}"
+                                    AutomationProperties.AutomationId="ConflictResolutionApplyFieldsButton" />
+                            <Button Content="{DynamicResource Refresh}"
+                                    Command="{Binding RefreshBackupConflictsCommand}"
+                                    AutomationProperties.AutomationId="ConflictResolutionRefreshButton" />
+                            <Button Content="{DynamicResource FinishConflictResolution}"
+                                    Classes="PrimaryConflictAction"
+                                    Command="{Binding CommitConflictResolutionCommand}"
+                                    IsEnabled="{Binding CanCommitConflictResolution}"
+                                    AutomationProperties.AutomationId="ConflictResolutionCommitButton" />
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

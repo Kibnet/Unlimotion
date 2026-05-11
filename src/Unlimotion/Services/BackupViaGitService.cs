@@ -14,6 +14,8 @@ using System.Threading.Tasks;
 using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
@@ -37,6 +39,20 @@ public class BackupViaGitService : IRemoteBackupService
     {
         "availability.migration.report",
         "migration.report"
+    };
+
+    private static readonly HashSet<string> TextMergeFieldNames = new(StringComparer.Ordinal)
+    {
+        "Title",
+        "Description"
+    };
+
+    private static readonly HashSet<string> RelationFieldNames = new(StringComparer.Ordinal)
+    {
+        "ContainsTasks",
+        "ParentTasks",
+        "BlocksTasks",
+        "BlockedByTasks"
     };
 
     private static readonly object LockObject = new();
@@ -219,6 +235,135 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         return File.ReadAllText(publicKeyPath).Trim();
+    }
+
+    public BackupConflictStatus GetConflictStatus()
+    {
+        try
+        {
+            var settings = GetSettings();
+            var path = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(path))
+            {
+                return BackupConflictStatus.None;
+            }
+
+            using var repo = new Repository(path);
+            var conflicts = repo.Index.Conflicts
+                .Select(conflict =>
+                {
+                    var conflictPath = GetConflictPath(conflict);
+                    return new BackupConflictFile(
+                        conflictPath,
+                        conflict.Ours != null,
+                        conflict.Theirs != null,
+                        CreateConflictFields(repo, conflict.Ancestor, conflict.Ours, conflict.Theirs));
+                })
+                .OrderBy(conflict => conflict.Path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return new BackupConflictStatus(HasConflictResolutionInProgress(repo), conflicts);
+        }
+        catch (Exception ex)
+        {
+            ShowUiError(ex.Message, ex);
+            return BackupConflictStatus.None;
+        }
+    }
+
+    public void ResolveConflict(string path, BackupConflictResolution resolution)
+    {
+        lock (LockObject)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new InvalidOperationException(L10n.Get("ConflictPathNotSpecified"));
+            }
+
+            var settings = GetSettings();
+            var repositoryPath = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(repositoryPath))
+            {
+                throw new InvalidOperationException(L10n.Get("RepositoryNotInitialized"));
+            }
+
+            using var repo = new Repository(repositoryPath);
+            var conflict = repo.Index.Conflicts[path]
+                           ?? throw new InvalidOperationException(L10n.Format("ConflictNotFound", path));
+            var conflictPath = GetConflictPath(conflict);
+            var selectedEntry = resolution == BackupConflictResolution.UseCurrent
+                ? conflict.Ours
+                : conflict.Theirs;
+
+            ResolveConflictEntry(repo, repositoryPath, conflictPath, selectedEntry);
+        }
+    }
+
+    public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections)
+    {
+        lock (LockObject)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new InvalidOperationException(L10n.Get("ConflictPathNotSpecified"));
+            }
+
+            if (fieldSelections.Count == 0)
+            {
+                throw new InvalidOperationException(L10n.Get("ConflictFieldsNotSpecified"));
+            }
+
+            var settings = GetSettings();
+            var repositoryPath = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(repositoryPath))
+            {
+                throw new InvalidOperationException(L10n.Get("RepositoryNotInitialized"));
+            }
+
+            using var repo = new Repository(repositoryPath);
+            var conflict = repo.Index.Conflicts[path]
+                           ?? throw new InvalidOperationException(L10n.Format("ConflictNotFound", path));
+            ResolveConflictFieldsEntry(
+                repo,
+                repositoryPath,
+                GetConflictPath(conflict),
+                conflict.Ancestor,
+                conflict.Ours,
+                conflict.Theirs,
+                fieldSelections);
+        }
+    }
+
+    public void CommitResolvedConflicts(string message)
+    {
+        lock (LockObject)
+        {
+            var settings = GetSettings();
+            var repositoryPath = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(repositoryPath))
+            {
+                throw new InvalidOperationException(L10n.Get("RepositoryNotInitialized"));
+            }
+
+            using var repo = new Repository(repositoryPath);
+            if (repo.Index.Conflicts.Any())
+            {
+                throw new InvalidOperationException(L10n.Get("ResolveAllSyncConflictsBeforeCommit"));
+            }
+
+            if (!repo.RetrieveStatus().IsDirty && !HasConflictResolutionInProgress(repo))
+            {
+                return;
+            }
+
+            var signature = CreateSignature(settings.git);
+            repo.Commit(
+                string.IsNullOrWhiteSpace(message) ? L10n.Get("ResolveSyncConflictsCommitMessage") : message,
+                signature,
+                signature);
+            PushConfiguredBranch(repo, repositoryPath, settings.git);
+            ShowUiMessage(L10n.Get("ConflictResolutionCommitted"));
+        }
     }
 
     public CredentialsHandler GetCredentials(GitSettings gitSettings)
@@ -765,6 +910,538 @@ public class BackupViaGitService : IRemoteBackupService
         {
             throw new InvalidOperationException(L10n.Get("GitConflicts"));
         }
+    }
+
+    private static bool HasConflictResolutionInProgress(Repository repo)
+    {
+        return repo.Index.Conflicts.Any() ||
+               IsConflictOperationInProgress(repo.Info.CurrentOperation);
+    }
+
+    private static bool IsConflictOperationInProgress(CurrentOperation operation)
+    {
+        return operation is CurrentOperation.Merge
+            or CurrentOperation.Rebase
+            or CurrentOperation.RebaseInteractive
+            or CurrentOperation.RebaseMerge
+            or CurrentOperation.CherryPick
+            or CurrentOperation.CherryPickSequence
+            or CurrentOperation.Revert
+            or CurrentOperation.RevertSequence
+            or CurrentOperation.ApplyMailbox
+            or CurrentOperation.ApplyMailboxOrRebase;
+    }
+
+    private static string GetConflictPath(Conflict conflict)
+    {
+        return conflict.Ours?.Path
+               ?? conflict.Theirs?.Path
+               ?? conflict.Ancestor?.Path
+               ?? throw new InvalidOperationException(L10n.Get("ConflictPathNotSpecified"));
+    }
+
+    private static IReadOnlyList<BackupConflictField> CreateConflictFields(
+        Repository repo,
+        IndexEntry? ancestorEntry,
+        IndexEntry? currentEntry,
+        IndexEntry? incomingEntry)
+    {
+        if (currentEntry == null || incomingEntry == null)
+        {
+            return new List<BackupConflictField>();
+        }
+
+        try
+        {
+            var ancestorObject = new JObject();
+            if (ancestorEntry != null)
+            {
+                var ancestorContent = ReadConflictEntryContent(repo, ancestorEntry);
+                if (!TryParseJsonObject(ancestorContent, out ancestorObject))
+                {
+                    return new List<BackupConflictField>();
+                }
+            }
+
+            var currentContent = ReadConflictEntryContent(repo, currentEntry);
+            var incomingContent = ReadConflictEntryContent(repo, incomingEntry);
+            if (!TryParseJsonObject(currentContent, out var currentObject) ||
+                !TryParseJsonObject(incomingContent, out var incomingObject))
+            {
+                return new List<BackupConflictField>();
+            }
+
+            var titleResolver = CreateTaskTitleResolver(repo);
+            var fields = new List<BackupConflictField>();
+            foreach (var fieldName in GetOrderedPropertyNames(ancestorObject, currentObject, incomingObject))
+            {
+                var ancestorToken = ancestorObject[fieldName];
+                var currentToken = currentObject[fieldName];
+                var incomingToken = incomingObject[fieldName];
+                var currentChanged = !JToken.DeepEquals(currentToken, ancestorToken);
+                var incomingChanged = !JToken.DeepEquals(incomingToken, ancestorToken);
+                var changeKind = GetConflictFieldChangeKind(currentChanged, incomingChanged, currentToken, incomingToken);
+                var defaultSource = changeKind == BackupConflictFieldChangeKind.IncomingOnly
+                    ? BackupConflictFieldSource.UseIncoming
+                    : BackupConflictFieldSource.UseCurrent;
+                var canMerge = changeKind == BackupConflictFieldChangeKind.BothDifferent &&
+                               CanMergeConflictTokens(fieldName, currentToken, incomingToken);
+                var canEditMergedValue = canMerge && CanEditMergedConflictToken(fieldName, currentToken, incomingToken);
+                var mergedToken = canMerge
+                    ? MergeConflictTokens(fieldName, currentToken, incomingToken)
+                    : null;
+                fields.Add(new BackupConflictField(
+                    fieldName,
+                    fieldName,
+                    FormatConflictValue(fieldName, ancestorToken, titleResolver),
+                    FormatConflictValue(fieldName, currentToken, titleResolver),
+                    FormatConflictValue(fieldName, incomingToken, titleResolver),
+                    FormatConflictValue(fieldName, mergedToken, titleResolver),
+                    canMerge,
+                    defaultSource,
+                    changeKind,
+                    canEditMergedValue));
+            }
+
+            return fields;
+        }
+        catch
+        {
+            return new List<BackupConflictField>();
+        }
+    }
+
+    private static void ResolveConflictFieldsEntry(
+        Repository repo,
+        string repositoryPath,
+        string conflictPath,
+        IndexEntry? ancestorEntry,
+        IndexEntry? currentEntry,
+        IndexEntry? incomingEntry,
+        IReadOnlyList<BackupConflictFieldSelection> fieldSelections)
+    {
+        if (currentEntry == null || incomingEntry == null)
+        {
+            throw new InvalidOperationException(L10n.Get("ConflictFieldResolutionRequiresBothVersions"));
+        }
+
+        var ancestorObject = new JObject();
+        if (ancestorEntry != null)
+        {
+            var ancestorContent = ReadConflictEntryContent(repo, ancestorEntry);
+            if (!TryParseJsonObject(ancestorContent, out ancestorObject))
+            {
+                throw new InvalidOperationException(L10n.Get("ConflictFieldResolutionRequiresJson"));
+            }
+        }
+
+        var currentContent = ReadConflictEntryContent(repo, currentEntry);
+        var incomingContent = ReadConflictEntryContent(repo, incomingEntry);
+        if (!TryParseJsonObject(currentContent, out var currentObject) ||
+            !TryParseJsonObject(incomingContent, out var incomingObject))
+        {
+            throw new InvalidOperationException(L10n.Get("ConflictFieldResolutionRequiresJson"));
+        }
+
+        var selectionByField = fieldSelections
+            .Where(selection => !string.IsNullOrWhiteSpace(selection.FieldPath))
+            .GroupBy(selection => selection.FieldPath, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+
+        var result = (JObject)ancestorObject.DeepClone();
+        foreach (var field in CreateConflictFields(repo, ancestorEntry, currentEntry, incomingEntry))
+        {
+            var fieldName = field.FieldPath;
+            var selection = selectionByField.TryGetValue(fieldName, out var selectedSelection)
+                ? selectedSelection
+                : null;
+            var source = selection?.Source ?? field.DefaultSource;
+            if (source == BackupConflictFieldSource.Merge && !field.CanMerge)
+            {
+                throw new InvalidOperationException(L10n.Format("ConflictFieldCannotMerge", fieldName));
+            }
+
+            var currentToken = currentObject[fieldName];
+            var incomingToken = incomingObject[fieldName];
+            var resolvedToken = source switch
+            {
+                BackupConflictFieldSource.UseCurrent => currentToken?.DeepClone(),
+                BackupConflictFieldSource.UseIncoming => incomingToken?.DeepClone(),
+                BackupConflictFieldSource.Merge => ResolveMergedConflictToken(
+                    field,
+                    currentToken,
+                    incomingToken,
+                    selection?.CustomValue),
+                _ => currentToken?.DeepClone()
+            };
+
+            if (resolvedToken == null)
+            {
+                result.Remove(fieldName);
+            }
+            else
+            {
+                result[fieldName] = resolvedToken;
+            }
+        }
+
+        var worktreePath = GetSafeWorktreePath(repositoryPath, conflictPath);
+        var directoryPath = Path.GetDirectoryName(worktreePath);
+        if (!string.IsNullOrWhiteSpace(directoryPath))
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
+
+        File.WriteAllText(worktreePath, result.ToString(Formatting.Indented));
+        repo.Index.Remove(conflictPath);
+        Commands.Stage(repo, conflictPath);
+        repo.Index.Write();
+    }
+
+    private static IEnumerable<string> GetOrderedPropertyNames(
+        JObject ancestorObject,
+        JObject currentObject,
+        JObject incomingObject)
+    {
+        var fields = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in ancestorObject.Properties()
+                     .Concat(currentObject.Properties())
+                     .Concat(incomingObject.Properties()))
+        {
+            if (seen.Add(property.Name))
+            {
+                fields.Add(property.Name);
+            }
+        }
+
+        return fields;
+    }
+
+    private static bool TryParseJsonObject(string? content, out JObject result)
+    {
+        result = null!;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stringReader = new StringReader(content);
+            using var jsonReader = new JsonTextReader(stringReader)
+            {
+                DateParseHandling = DateParseHandling.None
+            };
+            result = JObject.Load(jsonReader);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static BackupConflictFieldChangeKind GetConflictFieldChangeKind(
+        bool currentChanged,
+        bool incomingChanged,
+        JToken? currentToken,
+        JToken? incomingToken)
+    {
+        if (!currentChanged && !incomingChanged)
+        {
+            return BackupConflictFieldChangeKind.Unchanged;
+        }
+
+        if (currentChanged && incomingChanged)
+        {
+            return JToken.DeepEquals(currentToken, incomingToken)
+                ? BackupConflictFieldChangeKind.BothSame
+                : BackupConflictFieldChangeKind.BothDifferent;
+        }
+
+        return currentChanged
+            ? BackupConflictFieldChangeKind.CurrentOnly
+            : BackupConflictFieldChangeKind.IncomingOnly;
+    }
+
+    private static string ReadConflictEntryContent(Repository repo, IndexEntry entry)
+    {
+        var blob = repo.Lookup<Blob>(entry.Id)
+                   ?? throw new InvalidOperationException(L10n.Format("ConflictVersionNotFound", entry.Path));
+        using var content = blob.GetContentStream();
+        using var reader = new StreamReader(content);
+        return reader.ReadToEnd();
+    }
+
+    private static bool CanMergeConflictTokens(string fieldName, JToken? currentToken, JToken? incomingToken)
+    {
+        if (currentToken == null || incomingToken == null)
+        {
+            return false;
+        }
+
+        if (currentToken is JArray currentArray &&
+            incomingToken is JArray incomingArray &&
+            IsMergeableArray(currentArray) &&
+            IsMergeableArray(incomingArray))
+        {
+            return true;
+        }
+
+        return TextMergeFieldNames.Contains(fieldName) &&
+               currentToken.Type == JTokenType.String &&
+               incomingToken.Type == JTokenType.String;
+    }
+
+    private static bool CanEditMergedConflictToken(string fieldName, JToken? currentToken, JToken? incomingToken)
+    {
+        return currentToken != null &&
+               incomingToken != null &&
+               TextMergeFieldNames.Contains(fieldName) &&
+               currentToken.Type == JTokenType.String &&
+               incomingToken.Type == JTokenType.String;
+    }
+
+    private static JToken? ResolveMergedConflictToken(
+        BackupConflictField field,
+        JToken? currentToken,
+        JToken? incomingToken,
+        string? customValue)
+    {
+        if (field.CanEditMergedValue && customValue != null)
+        {
+            return new JValue(customValue);
+        }
+
+        return MergeConflictTokens(field.FieldPath, currentToken, incomingToken);
+    }
+
+    private static JToken? MergeConflictTokens(string fieldName, JToken? currentToken, JToken? incomingToken)
+    {
+        if (currentToken == null)
+        {
+            return incomingToken?.DeepClone();
+        }
+
+        if (incomingToken == null)
+        {
+            return currentToken.DeepClone();
+        }
+
+        if (JToken.DeepEquals(currentToken, incomingToken))
+        {
+            return currentToken.DeepClone();
+        }
+
+        if (currentToken is JArray currentArray &&
+            incomingToken is JArray incomingArray &&
+            IsMergeableArray(currentArray) &&
+            IsMergeableArray(incomingArray))
+        {
+            return MergeArrays(currentArray, incomingArray);
+        }
+
+        if (TextMergeFieldNames.Contains(fieldName) &&
+            currentToken.Type == JTokenType.String &&
+            incomingToken.Type == JTokenType.String)
+        {
+            return MergeStrings((string?)currentToken, (string?)incomingToken);
+        }
+
+        throw new InvalidOperationException(L10n.Format("ConflictFieldCannotMerge", fieldName));
+    }
+
+    private static bool IsMergeableArray(JArray array)
+    {
+        return array.All(IsScalarJsonValue);
+    }
+
+    private static bool IsScalarJsonValue(JToken token)
+    {
+        return token is JValue;
+    }
+
+    private static JArray MergeArrays(JArray currentArray, JArray incomingArray)
+    {
+        var result = new JArray();
+        foreach (var item in currentArray.Concat(incomingArray))
+        {
+            if (!result.Any(existing => JToken.DeepEquals(existing, item)))
+            {
+                result.Add(item.DeepClone());
+            }
+        }
+
+        return result;
+    }
+
+    private static JValue MergeStrings(string? currentValue, string? incomingValue)
+    {
+        if (string.IsNullOrEmpty(currentValue))
+        {
+            return new JValue(incomingValue);
+        }
+
+        if (string.IsNullOrEmpty(incomingValue) || string.Equals(currentValue, incomingValue, StringComparison.Ordinal))
+        {
+            return new JValue(currentValue);
+        }
+
+        if (currentValue.Contains(incomingValue, StringComparison.Ordinal))
+        {
+            return new JValue(currentValue);
+        }
+
+        if (incomingValue.Contains(currentValue, StringComparison.Ordinal))
+        {
+            return new JValue(incomingValue);
+        }
+
+        return new JValue($"{currentValue}{Environment.NewLine}{incomingValue}");
+    }
+
+    private static Func<string, string?> CreateTaskTitleResolver(Repository repo)
+    {
+        var cache = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var repositoryPath = repo.Info.WorkingDirectory;
+        return taskId =>
+        {
+            if (string.IsNullOrWhiteSpace(taskId))
+            {
+                return null;
+            }
+
+            if (cache.TryGetValue(taskId, out var cachedTitle))
+            {
+                return cachedTitle;
+            }
+
+            string? title = null;
+            try
+            {
+                var taskPath = GetSafeWorktreePath(repositoryPath, taskId);
+                if (File.Exists(taskPath) &&
+                    TryParseJsonObject(File.ReadAllText(taskPath), out var taskObject) &&
+                    taskObject["Title"]?.Type == JTokenType.String)
+                {
+                    title = (string?)taskObject["Title"];
+                }
+            }
+            catch
+            {
+                title = null;
+            }
+
+            cache[taskId] = title;
+            return title;
+        };
+    }
+
+    private static string FormatConflictValue(
+        string fieldName,
+        JToken? token,
+        Func<string, string?>? titleResolver = null)
+    {
+        if (token == null)
+        {
+            return L10n.Get("ConflictMissingValue");
+        }
+
+        if (RelationFieldNames.Contains(fieldName) && token is JArray relationArray)
+        {
+            return FormatRelationArrayValue(relationArray, titleResolver);
+        }
+
+        var value = token.Type == JTokenType.String
+            ? (string?)token
+            : token.ToString(Formatting.None);
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        const int maxLength = 500;
+        return value.Length <= maxLength
+            ? value
+            : $"{value[..maxLength]}...";
+    }
+
+    private static string FormatRelationArrayValue(JArray array, Func<string, string?>? titleResolver)
+    {
+        var values = array
+            .OfType<JValue>()
+            .Select(value => value.Value?.ToString())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value =>
+            {
+                var title = titleResolver?.Invoke(value!);
+                return string.IsNullOrWhiteSpace(title)
+                    ? value!
+                    : $"{title} ({value})";
+            })
+            .ToList();
+
+        return values.Count == 0
+            ? string.Empty
+            : string.Join(Environment.NewLine, values);
+    }
+
+    private static void ResolveConflictEntry(
+        Repository repo,
+        string repositoryPath,
+        string conflictPath,
+        IndexEntry? selectedEntry)
+    {
+        var worktreePath = GetSafeWorktreePath(repositoryPath, conflictPath);
+
+        if (selectedEntry == null)
+        {
+            if (File.Exists(worktreePath))
+            {
+                File.Delete(worktreePath);
+            }
+
+            repo.Index.Remove(conflictPath);
+            repo.Index.Write();
+            return;
+        }
+
+        var blob = repo.Lookup<Blob>(selectedEntry.Id)
+                   ?? throw new InvalidOperationException(L10n.Format("ConflictVersionNotFound", conflictPath));
+        var directoryPath = Path.GetDirectoryName(worktreePath);
+        if (!string.IsNullOrWhiteSpace(directoryPath))
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
+
+        using (var content = blob.GetContentStream())
+        using (var file = File.Open(worktreePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            content.CopyTo(file);
+        }
+
+        repo.Index.Remove(conflictPath);
+        repo.Index.Add(blob, conflictPath, selectedEntry.Mode);
+        repo.Index.Write();
+    }
+
+    private static string GetSafeWorktreePath(string repositoryPath, string relativePath)
+    {
+        if (Path.IsPathRooted(relativePath))
+        {
+            throw new InvalidOperationException(L10n.Format("InvalidConflictPath", relativePath));
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(
+            repositoryPath,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (!IsPathWithinDirectory(fullPath, repositoryPath))
+        {
+            throw new InvalidOperationException(L10n.Format("InvalidConflictPath", relativePath));
+        }
+
+        return fullPath;
     }
 
     private static void MergeUnrelatedHistoriesWithLibGit2(Repository repo, Branch remoteBranch, Signature signature)

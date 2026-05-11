@@ -44,6 +44,11 @@
         <Style Selector="Grid.FieldActionRow">
             <Setter Property="ColumnSpacing" Value="8" />
         </Style>
+        <Style Selector="Border.ConflictFieldRow">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="0,8,0,8" />
+        </Style>
         <Style Selector="ComboBox">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="MinWidth" Value="140" />
@@ -331,6 +336,25 @@
                         <TextBlock Classes="StatusText"
                                    Text="{Binding BackupStatusText}"
                                    AutomationProperties.AutomationId="BackupStatusText" />
+
+                        <Border Classes="SettingsSection"
+                                Padding="12"
+                                Margin="0,12,0,12"
+                                IsVisible="{Binding IsConflictResolutionMode}"
+                                AutomationProperties.AutomationId="SyncConflictResolutionPanel">
+                            <StackPanel>
+                                <TextBlock Classes="SectionTitle" Text="{DynamicResource SyncConflictsTitle}" />
+                                <TextBlock Classes="SectionHint" Text="{DynamicResource SyncConflictsHint}" />
+                                <WrapPanel Classes="ActionButtons">
+                                    <Button Content="{DynamicResource OpenConflictResolutionWindow}"
+                                            Command="{Binding OpenConflictResolutionWindowCommand}"
+                                            AutomationProperties.AutomationId="OpenConflictResolutionWindowButton" />
+                                    <Button Content="{DynamicResource Refresh}"
+                                            Command="{Binding RefreshBackupConflictsCommand}"
+                                            AutomationProperties.AutomationId="RefreshBackupConflictsButton" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
 
                         <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource ConnectRepository}"

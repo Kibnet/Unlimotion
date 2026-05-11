@@ -122,6 +122,35 @@
   <data name="From" xml:space="preserve"><value>From</value></data>
   <data name="FuzzySearch" xml:space="preserve"><value>Smart search</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Could not merge local tasks with the remote repository: Git conflicts were found.</value></data>
+  <data name="ConflictAncestorVersion" xml:space="preserve"><value>Before change</value></data>
+  <data name="ConflictCurrentVersion" xml:space="preserve"><value>Current version</value></data>
+  <data name="ConflictDeletedVersion" xml:space="preserve"><value>Deleted</value></data>
+  <data name="ConflictEditMergedValue" xml:space="preserve"><value>Edit merged text</value></data>
+  <data name="ConflictFieldCannotMerge" xml:space="preserve"><value>Field cannot be merged: {0}</value></data>
+  <data name="ConflictFieldRealConflict" xml:space="preserve"><value>Conflict</value></data>
+  <data name="ConflictFieldResolutionRequiresBothVersions" xml:space="preserve"><value>Field-by-field conflict resolution requires both current and incoming versions.</value></data>
+  <data name="ConflictFieldResolutionRequiresJson" xml:space="preserve"><value>Field-by-field conflict resolution is available only for JSON files.</value></data>
+  <data name="ConflictFieldsNotSpecified" xml:space="preserve"><value>Conflict fields are not specified.</value></data>
+  <data name="ConflictIncomingVersion" xml:space="preserve"><value>Incoming version</value></data>
+  <data name="ConflictMergeVersion" xml:space="preserve"><value>Merge</value></data>
+  <data name="ConflictMergedValue" xml:space="preserve"><value>Merged value</value></data>
+  <data name="ConflictMissingValue" xml:space="preserve"><value>Missing</value></data>
+  <data name="ConflictNotFound" xml:space="preserve"><value>Conflict not found: {0}</value></data>
+  <data name="ConflictPathNotSpecified" xml:space="preserve"><value>Conflict path is not specified.</value></data>
+  <data name="ConflictResolutionFilesTitle" xml:space="preserve"><value>Conflicting files</value></data>
+  <data name="ConflictResolutionSelectedFileHint" xml:space="preserve"><value>Review changed properties, compare both versions, and choose the resulting value.</value></data>
+  <data name="ConflictResolutionWholeFileHint" xml:space="preserve"><value>This file cannot be resolved field by field. Choose the current or incoming version for the whole file.</value></data>
+  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Resolve sync conflicts before continuing. This dialog works on desktop and mobile.</value></data>
+  <data name="ConflictResolutionWindowTitle" xml:space="preserve"><value>Resolve sync conflicts</value></data>
+  <data name="ConflictSelectedValue" xml:space="preserve"><value>Selected value</value></data>
+  <data name="ConflictResolutionComplete" xml:space="preserve"><value>Sync conflicts resolved.</value></data>
+  <data name="ConflictResolutionCommitted" xml:space="preserve"><value>Conflict resolution committed.</value></data>
+  <data name="ConflictResolveErrorStatus" xml:space="preserve"><value>Could not resolve conflict: {0}</value></data>
+  <data name="ConflictResolveErrorToast" xml:space="preserve"><value>Could not resolve sync conflict: {0}</value></data>
+  <data name="ConflictVersionNotFound" xml:space="preserve"><value>Selected conflict version was not found: {0}</value></data>
+  <data name="Close" xml:space="preserve"><value>Close</value></data>
+  <data name="FieldConflictResolutionComplete" xml:space="preserve"><value>Selected conflict fields resolved.</value></data>
+  <data name="InvalidConflictPath" xml:space="preserve"><value>Invalid conflict path: {0}</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Only Unlocked</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Updating roadmap...</value></data>
   <data name="Importance" xml:space="preserve"><value>Importance</value></data>
@@ -162,6 +191,7 @@
   <data name="OneHour" xml:space="preserve"><value>1 hour</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 minute</value></data>
   <data name="OnlyWanted" xml:space="preserve"><value>Only Wanted</value></data>
+  <data name="OpenConflictResolutionWindow" xml:space="preserve"><value>Open conflict resolver</value></data>
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Parameters saved. Click "Connect repository".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Parent tasks:</value></data>
   <data name="Password" xml:space="preserve"><value>Password</value></data>
@@ -206,6 +236,10 @@
   <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Could not connect repository: {0}</value></data>
   <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Repository working directory is unavailable.</value></data>
   <data name="RepositoryHeadUnavailable" xml:space="preserve"><value>Repository HEAD is unavailable.</value></data>
+  <data name="RepositoryNotInitialized" xml:space="preserve"><value>Repository is not initialized.</value></data>
+  <data name="ResolveAllSyncConflictsBeforeCommit" xml:space="preserve"><value>Resolve all sync conflicts before finishing.</value></data>
+  <data name="ResolveSyncConflictsCommitMessage" xml:space="preserve"><value>Resolve sync conflicts</value></data>
+  <data name="ResolvingConflict" xml:space="preserve"><value>Resolving conflict...</value></data>
   <data name="ResetFilters" xml:space="preserve"><value>Reset filters</value></data>
   <data name="ResetFiltersConfirmHeader" xml:space="preserve"><value>Reset filters?</value></data>
   <data name="ResetFiltersConfirmMessage" xml:space="preserve"><value>Filters on the current tab will be reset to defaults. Continue?</value></data>
@@ -275,10 +309,22 @@
   <data name="StorageTitle" xml:space="preserve"><value>Task storage</value></data>
   <data name="StorageLocal" xml:space="preserve"><value>On this device</value></data>
   <data name="SyncComplete" xml:space="preserve"><value>Synchronization complete.</value></data>
+  <data name="SyncConflictsHint" xml:space="preserve"><value>Synchronization is paused. Choose a version for each conflicted file, then finish the resolution.</value></data>
+  <data name="SyncConflictFieldsHint" xml:space="preserve"><value>Choose values for each changed field, or merge compatible text, list, and object fields.</value></data>
+  <data name="SyncConflictsReadyToCommit" xml:space="preserve"><value>All sync conflicts are resolved. Finish conflict resolution to continue.</value></data>
+  <data name="SyncConflictsStatus" xml:space="preserve"><value>{0} sync conflict(s) require resolution.</value></data>
+  <data name="SyncConflictsTitle" xml:space="preserve"><value>Sync Conflict Resolution</value></data>
   <data name="SyncErrorStatus" xml:space="preserve"><value>Sync error: {0}</value></data>
   <data name="SyncErrorToast" xml:space="preserve"><value>Could not synchronize repository: {0}</value></data>
   <data name="SyncNow" xml:space="preserve"><value>Synchronize now</value></data>
   <data name="SyncingRepository" xml:space="preserve"><value>Synchronizing with repository...</value></data>
+  <data name="FinishConflictResolution" xml:space="preserve"><value>Finish resolution</value></data>
+  <data name="CommittingConflictResolution" xml:space="preserve"><value>Finishing conflict resolution...</value></data>
+  <data name="CommitConflictResolutionErrorStatus" xml:space="preserve"><value>Could not finish conflict resolution: {0}</value></data>
+  <data name="CommitConflictResolutionErrorToast" xml:space="preserve"><value>Could not finish sync conflict resolution: {0}</value></data>
+  <data name="UseCurrentConflictVersion" xml:space="preserve"><value>Use current</value></data>
+  <data name="UseIncomingConflictVersion" xml:space="preserve"><value>Use incoming</value></data>
+  <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Apply selected fields</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Choose how task outlines are copied. Pasted outlines are recognized automatically.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Task outline clipboard</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>
