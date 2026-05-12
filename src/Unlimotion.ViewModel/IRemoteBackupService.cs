@@ -17,6 +17,7 @@ public interface IRemoteBackupService
     public void CommitResolvedConflicts(string message);
     public void Push(string msg);
     public void Pull();
+    public void PullExistingRepository();
     public BackupRepositoryConnectPreview PreviewConnectRepository();
     public void ConnectRepository(bool allowMergeWithNonEmptyRemote);
     public void CloneOrUpdateRepo();

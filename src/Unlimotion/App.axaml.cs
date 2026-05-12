@@ -176,7 +176,16 @@ public class App : Application
             {
                 if (!settings.IsServerMode)
                 {
-                    await PrepareFileStoragePathAsync(settings.TaskStoragePath);
+                    var shouldContinue = await PrepareLocalStorageConnectionAsync(
+                        settings,
+                        _backupService,
+                        GetCurrentLocalStoragePath(),
+                        PrepareFileStoragePathAsync,
+                        EnterConflictResolutionMode);
+                    if (!shouldContinue)
+                    {
+                        return;
+                    }
                 }
 
                 _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
@@ -847,12 +856,86 @@ public class App : Application
         settings.SetStorageConnectionState(SettingsConnectionState.Connected);
     }
 
+    internal static async Task<bool> PrepareLocalStorageConnectionAsync(
+        SettingsViewModel settings,
+        IRemoteBackupService? backupService,
+        string? currentLocalStoragePath,
+        Func<string?, Task> prepareFileStoragePathAsync,
+        Action<SettingsViewModel> enterConflictResolutionMode)
+    {
+        await prepareFileStoragePathAsync(settings.TaskStoragePath);
+
+        if (!ShouldAutoPullExistingTaskRepository(settings.TaskStoragePath, currentLocalStoragePath))
+        {
+            return true;
+        }
+
+        await Task.Run(() => backupService?.PullExistingRepository());
+        settings.ReloadGitMetadata();
+        if (!settings.IsConflictResolutionMode)
+        {
+            return true;
+        }
+
+        settings.SetStorageConnectionState(SettingsConnectionState.Disconnected);
+        enterConflictResolutionMode(settings);
+        return false;
+    }
+
+    internal static bool ShouldAutoPullExistingTaskRepository(
+        string? selectedLocalStoragePath,
+        string? currentLocalStoragePath)
+    {
+        if (string.IsNullOrWhiteSpace(currentLocalStoragePath))
+        {
+            return true;
+        }
+
+        return !string.Equals(
+            NormalizeLocalStoragePathForComparison(selectedLocalStoragePath),
+            NormalizeLocalStoragePathForComparison(currentLocalStoragePath),
+            GetPathComparison());
+    }
+
+    private string? GetCurrentLocalStoragePath()
+    {
+        return (_storageFactory?.CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+    }
+
     private static Task PrepareFileStoragePathAsync(string? path)
     {
         var prepareFileStoragePathAsync = TaskStorageFactory.PrepareFileStoragePathAsync;
         return prepareFileStoragePathAsync == null
             ? Task.CompletedTask
             : prepareFileStoragePathAsync(path);
+    }
+
+    private static string NormalizeLocalStoragePathForComparison(string? path)
+    {
+        var effectivePath = string.IsNullOrWhiteSpace(path)
+            ? TaskStorageFactory.DefaultStoragePath
+            : path.Trim();
+
+        if (string.IsNullOrWhiteSpace(effectivePath))
+        {
+            effectivePath = "Tasks";
+        }
+
+        try
+        {
+            return Path.GetFullPath(effectivePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return effectivePath;
+        }
+    }
+
+    private static StringComparison GetPathComparison()
+    {
+        return OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
     }
 
     private void ConfirmAndRun(

@@ -648,6 +648,14 @@ public class BackupViaGitService : IRemoteBackupService
     {
         lock (LockObject)
         {
+            PullCurrentRepository(notifyCurrentWatcher: true);
+        }
+    }
+
+    public void PullExistingRepository()
+    {
+        lock (LockObject)
+        {
             var settings = GetSettings();
             var path = GetRepositoryPath(settings.repositoryPath);
             if (!Repository.IsValid(path))
@@ -655,110 +663,133 @@ public class BackupViaGitService : IRemoteBackupService
                 return;
             }
 
-            CheckGitSettings(settings.git.UserName, settings.git.Password);
-
-            using var repo = new Repository(path);
-            var remote = repo.Network.Remotes[settings.git.RemoteName];
-            if (remote == null)
+            using (var repo = new Repository(path))
             {
-                ShowUiError(L10n.Format("RemoteNotFound", settings.git.RemoteName));
+                if (!repo.Network.Remotes.Any())
+                {
+                    return;
+                }
+
+                EnsureRemoteNameMatchesLocalRepository(repo, settings.git);
+                EnsurePushRefSpecMatchesLocalRepository(repo, settings.git);
+            }
+
+            PullCurrentRepository(notifyCurrentWatcher: false);
+        }
+    }
+
+    private void PullCurrentRepository(bool notifyCurrentWatcher)
+    {
+        var settings = GetSettings();
+        var path = GetRepositoryPath(settings.repositoryPath);
+        if (!Repository.IsValid(path))
+        {
+            return;
+        }
+
+        CheckGitSettings(settings.git.UserName, settings.git.Password);
+
+        using var repo = new Repository(path);
+        var remote = repo.Network.Remotes[settings.git.RemoteName];
+        if (remote == null)
+        {
+            ShowUiError(L10n.Format("RemoteNotFound", settings.git.RemoteName));
+            return;
+        }
+
+        ShowUiMessage(L10n.Get("StartGitPull"));
+
+        var dbwatcher = notifyCurrentWatcher ? _storageFactory?.CurrentWatcher : null;
+        try
+        {
+            dbwatcher?.SetEnable(false);
+
+            FetchRemote(repo, path, settings.git);
+
+            var localBranch = repo.Branches[settings.git.PushRefSpec];
+            if (localBranch == null)
+            {
+                ShowUiError(L10n.Format("LocalBranchNotFound", settings.git.PushRefSpec));
                 return;
             }
 
-            ShowUiMessage(L10n.Get("StartGitPull"));
-
-            var dbwatcher = _storageFactory?.CurrentWatcher;
-            try
+            var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
+            if (remoteBranch == null)
             {
-                dbwatcher?.SetEnable(false);
+                ShowUiError(L10n.Format("RemoteBranchNotFoundAfterFetch", $"{settings.git.RemoteName}/{localBranch.FriendlyName}"));
+                return;
+            }
 
-                FetchRemote(repo, path, settings.git);
+            if (localBranch.Tip.Sha != remoteBranch.Tip.Sha)
+            {
+                var changes = repo.Diff.Compare<TreeChanges>(localBranch.Tip.Tree, remoteBranch.Tip.Tree);
+                var signature = new Signature(
+                    new Identity(settings.git.CommitterName, settings.git.CommitterEmail),
+                    DateTimeOffset.Now);
 
-                var localBranch = repo.Branches[settings.git.PushRefSpec];
-                if (localBranch == null)
+                var stash = repo.Stashes.Add(signature, "Stash before merge");
+
+                Commands.Checkout(repo, settings.git.PushRefSpec);
+
+                try
                 {
-                    ShowUiError(L10n.Format("LocalBranchNotFound", settings.git.PushRefSpec));
-                    return;
-                }
+                    repo.Merge(remoteBranch, signature, new MergeOptions());
 
-                var remoteBranch = repo.Branches[$"refs/remotes/{settings.git.RemoteName}/{localBranch.FriendlyName}"];
-                if (remoteBranch == null)
-                {
-                    ShowUiError(L10n.Format("RemoteBranchNotFoundAfterFetch", $"{settings.git.RemoteName}/{localBranch.FriendlyName}"));
-                    return;
-                }
-
-                if (localBranch.Tip.Sha != remoteBranch.Tip.Sha)
-                {
-                    var changes = repo.Diff.Compare<TreeChanges>(localBranch.Tip.Tree, remoteBranch.Tip.Tree);
-                    var signature = new Signature(
-                        new Identity(settings.git.CommitterName, settings.git.CommitterEmail),
-                        DateTimeOffset.Now);
-
-                    var stash = repo.Stashes.Add(signature, "Stash before merge");
-
-                    Commands.Checkout(repo, settings.git.PushRefSpec);
-
-                    try
+                    foreach (var change in changes)
                     {
-                        repo.Merge(remoteBranch, signature, new MergeOptions());
-
-                        foreach (var change in changes)
+                        UpdateType mode;
+                        switch (change.Status)
                         {
-                            UpdateType mode;
-                            switch (change.Status)
-                            {
-                                case ChangeKind.Added:
-                                case ChangeKind.Modified:
-                                case ChangeKind.Renamed:
-                                case ChangeKind.Copied:
-                                    mode = UpdateType.Saved;
-                                    break;
-                                case ChangeKind.Deleted:
-                                    mode = UpdateType.Removed;
-                                    break;
-                                default:
-                                    continue;
-                            }
-
-                            dbwatcher?.ForceUpdateFile(change.Path, mode);
+                            case ChangeKind.Added:
+                            case ChangeKind.Modified:
+                            case ChangeKind.Renamed:
+                            case ChangeKind.Copied:
+                                mode = UpdateType.Saved;
+                                break;
+                            case ChangeKind.Deleted:
+                                mode = UpdateType.Removed;
+                                break;
+                            default:
+                                continue;
                         }
 
-                        ShowUiMessage(L10n.Get("MergeSuccessful"));
-                    }
-                    catch (Exception ex)
-                    {
-                        var errorMessage = L10n.Format("MergeRemoteBranchFailed", ex.Message);
-                        Debug.WriteLine(errorMessage);
-                        ShowUiError(errorMessage, ex);
+                        dbwatcher?.ForceUpdateFile(change.Path, mode);
                     }
 
-                    if (stash != null)
-                    {
-                        var stashIndex = repo.Stashes.ToList().IndexOf(stash);
-                        var applyStatus = repo.Stashes.Apply(stashIndex);
+                    ShowUiMessage(L10n.Get("MergeSuccessful"));
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = L10n.Format("MergeRemoteBranchFailed", ex.Message);
+                    Debug.WriteLine(errorMessage);
+                    ShowUiError(errorMessage, ex);
+                }
 
-                        ShowUiMessage(L10n.Get("StashApplied"));
-                        if (applyStatus == StashApplyStatus.Applied)
-                        {
-                            repo.Stashes.Remove(stashIndex);
-                        }
-                    }
+                if (stash != null)
+                {
+                    var stashIndex = repo.Stashes.ToList().IndexOf(stash);
+                    var applyStatus = repo.Stashes.Apply(stashIndex);
 
-                    if (repo.Index.Conflicts.Any())
+                    ShowUiMessage(L10n.Get("StashApplied"));
+                    if (applyStatus == StashApplyStatus.Applied)
                     {
-                        ShowUiError(L10n.Get("FixConflictsCommitResult"));
+                        repo.Stashes.Remove(stashIndex);
                     }
                 }
+
+                if (repo.Index.Conflicts.Any())
+                {
+                    ShowUiError(L10n.Get("FixConflictsCommitResult"));
+                }
             }
-            catch (Exception ex)
-            {
-                ShowUiError(L10n.Format("PullErrorToast", ex.Message), ex);
-            }
-            finally
-            {
-                dbwatcher?.SetEnable(true);
-            }
+        }
+        catch (Exception ex)
+        {
+            ShowUiError(L10n.Format("PullErrorToast", ex.Message), ex);
+        }
+        finally
+        {
+            dbwatcher?.SetEnable(true);
         }
     }
 
