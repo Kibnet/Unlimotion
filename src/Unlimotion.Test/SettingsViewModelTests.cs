@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
 using WritableJsonConfiguration;
@@ -458,6 +462,168 @@ public class SettingsViewModelTests : IDisposable
         settings.Password = "secret";
 
         await Assert.That(settings.CanConnectStorage).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PrepareLocalStorageConnectionAsync_PullsBetweenPrepareAndSwitch_WhenPathChanges()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var backupService = new FakeRemoteBackupService();
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = Path.Combine(Environment.CurrentDirectory, "NextTasks")
+        };
+        var events = new List<string>();
+        backupService.PullExistingRepositoryAction = () => events.Add("pull");
+
+        var shouldContinue = await App.PrepareLocalStorageConnectionAsync(
+            settings,
+            backupService,
+            Path.Combine(Environment.CurrentDirectory, "CurrentTasks"),
+            path =>
+            {
+                events.Add($"prepare:{path}");
+                return System.Threading.Tasks.Task.CompletedTask;
+            },
+            _ => events.Add("conflict"));
+        if (shouldContinue)
+        {
+            events.Add("switch");
+        }
+
+        await Assert.That(shouldContinue).IsTrue();
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(1);
+        await Assert.That(string.Join("|", events))
+            .IsEqualTo($"prepare:{settings.TaskStoragePath}|pull|switch");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PrepareLocalStorageConnectionAsync_SkipsPull_WhenReconnectingSameLocalPath()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var backupService = new FakeRemoteBackupService();
+        var selectedPath = Path.Combine(Environment.CurrentDirectory, "SameTasks");
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = selectedPath
+        };
+        var events = new List<string>();
+
+        var shouldContinue = await App.PrepareLocalStorageConnectionAsync(
+            settings,
+            backupService,
+            selectedPath,
+            path =>
+            {
+                events.Add($"prepare:{path}");
+                return System.Threading.Tasks.Task.CompletedTask;
+            },
+            _ => events.Add("conflict"));
+        if (shouldContinue)
+        {
+            events.Add("switch");
+        }
+
+        await Assert.That(shouldContinue).IsTrue();
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(0);
+        await Assert.That(string.Join("|", events))
+            .IsEqualTo($"prepare:{settings.TaskStoragePath}|switch");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PrepareLocalStorageConnectionAsync_StopsBeforeSwitch_WhenPullFindsConflicts()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var backupService = new FakeRemoteBackupService();
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = Path.Combine(Environment.CurrentDirectory, "ConflictedTasks")
+        };
+        var events = new List<string>();
+        backupService.PullExistingRepositoryAction = () =>
+        {
+            events.Add("pull");
+            backupService.ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>());
+        };
+
+        var shouldContinue = await App.PrepareLocalStorageConnectionAsync(
+            settings,
+            backupService,
+            Path.Combine(Environment.CurrentDirectory, "CurrentTasks"),
+            path =>
+            {
+                events.Add($"prepare:{path}");
+                return System.Threading.Tasks.Task.CompletedTask;
+            },
+            _ => events.Add("conflict"));
+        if (shouldContinue)
+        {
+            events.Add("switch");
+        }
+
+        await Assert.That(shouldContinue).IsFalse();
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.IsStorageBusy).IsFalse();
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(1);
+        await Assert.That(string.Join("|", events))
+            .IsEqualTo($"prepare:{settings.TaskStoragePath}|pull|conflict");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ConnectCommand_AutoPullsDifferentLocalPathBeforeSwitchStorage()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var currentPath = Path.Combine(Environment.CurrentDirectory, $"CurrentTasks-{Guid.NewGuid():N}");
+        var selectedPath = Path.Combine(Environment.CurrentDirectory, $"SelectedTasks-{Guid.NewGuid():N}");
+        var events = new ConcurrentQueue<string>();
+        var backupService = new FakeRemoteBackupService
+        {
+            PullExistingRepositoryAction = () => events.Enqueue("pull")
+        };
+        using var storageFactory = new RecordingTaskStorageFactory(currentPath, events);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = selectedPath
+        };
+        using var appScope = ConfigureAppSettingsCommands(settings, configuration, backupService, storageFactory);
+
+        settings.ConnectCommand?.Execute(null);
+
+        await WaitForConditionAsync(
+            () => settings.StorageConnectionState == SettingsConnectionState.Connected,
+            "Connect command did not finish.");
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(1);
+        await Assert.That(string.Join("|", events)).IsEqualTo($"pull|switch-local:{selectedPath}");
+        await Assert.That(storageFactory.CurrentFileStoragePath).IsEqualTo(selectedPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ConnectCommand_DoesNotAutoPull_WhenServerModeIsSelected()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var currentPath = Path.Combine(Environment.CurrentDirectory, $"CurrentTasks-{Guid.NewGuid():N}");
+        var events = new ConcurrentQueue<string>();
+        var backupService = new FakeRemoteBackupService
+        {
+            PullExistingRepositoryAction = () => events.Enqueue("pull")
+        };
+        using var storageFactory = new RecordingTaskStorageFactory(currentPath, events);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            IsServerMode = true,
+            ServerStorageUrl = "https://server.example",
+            Login = "user@example",
+            Password = "secret"
+        };
+        using var appScope = ConfigureAppSettingsCommands(settings, configuration, backupService, storageFactory);
+
+        settings.ConnectCommand?.Execute(null);
+
+        await WaitForConditionAsync(
+            () => settings.StorageConnectionState == SettingsConnectionState.Connected,
+            "Server connect command did not finish.");
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(0);
+        await Assert.That(string.Join("|", events)).IsEqualTo("switch-server:https://server.example");
     }
 
     [Test]
@@ -949,6 +1115,146 @@ public class SettingsViewModelTests : IDisposable
         await Assert.That(command).Contains("StrictHostKeyChecking=accept-new");
     }
 
+    private static IDisposable ConfigureAppSettingsCommands(
+        SettingsViewModel settings,
+        IConfiguration configuration,
+        IRemoteBackupService backupService,
+        ITaskStorageFactory storageFactory)
+    {
+        const BindingFlags fieldFlags = BindingFlags.Static | BindingFlags.NonPublic;
+        var appType = typeof(App);
+        var fieldValues = new Dictionary<string, object?>
+        {
+            ["_configuration"] = configuration,
+            ["_backupService"] = backupService,
+            ["_storageFactory"] = storageFactory,
+            ["_mainWindowViewModel"] = null,
+            ["_notificationManager"] = null
+        };
+        var previousValues = fieldValues.ToDictionary(
+            pair => pair.Key,
+            pair => GetRequiredAppField(appType, pair.Key, fieldFlags).GetValue(null));
+
+        foreach (var pair in fieldValues)
+        {
+            GetRequiredAppField(appType, pair.Key, fieldFlags).SetValue(null, pair.Value);
+        }
+
+        var setupSettingsCommands = appType.GetMethod(
+                                        "SetupSettingsCommands",
+                                        BindingFlags.Instance | BindingFlags.NonPublic)
+                                    ?? throw new MissingMethodException(nameof(App), "SetupSettingsCommands");
+        setupSettingsCommands.Invoke(new App(), [settings]);
+
+        return new DelegateDisposable(() =>
+        {
+            foreach (var pair in previousValues)
+            {
+                GetRequiredAppField(appType, pair.Key, fieldFlags).SetValue(null, pair.Value);
+            }
+        });
+    }
+
+    private static FieldInfo GetRequiredAppField(Type appType, string fieldName, BindingFlags flags) =>
+        appType.GetField(fieldName, flags)
+        ?? throw new MissingFieldException(nameof(App), fieldName);
+
+    private static async System.Threading.Tasks.Task WaitForConditionAsync(
+        Func<bool> condition,
+        string failureMessage,
+        TimeSpan? timeout = null)
+    {
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(3));
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await System.Threading.Tasks.Task.Delay(10);
+        }
+
+        throw new TimeoutException(failureMessage);
+    }
+
+    private sealed class RecordingTaskStorageFactory : ITaskStorageFactory, IDisposable
+    {
+        private readonly ConcurrentQueue<string> _events;
+        private readonly List<IDisposable> _storages = new();
+        private readonly List<string> _paths = new();
+
+        public RecordingTaskStorageFactory(string currentPath, ConcurrentQueue<string> events)
+        {
+            _events = events;
+            CurrentStorage = CreateFileStorageWithoutRecording(currentPath);
+        }
+
+        public ITaskStorage? CurrentStorage { get; private set; }
+        public IDatabaseWatcher? CurrentWatcher => null;
+        public string? CurrentFileStoragePath => (CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+
+        public ITaskStorage CreateFileStorage(string? path)
+        {
+            _events.Enqueue($"switch-local:{path}");
+            CurrentStorage = CreateFileStorageWithoutRecording(path);
+            return CurrentStorage;
+        }
+
+        public ITaskStorage CreateServerStorage(string? url)
+        {
+            _events.Enqueue($"switch-server:{url}");
+            CurrentStorage = CreateFileStorageWithoutRecording(
+                Path.Combine(Environment.CurrentDirectory, $"ServerStoragePlaceholder-{Guid.NewGuid():N}"));
+            return CurrentStorage;
+        }
+
+        public void SwitchStorage(bool isServerMode, IConfiguration configuration)
+        {
+            var settings = configuration.Get<TaskStorageSettings>("TaskStorage");
+            if (isServerMode)
+            {
+                CreateServerStorage(settings?.URL);
+                return;
+            }
+
+            CreateFileStorage(settings?.Path);
+        }
+
+        public void Dispose()
+        {
+            foreach (var storage in _storages)
+            {
+                storage.Dispose();
+            }
+
+            foreach (var path in _paths)
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+            }
+        }
+
+        private ITaskStorage CreateFileStorageWithoutRecording(string? path)
+        {
+            var storagePath = string.IsNullOrWhiteSpace(path)
+                ? Path.Combine(Environment.CurrentDirectory, $"Tasks-{Guid.NewGuid():N}")
+                : path;
+            var fileStorage = new FileStorage(storagePath, watcher: false);
+            var storage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+            _paths.Add(fileStorage.Path);
+            _storages.Add(storage);
+            return storage;
+        }
+    }
+
+    private sealed class DelegateDisposable(Action dispose) : IDisposable
+    {
+        public void Dispose() => dispose();
+    }
+
     private sealed class FakeRemoteBackupService : IRemoteBackupService
     {
         public List<string> PublicKeys { get; set; } = new();
@@ -957,6 +1263,8 @@ public class SettingsViewModelTests : IDisposable
         public Dictionary<string, string> RemoteAuthTypes { get; set; } = new();
         public Dictionary<string, string> RemoteUrls { get; set; } = new();
         public BackupConflictStatus ConflictStatus { get; set; } = BackupConflictStatus.None;
+        public int PullExistingRepositoryCalls { get; private set; }
+        public Action? PullExistingRepositoryAction { get; set; }
 
         public List<string> Remotes() => new(RemoteNames);
         public string? GetRemoteAuthType(string remoteName) =>
@@ -973,6 +1281,11 @@ public class SettingsViewModelTests : IDisposable
         public void CommitResolvedConflicts(string message) => throw new NotSupportedException();
         public void Push(string msg) => throw new NotSupportedException();
         public void Pull() => throw new NotSupportedException();
+        public void PullExistingRepository()
+        {
+            PullExistingRepositoryCalls++;
+            PullExistingRepositoryAction?.Invoke();
+        }
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
         public void CloneOrUpdateRepo() => throw new NotSupportedException();

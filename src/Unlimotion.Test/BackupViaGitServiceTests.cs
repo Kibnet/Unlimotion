@@ -9,6 +9,7 @@ using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Services;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
 
@@ -226,6 +227,117 @@ public sealed class BackupViaGitServiceTests : IDisposable
         using var remote = new Repository(remotePath);
         await Assert.That(remote.Branches["main"].Tip.Tree["migration.report"]).IsNull();
         await Assert.That(remote.Branches["main"].Tip.Tree["availability.migration.report"]).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PullExistingRepository_DoesNothing_WhenTaskFolderIsNotGitRepository()
+    {
+        var localPath = CreateLocalTaskFolder();
+        var remotePath = CreateBareRemoteWithCommit("remote-task", "remote content");
+        var service = CreateService(localPath, remotePath);
+
+        service.PullExistingRepository();
+
+        await Assert.That(Directory.Exists(Path.Combine(localPath, ".git"))).IsFalse();
+        await Assert.That(File.Exists(Path.Combine(localPath, "local-task"))).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PullExistingRepository_DoesNothing_WhenRepositoryHasNoRemote()
+    {
+        var localPath = Path.Combine(_rootPath, $"NoRemoteTasks-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localPath);
+        Repository.Init(localPath);
+        var remotePath = CreateBareRemoteWithCommit("remote-task", "remote content");
+        var service = CreateService(localPath, remotePath);
+
+        service.PullExistingRepository();
+
+        using var repo = new Repository(localPath);
+        await Assert.That(repo.Network.Remotes.Any()).IsFalse();
+        await Assert.That(File.Exists(Path.Combine(localPath, "remote-task"))).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PullExistingRepository_PullsRemoteChanges_WhenTaskFolderIsExistingRepository()
+    {
+        var remotePath = CreateBareRemoteWithCommit("task", "base content");
+        var localPath = CloneRemoteToLocalMain(remotePath);
+        var service = CreateService(localPath, remotePath);
+        PushRemoteChange(remotePath, "task", "remote content");
+
+        service.PullExistingRepository();
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("remote content");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PullExistingRepository_SelectsRepositoryRemoteAndBranch_WhenSettingsAreStale()
+    {
+        var remotePath = CreateBareRemoteWithCommit("task", "base content");
+        var localPath = CloneRemoteToLocalMain(remotePath);
+        using (var repo = new Repository(localPath))
+        {
+            repo.Network.Remotes.Remove("origin");
+            repo.Network.Remotes.Add("backup", remotePath);
+        }
+
+        var service = CreateService(
+            localPath,
+            remotePath,
+            out var configuration,
+            pushRefSpec: "refs/heads/master",
+            branch: "master",
+            remoteName: "missing");
+        PushRemoteChange(remotePath, "task", "remote content");
+
+        service.PullExistingRepository();
+
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.RemoteName))
+                .Get<string>())
+            .IsEqualTo("backup");
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.PushRefSpec))
+                .Get<string>())
+            .IsEqualTo("refs/heads/main");
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("remote content");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task PullExistingRepository_DoesNotNotifyCurrentStorageWatcher_WhenRepositoryChanges()
+    {
+        var remotePath = CreateBareRemoteWithCommit("task", "base content");
+        var localPath = CloneRemoteToLocalMain(remotePath);
+        var watcher = new FakeDatabaseWatcher();
+        var service = CreateService(localPath, remotePath, storageFactory: new FakeTaskStorageFactory(watcher));
+        PushRemoteChange(remotePath, "task", "remote content");
+
+        service.PullExistingRepository();
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("remote content");
+        await Assert.That(watcher.SetEnableCalls).IsEqualTo(0);
+        await Assert.That(watcher.ForceUpdateFileCalls).IsEqualTo(0);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task Pull_NotifiesCurrentStorageWatcher_WhenRepositoryChanges()
+    {
+        var remotePath = CreateBareRemoteWithCommit("task", "base content");
+        var localPath = CloneRemoteToLocalMain(remotePath);
+        var watcher = new FakeDatabaseWatcher();
+        var service = CreateService(localPath, remotePath, storageFactory: new FakeTaskStorageFactory(watcher));
+        PushRemoteChange(remotePath, "task", "remote content");
+
+        service.Pull();
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("remote content");
+        await Assert.That(watcher.SetEnableCalls).IsEqualTo(2);
+        await Assert.That(watcher.ForceUpdateFileCalls).IsEqualTo(1);
+        await Assert.That(watcher.LastForcedFileName).IsEqualTo("task");
+        await Assert.That(watcher.LastForcedUpdateType).IsEqualTo(UpdateType.Saved);
     }
 
     [Test]
@@ -982,6 +1094,19 @@ public sealed class BackupViaGitServiceTests : IDisposable
         }
     }
 
+    private string CloneRemoteToLocalMain(string remotePath)
+    {
+        var localPath = Path.Combine(_rootPath, $"local-clone-{Guid.NewGuid():N}");
+        Repository.Clone(remotePath, localPath);
+        using var repo = new Repository(localPath);
+        var remoteBranch = repo.Branches["origin/main"]
+                           ?? throw new InvalidOperationException("Remote main branch was not cloned.");
+        var localBranch = repo.Branches["main"] ?? repo.CreateBranch("main", remoteBranch.Tip);
+        repo.Branches.Update(localBranch, updater => updater.TrackedBranch = remoteBranch.CanonicalName);
+        Commands.Checkout(repo, localBranch);
+        return localPath;
+    }
+
     private void DeleteRemoteFile(string remotePath, string fileName)
     {
         var seedPath = Path.Combine(_rootPath, $"remote-delete-{Guid.NewGuid():N}");
@@ -1034,9 +1159,10 @@ public sealed class BackupViaGitServiceTests : IDisposable
         string remotePath,
         string pushRefSpec = "refs/heads/main",
         string branch = "main",
-        string remoteName = "origin")
+        string remoteName = "origin",
+        ITaskStorageFactory? storageFactory = null)
     {
-        return CreateService(localPath, remotePath, out _, pushRefSpec, branch, remoteName);
+        return CreateService(localPath, remotePath, out _, pushRefSpec, branch, remoteName, storageFactory);
     }
 
     private BackupViaGitService CreateService(
@@ -1045,7 +1171,8 @@ public sealed class BackupViaGitServiceTests : IDisposable
         out IConfigurationRoot configuration,
         string pushRefSpec = "refs/heads/main",
         string branch = "main",
-        string remoteName = "origin")
+        string remoteName = "origin",
+        ITaskStorageFactory? storageFactory = null)
     {
         configuration = WritableJsonConfigurationFabric.Create(_configPath);
 
@@ -1063,7 +1190,42 @@ public sealed class BackupViaGitServiceTests : IDisposable
         configuration.GetSection("Git").GetSection(nameof(GitSettings.CommitterEmail)).Set("backuper@example.com");
         configuration.GetSection("Git").GetSection(nameof(GitSettings.ShowStatusToasts)).Set(false);
 
-        return new BackupViaGitService(configuration);
+        return new BackupViaGitService(configuration, storageFactory: storageFactory);
+    }
+
+    private sealed class FakeTaskStorageFactory(IDatabaseWatcher? currentWatcher) : ITaskStorageFactory
+    {
+        public ITaskStorage? CurrentStorage => null;
+        public IDatabaseWatcher? CurrentWatcher { get; } = currentWatcher;
+        public ITaskStorage CreateFileStorage(string? path) => throw new NotSupportedException();
+        public ITaskStorage CreateServerStorage(string? url) => throw new NotSupportedException();
+        public void SwitchStorage(bool isServerMode, IConfiguration configuration) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeDatabaseWatcher : IDatabaseWatcher
+    {
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
+        public int SetEnableCalls { get; private set; }
+        public int ForceUpdateFileCalls { get; private set; }
+        public string? LastForcedFileName { get; private set; }
+        public UpdateType? LastForcedUpdateType { get; private set; }
+
+        public void AddIgnoredTask(string taskId)
+        {
+        }
+
+        public void SetEnable(bool enable)
+        {
+            SetEnableCalls++;
+        }
+
+        public void ForceUpdateFile(string filename, UpdateType type)
+        {
+            ForceUpdateFileCalls++;
+            LastForcedFileName = filename;
+            LastForcedUpdateType = type;
+            OnUpdated?.Invoke(this, new DbUpdatedEventArgs { Id = filename, Type = type });
+        }
     }
 
     private static Signature CreateSignature() =>

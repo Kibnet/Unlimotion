@@ -264,10 +264,12 @@ public class SettingsControlResponsiveUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
+                var pathInput = FindControlByAutomationId<TextBox>(view, "TaskStoragePathTextBox");
                 var browseButton = FindControlByAutomationId<Button>(view, "BrowseTaskStoragePathButton");
                 var browseCommand = browseButton.Command ??
                                     throw new InvalidOperationException("Browse button command is not bound.");
 
+                await Assert.That(pathInput.Text).IsEqualTo(initialPath);
                 await Assert.That(browseCommand.CanExecute(null)).IsTrue();
 
                 browseCommand.Execute(null);
@@ -283,10 +285,61 @@ public class SettingsControlResponsiveUiTests
                     TimeSpan.FromSeconds(2));
                 await Assert.That(capturedDirectory).IsEqualTo(initialPath);
                 await Assert.That(settings.TaskStoragePath).IsEqualTo(selectedPath);
+                await Assert.That(pathInput.Text).IsEqualTo(selectedPath);
             }
             finally
             {
                 Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SettingsControl_LocalStorageConnect_UsesEditedTaskStoragePath()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var initialPath = Path.Combine(fixture.DefaultTasksFolderPath, "Current");
+                var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
+                string? connectedPath = null;
+                settings.TaskStoragePath = initialPath;
+                settings.ConnectCommand = new TestParameterCommand(_ => connectedPath = settings.TaskStoragePath);
+
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var pathInput = FindControlByAutomationId<TextBox>(view, "TaskStoragePathTextBox");
+                var connectButton = FindControlByAutomationId<Button>(view, "ConnectLocalStorageButton");
+
+                pathInput.Text = selectedPath;
+                Dispatcher.UIThread.RunJobs();
+
+                await WaitForConditionAsync(
+                    () => settings.TaskStoragePath == selectedPath,
+                    "Task storage path input did not update the SettingsViewModel.");
+                await Assert.That(connectButton.IsEnabled).IsTrue();
+
+                connectButton.Command?.Execute(connectButton.CommandParameter);
+
+                await Assert.That(connectedPath).IsEqualTo(selectedPath);
+            }
+            finally
+            {
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -745,6 +798,7 @@ public class SettingsControlResponsiveUiTests
         public void CommitResolvedConflicts(string message) => throw new NotSupportedException();
         public void Push(string msg) => throw new NotSupportedException();
         public void Pull() => throw new NotSupportedException();
+        public void PullExistingRepository() => throw new NotSupportedException();
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
         public void CloneOrUpdateRepo() => throw new NotSupportedException();

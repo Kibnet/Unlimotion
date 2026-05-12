@@ -147,6 +147,8 @@ public sealed class GitBackupJobTests : IDisposable
             PullCalls++;
         }
 
+        public void PullExistingRepository() => throw new NotSupportedException();
+
         public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
 
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();

@@ -198,7 +198,8 @@
                         <StackPanel Classes="FieldGroup">
                             <TextBlock Classes="FieldLabel" Text="{DynamicResource DataFolder}" />
                             <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
-                                <TextBox Text="{Binding TaskStoragePath}"
+                                <TextBox AutomationProperties.AutomationId="TaskStoragePathTextBox"
+                                         Text="{Binding TaskStoragePath}"
                                          ToolTip.Tip="{Binding TaskStoragePathTooltip}" />
                                 <Button Grid.Column="1"
                                         AutomationProperties.AutomationId="BrowseTaskStoragePathButton"
@@ -207,10 +208,13 @@
                             </Grid>
                         </StackPanel>
 
-                        <TextBlock Classes="StatusText" Text="{Binding StorageStatusText}" />
+                        <TextBlock Classes="StatusText"
+                                   AutomationProperties.AutomationId="StorageStatusText"
+                                   Text="{Binding StorageStatusText}" />
 
                         <WrapPanel Classes="ActionButtons">
                             <Button Content="{DynamicResource Connect}"
+                                    AutomationProperties.AutomationId="ConnectLocalStorageButton"
                                     Command="{Binding ConnectCommand}"
                                     IsEnabled="{Binding CanConnectStorage}" />
                         </WrapPanel>
