@@ -990,48 +990,49 @@ public class App : Application
                 desktop.MainWindow = window;
 
                 // Когда окно загрузится — вызовем инициализацию
-                window.Opened += async (_, __) =>
-                {
-                    try
-                    {
-                        ApplyAutomationTaskWrapperDefaults();
-                        await vm.Connect();
-                        ApplyAutomationStartupState(vm);
-                        if (vm.Settings.IsConflictResolutionMode)
-                        {
-                            EnterConflictResolutionMode(vm.Settings);
-                        }
-                    }
-                    catch
-                    {
-                        // Existing startup behavior ignored connect failures here.
-                    }
-
-                    _ = CheckForUpdatesOnStartupAsync(vm.Settings);
-                };
+                window.Opened += (_, __) => _ = InitializeStartupViewModelAsync(vm);
             }
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
             var vm = GetMainWindowViewModel();
-            singleViewPlatform.MainView = new MainScreen
-            {
-                DataContext = vm,
-            };
-            Dispatcher.UIThread.Post(
-                () =>
-                {
-                    if (vm.Settings.IsConflictResolutionMode)
-                    {
-                        EnterConflictResolutionMode(vm.Settings);
-                    }
-
-                    _ = CheckForUpdatesOnStartupAsync(vm.Settings);
-                },
-                DispatcherPriority.Background);
+            singleViewPlatform.MainView = CreateSingleViewMainView(vm);
+            _ = InitializeStartupViewModelAsync(vm);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    internal MainScreen CreateSingleViewMainView(MainWindowViewModel vm)
+    {
+        return new MainScreen
+        {
+            DataContext = vm,
+        };
+    }
+
+    internal async Task InitializeStartupViewModelAsync(MainWindowViewModel vm)
+    {
+        try
+        {
+            ApplyAutomationTaskWrapperDefaults();
+            if (!vm.IsInitialized || vm.taskRepository == null)
+            {
+                await vm.Connect();
+            }
+
+            ApplyAutomationStartupState(vm);
+            if (vm.Settings.IsConflictResolutionMode)
+            {
+                EnterConflictResolutionMode(vm.Settings);
+            }
+        }
+        catch
+        {
+            // Existing startup behavior ignored connect failures here.
+        }
+
+        _ = CheckForUpdatesOnStartupAsync(vm.Settings);
     }
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)
