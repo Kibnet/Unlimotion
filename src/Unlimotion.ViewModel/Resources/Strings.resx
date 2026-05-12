@@ -348,7 +348,12 @@
   <data name="Unknown" xml:space="preserve"><value>Unknown</value></data>
   <data name="UpdateApply" xml:space="preserve"><value>Install update</value></data>
   <data name="UpdateApplyFailedWithError" xml:space="preserve"><value>Could not apply the update: {0}</value></data>
+  <data name="UpdateAutoCheckEnabled" xml:space="preserve"><value>Check for updates automatically</value></data>
   <data name="UpdateAvailableVersion" xml:space="preserve"><value>Available version</value></data>
+  <data name="UpdateCheckInterval" xml:space="preserve"><value>Check every</value></data>
+  <data name="UpdateCheckIntervalDays" xml:space="preserve"><value>Days</value></data>
+  <data name="UpdateCheckIntervalHours" xml:space="preserve"><value>Hours</value></data>
+  <data name="UpdateCheckIntervalMinutes" xml:space="preserve"><value>Minutes</value></data>
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Could not check for updates.</value></data>
   <data name="UpdateCheckFailedWithError" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
   <data name="UpdateCurrentVersion" xml:space="preserve"><value>Current version</value></data>

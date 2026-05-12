@@ -29,6 +29,7 @@ public class SettingsViewModel
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
     private readonly IConfiguration _taskOutlineClipboardSettings;
+    private readonly IConfiguration _updateSettings;
     private readonly IRemoteBackupService? _backupService;
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
@@ -59,6 +60,9 @@ public class SettingsViewModel
     private string? _gitSshPublicKeyPath;
     private bool _copyTaskOutlineAsMarkdown;
     private bool _copyTaskOutlineDescription;
+    private bool _updateAutoCheckEnabled;
+    private int _updateCheckIntervalValue;
+    private ApplicationUpdateCheckIntervalUnit _updateCheckIntervalUnit;
     private BackupConflictFile? _selectedBackupConflict;
 
     public SettingsViewModel(
@@ -73,6 +77,7 @@ public class SettingsViewModel
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
+        _updateSettings = configuration.GetSection(ApplicationUpdateSettings.SectionName);
         _backupService = backupService;
         _localization = localizationService ?? LocalizationService.Current;
         _defaultIsDarkTheme = defaultIsDarkTheme;
@@ -106,6 +111,17 @@ public class SettingsViewModel
         _gitSshPublicKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Get<string>();
         _copyTaskOutlineAsMarkdown = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyAsMarkdownKey).Get<bool>();
         _copyTaskOutlineDescription = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Get<bool>();
+        _updateAutoCheckEnabled = _updateSettings
+            .GetSection(ApplicationUpdateSettings.AutoCheckEnabledKey)
+            .Get<bool?>() ?? ApplicationUpdateSettings.DefaultAutoCheckEnabled;
+        _updateCheckIntervalValue = ApplicationUpdateSettings.NormalizeCheckIntervalValue(
+            _updateSettings
+                .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+                .Get<int?>() ?? ApplicationUpdateSettings.DefaultCheckIntervalValue);
+        _updateCheckIntervalUnit = ApplicationUpdateSettings.ParseCheckIntervalUnit(
+            _updateSettings
+                .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+                .Get<string>());
 
         ConnectedServerLogin = GetStoredClientLogin();
         StorageConnectionState = IsServerMode ? SettingsConnectionState.Disconnected : SettingsConnectionState.Connected;
@@ -321,6 +337,64 @@ public class SettingsViewModel
             _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Set(value);
         }
     }
+
+    [AlsoNotifyFor(nameof(CanEditUpdateCheckInterval))]
+    public bool UpdateAutoCheckEnabled
+    {
+        get => _updateAutoCheckEnabled;
+        set
+        {
+            _updateAutoCheckEnabled = value;
+            _updateSettings.GetSection(ApplicationUpdateSettings.AutoCheckEnabledKey).Set(value);
+        }
+    }
+
+    public bool CanEditUpdateCheckInterval => UpdateAutoCheckEnabled;
+
+    [AlsoNotifyFor(nameof(UpdateCheckInterval))]
+    public int UpdateCheckIntervalValue
+    {
+        get => _updateCheckIntervalValue;
+        set
+        {
+            _updateCheckIntervalValue = ApplicationUpdateSettings.NormalizeCheckIntervalValue(value);
+            _updateSettings
+                .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+                .Set(_updateCheckIntervalValue);
+        }
+    }
+
+    [AlsoNotifyFor(nameof(UpdateCheckInterval), nameof(UpdateCheckIntervalUnitIndex))]
+    public ApplicationUpdateCheckIntervalUnit UpdateCheckIntervalUnit
+    {
+        get => _updateCheckIntervalUnit;
+        set
+        {
+            _updateCheckIntervalUnit = Enum.IsDefined(value)
+                ? value
+                : ApplicationUpdateSettings.DefaultCheckIntervalUnit;
+            _updateSettings
+                .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+                .Set(ApplicationUpdateSettings.ToStoredCheckIntervalUnit(_updateCheckIntervalUnit));
+        }
+    }
+
+    public int UpdateCheckIntervalUnitIndex
+    {
+        get => (int)UpdateCheckIntervalUnit;
+        set
+        {
+            if (!Enum.IsDefined(typeof(ApplicationUpdateCheckIntervalUnit), value))
+            {
+                return;
+            }
+
+            UpdateCheckIntervalUnit = (ApplicationUpdateCheckIntervalUnit)value;
+        }
+    }
+
+    public TimeSpan UpdateCheckInterval =>
+        ApplicationUpdateSettings.ToInterval(UpdateCheckIntervalValue, UpdateCheckIntervalUnit);
 
     public double FontSize
     {
@@ -756,6 +830,20 @@ public class SettingsViewModel
         SetUpdateState(_availableUpdate == null
             ? ApplicationUpdateState.Idle
             : ApplicationUpdateState.ReadyToApply);
+    }
+
+    public void NormalizeUpdateCheckSettings()
+    {
+        _updateCheckIntervalValue = ApplicationUpdateSettings.NormalizeCheckIntervalValue(_updateCheckIntervalValue);
+        _updateCheckIntervalUnit = Enum.IsDefined(_updateCheckIntervalUnit)
+            ? _updateCheckIntervalUnit
+            : ApplicationUpdateSettings.DefaultCheckIntervalUnit;
+        _updateSettings
+            .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+            .Set(_updateCheckIntervalValue);
+        _updateSettings
+            .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+            .Set(ApplicationUpdateSettings.ToStoredCheckIntervalUnit(_updateCheckIntervalUnit));
     }
 
     public async Task CheckForUpdatesAsync(

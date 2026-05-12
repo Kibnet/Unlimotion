@@ -160,6 +160,31 @@
                                    AutomationProperties.AutomationId="AvailableUpdateVersionText" />
                     </StackPanel>
 
+                    <StackPanel Classes="FieldGroup">
+                        <CheckBox IsChecked="{Binding UpdateAutoCheckEnabled}"
+                                  Content="{DynamicResource UpdateAutoCheckEnabled}"
+                                  AutomationProperties.AutomationId="UpdateAutoCheckEnabledCheckBox" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup"
+                                IsEnabled="{Binding CanEditUpdateCheckInterval}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource UpdateCheckInterval}" />
+                        <StackPanel Spacing="8">
+                            <NumericUpDown Value="{Binding UpdateCheckIntervalValue}"
+                                           Minimum="1"
+                                           Maximum="999"
+                                           Increment="1"
+                                           FormatString="0"
+                                           AutomationProperties.AutomationId="UpdateCheckIntervalValueInput" />
+                            <ComboBox SelectedIndex="{Binding UpdateCheckIntervalUnitIndex, Mode=TwoWay}"
+                                      AutomationProperties.AutomationId="UpdateCheckIntervalUnitComboBox">
+                                <ComboBoxItem Content="{DynamicResource UpdateCheckIntervalDays}" />
+                                <ComboBoxItem Content="{DynamicResource UpdateCheckIntervalHours}" />
+                                <ComboBoxItem Content="{DynamicResource UpdateCheckIntervalMinutes}" />
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+
                     <TextBlock Classes="StatusText"
                                Text="{Binding UpdateStatusText}"
                                AutomationProperties.AutomationId="UpdateStatusText" />

@@ -247,6 +247,149 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task UpdateAutoCheckSettings_DefaultToHourlyAndPersistChoices()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = CreateSettingsViewModel(configuration);
+
+        await Assert.That(settings.UpdateAutoCheckEnabled).IsTrue();
+        await Assert.That(settings.CanEditUpdateCheckInterval).IsTrue();
+        await Assert.That(settings.UpdateCheckIntervalValue)
+            .IsEqualTo(ApplicationUpdateSettings.DefaultCheckIntervalValue);
+        await Assert.That(settings.UpdateCheckIntervalUnit)
+            .IsEqualTo(ApplicationUpdateCheckIntervalUnit.Hours);
+        await Assert.That(settings.UpdateCheckIntervalUnitIndex).IsEqualTo(1);
+        await Assert.That(settings.UpdateCheckInterval).IsEqualTo(TimeSpan.FromHours(1));
+
+        settings.UpdateAutoCheckEnabled = false;
+        settings.UpdateCheckIntervalValue = 2;
+        settings.UpdateCheckIntervalUnit = ApplicationUpdateCheckIntervalUnit.Days;
+
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.AutoCheckEnabledKey)
+                .Get<bool>())
+            .IsFalse();
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+                .Get<int>())
+            .IsEqualTo(2);
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+                .Get<string>())
+            .IsEqualTo(nameof(ApplicationUpdateCheckIntervalUnit.Days));
+
+        var reloaded = CreateSettingsViewModel(configuration);
+        await Assert.That(reloaded.UpdateAutoCheckEnabled).IsFalse();
+        await Assert.That(reloaded.CanEditUpdateCheckInterval).IsFalse();
+        await Assert.That(reloaded.UpdateCheckInterval).IsEqualTo(TimeSpan.FromDays(2));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task UpdateAutoCheckSettings_NormalizeInvalidValuesWithoutConstructorConfigChurn()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration
+            .GetSection(ApplicationUpdateSettings.SectionName)
+            .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+            .Set(0);
+        configuration
+            .GetSection(ApplicationUpdateSettings.SectionName)
+            .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+            .Set("Weeks");
+
+        var settings = CreateSettingsViewModel(configuration);
+
+        await Assert.That(settings.UpdateCheckIntervalValue).IsEqualTo(1);
+        await Assert.That(settings.UpdateCheckIntervalUnit)
+            .IsEqualTo(ApplicationUpdateCheckIntervalUnit.Hours);
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+                .Get<int>())
+            .IsEqualTo(0);
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+                .Get<string>())
+            .IsEqualTo("Weeks");
+
+        settings.NormalizeUpdateCheckSettings();
+
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalValueKey)
+                .Get<int>())
+            .IsEqualTo(1);
+        await Assert.That(configuration
+                .GetSection(ApplicationUpdateSettings.SectionName)
+                .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+                .Get<string>())
+            .IsEqualTo(nameof(ApplicationUpdateCheckIntervalUnit.Hours));
+
+        configuration
+            .GetSection(ApplicationUpdateSettings.SectionName)
+            .GetSection(ApplicationUpdateSettings.CheckIntervalUnitKey)
+            .Set("999");
+
+        var numericInvalidSettings = CreateSettingsViewModel(configuration);
+
+        await Assert.That(numericInvalidSettings.UpdateCheckIntervalUnit)
+            .IsEqualTo(ApplicationUpdateCheckIntervalUnit.Hours);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task AutomaticUpdateCheckAsync_ChecksAndDownloadsAvailableUpdate()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var updateService = new FakeApplicationUpdateService
+        {
+            NextUpdate = new ApplicationUpdateInfo("2.0.0")
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+        var app = new App();
+
+        await app.RunAutomaticUpdateCheckAsync(settings);
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(1);
+        await Assert.That(updateService.DownloadCalls).IsEqualTo(1);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.ReadyToApply);
+        await Assert.That(settings.AvailableUpdateVersion).IsEqualTo("2.0.0");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task AutomaticUpdateCheckAsync_SkipsDisabledAndOverlappingRuns()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var updateService = new FakeApplicationUpdateService
+        {
+            CheckCompletion = new System.Threading.Tasks.TaskCompletionSource<ApplicationUpdateInfo?>()
+        };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+        var app = new App();
+
+        settings.UpdateAutoCheckEnabled = false;
+        await app.RunAutomaticUpdateCheckAsync(settings);
+        await Assert.That(updateService.CheckCalls).IsEqualTo(0);
+
+        settings.UpdateAutoCheckEnabled = true;
+        var firstCheck = app.RunAutomaticUpdateCheckAsync(settings);
+        var secondCheck = app.RunAutomaticUpdateCheckAsync(settings);
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(1);
+
+        updateService.CheckCompletion.SetResult(null);
+        await firstCheck;
+        await secondCheck;
+
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.NoUpdates);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task BackupAuthMode_DerivesFromRemoteUrl_WhenRepositoryRemotesAreUnavailable()
     {
         IConfigurationRoot configuration = CreateConfiguration();
