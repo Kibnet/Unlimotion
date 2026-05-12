@@ -71,6 +71,12 @@ public class App : Application
     private Action<Exception?>? _serverConnectionErrorHandler;
     private EventHandler? _serverSignOutHandler;
     private bool _isConflictResolutionDialogOpen;
+    private DispatcherTimer? _automaticUpdateTimer;
+    private SettingsViewModel? _automaticUpdateTimerSettings;
+    private IDisposable? _updateAutoCheckEnabledSubscription;
+    private IDisposable? _updateCheckIntervalSubscription;
+    private IDisposable? _updateStateSubscription;
+    private bool _isAutomaticUpdateCheckRunning;
     
     /// <summary>
     /// Default storage path for tasks (used as fallback when config doesn't specify one)
@@ -158,6 +164,7 @@ public class App : Application
         // Set up commands on SettingsViewModel
         SetupSettingsCommands(settingsViewModel);
         WireSettingsToCurrentStorage(settingsViewModel);
+        SetupAutomaticUpdateTimer(settingsViewModel);
 
         // Set up static instances for TaskItemViewModel and MainControl
         TaskItemViewModel.NotificationManagerInstance = _notificationManager;
@@ -1281,29 +1288,142 @@ public class App : Application
     public static void ConfigureUpdateService(IApplicationUpdateService? updateService)
     {
         _applicationUpdateService = updateService;
-        _mainWindowViewModel?.Settings.ConfigureUpdateService(updateService);
+        var settings = _mainWindowViewModel?.Settings;
+        settings?.ConfigureUpdateService(updateService);
+
+        if (Current is App app && settings != null)
+        {
+            app.RescheduleAutomaticUpdateTimer(settings);
+        }
     }
 
     private async Task CheckForUpdatesOnStartupAsync(SettingsViewModel settings)
     {
-        await settings.CheckForUpdatesAsync(silent: true);
+        await RunAutomaticUpdateCheckAsync(settings);
+    }
 
-        if (settings.UpdateState != ApplicationUpdateState.UpdateAvailable)
+    internal async Task RunAutomaticUpdateCheckAsync(SettingsViewModel settings)
+    {
+        if (!settings.UpdateAutoCheckEnabled ||
+            settings.IsUpdateBusy ||
+            settings.UpdateState is ApplicationUpdateState.Unsupported
+                or ApplicationUpdateState.ReadyToApply
+                or ApplicationUpdateState.Applying)
         {
             return;
         }
 
-        await settings.DownloadUpdateAsync();
-
-        if (settings.UpdateState != ApplicationUpdateState.ReadyToApply)
+        if (_isAutomaticUpdateCheckRunning)
         {
             return;
         }
 
-        _notificationManager?.Ask(
-            L10n.Get("UpdateReadyHeader"),
-            L10n.Format("UpdateReadyMessage", settings.AvailableUpdateVersion ?? L10n.Get("Unknown")),
-            () => _ = settings.ApplyUpdateAsync());
+        _isAutomaticUpdateCheckRunning = true;
+
+        try
+        {
+            await settings.CheckForUpdatesAsync(silent: true);
+
+            if (settings.UpdateState != ApplicationUpdateState.UpdateAvailable)
+            {
+                return;
+            }
+
+            await settings.DownloadUpdateAsync();
+
+            if (settings.UpdateState != ApplicationUpdateState.ReadyToApply)
+            {
+                return;
+            }
+
+            _notificationManager?.Ask(
+                L10n.Get("UpdateReadyHeader"),
+                L10n.Format("UpdateReadyMessage", settings.AvailableUpdateVersion ?? L10n.Get("Unknown")),
+                () => _ = settings.ApplyUpdateAsync());
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Updates] Automatic update check failed: {ex}");
+        }
+        finally
+        {
+            _isAutomaticUpdateCheckRunning = false;
+        }
+    }
+
+    private void SetupAutomaticUpdateTimer(SettingsViewModel settings)
+    {
+        AttachAutomaticUpdateSettingsSubscriptions(settings);
+        RescheduleAutomaticUpdateTimer(settings);
+    }
+
+    private void AttachAutomaticUpdateSettingsSubscriptions(SettingsViewModel settings)
+    {
+        if (ReferenceEquals(_automaticUpdateTimerSettings, settings))
+        {
+            return;
+        }
+
+        _updateAutoCheckEnabledSubscription?.Dispose();
+        _updateCheckIntervalSubscription?.Dispose();
+        _updateStateSubscription?.Dispose();
+
+        _automaticUpdateTimerSettings = settings;
+        _updateAutoCheckEnabledSubscription = settings
+            .ObservableForProperty(m => m.UpdateAutoCheckEnabled, false, true)
+            .Subscribe(_ => RescheduleAutomaticUpdateTimer(settings));
+        _updateCheckIntervalSubscription = settings
+            .ObservableForProperty(m => m.UpdateCheckInterval, false, true)
+            .Subscribe(_ => RescheduleAutomaticUpdateTimer(settings));
+        _updateStateSubscription = settings
+            .ObservableForProperty(m => m.UpdateState, false, true)
+            .Subscribe(_ => RescheduleAutomaticUpdateTimer(settings));
+    }
+
+    private void RescheduleAutomaticUpdateTimer(SettingsViewModel settings)
+    {
+        if (!settings.UpdateAutoCheckEnabled ||
+            settings.UpdateState is ApplicationUpdateState.Unsupported
+                or ApplicationUpdateState.ReadyToApply
+                or ApplicationUpdateState.Applying)
+        {
+            _automaticUpdateTimer?.Stop();
+            return;
+        }
+
+        var interval = settings.UpdateCheckInterval;
+        if (interval <= TimeSpan.Zero)
+        {
+            _automaticUpdateTimer?.Stop();
+            return;
+        }
+
+        EnsureAutomaticUpdateTimer();
+        _automaticUpdateTimer!.Stop();
+        _automaticUpdateTimer.Interval = interval;
+        _automaticUpdateTimer.Start();
+    }
+
+    private void EnsureAutomaticUpdateTimer()
+    {
+        if (_automaticUpdateTimer != null)
+        {
+            return;
+        }
+
+        _automaticUpdateTimer = new DispatcherTimer();
+        _automaticUpdateTimer.Tick += OnAutomaticUpdateTimerTick;
+    }
+
+    private void OnAutomaticUpdateTimerTick(object? sender, EventArgs e)
+    {
+        var settings = _automaticUpdateTimerSettings ?? _mainWindowViewModel?.Settings;
+        if (settings == null)
+        {
+            return;
+        }
+
+        _ = RunAutomaticUpdateCheckAsync(settings);
     }
 
     private static readonly bool ShouldLogStartup = false;

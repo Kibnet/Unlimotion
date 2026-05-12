@@ -145,6 +145,60 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task SettingsControl_UpdateAutoCheckSettings_UpdateViewModelFromControls()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 1000);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var autoCheckBox = FindControlByAutomationId<CheckBox>(view, "UpdateAutoCheckEnabledCheckBox");
+                var intervalInput = FindControlByAutomationId<NumericUpDown>(view, "UpdateCheckIntervalValueInput");
+                var unitComboBox = FindControlByAutomationId<ComboBox>(view, "UpdateCheckIntervalUnitComboBox");
+
+                await Assert.That(autoCheckBox.IsChecked).IsTrue();
+                await Assert.That(settings.UpdateCheckIntervalValue).IsEqualTo(1);
+                await Assert.That(unitComboBox.SelectedIndex).IsEqualTo(1);
+
+                await ClickControlAsync(window, autoCheckBox);
+
+                await Assert.That(settings.UpdateAutoCheckEnabled).IsFalse();
+                await Assert.That(settings.CanEditUpdateCheckInterval).IsFalse();
+
+                await ClickControlAsync(window, autoCheckBox);
+
+                intervalInput.Value = 3;
+                unitComboBox.SelectedIndex = 2;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(settings.UpdateAutoCheckEnabled).IsTrue();
+                await Assert.That(settings.UpdateCheckIntervalValue).IsEqualTo(3);
+                await Assert.That(settings.UpdateCheckIntervalUnit)
+                    .IsEqualTo(ApplicationUpdateCheckIntervalUnit.Minutes);
+                await Assert.That(settings.UpdateCheckInterval).IsEqualTo(TimeSpan.FromMinutes(3));
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -260,7 +314,7 @@ public class SettingsControlResponsiveUiTests
                     DataContext = settings
                 };
 
-                window = CreateWindow(view, 720, 800);
+                window = CreateWindow(view, 720, 1000);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 

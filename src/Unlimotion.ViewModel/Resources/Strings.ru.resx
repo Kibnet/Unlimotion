@@ -348,7 +348,12 @@
   <data name="Unknown" xml:space="preserve"><value>Неизвестно</value></data>
   <data name="UpdateApply" xml:space="preserve"><value>Установить обновление</value></data>
   <data name="UpdateApplyFailedWithError" xml:space="preserve"><value>Не удалось применить обновление: {0}</value></data>
+  <data name="UpdateAutoCheckEnabled" xml:space="preserve"><value>Автоматически проверять обновления</value></data>
   <data name="UpdateAvailableVersion" xml:space="preserve"><value>Доступная версия</value></data>
+  <data name="UpdateCheckInterval" xml:space="preserve"><value>Проверять каждые</value></data>
+  <data name="UpdateCheckIntervalDays" xml:space="preserve"><value>Дни</value></data>
+  <data name="UpdateCheckIntervalHours" xml:space="preserve"><value>Часы</value></data>
+  <data name="UpdateCheckIntervalMinutes" xml:space="preserve"><value>Минуты</value></data>
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Не удалось проверить обновления.</value></data>
   <data name="UpdateCheckFailedWithError" xml:space="preserve"><value>Не удалось проверить обновления: {0}</value></data>
   <data name="UpdateCurrentVersion" xml:space="preserve"><value>Текущая версия</value></data>
