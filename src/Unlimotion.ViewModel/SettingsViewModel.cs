@@ -59,6 +59,7 @@ public class SettingsViewModel
     private string? _gitSshPublicKeyPath;
     private bool _copyTaskOutlineAsMarkdown;
     private bool _copyTaskOutlineDescription;
+    private BackupConflictFile? _selectedBackupConflict;
 
     public SettingsViewModel(
         IConfiguration configuration,
@@ -127,6 +128,12 @@ public class SettingsViewModel
     public ICommand? CloneCommand { get; set; }
     public ICommand? PullCommand { get; set; }
     public ICommand? PushCommand { get; set; }
+    public ICommand? ResolveConflictUseCurrentCommand { get; set; }
+    public ICommand? ResolveConflictUseIncomingCommand { get; set; }
+    public ICommand? ResolveConflictUseFieldSelectionCommand { get; set; }
+    public ICommand? RefreshBackupConflictsCommand { get; set; }
+    public ICommand? CommitConflictResolutionCommand { get; set; }
+    public ICommand? OpenConflictResolutionWindowCommand { get; set; }
     public ICommand? GenerateSshKeyCommand { get; set; }
     public ICommand? RefreshSshKeysCommand { get; set; }
     public ICommand? RefreshGitMetadataCommand { get; set; }
@@ -556,6 +563,47 @@ public class SettingsViewModel
 
     public bool CanSyncRepository { get; private set; }
 
+    public bool IsConflictResolutionMode { get; private set; }
+
+    public bool HasBackupConflictFiles { get; private set; }
+
+    public bool CanCommitConflictResolution { get; private set; }
+
+    public List<BackupConflictFile> BackupConflicts { get; private set; } = new();
+
+    public List<BackupConflictFieldDecision> SelectedBackupConflictFields { get; private set; } = new();
+
+    public BackupConflictFile? SelectedBackupConflict
+    {
+        get => _selectedBackupConflict;
+        set
+        {
+            _selectedBackupConflict = value;
+            SelectedBackupConflictFields = value?.Fields
+                .Select(conflictField => new BackupConflictFieldDecision(conflictField))
+                .ToList() ?? new List<BackupConflictFieldDecision>();
+            RefreshBackupActionAvailability();
+        }
+    }
+
+    public bool CanResolveSelectedConflictUseCurrent { get; private set; }
+
+    public bool CanResolveSelectedConflictUseIncoming { get; private set; }
+
+    public bool CanResolveSelectedConflictByFields { get; private set; }
+
+    public IReadOnlyList<BackupConflictFieldSelection> GetSelectedBackupConflictFieldSelections()
+    {
+        return SelectedBackupConflictFields
+            .Select(field => new BackupConflictFieldSelection(
+                field.FieldPath,
+                field.SelectedSource,
+                field.SelectedSource == BackupConflictFieldSource.Merge && field.CanEditMergedValue
+                    ? field.EditedMergedValue
+                    : null))
+            .ToList();
+    }
+
     public bool CanRunServerMaintenance { get; private set; }
 
     public bool CanRunResave { get; private set; }
@@ -621,7 +669,39 @@ public class SettingsViewModel
         EnsureRemoteSelection();
         SyncGitRemoteUrlFromSelectedRemote(forceKnownRemoteUrl: true);
         EnsureGitPushRefSpecSelection();
+        ReloadBackupConflictStatus();
         RefreshBackupAuthMode();
+        RefreshBackupState();
+    }
+
+    public void ReloadBackupConflictStatus()
+    {
+        var conflictStatus = _backupService?.GetConflictStatus() ?? BackupConflictStatus.None;
+        var selectedPath = SelectedBackupConflict?.Path;
+        BackupConflicts = conflictStatus.Conflicts.ToList();
+        SelectedBackupConflict = BackupConflicts.FirstOrDefault(conflict =>
+                                     string.Equals(conflict.Path, selectedPath, StringComparison.Ordinal))
+                                 ?? BackupConflicts.FirstOrDefault();
+        IsConflictResolutionMode = conflictStatus.IsInProgress || BackupConflicts.Count > 0;
+        HasBackupConflictFiles = BackupConflicts.Count > 0;
+        RefreshBackupActionAvailability();
+    }
+
+    public void MarkConflictResolutionPendingCommit()
+    {
+        BackupConflicts = new List<BackupConflictFile>();
+        SelectedBackupConflict = null;
+        HasBackupConflictFiles = false;
+        IsConflictResolutionMode = true;
+        RefreshBackupState();
+    }
+
+    public void CompleteConflictResolution()
+    {
+        BackupConflicts = new List<BackupConflictFile>();
+        SelectedBackupConflict = null;
+        HasBackupConflictFiles = false;
+        IsConflictResolutionMode = false;
         RefreshBackupState();
     }
 
@@ -1076,6 +1156,12 @@ public class SettingsViewModel
             return;
         }
 
+        if (IsConflictResolutionMode)
+        {
+            SetBackupConnectionState(BackupStatusState.ConflictResolution);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(GitRemoteUrl))
         {
             SetBackupConnectionState(BackupStatusState.NotConfigured, _localization.Get("SpecifyRepositoryUrl"));
@@ -1119,6 +1205,9 @@ public class SettingsViewModel
         {
             BackupStatusState.Connecting => _localization.Get("BackupConnecting"),
             BackupStatusState.Syncing => _localization.Get("BackupSyncing"),
+            BackupStatusState.ConflictResolution => HasBackupConflictFiles
+                ? _localization.Format("SyncConflictsStatus", BackupConflicts.Count)
+                : _localization.Get("SyncConflictsReadyToCommit"),
             BackupStatusState.Connected => _localization.Get("BackupStatusConnected"),
             BackupStatusState.Error => _localization.Get("BackupError"),
             _ => _localization.Get("BackupNotConfigured")
@@ -1145,8 +1234,25 @@ public class SettingsViewModel
         var hasReadySshAuth = IsSshAuthSelected &&
                               !string.IsNullOrWhiteSpace(SelectedSshPublicKeyPath);
 
-        CanConnectRepository = !IsBackupBusy && hasRemoteUrl && (hasReadyTokenAuth || hasReadySshAuth);
-        CanSyncRepository = !IsBackupBusy && hasReadySyncTarget;
+        CanConnectRepository = !IsBackupBusy &&
+                               !IsConflictResolutionMode &&
+                               hasRemoteUrl &&
+                               (hasReadyTokenAuth || hasReadySshAuth);
+        CanSyncRepository = !IsBackupBusy &&
+                            !IsConflictResolutionMode &&
+                            hasReadySyncTarget;
+        CanCommitConflictResolution = !IsBackupBusy &&
+                                      IsConflictResolutionMode &&
+                                      !HasBackupConflictFiles;
+        CanResolveSelectedConflictUseCurrent = !IsBackupBusy &&
+                                               IsConflictResolutionMode &&
+                                               SelectedBackupConflict != null;
+        CanResolveSelectedConflictUseIncoming = !IsBackupBusy &&
+                                                IsConflictResolutionMode &&
+                                                SelectedBackupConflict != null;
+        CanResolveSelectedConflictByFields = !IsBackupBusy &&
+                                             IsConflictResolutionMode &&
+                                             SelectedBackupConflict?.CanResolveByFields == true;
     }
 
     private void SetUpdateState(ApplicationUpdateState state, string? statusText = null)

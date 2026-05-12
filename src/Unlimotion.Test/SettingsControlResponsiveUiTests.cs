@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -12,9 +13,11 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Microsoft.Extensions.Configuration;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
@@ -290,6 +293,240 @@ public class SettingsControlResponsiveUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task SettingsControl_SyncConflictResolutionMode_ShowsOpenResolverAction()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(Environment.CurrentDirectory, $"SyncConflictSettings_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                configurationDisposable = configuration as IDisposable;
+                configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+                configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/repo.git");
+
+                var backupService = new FakeRemoteBackupService
+                {
+                    ConflictStatus = new BackupConflictStatus(
+                        true,
+                        new List<BackupConflictFile>
+                        {
+                            new(
+                                "Tasks/conflicted-task.json",
+                                true,
+                                true,
+                                new List<BackupConflictField>
+                                {
+                                    new(
+                                        "Title",
+                                        "Title",
+                                        "Current title",
+                                        "Incoming title",
+                                        "Current title\nIncoming title",
+                                        true,
+                                        BackupConflictFieldSource.UseCurrent,
+                                        BackupConflictFieldChangeKind.BothDifferent)
+                                }),
+                            new("Tasks/deleted-task.json", true, false)
+                        })
+                };
+                var settings = new SettingsViewModel(configuration, backupService);
+                var resolverOpened = false;
+                settings.OpenConflictResolutionWindowCommand = new TestParameterCommand(_ => resolverOpened = true);
+                settings.RefreshBackupConflictsCommand = new TestParameterCommand(_ => settings.ReloadGitMetadata());
+
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var panel = FindControlByAutomationId<Border>(view, "SyncConflictResolutionPanel");
+                var openResolverButton = FindControlByAutomationId<Button>(view, "OpenConflictResolutionWindowButton");
+                var syncButton = FindControlByAutomationId<Button>(view, "SyncNowButton");
+
+                await Assert.That(panel.IsVisible).IsTrue();
+                await Assert.That(syncButton.IsEnabled).IsFalse();
+                await Assert.That(openResolverButton.IsEnabled).IsTrue();
+
+                openResolverButton.Command?.Execute(openResolverButton.CommandParameter);
+
+                await Assert.That(resolverOpened).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ConflictResolutionControl_ShowsFieldDecisionsAndDeleteSideAction()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolver_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                configurationDisposable = configuration as IDisposable;
+                var backupService = new FakeRemoteBackupService
+                {
+                    ConflictStatus = CreateDemoConflictStatus()
+                };
+                var settings = new SettingsViewModel(configuration, backupService);
+                BackupConflictFile? incomingResolvedConflict = null;
+                List<BackupConflictFieldSelection>? appliedFieldSelections = null;
+                settings.ResolveConflictUseIncomingCommand = new TestParameterCommand(parameter =>
+                    incomingResolvedConflict = (BackupConflictFile?)parameter ?? settings.SelectedBackupConflict);
+                settings.ResolveConflictUseFieldSelectionCommand = new TestParameterCommand(_ =>
+                    appliedFieldSelections = settings.GetSelectedBackupConflictFieldSelections().ToList());
+                settings.RefreshBackupConflictsCommand = new TestParameterCommand(_ => settings.ReloadGitMetadata());
+                settings.CommitConflictResolutionCommand = new TestParameterCommand(_ => { });
+
+                var view = new ConflictResolutionControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 920, 720);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var conflictList = FindControlByAutomationId<ListBox>(view, "ConflictResolutionFileList");
+                var fieldPanel = FindControlByAutomationId<StackPanel>(view, "ConflictResolutionFieldPanel");
+                var realConflictBadge = FindControlsByAutomationId<TextBlock>(view, "ConflictResolutionRealConflictBadge")
+                    .Single(IsVisibleAndArranged);
+                var mergeFieldRadio = FindControlsByAutomationId<RadioButton>(view, "ConflictResolutionMergeRadioButton")
+                    .Single(IsVisibleAndArranged);
+                var selectedValue = FindControlsByAutomationId<TextBlock>(view, "ConflictResolutionSelectedValueTextBlock")
+                    .Single(IsVisibleAndArranged);
+                var compactValue = FindControlByAutomationId<TextBlock>(view, "ConflictResolutionCompactValueTextBlock");
+                var useIncomingButton = FindControlByAutomationId<Button>(view, "ConflictResolutionUseIncomingButton");
+                var applyFieldsButton = FindControlByAutomationId<Button>(view, "ConflictResolutionApplyFieldsButton");
+                var commitButton = FindControlByAutomationId<Button>(view, "ConflictResolutionCommitButton");
+
+                await Assert.That(conflictList.ItemCount).IsEqualTo(2);
+                await Assert.That(fieldPanel.IsVisible).IsTrue();
+                await Assert.That(realConflictBadge.IsVisible).IsTrue();
+                await Assert.That(view.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == "Base title")).IsTrue();
+                await Assert.That(compactValue.Text).IsEqualTo("task-main");
+                await Assert.That(FindControlsByAutomationId<RadioButton>(view, "ConflictResolutionMergeRadioButton")
+                    .Count(IsVisibleAndArranged)).IsEqualTo(1);
+                await Assert.That(FindControlsByAutomationId<TextBox>(view, "ConflictResolutionEditedMergeTextBox")
+                    .Count(IsVisibleAndArranged)).IsEqualTo(0);
+                await Assert.That(selectedValue.Text).IsEqualTo("Current title");
+                await Assert.That(applyFieldsButton.IsEnabled).IsTrue();
+                await Assert.That(commitButton.IsEnabled).IsFalse();
+                await Assert.That(commitButton.Classes.Contains("PrimaryConflictAction")).IsTrue();
+
+                mergeFieldRadio.IsChecked = true;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(selectedValue.IsVisible).IsFalse();
+                var editedMergeTextBox = FindControlsByAutomationId<TextBox>(view, "ConflictResolutionEditedMergeTextBox")
+                    .Single(IsVisibleAndArranged);
+                await Assert.That(editedMergeTextBox.Text).IsEqualTo("Current title\nIncoming title");
+                editedMergeTextBox.Text = "Edited merged title";
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(editedMergeTextBox.Text).IsEqualTo("Edited merged title");
+
+                applyFieldsButton.Command?.Execute(applyFieldsButton.CommandParameter);
+
+                var titleSelection = appliedFieldSelections?.Single(selection => selection.FieldPath == "Title");
+                await Assert.That(titleSelection?.Source).IsEqualTo(BackupConflictFieldSource.Merge);
+                await Assert.That(titleSelection?.CustomValue).IsEqualTo("Edited merged title");
+
+                conflictList.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(settings.SelectedBackupConflict?.Path).IsEqualTo("Tasks/deleted-task.json");
+                await Assert.That(settings.SelectedBackupConflict?.HasIncomingVersion).IsFalse();
+                await Assert.That(useIncomingButton.IsEnabled).IsTrue();
+
+                useIncomingButton.Command?.Execute(useIncomingButton.CommandParameter);
+
+                await Assert.That(incomingResolvedConflict?.Path).IsEqualTo("Tasks/deleted-task.json");
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ConflictResolutionControl_UsesSingleColumnLayoutOnPhoneWidth()
+    {
+        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverPhone_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                configurationDisposable = configuration as IDisposable;
+                var settings = new SettingsViewModel(
+                    configuration,
+                    new FakeRemoteBackupService { ConflictStatus = CreateDemoConflictStatus() });
+                var view = new ConflictResolutionControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var filePane = FindControlByAutomationId<Border>(view, "ConflictResolutionFilePane");
+                var detailsPane = FindControlByAutomationId<Border>(view, "ConflictResolutionDetailPanel");
+
+                await Assert.That(Grid.GetColumn(filePane)).IsEqualTo(0);
+                await Assert.That(Grid.GetRow(filePane)).IsEqualTo(0);
+                await Assert.That(Grid.GetColumn(detailsPane)).IsEqualTo(0);
+                await Assert.That(Grid.GetRow(detailsPane)).IsEqualTo(1);
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
     private static Window CreateWindow(Control content, double width, double height)
     {
         return new Window
@@ -298,6 +535,44 @@ public class SettingsControlResponsiveUiTests
             Height = height,
             Content = content
         };
+    }
+
+    private static BackupConflictStatus CreateDemoConflictStatus()
+    {
+        return new BackupConflictStatus(
+            true,
+            new List<BackupConflictFile>
+            {
+                new(
+                    "Tasks/conflicted-task.json",
+                    true,
+                    true,
+                    new List<BackupConflictField>
+                    {
+                        new(
+                            "Id",
+                            "Id",
+                            "task-main",
+                            "task-main",
+                            "task-main",
+                            string.Empty,
+                            false,
+                            BackupConflictFieldSource.UseCurrent,
+                            BackupConflictFieldChangeKind.Unchanged),
+                        new(
+                            "Title",
+                            "Title",
+                            "Base title",
+                            "Current title",
+                            "Incoming title",
+                            "Current title\nIncoming title",
+                            true,
+                            BackupConflictFieldSource.UseCurrent,
+                            BackupConflictFieldChangeKind.BothDifferent,
+                            true)
+                    }),
+                new("Tasks/deleted-task.json", true, false)
+            });
     }
 
     private static async Task ClickControlAsync(Window window, Control control)
@@ -339,6 +614,15 @@ public class SettingsControlResponsiveUiTests
         return root.GetVisualDescendants()
             .OfType<T>()
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
+    }
+
+    private static List<T> FindControlsByAutomationId<T>(Control root, string automationId)
+        where T : Control
+    {
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .Where(control => AutomationProperties.GetAutomationId(control) == automationId)
+            .ToList();
     }
 
     private static bool IsVisibleAndArranged(Control control)
@@ -388,6 +672,21 @@ public class SettingsControlResponsiveUiTests
         }
     }
 
+    private sealed class TestParameterCommand(Action<object?> execute) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged;
+
+        public bool CanExecute(object? parameter)
+        {
+            return true;
+        }
+
+        public void Execute(object? parameter)
+        {
+            execute(parameter);
+        }
+    }
+
     private static double GetRightEdge(Visual relativeTo, Control control)
     {
         var point = control.TranslatePoint(new Point(control.Bounds.Width, 0), relativeTo);
@@ -427,6 +726,28 @@ public class SettingsControlResponsiveUiTests
                 throw ApplyException;
             }
         }
+    }
+
+    private sealed class FakeRemoteBackupService : IRemoteBackupService
+    {
+        public BackupConflictStatus ConflictStatus { get; set; } = BackupConflictStatus.None;
+
+        public List<string> Remotes() => new();
+        public string? GetRemoteAuthType(string remoteName) => null;
+        public string? GetRemoteUrl(string remoteName) => null;
+        public List<string> Refs() => new();
+        public List<string> GetSshPublicKeys() => new();
+        public string GenerateSshKey(string keyName) => throw new NotSupportedException();
+        public string? ReadPublicKey(string publicKeyPath) => throw new NotSupportedException();
+        public BackupConflictStatus GetConflictStatus() => ConflictStatus;
+        public void ResolveConflict(string path, BackupConflictResolution resolution) => throw new NotSupportedException();
+        public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections) => throw new NotSupportedException();
+        public void CommitResolvedConflicts(string message) => throw new NotSupportedException();
+        public void Push(string msg) => throw new NotSupportedException();
+        public void Pull() => throw new NotSupportedException();
+        public BackupRepositoryConnectPreview PreviewConnectRepository() => throw new NotSupportedException();
+        public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
+        public void CloneOrUpdateRepo() => throw new NotSupportedException();
     }
 
 }

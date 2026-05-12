@@ -11,6 +11,10 @@ public interface IRemoteBackupService
     public List<string> GetSshPublicKeys();
     public string GenerateSshKey(string keyName);
     public string? ReadPublicKey(string publicKeyPath);
+    public BackupConflictStatus GetConflictStatus();
+    public void ResolveConflict(string path, BackupConflictResolution resolution);
+    public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections);
+    public void CommitResolvedConflicts(string message);
     public void Push(string msg);
     public void Pull();
     public BackupRepositoryConnectPreview PreviewConnectRepository();

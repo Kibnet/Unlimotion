@@ -122,6 +122,35 @@
   <data name="From" xml:space="preserve"><value>С</value></data>
   <data name="FuzzySearch" xml:space="preserve"><value>Умный поиск</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.</value></data>
+  <data name="ConflictAncestorVersion" xml:space="preserve"><value>До изменения</value></data>
+  <data name="ConflictCurrentVersion" xml:space="preserve"><value>Текущая версия</value></data>
+  <data name="ConflictDeletedVersion" xml:space="preserve"><value>Удалено</value></data>
+  <data name="ConflictEditMergedValue" xml:space="preserve"><value>Отредактируйте объединенный текст</value></data>
+  <data name="ConflictFieldCannotMerge" xml:space="preserve"><value>Поле нельзя объединить: {0}</value></data>
+  <data name="ConflictFieldRealConflict" xml:space="preserve"><value>Конфликт</value></data>
+  <data name="ConflictFieldResolutionRequiresBothVersions" xml:space="preserve"><value>Для исправления конфликта по полям нужны текущая и входящая версии.</value></data>
+  <data name="ConflictFieldResolutionRequiresJson" xml:space="preserve"><value>Исправление конфликта по полям доступно только для JSON-файлов.</value></data>
+  <data name="ConflictFieldsNotSpecified" xml:space="preserve"><value>Поля конфликта не указаны.</value></data>
+  <data name="ConflictIncomingVersion" xml:space="preserve"><value>Входящая версия</value></data>
+  <data name="ConflictMergeVersion" xml:space="preserve"><value>Объединить</value></data>
+  <data name="ConflictMergedValue" xml:space="preserve"><value>Объединенное значение</value></data>
+  <data name="ConflictMissingValue" xml:space="preserve"><value>Отсутствует</value></data>
+  <data name="ConflictNotFound" xml:space="preserve"><value>Конфликт не найден: {0}</value></data>
+  <data name="ConflictPathNotSpecified" xml:space="preserve"><value>Путь конфликтующего файла не указан.</value></data>
+  <data name="ConflictResolutionFilesTitle" xml:space="preserve"><value>Конфликтующие файлы</value></data>
+  <data name="ConflictResolutionSelectedFileHint" xml:space="preserve"><value>Просмотрите измененные свойства, сравните обе версии и выберите итоговое значение.</value></data>
+  <data name="ConflictResolutionWholeFileHint" xml:space="preserve"><value>Этот файл нельзя исправить по отдельным полям. Выберите текущую или входящую версию целиком.</value></data>
+  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Исправьте конфликты синхронизации перед продолжением. Это окно работает на компьютере и телефоне.</value></data>
+  <data name="ConflictResolutionWindowTitle" xml:space="preserve"><value>Исправление конфликтов синхронизации</value></data>
+  <data name="ConflictSelectedValue" xml:space="preserve"><value>Выбранное значение</value></data>
+  <data name="ConflictResolutionComplete" xml:space="preserve"><value>Конфликты синхронизации исправлены.</value></data>
+  <data name="ConflictResolutionCommitted" xml:space="preserve"><value>Исправление конфликтов закоммичено.</value></data>
+  <data name="ConflictResolveErrorStatus" xml:space="preserve"><value>Не удалось исправить конфликт: {0}</value></data>
+  <data name="ConflictResolveErrorToast" xml:space="preserve"><value>Не удалось исправить конфликт синхронизации: {0}</value></data>
+  <data name="ConflictVersionNotFound" xml:space="preserve"><value>Выбранная версия конфликта не найдена: {0}</value></data>
+  <data name="Close" xml:space="preserve"><value>Закрыть</value></data>
+  <data name="FieldConflictResolutionComplete" xml:space="preserve"><value>Выбранные поля конфликта исправлены.</value></data>
+  <data name="InvalidConflictPath" xml:space="preserve"><value>Некорректный путь конфликтующего файла: {0}</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Только разблокированные</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Обновление карты...</value></data>
   <data name="Importance" xml:space="preserve"><value>Важность</value></data>
@@ -162,6 +191,7 @@
   <data name="OneHour" xml:space="preserve"><value>1 час</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 минута</value></data>
   <data name="OnlyWanted" xml:space="preserve"><value>Только важные</value></data>
+  <data name="OpenConflictResolutionWindow" xml:space="preserve"><value>Открыть исправление конфликтов</value></data>
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Параметры сохранены. Нажмите "Подключить репозиторий".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Родительские задачи:</value></data>
   <data name="Password" xml:space="preserve"><value>Пароль</value></data>
@@ -206,6 +236,10 @@
   <data name="RepositoryConnectErrorToast" xml:space="preserve"><value>Не удалось подключить репозиторий: {0}</value></data>
   <data name="RepositoryWorkingDirectoryUnavailable" xml:space="preserve"><value>Рабочая папка репозитория недоступна.</value></data>
   <data name="RepositoryHeadUnavailable" xml:space="preserve"><value>HEAD репозитория недоступен.</value></data>
+  <data name="RepositoryNotInitialized" xml:space="preserve"><value>Репозиторий не инициализирован.</value></data>
+  <data name="ResolveAllSyncConflictsBeforeCommit" xml:space="preserve"><value>Исправьте все конфликты синхронизации перед завершением.</value></data>
+  <data name="ResolveSyncConflictsCommitMessage" xml:space="preserve"><value>Исправление конфликтов синхронизации</value></data>
+  <data name="ResolvingConflict" xml:space="preserve"><value>Исправление конфликта...</value></data>
   <data name="ResetFilters" xml:space="preserve"><value>Сбросить фильтры</value></data>
   <data name="ResetFiltersConfirmHeader" xml:space="preserve"><value>Сбросить фильтры?</value></data>
   <data name="ResetFiltersConfirmMessage" xml:space="preserve"><value>Фильтры на текущей вкладке будут сброшены к значениям по умолчанию. Продолжить?</value></data>
@@ -275,10 +309,22 @@
   <data name="StorageTitle" xml:space="preserve"><value>Хранилище задач</value></data>
   <data name="StorageLocal" xml:space="preserve"><value>На этом устройстве</value></data>
   <data name="SyncComplete" xml:space="preserve"><value>Синхронизация завершена.</value></data>
+  <data name="SyncConflictsHint" xml:space="preserve"><value>Синхронизация приостановлена. Выберите версию для каждого конфликтующего файла, затем завершите исправление.</value></data>
+  <data name="SyncConflictFieldsHint" xml:space="preserve"><value>Выберите значения для каждого измененного поля или объедините совместимые текстовые поля, списки и объекты.</value></data>
+  <data name="SyncConflictsReadyToCommit" xml:space="preserve"><value>Все конфликты синхронизации исправлены. Завершите исправление, чтобы продолжить.</value></data>
+  <data name="SyncConflictsStatus" xml:space="preserve"><value>Конфликты синхронизации требуют исправления: {0}.</value></data>
+  <data name="SyncConflictsTitle" xml:space="preserve"><value>Исправление конфликтов синхронизации</value></data>
   <data name="SyncErrorStatus" xml:space="preserve"><value>Ошибка синхронизации: {0}</value></data>
   <data name="SyncErrorToast" xml:space="preserve"><value>Не удалось синхронизировать репозиторий: {0}</value></data>
   <data name="SyncNow" xml:space="preserve"><value>Синхронизировать сейчас</value></data>
   <data name="SyncingRepository" xml:space="preserve"><value>Синхронизация с репозиторием...</value></data>
+  <data name="FinishConflictResolution" xml:space="preserve"><value>Завершить исправление</value></data>
+  <data name="CommittingConflictResolution" xml:space="preserve"><value>Завершение исправления конфликтов...</value></data>
+  <data name="CommitConflictResolutionErrorStatus" xml:space="preserve"><value>Не удалось завершить исправление конфликтов: {0}</value></data>
+  <data name="CommitConflictResolutionErrorToast" xml:space="preserve"><value>Не удалось завершить исправление конфликтов синхронизации: {0}</value></data>
+  <data name="UseCurrentConflictVersion" xml:space="preserve"><value>Использовать текущую</value></data>
+  <data name="UseIncomingConflictVersion" xml:space="preserve"><value>Использовать входящую</value></data>
+  <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Применить выбранные поля</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Выберите, как копировать аутлайн задач. Вставляемые аутлайны распознаются автоматически.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Буфер обмена аутлайном задач</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>

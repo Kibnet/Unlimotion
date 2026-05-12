@@ -49,6 +49,9 @@
                 <DataTemplate DataType="unlimotion:TaskOutlinePastePreviewDialogViewModel">
                     <views:TaskOutlinePastePreviewControl />
                 </DataTemplate>
+                <DataTemplate DataType="viewModel:SettingsViewModel">
+                    <views:ConflictResolutionControl />
+                </DataTemplate>
             </dialogHostAvalonia:DialogHost.DataTemplates>
             <!-- put the content over which the dialog is shown here (e.g. your main window grid)-->
             <Panel>

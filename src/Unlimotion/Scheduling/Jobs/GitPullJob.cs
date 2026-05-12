@@ -16,11 +16,14 @@ public class GitPullJob : IJob
         _backupService = backupService;
     }
 
-    public async Task Execute(IJobExecutionContext context)
+    public Task Execute(IJobExecutionContext context)
     {
-        if (_configuration.Get<GitSettings>("Git")?.BackupEnabled == true)
+        if (_configuration.Get<GitSettings>("Git")?.BackupEnabled == true &&
+            _backupService.GetConflictStatus().IsInProgress != true)
         {
             _backupService.Pull();
         }
+
+        return Task.CompletedTask;
     }
 }

@@ -70,6 +70,7 @@ public class App : Application
     private Action? _serverConnectedHandler;
     private Action<Exception?>? _serverConnectionErrorHandler;
     private EventHandler? _serverSignOutHandler;
+    private bool _isConflictResolutionDialogOpen;
     
     /// <summary>
     /// Default storage path for tasks (used as fallback when config doesn't specify one)
@@ -224,15 +225,31 @@ public class App : Application
                 await Task.Run(() =>
                 {
                     _backupService?.Pull();
-                    _backupService?.Push("Manual backup");
+                    if (_backupService?.GetConflictStatus().IsInProgress != true)
+                    {
+                        _backupService?.Push("Manual backup");
+                    }
                 });
 
                 settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
                 settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("SyncComplete"));
                 ShowBackupSuccessToast(settings, L10n.Get("SyncComplete"));
             }
             catch (Exception ex)
             {
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
                 settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("SyncErrorStatus", ex.Message));
                 _notificationManager?.ErrorToast(L10n.Format("SyncErrorToast", ex.Message));
             }
@@ -427,6 +444,13 @@ public class App : Application
             }
             catch (Exception ex)
             {
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
                 settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("RepositoryConnectErrorStatus", ex.Message));
                 _notificationManager?.ErrorToast(L10n.Format("RepositoryConnectErrorToast", ex.Message));
             }
@@ -439,11 +463,24 @@ public class App : Application
             {
                 await Task.Run(() => _backupService?.Pull());
                 settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
                 settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("PulledChanges"));
                 ShowBackupSuccessToast(settings, L10n.Get("PulledChanges"));
             }
             catch (Exception ex)
             {
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
                 settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("PullErrorStatus", ex.Message));
                 _notificationManager?.ErrorToast(L10n.Format("PullErrorToast", ex.Message));
             }
@@ -463,6 +500,81 @@ public class App : Application
             {
                 settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("PushErrorStatus", ex.Message));
                 _notificationManager?.ErrorToast(L10n.Format("PushErrorToast", ex.Message));
+            }
+        });
+
+        settings.ResolveConflictUseCurrentCommand = ReactiveCommand.CreateFromTask<BackupConflictFile?>(conflict =>
+            ResolveBackupConflictAsync(settings, conflict, BackupConflictResolution.UseCurrent));
+
+        settings.ResolveConflictUseIncomingCommand = ReactiveCommand.CreateFromTask<BackupConflictFile?>(conflict =>
+            ResolveBackupConflictAsync(settings, conflict, BackupConflictResolution.UseIncoming));
+
+        settings.ResolveConflictUseFieldSelectionCommand = ReactiveCommand.CreateFromTask<BackupConflictFile?>(conflict =>
+            ResolveBackupConflictFieldsAsync(settings, conflict));
+
+        settings.RefreshBackupConflictsCommand = ReactiveCommand.Create(() =>
+        {
+            settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                EnterConflictResolutionMode(settings);
+            }
+        });
+
+        settings.OpenConflictResolutionWindowCommand = ReactiveCommand.Create(() =>
+        {
+            settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                EnterConflictResolutionMode(settings);
+            }
+        });
+
+        settings.CommitConflictResolutionCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("CommittingConflictResolution"));
+            try
+            {
+                await Task.Run(() =>
+                {
+                    _backupService?.CommitResolvedConflicts(L10n.Get("ResolveSyncConflictsCommitMessage"));
+                });
+
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    settings.SetBackupConnectionState(BackupStatusState.ConflictResolution);
+                    return;
+                }
+
+                settings.CompleteConflictResolution();
+                CloseConflictResolutionDialog();
+                await ReloadCurrentTaskStorageAsync(settings);
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    EnterConflictResolutionMode(settings);
+                    return;
+                }
+
+                settings.CompleteConflictResolution();
+                settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("ConflictResolutionComplete"));
+                ResumeBackupScheduler(settings);
+                ShowBackupSuccessToast(settings, L10n.Get("ConflictResolutionComplete"));
+            }
+            catch (Exception ex)
+            {
+                settings.ReloadGitMetadata();
+                if (settings.IsConflictResolutionMode)
+                {
+                    settings.SetBackupConnectionState(BackupStatusState.ConflictResolution);
+                    return;
+                }
+
+                settings.SetBackupConnectionState(
+                    BackupStatusState.Error,
+                    L10n.Format("CommitConflictResolutionErrorStatus", ex.Message));
+                _notificationManager?.ErrorToast(L10n.Format("CommitConflictResolutionErrorToast", ex.Message));
             }
         });
 
@@ -526,6 +638,168 @@ public class App : Application
         settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
     }
 
+    private void EnterConflictResolutionMode(SettingsViewModel settings)
+    {
+        PauseBackupScheduler(settings);
+        settings.SetBackupConnectionState(BackupStatusState.ConflictResolution);
+        ShowConflictResolutionDialog(settings);
+    }
+
+    private void ShowConflictResolutionDialog(SettingsViewModel settings)
+    {
+        if (!settings.IsConflictResolutionMode || _isConflictResolutionDialogOpen)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!settings.IsConflictResolutionMode || _isConflictResolutionDialogOpen)
+            {
+                return;
+            }
+
+            try
+            {
+                _isConflictResolutionDialogOpen = true;
+                var dialogTask = DialogHost.Show(settings, "Ask");
+                _ = dialogTask.ContinueWith(
+                    _ => _isConflictResolutionDialogOpen = false,
+                    TaskScheduler.Default);
+            }
+            catch
+            {
+                _isConflictResolutionDialogOpen = false;
+            }
+        }, DispatcherPriority.Background);
+    }
+
+    private void ResumeBackupScheduler(SettingsViewModel settings)
+    {
+        if (!settings.GitBackupEnabled)
+        {
+            return;
+        }
+
+        EnsureScheduler();
+        if (_scheduler == null)
+        {
+            return;
+        }
+
+        _ = _scheduler.ResumeAll();
+        if (!_scheduler.IsStarted)
+        {
+            _ = _scheduler.Start();
+        }
+    }
+
+    private void PauseBackupScheduler(SettingsViewModel settings)
+    {
+        if (!settings.GitBackupEnabled)
+        {
+            return;
+        }
+
+        EnsureScheduler();
+        if (_scheduler == null)
+        {
+            return;
+        }
+
+        _ = _scheduler.PauseAll();
+    }
+
+    private void CloseConflictResolutionDialog()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            DialogHost.GetDialogSession("Ask")?.Close(false);
+            _isConflictResolutionDialogOpen = false;
+        });
+    }
+
+    private async Task ResolveBackupConflictFieldsAsync(
+        SettingsViewModel settings,
+        BackupConflictFile? conflict)
+    {
+        var targetConflict = conflict ?? settings.SelectedBackupConflict;
+        if (targetConflict == null || !targetConflict.CanResolveByFields)
+        {
+            return;
+        }
+
+        var selections = settings.GetSelectedBackupConflictFieldSelections();
+
+        settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("ResolvingConflict"));
+        try
+        {
+            await Task.Run(() => _backupService?.ResolveConflictFields(targetConflict.Path, selections));
+            settings.ReloadGitMetadata();
+            if (!settings.IsConflictResolutionMode)
+            {
+                settings.MarkConflictResolutionPendingCommit();
+            }
+
+            settings.SetBackupConnectionState(
+                BackupStatusState.ConflictResolution,
+                L10n.Get("FieldConflictResolutionComplete"));
+        }
+        catch (Exception ex)
+        {
+            settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                settings.SetBackupConnectionState(
+                    BackupStatusState.ConflictResolution,
+                    L10n.Format("ConflictResolveErrorStatus", ex.Message));
+                return;
+            }
+
+            settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("ConflictResolveErrorStatus", ex.Message));
+            _notificationManager?.ErrorToast(L10n.Format("ConflictResolveErrorToast", ex.Message));
+        }
+    }
+
+    private async Task ResolveBackupConflictAsync(
+        SettingsViewModel settings,
+        BackupConflictFile? conflict,
+        BackupConflictResolution resolution)
+    {
+        var targetConflict = conflict ?? settings.SelectedBackupConflict;
+        if (targetConflict == null)
+        {
+            return;
+        }
+
+        settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("ResolvingConflict"));
+        try
+        {
+            await Task.Run(() => _backupService?.ResolveConflict(targetConflict.Path, resolution));
+            settings.ReloadGitMetadata();
+            if (!settings.IsConflictResolutionMode)
+            {
+                settings.MarkConflictResolutionPendingCommit();
+            }
+
+            settings.SetBackupConnectionState(BackupStatusState.ConflictResolution);
+        }
+        catch (Exception ex)
+        {
+            settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                settings.SetBackupConnectionState(
+                    BackupStatusState.ConflictResolution,
+                    L10n.Format("ConflictResolveErrorStatus", ex.Message));
+                return;
+            }
+
+            settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("ConflictResolveErrorStatus", ex.Message));
+            _notificationManager?.ErrorToast(L10n.Format("ConflictResolveErrorToast", ex.Message));
+        }
+    }
+
     private async Task ConnectBackupRepositoryAsync(
         SettingsViewModel settings,
         bool allowMergeWithNonEmptyRemote)
@@ -535,12 +809,25 @@ public class App : Application
         {
             await Task.Run(() => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
             settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                EnterConflictResolutionMode(settings);
+                return;
+            }
+
             await ReloadCurrentTaskStorageAsync(settings);
             settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("RepositoryConnected"));
             ShowBackupSuccessToast(settings, L10n.Get("RepositoryConnected"));
         }
         catch (Exception ex)
         {
+            settings.ReloadGitMetadata();
+            if (settings.IsConflictResolutionMode)
+            {
+                EnterConflictResolutionMode(settings);
+                return;
+            }
+
             settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("RepositoryConnectErrorStatus", ex.Message));
             _notificationManager?.ErrorToast(L10n.Format("RepositoryConnectErrorToast", ex.Message));
         }
@@ -710,6 +997,10 @@ public class App : Application
                         ApplyAutomationTaskWrapperDefaults();
                         await vm.Connect();
                         ApplyAutomationStartupState(vm);
+                        if (vm.Settings.IsConflictResolutionMode)
+                        {
+                            EnterConflictResolutionMode(vm.Settings);
+                        }
                     }
                     catch
                     {
@@ -728,7 +1019,15 @@ public class App : Application
                 DataContext = vm,
             };
             Dispatcher.UIThread.Post(
-                () => _ = CheckForUpdatesOnStartupAsync(vm.Settings),
+                () =>
+                {
+                    if (vm.Settings.IsConflictResolutionMode)
+                    {
+                        EnterConflictResolutionMode(vm.Settings);
+                    }
+
+                    _ = CheckForUpdatesOnStartupAsync(vm.Settings);
+                },
                 DispatcherPriority.Background);
         }
 

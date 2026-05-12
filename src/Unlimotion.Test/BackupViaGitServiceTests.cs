@@ -7,6 +7,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
@@ -228,6 +229,454 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task Pull_WithDivergedFile_ExposesConflictResolutionStatus()
+    {
+        var (service, _, _) = CreateServiceWithMergeConflict();
+
+        var status = service.GetConflictStatus();
+
+        await Assert.That(status.IsInProgress).IsTrue();
+        await Assert.That(status.Conflicts.Count).IsEqualTo(1);
+        await Assert.That(status.Conflicts[0].Path).IsEqualTo("task");
+        await Assert.That(status.Conflicts[0].HasCurrentVersion).IsTrue();
+        await Assert.That(status.Conflicts[0].HasIncomingVersion).IsTrue();
+        await Assert.That(status.Conflicts[0].CanResolveByFields).IsFalse();
+        await Assert.That(status.Conflicts[0].Fields.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task Pull_WithDivergedJsonTask_ExposesFieldResolutionOptions()
+    {
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "Description": "base description",
+                          "ContainsTasks": ["local-child"],
+                          "Importance": 1
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "Description": "remote description",
+                           "ContainsTasks": ["remote-child"],
+                           "Importance": 5
+                         }
+                         """;
+        var (service, _, _) = CreateServiceWithMergeConflict(localJson, remoteJson);
+
+        var conflict = service.GetConflictStatus().Conflicts.Single();
+
+        await Assert.That(conflict.CanResolveByFields).IsTrue();
+        await Assert.That(conflict.Fields.Select(field => field.FieldPath))
+            .IsEquivalentTo(new[] { "Id", "Title", "Description", "ContainsTasks", "Importance" });
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "Id").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.Unchanged);
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "Title").CanMerge).IsTrue();
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "Title").CanEditMergedValue).IsTrue();
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "ContainsTasks").CanMerge).IsTrue();
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "ContainsTasks").CanEditMergedValue).IsFalse();
+        await Assert.That(conflict.Fields.Single(field => field.FieldPath == "Importance").CanMerge).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task Pull_WithDivergedJsonTask_ShowsAllChangedFieldsAndMarksRealConflicts()
+    {
+        var baseJson = """
+                       {
+                         "Id": "task",
+                         "Title": "base title",
+                         "Description": "base description",
+                         "Wanted": false,
+                         "Importance": 0
+                       }
+                       """;
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "Description": "local description",
+                          "Wanted": true,
+                          "Importance": 0
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "Description": "base description",
+                           "Wanted": true,
+                           "Importance": 5
+                         }
+                         """;
+        var (service, _, _) = CreateServiceWithMergeConflict(localJson, remoteJson, baseJson);
+
+        var fields = service.GetConflictStatus().Conflicts.Single().Fields;
+
+        await Assert.That(fields.Select(field => field.FieldPath))
+            .IsEquivalentTo(new[] { "Id", "Title", "Description", "Wanted", "Importance" });
+        await Assert.That(fields.Single(field => field.FieldPath == "Id").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.Unchanged);
+        await Assert.That(fields.Single(field => field.FieldPath == "Title").AncestorValue)
+            .IsEqualTo("base title");
+        await Assert.That(fields.Single(field => field.FieldPath == "Title").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.BothDifferent);
+        await Assert.That(fields.Single(field => field.FieldPath == "Title").IsRealConflict).IsTrue();
+        await Assert.That(fields.Single(field => field.FieldPath == "Description").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.CurrentOnly);
+        await Assert.That(fields.Single(field => field.FieldPath == "Wanted").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.BothSame);
+        await Assert.That(fields.Single(field => field.FieldPath == "Importance").ChangeKind)
+            .IsEqualTo(BackupConflictFieldChangeKind.IncomingOnly);
+        await Assert.That(fields.Where(field => field.IsRealConflict).Select(field => field.FieldPath))
+            .IsEquivalentTo(new[] { "Title" });
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflictFields_UsesSelectedVersionsAndMergedFields()
+    {
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "Description": "local description",
+                          "ContainsTasks": ["shared-child", "local-child"],
+                          "Importance": 1
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "Description": "remote description",
+                           "ContainsTasks": ["shared-child", "remote-child"],
+                           "Importance": 5
+                         }
+                         """;
+        var (service, localPath, remotePath) = CreateServiceWithMergeConflict(localJson, remoteJson);
+
+        service.ResolveConflictFields(
+            "task",
+            new List<BackupConflictFieldSelection>
+            {
+                new("Title", BackupConflictFieldSource.UseCurrent),
+                new("Description", BackupConflictFieldSource.UseIncoming),
+                new("ContainsTasks", BackupConflictFieldSource.Merge),
+                new("Importance", BackupConflictFieldSource.UseIncoming)
+            });
+
+        var resolved = JObject.Parse(File.ReadAllText(Path.Combine(localPath, "task")));
+        await Assert.That((string?)resolved["Title"]).IsEqualTo("local title");
+        await Assert.That((string?)resolved["Description"]).IsEqualTo("remote description");
+        await Assert.That((int?)resolved["Importance"]).IsEqualTo(5);
+        await Assert.That(resolved["ContainsTasks"]!.Values<string>())
+            .IsEquivalentTo(new[] { "shared-child", "local-child", "remote-child" });
+        await Assert.That(service.GetConflictStatus().Conflicts.Count).IsEqualTo(0);
+
+        service.CommitResolvedConflicts("Resolve sync conflict");
+
+        var pushed = JObject.Parse(ReadFileFromBranch(remotePath, "main", "task"));
+        await Assert.That((string?)pushed["Title"]).IsEqualTo("local title");
+        await Assert.That((string?)pushed["Description"]).IsEqualTo("remote description");
+        await Assert.That(pushed["ContainsTasks"]!.Values<string>())
+            .IsEquivalentTo(new[] { "shared-child", "local-child", "remote-child" });
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflictFields_UsesCustomMergedTextValue()
+    {
+        var baseJson = """
+                       {
+                         "Id": "task",
+                         "Title": "base title",
+                         "Description": "base description"
+                       }
+                       """;
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "Description": "local description"
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "Description": "remote description"
+                         }
+                         """;
+        var (service, localPath, _) = CreateServiceWithMergeConflict(localJson, remoteJson, baseJson);
+
+        service.ResolveConflictFields(
+            "task",
+            new List<BackupConflictFieldSelection>
+            {
+                new("Title", BackupConflictFieldSource.Merge, "edited merged title"),
+                new("Description", BackupConflictFieldSource.Merge, "edited merged description")
+            });
+
+        var resolved = JObject.Parse(File.ReadAllText(Path.Combine(localPath, "task")));
+        await Assert.That((string?)resolved["Title"]).IsEqualTo("edited merged title");
+        await Assert.That((string?)resolved["Description"]).IsEqualTo("edited merged description");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task Pull_WithDivergedJsonTask_DisplaysRelationTaskTitles()
+    {
+        var baseJson = """
+                       {
+                         "Id": "task",
+                         "Title": "base title",
+                         "ContainsTasks": []
+                       }
+                       """;
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "ContainsTasks": ["shared-child", "local-child"]
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "ContainsTasks": ["shared-child", "remote-child"]
+                         }
+                         """;
+        var (service, localPath, _) = CreateServiceWithMergeConflict(localJson, remoteJson, baseJson);
+        File.WriteAllText(
+            Path.Combine(localPath, "shared-child"),
+            """
+            {
+              "Id": "shared-child",
+              "Title": "Shared child"
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(localPath, "local-child"),
+            """
+            {
+              "Id": "local-child",
+              "Title": "Local child"
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(localPath, "remote-child"),
+            """
+            {
+              "Id": "remote-child",
+              "Title": "Remote child"
+            }
+            """);
+
+        var relationField = service.GetConflictStatus().Conflicts.Single().Fields
+            .Single(field => field.FieldPath == "ContainsTasks");
+
+        await Assert.That(relationField.CurrentValue).Contains("Shared child (shared-child)");
+        await Assert.That(relationField.CurrentValue).Contains("Local child (local-child)");
+        await Assert.That(relationField.IncomingValue).Contains("Shared child (shared-child)");
+        await Assert.That(relationField.IncomingValue).Contains("Remote child (remote-child)");
+        await Assert.That(relationField.MergedValue).Contains("Local child (local-child)");
+        await Assert.That(relationField.MergedValue).Contains("Remote child (remote-child)");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflictFields_PreservesUnknownFieldsAndIncomingOnlyDefaults()
+    {
+        var baseJson = """
+                       {
+                         "Id": "task",
+                         "Title": "base title",
+                         "Description": "base description",
+                         "Unknown": "base"
+                       }
+                       """;
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "Description": "base description",
+                          "Unknown": "base"
+                        }
+                        """;
+        var remoteJson = """
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "Description": "remote description",
+                           "Unknown": "incoming unknown"
+                         }
+                         """;
+        var (service, localPath, _) = CreateServiceWithMergeConflict(localJson, remoteJson, baseJson);
+
+        service.ResolveConflictFields(
+            "task",
+            service.GetConflictStatus().Conflicts.Single().Fields
+                .Select(field => new BackupConflictFieldSelection(field.FieldPath, field.DefaultSource))
+                .ToList());
+
+        var resolved = JObject.Parse(File.ReadAllText(Path.Combine(localPath, "task")));
+        await Assert.That((string?)resolved["Title"]).IsEqualTo("local title");
+        await Assert.That((string?)resolved["Description"]).IsEqualTo("remote description");
+        await Assert.That((string?)resolved["Unknown"]).IsEqualTo("incoming unknown");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflictFields_CopiesDateTokensWithoutReformattingUsingRawJsonTokens()
+    {
+        var incomingDate = "2025-01-02T03:04:05.678+03:30";
+        var baseJson = """
+                       {
+                         "Id": "task",
+                         "Title": "base title",
+                         "PlannedBeginDateTime": "2025-01-02T03:04:05.678+00:00"
+                       }
+                       """;
+        var localJson = """
+                        {
+                          "Id": "task",
+                          "Title": "local title",
+                          "PlannedBeginDateTime": "2025-01-02T03:04:05.678+00:00"
+                        }
+                        """;
+        var remoteJson = $$"""
+                         {
+                           "Id": "task",
+                           "Title": "remote title",
+                           "PlannedBeginDateTime": "{{incomingDate}}"
+                         }
+                         """;
+        var (service, localPath, _) = CreateServiceWithMergeConflict(localJson, remoteJson, baseJson);
+
+        service.ResolveConflictFields(
+            "task",
+            new List<BackupConflictFieldSelection>
+            {
+                new("Title", BackupConflictFieldSource.UseCurrent),
+                new("PlannedBeginDateTime", BackupConflictFieldSource.UseIncoming)
+            });
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).Contains(incomingDate);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflictFields_RejectsMergeForNonMergeableScalar()
+    {
+        var (service, _, _) = CreateServiceWithMergeConflict(
+            """
+            {
+              "Id": "task",
+              "Title": "local title",
+              "Importance": 1
+            }
+            """,
+            """
+            {
+              "Id": "task",
+              "Title": "remote title",
+              "Importance": 5
+            }
+            """,
+            """
+            {
+              "Id": "task",
+              "Title": "base title",
+              "Importance": 0
+            }
+            """);
+
+        await Assert.That(() => service.ResolveConflictFields(
+                "task",
+                new List<BackupConflictFieldSelection>
+                {
+                    new("Title", BackupConflictFieldSource.UseCurrent),
+                    new("Importance", BackupConflictFieldSource.Merge)
+                }))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflict_UseDeletedSide_StagesDeletion()
+    {
+        var (service, localPath, remotePath) = CreateServiceWithDeleteModifyConflict();
+
+        service.ResolveConflict("task", BackupConflictResolution.UseIncoming);
+
+        await Assert.That(File.Exists(Path.Combine(localPath, "task"))).IsFalse();
+        await Assert.That(service.GetConflictStatus().Conflicts.Count).IsEqualTo(0);
+
+        service.CommitResolvedConflicts("Resolve sync conflict");
+
+        using var remote = new Repository(remotePath);
+        await Assert.That(remote.Branches["main"].Tip.Tree["task"]).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CommitResolvedConflicts_DoesNotStageUnrelatedFiles()
+    {
+        var (service, localPath, remotePath) = CreateServiceWithMergeConflict();
+
+        service.ResolveConflict("task", BackupConflictResolution.UseCurrent);
+        File.WriteAllText(Path.Combine(localPath, "unrelated-task"), "unrelated content");
+        service.CommitResolvedConflicts("Resolve sync conflict");
+
+        using var remote = new Repository(remotePath);
+        await Assert.That(remote.Branches["main"].Tip.Tree["task"]).IsNotNull();
+        await Assert.That(remote.Branches["main"].Tip.Tree["unrelated-task"]).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CommitResolvedConflicts_RejectsWhenAnyConflictRemains()
+    {
+        var (service, _, _) = CreateServiceWithMergeConflict();
+
+        await Assert.That(() => service.CommitResolvedConflicts("Resolve sync conflict"))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflict_UseCurrentVersion_CommitsAndPushesResolution()
+    {
+        var (service, localPath, remotePath) = CreateServiceWithMergeConflict();
+
+        service.ResolveConflict("task", BackupConflictResolution.UseCurrent);
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("local content");
+        var pendingStatus = service.GetConflictStatus();
+        await Assert.That(pendingStatus.IsInProgress).IsTrue();
+        await Assert.That(pendingStatus.Conflicts.Count).IsEqualTo(0);
+
+        service.CommitResolvedConflicts("Resolve sync conflict");
+
+        using var local = new Repository(localPath);
+        await Assert.That(local.Index.Conflicts.Any()).IsFalse();
+        await Assert.That(local.Info.CurrentOperation).IsEqualTo(CurrentOperation.None);
+        var completedStatus = service.GetConflictStatus();
+        await Assert.That(completedStatus.IsInProgress).IsFalse();
+        await Assert.That(completedStatus.Conflicts.Count).IsEqualTo(0);
+        await Assert.That(ReadFileFromBranch(remotePath, "main", "task")).IsEqualTo("local content");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResolveConflict_UseIncomingVersion_CommitsAndPushesResolution()
+    {
+        var (service, localPath, remotePath) = CreateServiceWithMergeConflict();
+
+        service.ResolveConflict("task", BackupConflictResolution.UseIncoming);
+
+        await Assert.That(File.ReadAllText(Path.Combine(localPath, "task"))).IsEqualTo("remote content");
+        await Assert.That(service.GetConflictStatus().Conflicts.Count).IsEqualTo(0);
+
+        service.CommitResolvedConflicts("Resolve sync conflict");
+
+        await Assert.That(ReadFileFromBranch(remotePath, "main", "task")).IsEqualTo("remote content");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task GetCredentials_ReturnsSshPrivateKeyCredentialsForConfiguredSshUrl()
     {
         var privateKeyPath = Path.Combine(_rootPath, "id_unlimotion");
@@ -425,6 +874,52 @@ public sealed class BackupViaGitServiceTests : IDisposable
         return localPath;
     }
 
+    private (BackupViaGitService Service, string LocalPath, string RemotePath) CreateServiceWithMergeConflict()
+    {
+        return CreateServiceWithMergeConflict("local content", "remote content", "base content");
+    }
+
+    private (BackupViaGitService Service, string LocalPath, string RemotePath) CreateServiceWithMergeConflict(
+        string localContent,
+        string remoteContent,
+        string baseContent = """
+                             {
+                               "Id": "task",
+                               "Title": "base title",
+                               "Description": "base description",
+                               "ContainsTasks": [],
+                               "Importance": 0
+                             }
+                             """)
+    {
+        var localPath = Path.Combine(_rootPath, $"ConflictedTasks-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localPath);
+        var remotePath = CreateBareRemoteWithCommit("task", baseContent);
+        var service = CreateService(localPath, remotePath);
+
+        service.ConnectRepository(allowMergeWithNonEmptyRemote: false);
+        CommitRepositoryFile(localPath, "task", localContent, "local change");
+        PushRemoteChange(remotePath, "task", remoteContent);
+        service.Pull();
+
+        return (service, localPath, remotePath);
+    }
+
+    private (BackupViaGitService Service, string LocalPath, string RemotePath) CreateServiceWithDeleteModifyConflict()
+    {
+        var localPath = Path.Combine(_rootPath, $"DeleteModifyTasks-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localPath);
+        var remotePath = CreateBareRemoteWithCommit("task", "base content");
+        var service = CreateService(localPath, remotePath);
+
+        service.ConnectRepository(allowMergeWithNonEmptyRemote: false);
+        CommitRepositoryFile(localPath, "task", "local content", "local change");
+        DeleteRemoteFile(remotePath, "task");
+        service.Pull();
+
+        return (service, localPath, remotePath);
+    }
+
     private string CreateBareRemote()
     {
         var remotePath = Path.Combine(_rootPath, $"remote-{Guid.NewGuid():N}.git");
@@ -460,6 +955,78 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
         TryDeleteDirectory(seedPath);
         return remotePath;
+    }
+
+    private void PushRemoteChange(string remotePath, string fileName, string content)
+    {
+        var seedPath = Path.Combine(_rootPath, $"remote-change-{Guid.NewGuid():N}");
+        Repository.Clone(remotePath, seedPath);
+        try
+        {
+            using (var seed = new Repository(seedPath))
+            {
+                var remoteBranch = seed.Branches["origin/main"]
+                                   ?? throw new InvalidOperationException("Remote main branch was not cloned.");
+                var localBranch = seed.Branches["main"] ?? seed.CreateBranch("main", remoteBranch.Tip);
+                seed.Branches.Update(localBranch, updater => updater.TrackedBranch = remoteBranch.CanonicalName);
+                Commands.Checkout(seed, localBranch);
+            }
+
+            CommitRepositoryFile(seedPath, fileName, content, "remote change");
+            using var pushRepo = new Repository(seedPath);
+            pushRepo.Network.Push(pushRepo.Network.Remotes["origin"], "refs/heads/main", new PushOptions());
+        }
+        finally
+        {
+            TryDeleteDirectory(seedPath);
+        }
+    }
+
+    private void DeleteRemoteFile(string remotePath, string fileName)
+    {
+        var seedPath = Path.Combine(_rootPath, $"remote-delete-{Guid.NewGuid():N}");
+        Repository.Clone(remotePath, seedPath);
+        try
+        {
+            using (var seed = new Repository(seedPath))
+            {
+                var remoteBranch = seed.Branches["origin/main"]
+                                   ?? throw new InvalidOperationException("Remote main branch was not cloned.");
+                var localBranch = seed.Branches["main"] ?? seed.CreateBranch("main", remoteBranch.Tip);
+                seed.Branches.Update(localBranch, updater => updater.TrackedBranch = remoteBranch.CanonicalName);
+                Commands.Checkout(seed, localBranch);
+            }
+
+            File.Delete(Path.Combine(seedPath, fileName));
+            using var deleteRepo = new Repository(seedPath);
+            Commands.Stage(deleteRepo, fileName);
+            var signature = CreateSignature();
+            deleteRepo.Commit("remote delete", signature, signature);
+            deleteRepo.Network.Push(deleteRepo.Network.Remotes["origin"], "refs/heads/main", new PushOptions());
+        }
+        finally
+        {
+            TryDeleteDirectory(seedPath);
+        }
+    }
+
+    private static void CommitRepositoryFile(string repositoryPath, string fileName, string content, string message)
+    {
+        File.WriteAllText(Path.Combine(repositoryPath, fileName), content);
+        using var repo = new Repository(repositoryPath);
+        Commands.Stage(repo, fileName);
+        var signature = CreateSignature();
+        repo.Commit(message, signature, signature);
+    }
+
+    private static string ReadFileFromBranch(string repositoryPath, string branchName, string fileName)
+    {
+        using var repo = new Repository(repositoryPath);
+        var branch = repo.Branches[branchName] ?? throw new InvalidOperationException($"Branch not found: {branchName}");
+        var treeEntry = branch.Tip.Tree[fileName] ?? throw new InvalidOperationException($"File not found: {fileName}");
+        var blob = (Blob)treeEntry.Target;
+        using var reader = new StreamReader(blob.GetContentStream());
+        return reader.ReadToEnd();
     }
 
     private BackupViaGitService CreateService(
