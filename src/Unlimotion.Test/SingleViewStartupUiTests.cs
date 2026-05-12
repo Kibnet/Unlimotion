@@ -77,6 +77,42 @@ public class SingleViewStartupUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task SingleViewStartup_ReplaysStartupUpdateCheck_WhenUpdateServiceAttachesAfterStartup()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = SingleViewStartupContext.Create();
+            var app = new App();
+            var updateService = new CountingApplicationUpdateService();
+
+            try
+            {
+                App.ConfigureUpdateService(null);
+
+                var startupTask = app.InitializeStartupViewModelAsync(context.MainWindowViewModel);
+                var startupCompleted = WaitFor(() =>
+                    startupTask.IsCompleted &&
+                    context.Storage.ConnectCallCount == 1);
+
+                await Assert.That(startupCompleted).IsTrue();
+                await Assert.That(updateService.CheckCalls).IsEqualTo(0);
+
+                App.ConfigureUpdateService(updateService);
+                var updateCheckReplayed = WaitFor(() =>
+                    updateService.CheckCalls == 1 &&
+                    context.MainWindowViewModel.Settings.UpdateState == ApplicationUpdateState.NoUpdates);
+
+                await Assert.That(updateCheckReplayed).IsTrue();
+            }
+            finally
+            {
+                App.ConfigureUpdateService(null);
+            }
+        }, CancellationToken.None);
+    }
+
     private static bool WaitFor(Func<bool> predicate, int timeoutMilliseconds = 5000)
     {
         return SpinWait.SpinUntil(() =>
@@ -233,6 +269,30 @@ public class SingleViewStartupUiTests
                 IsCompleted = task.IsCompleted,
                 IsCanBeCompleted = task.IsCanBeCompleted,
             };
+        }
+    }
+
+    private sealed class CountingApplicationUpdateService : IApplicationUpdateService
+    {
+        public bool IsSupported => true;
+
+        public string CurrentVersion => "1.0.0";
+
+        public ApplicationUpdateInfo? PendingUpdate => null;
+
+        public int CheckCalls { get; private set; }
+
+        public Task<ApplicationUpdateInfo?> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+        {
+            CheckCalls++;
+            return Task.FromResult<ApplicationUpdateInfo?>(null);
+        }
+
+        public Task DownloadUpdateAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public void ApplyUpdateAndRestart()
+        {
         }
     }
 }

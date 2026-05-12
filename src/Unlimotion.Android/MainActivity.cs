@@ -15,6 +15,7 @@ using Android.Util;
 using Android.Views;
 using Avalonia;
 using Avalonia.Android;
+using LibGit2Sharp;
 using ReactiveUI.Avalonia;
 using Unlimotion;
 using Unlimotion.Android.Services;
@@ -38,6 +39,9 @@ public class MainActivity : AvaloniaMainActivity
     private const string TasksFolderName = "Tasks";
     private const int OpenTaskFolderRequestCode = 4201;
     private const int ManageExternalStorageRequestCode = 4202;
+    private static readonly object AppServicesGate = new();
+    private static bool _coreAppServicesConfigured;
+    private static string? _configuredDataDir;
     private string? _dataDir;
     private TaskCompletionSource<string?>? _openTaskFolderCompletion;
     private TaskCompletionSource<bool>? _manageExternalStorageCompletion;
@@ -54,26 +58,8 @@ public class MainActivity : AvaloniaMainActivity
     {
         try
         {
-            var dataDir = ResolveDataDirectory();
+            var dataDir = ConfigureCoreAppServices(this);
             _dataDir = dataDir;
-            Directory.CreateDirectory(dataDir);
-
-            BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
-
-            EnsureGitSafeDirectory(dataDir);
-            EnsureGitSslCertBundle(dataDir);
-
-            TaskStorageFactory.DefaultStoragePath = Path.Combine(dataDir, TasksFolderName);
-
-            var configPath = Path.Combine(dataDir, DefaultConfigName);
-            if (!File.Exists(configPath))
-            {
-                using var stream = File.CreateText(configPath);
-                stream.Write(@"{}");
-            }
-
-            App.Init(configPath);
-            EnsureGitSafeDirectory(TaskStorageFactory.DefaultStoragePath);
 
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
@@ -86,16 +72,56 @@ public class MainActivity : AvaloniaMainActivity
         }
     }
 
-    private string ResolveDataDirectory()
+    internal static string ConfigureCoreAppServices(Context context)
+    {
+        lock (AppServicesGate)
+        {
+            if (_coreAppServicesConfigured && !string.IsNullOrWhiteSpace(_configuredDataDir))
+            {
+                return _configuredDataDir;
+            }
+
+            var dataDir = ResolveDataDirectory(context);
+            Directory.CreateDirectory(dataDir);
+
+            var tasksPath = Path.Combine(dataDir, TasksFolderName);
+            App.DefaultStoragePath = tasksPath;
+            TaskStorageFactory.DefaultStoragePath = tasksPath;
+            BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
+
+            EnsureGitSafeDirectory(dataDir, dataDir);
+            EnsureGitSslCertBundle(context, dataDir);
+
+            var configPath = Path.Combine(dataDir, DefaultConfigName);
+            if (!File.Exists(configPath))
+            {
+                using var stream = File.CreateText(configPath);
+                stream.Write(@"{}");
+            }
+
+            App.Init(configPath);
+
+            BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
+            EnsureGitSafeDirectory(dataDir, TaskStorageFactory.DefaultStoragePath);
+
+            _configuredDataDir = dataDir;
+            _coreAppServicesConfigured = true;
+            return dataDir;
+        }
+    }
+
+    private string ResolveDataDirectory() => ResolveDataDirectory(this);
+
+    private static string ResolveDataDirectory(Context context)
     {
         // App-private storage works on modern Android without broad filesystem permissions.
-        var externalFilesDir = GetExternalFilesDir(null)?.AbsolutePath;
+        var externalFilesDir = context.GetExternalFilesDir(null)?.AbsolutePath;
         if (!string.IsNullOrWhiteSpace(externalFilesDir))
         {
             return externalFilesDir;
         }
 
-        var internalFilesDir = ApplicationContext?.FilesDir;
+        var internalFilesDir = context.FilesDir ?? context.ApplicationContext?.FilesDir;
         if (internalFilesDir != null)
         {
             return internalFilesDir.AbsolutePath;
@@ -378,7 +404,7 @@ public class MainActivity : AvaloniaMainActivity
 
     private static bool _crashLoggingHooked;
 
-    private static void HookCrashLogging()
+    internal static void HookCrashLogging()
     {
         if (_crashLoggingHooked)
         {
@@ -466,11 +492,28 @@ public class MainActivity : AvaloniaMainActivity
             }
 
             var dataDir = _dataDir ?? ResolveDataDirectory();
+            EnsureGitSafeDirectory(dataDir, directoryPath);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void EnsureGitSafeDirectory(string dataDir, string? directoryPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+            {
+                return;
+            }
+
             var configPath = Path.Combine(dataDir, ".gitconfig");
             var safeDirectory = ResolveGitSafeDirectoryPath(dataDir, directoryPath);
 
             GitSafeDirectoryConfig.EnsureSafeDirectory(configPath, safeDirectory);
             System.Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", configPath);
+            GlobalSettings.SetConfigSearchPaths(ConfigurationLevel.Global, [dataDir]);
         }
         catch
         {
@@ -491,14 +534,14 @@ public class MainActivity : AvaloniaMainActivity
                Path.IsPathFullyQualified(path);
     }
 
-    private void EnsureGitSslCertBundle(string dataDir)
+    private static void EnsureGitSslCertBundle(Context context, string dataDir)
     {
         try
         {
             var certPath = Path.Combine(dataDir, "cacert.pem");
             if (!File.Exists(certPath))
             {
-                using var input = Assets?.Open("cacert.pem");
+                using var input = context.Assets?.Open("cacert.pem");
                 if (input == null)
                 {
                     return;
@@ -508,7 +551,10 @@ public class MainActivity : AvaloniaMainActivity
                 input.CopyTo(output);
             }
 
-            LibGit2Interop.SetSslCertificateLocations(certPath, null);
+            var certDirectory = Directory.Exists("/system/etc/security/cacerts")
+                ? "/system/etc/security/cacerts"
+                : null;
+            LibGit2Interop.SetSslCertificateLocations(certPath, certDirectory);
         }
         catch
         {
@@ -522,6 +568,23 @@ public class AndroidApp : AvaloniaAndroidApplication<App>
     protected AndroidApp(IntPtr javaReference, JniHandleOwnership transfer)
         : base(javaReference, transfer)
     {
+    }
+
+    public override void OnCreate()
+    {
+        MainActivity.HookCrashLogging();
+
+        try
+        {
+            MainActivity.ConfigureCoreAppServices(this);
+        }
+        catch (Exception ex)
+        {
+            MainActivity.WriteStartupError(ex);
+            throw;
+        }
+
+        base.OnCreate();
     }
 
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
