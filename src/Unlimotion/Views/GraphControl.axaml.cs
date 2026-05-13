@@ -18,6 +18,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DynamicData.Binding;
@@ -1342,7 +1343,9 @@ namespace Unlimotion.Views
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = titleText.VerticalAlignment,
                 MinWidth = Math.Max(titleText.Bounds.Width, 48),
-                MaxWidth = RoadmapNode.MaxWidth
+                MinHeight = Math.Max(titleText.Bounds.Height, 22),
+                MaxWidth = titleText.MaxWidth,
+                TextWrapping = TextWrapping.Wrap
             };
             titleEditor.Classes.Add("RoadmapInlineTaskTitleEditor");
             if (taskItem.Wanted)

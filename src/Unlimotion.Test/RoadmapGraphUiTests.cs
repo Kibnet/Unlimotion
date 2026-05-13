@@ -1303,7 +1303,8 @@ public class RoadmapGraphUiTests
 
                 var currentTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(currentTask).IsNotNull();
-                currentTask!.Title = "Roadmap editable title";
+                currentTask!.Title =
+                    "Roadmap editable title with enough words to wrap across multiple visual lines in a roadmap node";
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
@@ -1323,6 +1324,7 @@ public class RoadmapGraphUiTests
                     graphControl!,
                     MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(titleText.Bounds.Width).IsGreaterThan(0);
+                await Assert.That(titleText.Bounds.Height).IsGreaterThan(22);
                 await Assert.That(titleSurface.Bounds.Width).IsGreaterThan(0);
                 await Assert.That(FindRoadmapInlineTitleEditor(
                     graphControl!,
@@ -1353,6 +1355,9 @@ public class RoadmapGraphUiTests
                     MainWindowViewModelFixture.RootTask2Id);
                 var clickFocused = WaitFor(() => IsFocused(window, inlineEditor));
                 await Assert.That(clickFocused).IsTrue();
+                await Assert.That(inlineEditor.TextWrapping).IsEqualTo(TextWrapping.Wrap);
+                await Assert.That(WaitFor(() =>
+                    inlineEditor.Bounds.Height >= titleText.Bounds.Height - 1)).IsTrue();
 
                 inlineEditor.Text = "Roadmap renamed from repeated title click";
                 Dispatcher.UIThread.RunJobs();
