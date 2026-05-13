@@ -66,6 +66,8 @@ public class App : Application
     private static IScheduler? _scheduler;
     private static MainWindowViewModel? _mainWindowViewModel;
     private static EventHandler? _cultureChangedHandler;
+    private static SettingsViewModel? _startupUpdateSettings;
+    private static bool _startupUpdateCheckPending;
     private ServerStorage? _wiredServerStorage;
     private Action? _serverConnectedHandler;
     private Action<Exception?>? _serverConnectionErrorHandler;
@@ -1122,7 +1124,8 @@ public class App : Application
             // Existing startup behavior ignored connect failures here.
         }
 
-        _ = CheckForUpdatesOnStartupAsync(vm.Settings);
+        _startupUpdateSettings = vm.Settings;
+        RequestStartupUpdateCheck(vm.Settings);
     }
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)
@@ -1288,17 +1291,51 @@ public class App : Application
     public static void ConfigureUpdateService(IApplicationUpdateService? updateService)
     {
         _applicationUpdateService = updateService;
-        var settings = _mainWindowViewModel?.Settings;
-        settings?.ConfigureUpdateService(updateService);
+        var mainSettings = _mainWindowViewModel?.Settings;
+        var startupSettings = _startupUpdateSettings;
 
+        mainSettings?.ConfigureUpdateService(updateService);
+        if (mainSettings != null)
+        {
+            _startupUpdateSettings = mainSettings;
+        }
+
+        if (startupSettings != null && !ReferenceEquals(startupSettings, mainSettings))
+        {
+            startupSettings.ConfigureUpdateService(updateService);
+        }
+
+        var settings = mainSettings ?? startupSettings;
         if (Current is App app && settings != null)
         {
             app.RescheduleAutomaticUpdateTimer(settings);
+            if (_startupUpdateCheckPending && updateService?.IsSupported == true)
+            {
+                app.RequestStartupUpdateCheck(settings);
+            }
         }
+    }
+
+    private void RequestStartupUpdateCheck(SettingsViewModel settings)
+    {
+        if (_applicationUpdateService?.IsSupported != true)
+        {
+            _startupUpdateCheckPending = true;
+            return;
+        }
+
+        _startupUpdateCheckPending = false;
+        _ = CheckForUpdatesOnStartupAsync(settings);
     }
 
     private async Task CheckForUpdatesOnStartupAsync(SettingsViewModel settings)
     {
+        if (_applicationUpdateService?.IsSupported != true)
+        {
+            _startupUpdateCheckPending = true;
+            return;
+        }
+
         await RunAutomaticUpdateCheckAsync(settings);
     }
 
