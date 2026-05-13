@@ -259,6 +259,94 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task SwitchRemoteConnectionType_CreatesSshRemoteForSingleHttpRemote()
+    {
+        var localPath = CreateInitializedRepositoryWithRemote("origin", "https://github.com/org/repo.git");
+        var service = CreateService(localPath, "https://github.com/org/repo.git", out var configuration);
+
+        var result = service.SwitchRemoteConnectionType("origin", BackupAuthMode.Ssh);
+
+        using var repo = new Repository(localPath);
+        await Assert.That(result.RemoteName).IsEqualTo("origin-ssh");
+        await Assert.That(result.RemoteUrl).IsEqualTo("git@github.com:org/repo.git");
+        await Assert.That(result.AuthType).IsEqualTo("SSH");
+        await Assert.That(result.CreatedRemote).IsTrue();
+        await Assert.That(repo.Network.Remotes["origin"]?.Url).IsEqualTo("https://github.com/org/repo.git");
+        await Assert.That(repo.Network.Remotes["origin-ssh"]?.Url).IsEqualTo("git@github.com:org/repo.git");
+        await Assert.That(configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Get<string>())
+            .IsEqualTo("origin-ssh");
+        await Assert.That(configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Get<string>())
+            .IsEqualTo("git@github.com:org/repo.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SwitchRemoteConnectionType_SelectsExistingCanonicalTargetWithoutDuplicate()
+    {
+        var localPath = CreateInitializedRepositoryWithRemote("origin", "git@github.com:org/repo.git");
+        using (var repo = new Repository(localPath))
+        {
+            repo.Network.Remotes.Add("origin-http", "http://github.com:80/org/repo/");
+        }
+
+        var service = CreateService(localPath, "git@github.com:org/repo.git", out _);
+
+        var result = service.SwitchRemoteConnectionType("origin", BackupAuthMode.Token);
+
+        using var verifiedRepo = new Repository(localPath);
+        await Assert.That(result.RemoteName).IsEqualTo("origin-http");
+        await Assert.That(result.RemoteUrl).IsEqualTo("http://github.com:80/org/repo/");
+        await Assert.That(result.CreatedRemote).IsFalse();
+        await Assert.That(verifiedRepo.Network.Remotes.Count()).IsEqualTo(2);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SwitchRemoteConnectionType_CreatesUniqueHttpRemoteName()
+    {
+        var localPath = CreateInitializedRepositoryWithRemote("backup", "git@github.com:org/repo.git");
+        using (var repo = new Repository(localPath))
+        {
+            repo.Network.Remotes.Add("backup-http", "https://github.com/org/other.git");
+        }
+
+        var service = CreateService(localPath, "git@github.com:org/repo.git", out _);
+
+        var result = service.SwitchRemoteConnectionType("backup", BackupAuthMode.Token);
+
+        using var verifiedRepo = new Repository(localPath);
+        await Assert.That(result.RemoteName).IsEqualTo("backup-http-2");
+        await Assert.That(result.RemoteUrl).IsEqualTo("https://github.com/org/repo.git");
+        await Assert.That(verifiedRepo.Network.Remotes["backup-http-2"]?.Url)
+            .IsEqualTo("https://github.com/org/repo.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SwitchRemoteConnectionType_RejectsUnsupportedRemoteUrlWithoutChangingRemotes()
+    {
+        var localPath = CreateInitializedRepositoryWithRemote("origin", "file:///tmp/repo.git");
+        var service = CreateService(localPath, "file:///tmp/repo.git", out _);
+
+        await Assert.That(() => service.SwitchRemoteConnectionType("origin", BackupAuthMode.Ssh))
+            .Throws<InvalidOperationException>();
+
+        using var repo = new Repository(localPath);
+        await Assert.That(repo.Network.Remotes.Count()).IsEqualTo(1);
+        await Assert.That(repo.Network.Remotes["origin"]?.Url).IsEqualTo("file:///tmp/repo.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task AreEquivalentRemoteUrls_NormalizesSupportedHttpAndSshForms()
+    {
+        await Assert.That(BackupViaGitService.AreEquivalentRemoteUrls(
+                "ssh://git@github.com/org/repo.git",
+                "git@github.com:org/repo"))
+            .IsTrue();
+        await Assert.That(BackupViaGitService.AreEquivalentRemoteUrls(
+                "http://github.com:80/org/repo/",
+                "https://GITHUB.com/org/repo.git"))
+            .IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task PullExistingRepository_PullsRemoteChanges_WhenTaskFolderIsExistingRepository()
     {
         var remotePath = CreateBareRemoteWithCommit("task", "base content");
@@ -1104,6 +1192,16 @@ public sealed class BackupViaGitServiceTests : IDisposable
         var localBranch = repo.Branches["main"] ?? repo.CreateBranch("main", remoteBranch.Tip);
         repo.Branches.Update(localBranch, updater => updater.TrackedBranch = remoteBranch.CanonicalName);
         Commands.Checkout(repo, localBranch);
+        return localPath;
+    }
+
+    private string CreateInitializedRepositoryWithRemote(string remoteName, string remoteUrl)
+    {
+        var localPath = Path.Combine(_rootPath, $"remote-switch-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localPath);
+        Repository.Init(localPath);
+        using var repo = new Repository(localPath);
+        repo.Network.Remotes.Add(remoteName, remoteUrl);
         return localPath;
     }
 

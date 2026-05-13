@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LibGit2Sharp;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -78,6 +79,10 @@ public static class UnlimotionAutomationScenarioData
     {
         switch (scenario)
         {
+            case UnlimotionAutomationScenario.GitRemoteSwitch:
+                CopySmokeSnapshots(repositoryRoot, tasksPath);
+                InitializeGitRemoteSwitchRepository(tasksPath);
+                break;
             case UnlimotionAutomationScenario.ReadmeDemo:
                 SeedReadmeDemoTasks(tasksPath, language);
                 break;
@@ -95,6 +100,9 @@ public static class UnlimotionAutomationScenarioData
     {
         switch (scenario)
         {
+            case UnlimotionAutomationScenario.GitRemoteSwitch:
+                WriteGitRemoteSwitchConfig(configPath, tasksPath);
+                break;
             case UnlimotionAutomationScenario.ReadmeDemo:
                 WriteReadmeDemoConfig(configPath, tasksPath, language);
                 break;
@@ -163,6 +171,59 @@ public static class UnlimotionAutomationScenarioData
         };
 
         WriteJson(configPath, config);
+    }
+
+    private static void WriteGitRemoteSwitchConfig(string configPath, string tasksPath)
+    {
+        var config = new
+        {
+            TaskStorage = new
+            {
+                Path = tasksPath,
+                URL = string.Empty,
+                Login = string.Empty,
+                Password = string.Empty,
+                IsServerMode = "False"
+            },
+            Git = new
+            {
+                BackupEnabled = "False",
+                ShowStatusToasts = "False",
+                RemoteUrl = "https://github.com/org/unlimotion-backup.git",
+                Branch = "master",
+                UserName = "YourEmail",
+                Password = "YourToken",
+                PullIntervalSeconds = "30",
+                PushIntervalSeconds = "60",
+                RemoteName = "origin",
+                PushRefSpec = "refs/heads/master",
+                CommitterName = "Backuper",
+                CommitterEmail = "Backuper@unlimotion.ru"
+            },
+            AllTasks = new
+            {
+                ShowCompleted = "False",
+                ShowArchived = "False",
+                ShowWanted = "False",
+                CurrentSortDefinition = "Comfort",
+                CurrentSortDefinitionForUnlocked = "Comfort"
+            },
+            Appearance = new
+            {
+                Theme = AppearanceSettings.LightTheme,
+                FontSize = AppearanceSettings.DefaultFontSize,
+                Language = LocalizationService.EnglishLanguage
+            }
+        };
+
+        WriteJson(configPath, config);
+    }
+
+    private static void InitializeGitRemoteSwitchRepository(string tasksPath)
+    {
+        Repository.Init(tasksPath);
+        using var repo = new Repository(tasksPath);
+        repo.Network.Remotes.Add("origin", "https://github.com/org/unlimotion-backup.git");
     }
 
     private static void WriteReadmeDemoConfig(string configPath, string tasksPath, string? language)

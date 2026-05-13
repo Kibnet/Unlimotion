@@ -319,7 +319,26 @@
                                       ItemsSource="{Binding RemotesWithAuthType}" />
                         </StackPanel>
 
-                        <StackPanel IsVisible="{Binding IsTokenAuthSelected}">
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource RemoteConnectionType}" />
+                            <WrapPanel Classes="ActionButtons" Margin="0">
+                                <ToggleButton Content="HTTP"
+                                              IsChecked="{Binding IsHttpRemoteConnectionTypeSelected, Mode=OneWay}"
+                                              IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                              Command="{Binding SwitchRemoteToHttpCommand}"
+                                              AutomationProperties.AutomationId="SwitchRemoteToHttpButton" />
+                                <ToggleButton Content="SSH"
+                                              IsChecked="{Binding IsSshRemoteConnectionTypeSelected, Mode=OneWay}"
+                                              IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                              Command="{Binding SwitchRemoteToSshCommand}"
+                                              AutomationProperties.AutomationId="SwitchRemoteToSshButton" />
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding IsTokenAuthSelected}"
+                                    AutomationProperties.AutomationId="TokenAuthSection"
+                                    AutomationProperties.ControlTypeOverride="Group"
+                                    AutomationProperties.IsControlElementOverride="True">
                             <StackPanel Classes="FieldGroup">
                                 <TextBlock Classes="FieldLabel" Text="{DynamicResource Login}" />
                                 <TextBox Text="{Binding GitUserName}" />

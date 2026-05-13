@@ -882,6 +882,8 @@ public class SettingsControlResponsiveUiTests
         public List<string> Remotes() => new();
         public string? GetRemoteAuthType(string remoteName) => null;
         public string? GetRemoteUrl(string remoteName) => null;
+        public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(string remoteName, BackupAuthMode targetMode) =>
+            throw new NotSupportedException();
         public List<string> Refs() => new();
         public List<string> GetSshPublicKeys() => new();
         public string GenerateSshKey(string keyName) => throw new NotSupportedException();

@@ -1,0 +1,126 @@
+using AppAutomation.Abstractions;
+using AppAutomation.Avalonia.Headless.Automation;
+using AppAutomation.Avalonia.Headless.Session;
+using AppAutomation.TUnit;
+using ReactiveUI;
+using TUnit.Assertions;
+using TUnit.Core;
+using Unlimotion.AppAutomation.TestHost;
+using Unlimotion.UiTests.Authoring.Pages;
+using Unlimotion.ViewModel;
+
+namespace Unlimotion.UiTests.Headless.Tests;
+
+public sealed class SettingsRemoteTypeHeadlessTests
+    : UiTestBase<MainWindowHeadlessTests.HeadlessRuntimeSession, MainWindowPage>
+{
+    private MainWindowViewModel? _vm;
+
+    protected override MainWindowHeadlessTests.HeadlessRuntimeSession LaunchSession()
+    {
+        return new MainWindowHeadlessTests.HeadlessRuntimeSession(
+            DesktopAppSession.Launch(
+                UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
+                    UnlimotionAutomationScenario.GitRemoteSwitch,
+                    afterViewModelPrepared: vm => _vm = vm)));
+    }
+
+    protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
+    {
+        return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
+    {
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        _ = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SettingsRoot),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Settings root did not become available.")!;
+
+        Page.BackupAutoCheckBox.IsChecked = true;
+        var tokenSection = WaitUntil(
+            () => TryResolveDuringWait(() => Page.TokenAuthSection),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Token auth section did not become available for HTTP remote.")!;
+        var sshButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SwitchRemoteToSshButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "SSH remote switch button did not become available.")!;
+        _ = WaitUntil(
+            () => _vm?.Settings.CanSwitchRemoteConnectionType == true,
+            static canSwitch => canSwitch,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Remote connection type switch did not become enabled.")!;
+        await Assert.That(_vm!.Settings.GitRemoteName).IsEqualTo("origin");
+        await Assert.That(_vm.Settings.GitRemoteUrl).IsEqualTo("https://github.com/org/unlimotion-backup.git");
+        await Assert.That(_vm.Settings.SwitchRemoteToSshCommand?.CanExecute(null)).IsTrue();
+
+        var commandErrors = new List<Exception>();
+        using var commandErrorSubscription =
+            (_vm?.Settings.SwitchRemoteToSshCommand as IReactiveCommand)?.ThrownExceptions.Subscribe(commandErrors.Add);
+        _vm.Settings.SwitchRemoteToSshCommand!.Execute(null);
+
+        var sshSection = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SshKeysSection),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "SSH keys section did not become available after switching remote type.")!;
+        var selectedRemoteUrl = WaitUntil(
+            () =>
+            {
+                return new RemoteSwitchWaitState(
+                    _vm?.Settings.GitRemoteName,
+                    _vm?.Settings.GitRemoteUrl,
+                    _vm?.Settings.IsSshAuthSelected,
+                    commandErrors.FirstOrDefault());
+            },
+            static state => state.Error is not null ||
+                            string.Equals(state.SelectedRemoteName, "origin-ssh", StringComparison.Ordinal) &&
+                            string.Equals(
+                                state.SelectedRemoteUrl,
+                                "git@github.com:org/unlimotion-backup.git",
+                                StringComparison.Ordinal) &&
+                            state.IsSshAuthSelected == true,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Selected Git remote state was not updated after switching remote type.")!;
+        if (selectedRemoteUrl.Error is not null)
+        {
+            throw selectedRemoteUrl.Error;
+        }
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(tokenSection.AutomationId).IsEqualTo("TokenAuthSection");
+            await Assert.That(sshButton.AutomationId).IsEqualTo("SwitchRemoteToSshButton");
+            await Assert.That(sshSection.AutomationId).IsEqualTo("SshKeysSection");
+            await Assert.That(selectedRemoteUrl.SelectedRemoteName).IsEqualTo("origin-ssh");
+            await Assert.That(selectedRemoteUrl.IsSshAuthSelected).IsTrue();
+            await Assert.That(selectedRemoteUrl.SelectedRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+        }
+    }
+
+    private sealed record RemoteSwitchWaitState(
+        string? SelectedRemoteName,
+        string? SelectedRemoteUrl,
+        bool? IsSshAuthSelected,
+        Exception? Error);
+
+    private static TControl? TryResolveDuringWait<TControl>(Func<TControl> resolve)
+        where TControl : class
+    {
+        try
+        {
+            return resolve();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

@@ -1,6 +1,7 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 using ReactiveUI.Avalonia;
 using ReactiveUI.Builder;
 using Unlimotion;
@@ -181,7 +182,29 @@ public static class UnlimotionAppLaunchHost
         TaskStorageFactory.DefaultStoragePath = launchData.TasksPath;
         storageFactory.CreateFileStorage(launchData.TasksPath);
 
-        var settingsViewModel = new SettingsViewModel(configuration);
+        var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
+        var settingsViewModel = new SettingsViewModel(configuration, backupService);
+        async Task SwitchRemoteConnectionTypeAsync(BackupAuthMode targetMode)
+        {
+            if (string.IsNullOrWhiteSpace(settingsViewModel.GitRemoteName))
+            {
+                return;
+            }
+
+            var result = await Task.Run(() =>
+                backupService.SwitchRemoteConnectionType(settingsViewModel.GitRemoteName, targetMode));
+            settingsViewModel.ApplyRemoteConnectionTypeSwitch(result);
+        }
+
+        settingsViewModel.SwitchRemoteConnectionTypeCommand = ReactiveCommand.CreateFromTask<string?>(targetType =>
+            SwitchRemoteConnectionTypeAsync(
+                string.Equals(targetType, "SSH", StringComparison.OrdinalIgnoreCase)
+                    ? BackupAuthMode.Ssh
+                    : BackupAuthMode.Token));
+        settingsViewModel.SwitchRemoteToHttpCommand = ReactiveCommand.CreateFromTask(() =>
+            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Token));
+        settingsViewModel.SwitchRemoteToSshCommand = ReactiveCommand.CreateFromTask(() =>
+            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Ssh));
         var vm = new MainWindowViewModel(
             new AppNameDefinitionService(),
             notificationManager,
