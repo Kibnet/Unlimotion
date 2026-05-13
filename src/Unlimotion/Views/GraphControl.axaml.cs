@@ -12,10 +12,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using DynamicData.Binding;
 using ReactiveUI;
 using Unlimotion.ViewModel;
@@ -45,6 +49,9 @@ namespace Unlimotion.Views
         private IRoadmapViewportAdapter? roadmapViewport;
         private PendingRoadmapDragContext? pendingRoadmapDrag;
         private PendingRoadmapPanContext? pendingRoadmapPan;
+        private TextBox? activeRoadmapInlineTitleEditor;
+        private string? lastRoadmapInlineTitleClickTaskId;
+        private DateTimeOffset? lastRoadmapInlineTitleClickAt;
         private bool roadmapDragInProgress;
         private int roadmapBuildRequestVersion;
         private int roadmapActiveBuildCount;
@@ -53,6 +60,7 @@ namespace Unlimotion.Views
         private const double RoadmapPanStep = 240;
         private const double RoadmapDragThreshold = 4;
         private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
+        private static readonly TimeSpan RoadmapInlineTitleRepeatedClickDelay = TimeSpan.FromMilliseconds(500);
 
         public static readonly StyledProperty<bool> RoadmapGraphBuildInProgressProperty =
             AvaloniaProperty.Register<GraphControl, bool>(nameof(RoadmapGraphBuildInProgress));
@@ -90,10 +98,16 @@ namespace Unlimotion.Views
                 CancelPendingRoadmapBuilds();
                 ClearPendingRoadmapDrag();
                 ClearPendingRoadmapPan();
+                ClearRoadmapInlineTitleEditState();
             };
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
             AddHandler(DragDrop.DragOverEvent, MainControl.DragOver);
+            AddHandler(
+                PointerPressedEvent,
+                RoadmapInlineTitleText_OnPointerPressed,
+                RoutingStrategies.Tunnel,
+                true);
             AddHandler(
                 PointerMovedEvent,
                 InputElement_OnPointerMoved,
@@ -182,6 +196,7 @@ namespace Unlimotion.Views
             CancelScheduledGraphUpdate();
             CancelPendingRoadmapBuilds();
             ClearRoadmapProjection();
+            ClearRoadmapInlineTitleEditState();
 
             if (dc == null)
             {
@@ -906,6 +921,15 @@ namespace Unlimotion.Views
                 return;
             }
 
+            if (e.KeyModifiers == KeyModifiers.None &&
+                e.Key == Key.F2 &&
+                FocusCurrentRoadmapInlineTitleEditor(sender as Control ?? e.Source as Control))
+            {
+                ClearRoadmapInlineTitleClickState();
+                e.Handled = true;
+                return;
+            }
+
             if (TryExecuteRoadmapCreateHotkey(sender, e))
             {
                 return;
@@ -1108,6 +1132,331 @@ namespace Unlimotion.Views
             return RoadmapNodes
                 .GroupBy(node => node.Id)
                 .ToDictionary(group => group.Key, group => group.First().Width);
+        }
+
+        private void RoadmapInlineTitleText_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (e.Handled ||
+                e.KeyModifiers != KeyModifiers.None ||
+                !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            if (activeRoadmapInlineTitleEditor != null &&
+                (e.Source is Control sourceControl &&
+                 IsControlOrDescendantOf(sourceControl, activeRoadmapInlineTitleEditor) ||
+                 IsPointWithinControl(activeRoadmapInlineTitleEditor, e.GetPosition(this))))
+            {
+                return;
+            }
+
+            var control = FindRoadmapInlineTitleControl(e.Source as Control) ??
+                          FindRoadmapInlineTitleControlAt(e.GetPosition(this));
+            if (control == null)
+            {
+                return;
+            }
+
+            if (!TryGetRoadmapTaskItem(control, out var taskItem) ||
+                string.IsNullOrWhiteSpace(taskItem.Id))
+            {
+                return;
+            }
+
+            HandleRoadmapInlineTitleClick(control, taskItem, e);
+        }
+
+        private static Control? FindRoadmapInlineTitleControl(Control? source)
+        {
+            var current = source;
+            while (current != null)
+            {
+                var automationId = AutomationProperties.GetAutomationId(current);
+                if (automationId is "RoadmapInlineTaskTitleSurface" or "RoadmapInlineTaskTitleTextBlock")
+                {
+                    return current;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return null;
+        }
+
+        private static bool IsControlOrDescendantOf(Control control, Control ancestor)
+        {
+            var current = control;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, ancestor))
+                {
+                    return true;
+                }
+
+                current = current.FindParent<Control>();
+            }
+
+            return false;
+        }
+
+        private Control? FindRoadmapInlineTitleControlAt(Point position)
+        {
+            foreach (var control in this.GetVisualDescendants().OfType<Control>())
+            {
+                var automationId = AutomationProperties.GetAutomationId(control);
+                if (automationId != "RoadmapInlineTaskTitleSurface" ||
+                    !control.IsAttachedToVisualTree() ||
+                    !control.IsVisible ||
+                    !control.IsEnabled ||
+                    control.Bounds.Width <= 0 ||
+                    control.Bounds.Height <= 0)
+                {
+                    continue;
+                }
+
+                var origin = control.TranslatePoint(new Point(0, 0), this);
+                if (!origin.HasValue)
+                {
+                    continue;
+                }
+
+                var bounds = new Rect(origin.Value, control.Bounds.Size);
+                if (bounds.Contains(position))
+                {
+                    return control;
+                }
+            }
+
+            return null;
+        }
+
+        private bool IsPointWithinControl(Control control, Point position)
+        {
+            if (!control.IsAttachedToVisualTree() ||
+                !control.IsVisible ||
+                control.Bounds.Width <= 0 ||
+                control.Bounds.Height <= 0)
+            {
+                return false;
+            }
+
+            var origin = control.TranslatePoint(new Point(0, 0), this);
+            return origin.HasValue &&
+                   new Rect(origin.Value, control.Bounds.Size).Contains(position);
+        }
+
+        private void HandleRoadmapInlineTitleClick(
+            Control context,
+            TaskItemViewModel taskItem,
+            PointerPressedEventArgs e)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var lastClickElapsed = lastRoadmapInlineTitleClickAt == null
+                ? TimeSpan.MaxValue
+                : now - lastRoadmapInlineTitleClickAt.Value;
+            var isLastClickSameTitle =
+                string.Equals(lastRoadmapInlineTitleClickTaskId, taskItem.Id, StringComparison.Ordinal);
+            var isRapidRepeatedTitleClick =
+                isLastClickSameTitle &&
+                lastClickElapsed < RoadmapInlineTitleRepeatedClickDelay;
+
+            if (isRapidRepeatedTitleClick ||
+                e.ClickCount > 1 && lastClickElapsed < RoadmapInlineTitleRepeatedClickDelay)
+            {
+                ClearRoadmapInlineTitleClickState();
+                return;
+            }
+
+            var isRepeatedTitleClick =
+                isLastClickSameTitle &&
+                lastClickElapsed >= RoadmapInlineTitleRepeatedClickDelay;
+
+            SelectRoadmapTask(context, taskItem);
+
+            if (isRepeatedTitleClick && FocusRoadmapInlineTitleEditor(taskItem.Id))
+            {
+                ClearRoadmapInlineTitleClickState();
+                e.Handled = true;
+                return;
+            }
+
+            lastRoadmapInlineTitleClickTaskId = taskItem.Id;
+            lastRoadmapInlineTitleClickAt = now;
+        }
+
+        private bool FocusCurrentRoadmapInlineTitleEditor(Control? context)
+        {
+            var owner = ResolveMainWindowViewModel(context);
+            return FocusRoadmapInlineTitleEditor(owner?.CurrentTaskItem?.Id);
+        }
+
+        private bool FocusRoadmapInlineTitleEditor(string? taskId)
+        {
+            if (string.IsNullOrWhiteSpace(taskId))
+            {
+                return false;
+            }
+
+            var titleEditor = FindRoadmapInlineTitleEditor(taskId) ??
+                              CreateRoadmapInlineTitleEditor(taskId);
+
+            if (titleEditor == null)
+            {
+                return false;
+            }
+
+            if (!FocusRoadmapInlineTitleEditor(titleEditor))
+            {
+                QueueRoadmapInlineTitleEditorFocus(titleEditor);
+            }
+
+            return true;
+        }
+
+        private void QueueRoadmapInlineTitleEditorFocus(TextBox titleEditor)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(activeRoadmapInlineTitleEditor, titleEditor))
+                {
+                    FocusRoadmapInlineTitleEditor(titleEditor);
+                }
+            }, DispatcherPriority.Loaded);
+        }
+
+        private TextBox? CreateRoadmapInlineTitleEditor(string taskId)
+        {
+            var titleText = FindRoadmapInlineTitleTextBlock(taskId);
+            if (titleText?.Parent is not Panel parent ||
+                !TryGetRoadmapTaskItem(titleText, out var taskItem))
+            {
+                return null;
+            }
+
+            ClearActiveRoadmapInlineTitleEditor();
+
+            var titleEditor = new TextBox
+            {
+                DataContext = taskItem,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = titleText.VerticalAlignment,
+                MinWidth = Math.Max(titleText.Bounds.Width, 48),
+                MaxWidth = RoadmapNode.MaxWidth
+            };
+            titleEditor.Classes.Add("RoadmapInlineTaskTitleEditor");
+            if (taskItem.Wanted)
+            {
+                titleEditor.Classes.Add("IsWanted");
+            }
+
+            AutomationProperties.SetAutomationId(titleEditor, "RoadmapInlineTaskTitleTextBox");
+            titleEditor.Bind(
+                TextBox.TextProperty,
+                new Binding(nameof(TaskItemViewModel.Title))
+                {
+                    Mode = BindingMode.TwoWay,
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                });
+
+            Grid.SetColumn(titleEditor, Grid.GetColumn(titleText));
+            Grid.SetColumnSpan(titleEditor, Grid.GetColumnSpan(titleText));
+            Grid.SetRow(titleEditor, Grid.GetRow(titleText));
+            Grid.SetRowSpan(titleEditor, Grid.GetRowSpan(titleText));
+
+            titleEditor.LostFocus += RoadmapInlineTitleEditor_OnLostFocus;
+            parent.Children.Add(titleEditor);
+            activeRoadmapInlineTitleEditor = titleEditor;
+
+            return titleEditor;
+        }
+
+        private TextBlock? FindRoadmapInlineTitleTextBlock(string taskId)
+        {
+            return this.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "RoadmapInlineTaskTitleTextBlock",
+                        StringComparison.Ordinal) &&
+                    TryGetRoadmapTaskItem(control, out var taskItem) &&
+                    string.Equals(taskItem.Id, taskId, StringComparison.Ordinal) &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+        }
+
+        private TextBox? FindRoadmapInlineTitleEditor(string taskId)
+        {
+            return this.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "RoadmapInlineTaskTitleTextBox",
+                        StringComparison.Ordinal) &&
+                    TryGetRoadmapTaskItem(control, out var taskItem) &&
+                    string.Equals(taskItem.Id, taskId, StringComparison.Ordinal) &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+        }
+
+        private static bool FocusRoadmapInlineTitleEditor(TextBox titleEditor)
+        {
+            if (!titleEditor.Focus())
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(titleEditor.Text))
+            {
+                titleEditor.SelectAll();
+            }
+            else
+            {
+                titleEditor.CaretIndex = 0;
+            }
+
+            return true;
+        }
+
+        private void RoadmapInlineTitleEditor_OnLostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (ReferenceEquals(sender, activeRoadmapInlineTitleEditor))
+            {
+                ClearActiveRoadmapInlineTitleEditor();
+            }
+        }
+
+        private void ClearRoadmapInlineTitleEditState()
+        {
+            ClearRoadmapInlineTitleClickState();
+            ClearActiveRoadmapInlineTitleEditor();
+        }
+
+        private void ClearRoadmapInlineTitleClickState()
+        {
+            lastRoadmapInlineTitleClickTaskId = null;
+            lastRoadmapInlineTitleClickAt = null;
+        }
+
+        private void ClearActiveRoadmapInlineTitleEditor()
+        {
+            var titleEditor = activeRoadmapInlineTitleEditor;
+            if (titleEditor == null)
+            {
+                return;
+            }
+
+            titleEditor.LostFocus -= RoadmapInlineTitleEditor_OnLostFocus;
+            if (titleEditor.Parent is Panel parent)
+            {
+                parent.Children.Remove(titleEditor);
+            }
+
+            activeRoadmapInlineTitleEditor = null;
         }
 
         private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
