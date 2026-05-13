@@ -15,6 +15,8 @@ public sealed class RoadmapNode : INotifyPropertyChanged
     private Point location;
     private double width = MinWidth;
     private double connectionWidth = MaxWidth;
+    private bool isSelected;
+    private bool isCurrent;
 
     public RoadmapNode(TaskItemViewModel taskItem)
     {
@@ -82,6 +84,36 @@ public sealed class RoadmapNode : INotifyPropertyChanged
     public Point RightAnchor => new(Location.X + Width, Location.Y + Height / 2);
 
     public Point ConnectionRightAnchor => new(Location.X + ConnectionWidth, Location.Y + Height / 2);
+
+    public bool IsSelected
+    {
+        get => isSelected;
+        set
+        {
+            if (isSelected == value)
+            {
+                return;
+            }
+
+            isSelected = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsCurrent
+    {
+        get => isCurrent;
+        set
+        {
+            if (isCurrent == value)
+            {
+                return;
+            }
+
+            isCurrent = value;
+            OnPropertyChanged();
+        }
+    }
 
     public bool SetMeasuredWidth(double measuredWidth)
     {

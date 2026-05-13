@@ -896,6 +896,7 @@ namespace Unlimotion.Views
         {
             return data.Contains(CustomBatchDataFormat) ||
                    data.Contains(CustomDataFormat) ||
+                   data.Contains(GraphControl.CustomBatchDataFormat) ||
                    data.Contains(GraphControl.CustomDataFormat);
         }
 
@@ -968,6 +969,33 @@ namespace Unlimotion.Views
                 return items.Count > 0;
             }
 
+            if (DragDataFormats.TryGetValue<GraphControl.RoadmapTaskDragData>(
+                    e.DataTransfer,
+                    GraphControl.CustomBatchDataFormat,
+                    out var roadmapBatchData))
+            {
+                var normalizedTasks = NormalizeRoadmapTasksForBatch(roadmapBatchData.TaskItems);
+                var result = new List<DragSourceOperationItem>(normalizedTasks.Count);
+                foreach (var taskItem in normalizedTasks)
+                {
+                    TaskItemViewModel? sourceParent = null;
+                    if (operationKind == BatchDropOperationKind.MoveInto &&
+                        !TryResolveMoveSourceParent(taskItem, out sourceParent))
+                    {
+                        items = Array.Empty<DragSourceOperationItem>();
+                        errorMessage = L10n.Get("BatchMoveMissingParents");
+                        return false;
+                    }
+
+                    result.Add(new DragSourceOperationItem(
+                        taskItem,
+                        operationKind == BatchDropOperationKind.MoveInto ? sourceParent : null));
+                }
+
+                items = result;
+                return items.Count > 0;
+            }
+
             object? singleSource = null;
             if (!DragDataFormats.TryGetValue<object>(e.DataTransfer, CustomDataFormat, out singleSource))
             {
@@ -1018,17 +1046,11 @@ namespace Unlimotion.Views
                 case TaskItemViewModel taskItem:
                 {
                     TaskItemViewModel? sourceParent = null;
-                    if (operationKind == BatchDropOperationKind.MoveInto)
+                    if (operationKind == BatchDropOperationKind.MoveInto &&
+                        !TryResolveMoveSourceParent(taskItem, out sourceParent))
                     {
-                        if (taskItem.Parents.Count <= 1)
-                        {
-                            sourceParent = taskItem.ParentsTasks.FirstOrDefault();
-                        }
-                        else
-                        {
-                            errorMessage = L10n.Get("MoveMissingParent");
-                            return false;
-                        }
+                        errorMessage = L10n.Get("MoveMissingParent");
+                        return false;
                     }
 
                     item = new DragSourceOperationItem(taskItem, sourceParent);
@@ -1061,6 +1083,44 @@ namespace Unlimotion.Views
             }
 
             return false;
+        }
+
+        private static bool TryResolveMoveSourceParent(
+            TaskItemViewModel taskItem,
+            out TaskItemViewModel? sourceParent)
+        {
+            sourceParent = null;
+            if (taskItem.Parents.Count > 1)
+            {
+                return false;
+            }
+
+            sourceParent = taskItem.ParentsTasks.FirstOrDefault();
+            return true;
+        }
+
+        private static IReadOnlyList<TaskItemViewModel> NormalizeRoadmapTasksForBatch(
+            IEnumerable<TaskItemViewModel>? taskItems)
+        {
+            var distinctTasks = taskItems?
+                                    .Where(static task => task != null &&
+                                                          !string.IsNullOrWhiteSpace(task.Id))
+                                    .GroupBy(static task => task.Id, StringComparer.Ordinal)
+                                    .Select(static group => group.First())
+                                    .ToList()
+                                ?? [];
+            if (distinctTasks.Count <= 1)
+            {
+                return distinctTasks;
+            }
+
+            var selectedIds = distinctTasks
+                .Select(static task => task.Id)
+                .ToHashSet(StringComparer.Ordinal);
+
+            return distinctTasks
+                .Where(task => task.GetAllParents().All(parent => !selectedIds.Contains(parent.Id)))
+                .ToList();
         }
 
         private static bool CanApplyDrop(

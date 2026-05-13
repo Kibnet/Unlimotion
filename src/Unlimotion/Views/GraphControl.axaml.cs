@@ -32,16 +32,24 @@ namespace Unlimotion.Views
     public partial class GraphControl : UserControl
     {
         public const string CustomFormat = "application/xxx-unlimotion-task-item";
+        public const string CustomBatchFormat = "application/xxx-unlimotion-roadmap-task-items";
         internal static readonly DataFormat<string> CustomDataFormat =
             DataFormat.CreateStringPlatformFormat(CustomFormat);
+        internal static readonly DataFormat<string> CustomBatchDataFormat =
+            DataFormat.CreateStringPlatformFormat(CustomBatchFormat);
 
         private GraphViewModel? dc;
         private readonly DisposableList disposableList = new DisposableListRealization();
         private readonly SerialDisposable roadmapScopeSubscriptions = new();
         private readonly SerialDisposable roadmapFilterSubscriptions = new();
+        private readonly SerialDisposable roadmapCurrentTaskSubscription = new();
         private readonly DispatcherTimer graphUpdateTimer;
+        private readonly HashSet<string> selectedRoadmapTaskIds = new(StringComparer.Ordinal);
         private DateTime lastRoadmapPointerDoubleTapAt = DateTime.MinValue;
         private string? lastRoadmapPointerDoubleTapTaskId;
+        private string? lastRoadmapClickSelectionTaskId;
+        private KeyModifiers lastRoadmapClickSelectionModifiers;
+        private bool lastRoadmapClickSelectionSelectedCurrentTask;
         private ReadOnlyObservableCollection<TaskWrapperViewModel>? roadmapScopeSubscriptionRoots;
         private string? roadmapScopeSubscriptionSignature;
         private bool roadmapScopeSubscriptionsDirty = true;
@@ -50,6 +58,7 @@ namespace Unlimotion.Views
         private IRoadmapViewportAdapter? roadmapViewport;
         private PendingRoadmapDragContext? pendingRoadmapDrag;
         private PendingRoadmapPanContext? pendingRoadmapPan;
+        private PendingRoadmapSelectionContext? pendingRoadmapSelection;
         private TextBox? activeRoadmapInlineTitleEditor;
         private string? lastRoadmapInlineTitleClickTaskId;
         private DateTimeOffset? lastRoadmapInlineTitleClickAt;
@@ -84,6 +93,22 @@ namespace Unlimotion.Views
                 nameof(IsRoadmapMinimapExpanded),
                 true);
 
+        public static readonly StyledProperty<bool> IsRoadmapSelectionRectangleVisibleProperty =
+            AvaloniaProperty.Register<GraphControl, bool>(
+                nameof(IsRoadmapSelectionRectangleVisible));
+
+        public static readonly StyledProperty<Thickness> RoadmapSelectionRectangleMarginProperty =
+            AvaloniaProperty.Register<GraphControl, Thickness>(
+                nameof(RoadmapSelectionRectangleMargin));
+
+        public static readonly StyledProperty<double> RoadmapSelectionRectangleWidthProperty =
+            AvaloniaProperty.Register<GraphControl, double>(
+                nameof(RoadmapSelectionRectangleWidth));
+
+        public static readonly StyledProperty<double> RoadmapSelectionRectangleHeightProperty =
+            AvaloniaProperty.Register<GraphControl, double>(
+                nameof(RoadmapSelectionRectangleHeight));
+
         public GraphControl()
         {
             graphUpdateTimer = new DispatcherTimer
@@ -99,7 +124,9 @@ namespace Unlimotion.Views
                 CancelPendingRoadmapBuilds();
                 ClearPendingRoadmapDrag();
                 ClearPendingRoadmapPan();
+                ClearPendingRoadmapSelection();
                 ClearRoadmapInlineTitleEditState();
+                roadmapCurrentTaskSubscription.Disposable = Disposable.Empty;
             };
             InitializeComponent();
             AddHandler(DragDrop.DropEvent, MainControl.Drop);
@@ -165,6 +192,30 @@ namespace Unlimotion.Views
             set => SetValue(IsRoadmapMinimapExpandedProperty, value);
         }
 
+        public bool IsRoadmapSelectionRectangleVisible
+        {
+            get => GetValue(IsRoadmapSelectionRectangleVisibleProperty);
+            private set => SetValue(IsRoadmapSelectionRectangleVisibleProperty, value);
+        }
+
+        public Thickness RoadmapSelectionRectangleMargin
+        {
+            get => GetValue(RoadmapSelectionRectangleMarginProperty);
+            private set => SetValue(RoadmapSelectionRectangleMarginProperty, value);
+        }
+
+        public double RoadmapSelectionRectangleWidth
+        {
+            get => GetValue(RoadmapSelectionRectangleWidthProperty);
+            private set => SetValue(RoadmapSelectionRectangleWidthProperty, value);
+        }
+
+        public double RoadmapSelectionRectangleHeight
+        {
+            get => GetValue(RoadmapSelectionRectangleHeightProperty);
+            private set => SetValue(RoadmapSelectionRectangleHeightProperty, value);
+        }
+
         private IRoadmapViewportAdapter RoadmapViewport =>
             roadmapViewport ??= new NodifyRoadmapViewportAdapter(RoadmapEditor);
 
@@ -193,6 +244,9 @@ namespace Unlimotion.Views
             disposableList.Disposables.Clear();
             roadmapScopeSubscriptions.Disposable = Disposable.Empty;
             roadmapFilterSubscriptions.Disposable = Disposable.Empty;
+            roadmapCurrentTaskSubscription.Disposable = Disposable.Empty;
+            selectedRoadmapTaskIds.Clear();
+            ClearPendingRoadmapSelection();
             ResetRoadmapScopeSubscriptionCache();
             CancelScheduledGraphUpdate();
             CancelPendingRoadmapBuilds();
@@ -203,6 +257,8 @@ namespace Unlimotion.Views
             {
                 return;
             }
+
+            RegisterRoadmapCurrentTaskSubscription(dc.MainWindowViewModel);
 
             dc.WhenAnyValue(
                     m => m.OnlyUnlocked,
@@ -634,6 +690,9 @@ namespace Unlimotion.Views
             RemoveStaleRoadmapConnections(desiredConnectionKeys);
             SynchronizeRoadmapNodes(desiredNodes);
             SynchronizeRoadmapConnections(desiredConnections);
+            PruneRoadmapSelectionToVisibleNodes();
+            ApplyRoadmapSelectionState();
+            ApplyRoadmapCurrentState();
         }
 
         private void ClearRoadmapProjection()
@@ -645,6 +704,51 @@ namespace Unlimotion.Views
 
             RoadmapConnections.Clear();
             RoadmapNodes.Clear();
+        }
+
+        private void RegisterRoadmapCurrentTaskSubscription(MainWindowViewModel? owner)
+        {
+            if (owner == null)
+            {
+                roadmapCurrentTaskSubscription.Disposable = Disposable.Empty;
+                return;
+            }
+
+            roadmapCurrentTaskSubscription.Disposable = owner
+                .WhenAnyValue(m => m.CurrentTaskItem)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ => ApplyRoadmapCurrentState());
+        }
+
+        private void PruneRoadmapSelectionToVisibleNodes()
+        {
+            if (selectedRoadmapTaskIds.Count == 0)
+            {
+                return;
+            }
+
+            var visibleIds = RoadmapNodes
+                .Select(node => node.Id)
+                .ToHashSet(StringComparer.Ordinal);
+
+            selectedRoadmapTaskIds.RemoveWhere(id => !visibleIds.Contains(id));
+        }
+
+        private void ApplyRoadmapSelectionState()
+        {
+            foreach (var node in RoadmapNodes)
+            {
+                node.IsSelected = selectedRoadmapTaskIds.Contains(node.Id);
+            }
+        }
+
+        private void ApplyRoadmapCurrentState()
+        {
+            var currentTaskId = dc?.MainWindowViewModel?.CurrentTaskItem?.Id;
+            foreach (var node in RoadmapNodes)
+            {
+                node.IsCurrent = string.Equals(node.Id, currentTaskId, StringComparison.Ordinal);
+            }
         }
 
         private void RemoveStaleRoadmapConnections(IReadOnlySet<string> desiredConnectionKeys)
@@ -1462,6 +1566,142 @@ namespace Unlimotion.Views
             activeRoadmapInlineTitleEditor = null;
         }
 
+        private void RoadmapEditor_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (e.Handled)
+            {
+                return;
+            }
+
+            var pointer = e.GetCurrentPoint(RoadmapSurface);
+            if (pointer.Properties.IsRightButtonPressed)
+            {
+                StartPendingRoadmapPan(RoadmapSurface, e);
+                return;
+            }
+
+            if (!pointer.Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            if (TryGetRoadmapTaskItem(e.Source as Control, out _))
+            {
+                return;
+            }
+
+            ClearPendingRoadmapDrag();
+            ClearPendingRoadmapPan();
+            ClearPendingRoadmapSelection();
+
+            e.Pointer.Capture(RoadmapSurface);
+            pendingRoadmapSelection = new PendingRoadmapSelectionContext(
+                e.Pointer,
+                e.GetPosition(RoadmapSurface),
+                e.KeyModifiers);
+            e.Handled = true;
+        }
+
+        private void StartPendingRoadmapPan(Control captureControl, PointerPressedEventArgs e)
+        {
+            ClearPendingRoadmapDrag();
+            ClearPendingRoadmapPan();
+            ClearPendingRoadmapSelection();
+
+            e.Pointer.Capture(captureControl);
+            pendingRoadmapPan = new PendingRoadmapPanContext(
+                captureControl,
+                e.Pointer,
+                e.GetPosition(RoadmapViewport.Control),
+                RoadmapViewport.Location);
+            e.Handled = true;
+        }
+
+        private void ApplyRoadmapClickSelection(
+            Control? context,
+            TaskItemViewModel taskItem,
+            KeyModifiers modifiers)
+        {
+            var operation = GetRoadmapSelectionOperation(modifiers);
+            var wasSelected = selectedRoadmapTaskIds.Contains(taskItem.Id);
+            var shouldSelectCurrentTask = ShouldSelectRoadmapCurrentTask(operation, wasSelected);
+
+            switch (operation)
+            {
+                case RoadmapSelectionOperation.Replace:
+                    selectedRoadmapTaskIds.Clear();
+                    selectedRoadmapTaskIds.Add(taskItem.Id);
+                    break;
+                case RoadmapSelectionOperation.Toggle:
+                    if (!selectedRoadmapTaskIds.Remove(taskItem.Id))
+                    {
+                        selectedRoadmapTaskIds.Add(taskItem.Id);
+                    }
+
+                    break;
+                case RoadmapSelectionOperation.Add:
+                    selectedRoadmapTaskIds.Add(taskItem.Id);
+                    break;
+                case RoadmapSelectionOperation.Remove:
+                    selectedRoadmapTaskIds.Remove(taskItem.Id);
+                    break;
+            }
+
+            ApplyRoadmapSelectionState();
+            lastRoadmapClickSelectionTaskId = taskItem.Id;
+            lastRoadmapClickSelectionModifiers = modifiers;
+            lastRoadmapClickSelectionSelectedCurrentTask = shouldSelectCurrentTask;
+
+            if (shouldSelectCurrentTask)
+            {
+                SelectRoadmapTask(context, taskItem);
+            }
+        }
+
+        private bool ShouldSuppressDuplicateRoadmapClickSelection(
+            TaskItemViewModel taskItem,
+            KeyModifiers modifiers,
+            int clickCount)
+        {
+            return clickCount > 1 &&
+                   lastRoadmapClickSelectionTaskId == taskItem.Id &&
+                   lastRoadmapClickSelectionModifiers == modifiers;
+        }
+
+        private static RoadmapSelectionOperation GetRoadmapSelectionOperation(KeyModifiers modifiers)
+        {
+            if ((modifiers & KeyModifiers.Alt) != 0)
+            {
+                return RoadmapSelectionOperation.Remove;
+            }
+
+            if ((modifiers & KeyModifiers.Control) != 0)
+            {
+                return RoadmapSelectionOperation.Toggle;
+            }
+
+            if ((modifiers & KeyModifiers.Shift) != 0)
+            {
+                return RoadmapSelectionOperation.Add;
+            }
+
+            return RoadmapSelectionOperation.Replace;
+        }
+
+        private static bool ShouldSelectRoadmapCurrentTask(
+            RoadmapSelectionOperation operation,
+            bool wasSelected)
+        {
+            return operation switch
+            {
+                RoadmapSelectionOperation.Replace => true,
+                RoadmapSelectionOperation.Add => true,
+                RoadmapSelectionOperation.Toggle => !wasSelected,
+                RoadmapSelectionOperation.Remove => false,
+                _ => false
+            };
+        }
+
         private void InputElement_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var pointer = e.GetCurrentPoint(this);
@@ -1471,14 +1711,7 @@ namespace Unlimotion.Views
             if (pointer.Properties.IsRightButtonPressed &&
                 TryGetRoadmapTaskItem(gestureControl, out _))
             {
-                ClearPendingRoadmapDrag();
-                e.Pointer.Capture(gestureControl ?? this);
-                pendingRoadmapPan = new PendingRoadmapPanContext(
-                    gestureControl ?? this,
-                    e.Pointer,
-                    e.GetPosition(RoadmapViewport.Control),
-                    RoadmapViewport.Location);
-                e.Handled = true;
+                StartPendingRoadmapPan(gestureControl ?? this, e);
                 return;
             }
 
@@ -1496,15 +1729,52 @@ namespace Unlimotion.Views
                 return;
             }
 
-            SelectRoadmapTask(gestureControl, taskItem);
             if (e.ClickCount > 1)
             {
-                ToggleRoadmapTaskDetails(gestureControl, taskItem);
+                var shouldSuppressClickSelection =
+                    ShouldSuppressDuplicateRoadmapClickSelection(taskItem, e.KeyModifiers, e.ClickCount);
+                var shouldSelectCurrentTask = shouldSuppressClickSelection
+                    ? lastRoadmapClickSelectionSelectedCurrentTask
+                    : ShouldSelectRoadmapCurrentTask(
+                        GetRoadmapSelectionOperation(e.KeyModifiers),
+                        selectedRoadmapTaskIds.Contains(taskItem.Id));
+
+                if (!shouldSuppressClickSelection)
+                {
+                    ApplyRoadmapClickSelection(gestureControl, taskItem, e.KeyModifiers);
+                }
+
+                ToggleRoadmapTaskDetails(gestureControl, taskItem, shouldSelectCurrentTask);
                 lastRoadmapPointerDoubleTapAt = DateTime.UtcNow;
                 lastRoadmapPointerDoubleTapTaskId = taskItem.Id;
                 ClearPendingRoadmapDrag();
                 e.Handled = true;
                 return;
+            }
+
+            if (HasRoadmapSelectionModifier(e.KeyModifiers))
+            {
+                if (!ShouldSuppressDuplicateRoadmapClickSelection(taskItem, e.KeyModifiers, e.ClickCount))
+                {
+                    ApplyRoadmapClickSelection(gestureControl, taskItem, e.KeyModifiers);
+                }
+
+                ClearPendingRoadmapDrag();
+                e.Handled = true;
+                return;
+            }
+
+            var selectedDragTasks = GetSelectedRoadmapDragTasks(taskItem);
+            var shouldDeferClickSelection = selectedDragTasks.Count > 1 &&
+                                            selectedRoadmapTaskIds.Contains(taskItem.Id);
+            if (shouldDeferClickSelection)
+            {
+                SelectRoadmapTask(gestureControl, taskItem);
+            }
+            else if (!ShouldSuppressDuplicateRoadmapClickSelection(taskItem, e.KeyModifiers, e.ClickCount))
+            {
+                ApplyRoadmapClickSelection(gestureControl, taskItem, e.KeyModifiers);
+                selectedDragTasks = [taskItem];
             }
 
             e.Pointer.Capture(gestureControl ?? this);
@@ -1513,12 +1783,19 @@ namespace Unlimotion.Views
                 e.Pointer,
                 taskItem,
                 e,
-                e.GetPosition(gestureControl ?? this));
+                e.GetPosition(gestureControl ?? this),
+                selectedDragTasks,
+                shouldDeferClickSelection);
         }
 
         private async void InputElement_OnPointerMoved(object? sender, PointerEventArgs e)
         {
             if (TryHandlePendingRoadmapPan(e))
+            {
+                return;
+            }
+
+            if (TryHandlePendingRoadmapSelection(e))
             {
                 return;
             }
@@ -1561,6 +1838,15 @@ namespace Unlimotion.Views
 
         private void InputElement_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
+            if (pendingRoadmapSelection != null &&
+                ReferenceEquals(e.Pointer, pendingRoadmapSelection.Pointer))
+            {
+                CommitPendingRoadmapSelection();
+                ClearPendingRoadmapSelection();
+                e.Handled = true;
+                return;
+            }
+
             if (pendingRoadmapPan != null &&
                 ReferenceEquals(e.Pointer, pendingRoadmapPan.Pointer))
             {
@@ -1573,6 +1859,15 @@ namespace Unlimotion.Views
                 !ReferenceEquals(e.Pointer, pendingRoadmapDrag.Pointer))
             {
                 return;
+            }
+
+            if (pendingRoadmapDrag?.ApplyClickSelectionOnRelease == true)
+            {
+                ApplyRoadmapClickSelection(
+                    pendingRoadmapDrag.Control,
+                    pendingRoadmapDrag.TaskItem,
+                    KeyModifiers.None);
+                e.Handled = true;
             }
 
             ClearPendingRoadmapDrag();
@@ -1603,6 +1898,166 @@ namespace Unlimotion.Views
             return true;
         }
 
+        private bool TryHandlePendingRoadmapSelection(PointerEventArgs e)
+        {
+            var pending = pendingRoadmapSelection;
+            if (pending == null || !ReferenceEquals(e.Pointer, pending.Pointer))
+            {
+                return false;
+            }
+
+            if (!e.GetCurrentPoint(RoadmapSurface).Properties.IsLeftButtonPressed)
+            {
+                ClearPendingRoadmapSelection();
+                return true;
+            }
+
+            var currentPoint = e.GetPosition(RoadmapSurface);
+            if (!pending.HasExceededThreshold &&
+                !HasExceededRoadmapDragThreshold(pending.StartPoint, currentPoint))
+            {
+                e.Handled = true;
+                return true;
+            }
+
+            pending.HasExceededThreshold = true;
+            pending.CurrentPoint = currentPoint;
+            UpdateRoadmapSelectionRectangle(pending.StartPoint, currentPoint);
+            e.Handled = true;
+            return true;
+        }
+
+        private void CommitPendingRoadmapSelection()
+        {
+            var pending = pendingRoadmapSelection;
+            if (pending == null || !pending.HasExceededThreshold)
+            {
+                return;
+            }
+
+            var rectangle = CreateNormalizedRect(pending.StartPoint, pending.CurrentPoint);
+            var hitNodes = GetRoadmapNodesIntersecting(rectangle);
+            ApplyRoadmapRectangleSelection(hitNodes, pending.Modifiers);
+        }
+
+        private void ApplyRoadmapRectangleSelection(
+            IReadOnlyList<RoadmapNode> nodes,
+            KeyModifiers modifiers)
+        {
+            var operation = GetRoadmapSelectionOperation(modifiers);
+
+            if (operation == RoadmapSelectionOperation.Replace)
+            {
+                selectedRoadmapTaskIds.Clear();
+            }
+
+            foreach (var node in nodes)
+            {
+                switch (operation)
+                {
+                    case RoadmapSelectionOperation.Replace:
+                    case RoadmapSelectionOperation.Add:
+                        selectedRoadmapTaskIds.Add(node.Id);
+                        break;
+                    case RoadmapSelectionOperation.Toggle:
+                        if (!selectedRoadmapTaskIds.Remove(node.Id))
+                        {
+                            selectedRoadmapTaskIds.Add(node.Id);
+                        }
+
+                        break;
+                    case RoadmapSelectionOperation.Remove:
+                        selectedRoadmapTaskIds.Remove(node.Id);
+                        break;
+                }
+            }
+
+            ApplyRoadmapSelectionState();
+        }
+
+        private IReadOnlyList<RoadmapNode> GetRoadmapNodesIntersecting(Rect rectangle)
+        {
+            var result = new List<RoadmapNode>();
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var border in RoadmapEditor
+                         .GetVisualDescendants()
+                         .OfType<Border>())
+            {
+                if (border.DataContext is not RoadmapNode node ||
+                    !seenIds.Add(node.Id) ||
+                    border.Bounds.Width <= 0 ||
+                    border.Bounds.Height <= 0)
+                {
+                    continue;
+                }
+
+                var nodeBounds = GetRoadmapNodeBoundsInSelectionCoordinates(border);
+                if (!nodeBounds.HasValue)
+                {
+                    continue;
+                }
+
+                if (RectanglesIntersect(rectangle, nodeBounds.Value))
+                {
+                    result.Add(node);
+                }
+            }
+
+            return result;
+        }
+
+        private Rect? GetRoadmapNodeBoundsInSelectionCoordinates(Control nodeControl)
+        {
+            var topLeft = nodeControl.TranslatePoint(new Point(0, 0), RoadmapSurface);
+            var bottomRight = nodeControl.TranslatePoint(
+                new Point(nodeControl.Bounds.Width, nodeControl.Bounds.Height),
+                RoadmapSurface);
+
+            if (!topLeft.HasValue || !bottomRight.HasValue)
+            {
+                return null;
+            }
+
+            return CreateNormalizedRect(topLeft.Value, bottomRight.Value);
+        }
+
+        private void UpdateRoadmapSelectionRectangle(Point startPoint, Point currentPoint)
+        {
+            var rectangle = CreateNormalizedRect(startPoint, currentPoint);
+            RoadmapSelectionRectangleMargin = new Thickness(rectangle.X, rectangle.Y, 0, 0);
+            RoadmapSelectionRectangleWidth = rectangle.Width;
+            RoadmapSelectionRectangleHeight = rectangle.Height;
+            IsRoadmapSelectionRectangleVisible = true;
+        }
+
+        private void ClearPendingRoadmapSelection()
+        {
+            pendingRoadmapSelection?.Pointer.Capture(null);
+            pendingRoadmapSelection = null;
+            IsRoadmapSelectionRectangleVisible = false;
+            RoadmapSelectionRectangleWidth = 0;
+            RoadmapSelectionRectangleHeight = 0;
+        }
+
+        private static Rect CreateNormalizedRect(Point first, Point second)
+        {
+            var x = Math.Min(first.X, second.X);
+            var y = Math.Min(first.Y, second.Y);
+            return new Rect(
+                x,
+                y,
+                Math.Abs(first.X - second.X),
+                Math.Abs(first.Y - second.Y));
+        }
+
+        private static bool RectanglesIntersect(Rect first, Rect second)
+        {
+            return first.X < second.Right &&
+                   second.X < first.Right &&
+                   first.Y < second.Bottom &&
+                   second.Y < first.Bottom;
+        }
+
         private static bool HasExceededRoadmapDragThreshold(Point startPoint, Point currentPoint)
         {
             return Math.Abs(currentPoint.X - startPoint.X) >= RoadmapDragThreshold ||
@@ -1611,7 +2066,7 @@ namespace Unlimotion.Views
 
         private static async Task StartRoadmapDragAsync(PendingRoadmapDragContext pending, PointerEventArgs e)
         {
-            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, pending.TaskItem);
+            var dragData = CreateRoadmapDragTransfer(pending.TaskItems);
 
             var graphControl = pending.Control.FindParent<GraphControl>();
             if (graphControl != null)
@@ -1630,6 +2085,60 @@ namespace Unlimotion.Views
             {
                 pending.Pointer.Capture(null);
             }
+        }
+
+        internal static InMemoryDragDataTransfer CreateRoadmapDragTransfer(
+            IReadOnlyList<TaskItemViewModel> taskItems)
+        {
+            var normalizedTasks = NormalizeRoadmapDragTasks(taskItems);
+            if (normalizedTasks.Count == 0)
+            {
+                return new InMemoryDragDataTransfer();
+            }
+
+            if (normalizedTasks.Count == 1)
+            {
+                return DragDataFormats.CreateTransfer(CustomDataFormat, normalizedTasks[0]);
+            }
+
+            var dragData = new InMemoryDragDataTransfer();
+            var item = new DataTransferItem();
+            item.Set(CustomBatchDataFormat, dragData.Track(new RoadmapTaskDragData(normalizedTasks)));
+            item.Set(CustomDataFormat, dragData.Track(normalizedTasks[0]));
+            dragData.Add(item);
+            return dragData;
+        }
+
+        private IReadOnlyList<TaskItemViewModel> GetSelectedRoadmapDragTasks(TaskItemViewModel fallbackTask)
+        {
+            if (selectedRoadmapTaskIds.Count <= 1 ||
+                !selectedRoadmapTaskIds.Contains(fallbackTask.Id))
+            {
+                return [fallbackTask];
+            }
+
+            var tasks = RoadmapNodes
+                .Where(node => selectedRoadmapTaskIds.Contains(node.Id))
+                .Select(node => node.TaskItem)
+                .ToArray();
+            return tasks.Length > 0 ? tasks : [fallbackTask];
+        }
+
+        private static IReadOnlyList<TaskItemViewModel> NormalizeRoadmapDragTasks(
+            IEnumerable<TaskItemViewModel>? taskItems)
+        {
+            return taskItems?
+                       .Where(static task => task != null && !string.IsNullOrWhiteSpace(task.Id))
+                       .GroupBy(static task => task.Id, StringComparer.Ordinal)
+                       .Select(static group => group.First())
+                       .ToList()
+                   ?? [];
+        }
+
+        private static bool HasRoadmapSelectionModifier(KeyModifiers modifiers)
+        {
+            var relevantModifiers = modifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt);
+            return relevantModifiers != KeyModifiers.None;
         }
 
         private void ClearPendingRoadmapDrag()
@@ -1658,6 +2167,7 @@ namespace Unlimotion.Views
                 return;
             }
 
+            ApplyRoadmapClickSelection(control, taskItem, KeyModifiers.None);
             ToggleRoadmapTaskDetails(control, taskItem);
             e.Handled = true;
         }
@@ -1668,9 +2178,14 @@ namespace Unlimotion.Views
                    DateTime.UtcNow - lastRoadmapPointerDoubleTapAt < TimeSpan.FromMilliseconds(500);
         }
 
-        private MainWindowViewModel? ToggleRoadmapTaskDetails(Control? context, TaskItemViewModel taskItem)
+        private MainWindowViewModel? ToggleRoadmapTaskDetails(
+            Control? context,
+            TaskItemViewModel taskItem,
+            bool selectTask = true)
         {
-            var owner = SelectRoadmapTask(context, taskItem);
+            var owner = selectTask
+                ? SelectRoadmapTask(context, taskItem)
+                : ResolveMainWindowViewModel(context);
             if (owner != null)
             {
                 owner.DetailsAreOpen = !owner.DetailsAreOpen;
@@ -1693,6 +2208,7 @@ namespace Unlimotion.Views
                 owner.SelectCurrentTask();
             }
 
+            ApplyRoadmapCurrentState();
             return owner;
         }
 
@@ -1729,7 +2245,9 @@ namespace Unlimotion.Views
             IPointer pointer,
             TaskItemViewModel taskItem,
             PointerPressedEventArgs pressEvent,
-            Point startPoint)
+            Point startPoint,
+            IReadOnlyList<TaskItemViewModel> taskItems,
+            bool applyClickSelectionOnRelease)
         {
             public Control Control { get; } = control;
 
@@ -1740,6 +2258,16 @@ namespace Unlimotion.Views
             public PointerPressedEventArgs PressEvent { get; } = pressEvent;
 
             public Point StartPoint { get; } = startPoint;
+
+            public IReadOnlyList<TaskItemViewModel> TaskItems { get; } = taskItems;
+
+            public bool ApplyClickSelectionOnRelease { get; } = applyClickSelectionOnRelease;
+        }
+
+        internal sealed class RoadmapTaskDragData(IReadOnlyList<TaskItemViewModel> taskItems)
+        {
+            public IReadOnlyList<TaskItemViewModel> TaskItems { get; } =
+                NormalizeRoadmapDragTasks(taskItems);
         }
 
         private sealed class PendingRoadmapPanContext(
@@ -1755,6 +2283,30 @@ namespace Unlimotion.Views
             public Point StartPoint { get; } = startPoint;
 
             public Point StartViewportLocation { get; } = startViewportLocation;
+        }
+
+        private sealed class PendingRoadmapSelectionContext(
+            IPointer pointer,
+            Point startPoint,
+            KeyModifiers modifiers)
+        {
+            public IPointer Pointer { get; } = pointer;
+
+            public Point StartPoint { get; } = startPoint;
+
+            public KeyModifiers Modifiers { get; } = modifiers;
+
+            public Point CurrentPoint { get; set; } = startPoint;
+
+            public bool HasExceededThreshold { get; set; }
+        }
+
+        private enum RoadmapSelectionOperation
+        {
+            Replace,
+            Toggle,
+            Add,
+            Remove
         }
 
         private bool Matches(TaskItemViewModel task, string normalizedQuery, bool isFuzzy)
