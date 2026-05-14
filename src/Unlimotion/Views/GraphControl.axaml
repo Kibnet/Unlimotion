@@ -39,6 +39,26 @@
         <Style Selector="TextBox.RoadmapInlineTaskTitleEditor.IsWanted">
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
+        <Style Selector="Border.roadmapNode">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="Border.roadmapNode.roadmapSelected">
+            <Setter Property="Background" Value="#182F80ED" />
+            <Setter Property="BorderBrush" Value="#7A2F80ED" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Border.roadmapNode.roadmapCurrent">
+            <Setter Property="BorderBrush" Value="#E08A3FFC" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Border.roadmapNode.roadmapSelected.roadmapCurrent">
+            <Setter Property="Background" Value="#243A9B4F" />
+            <Setter Property="BorderBrush" Value="#E08A3FFC" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
         <Style Selector="Button.roadmapViewportButton">
             <Setter Property="Width" Value="28" />
             <Setter Property="Height" Value="28" />
@@ -80,7 +100,7 @@
                         AutomationProperties.AutomationId="RoadmapResetFiltersButton" />
         </WrapPanel>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="RoadmapSurface">
             <nodify:NodifyEditor x:Name="RoadmapEditor"
                                  AutomationProperties.AutomationId="RoadmapZoomBorder"
                                  ItemsSource="{Binding RoadmapNodes, ElementName=Root}"
@@ -92,6 +112,7 @@
                                  MinViewportZoom="0.1"
                                  MaxViewportZoom="2"
                                  GridCellSize="1"
+                                 PointerPressed="RoadmapEditor_OnPointerPressed"
                                  DisableAutoPanning="True"
                                  DisplayConnectionsOnTop="False">
                 <nodify:NodifyEditor.Resources>
@@ -131,8 +152,10 @@
                         <Border MinWidth="{x:Static local:RoadmapNode.MinWidth}"
                                 MaxWidth="{x:Static local:RoadmapNode.MaxWidth}"
                                 MinHeight="{x:Static local:RoadmapNode.Height}"
-                                Padding="5,3"
-                                Background="Transparent"
+                                Classes="roadmapNode"
+                                Classes.roadmapSelected="{Binding IsSelected}"
+                                Classes.roadmapCurrent="{Binding IsCurrent}"
+                                Padding="4,2"
                                 DragDrop.AllowDrop="True"
                                 SizeChanged="RoadmapNode_OnSizeChanged"
                                 PointerPressed="InputElement_OnPointerPressed"
@@ -186,6 +209,18 @@
                     </ControlTheme>
                 </nodify:NodifyEditor.ItemContainerTheme>
             </nodify:NodifyEditor>
+
+            <Border HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="{Binding RoadmapSelectionRectangleMargin, ElementName=Root}"
+                    Width="{Binding RoadmapSelectionRectangleWidth, ElementName=Root}"
+                    Height="{Binding RoadmapSelectionRectangleHeight, ElementName=Root}"
+                    Background="#332F80ED"
+                    BorderBrush="#B02F80ED"
+                    BorderThickness="1"
+                    IsHitTestVisible="False"
+                    IsVisible="{Binding IsRoadmapSelectionRectangleVisible, ElementName=Root}"
+                    AutomationProperties.AutomationId="RoadmapSelectionRectangle" />
 
             <Border HorizontalAlignment="Left"
                     VerticalAlignment="Top"
