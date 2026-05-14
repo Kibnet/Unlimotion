@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -329,6 +330,81 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("AllTasksTree")]
+    [Arguments("LastCreatedTree")]
+    [Arguments("LastUpdatedTree")]
+    [Arguments("UnlockedTree")]
+    [Arguments("CompletedTree")]
+    [Arguments("ArchivedTree")]
+    [Arguments("LastOpenedTree")]
+    public async Task TreeSearch_ClearSearch_RestoresExpansionState(string treeName)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                var scenario = await CreateSearchExpansionScenarioAsync(vm, treeName);
+                ActivateSearchExpansionTree(vm, treeName, scenario.Parent);
+
+                var wrappersReady = WaitFor(() =>
+                    FindWrapper(vm, treeName, scenario.Parent.Id) != null &&
+                    FindWrapper(vm, treeName, scenario.Child.Id) != null);
+                await Assert.That(wrappersReady).IsTrue();
+
+                var parentWrapper = FindWrapper(vm, treeName, scenario.Parent.Id);
+                var childWrapper = FindWrapper(vm, treeName, scenario.Child.Id);
+                await Assert.That(parentWrapper).IsNotNull();
+                await Assert.That(childWrapper).IsNotNull();
+
+                var propertyChangedRaised = false;
+                ((INotifyPropertyChanged)parentWrapper!).PropertyChanged += (_, e) =>
+                {
+                    propertyChangedRaised |= e.PropertyName == nameof(TaskWrapperViewModel.IsExpanded);
+                };
+
+                parentWrapper!.IsExpanded = true;
+                childWrapper!.IsExpanded = false;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(parentWrapper.IsExpanded).IsTrue();
+                await Assert.That(childWrapper.IsExpanded).IsFalse();
+                await Assert.That(propertyChangedRaised).IsTrue();
+
+                vm.Search.SearchText = "search warmup";
+                await ApplySearchAsync(vm, scenario.SearchText);
+                var parentFilteredOut = WaitFor(
+                    () => FindWrapper(vm, treeName, scenario.Parent.Id) == null,
+                    4000);
+                await Assert.That(parentFilteredOut).IsTrue();
+
+                await ApplySearchAsync(vm, string.Empty);
+                TaskWrapperViewModel? restoredParentWrapper = null;
+                TaskWrapperViewModel? restoredChildWrapper = null;
+                var restored = WaitFor(
+                    () =>
+                    {
+                        restoredParentWrapper = FindWrapper(vm, treeName, scenario.Parent.Id);
+                        restoredChildWrapper = FindWrapper(vm, treeName, scenario.Child.Id);
+                        return restoredParentWrapper != null && restoredChildWrapper != null;
+                    },
+                    4000);
+
+                await Assert.That(restored).IsTrue();
+                await Assert.That(restoredParentWrapper!.IsExpanded).IsTrue();
+                await Assert.That(restoredChildWrapper!.IsExpanded).IsFalse();
+            }
+            finally
+            {
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -2078,6 +2154,116 @@ public class MainControlTreeCommandsUiTests
         return ready ? wrapper : null;
     }
 
+    private sealed record SearchExpansionScenario(
+        TaskItemViewModel Parent,
+        TaskItemViewModel Child,
+        string SearchText);
+
+    private static async Task<SearchExpansionScenario> CreateSearchExpansionScenarioAsync(
+        MainWindowViewModel vm,
+        string treeName)
+    {
+        var repository = vm.taskRepository
+            ?? throw new InvalidOperationException("Task repository was not initialized.");
+        var suffix = Guid.NewGuid().ToString("N");
+
+        var parent = await repository.Add();
+        parent.Title = $"Search expansion parent {treeName} {suffix}";
+        await repository.Update(parent);
+
+        var child = await repository.AddChild(parent);
+        child.Title = $"Search expansion child {treeName} {suffix}";
+
+        var searchTarget = await repository.Add();
+        searchTarget.Title = $"Search expansion target {treeName} {suffix}";
+        var searchText = searchTarget.Title;
+
+        ApplySearchExpansionCompletionState(treeName, parent, child);
+
+        await repository.Update(parent);
+        await repository.Update(child);
+        await repository.Update(searchTarget);
+
+        await TestHelpers.WaitThrottleTime();
+        Dispatcher.UIThread.RunJobs();
+
+        return new SearchExpansionScenario(parent, child, searchText);
+    }
+
+    private static void ApplySearchExpansionCompletionState(
+        string treeName,
+        TaskItemViewModel parent,
+        TaskItemViewModel child)
+    {
+        switch (treeName)
+        {
+            case "CompletedTree":
+                parent.IsCompleted = true;
+                parent.CompletedDateTime ??= DateTimeOffset.UtcNow;
+                child.IsCompleted = true;
+                child.CompletedDateTime ??= DateTimeOffset.UtcNow;
+                break;
+            case "UnlockedTree":
+                child.IsCompleted = true;
+                child.CompletedDateTime ??= DateTimeOffset.UtcNow;
+                break;
+            case "ArchivedTree":
+                parent.IsCompleted = null;
+                parent.ArchiveDateTime ??= DateTimeOffset.UtcNow;
+                child.IsCompleted = null;
+                child.ArchiveDateTime ??= DateTimeOffset.UtcNow;
+                break;
+        }
+    }
+
+    private static void ActivateSearchExpansionTree(
+        MainWindowViewModel vm,
+        string treeName,
+        TaskItemViewModel parent)
+    {
+        switch (treeName)
+        {
+            case "AllTasksTree":
+                vm.AllTasksMode = true;
+                break;
+            case "LastCreatedTree":
+                SetDateFilterAllTime(vm.LastCreatedDateFilter);
+                vm.LastCreatedMode = true;
+                break;
+            case "LastUpdatedTree":
+                SetDateFilterAllTime(vm.LastUpdatedDateFilter);
+                vm.LastUpdatedMode = true;
+                break;
+            case "UnlockedTree":
+                vm.UnlockedMode = true;
+                break;
+            case "CompletedTree":
+                SetDateFilterAllTime(vm.CompletedDateFilter);
+                vm.CompletedMode = true;
+                break;
+            case "ArchivedTree":
+                SetDateFilterAllTime(vm.ArchivedDateFilter);
+                vm.ArchivedMode = true;
+                break;
+            case "LastOpenedTree":
+                vm.DetailsAreOpen = true;
+                vm.CurrentTaskItem = parent;
+                vm.LastOpenedMode = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(treeName), treeName, "Unknown task tree.");
+        }
+
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static async Task ApplySearchAsync(MainWindowViewModel vm, string searchText)
+    {
+        vm.Search.SearchText = searchText;
+        await Task.Delay(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs + 100));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static void SetDateFilterAllTime(DateFilter filter)
     {
         filter.CurrentOption = DateFilterDefinition.AllTime;
@@ -2295,6 +2481,8 @@ public class MainControlTreeCommandsUiTests
     {
         return treeName switch
         {
+            "AllTasksTree" => vm.CurrentAllTasksItems,
+            "LastCreatedTree" => vm.LastCreatedItems,
             "LastUpdatedTree" => vm.LastUpdatedItems,
             "UnlockedTree" => vm.UnlockedItems,
             "CompletedTree" => vm.CompletedItems,
