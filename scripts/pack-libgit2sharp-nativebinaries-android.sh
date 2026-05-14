@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PACKAGE_ID="${PACKAGE_ID:-LibGit2Sharp.NativeBinaries}"
 UPSTREAM_VERSION="${UPSTREAM_VERSION:-2.0.323}"
-PACKAGE_VERSION="${PACKAGE_VERSION:-${LIBGIT2_NATIVE_PACKAGE_VERSION:-2.0.324-android.6}}"
+PACKAGE_VERSION="${PACKAGE_VERSION:-${LIBGIT2_NATIVE_PACKAGE_VERSION:-2.0.324-android.7}}"
 OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
 LIBSSH2_VERSION="${LIBSSH2_VERSION:-1.11.1}"
 ANDROID_ABIS="${ANDROID_ABIS:-arm64-v8a x86_64}"
@@ -114,6 +114,8 @@ stage_runtime() {
   install -m 0644 "$libgit2_path" "$native_dir/libgit2-3f4182d.so"
   install -m 0644 "$openssl_lib_dir/libssl.so.3" "$native_dir/libssl.so.3"
   install -m 0644 "$openssl_lib_dir/libcrypto.so.3" "$native_dir/libcrypto.so.3"
+  install -m 0644 "$openssl_lib_dir/libssl.so.3" "$native_dir/libssl.so"
+  install -m 0644 "$openssl_lib_dir/libcrypto.so.3" "$native_dir/libcrypto.so"
 
   for libssh2_path in "$libssh2_lib_dir"/libssh2.so*; do
     if [ -f "$libssh2_path" ]; then
@@ -146,7 +148,9 @@ for abi in $ANDROID_ABIS; do
   rid="$(rid_for_abi "$abi")"
   for required_entry in \
     "runtimes/$rid/native/libgit2-3f4182d.so" \
+    "runtimes/$rid/native/libssl.so" \
     "runtimes/$rid/native/libssl.so.3" \
+    "runtimes/$rid/native/libcrypto.so" \
     "runtimes/$rid/native/libcrypto.so.3"; do
     if ! unzip -l "$OUTPUT_PACKAGE_PATH" "$required_entry" >/dev/null 2>&1; then
       echo "Packed package is missing $required_entry"
