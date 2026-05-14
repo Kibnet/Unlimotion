@@ -19,6 +19,26 @@
             <Setter Property="Foreground" Value="#2F80ED" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor">
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor:focus">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsHitTestVisible" Value="True" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor.IsWanted">
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
         <Style Selector="Button.roadmapViewportButton">
             <Setter Property="Width" Value="28" />
             <Setter Property="Height" Value="28" />
@@ -136,15 +156,19 @@
                                            AutomationProperties.AutomationId="TaskRepeaterGraphMarker"
                                            Margin="4,0,4,0"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3"
-                                           DataContext="{Binding TaskItem}"
-                                           Text="{Binding TitleWithoutEmoji}"
-                                           TextWrapping="Wrap"
-                                           MaxWidth="300"
-                                           VerticalAlignment="Center"
-                                           Classes.highlighted="{Binding IsHighlighted}"
-                                           Classes.IsWanted="{Binding Wanted}"
-                                           Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" />
+                                <Grid Grid.Column="3"
+                                      DataContext="{Binding TaskItem}"
+                                      Background="Transparent"
+                                      AutomationProperties.AutomationId="RoadmapInlineTaskTitleSurface">
+                                    <TextBlock Text="{Binding TitleWithoutEmoji}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="300"
+                                               VerticalAlignment="Center"
+                                               AutomationProperties.AutomationId="RoadmapInlineTaskTitleTextBlock"
+                                               Classes.highlighted="{Binding IsHighlighted}"
+                                               Classes.IsWanted="{Binding Wanted}"
+                                               Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" />
+                                </Grid>
                             </Grid>
                         </Border>
                     </DataTemplate>

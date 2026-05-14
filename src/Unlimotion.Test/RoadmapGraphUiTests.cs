@@ -1285,6 +1285,108 @@ public class RoadmapGraphUiTests
     }
 
     [Test]
+    public async Task RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = false;
+                vm.GraphMode = true;
+                vm.DetailsAreOpen = false;
+
+                var currentTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(currentTask).IsNotNull();
+                currentTask!.Title =
+                    "Roadmap editable title with enough words to wrap across multiple visual lines in a roadmap node";
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                await Assert.That(graphControl).IsNotNull();
+                var fitButton = WaitForAutomationControl<Button>(view, "RoadmapFitButton");
+                await ClickControlAsync(window, fitButton);
+                Dispatcher.UIThread.RunJobs();
+
+                var titleText = WaitForTaskTitleTextBlock(
+                    graphControl!,
+                    MainWindowViewModelFixture.RootTask2Id);
+                var titleSurface = WaitForRoadmapInlineTitleSurface(
+                    graphControl!,
+                    MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(titleText.Bounds.Width).IsGreaterThan(0);
+                await Assert.That(titleText.Bounds.Height).IsGreaterThan(22);
+                await Assert.That(titleSurface.Bounds.Width).IsGreaterThan(0);
+                await Assert.That(FindRoadmapInlineTitleEditor(
+                    graphControl!,
+                    MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                PressRoadmapTitleSurface(titleSurface);
+                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(FindRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                PressRoadmapTitleSurface(titleSurface);
+                await Assert.That(FindRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                await Task.Delay(650);
+                PressRoadmapTitleSurface(titleSurface);
+                await Assert.That(FindRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id)).IsNull();
+
+                await Task.Delay(650);
+                PressRoadmapTitleSurface(titleSurface);
+
+                var inlineEditor = WaitForRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id);
+                var clickFocused = WaitFor(() => IsFocused(window, inlineEditor));
+                await Assert.That(clickFocused).IsTrue();
+                await Assert.That(inlineEditor.TextWrapping).IsEqualTo(TextWrapping.Wrap);
+                await Assert.That(WaitFor(() =>
+                    inlineEditor.Bounds.Height >= titleText.Bounds.Height - 1)).IsTrue();
+
+                inlineEditor.Text = "Roadmap renamed from repeated title click";
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(currentTask.Title).IsEqualTo("Roadmap renamed from repeated title click");
+
+                var roadmapEditor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                roadmapEditor.Focus();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(WaitFor(() => FindRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id) == null)).IsTrue();
+
+                PressHotkey(window, Key.F2, PhysicalKey.F2, RawInputModifiers.None);
+
+                inlineEditor = WaitForRoadmapInlineTitleEditor(
+                    graphControl,
+                    MainWindowViewModelFixture.RootTask2Id);
+                var hotkeyFocused = WaitFor(() => IsFocused(window, inlineEditor));
+                await Assert.That(hotkeyFocused).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task RoadmapGraph_OpenView_ReflectsCreatedAndDeletedTasks()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1912,6 +2014,28 @@ public class RoadmapGraphUiTests
         await Task.CompletedTask;
     }
 
+    private static void PressRoadmapTitleSurface(Control titleSurface)
+    {
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        var properties = new PointerPointProperties(
+            RawInputModifiers.LeftMouseButton,
+            PointerUpdateKind.LeftButtonPressed);
+        var point = new Point(
+            Math.Min(6, Math.Max(1, titleSurface.Bounds.Width / 2)),
+            titleSurface.Bounds.Height / 2);
+
+        titleSurface.RaiseEvent(new PointerPressedEventArgs(
+            titleSurface,
+            pointer,
+            titleSurface,
+            point,
+            0,
+            properties,
+            KeyModifiers.None,
+            1));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static Point GetControlCenterPoint(Visual relativeTo, Control control)
     {
         var point = control.TranslatePoint(
@@ -2124,6 +2248,80 @@ public class RoadmapGraphUiTests
         }
 
         return checkBox;
+    }
+
+    private static Control WaitForRoadmapInlineTitleSurface(
+        Control root,
+        string taskId,
+        int timeoutMilliseconds = 3000)
+    {
+        Control? surface = null;
+        var ready = WaitFor(() =>
+        {
+            surface = root.GetVisualDescendants()
+                .OfType<Control>()
+                .FirstOrDefault(control =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(control),
+                        "RoadmapInlineTaskTitleSurface",
+                        StringComparison.Ordinal) &&
+                    control.DataContext is TaskItemViewModel task &&
+                    task.Id == taskId &&
+                    control.IsAttachedToVisualTree() &&
+                    control.IsVisible &&
+                    control.IsEnabled);
+
+            return surface != null;
+        }, timeoutMilliseconds);
+
+        if (!ready || surface == null)
+        {
+            throw new InvalidOperationException($"Roadmap inline title surface for task '{taskId}' was not found.");
+        }
+
+        return surface;
+    }
+
+    private static TextBox WaitForRoadmapInlineTitleEditor(
+        Control root,
+        string taskId,
+        int timeoutMilliseconds = 3000)
+    {
+        TextBox? textBox = null;
+        var ready = WaitFor(() =>
+        {
+            textBox = FindRoadmapInlineTitleEditor(root, taskId);
+            return textBox != null;
+        }, timeoutMilliseconds);
+
+        if (!ready || textBox == null)
+        {
+            throw new InvalidOperationException($"Roadmap inline title TextBox for task '{taskId}' was not found.");
+        }
+
+        return textBox;
+    }
+
+    private static TextBox? FindRoadmapInlineTitleEditor(Control root, string taskId)
+    {
+        return root.GetVisualDescendants()
+            .OfType<TextBox>()
+            .FirstOrDefault(control =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(control),
+                    "RoadmapInlineTaskTitleTextBox",
+                    StringComparison.Ordinal) &&
+                control.DataContext is TaskItemViewModel task &&
+                task.Id == taskId &&
+                control.IsAttachedToVisualTree() &&
+                control.IsVisible &&
+                control.IsEnabled);
+    }
+
+    private static bool IsFocused(Window window, Control control)
+    {
+        return ReferenceEquals(window.FocusManager?.GetFocusedElement(), control) ||
+               control.IsFocused;
     }
 
     private static bool WaitFor(Func<bool> predicate, int timeoutMilliseconds = 3000)
