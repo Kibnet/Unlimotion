@@ -120,6 +120,12 @@
                         <CheckBox IsChecked="{Binding IsFuzzySearch}"
                                   Content="{DynamicResource Enabled}" />
                     </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <CheckBox IsChecked="{Binding PersistTaskTreeExpansionState}"
+                                  Content="{DynamicResource PersistTaskTreeExpansionState}"
+                                  AutomationProperties.AutomationId="PersistTaskTreeExpansionStateCheckBox" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

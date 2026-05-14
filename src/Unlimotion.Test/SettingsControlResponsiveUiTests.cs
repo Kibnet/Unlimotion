@@ -66,6 +66,46 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task SettingsControl_TaskTreeExpansionStateCheckBox_PersistsSetting()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var checkBox = FindControlByAutomationId<CheckBox>(
+                    view,
+                    "PersistTaskTreeExpansionStateCheckBox");
+
+                await Assert.That(checkBox.IsChecked).IsFalse();
+
+                await ClickControlAsync(window, checkBox);
+
+                await Assert.That(settings.PersistTaskTreeExpansionState).IsTrue();
+                await Assert.That(checkBox.IsChecked).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));

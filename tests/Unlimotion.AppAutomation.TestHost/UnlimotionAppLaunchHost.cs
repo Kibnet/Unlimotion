@@ -188,7 +188,8 @@ public static class UnlimotionAppLaunchHost
             configuration,
             () => storageFactory.CurrentStorage,
             settingsViewModel,
-            new GraphViewModel());
+            new GraphViewModel(),
+            TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath));
 
         TaskItemViewModel.NotificationManagerInstance = notificationManager;
         TaskItemViewModel.MainWindowInstance = vm;

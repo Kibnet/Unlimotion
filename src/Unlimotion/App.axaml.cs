@@ -63,6 +63,7 @@ public class App : Application
     private static IApplicationUpdateService? _applicationUpdateService;
     private static IAppNameDefinitionService? _appNameService;
     private static ITaskStorageFactory? _storageFactory;
+    private static string? _configPath;
     private static IScheduler? _scheduler;
     private static MainWindowViewModel? _mainWindowViewModel;
     private static EventHandler? _cultureChangedHandler;
@@ -157,7 +158,8 @@ public class App : Application
             _configuration!,
             () => _storageFactory?.CurrentStorage,
             settingsViewModel,
-            graphViewModel
+            graphViewModel,
+            TaskTreeExpansionStateStore.GetDefaultPath(_configPath)
         )
         {
             ToastNotificationManager = _toastNotificationManager
@@ -1562,7 +1564,8 @@ public class App : Application
         try
         {
             Log($"[App.Init] Starting with configPath: {configPath}");
-            
+            _configPath = configPath;
+
             // Create configuration
             _configuration = WritableJsonConfigurationFabric.Create(configPath);
             Log("[App.Init] Configuration created");

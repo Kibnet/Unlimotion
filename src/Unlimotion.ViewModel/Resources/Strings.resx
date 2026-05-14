@@ -121,6 +121,7 @@
   <data name="Friday" xml:space="preserve"><value>Friday</value></data>
   <data name="From" xml:space="preserve"><value>From</value></data>
   <data name="FuzzySearch" xml:space="preserve"><value>Smart search</value></data>
+  <data name="PersistTaskTreeExpansionState" xml:space="preserve"><value>Remember expanded task tree nodes</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Could not merge local tasks with the remote repository: Git conflicts were found.</value></data>
   <data name="ConflictAncestorVersion" xml:space="preserve"><value>Before change</value></data>
   <data name="ConflictCurrentVersion" xml:space="preserve"><value>Current version</value></data>

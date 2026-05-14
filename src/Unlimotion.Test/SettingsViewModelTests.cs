@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
@@ -107,6 +108,145 @@ public class SettingsViewModelTests : IDisposable
         var reloaded = new SettingsViewModel(configuration);
         await Assert.That(reloaded.CopyTaskOutlineAsMarkdown).IsTrue();
         await Assert.That(reloaded.CopyTaskOutlineDescription).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskTreeExpansionStateSettings_PersistChoice()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+
+        await Assert.That(settings.PersistTaskTreeExpansionState).IsFalse();
+
+        settings.PersistTaskTreeExpansionState = true;
+
+        await Assert.That(configuration
+                .GetSection("TaskTreeExpansionState")
+                .GetSection("Enabled")
+                .Get<bool>())
+            .IsTrue();
+
+        var reloaded = new SettingsViewModel(configuration);
+        await Assert.That(reloaded.PersistTaskTreeExpansionState).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_BatchesChangesIntoOneWrite()
+    {
+        var writes = new ConcurrentQueue<string>();
+        using var store = new TaskTreeExpansionStateStore(
+            "TaskTreeExpansionState.json",
+            loadPersistedState: true,
+            saveThrottle: TimeSpan.FromMilliseconds(50),
+            fileExists: _ => false,
+            readAllText: _ => string.Empty,
+            writeAllText: (_, content) => writes.Enqueue(content));
+
+        store.SetExpansionState("AllTasksTree", "root", true, persist: true);
+        store.SetExpansionState("AllTasksTree", "child", true, persist: true);
+        store.SetExpansionState("AllTasksTree", "grandchild", true, persist: true);
+
+        var written = await TestHelpers.WaitUntilAsync(
+            () => writes.Count == 1,
+            TimeSpan.FromSeconds(2));
+        await Assert.That(written).IsTrue();
+
+        await System.Threading.Tasks.Task.Delay(150);
+        await Assert.That(writes.Count).IsEqualTo(1);
+
+        var json = writes.Single();
+        using var document = JsonDocument.Parse(json);
+        var expandedIds = document.RootElement
+            .GetProperty("Trees")
+            .GetProperty("AllTasksTree")
+            .EnumerateArray()
+            .Select(element => element.GetString())
+            .ToList();
+
+        await Assert.That(expandedIds).Contains("root");
+        await Assert.That(expandedIds).Contains("child");
+        await Assert.That(expandedIds).Contains("grandchild");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_DisposeFlushesPendingWrite()
+    {
+        var writes = new ConcurrentQueue<string>();
+        var store = new TaskTreeExpansionStateStore(
+            "TaskTreeExpansionState.json",
+            loadPersistedState: true,
+            saveThrottle: TimeSpan.FromHours(1),
+            fileExists: _ => false,
+            readAllText: _ => string.Empty,
+            writeAllText: (_, content) => writes.Enqueue(content));
+
+        store.SetExpansionState("AllTasksTree", "root", true, persist: true);
+        await Assert.That(writes.Count).IsEqualTo(0);
+
+        store.Dispose();
+
+        await Assert.That(writes.Count).IsEqualTo(1);
+        var json = writes.Single();
+        using var document = JsonDocument.Parse(json);
+        var expandedIds = document.RootElement
+            .GetProperty("Trees")
+            .GetProperty("AllTasksTree")
+            .EnumerateArray()
+            .Select(element => element.GetString())
+            .ToList();
+        await Assert.That(expandedIds).Contains("root");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_DisableCancelsPendingWrite()
+    {
+        var writes = new ConcurrentQueue<string>();
+        using var store = new TaskTreeExpansionStateStore(
+            "TaskTreeExpansionState.json",
+            loadPersistedState: true,
+            saveThrottle: TimeSpan.FromMilliseconds(50),
+            fileExists: _ => false,
+            readAllText: _ => string.Empty,
+            writeAllText: (_, content) => writes.Enqueue(content));
+
+        store.SetExpansionState("AllTasksTree", "root", true, persist: true);
+        store.SetPersistenceEnabled(false);
+
+        await System.Threading.Tasks.Task.Delay(150);
+        await Assert.That(writes.Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_FailedWriteKeepsDirtyStateForNextFlush()
+    {
+        var writes = new ConcurrentQueue<string>();
+        var writeAttempts = 0;
+        using var store = new TaskTreeExpansionStateStore(
+            "TaskTreeExpansionState.json",
+            loadPersistedState: true,
+            saveThrottle: TimeSpan.FromHours(1),
+            fileExists: _ => false,
+            readAllText: _ => string.Empty,
+            writeAllText: (_, content) =>
+            {
+                writeAttempts++;
+                if (writeAttempts == 1)
+                {
+                    throw new IOException("Transient write failure.");
+                }
+
+                writes.Enqueue(content);
+            });
+
+        store.SetExpansionState("AllTasksTree", "root", true, persist: true);
+
+        store.Flush();
+        await Assert.That(writeAttempts).IsEqualTo(1);
+        await Assert.That(writes.Count).IsEqualTo(0);
+
+        store.Flush();
+        await Assert.That(writeAttempts).IsEqualTo(2);
+        await Assert.That(writes.Count).IsEqualTo(1);
     }
 
     [Test]

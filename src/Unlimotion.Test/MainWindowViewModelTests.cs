@@ -10,7 +10,9 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using WritableJsonConfiguration;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test
@@ -148,6 +150,66 @@ namespace Unlimotion.Test
             return text?
                 .Replace("\r\n", "\n")
                 .Replace('\r', '\n');
+        }
+
+        private static IReadOnlyList<string> ReadExpandedTaskIds(string statePath, string treeName)
+        {
+            if (!File.Exists(statePath))
+            {
+                return [];
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(statePath));
+            if (!document.RootElement.TryGetProperty("Trees", out var trees) ||
+                !trees.TryGetProperty(treeName, out var treeState))
+            {
+                return [];
+            }
+
+            return treeState.EnumerateArray()
+                .Select(element => element.GetString())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Cast<string>()
+                .ToList();
+        }
+
+        private static async Task<MainWindowViewModel> CreateReloadedViewModelAsync(
+            MainWindowViewModelFixture sourceFixture,
+            List<IDisposable> disposables)
+        {
+            var configuration = WritableJsonConfigurationFabric.Create(sourceFixture.ConfigPath, reloadOnChange: false);
+            if (configuration is IDisposable configurationDisposable)
+            {
+                disposables.Add(configurationDisposable);
+            }
+
+            var notificationManager = new NotificationManagerWrapperMock();
+            var storageFactory = new TaskStorageFactory(
+                configuration,
+                Unlimotion.AppModelMapping.ConfigureMapping(),
+                notificationManager);
+            storageFactory.CreateFileStorage(sourceFixture.DefaultTasksFolderPath);
+
+            if (storageFactory.CurrentStorage is IDisposable storageDisposable)
+            {
+                disposables.Add(storageDisposable);
+            }
+
+            var settings = new SettingsViewModel(configuration);
+            var viewModel = new MainWindowViewModel(
+                new AppNameDefinitionService(),
+                notificationManager,
+                configuration,
+                () => storageFactory.CurrentStorage,
+                settings,
+                taskTreeExpansionStatePath: sourceFixture.TaskTreeExpansionStatePath);
+            disposables.Add(viewModel);
+
+            await viewModel.Connect();
+            viewModel.AllTasksMode = true;
+            Dispatcher.UIThread.RunJobs();
+
+            return viewModel;
         }
 
         private static async Task<(TaskWrapperViewModel RootWrapper, TaskWrapperViewModel ChildWrapper, TaskWrapperViewModel GrandchildWrapper)>
@@ -2016,6 +2078,119 @@ namespace Unlimotion.Test
                 await Assert.That(rootWrapper.IsExpanded).IsTrue();
                 await Assert.That(childWrapper.IsExpanded).IsTrue();
                 await Assert.That(grandchildWrapper.IsExpanded).IsTrue();
+            });
+        }
+
+        [Test]
+        public async Task TaskTreeExpansionState_Disabled_DoesNotCreateSidecarFile()
+        {
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, _) =>
+            {
+                var statePath = projectionFixture.TaskTreeExpansionStatePath
+                    ?? throw new InvalidOperationException("Task tree expansion state path was not configured.");
+                if (File.Exists(statePath))
+                {
+                    File.Delete(statePath);
+                }
+
+                viewModel.Settings.PersistTaskTreeExpansionState = false;
+                var rootWrapper = viewModel.CurrentAllTasksItems.First();
+                rootWrapper.IsExpanded = true;
+
+                await Task.Delay(TaskTreeExpansionStateStore.DefaultSaveThrottle + TimeSpan.FromMilliseconds(200));
+
+                await Assert.That(File.Exists(statePath)).IsFalse();
+            });
+        }
+
+        [Test]
+        public async Task TaskTreeExpansionState_DisablingBeforeThrottleCancelsPendingSidecarWrite()
+        {
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, _) =>
+            {
+                var statePath = projectionFixture.TaskTreeExpansionStatePath
+                    ?? throw new InvalidOperationException("Task tree expansion state path was not configured.");
+                if (File.Exists(statePath))
+                {
+                    File.Delete(statePath);
+                }
+
+                viewModel.Settings.PersistTaskTreeExpansionState = true;
+                var rootWrapper = viewModel.CurrentAllTasksItems.First();
+                rootWrapper.IsExpanded = true;
+                viewModel.Settings.PersistTaskTreeExpansionState = false;
+
+                await Task.Delay(TaskTreeExpansionStateStore.DefaultSaveThrottle + TimeSpan.FromMilliseconds(200));
+
+                await Assert.That(File.Exists(statePath)).IsFalse();
+            });
+        }
+
+        [Test]
+        public async Task TaskTreeExpansionState_Enabled_PersistsAndRestoresExpandedIds()
+        {
+            await RunWithTreeProjectionAsync(async (projectionFixture, viewModel, repository) =>
+            {
+                var statePath = projectionFixture.TaskTreeExpansionStatePath
+                    ?? throw new InvalidOperationException("Task tree expansion state path was not configured.");
+                if (File.Exists(statePath))
+                {
+                    File.Delete(statePath);
+                }
+
+                viewModel.Settings.PersistTaskTreeExpansionState = true;
+                var (rootWrapper, childWrapper, _) =
+                    await CreateThreeLevelTreeCommandBranchAsync(viewModel, repository);
+
+                rootWrapper.IsExpanded = true;
+                childWrapper.IsExpanded = true;
+
+                var persisted = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        var ids = ReadExpandedTaskIds(statePath, "AllTasksTree");
+                        return ids.Contains(rootWrapper.TaskItem.Id) && ids.Contains(childWrapper.TaskItem.Id);
+                    },
+                    TimeSpan.FromSeconds(3));
+                await Assert.That(persisted).IsTrue();
+
+                childWrapper.IsExpanded = false;
+
+                var removed = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        var ids = ReadExpandedTaskIds(statePath, "AllTasksTree");
+                        return ids.Contains(rootWrapper.TaskItem.Id) && !ids.Contains(childWrapper.TaskItem.Id);
+                    },
+                    TimeSpan.FromSeconds(3));
+                await Assert.That(removed).IsTrue();
+
+                var disposables = new List<IDisposable>();
+                try
+                {
+                    var reloaded = await CreateReloadedViewModelAsync(projectionFixture, disposables);
+                    var reloadedRootTask = TestHelpers.GetTask(reloaded, rootWrapper.TaskItem.Id);
+                    var reloadedChildTask = TestHelpers.GetTask(reloaded, childWrapper.TaskItem.Id);
+
+                    var reloadedRootWrapper = reloaded.FindTaskWrapperViewModel(
+                        reloadedRootTask,
+                        reloaded.CurrentAllTasksItems);
+                    var reloadedChildWrapper = reloaded.FindTaskWrapperViewModel(
+                        reloadedChildTask,
+                        reloaded.CurrentAllTasksItems);
+
+                    await Assert.That(reloadedRootWrapper).IsNotNull();
+                    await Assert.That(reloadedChildWrapper).IsNotNull();
+                    await Assert.That(reloadedRootWrapper!.IsExpanded).IsTrue();
+                    await Assert.That(reloadedChildWrapper!.IsExpanded).IsFalse();
+                }
+                finally
+                {
+                    foreach (var disposable in disposables)
+                    {
+                        disposable.Dispose();
+                    }
+                }
             });
         }
 
