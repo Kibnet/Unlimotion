@@ -715,6 +715,40 @@ namespace Unlimotion.ViewModel
 
             #endregion Поиск
 
+            var allTasksExpansionState = new Dictionary<string, bool>();
+            var unlockedExpansionState = new Dictionary<string, bool>();
+            var completedExpansionState = new Dictionary<string, bool>();
+            var archivedExpansionState = new Dictionary<string, bool>();
+            var lastCreatedExpansionState = new Dictionary<string, bool>();
+            var lastUpdatedExpansionState = new Dictionary<string, bool>();
+            var lastOpenedExpansionState = new Dictionary<string, bool>();
+
+            static TaskWrapperActions TrackExpansionState(
+                TaskWrapperActions actions,
+                IDictionary<string, bool> expansionState)
+            {
+                actions.GetExpansionState = task =>
+                {
+                    if (string.IsNullOrWhiteSpace(task.Id))
+                    {
+                        return null;
+                    }
+
+                    return expansionState.TryGetValue(task.Id, out var isExpanded)
+                        ? isExpanded
+                        : null;
+                };
+                actions.SetExpansionState = (task, isExpanded) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(task.Id))
+                    {
+                        expansionState[task.Id] = isExpanded;
+                    }
+                };
+
+                return actions;
+            }
+
             //Bind Roots
 
             #region Roots
@@ -776,14 +810,14 @@ namespace Unlimotion.ViewModel
                 .Filter(emojiExcludeFilter)
                 .Transform(item =>
                 {
-                    var actions = new TaskWrapperActions
+                    var actions = TrackExpansionState(new TaskWrapperActions
                     {
                         ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter, emojiExcludeFilter },
-                    };
+                    }, allTasksExpansionState);
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
@@ -831,12 +865,12 @@ namespace Unlimotion.ViewModel
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, unlockedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -944,12 +978,12 @@ namespace Unlimotion.ViewModel
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, completedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -983,12 +1017,12 @@ namespace Unlimotion.ViewModel
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, archivedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1023,12 +1057,12 @@ namespace Unlimotion.ViewModel
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, lastCreatedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1064,12 +1098,12 @@ namespace Unlimotion.ViewModel
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, lastUpdatedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1225,12 +1259,12 @@ namespace Unlimotion.ViewModel
                             return;
                         }
 
-                        var actions = new TaskWrapperActions
+                        var actions = TrackExpansionState(new TaskWrapperActions
                         {
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = m => RemoveTask(m),
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        };
+                        }, lastOpenedExpansionState);
                         var wrapper = new TaskWrapperViewModel(null, item.Item1, actions)
                         {
                             SpecialDateTime = DateTimeOffset.Now

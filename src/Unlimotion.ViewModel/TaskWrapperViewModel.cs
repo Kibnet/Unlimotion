@@ -17,6 +17,8 @@ public class TaskWrapperActions
         _ => Observable.Empty<IChangeSet<TaskItemViewModel>>();
     public Action<TaskWrapperViewModel>? RemoveAction;
     public Func<TaskWrapperViewModel, string> GetBreadScrumbs = _ => string.Empty;
+    public Func<TaskItemViewModel, bool?> GetExpansionState = _ => null;
+    public Action<TaskItemViewModel, bool>? SetExpansionState;
     public List<IObservable<Func<TaskItemViewModel, bool>>> Filter = new() { Filters.Default };
     public IObservable<IComparer<TaskWrapperViewModel>> SortComparer = Comparers.Default;
 }
@@ -74,6 +76,7 @@ public class TaskWrapperViewModel : DisposableList
 {
     private ReadOnlyObservableCollection<TaskWrapperViewModel>? _subTasks;
     private readonly TaskWrapperActions _actions;
+    private bool _isExpanded;
 
     public static bool DefaultIsExpanded { get; set; }
 
@@ -82,7 +85,7 @@ public class TaskWrapperViewModel : DisposableList
         TaskItem = task;
         Parent = parent;
         _actions = actions;
-        IsExpanded = DefaultIsExpanded;
+        _isExpanded = _actions.GetExpansionState.Invoke(TaskItem) ?? DefaultIsExpanded;
         RemoveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_actions.RemoveAction != null) 
@@ -99,7 +102,20 @@ public class TaskWrapperViewModel : DisposableList
 
     public string BreadScrumbs => _actions.GetBreadScrumbs.Invoke(this);
 
-    public bool IsExpanded { get; set; }
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (_isExpanded == value)
+            {
+                return;
+            }
+
+            _isExpanded = value;
+            _actions.SetExpansionState?.Invoke(TaskItem, value);
+        }
+    }
 
     public ReadOnlyObservableCollection<TaskWrapperViewModel> SubTasks
     {
