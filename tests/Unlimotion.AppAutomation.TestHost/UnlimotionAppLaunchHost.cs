@@ -184,6 +184,7 @@ public static class UnlimotionAppLaunchHost
 
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
         var settingsViewModel = new SettingsViewModel(configuration, backupService);
+        settingsViewModel.RefreshGitMetadataCommand = ReactiveCommand.Create(settingsViewModel.ReloadGitMetadata);
         async Task SwitchRemoteConnectionTypeAsync(BackupAuthMode targetMode)
         {
             if (string.IsNullOrWhiteSpace(settingsViewModel.GitRemoteName))

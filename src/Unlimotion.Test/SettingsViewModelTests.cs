@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
+using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
@@ -993,6 +994,34 @@ public class SettingsViewModelTests : IDisposable
         configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("backup");
         var settings = new SettingsViewModel(configuration, backupService);
 
+        await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task RefreshGitMetadataCommand_FillsEmptyRepositoryUrlFromCurrentLocalStorage()
+    {
+        var localPath = Path.Combine(Environment.CurrentDirectory, $"RemoteRefreshTasks-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localPath);
+        Repository.Init(localPath);
+        using (var repo = new Repository(localPath))
+        {
+            repo.Network.Remotes.Add("origin", "git@github.com:org/unlimotion-backup.git");
+        }
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(string.Empty);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set(string.Empty);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set(string.Empty);
+        using var storageFactory = new RecordingTaskStorageFactory(localPath, new ConcurrentQueue<string>());
+        var backupService = new BackupViaGitService(configuration, storageFactory: storageFactory);
+        var settings = new SettingsViewModel(configuration, backupService);
+        using var appFields = ConfigureAppSettingsCommands(settings, configuration, backupService, storageFactory);
+        settings.GitRemoteName = null;
+        settings.GitRemoteUrl = string.Empty;
+
+        settings.RefreshGitMetadataCommand!.Execute(null);
+
+        await Assert.That(settings.GitRemoteName).IsEqualTo("origin");
         await Assert.That(settings.GitRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
     }
 

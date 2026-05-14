@@ -105,11 +105,55 @@ public sealed class SettingsRemoteTypeHeadlessTests
         }
     }
 
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage()
+    {
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        _ = WaitUntil(
+            () => TryResolveDuringWait(() => Page.SettingsRoot),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Settings root did not become available.")!;
+
+        Page.BackupAutoCheckBox.IsChecked = true;
+        var refreshButton = WaitUntil(
+            () => TryResolveDuringWait(() => Page.RefreshGitMetadataButton),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Refresh Git metadata button did not become available.")!;
+        _vm!.Settings.TaskStoragePath = string.Empty;
+        _vm.Settings.GitRemoteName = null;
+        _vm.Settings.GitRemoteUrl = string.Empty;
+        await Assert.That(_vm.Settings.RefreshGitMetadataCommand?.CanExecute(null)).IsTrue();
+
+        _vm.Settings.RefreshGitMetadataCommand!.Execute(null);
+
+        var selectedRemote = WaitUntil(
+            () => new RemoteMetadataWaitState(_vm?.Settings.GitRemoteName, _vm?.Settings.GitRemoteUrl),
+            static state => string.Equals(state.RemoteName, "origin", StringComparison.Ordinal) &&
+                            string.Equals(
+                                state.RemoteUrl,
+                                "https://github.com/org/unlimotion-backup.git",
+                                StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Git remote metadata was not loaded from current local storage.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(refreshButton.AutomationId).IsEqualTo("RefreshGitMetadataButton");
+            await Assert.That(selectedRemote.RemoteName).IsEqualTo("origin");
+            await Assert.That(selectedRemote.RemoteUrl).IsEqualTo("https://github.com/org/unlimotion-backup.git");
+        }
+    }
+
     private sealed record RemoteSwitchWaitState(
         string? SelectedRemoteName,
         string? SelectedRemoteUrl,
         bool? IsSshAuthSelected,
         Exception? Error);
+
+    private sealed record RemoteMetadataWaitState(string? RemoteName, string? RemoteUrl);
 
     private static TControl? TryResolveDuringWait<TControl>(Func<TControl> resolve)
         where TControl : class

@@ -303,7 +303,8 @@
                                          ToolTip.Tip="{Binding GitRemoteUrl}" />
                                 <Button Grid.Column="1"
                                         Content="{DynamicResource Refresh}"
-                                        Command="{Binding RefreshGitMetadataCommand}" />
+                                        Command="{Binding RefreshGitMetadataCommand}"
+                                        AutomationProperties.AutomationId="RefreshGitMetadataButton" />
                             </Grid>
                         </StackPanel>
 

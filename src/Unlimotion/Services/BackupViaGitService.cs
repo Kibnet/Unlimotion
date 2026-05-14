@@ -2723,8 +2723,18 @@ public class BackupViaGitService : IRemoteBackupService
 
     private (GitSettings git, string? repositoryPath) GetSettings()
     {
-        return (_configuration.Get<GitSettings>("Git"),
-            _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
+        return (_configuration.Get<GitSettings>("Git"), ResolveRepositoryPathFromSettings());
+    }
+
+    private string? ResolveRepositoryPathFromSettings()
+    {
+        var configuredPath = _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        return (_storageFactory?.CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
     }
 
     private void ShowUiError(string message, Exception? ex = null)

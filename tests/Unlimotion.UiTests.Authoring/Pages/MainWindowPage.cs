@@ -24,6 +24,7 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("SettingsRoot", UiControlType.AutomationElement, "SettingsRoot")]
 [UiControl("BackupAutoCheckBox", UiControlType.CheckBox, "BackupAutoCheckBox")]
 [UiControl("GitRemoteUrlTextBox", UiControlType.TextBox, "GitRemoteUrlTextBox")]
+[UiControl("RefreshGitMetadataButton", UiControlType.Button, "RefreshGitMetadataButton")]
 [UiControl("TokenAuthSection", UiControlType.AutomationElement, "TokenAuthSection")]
 [UiControl("SwitchRemoteToHttpButton", UiControlType.ToggleButton, "SwitchRemoteToHttpButton")]
 [UiControl("SwitchRemoteToSshButton", UiControlType.ToggleButton, "SwitchRemoteToSshButton")]

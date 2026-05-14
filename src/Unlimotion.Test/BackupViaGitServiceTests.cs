@@ -347,6 +347,28 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task Remotes_UsesCurrentLocalStorageWhenConfiguredPathIsEmpty()
+    {
+        var localPath = CreateInitializedRepositoryWithRemote(
+            "origin",
+            "git@github.com:org/unlimotion-backup.git");
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(string.Empty);
+        using var storageFactory = new CurrentFileStorageFactory(localPath);
+        var service = new BackupViaGitService(configuration, storageFactory: storageFactory);
+
+        var remotes = service.Remotes();
+
+        await Assert.That(remotes).Contains("origin");
+        await Assert.That(service.GetRemoteUrl("origin")).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task PullExistingRepository_PullsRemoteChanges_WhenTaskFolderIsExistingRepository()
     {
         var remotePath = CreateBareRemoteWithCommit("task", "base content");
@@ -1298,6 +1320,24 @@ public sealed class BackupViaGitServiceTests : IDisposable
         public ITaskStorage CreateFileStorage(string? path) => throw new NotSupportedException();
         public ITaskStorage CreateServerStorage(string? url) => throw new NotSupportedException();
         public void SwitchStorage(bool isServerMode, IConfiguration configuration) => throw new NotSupportedException();
+    }
+
+    private sealed class CurrentFileStorageFactory : ITaskStorageFactory, IDisposable
+    {
+        private readonly ITaskStorage _storage;
+
+        public CurrentFileStorageFactory(string currentPath)
+        {
+            var fileStorage = new FileStorage(currentPath, watcher: false);
+            _storage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+        }
+
+        public ITaskStorage? CurrentStorage => _storage;
+        public IDatabaseWatcher? CurrentWatcher => null;
+        public ITaskStorage CreateFileStorage(string? path) => throw new NotSupportedException();
+        public ITaskStorage CreateServerStorage(string? url) => throw new NotSupportedException();
+        public void SwitchStorage(bool isServerMode, IConfiguration configuration) => throw new NotSupportedException();
+        public void Dispose() => (_storage as IDisposable)?.Dispose();
     }
 
     private sealed class FakeDatabaseWatcher : IDatabaseWatcher
