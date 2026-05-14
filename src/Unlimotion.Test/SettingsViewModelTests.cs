@@ -1160,6 +1160,62 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task SwitchRemoteConnectionTypeCommand_KeepsSshKeyRequirementWhenNoKeyIsSelected()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin" },
+            RemoteAuthTypes = new Dictionary<string, string>
+            {
+                ["origin"] = "HTTP"
+            },
+            RemoteUrls = new Dictionary<string, string>
+            {
+                ["origin"] = "https://github.com/org/repo.git"
+            }
+        };
+        backupService.SwitchRemoteConnectionTypeHandler = (_, _) =>
+        {
+            backupService.RemoteNames.Add("origin-ssh");
+            backupService.RemoteAuthTypes["origin-ssh"] = "SSH";
+            backupService.RemoteUrls["origin-ssh"] = "git@github.com:org/repo.git";
+            return new RemoteConnectionTypeSwitchResult(
+                "origin-ssh",
+                "git@github.com:org/repo.git",
+                "SSH",
+                CreatedRemote: true);
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://github.com/org/repo.git");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.UserName)).Set("user");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.Password)).Set("token");
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: localization);
+        using var storageFactory = new RecordingTaskStorageFactory(
+            Path.Combine(Environment.CurrentDirectory, $"RemoteSwitchNoKeyTasks-{Guid.NewGuid():N}"),
+            new ConcurrentQueue<string>());
+        using var appFields = ConfigureAppSettingsCommands(settings, configuration, backupService, storageFactory);
+
+        await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.Connected);
+
+        settings.SwitchRemoteToSshCommand!.Execute(null);
+
+        await WaitForConditionAsync(
+            () => backupService.SwitchRemoteConnectionTypeCalls == 1 &&
+                  settings.GitRemoteName == "origin-ssh" &&
+                  settings.BackupConnectionState != BackupStatusState.Connecting,
+            "Remote connection type switch did not complete.");
+
+        await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.NotConfigured);
+        await Assert.That(settings.CanConnectRepository).IsFalse();
+        await Assert.That(settings.BackupStatusText).IsEqualTo("Select an SSH key.");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadGitMetadata_DoesNotSwitchRemoteConnectionType()
     {
         var backupService = new FakeRemoteBackupService

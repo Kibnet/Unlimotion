@@ -41,7 +41,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Settings root did not become available.")!;
 
-        Page.BackupAutoCheckBox.IsChecked = true;
+        Page.SetChecked(static page => page.BackupAutoCheckBox, true);
         var tokenSection = WaitUntil(
             () => TryResolveDuringWait(() => Page.TokenAuthSection),
             static control => control is not null,
@@ -57,14 +57,16 @@ public sealed class SettingsRemoteTypeHeadlessTests
             static canSwitch => canSwitch,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Remote connection type switch did not become enabled.")!;
-        await Assert.That(_vm!.Settings.GitRemoteName).IsEqualTo("origin");
-        await Assert.That(_vm.Settings.GitRemoteUrl).IsEqualTo("https://github.com/org/unlimotion-backup.git");
-        await Assert.That(_vm.Settings.SwitchRemoteToSshCommand?.CanExecute(null)).IsTrue();
+        Page.WaitUntilIsEnabled(static page => page.SwitchRemoteToSshButton, true, 10_000);
+        var vm = _vm ?? throw new InvalidOperationException("ViewModel was not captured.");
+        await Assert.That(vm.Settings.GitRemoteName).IsEqualTo("origin");
+        await Assert.That(vm.Settings.GitRemoteUrl).IsEqualTo("https://github.com/org/unlimotion-backup.git");
+        await Assert.That(vm.Settings.SwitchRemoteToSshCommand?.CanExecute(null)).IsTrue();
 
         var commandErrors = new List<Exception>();
         using var commandErrorSubscription =
-            (_vm?.Settings.SwitchRemoteToSshCommand as IReactiveCommand)?.ThrownExceptions.Subscribe(commandErrors.Add);
-        _vm.Settings.SwitchRemoteToSshCommand!.Execute(null);
+            (vm.Settings.SwitchRemoteToSshCommand as IReactiveCommand)?.ThrownExceptions.Subscribe(commandErrors.Add);
+        vm.Settings.SwitchRemoteToSshCommand!.Execute(null);
 
         var sshSection = WaitUntil(
             () => TryResolveDuringWait(() => Page.SshKeysSection),
@@ -102,6 +104,8 @@ public sealed class SettingsRemoteTypeHeadlessTests
             await Assert.That(selectedRemoteUrl.SelectedRemoteName).IsEqualTo("origin-ssh");
             await Assert.That(selectedRemoteUrl.IsSshAuthSelected).IsTrue();
             await Assert.That(selectedRemoteUrl.SelectedRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");
+            await Assert.That(vm.Settings.BackupConnectionState).IsEqualTo(BackupStatusState.NotConfigured);
+            await Assert.That(vm.Settings.BackupStatusText).IsEqualTo("Select an SSH key.");
         }
     }
 
@@ -116,7 +120,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Settings root did not become available.")!;
 
-        Page.BackupAutoCheckBox.IsChecked = true;
+        Page.SetChecked(static page => page.BackupAutoCheckBox, true);
         var refreshButton = WaitUntil(
             () => TryResolveDuringWait(() => Page.RefreshGitMetadataButton),
             static control => control is not null,

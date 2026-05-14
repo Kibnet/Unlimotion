@@ -185,27 +185,7 @@ public static class UnlimotionAppLaunchHost
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
         var settingsViewModel = new SettingsViewModel(configuration, backupService);
         settingsViewModel.RefreshGitMetadataCommand = ReactiveCommand.Create(settingsViewModel.ReloadGitMetadata);
-        async Task SwitchRemoteConnectionTypeAsync(BackupAuthMode targetMode)
-        {
-            if (string.IsNullOrWhiteSpace(settingsViewModel.GitRemoteName))
-            {
-                return;
-            }
-
-            var result = await Task.Run(() =>
-                backupService.SwitchRemoteConnectionType(settingsViewModel.GitRemoteName, targetMode));
-            settingsViewModel.ApplyRemoteConnectionTypeSwitch(result);
-        }
-
-        settingsViewModel.SwitchRemoteConnectionTypeCommand = ReactiveCommand.CreateFromTask<string?>(targetType =>
-            SwitchRemoteConnectionTypeAsync(
-                string.Equals(targetType, "SSH", StringComparison.OrdinalIgnoreCase)
-                    ? BackupAuthMode.Ssh
-                    : BackupAuthMode.Token));
-        settingsViewModel.SwitchRemoteToHttpCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Token));
-        settingsViewModel.SwitchRemoteToSshCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Ssh));
+        SettingsRemoteConnectionTypeCommands.Configure(settingsViewModel, backupService, notificationManager);
         var vm = new MainWindowViewModel(
             new AppNameDefinitionService(),
             notificationManager,

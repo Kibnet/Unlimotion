@@ -605,45 +605,7 @@ public class App : Application
         });
 
         settings.RefreshGitMetadataCommand = ReactiveCommand.Create(settings.ReloadGitMetadata);
-
-        async Task SwitchRemoteConnectionTypeAsync(BackupAuthMode targetMode)
-        {
-            if (_backupService == null || string.IsNullOrWhiteSpace(settings.GitRemoteName))
-            {
-                return;
-            }
-
-            settings.SetBackupConnectionState(BackupStatusState.Connecting, L10n.Get("SwitchingRemoteConnectionType"));
-            try
-            {
-                var result = await Task.Run(() =>
-                    _backupService.SwitchRemoteConnectionType(settings.GitRemoteName!, targetMode));
-                settings.ApplyRemoteConnectionTypeSwitch(result);
-                settings.SetBackupConnectionState(
-                    BackupStatusState.Connected,
-                    L10n.Get(result.CreatedRemote
-                        ? "RemoteConnectionTypeCopyCreated"
-                        : "RemoteConnectionTypeSwitched"));
-            }
-            catch (Exception ex)
-            {
-                settings.ReloadGitMetadata();
-                settings.SetBackupConnectionState(
-                    BackupStatusState.Error,
-                    L10n.Format("RemoteConnectionTypeSwitchFailed", ex.Message));
-                _notificationManager?.ErrorToast(L10n.Format("RemoteConnectionTypeSwitchFailed", ex.Message));
-            }
-        }
-
-        settings.SwitchRemoteConnectionTypeCommand = ReactiveCommand.CreateFromTask<string?>(targetType =>
-            SwitchRemoteConnectionTypeAsync(
-                string.Equals(targetType, "SSH", StringComparison.OrdinalIgnoreCase)
-                    ? BackupAuthMode.Ssh
-                    : BackupAuthMode.Token));
-        settings.SwitchRemoteToHttpCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Token));
-        settings.SwitchRemoteToSshCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Ssh));
+        SettingsRemoteConnectionTypeCommands.Configure(settings, _backupService, _notificationManager);
 
         settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
         {

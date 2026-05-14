@@ -187,7 +187,7 @@ public static class UnlimotionAutomationScenarioData
             },
             Git = new
             {
-                BackupEnabled = "False",
+                BackupEnabled = "True",
                 ShowStatusToasts = "False",
                 RemoteUrl = "https://github.com/org/unlimotion-backup.git",
                 Branch = "master",

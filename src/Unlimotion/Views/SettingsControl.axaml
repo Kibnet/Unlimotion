@@ -71,6 +71,11 @@
         <Style Selector="WrapPanel.ActionButtons ToggleButton">
             <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
+        <Style Selector="WrapPanel.ActionButtons Button.RemoteConnectionTypeSelected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -323,16 +328,16 @@
                         <StackPanel Classes="FieldGroup">
                             <TextBlock Classes="FieldLabel" Text="{DynamicResource RemoteConnectionType}" />
                             <WrapPanel Classes="ActionButtons" Margin="0">
-                                <ToggleButton Content="HTTP"
-                                              IsChecked="{Binding IsHttpRemoteConnectionTypeSelected, Mode=OneWay}"
-                                              IsEnabled="{Binding CanSwitchRemoteConnectionType}"
-                                              Command="{Binding SwitchRemoteToHttpCommand}"
-                                              AutomationProperties.AutomationId="SwitchRemoteToHttpButton" />
-                                <ToggleButton Content="SSH"
-                                              IsChecked="{Binding IsSshRemoteConnectionTypeSelected, Mode=OneWay}"
-                                              IsEnabled="{Binding CanSwitchRemoteConnectionType}"
-                                              Command="{Binding SwitchRemoteToSshCommand}"
-                                              AutomationProperties.AutomationId="SwitchRemoteToSshButton" />
+                                <Button Content="HTTP"
+                                        Classes.RemoteConnectionTypeSelected="{Binding IsHttpRemoteConnectionTypeSelected}"
+                                        IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                        Command="{Binding SwitchRemoteToHttpCommand}"
+                                        AutomationProperties.AutomationId="SwitchRemoteToHttpButton" />
+                                <Button Content="SSH"
+                                        Classes.RemoteConnectionTypeSelected="{Binding IsSshRemoteConnectionTypeSelected}"
+                                        IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                        Command="{Binding SwitchRemoteToSshCommand}"
+                                        AutomationProperties.AutomationId="SwitchRemoteToSshButton" />
                             </WrapPanel>
                         </StackPanel>
 
