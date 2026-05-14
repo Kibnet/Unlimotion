@@ -51,6 +51,7 @@ namespace Unlimotion.ViewModel
 
         public ITaskStorage? taskRepository;
         private readonly Func<ITaskStorage?>? _getTaskStorage;
+        private readonly string? _taskTreeExpansionStatePath;
 
         public MainWindowViewModel(
             IAppNameDefinitionService? appNameService,
@@ -58,13 +59,15 @@ namespace Unlimotion.ViewModel
             IConfiguration configuration,
             Func<ITaskStorage?>? getTaskStorage = null,
             SettingsViewModel? settings = null,
-            GraphViewModel? graph = null)
+            GraphViewModel? graph = null,
+            string? taskTreeExpansionStatePath = null)
         {
             Title = appNameService?.GetAppName() ?? "";
             connectionDisposableList.AddToDispose(this);
             ManagerWrapper = managerWrapper;
             _configuration = configuration;
             _getTaskStorage = getTaskStorage;
+            _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
@@ -715,35 +718,26 @@ namespace Unlimotion.ViewModel
 
             #endregion Поиск
 
-            var allTasksExpansionState = new Dictionary<string, bool>();
-            var unlockedExpansionState = new Dictionary<string, bool>();
-            var completedExpansionState = new Dictionary<string, bool>();
-            var archivedExpansionState = new Dictionary<string, bool>();
-            var lastCreatedExpansionState = new Dictionary<string, bool>();
-            var lastUpdatedExpansionState = new Dictionary<string, bool>();
-            var lastOpenedExpansionState = new Dictionary<string, bool>();
+            var expansionStateStore = new TaskTreeExpansionStateStore(
+                _taskTreeExpansionStatePath,
+                Settings.PersistTaskTreeExpansionState);
+            expansionStateStore.AddToDispose(connectionDisposableList);
+            this.WhenAnyValue(m => m.Settings.PersistTaskTreeExpansionState)
+                .Subscribe(expansionStateStore.SetPersistenceEnabled)
+                .AddToDispose(connectionDisposableList);
 
-            static TaskWrapperActions TrackExpansionState(
+            TaskWrapperActions TrackExpansionState(
                 TaskWrapperActions actions,
-                IDictionary<string, bool> expansionState)
+                string treeName)
             {
-                actions.GetExpansionState = task =>
-                {
-                    if (string.IsNullOrWhiteSpace(task.Id))
-                    {
-                        return null;
-                    }
-
-                    return expansionState.TryGetValue(task.Id, out var isExpanded)
-                        ? isExpanded
-                        : null;
-                };
+                actions.GetExpansionState = task => expansionStateStore.GetExpansionState(treeName, task.Id);
                 actions.SetExpansionState = (task, isExpanded) =>
                 {
-                    if (!string.IsNullOrWhiteSpace(task.Id))
-                    {
-                        expansionState[task.Id] = isExpanded;
-                    }
+                    expansionStateStore.SetExpansionState(
+                        treeName,
+                        task.Id,
+                        isExpanded,
+                        Settings.PersistTaskTreeExpansionState);
                 };
 
                 return actions;
@@ -817,7 +811,7 @@ namespace Unlimotion.ViewModel
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
                         Filter = new() { taskFilter, emojiExcludeFilter },
-                    }, allTasksExpansionState);
+                    }, "AllTasksTree");
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
@@ -870,7 +864,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, unlockedExpansionState);
+                        }, "UnlockedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -983,7 +977,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, completedExpansionState);
+                        }, "CompletedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1022,7 +1016,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, archivedExpansionState);
+                        }, "ArchivedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1062,7 +1056,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, lastCreatedExpansionState);
+                        }, "LastCreatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1103,7 +1097,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, lastUpdatedExpansionState);
+                        }, "LastUpdatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
@@ -1264,7 +1258,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = m => RemoveTask(m),
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                        }, lastOpenedExpansionState);
+                        }, "LastOpenedTree");
                         var wrapper = new TaskWrapperViewModel(null, item.Item1, actions)
                         {
                             SpecialDateTime = DateTimeOffset.Now

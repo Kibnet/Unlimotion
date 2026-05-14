@@ -16,9 +16,12 @@ namespace Unlimotion.Test
         private readonly ThreadLocal<Guid> guid;
         private readonly IDisposable? configurationDisposable;
 
+        private readonly string fixtureDirectory;
         private readonly string uniqueConfigName;
         private bool isCleaned;
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
+        public string ConfigPath => Path.GetFullPath(uniqueConfigName);
+        public string? TaskTreeExpansionStatePath => TaskTreeExpansionStateStore.GetDefaultPath(ConfigPath);
         public readonly string DefaultTasksFolderPath;
         private readonly string defaultSnapshotsFolderPath;
         public string DefaultRootTaskPath;
@@ -57,16 +60,20 @@ namespace Unlimotion.Test
         public MainWindowViewModelFixture()
         {
             guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
-            uniqueConfigName = $"TestSettings_{UniquiId}.json";
+            fixtureDirectory = Path.Combine(Environment.CurrentDirectory, $"MainWindowViewModelFixture_{UniquiId}");
+            Directory.CreateDirectory(fixtureDirectory);
+            uniqueConfigName = Path.Combine(fixtureDirectory, $"TestSettings_{UniquiId}.json");
             var defaultTasksFolderName = $"Tasks_{UniquiId}";
-            DefaultTasksFolderPath = Path.Combine(Environment.CurrentDirectory, defaultTasksFolderName);
+            DefaultTasksFolderPath = Path.Combine(fixtureDirectory, defaultTasksFolderName);
             defaultSnapshotsFolderPath = Path.Combine(Environment.CurrentDirectory, "Snapshots");
             DefaultRootTaskPath = Path.Combine(defaultSnapshotsFolderPath, RootTask1Id);
             Directory.CreateDirectory(DefaultTasksFolderPath);
             CopyTaskFromSnapshotsFolder();
             var fileInfo = new FileInfo(DefaultConfigName);
             var content = fileInfo.ReadAllText();
-            content = content.Replace("Tasks", defaultTasksFolderName);
+            content = content.Replace(
+                "\"Path\": \"Tasks\"",
+                $"\"Path\": \"{DefaultTasksFolderPath.Replace("\\", "\\\\")}\"");
             var configFile = File.Create(uniqueConfigName);
             configFile.Write(content);
             configFile.Close();
@@ -95,7 +102,8 @@ namespace Unlimotion.Test
                 notificationManagerMock,
                 configuration,
                 () => storageFactory.CurrentStorage,
-                settingsViewModel
+                settingsViewModel,
+                taskTreeExpansionStatePath: TaskTreeExpansionStatePath
             );
         }
 
@@ -144,7 +152,14 @@ namespace Unlimotion.Test
             {
                 Try(() => File.Delete(uniqueConfigName));
             }
+
+            if (!string.IsNullOrWhiteSpace(TaskTreeExpansionStatePath) && File.Exists(TaskTreeExpansionStatePath))
+            {
+                Try(() => File.Delete(TaskTreeExpansionStatePath));
+            }
+
             Try(() => Directory.Delete(DefaultTasksFolderPath, true));
+            Try(() => Directory.Delete(fixtureDirectory, true));
         }
     }
 }

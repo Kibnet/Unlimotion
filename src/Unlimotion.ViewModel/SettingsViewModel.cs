@@ -23,12 +23,15 @@ public class SettingsViewModel
     private const string TaskOutlineClipboardSectionName = "TaskOutlineClipboard";
     private const string TaskOutlineCopyAsMarkdownKey = "CopyAsMarkdown";
     private const string TaskOutlineCopyDescriptionKey = "CopyDescription";
+    private const string TaskTreeExpansionStateSectionName = "TaskTreeExpansionState";
+    private const string TaskTreeExpansionStateEnabledKey = "Enabled";
 
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
     private readonly IConfiguration _taskOutlineClipboardSettings;
+    private readonly IConfiguration _taskTreeExpansionStateSettings;
     private readonly IConfiguration _updateSettings;
     private readonly IRemoteBackupService? _backupService;
     private readonly ILocalizationService _localization;
@@ -60,6 +63,7 @@ public class SettingsViewModel
     private string? _gitSshPublicKeyPath;
     private bool _copyTaskOutlineAsMarkdown;
     private bool _copyTaskOutlineDescription;
+    private bool _persistTaskTreeExpansionState;
     private bool _updateAutoCheckEnabled;
     private int _updateCheckIntervalValue;
     private ApplicationUpdateCheckIntervalUnit _updateCheckIntervalUnit;
@@ -77,6 +81,7 @@ public class SettingsViewModel
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
+        _taskTreeExpansionStateSettings = configuration.GetSection(TaskTreeExpansionStateSectionName);
         _updateSettings = configuration.GetSection(ApplicationUpdateSettings.SectionName);
         _backupService = backupService;
         _localization = localizationService ?? LocalizationService.Current;
@@ -111,6 +116,9 @@ public class SettingsViewModel
         _gitSshPublicKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Get<string>();
         _copyTaskOutlineAsMarkdown = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyAsMarkdownKey).Get<bool>();
         _copyTaskOutlineDescription = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Get<bool>();
+        _persistTaskTreeExpansionState = _taskTreeExpansionStateSettings
+            .GetSection(TaskTreeExpansionStateEnabledKey)
+            .Get<bool>();
         _updateAutoCheckEnabled = _updateSettings
             .GetSection(ApplicationUpdateSettings.AutoCheckEnabledKey)
             .Get<bool?>() ?? ApplicationUpdateSettings.DefaultAutoCheckEnabled;
@@ -335,6 +343,16 @@ public class SettingsViewModel
         {
             _copyTaskOutlineDescription = value;
             _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Set(value);
+        }
+    }
+
+    public bool PersistTaskTreeExpansionState
+    {
+        get => _persistTaskTreeExpansionState;
+        set
+        {
+            _persistTaskTreeExpansionState = value;
+            _taskTreeExpansionStateSettings.GetSection(TaskTreeExpansionStateEnabledKey).Set(value);
         }
     }
 

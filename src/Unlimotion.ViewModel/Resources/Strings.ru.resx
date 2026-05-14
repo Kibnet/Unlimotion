@@ -121,6 +121,7 @@
   <data name="Friday" xml:space="preserve"><value>Пятница</value></data>
   <data name="From" xml:space="preserve"><value>С</value></data>
   <data name="FuzzySearch" xml:space="preserve"><value>Умный поиск</value></data>
+  <data name="PersistTaskTreeExpansionState" xml:space="preserve"><value>Запоминать развёрнутые узлы дерева задач</value></data>
   <data name="GitConflicts" xml:space="preserve"><value>Не удалось объединить локальные задачи с удаленным репозиторием: есть Git conflicts.</value></data>
   <data name="ConflictAncestorVersion" xml:space="preserve"><value>До изменения</value></data>
   <data name="ConflictCurrentVersion" xml:space="preserve"><value>Текущая версия</value></data>
