@@ -170,6 +170,65 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
+    public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(string remoteName, BackupAuthMode targetMode)
+    {
+        lock (LockObject)
+        {
+            if (string.IsNullOrWhiteSpace(remoteName))
+            {
+                throw new InvalidOperationException(L10n.Get("RemoteNameNotConfigured"));
+            }
+
+            var settings = GetSettings();
+            var repositoryPath = GetRepositoryPath(settings.repositoryPath);
+            if (!Repository.IsValid(repositoryPath))
+            {
+                throw new InvalidOperationException(L10n.Get("RepositoryNotInitialized"));
+            }
+
+            using var repo = new Repository(repositoryPath);
+            var selectedRemote = repo.Network.Remotes[remoteName]
+                                 ?? throw new InvalidOperationException(L10n.Format("RemoteNotFound", remoteName));
+
+            if (ParseBackupAuthMode(selectedRemote.Url) == targetMode)
+            {
+                SetRemoteName(settings.git, selectedRemote.Name);
+                SetRemoteUrl(settings.git, selectedRemote.Url);
+                return new RemoteConnectionTypeSwitchResult(
+                    selectedRemote.Name,
+                    selectedRemote.Url,
+                    DetectAuthType(selectedRemote.Url),
+                    CreatedRemote: false);
+            }
+
+            var targetUrl = BuildRemoteUrlForConnectionType(selectedRemote.Url, targetMode);
+            var existingRemote = repo.Network.Remotes.FirstOrDefault(remote =>
+                AreEquivalentRemoteUrls(remote.Url, targetUrl));
+            if (existingRemote != null)
+            {
+                SetRemoteName(settings.git, existingRemote.Name);
+                SetRemoteUrl(settings.git, existingRemote.Url);
+                return new RemoteConnectionTypeSwitchResult(
+                    existingRemote.Name,
+                    existingRemote.Url,
+                    DetectAuthType(existingRemote.Url),
+                    CreatedRemote: false);
+            }
+
+            var targetRemoteName = CreateUniqueRemoteName(
+                repo,
+                $"{selectedRemote.Name}-{(targetMode == BackupAuthMode.Ssh ? "ssh" : "http")}");
+            var createdRemote = repo.Network.Remotes.Add(targetRemoteName, targetUrl);
+            SetRemoteName(settings.git, createdRemote.Name);
+            SetRemoteUrl(settings.git, createdRemote.Url);
+            return new RemoteConnectionTypeSwitchResult(
+                createdRemote.Name,
+                createdRemote.Url,
+                DetectAuthType(createdRemote.Url),
+                CreatedRemote: true);
+        }
+    }
+
     public List<string> GetSshPublicKeys()
     {
         var sshDirectory = GetSshDirectory();
@@ -2278,6 +2337,184 @@ public class BackupViaGitService : IRemoteBackupService
         return IsSshUrl(remoteUrl) ? "SSH" : "HTTP";
     }
 
+    private static BackupAuthMode ParseBackupAuthMode(string? remoteUrl) =>
+        IsSshUrl(remoteUrl) ? BackupAuthMode.Ssh : BackupAuthMode.Token;
+
+    internal static string BuildRemoteUrlForConnectionType(string remoteUrl, BackupAuthMode targetMode)
+    {
+        var identity = ParseRemoteUrlIdentity(remoteUrl);
+        return targetMode switch
+        {
+            BackupAuthMode.Ssh => identity.ToSshUrl(),
+            BackupAuthMode.Token => identity.ToHttpUrl(),
+            _ => throw new InvalidOperationException($"Unsupported backup auth mode: {targetMode}.")
+        };
+    }
+
+    internal static bool AreEquivalentRemoteUrls(string? firstRemoteUrl, string? secondRemoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(firstRemoteUrl) || string.IsNullOrWhiteSpace(secondRemoteUrl))
+        {
+            return false;
+        }
+
+        if (string.Equals(firstRemoteUrl, secondRemoteUrl, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            return ParseRemoteUrlIdentity(firstRemoteUrl).Equals(ParseRemoteUrlIdentity(secondRemoteUrl));
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static RemoteUrlIdentity ParseRemoteUrlIdentity(string remoteUrl)
+    {
+        if (string.IsNullOrWhiteSpace(remoteUrl))
+        {
+            throw new InvalidOperationException(L10n.Get("RemoteUrlUnsupportedForTypeSwitch"));
+        }
+
+        var trimmedUrl = remoteUrl.Trim();
+        if (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var uri))
+        {
+            return ParseRemoteUriIdentity(uri);
+        }
+
+        var atSignIndex = trimmedUrl.IndexOf('@');
+        var colonIndex = trimmedUrl.LastIndexOf(':');
+        if (atSignIndex <= 0 ||
+            colonIndex <= atSignIndex + 1 ||
+            trimmedUrl.IndexOf("://", StringComparison.Ordinal) >= 0)
+        {
+            throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", remoteUrl));
+        }
+
+        var user = trimmedUrl[..atSignIndex];
+        if (!string.Equals(user, "git", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", remoteUrl));
+        }
+
+        var host = trimmedUrl[(atSignIndex + 1)..colonIndex];
+        var path = trimmedUrl[(colonIndex + 1)..];
+        if (host.Contains(':', StringComparison.Ordinal) ||
+            host.Contains('/', StringComparison.Ordinal) ||
+            host.Contains('\\', StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", remoteUrl));
+        }
+
+        return new RemoteUrlIdentity(BackupAuthMode.Ssh, NormalizeRemoteHost(host, null), NormalizeRemotePath(path));
+    }
+
+    private static RemoteUrlIdentity ParseRemoteUriIdentity(Uri uri)
+    {
+        if (!string.IsNullOrWhiteSpace(uri.Query) ||
+            !string.IsNullOrWhiteSpace(uri.Fragment) ||
+            string.IsNullOrWhiteSpace(uri.Host))
+        {
+            throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", uri.ToString()));
+        }
+
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(uri.UserInfo))
+            {
+                throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", uri.ToString()));
+            }
+
+            return new RemoteUrlIdentity(
+                BackupAuthMode.Token,
+                NormalizeRemoteHost(uri.Host, uri.IsDefaultPort ? null : uri.Port),
+                NormalizeRemotePath(uri.AbsolutePath));
+        }
+
+        if (string.Equals(uri.Scheme, "ssh", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(uri.UserInfo) &&
+                !string.Equals(uri.UserInfo.Split(':', 2)[0], "git", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", uri.ToString()));
+            }
+
+            return new RemoteUrlIdentity(
+                BackupAuthMode.Ssh,
+                NormalizeRemoteHost(uri.Host, uri.IsDefaultPort || uri.Port == 22 ? null : uri.Port),
+                NormalizeRemotePath(uri.AbsolutePath));
+        }
+
+        throw new InvalidOperationException(L10n.Format("RemoteUrlUnsupportedForTypeSwitchWithUrl", uri.ToString()));
+    }
+
+    private static string NormalizeRemoteHost(string host, int? port)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            throw new InvalidOperationException(L10n.Get("RemoteUrlUnsupportedForTypeSwitch"));
+        }
+
+        var normalizedHost = host.Trim().Trim('[', ']').ToLowerInvariant();
+        return port is > 0 ? $"{normalizedHost}:{port.Value}" : normalizedHost;
+    }
+
+    private static string NormalizeRemotePath(string path)
+    {
+        var normalizedPath = path.Trim().Replace('\\', '/').TrimStart('/');
+        if (normalizedPath.EndsWith("/", StringComparison.Ordinal))
+        {
+            normalizedPath = normalizedPath[..^1];
+        }
+
+        if (normalizedPath.EndsWith(".git", StringComparison.Ordinal))
+        {
+            normalizedPath = normalizedPath[..^4];
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedPath) ||
+            normalizedPath.Contains('?') ||
+            normalizedPath.Contains('#'))
+        {
+            throw new InvalidOperationException(L10n.Get("RemoteUrlUnsupportedForTypeSwitch"));
+        }
+
+        return normalizedPath;
+    }
+
+    private static string CreateUniqueRemoteName(Repository repo, string baseName)
+    {
+        var candidate = baseName;
+        var suffix = 2;
+        while (repo.Network.Remotes.Any(remote => string.Equals(remote.Name, candidate, StringComparison.Ordinal)))
+        {
+            candidate = $"{baseName}-{suffix++}";
+        }
+
+        return candidate;
+    }
+
+    private sealed record RemoteUrlIdentity(BackupAuthMode Mode, string Host, string Path)
+    {
+        public string ToHttpUrl() => $"https://{Host}/{Path}.git";
+
+        public string ToSshUrl()
+        {
+            var portSeparatorIndex = Host.LastIndexOf(':');
+            if (portSeparatorIndex > 0 && Host[(portSeparatorIndex + 1)..].All(char.IsDigit))
+            {
+                return $"ssh://git@{Host}/{Path}.git";
+            }
+
+            return $"git@{Host}:{Path}.git";
+        }
+    }
+
     private static bool IsSshUrl(string? remoteUrl)
     {
         if (string.IsNullOrWhiteSpace(remoteUrl))
@@ -2486,8 +2723,18 @@ public class BackupViaGitService : IRemoteBackupService
 
     private (GitSettings git, string? repositoryPath) GetSettings()
     {
-        return (_configuration.Get<GitSettings>("Git"),
-            _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path);
+        return (_configuration.Get<GitSettings>("Git"), ResolveRepositoryPathFromSettings());
+    }
+
+    private string? ResolveRepositoryPathFromSettings()
+    {
+        var configuredPath = _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        return (_storageFactory?.CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
     }
 
     private void ShowUiError(string message, Exception? ex = null)

@@ -71,6 +71,11 @@
         <Style Selector="WrapPanel.ActionButtons ToggleButton">
             <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
+        <Style Selector="WrapPanel.ActionButtons Button.RemoteConnectionTypeSelected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -303,7 +308,8 @@
                                          ToolTip.Tip="{Binding GitRemoteUrl}" />
                                 <Button Grid.Column="1"
                                         Content="{DynamicResource Refresh}"
-                                        Command="{Binding RefreshGitMetadataCommand}" />
+                                        Command="{Binding RefreshGitMetadataCommand}"
+                                        AutomationProperties.AutomationId="RefreshGitMetadataButton" />
                             </Grid>
                         </StackPanel>
 
@@ -319,7 +325,26 @@
                                       ItemsSource="{Binding RemotesWithAuthType}" />
                         </StackPanel>
 
-                        <StackPanel IsVisible="{Binding IsTokenAuthSelected}">
+                        <StackPanel Classes="FieldGroup">
+                            <TextBlock Classes="FieldLabel" Text="{DynamicResource RemoteConnectionType}" />
+                            <WrapPanel Classes="ActionButtons" Margin="0">
+                                <Button Content="HTTP"
+                                        Classes.RemoteConnectionTypeSelected="{Binding IsHttpRemoteConnectionTypeSelected}"
+                                        IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                        Command="{Binding SwitchRemoteToHttpCommand}"
+                                        AutomationProperties.AutomationId="SwitchRemoteToHttpButton" />
+                                <Button Content="SSH"
+                                        Classes.RemoteConnectionTypeSelected="{Binding IsSshRemoteConnectionTypeSelected}"
+                                        IsEnabled="{Binding CanSwitchRemoteConnectionType}"
+                                        Command="{Binding SwitchRemoteToSshCommand}"
+                                        AutomationProperties.AutomationId="SwitchRemoteToSshButton" />
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding IsTokenAuthSelected}"
+                                    AutomationProperties.AutomationId="TokenAuthSection"
+                                    AutomationProperties.ControlTypeOverride="Group"
+                                    AutomationProperties.IsControlElementOverride="True">
                             <StackPanel Classes="FieldGroup">
                                 <TextBlock Classes="FieldLabel" Text="{DynamicResource Login}" />
                                 <TextBox Text="{Binding GitUserName}" />

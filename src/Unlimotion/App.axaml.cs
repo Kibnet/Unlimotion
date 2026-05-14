@@ -605,6 +605,7 @@ public class App : Application
         });
 
         settings.RefreshGitMetadataCommand = ReactiveCommand.Create(settings.ReloadGitMetadata);
+        SettingsRemoteConnectionTypeCommands.Configure(settings, _backupService, _notificationManager);
 
         settings.GenerateSshKeyCommand = ReactiveCommand.CreateFromTask(async () =>
         {

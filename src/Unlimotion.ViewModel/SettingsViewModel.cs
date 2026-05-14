@@ -161,6 +161,9 @@ public class SettingsViewModel
     public ICommand? GenerateSshKeyCommand { get; set; }
     public ICommand? RefreshSshKeysCommand { get; set; }
     public ICommand? RefreshGitMetadataCommand { get; set; }
+    public ICommand? SwitchRemoteConnectionTypeCommand { get; set; }
+    public ICommand? SwitchRemoteToHttpCommand { get; set; }
+    public ICommand? SwitchRemoteToSshCommand { get; set; }
     public ICommand? CopySelectedSshKeyCommand { get; set; }
     public ICommand? CheckForUpdatesCommand { get; set; }
     public ICommand? DownloadUpdateCommand { get; set; }
@@ -528,6 +531,8 @@ public class SettingsViewModel
 
     public bool HasMultipleRemotes { get; private set; }
 
+    public bool CanSwitchRemoteConnectionType { get; private set; }
+
     public string? GitRemoteNameDisplay
     {
         get
@@ -629,9 +634,15 @@ public class SettingsViewModel
 
     public string BackupAuthModeText { get; private set; } = string.Empty;
 
+    [AlsoNotifyFor(nameof(IsHttpRemoteConnectionTypeSelected))]
     public bool IsTokenAuthSelected { get; private set; } = true;
 
+    [AlsoNotifyFor(nameof(IsSshRemoteConnectionTypeSelected))]
     public bool IsSshAuthSelected { get; private set; }
+
+    public bool IsHttpRemoteConnectionTypeSelected => IsTokenAuthSelected;
+
+    public bool IsSshRemoteConnectionTypeSelected => IsSshAuthSelected;
 
     public SettingsConnectionState StorageConnectionState { get; private set; }
 
@@ -764,6 +775,18 @@ public class SettingsViewModel
         ReloadBackupConflictStatus();
         RefreshBackupAuthMode();
         RefreshBackupState();
+    }
+
+    public void ApplyRemoteConnectionTypeSwitch(RemoteConnectionTypeSwitchResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.RemoteName) || string.IsNullOrWhiteSpace(result.RemoteUrl))
+        {
+            return;
+        }
+
+        GitRemoteName = result.RemoteName;
+        GitRemoteUrl = result.RemoteUrl;
+        ReloadGitMetadata();
     }
 
     public void ReloadBackupConflictStatus()
@@ -1347,6 +1370,10 @@ public class SettingsViewModel
         CanSyncRepository = !IsBackupBusy &&
                             !IsConflictResolutionMode &&
                             hasReadySyncTarget;
+        CanSwitchRemoteConnectionType = !IsBackupBusy &&
+                                        !IsConflictResolutionMode &&
+                                        !string.IsNullOrWhiteSpace(GitRemoteName) &&
+                                        Remotes.Any(remote => string.Equals(remote, GitRemoteName, StringComparison.Ordinal));
         CanCommitConflictResolution = !IsBackupBusy &&
                                       IsConflictResolutionMode &&
                                       !HasBackupConflictFiles;

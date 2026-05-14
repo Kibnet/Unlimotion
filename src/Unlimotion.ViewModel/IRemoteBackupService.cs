@@ -7,6 +7,7 @@ public interface IRemoteBackupService
     public List<string> Remotes();
     public string? GetRemoteAuthType(string remoteName);
     public string? GetRemoteUrl(string remoteName);
+    public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(string remoteName, BackupAuthMode targetMode);
     public List<string> Refs();
     public List<string> GetSshPublicKeys();
     public string GenerateSshKey(string keyName);

@@ -1,6 +1,7 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 using ReactiveUI.Avalonia;
 using ReactiveUI.Builder;
 using Unlimotion;
@@ -181,7 +182,10 @@ public static class UnlimotionAppLaunchHost
         TaskStorageFactory.DefaultStoragePath = launchData.TasksPath;
         storageFactory.CreateFileStorage(launchData.TasksPath);
 
-        var settingsViewModel = new SettingsViewModel(configuration);
+        var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
+        var settingsViewModel = new SettingsViewModel(configuration, backupService);
+        settingsViewModel.RefreshGitMetadataCommand = ReactiveCommand.Create(settingsViewModel.ReloadGitMetadata);
+        SettingsRemoteConnectionTypeCommands.Configure(settingsViewModel, backupService, notificationManager);
         var vm = new MainWindowViewModel(
             new AppNameDefinitionService(),
             notificationManager,

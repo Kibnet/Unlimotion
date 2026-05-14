@@ -220,8 +220,15 @@
   <data name="PushedChanges" xml:space="preserve"><value>Changes pushed to repository.</value></data>
   <data name="PushingChanges" xml:space="preserve"><value>Pushing changes to repository...</value></data>
   <data name="Refresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="RemoteConnectionType" xml:space="preserve"><value>Connection type</value></data>
+  <data name="RemoteConnectionTypeCopyCreated" xml:space="preserve"><value>Remote copy created and selected.</value></data>
+  <data name="RemoteConnectionTypeSwitchFailed" xml:space="preserve"><value>Could not switch remote connection type: {0}</value></data>
+  <data name="RemoteConnectionTypeSwitched" xml:space="preserve"><value>Remote connection type selected.</value></data>
+  <data name="RemoteNameNotConfigured" xml:space="preserve"><value>Remote name is not configured.</value></data>
   <data name="RemoteRepositoryUrlNotConfigured" xml:space="preserve"><value>Remote repository URL is not configured.</value></data>
   <data name="RemoteSource" xml:space="preserve"><value>Remote source</value></data>
+  <data name="RemoteUrlUnsupportedForTypeSwitch" xml:space="preserve"><value>Remote URL cannot be converted between HTTP and SSH.</value></data>
+  <data name="RemoteUrlUnsupportedForTypeSwitchWithUrl" xml:space="preserve"><value>Remote URL cannot be converted between HTTP and SSH: {0}</value></data>
   <data name="Remove" xml:space="preserve"><value>Remove</value></data>
   <data name="RemoveTaskHeader" xml:space="preserve"><value>Remove task</value></data>
   <data name="RemoveTaskMessage" xml:space="preserve"><value>Are you sure you want to remove the task "{0}" from disk?</value></data>
@@ -309,6 +316,7 @@
   <data name="StorageServer" xml:space="preserve"><value>On server</value></data>
   <data name="StorageTitle" xml:space="preserve"><value>Task storage</value></data>
   <data name="StorageLocal" xml:space="preserve"><value>On this device</value></data>
+  <data name="SwitchingRemoteConnectionType" xml:space="preserve"><value>Switching remote connection type...</value></data>
   <data name="SyncComplete" xml:space="preserve"><value>Synchronization complete.</value></data>
   <data name="SyncConflictsHint" xml:space="preserve"><value>Synchronization is paused. Choose a version for each conflicted file, then finish the resolution.</value></data>
   <data name="SyncConflictFieldsHint" xml:space="preserve"><value>Choose values for each changed field, or merge compatible text, list, and object fields.</value></data>

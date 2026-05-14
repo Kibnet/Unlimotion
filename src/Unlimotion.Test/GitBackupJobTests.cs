@@ -113,6 +113,9 @@ public sealed class GitBackupJobTests : IDisposable
 
         public string? GetRemoteUrl(string remoteName) => null;
 
+        public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(string remoteName, BackupAuthMode targetMode) =>
+            throw new NotSupportedException();
+
         public List<string> Refs() => new();
 
         public List<string> GetSshPublicKeys() => new();

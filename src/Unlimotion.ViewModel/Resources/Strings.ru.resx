@@ -220,8 +220,15 @@
   <data name="PushedChanges" xml:space="preserve"><value>Изменения отправлены в репозиторий.</value></data>
   <data name="PushingChanges" xml:space="preserve"><value>Отправка изменений в репозиторий...</value></data>
   <data name="Refresh" xml:space="preserve"><value>Обновить</value></data>
+  <data name="RemoteConnectionType" xml:space="preserve"><value>Тип подключения</value></data>
+  <data name="RemoteConnectionTypeCopyCreated" xml:space="preserve"><value>Копия remote создана и выбрана.</value></data>
+  <data name="RemoteConnectionTypeSwitchFailed" xml:space="preserve"><value>Не удалось переключить тип подключения remote: {0}</value></data>
+  <data name="RemoteConnectionTypeSwitched" xml:space="preserve"><value>Тип подключения remote выбран.</value></data>
+  <data name="RemoteNameNotConfigured" xml:space="preserve"><value>Имя remote не настроено.</value></data>
   <data name="RemoteRepositoryUrlNotConfigured" xml:space="preserve"><value>Адрес удаленного репозитория не настроен.</value></data>
   <data name="RemoteSource" xml:space="preserve"><value>Удаленный источник</value></data>
+  <data name="RemoteUrlUnsupportedForTypeSwitch" xml:space="preserve"><value>URL remote нельзя преобразовать между HTTP и SSH.</value></data>
+  <data name="RemoteUrlUnsupportedForTypeSwitchWithUrl" xml:space="preserve"><value>URL remote нельзя преобразовать между HTTP и SSH: {0}</value></data>
   <data name="Remove" xml:space="preserve"><value>Удалить</value></data>
   <data name="RemoveTaskHeader" xml:space="preserve"><value>Удалить задачу</value></data>
   <data name="RemoveTaskMessage" xml:space="preserve"><value>Удалить задачу "{0}" с диска?</value></data>
@@ -309,6 +316,7 @@
   <data name="StorageServer" xml:space="preserve"><value>На сервере</value></data>
   <data name="StorageTitle" xml:space="preserve"><value>Хранилище задач</value></data>
   <data name="StorageLocal" xml:space="preserve"><value>На этом устройстве</value></data>
+  <data name="SwitchingRemoteConnectionType" xml:space="preserve"><value>Переключение типа подключения remote...</value></data>
   <data name="SyncComplete" xml:space="preserve"><value>Синхронизация завершена.</value></data>
   <data name="SyncConflictsHint" xml:space="preserve"><value>Синхронизация приостановлена. Выберите версию для каждого конфликтующего файла, затем завершите исправление.</value></data>
   <data name="SyncConflictFieldsHint" xml:space="preserve"><value>Выберите значения для каждого измененного поля или объедините совместимые текстовые поля, списки и объекты.</value></data>
