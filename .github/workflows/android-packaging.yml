@@ -21,7 +21,7 @@ env:
   ANDROID_NDK_VERSION: 27.2.12479018
   OPENSSL_VERSION: 3.0.14
   LIBSSH2_VERSION: 1.11.1
-  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.6
+  LIBGIT2_NATIVE_PACKAGE_VERSION: 2.0.324-android.7
 
 jobs:
   android-build:
@@ -172,6 +172,24 @@ jobs:
           local abi="$2"
           local readelf="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
           local tmp_dir
+          local missing=0
+
+          for native_library in \
+            libgit2-3f4182d.so \
+            libssl.so \
+            libssl.so.3 \
+            libcrypto.so \
+            libcrypto.so.3 \
+            libssh2.so; do
+            if ! unzip -l "$apk_path" "lib/${abi}/${native_library}" >/dev/null 2>&1; then
+              echo "APK ${apk_path} is missing native library lib/${abi}/${native_library}." >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
           if [ ! -x "$readelf" ]; then
             echo "llvm-readelf not found at $readelf" >&2
@@ -187,7 +205,6 @@ jobs:
           "$readelf" --dyn-symbols "$tmp_dir/libmonodroid.so" > "$monodroid_symbols"
           "$readelf" --dyn-symbols "$tmp_dir/libxamarin-app.so" > "$xamarin_app_symbols"
 
-          local missing=0
           for symbol in \
             compressed_assembly_count \
             compressed_assembly_descriptors \
