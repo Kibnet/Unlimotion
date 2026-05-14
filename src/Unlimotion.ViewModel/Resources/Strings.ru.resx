@@ -336,6 +336,8 @@
   <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Применить выбранные поля</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Выберите, как копировать аутлайн задач. Вставляемые аутлайны распознаются автоматически.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Буфер обмена аутлайном задач</value></data>
+  <data name="TaskCardPlanning" xml:space="preserve"><value>Планирование</value></data>
+  <data name="TaskCardRelations" xml:space="preserve"><value>Связи</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 дней</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 минут</value></data>

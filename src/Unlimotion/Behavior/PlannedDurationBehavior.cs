@@ -80,7 +80,8 @@ namespace Unlimotion.Behavior
                 isUpdatingTextFromBinding = true;
                 try
                 {
-                    textBox.Text = GetText(textBox);
+                    var bindingText = GetText(textBox);
+                    textBox.Text = string.IsNullOrEmpty(bindingText) ? null : bindingText;
                 }
                 finally
                 {

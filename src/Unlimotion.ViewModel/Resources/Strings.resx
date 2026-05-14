@@ -336,6 +336,8 @@
   <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Apply selected fields</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Choose how task outlines are copied. Pasted outlines are recognized automatically.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Task outline clipboard</value></data>
+  <data name="TaskCardPlanning" xml:space="preserve"><value>Planning</value></data>
+  <data name="TaskCardRelations" xml:space="preserve"><value>Relations</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 days</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 minutes</value></data>
