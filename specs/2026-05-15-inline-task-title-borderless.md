@@ -7,7 +7,7 @@
 - Целевая модель: gpt-5.5
 - Целевой релиз / ветка: текущая рабочая ветка
 - Ограничения: central `QUEST` SPEC-first gate; локальный `AGENTS.override.md` требует UI tests для UI-facing изменений; до подтверждения спеки меняется только этот spec-файл.
-- Связанные ссылки: `C:\Users\Kibnet\.codex\agents\AGENTS.md`; `AGENTS.override.md`; `src/Unlimotion/Views/MainControl.axaml`; `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`
+- Связанные ссылки: `C:\Users\Kibnet\.codex\agents\AGENTS.md`; `AGENTS.override.md`; `src/Unlimotion/Views/MainControl.axaml`; `src/Unlimotion/Views/GraphControl.axaml`; `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`; `src/Unlimotion.Test/RoadmapGraphUiTests.cs`
 
 Если секция не применима, явно указано `Не применимо` и причина.
 
@@ -15,22 +15,25 @@
 Сделать inline-редактирование текста задачи визуально гладким: при появлении и фокусе `TextBox` не должен добавлять рамку и не должен создавать визуальный сдвиг относительно обычного текста задачи.
 
 Outcome contract:
-- Success means: при входе в inline-редактирование заголовка задачи редактор остаётся без рамки; существующий flow F2/повторный клик продолжает работать; заголовок продолжает обновляться через binding.
-- Итоговый артефакт / output: точечная правка стиля `TextBox.InlineTaskTitleEditor` и UI regression test в существующем headless suite.
+- Success means: при входе в inline-редактирование заголовка задачи редактор остаётся без рамки в дереве задач и на роадмапе; существующий flow F2/повторный клик продолжает работать; заголовок продолжает обновляться через binding.
+- Итоговый артефакт / output: точечная правка стилей `TextBox.InlineTaskTitleEditor` и `TextBox.RoadmapInlineTaskTitleEditor` с UI regression tests в существующем headless suite.
 - Stop rules: остановиться после targeted UI test, `dotnet build` и полного тестового прогона либо явно зафиксировать объективную причину, если полный прогон невозможен.
 
 ## 2. Текущее состояние (AS-IS)
 - Inline-редактор создаётся программно в `MainControl.CreateInlineTitleEditor` (`src/Unlimotion/Views/MainControl.axaml.cs`), получает класс `InlineTaskTitleEditor` и `AutomationId=InlineTaskTitleTextBox`.
 - В `src/Unlimotion/Views/MainControl.axaml` стиль `TextBox.InlineTaskTitleEditor` задаёт `BorderThickness=1`, `BorderBrush=Transparent`, `Background=Transparent`, `Padding=2,0`, а стиль `:focus` делает `Opacity=1`, `IsHitTestVisible=True`, `BorderBrush={DynamicResource ThemeControlMidBrush}` и `Background={DynamicResource ThemeControlLowBrush}`.
+- Roadmap inline-редактор создаётся программно в `GraphControl.CreateRoadmapInlineTitleEditor` (`src/Unlimotion/Views/GraphControl.axaml.cs`), получает класс `RoadmapInlineTaskTitleEditor` и `AutomationId=RoadmapInlineTaskTitleTextBox`.
+- В `src/Unlimotion/Views/GraphControl.axaml` стиль `TextBox.RoadmapInlineTaskTitleEditor` имеет тот же проблемный visual contract: `BorderThickness=1`, `Padding=2,0`, а focused style возвращает видимый `BorderBrush` и focused `Background`.
 - Поэтому при фокусе появляется видимая рамка и фон. Даже прозрачная рамка в базовом состоянии оставляет толщину border в layout/шаблоне `TextBox`.
 - Уже есть headless UI-тест `TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick`, который создаёт inline-редактор, проверяет focus и binding.
+- Уже есть headless UI-тест `RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick`, который создаёт roadmap inline-редактор, проверяет focus, wrapping и binding.
 
 ## 3. Проблема
 Одна корневая проблема: focused inline `TextBox` визуально отличается от текста задачи рамкой и может восприниматься как сдвигающийся/выпирающий элемент вместо плавного редактирования на месте.
 
 ## 4. Цели дизайна
 - Разделение ответственности: поведение создания/фокуса редактора остаётся в code-behind; визуальный контракт без рамки задаётся XAML-стилем.
-- Повторное использование: сохранить существующий класс `InlineTaskTitleEditor` для всех деревьев задач.
+- Повторное использование: сохранить существующие классы `InlineTaskTitleEditor` и `RoadmapInlineTaskTitleEditor` для соответствующих поверхностей.
 - Тестируемость: расширить текущий headless UI-тест проверкой border/padding визуального контракта редактора.
 - Консистентность: не менять общий стиль всех `TextBox`, только inline title editor.
 - Обратная совместимость: сохранить `AutomationId`, hotkey/click flow и binding `TaskItemViewModel.Title`.
@@ -44,11 +47,14 @@ Outcome contract:
 
 ## 6. Предлагаемое решение (TO-BE)
 ### 6.1 Распределение ответственности
-- `src/Unlimotion/Views/MainControl.axaml` -> визуальный стиль inline editor: убрать видимую рамку и предотвратить layout shift от border/padding.
-- `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` -> regression coverage для borderless focused inline editor в существующем headless UI flow.
+- `src/Unlimotion/Views/MainControl.axaml` -> визуальный стиль task-tree inline editor: убрать видимую рамку и предотвратить layout shift от border/padding.
+- `src/Unlimotion/Views/GraphControl.axaml` -> визуальный стиль roadmap inline editor с тем же borderless contract.
+- `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` -> regression coverage для borderless focused inline editor в task-tree flow.
+- `src/Unlimotion.Test/RoadmapGraphUiTests.cs` -> regression coverage для borderless focused inline editor в roadmap flow.
 
 ### 6.2 Детальный дизайн
 - В `TextBox.InlineTaskTitleEditor` установить borderless-визуальный контракт: `BorderThickness=0`, `BorderBrush=Transparent`, `Background=Transparent`, без дополнительных отступов, которые увеличивают занимаемое место относительно `EmojiTextBlock`.
+- В `TextBox.RoadmapInlineTaskTitleEditor` применить такой же borderless-визуальный контракт: `BorderThickness=0`, `BorderBrush=Transparent`, `Background=Transparent`, `Padding=0`.
 - Для Fluent `TextBox` дополнительно переопределить template part `Border#PART_BorderElement`, потому что focused blue frame рисуется не только свойствами верхнего `TextBox`.
 - В `TextBox.InlineTaskTitleEditor:focus` не возвращать видимый `BorderBrush`; фон оставить прозрачным или убрать focused background, чтобы редактор выглядел как редактируемый текст на месте.
 - Автоселект текста при входе в редактирование сохранить.
@@ -77,7 +83,9 @@ TO-BE:
 
 ## 8. Точки интеграции и триггеры
 - `CreateInlineTitleEditor` добавляет класс `InlineTaskTitleEditor`; именно этот класс должен получать новый borderless style.
+- `CreateRoadmapInlineTitleEditor` добавляет класс `RoadmapInlineTaskTitleEditor`; этот класс должен получать тот же borderless style.
 - Триггеры создания редактора остаются прежними: `F2` и повторный клик по `InlineTaskTitleTextBlock`.
+- Roadmap-триггеры создания редактора остаются прежними: `F2` и повторный клик по `RoadmapInlineTaskTitleSurface`.
 - `LostFocus` cleanup остаётся прежним.
 
 ## 9. Изменения модели данных / состояния
@@ -93,11 +101,13 @@ TO-BE:
 ## 11. Тестирование и критерии приёмки
 - Acceptance Criteria:
   - Focused inline title `TextBox` has no visible/reserved border (`BorderThickness == 0`).
+  - Focused roadmap inline title `TextBox` has no visible/reserved border (`BorderThickness == 0`) and no Fluent template focus frame.
   - Inline editor keeps the existing repeated-click and `F2` creation/focus behavior.
   - Editing text still updates `TaskItemViewModel.Title`.
   - No global `TextBox` styles are changed.
 - Какие тесты добавить/изменить:
   - Update `TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick` or add a sibling test in `MainControlTreeCommandsUiTests.cs` that asserts the borderless style after editor focus.
+  - Update `RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick` in `RoadmapGraphUiTests.cs` to assert the same borderless style after repeated-click and F2 focus.
 - Characterization tests / contract checks для текущего поведения:
   - Existing test already characterizes creation/focus/binding. New assertion characterizes the desired no-border contract.
 - Visual acceptance для UI-facing изменений:
@@ -113,6 +123,7 @@ TO-BE:
 - Базовые замеры до/после для performance tradeoff: Не применимо.
 - Команды для проверки:
   - Targeted: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick"`
+  - Targeted roadmap: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick"`
   - Build: `dotnet build src/Unlimotion.sln`
   - Full tests: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj`
   - Video encode: `ffmpeg -y -hide_banner -framerate 1 -start_number 1 -i artifacts/ui-video-evidence/inline-task-title-borderless/<timestamp>-<label>/frames/frame-%03d.png -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -r 30 -movflags +faststart -pix_fmt yuv420p artifacts/ui-video-evidence/inline-task-title-borderless/<timestamp>-<label>/inline-task-title-borderless.mp4`
@@ -127,12 +138,13 @@ TO-BE:
 
 ## 13. План выполнения
 1. Обновить `TextBox.InlineTaskTitleEditor` style в `MainControl.axaml`.
-2. Расширить existing headless UI test assertion for focused inline editor style.
-3. Добавить или переиспользовать local-only desktop video evidence recorder для frame capture + FFmpeg MP4 encoding.
-4. Запустить targeted UI test и сгенерировать MP4 artifact.
-5. Запустить `dotnet build src/Unlimotion.sln`.
-6. Запустить full test command or record objective blocker.
-7. Выполнить post-EXEC review-loop и обновить журнал действий.
+2. Обновить `TextBox.RoadmapInlineTaskTitleEditor` style в `GraphControl.axaml`.
+3. Расширить existing headless UI test assertions for focused inline editor style в task-tree и roadmap flows.
+4. Добавить или переиспользовать local-only desktop video evidence recorder для frame capture + FFmpeg MP4 encoding.
+5. Запустить targeted UI tests и сгенерировать MP4 artifact.
+6. Запустить `dotnet build src/Unlimotion.sln`.
+7. Запустить full test command or record objective blocker.
+8. Выполнить post-EXEC review-loop и обновить журнал действий.
 
 ## 14. Открытые вопросы
 Нет блокирующих вопросов.
@@ -150,7 +162,9 @@ TO-BE:
 | Файл | Изменения | Причина |
 | --- | --- | --- |
 | `src/Unlimotion/Views/MainControl.axaml` | Убрать рамку/фон focused inline title `TextBox`; обнулить border footprint | Сделать inline editing гладким и без сдвига |
+| `src/Unlimotion/Views/GraphControl.axaml` | Убрать рамку/фон focused roadmap inline title `TextBox`; обнулить border footprint and template border | Сделать roadmap inline editing визуально таким же гладким |
 | `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` | Добавить assertion на borderless focused inline editor | Покрыть UI-facing regression |
+| `src/Unlimotion.Test/RoadmapGraphUiTests.cs` | Добавить assertion на borderless focused roadmap inline editor | Покрыть roadmap UI-facing regression |
 | `artifacts/ui-video-evidence/inline-task-title-borderless/<timestamp>/inline-task-title-borderless.mp4` | Local-only generated evidence artifact | Подтвердить UI flow видео |
 | `specs/2026-05-15-inline-task-title-borderless.md` | Рабочая спецификация и журнал | Требование QUEST gate |
 
@@ -159,6 +173,7 @@ TO-BE:
 | --- | --- | --- |
 | Inline title editor border | `BorderThickness=1`, focused `BorderBrush` visible, Fluent template focus border visible | `BorderThickness=0`, no focused border, template `PART_BorderElement` borderless |
 | Inline title editor background | focused `ThemeControlLowBrush` fill | transparent/no fill for smooth in-place edit |
+| Roadmap inline title editor border/background | Same focused frame/fill pattern in `RoadmapInlineTaskTitleEditor` | Same borderless/no-fill contract as task tree inline editor |
 | UI coverage | Creation/focus/binding covered | Creation/focus/binding plus no-border/no-padding/no-fill contract covered |
 | Video evidence | Fallback planned | Required MP4 from desktop `PrintWindow`/`BitBlt` frames |
 
@@ -271,6 +286,46 @@ TO-BE:
 - Needs human: no.
 - Residual risks / follow-ups: solution-wide build and full-suite completion depend on local workload/time budget, not on the inline editor change.
 
+### Post-EXEC Review Addendum: Roadmap parity
+- Статус: PASS с зафиксированными environment blockers для solution build/full test.
+- Scope reviewed: user request on 2026-05-21 to apply the same behavior on roadmap; `src/Unlimotion/Views/GraphControl.axaml`; `src/Unlimotion.Test/RoadmapGraphUiTests.cs`; this spec; `git diff --stat`; targeted UI test output; test-project build output; full test and solution build timeout evidence.
+- Decision: можно завершать roadmap parity change; UI regression is covered by targeted tests; full validation blockers are documented.
+- Review passes:
+  - Scope/Evidence pass: inspected roadmap style, roadmap editor creation path, existing roadmap inline edit UI test, and final diff. Tracked changes are limited to roadmap style/test and this spec update.
+  - Contract pass: roadmap editor now matches task-tree borderless contract: `BorderThickness=0`, `Padding=0`, transparent top-level brushes/background, and transparent `Border#PART_BorderElement` for normal/focus/pointerover/focus:pointerover states. `RoadmapInlineTaskTitleTextBox` automation-id, F2/repeated-click flow, wrapping, binding and autoselect remain intact.
+  - Adversarial risk pass: checked for hidden Fluent template focused frame, lost autoselect, accidental global `TextBox` changes, unrelated tracked edits, and insufficient UI evidence. Roadmap targeted UI test asserts the external properties, internal template border, and `SelectedText == Text` after repeated click and F2 focus.
+  - Re-review after fixes / Fix and re-review: no code findings requiring fixes after roadmap targeted test/build/diff review; spec was updated to include roadmap scope and validation.
+  - Stop decision: PASS for implemented scope; full-suite and solution-build evidence are blocked by local runtime/time constraints, not by failing targeted roadmap behavior.
+- Evidence inspected:
+  - Targeted roadmap UI test passed: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/RoadmapGraphUiTests/RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick"`; result `1` total, `1` passed.
+  - Targeted task-tree UI test passed after roadmap change: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_InlineTitleEdit_CreatesEditorOnlyForF2OrRepeatedTitleClick"`; result `1` total, `1` passed.
+  - Test-project build passed: `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj`.
+  - Full test command attempted and timed out after 15 minutes with no useful output: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj`. The remaining `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj` process was stopped.
+  - Solution build attempted and timed out after 5 minutes: `dotnet build src/Unlimotion.sln`. `dotnet build-server shutdown` was run afterwards.
+  - `git diff --check` passed; only LF/CRLF warnings were reported.
+- Depth checklist:
+  - Scope drift / unrelated changes: tracked changes are related; untracked `src/Unlimotion.Desktop/TaskTreeExpansionState.json` is pre-existing/unrelated and was not touched.
+  - Acceptance criteria: roadmap no-border/no-template-border/no-padding/no-fill and preserved autoselect are asserted; task-tree regression still passes.
+  - Validation evidence: targeted UI tests and test-project build passed; full test and solution build have documented timeout blockers.
+  - Unsupported claims: all claims are tied to inspected diff or command output.
+  - Regression / edge case: normal/focus/pointerover/focus:pointerover template states are all covered by style selectors; F2 and repeated-click entry paths are both asserted.
+  - Comments/docs/changelog: no code comments or changelog needed; spec updated.
+  - Hidden contract change: no public API, model, storage or automation-id change.
+  - Manual-review challenge: likely issue would be the same hidden Fluent template frame on roadmap; this is directly tested through `PART_BorderElement`.
+- No-findings justification: relevant style/test diff is small and mirrors already accepted task-tree fix; targeted roadmap and task-tree UI evidence passed.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | validation | Full test run timed out after 15 minutes without useful output. | Re-run with larger local budget or CI. | follow-up |
+| LOW | validation | Solution build timed out after 5 minutes in the local environment. | Re-run with larger local budget or CI; previous environment also had solution-wide workload constraints. | follow-up |
+
+- Fixed before final report: none required after review.
+- Checks rerun: targeted roadmap UI test; targeted task-tree UI test; test-project build; full test attempted; solution build attempted; `git diff --check`.
+- Validation evidence: commands listed above.
+- Unrelated changes: untracked `src/Unlimotion.Desktop/TaskTreeExpansionState.json` remains unrelated and untouched.
+- Needs human: no.
+- Residual risks / follow-ups: full-suite and solution-wide build should be validated in CI or with a larger local timeout budget.
+
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
@@ -287,3 +342,5 @@ TO-BE:
 | EXEC | validation | 0.86 | Full-suite completion; solution workload | Выполнить post-EXEC review | Нет | Нет | Targeted UI test passed; visible before/after MP4s encoded; test project build passed after build-server shutdown; solution build blocked by missing `wasm-tools`; full test timed out after 15 minutes. | `artifacts/ui-video-evidence/inline-task-title-borderless/20260515-before-printwindow/inline-task-title-borderless.mp4`, `artifacts/ui-video-evidence/inline-task-title-borderless/20260515-after-template-borderless/inline-task-title-borderless.mp4`, `src/Unlimotion.Test/Unlimotion.Test.csproj`, `src/Unlimotion.sln` |
 | EXEC | user-review-fix | 0.9 | Нет | Финальный отчет | Нет | Да, пользователь указал, что автоселект надо оставить и рамка всё ещё видна | Исправлен неверный вывод про автоселект: `SelectAll()` сохранён, а синяя рамка убрана через `TextBox.InlineTaskTitleEditor /template/ Border#PART_BorderElement`; тест проверяет и autoselect, и template border. | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `artifacts/ui-video-evidence/inline-task-title-borderless/20260515-after-template-borderless/inline-task-title-borderless.mp4` |
 | EXEC | post-exec-review | 0.88 | Нет для текущего scope | Финальный отчет | Нет | Нет | Reviewed diff/scope/evidence; no unrelated tracked changes; documented validation blockers and residual risks. | `specs/2026-05-15-inline-task-title-borderless.md` |
+| EXEC | roadmap-parity-implementation | 0.9 | Нет | Выполнить roadmap validation и финальный отчет | Нет | Да, пользователь попросил, чтобы так же работало на роадмапе | Roadmap использовал отдельный `RoadmapInlineTaskTitleEditor` с теми же focused border/background; применён тот же borderless/template-borderless contract. | `src/Unlimotion/Views/GraphControl.axaml`, `src/Unlimotion.Test/RoadmapGraphUiTests.cs`, `specs/2026-05-15-inline-task-title-borderless.md` |
+| EXEC | roadmap-validation-review | 0.86 | Full-suite/solution completion в локальном time budget | Финальный отчет | Нет | Нет | Targeted roadmap and task-tree UI tests passed; test-project build passed; full test and solution build timed out; post-EXEC addendum зафиксировал evidence и residual risks. | `src/Unlimotion.Test/Unlimotion.Test.csproj`, `src/Unlimotion.sln`, `specs/2026-05-15-inline-task-title-borderless.md` |
