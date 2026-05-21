@@ -13,6 +13,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion;
@@ -554,6 +555,7 @@ public class MainControlTreeCommandsUiTests
                 var inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
                 var clickFocused = WaitFor(() => IsFocused(window, inlineEditor));
                 await Assert.That(clickFocused).IsTrue();
+                await AssertInlineTitleEditorHasNoFrame(inlineEditor);
 
                 inlineEditor.Text = "Renamed from title text";
                 Dispatcher.UIThread.RunJobs();
@@ -569,6 +571,7 @@ public class MainControlTreeCommandsUiTests
                 inlineEditor = WaitForInlineTitleEditor(view, MainWindowViewModelFixture.RootTask2Id);
                 var hotkeyFocused = WaitFor(() => IsFocused(window, inlineEditor));
                 await Assert.That(hotkeyFocused).IsTrue();
+                await AssertInlineTitleEditorHasNoFrame(inlineEditor);
             }
             finally
             {
@@ -2414,6 +2417,43 @@ public class MainControlTreeCommandsUiTests
                 candidate.IsAttachedToVisualTree() &&
                 candidate.IsVisible &&
                 candidate.IsEnabled);
+    }
+
+    private static async Task AssertInlineTitleEditorHasNoFrame(TextBox inlineEditor)
+    {
+        await Assert.That(inlineEditor.BorderThickness).IsEqualTo(new Thickness(0));
+        await Assert.That(inlineEditor.Padding).IsEqualTo(new Thickness(0));
+        await Assert.That(IsTransparentBrush(inlineEditor.BorderBrush)).IsTrue();
+        await Assert.That(IsTransparentBrush(inlineEditor.Background)).IsTrue();
+        await Assert.That(inlineEditor.SelectedText).IsEqualTo(inlineEditor.Text);
+
+        var templateBorder = FindInlineTitleEditorTemplateBorder(inlineEditor);
+        if (templateBorder == null)
+        {
+            throw new InvalidOperationException("Inline title editor template border was not found.");
+        }
+
+        await Assert.That(templateBorder.BorderThickness).IsEqualTo(new Thickness(0));
+        await Assert.That(IsTransparentBrush(templateBorder.BorderBrush)).IsTrue();
+        await Assert.That(IsTransparentBrush(templateBorder.Background)).IsTrue();
+    }
+
+    private static Border? FindInlineTitleEditorTemplateBorder(TextBox inlineEditor)
+    {
+        return inlineEditor.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, "PART_BorderElement", StringComparison.Ordinal));
+    }
+
+    private static bool IsTransparentBrush(IBrush? brush)
+    {
+        if (brush == null || brush.Opacity <= 0)
+        {
+            return true;
+        }
+
+        return brush is ISolidColorBrush solidColorBrush && solidColorBrush.Color.A == 0;
     }
 
     private static bool IsVisibleInVisualTree(Control control)

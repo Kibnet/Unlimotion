@@ -21,8 +21,8 @@
         </Style>
         <Style Selector="TextBox.RoadmapInlineTaskTitleEditor">
             <Setter Property="MinHeight" Value="22" />
-            <Setter Property="Padding" Value="2,0" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -33,8 +33,26 @@
         <Style Selector="TextBox.RoadmapInlineTaskTitleEditor:focus">
             <Setter Property="Opacity" Value="1" />
             <Setter Property="IsHitTestVisible" Value="True" />
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
-            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBox.RoadmapInlineTaskTitleEditor:focus:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="TextBox.RoadmapInlineTaskTitleEditor.IsWanted">
             <Setter Property="FontWeight" Value="Bold" />
