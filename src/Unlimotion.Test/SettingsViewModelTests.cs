@@ -45,7 +45,7 @@ public class SettingsViewModelTests : IDisposable
 
     private IConfigurationRoot CreateConfiguration()
     {
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
 
         if (configuration is IDisposable disposable)
         {

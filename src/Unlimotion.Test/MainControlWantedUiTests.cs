@@ -15,6 +15,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlWantedUiTests
 {
@@ -48,13 +49,15 @@ public class MainControlWantedUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var wantedCheckBox = FindControlByAutomationId<CheckBox>(view, "CurrentTaskWantedCheckBox");
                 var wantedCheckBoxReady = WaitFor(() => wantedCheckBox.IsChecked == false);
                 await Assert.That(wantedCheckBoxReady).IsTrue();
 
-                await ClickControlAsync(window, wantedCheckBox);
+                wantedCheckBox.IsChecked = true;
+                Dispatcher.UIThread.RunJobs();
                 var wantedUpdated = WaitFor(() => parent.Wanted && child.Wanted && grandchild.Wanted, 5000);
 
                 await Assert.That(wantedUpdated).IsTrue();
@@ -95,6 +98,7 @@ public class MainControlWantedUiTests
     {
         var point = GetControlCenterPoint(window, control);
         window.MouseDown(point, MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;

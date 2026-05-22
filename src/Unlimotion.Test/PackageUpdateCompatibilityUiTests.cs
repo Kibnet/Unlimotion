@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ using Unlimotion.Views.Graph;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class PackageUpdateCompatibilityUiTests
 {
     [Test]
@@ -46,7 +49,11 @@ public class PackageUpdateCompatibilityUiTests
                 dropArgs.Source = targetControl;
 
                 await MainControl.Drop(view, dropArgs);
-                await TestHelpers.WaitThrottleTime();
+                await Assert.That(await TestHelpers.WaitUntilAsync(
+                        () => sourceTask.Blocks.Contains(targetTask.Id) &&
+                              targetTask.BlockedBy.Contains(sourceTask.Id),
+                        TimeSpan.FromSeconds(10)))
+                    .IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(dropArgs.Handled).IsTrue();

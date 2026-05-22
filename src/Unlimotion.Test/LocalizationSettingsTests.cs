@@ -39,6 +39,30 @@ public class LocalizationSettingsTests
     }
 
     [Test]
+    public async System.Threading.Tasks.Task SetLanguage_DoesNotRaiseCultureChanged_WhenEffectiveLanguageIsUnchanged()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var changes = 0;
+        localization.CultureChanged += (_, _) => changes++;
+
+        localization.SetLanguage(LocalizationService.SystemLanguage);
+
+        await Assert.That(changes).IsEqualTo(0);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetLanguage_RaisesCultureChanged_WhenEffectiveLanguageChanges()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var changes = 0;
+        localization.CultureChanged += (_, _) => changes++;
+
+        localization.SetLanguage(LocalizationService.RussianLanguage);
+
+        await Assert.That(changes).IsEqualTo(1);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task SystemLanguage_UsesCapturedSystemCultureAfterManualSwitch()
     {
         var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));

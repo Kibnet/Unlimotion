@@ -25,7 +25,8 @@ using Unlimotion.Views.Graph;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class RoadmapGraphUiTests
 {
     [Test]
@@ -921,7 +922,7 @@ public class RoadmapGraphUiTests
     public async Task RoadmapGraph_ViewportOverlays_CollapseToCompactButtonsAndRestore()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;

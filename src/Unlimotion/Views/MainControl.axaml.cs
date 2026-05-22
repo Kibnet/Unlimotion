@@ -1221,10 +1221,10 @@ namespace Unlimotion.Views
                         await item.TaskItem.CloneInto(targetTask);
                         break;
                     case BatchDropOperationKind.SourcesBlockTarget:
-                        targetTask.BlockBy(item.TaskItem);
+                        await targetTask.BlockBy(item.TaskItem);
                         break;
                     case BatchDropOperationKind.TargetBlocksSources:
-                        item.TaskItem.BlockBy(targetTask);
+                        await item.TaskItem.BlockBy(targetTask);
                         break;
                 }
             }

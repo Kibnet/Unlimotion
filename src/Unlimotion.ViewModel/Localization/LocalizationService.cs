@@ -42,6 +42,8 @@ public sealed class LocalizationService : ILocalizationService
     {
         var normalizedMode = NormalizeLanguageMode(languageMode);
         var effectiveCulture = ResolveEffectiveCulture(normalizedMode);
+        var cultureChanged = _languageMode != normalizedMode ||
+                             _currentCulture.Name != effectiveCulture.Name;
 
         _languageMode = normalizedMode;
         _currentCulture = effectiveCulture;
@@ -52,7 +54,10 @@ public sealed class LocalizationService : ILocalizationService
         Thread.CurrentThread.CurrentCulture = effectiveCulture;
 
         RefreshSupportedLanguages();
-        CultureChanged?.Invoke(this, EventArgs.Empty);
+        if (cultureChanged)
+        {
+            CultureChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public string Get(string key)

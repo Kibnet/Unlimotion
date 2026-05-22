@@ -175,7 +175,7 @@ public static class UnlimotionAppLaunchHost
     {
         EnsureReactiveUiInitialized();
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(launchData.ConfigPath);
+        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false);
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = new AutomationNotificationManager();
         var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManager);

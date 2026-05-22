@@ -14,6 +14,7 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class SingleViewStartupUiTests
 {

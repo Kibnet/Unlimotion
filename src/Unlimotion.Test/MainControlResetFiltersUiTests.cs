@@ -17,6 +17,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlResetFiltersUiTests
 {

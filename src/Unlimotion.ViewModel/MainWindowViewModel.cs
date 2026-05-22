@@ -2098,7 +2098,7 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            foreach (var root in roots)
+            foreach (var root in SnapshotWrappers(roots))
             {
                 SetExpandedRecursive(root, isExpanded);
             }
@@ -2113,7 +2113,7 @@ namespace Unlimotion.ViewModel
 
             current.IsExpanded = isExpanded;
 
-            foreach (var child in current.SubTasks)
+            foreach (var child in SnapshotWrappers(current.SubTasks))
             {
                 SetExpandedRecursive(child, isExpanded);
             }
@@ -2126,22 +2126,58 @@ namespace Unlimotion.ViewModel
                 return null;
             }
 
+            var snapshot = SnapshotWrappers(source);
             //Прямой поиск по коллекции
-            var finded = source.FirstOrDefault(t => IsSameTask(t?.TaskItem, taskItemViewModel));
+            var finded = snapshot.FirstOrDefault(t => IsSameTask(t?.TaskItem, taskItemViewModel));
             if (finded != null)
             {
                 return finded;
             }
 
             //Поиск по родителям
-            ReadOnlyObservableCollection<TaskWrapperViewModel>? selected = source;
+            IReadOnlyList<TaskWrapperViewModel>? selected = snapshot;
             foreach (var parent in taskItemViewModel.GetFirstParentsPath())
             {
-                selected = selected?.FirstOrDefault(p => IsSameTask(p.TaskItem, parent))?.SubTasks;
+                var parentWrapper = selected?.FirstOrDefault(p => IsSameTask(p.TaskItem, parent));
+                selected = parentWrapper != null
+                    ? SnapshotWrappers(parentWrapper.SubTasks)
+                    : null;
             }
 
             finded = selected?.FirstOrDefault(p => IsSameTask(p.TaskItem, taskItemViewModel));
             return finded;
+        }
+
+        private static IReadOnlyList<TaskWrapperViewModel> SnapshotWrappers(IEnumerable<TaskWrapperViewModel>? wrappers)
+        {
+            if (wrappers == null)
+            {
+                return Array.Empty<TaskWrapperViewModel>();
+            }
+
+            const int maxSnapshotAttempts = 3;
+            InvalidOperationException? lastException = null;
+            var spinWait = new System.Threading.SpinWait();
+
+            for (var attempt = 0; attempt < maxSnapshotAttempts; attempt++)
+            {
+                try
+                {
+                    return wrappers.Where(static wrapper => wrapper != null).ToArray();
+                }
+                catch (InvalidOperationException exception)
+                {
+                    lastException = exception;
+                    if (attempt < maxSnapshotAttempts - 1)
+                    {
+                        spinWait.SpinOnce();
+                    }
+                }
+            }
+
+            throw new InvalidOperationException(
+                "Task wrapper collection changed while it was being snapshotted.",
+                lastException);
         }
 
         private static bool IsSameTask(TaskItemViewModel? left, TaskItemViewModel? right)
