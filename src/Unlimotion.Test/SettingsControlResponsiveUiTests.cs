@@ -21,6 +21,7 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class SettingsControlResponsiveUiTests
 {
@@ -443,7 +444,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_SyncConflictResolutionMode_ShowsOpenResolverAction()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"SyncConflictSettings_{Guid.NewGuid():N}.json");
@@ -453,7 +454,7 @@ public class SettingsControlResponsiveUiTests
 
             try
             {
-                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
                 configurationDisposable = configuration as IDisposable;
                 configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
                 configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://example.com/repo.git");
@@ -524,7 +525,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_ShowsFieldDecisionsAndDeleteSideAction()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolver_{Guid.NewGuid():N}.json");
@@ -534,7 +535,7 @@ public class SettingsControlResponsiveUiTests
 
             try
             {
-                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
                 configurationDisposable = configuration as IDisposable;
                 var backupService = new FakeRemoteBackupService
                 {
@@ -630,7 +631,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_UsesSingleColumnLayoutOnPhoneWidth()
     {
-        using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverPhone_{Guid.NewGuid():N}.json");
@@ -640,7 +641,7 @@ public class SettingsControlResponsiveUiTests
 
             try
             {
-                var configuration = WritableJsonConfigurationFabric.Create(configPath);
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
                 configurationDisposable = configuration as IDisposable;
                 var settings = new SettingsViewModel(
                     configuration,
@@ -734,6 +735,7 @@ public class SettingsControlResponsiveUiTests
         }
 
         window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;

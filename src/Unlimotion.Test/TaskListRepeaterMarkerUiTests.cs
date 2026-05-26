@@ -17,6 +17,7 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class TaskListRepeaterMarkerUiTests
 {

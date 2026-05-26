@@ -570,9 +570,9 @@ namespace Unlimotion.ViewModel
             return await CloneFunc.Invoke(destination);
         }
 
-        public async void BlockBy(TaskItemViewModel blocker)
+        public Task<bool> BlockBy(TaskItemViewModel blocker)
         {
-            await _taskStorage.Block(this, blocker);
+            return _taskStorage.Block(this, blocker);
         }
 
         public IEnumerable<TaskItemViewModel> GetFirstParentsPath()

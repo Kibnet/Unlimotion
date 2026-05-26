@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless;
@@ -15,7 +16,8 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class TaskImportanceUiTests
 {
     [Test]
@@ -97,7 +99,7 @@ public class TaskImportanceUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = view.GetVisualDescendants().OfType<GraphControl>().FirstOrDefault();
+                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var graphText = WaitForTaskTitleTextBlock(
@@ -211,6 +213,54 @@ public class TaskImportanceUiTests
         }
 
         return textBlock;
+    }
+
+    private static GraphControl? OpenRoadmapTabAndWaitForGraphControl(
+        MainControl root,
+        int timeoutMilliseconds = 3000)
+    {
+        var roadmapTab = WaitForAutomationControl<TabItem>(
+            root,
+            "RoadmapTabItem",
+            timeoutMilliseconds);
+
+        roadmapTab.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+
+        GraphControl? graphControl = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            graphControl = root.GetVisualDescendants().OfType<GraphControl>().FirstOrDefault();
+            return graphControl != null && graphControl.RoadmapNodes.Count > 0;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        return ready ? graphControl : null;
+    }
+
+    private static T WaitForAutomationControl<T>(
+        Control root,
+        string automationId,
+        int timeoutMilliseconds = 3000)
+        where T : Control
+    {
+        T? control = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            control = root.GetVisualDescendants()
+                .OfType<T>()
+                .FirstOrDefault(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == automationId);
+            return control != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || control == null)
+        {
+            throw new InvalidOperationException($"Control with AutomationId '{automationId}' was not found.");
+        }
+
+        return control;
     }
 
     private static TextBlock? FindTaskTitleTextBlock(

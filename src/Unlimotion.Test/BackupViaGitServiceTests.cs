@@ -352,7 +352,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
         var localPath = CreateInitializedRepositoryWithRemote(
             "origin",
             "git@github.com:org/unlimotion-backup.git");
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
         if (configuration is IDisposable disposable)
         {
             _configurationDisposables.Add(disposable);
@@ -905,7 +905,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
         var publicKeyPath = $"{privateKeyPath}.pub";
         File.WriteAllText(privateKeyPath, "private key");
         File.WriteAllText(publicKeyPath, "public key");
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
         if (configuration is IDisposable disposable)
         {
             _configurationDisposables.Add(disposable);
@@ -980,7 +980,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
         AddExplicitReadRule(privateKeyPath, extraIdentity);
         await Assert.That(HasAccessRule(privateKeyPath, extraIdentity, includeInherited: false)).IsTrue();
 
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
         if (configuration is IDisposable disposable)
         {
             _configurationDisposables.Add(disposable);
@@ -1000,7 +1000,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
     [Test]
     public async System.Threading.Tasks.Task GetCredentials_ThrowsForSshUrlWhenPrivateKeyIsMissing()
     {
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
         if (configuration is IDisposable disposable)
         {
             _configurationDisposables.Add(disposable);
@@ -1294,7 +1294,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
         string remoteName = "origin",
         ITaskStorageFactory? storageFactory = null)
     {
-        configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
 
         if (configuration is IDisposable disposable)
         {

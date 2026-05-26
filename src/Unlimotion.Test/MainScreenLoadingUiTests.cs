@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +21,7 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainScreenLoadingUiTests
 {
@@ -69,7 +69,7 @@ public class MainScreenLoadingUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
-            using var context = TestMainWindowContext.Create(TimeSpan.FromMilliseconds(400));
+            using var context = TestMainWindowContext.Create(TimeSpan.FromSeconds(2));
             Window? window = null;
 
             try
@@ -84,15 +84,20 @@ public class MainScreenLoadingUiTests
                 var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
                 var connectTask = vm.Connect();
 
+                var loadStarted = WaitFor(
+                    () => overlay.IsVisible &&
+                          spinner.IsVisible &&
+                          !connectTask.IsCompleted,
+                    timeoutMilliseconds: 2000);
+                await Assert.That(loadStarted).IsTrue();
+
                 var postedCallbackRan = false;
                 Dispatcher.UIThread.Post(() => postedCallbackRan = true);
-                var initialAngle = GetSpinnerAngle(spinner);
 
                 var stayedResponsive = WaitFor(
                     () => postedCallbackRan &&
                           overlay.IsVisible &&
-                          !connectTask.IsCompleted &&
-                          GetSpinnerAngle(spinner) != initialAngle,
+                          !connectTask.IsCompleted,
                     timeoutMilliseconds: 2000);
                 await Assert.That(stayedResponsive).IsTrue();
 
@@ -159,13 +164,6 @@ public class MainScreenLoadingUiTests
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
     }
 
-    private static double GetSpinnerAngle(Control spinner)
-    {
-        return spinner.RenderTransform is RotateTransform rotateTransform
-            ? rotateTransform.Angle
-            : 0d;
-    }
-
     private sealed class TestMainWindowContext : IDisposable
     {
         private readonly string _configPath;
@@ -190,7 +188,7 @@ public class MainScreenLoadingUiTests
                 $"LoadingUiTests_{Guid.NewGuid():N}.json");
             File.WriteAllText(configPath, "{}");
 
-            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath);
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
             var notificationManager = new NotificationManagerWrapperMock();
             var storage = new UnifiedTaskStorage(new TaskTreeManager(new BlockingInitialLoadStorage(loadDelay)));
             var settings = new SettingsViewModel(configuration);

@@ -13,6 +13,7 @@ using Unlimotion.Views.SearchControl;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlFilterToolbarResponsiveUiTests
 {

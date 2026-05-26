@@ -135,6 +135,7 @@ namespace Unlimotion.Test
         }
     }
 
+    [NotInParallel("AvaloniaHeadless")]
     [ParallelLimiter<SharedUiStateParallelLimit>]
     public class MainWindowViewModelTests : BaseModelTests
     {
@@ -159,18 +160,34 @@ namespace Unlimotion.Test
                 return [];
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllText(statePath));
-            if (!document.RootElement.TryGetProperty("Trees", out var trees) ||
-                !trees.TryGetProperty(treeName, out var treeState))
+            try
+            {
+                using var stream = new FileStream(
+                    statePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                using var document = JsonDocument.Parse(stream);
+                if (!document.RootElement.TryGetProperty("Trees", out var trees) ||
+                    !trees.TryGetProperty(treeName, out var treeState))
+                {
+                    return [];
+                }
+
+                return treeState.EnumerateArray()
+                    .Select(element => element.GetString())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Cast<string>()
+                    .ToList();
+            }
+            catch (IOException)
             {
                 return [];
             }
-
-            return treeState.EnumerateArray()
-                .Select(element => element.GetString())
-                .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Cast<string>()
-                .ToList();
+            catch (JsonException)
+            {
+                return [];
+            }
         }
 
         private static async Task<MainWindowViewModel> CreateReloadedViewModelAsync(
@@ -442,6 +459,12 @@ namespace Unlimotion.Test
             var pastedRoot = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste root");
             var pastedChild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste child");
             var pastedGrandchild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste grandchild");
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => parent!.Contains.Contains(pastedRoot.Id) &&
+                          pastedRoot.Contains.Contains(pastedChild.Id) &&
+                          pastedChild.Contains.Contains(pastedGrandchild.Id),
+                    TimeSpan.FromSeconds(10)))
+                .IsTrue();
 
             await Assert.That(parent!.Contains).Contains(pastedRoot.Id);
             await Assert.That(pastedRoot.Parents).Contains(parent.Id);
@@ -461,6 +484,12 @@ namespace Unlimotion.Test
             child.Title = "Outline markdown child";
             child.Description = "Child description";
             await taskRepository.Update(child);
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => parent.Contains.Contains(child.Id) &&
+                          child.Parents.Contains(parent.Id) &&
+                          parent.ContainsTasks.Any(task => task.Id == child.Id),
+                    TimeSpan.FromSeconds(10)))
+                .IsTrue();
             mainWindowVM.Settings.CopyTaskOutlineAsMarkdown = true;
             mainWindowVM.Settings.CopyTaskOutlineDescription = true;
 
@@ -1659,7 +1688,7 @@ namespace Unlimotion.Test
             var isdestinationNotBlockedByDraggable = !destinationTask6ViewModel.BlockedBy.Contains(draggableViewModel.Id);
             if (isdestinationNotBlockedByDraggable)
             {
-                draggableViewModel.BlockBy(destinationTask6ViewModel);
+                await draggableViewModel.BlockBy(destinationTask6ViewModel);
             }
 
             // Assert
@@ -1722,7 +1751,7 @@ namespace Unlimotion.Test
             var isDraggableNotBlockedBydestination = !draggableViewModel.BlockedBy.Contains(destinationViewModel.Id);
             if (isDraggableNotBlockedBydestination)
             {
-                destinationViewModel.BlockBy(draggableViewModel);
+                await destinationViewModel.BlockBy(draggableViewModel);
             }
 
             // Assert
@@ -2031,7 +2060,7 @@ namespace Unlimotion.Test
             var blockerTask = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
 
             // Act - Create blocking relation (blockerTask blocks parentTask)
-            parentTask.BlockBy(blockerTask);
+            await parentTask.BlockBy(blockerTask);
             await TestHelpers.WaitThrottleTime();
 
             // Assert - Parent task should remain not available

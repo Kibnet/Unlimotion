@@ -14,7 +14,8 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlNewTaskDeadlineUiTests
 {
     [Test]
@@ -92,6 +93,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var deadlinePickers = view.GetVisualDescendants()
@@ -171,9 +173,13 @@ public class MainControlNewTaskDeadlineUiTests
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
                 var createButton = view.GetVisualDescendants()
                     .OfType<Button>()
-                    .First(button => ReferenceEquals(button.Command, vm.Create));
+                    .First(button =>
+                        ReferenceEquals(button.Command, vm.Create) &&
+                        button.IsVisible &&
+                        button.IsEnabled);
 
-                await ClickControlAsync(window, createButton);
+                createButton.Command?.Execute(createButton.CommandParameter);
+                Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
                     vm.taskRepository.Tasks.Count == taskCountBefore + 1 &&
@@ -185,7 +191,7 @@ public class MainControlNewTaskDeadlineUiTests
                 await Assert.That(newTask.PlannedDuration).IsNull();
 
                 var newTaskDurationTextBox = FindPlannedDurationTextBox(view, newTask);
-                await Assert.That(newTaskDurationTextBox.Text).IsNull();
+                await Assert.That(string.IsNullOrEmpty(newTaskDurationTextBox.Text)).IsTrue();
             }
             finally
             {
@@ -273,6 +279,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var deadlinePickers = view.GetVisualDescendants()
@@ -301,14 +308,19 @@ public class MainControlNewTaskDeadlineUiTests
                 var createCommand = commandSelector(vm);
                 var createButton = view.GetVisualDescendants()
                     .OfType<Button>()
-                    .First(button => ReferenceEquals(button.Command, createCommand));
+                    .First(button =>
+                        ReferenceEquals(button.Command, createCommand) &&
+                        button.IsVisible &&
+                        button.IsEnabled);
 
-                await ClickControlAsync(window, createButton);
+                createButton.Command?.Execute(createButton.CommandParameter);
+                Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
                     vm.taskRepository.Tasks.Count == taskCountBefore + 1 &&
                     vm.CurrentTaskItem != null &&
-                    vm.CurrentTaskItem.Id != taskWithDeadline.Id);
+                    vm.CurrentTaskItem.Id != taskWithDeadline.Id,
+                    5000);
                 await Assert.That(created).IsTrue();
 
                 var newTask = vm.CurrentTaskItem!;

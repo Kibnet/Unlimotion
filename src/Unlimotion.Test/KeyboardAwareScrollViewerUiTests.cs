@@ -11,6 +11,7 @@ using Unlimotion.Behavior;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class KeyboardAwareScrollViewerUiTests
 {

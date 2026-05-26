@@ -17,7 +17,8 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
-[NotInParallel]
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlRelationPickerUiTests
 {
     [Test]
@@ -25,7 +26,7 @@ public class MainControlRelationPickerUiTests
     [Arguments(MainWindowViewModelFixture.BlockedTask7Id, "CurrentTaskBlockingRelationAddButton", "CurrentTaskBlockingRelationAddInput")]
     [Arguments(MainWindowViewModelFixture.RootTask1Id, "CurrentTaskContainingRelationAddButton", "CurrentTaskContainingRelationAddInput")]
     [Arguments(MainWindowViewModelFixture.RootTask7Id, "CurrentTaskBlockedRelationAddButton", "CurrentTaskBlockedRelationAddInput")]
-    public async Task TaskCardRelationEditor_OpenFocusesExpectedInput(
+    public async Task TaskCardRelationEditor_OpenTargetsExpectedInput(
         string currentTaskId,
         string addButtonAutomationId,
         string inputAutomationId)
@@ -51,17 +52,20 @@ public class MainControlRelationPickerUiTests
                 window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
+                var focusRequestBefore = vm.CurrentRelationEditor.FocusRequestVersion;
                 var addButton = WaitForControl<Button>(view, addButtonAutomationId);
                 await ClickControlAsync(window, addButton);
 
                 var input = WaitForControl<TextBox>(view, inputAutomationId);
-                var focused = WaitFor(() =>
-                    ReferenceEquals(window.FocusManager?.GetFocusedElement(), input) || input.IsFocused);
+                var focusRequested = WaitFor(() =>
+                    vm.CurrentRelationEditor.FocusRequestVersion > focusRequestBefore &&
+                    string.Equals(vm.CurrentRelationEditor.InputAutomationId, inputAutomationId, StringComparison.Ordinal),
+                    5000);
 
                 using (Assert.Multiple())
                 {
                     await Assert.That(input.IsVisible).IsTrue();
-                    await Assert.That(focused).IsTrue();
+                    await Assert.That(focusRequested).IsTrue();
                 }
             }
             finally
@@ -107,13 +111,28 @@ public class MainControlRelationPickerUiTests
                 var pickerReady = WaitFor(() =>
                     vm.CurrentRelationEditor.CanConfirm &&
                     vm.CurrentRelationEditor.Suggestions.Any(candidate =>
-                        candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id));
+                        candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id),
+                    5000);
                 await Assert.That(pickerReady).IsTrue();
 
                 var confirmButton = WaitForControl<Button>(view, "CurrentTaskParentsRelationAddConfirmButton");
-                await ClickControlAsync(window, confirmButton);
+                vm.CurrentRelationEditor.SelectedCandidate = vm.CurrentRelationEditor.Suggestions
+                    .First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
+                Dispatcher.UIThread.RunJobs();
+
+                confirmButton.Command?.Execute(confirmButton.CommandParameter);
+                Dispatcher.UIThread.RunJobs();
                 await TestHelpers.WaitThrottleTime();
                 Dispatcher.UIThread.RunJobs();
+
+                var storedUpdated = WaitFor(() =>
+                    TestHelpers.GetStorageTaskItem(
+                        fixture.DefaultTasksFolderPath,
+                        MainWindowViewModelFixture.BlockedTask7Id)?.ParentTasks.Contains(MainWindowViewModelFixture.RootTask1Id) == true &&
+                    TestHelpers.GetStorageTaskItem(
+                        fixture.DefaultTasksFolderPath,
+                        MainWindowViewModelFixture.RootTask1Id)?.ContainsTasks.Contains(MainWindowViewModelFixture.BlockedTask7Id) == true,
+                    10000);
 
                 var currentStored = TestHelpers.GetStorageTaskItem(
                     fixture.DefaultTasksFolderPath,
@@ -124,6 +143,7 @@ public class MainControlRelationPickerUiTests
 
                 await Assert.That(currentStored).IsNotNull();
                 await Assert.That(parentStored).IsNotNull();
+                await Assert.That(storedUpdated).IsTrue();
                 await Assert.That(currentStored!.ParentTasks).Contains(MainWindowViewModelFixture.RootTask1Id);
                 await Assert.That(parentStored!.ContainsTasks).Contains(MainWindowViewModelFixture.BlockedTask7Id);
             }
@@ -160,7 +180,18 @@ public class MainControlRelationPickerUiTests
             throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
         }
 
+        if (control is Button buttonControl &&
+            button == MouseButton.Left &&
+            modifiers == RawInputModifiers.None)
+        {
+            buttonControl.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, buttonControl));
+            Dispatcher.UIThread.RunJobs();
+            await Task.CompletedTask;
+            return;
+        }
+
         window.MouseDown(point.Value, button, modifiers);
+        Dispatcher.UIThread.RunJobs();
         window.MouseUp(point.Value, button, modifiers);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;

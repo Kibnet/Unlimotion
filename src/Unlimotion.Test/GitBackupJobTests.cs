@@ -85,7 +85,7 @@ public sealed class GitBackupJobTests : IDisposable
 
     private IConfigurationRoot CreateConfiguration(bool backupEnabled)
     {
-        var configuration = WritableJsonConfigurationFabric.Create(_configPath);
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
         if (configuration is IDisposable disposable)
         {
             _configurationDisposables.Add(disposable);

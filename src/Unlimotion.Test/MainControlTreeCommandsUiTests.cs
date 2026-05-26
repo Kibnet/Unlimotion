@@ -22,9 +22,12 @@ using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlTreeCommandsUiTests
 {
+    private const int SearchExpansionWaitMilliseconds = 15000;
+
     [Test]
     public async Task TaskOutlinePastePreviewDialog_LargePreview_IsScrollableAndShowsLastTask()
     {
@@ -357,10 +360,13 @@ public class MainControlTreeCommandsUiTests
                 await vm.Connect();
                 var scenario = await CreateSearchExpansionScenarioAsync(vm, treeName);
                 ActivateSearchExpansionTree(vm, treeName, scenario.Parent);
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
 
                 var wrappersReady = WaitFor(() =>
                     FindWrapper(vm, treeName, scenario.Parent.Id) != null &&
-                    FindWrapper(vm, treeName, scenario.Child.Id) != null);
+                    FindWrapper(vm, treeName, scenario.Child.Id) != null,
+                    SearchExpansionWaitMilliseconds);
                 await Assert.That(wrappersReady).IsTrue();
 
                 var parentWrapper = FindWrapper(vm, treeName, scenario.Parent.Id);
@@ -381,11 +387,11 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(childWrapper.IsExpanded).IsFalse();
                 await Assert.That(propertyChangedRaised).IsTrue();
 
-                vm.Search.SearchText = "search warmup";
+                await ApplySearchAsync(vm, $"search warmup {Guid.NewGuid():N}");
                 await ApplySearchAsync(vm, scenario.SearchText);
                 var parentFilteredOut = WaitFor(
                     () => FindWrapper(vm, treeName, scenario.Parent.Id) == null,
-                    4000);
+                    SearchExpansionWaitMilliseconds);
                 await Assert.That(parentFilteredOut).IsTrue();
 
                 await ApplySearchAsync(vm, string.Empty);
@@ -398,7 +404,7 @@ public class MainControlTreeCommandsUiTests
                         restoredChildWrapper = FindWrapper(vm, treeName, scenario.Child.Id);
                         return restoredParentWrapper != null && restoredChildWrapper != null;
                     },
-                    4000);
+                    SearchExpansionWaitMilliseconds);
 
                 await Assert.That(restored).IsTrue();
                 await Assert.That(restoredParentWrapper!.IsExpanded).IsTrue();
@@ -464,6 +470,13 @@ public class MainControlTreeCommandsUiTests
 
                 var parentControl = FindWrapperControl(allTasksTree!, parent!.Id);
                 await ClickControlAsync(window, parentControl);
+                var parentSelected = WaitFor(
+                    () => vm.CurrentAllTasksItem?.TaskItem.Id == parent.Id &&
+                          allTasksTree!.SelectedItem is TaskWrapperViewModel selected &&
+                          selected.TaskItem.Id == parent.Id,
+                    SearchExpansionWaitMilliseconds);
+                await Assert.That(parentSelected).IsTrue();
+
                 PressHotkey(window, Key.V, PhysicalKey.V, RawInputModifiers.Control | RawInputModifiers.Shift);
 
                 var pasted = WaitFor(() =>
@@ -477,17 +490,34 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(((NotificationManagerWrapperMock)vm.ManagerWrapper).LastTaskOutlinePastePreview).IsNotNull();
                 await Assert.That(((NotificationManagerWrapperMock)vm.ManagerWrapper).LastTaskOutlinePastePreview!.TaskCount).IsEqualTo(4);
 
-                var pastedRoot = FindTaskByTitle(vm, "Outline UI paste root");
-                var pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
-                var pastedGrandchild = FindTaskByTitle(vm, "Outline UI paste grandchild");
-                var pastedSibling = FindTaskByTitle(vm, "Outline UI paste sibling");
+                TaskItemViewModel? pastedRoot = null;
+                TaskItemViewModel? pastedChild = null;
+                TaskItemViewModel? pastedGrandchild = null;
+                TaskItemViewModel? pastedSibling = null;
+                var relationsReady = WaitFor(
+                    () =>
+                    {
+                        pastedRoot = FindTaskByTitle(vm, "Outline UI paste root");
+                        pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
+                        pastedGrandchild = FindTaskByTitle(vm, "Outline UI paste grandchild");
+                        pastedSibling = FindTaskByTitle(vm, "Outline UI paste sibling");
 
-                await Assert.That(parent.Contains).Contains(pastedRoot.Id);
-                await Assert.That(parent.Contains).Contains(pastedSibling.Id);
-                await Assert.That(pastedRoot.Parents).Contains(parent.Id);
-                await Assert.That(pastedRoot.Contains).Contains(pastedChild.Id);
-                await Assert.That(pastedChild.Contains).Contains(pastedGrandchild.Id);
-                await Assert.That(pastedGrandchild.Parents).Contains(pastedChild.Id);
+                        return parent.Contains.Contains(pastedRoot.Id) &&
+                               parent.Contains.Contains(pastedSibling.Id) &&
+                               pastedRoot.Parents.Contains(parent.Id) &&
+                               pastedRoot.Contains.Contains(pastedChild.Id) &&
+                               pastedChild.Contains.Contains(pastedGrandchild.Id) &&
+                               pastedGrandchild.Parents.Contains(pastedChild.Id);
+                    },
+                    SearchExpansionWaitMilliseconds);
+                await Assert.That(relationsReady).IsTrue();
+
+                await Assert.That(parent.Contains).Contains(pastedRoot!.Id);
+                await Assert.That(parent.Contains).Contains(pastedSibling!.Id);
+                await Assert.That(pastedRoot!.Parents).Contains(parent.Id);
+                await Assert.That(pastedRoot.Contains).Contains(pastedChild!.Id);
+                await Assert.That(pastedChild!.Contains).Contains(pastedGrandchild!.Id);
+                await Assert.That(pastedGrandchild!.Parents).Contains(pastedChild.Id);
             }
             finally
             {
@@ -1188,10 +1218,14 @@ public class MainControlTreeCommandsUiTests
                         $"Selected=[{selectedIds}]");
                 }
 
+                SelectTreeWrapper(tree!, childWrapper);
+                tree!.Focus();
+                Dispatcher.UIThread.RunJobs();
+
                 PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Shift);
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
+                await Assert.That(WaitFor(() => childWrapper.IsExpanded, 5000)).IsTrue();
 
                 childWrapper.IsExpanded = false;
                 Dispatcher.UIThread.RunJobs();
@@ -1200,7 +1234,7 @@ public class MainControlTreeCommandsUiTests
                 var expandCurrentMenuItem = tree.ContextMenu!.Items.OfType<MenuItem>().First();
                 InvokeMenuItemClick(expandCurrentMenuItem);
 
-                await Assert.That(childWrapper.IsExpanded).IsTrue();
+                await Assert.That(WaitFor(() => childWrapper.IsExpanded, 5000)).IsTrue();
 
                 var roots = GetRootsForTree(vm, treeName).ToArray();
                 vm.CollapseAllNodes(roots);
@@ -1418,6 +1452,7 @@ public class MainControlTreeCommandsUiTests
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
+            ContextMenu? contextMenu = null;
 
             try
             {
@@ -1436,24 +1471,34 @@ public class MainControlTreeCommandsUiTests
                 var unlockedTree = view.FindControl<TreeView>("UnlockedTree");
                 await Assert.That(unlockedTree).IsNotNull();
                 await Assert.That(unlockedTree!.ContextMenu).IsNotNull();
+                contextMenu = unlockedTree.ContextMenu!;
 
                 vm.CollapseAllNodes(vm.UnlockedItems);
                 Dispatcher.UIThread.RunJobs();
 
-                unlockedTree.ContextMenu!.PlacementTarget = unlockedTree;
-                unlockedTree.ContextMenu.Open(unlockedTree);
+                contextMenu.PlacementTarget = unlockedTree;
+                contextMenu.Open(unlockedTree);
                 Dispatcher.UIThread.RunJobs();
                 ClearStoredTreeCommandContext(view);
-                var expandAllMenuItem = unlockedTree.ContextMenu.Items
+                var expandAllMenuItem = contextMenu.Items
                     .OfType<MenuItem>()
                     .First(item => string.Equals(item.Tag?.ToString(), "ExpandAll", StringComparison.Ordinal));
                 InvokeMenuItemClick(expandAllMenuItem);
-                unlockedTree.ContextMenu.Close();
+                contextMenu.Close();
+                contextMenu.PlacementTarget = null;
+                Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(vm.UnlockedItems.All(IsExpandedRecursive)).IsTrue();
             }
             finally
             {
+                if (contextMenu != null)
+                {
+                    contextMenu.Close();
+                    contextMenu.PlacementTarget = null;
+                    Dispatcher.UIThread.RunJobs();
+                }
+
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -2169,6 +2214,17 @@ public class MainControlTreeCommandsUiTests
         var repository = vm.taskRepository
             ?? throw new InvalidOperationException("Task repository was not initialized.");
         var suffix = Guid.NewGuid().ToString("N");
+        var searchToken = Guid.NewGuid().ToString("N");
+
+        if (treeName == "UnlockedTree")
+        {
+            return await CreateUnlockedSearchExpansionScenarioAsync(vm, repository, searchToken);
+        }
+
+        if (treeName == "ArchivedTree")
+        {
+            return await CreateArchivedSearchExpansionScenarioAsync(vm, repository, searchToken);
+        }
 
         var parent = await repository.Add();
         parent.Title = $"Search expansion parent {treeName} {suffix}";
@@ -2176,10 +2232,16 @@ public class MainControlTreeCommandsUiTests
 
         var child = await repository.AddChild(parent);
         child.Title = $"Search expansion child {treeName} {suffix}";
+        await Assert.That(await TestHelpers.WaitUntilAsync(
+                () => parent.Contains.Contains(child.Id) &&
+                      child.Parents.Contains(parent.Id) &&
+                      parent.ContainsTasks.Any(task => task.Id == child.Id),
+                TimeSpan.FromSeconds(10)))
+            .IsTrue();
 
         var searchTarget = await repository.Add();
-        searchTarget.Title = $"Search expansion target {treeName} {suffix}";
-        var searchText = searchTarget.Title;
+        searchTarget.Title = $"Search expansion target {treeName} {searchToken}";
+        var searchText = searchToken;
 
         ApplySearchExpansionCompletionState(treeName, parent, child);
 
@@ -2219,6 +2281,65 @@ public class MainControlTreeCommandsUiTests
         }
     }
 
+    private static async Task<SearchExpansionScenario> CreateUnlockedSearchExpansionScenarioAsync(
+        MainWindowViewModel vm,
+        ITaskStorage repository,
+        string searchToken)
+    {
+        var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+            ?? throw new InvalidOperationException("Unlocked search parent task was not found.");
+        var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
+            ?? throw new InvalidOperationException("Unlocked search child task was not found.");
+
+        child.IsCompleted = true;
+        child.CompletedDateTime ??= DateTimeOffset.UtcNow;
+        await repository.Update(child);
+        await Assert.That(await TestHelpers.WaitUntilAsync(
+                () => parent.IsCanBeCompleted &&
+                      parent.Contains.Contains(child.Id) &&
+                      parent.ContainsTasks.Any(task => task.Id == child.Id),
+                TimeSpan.FromSeconds(10)))
+            .IsTrue();
+
+        var searchTarget = await repository.Add();
+        searchTarget.Title = $"Search expansion target UnlockedTree {searchToken}";
+        await repository.Update(searchTarget);
+
+        await TestHelpers.WaitThrottleTime();
+        Dispatcher.UIThread.RunJobs();
+
+        return new SearchExpansionScenario(parent, child, searchToken);
+    }
+
+    private static async Task<SearchExpansionScenario> CreateArchivedSearchExpansionScenarioAsync(
+        MainWindowViewModel vm,
+        ITaskStorage repository,
+        string searchToken)
+    {
+        var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.ArchivedTask1Id)
+            ?? throw new InvalidOperationException("Archived search parent task was not found.");
+        var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.ArchivedTask11Id)
+            ?? throw new InvalidOperationException("Archived search child task was not found.");
+
+        await Assert.That(await TestHelpers.WaitUntilAsync(
+                () => parent.Contains.Contains(child.Id) &&
+                      child.Parents.Contains(parent.Id) &&
+                      parent.ContainsTasks.Any(task => task.Id == child.Id),
+                TimeSpan.FromSeconds(10)))
+            .IsTrue();
+
+        var searchTarget = await repository.Add();
+        searchTarget.Title = $"Search expansion target ArchivedTree {searchToken}";
+        searchTarget.IsCompleted = null;
+        searchTarget.ArchiveDateTime ??= DateTimeOffset.UtcNow;
+        await repository.Update(searchTarget);
+
+        await TestHelpers.WaitThrottleTime();
+        Dispatcher.UIThread.RunJobs();
+
+        return new SearchExpansionScenario(parent, child, searchToken);
+    }
+
     private static void ActivateSearchExpansionTree(
         MainWindowViewModel vm,
         string treeName,
@@ -2250,8 +2371,9 @@ public class MainControlTreeCommandsUiTests
                 break;
             case "LastOpenedTree":
                 vm.DetailsAreOpen = true;
-                vm.CurrentTaskItem = parent;
                 vm.LastOpenedMode = true;
+                Dispatcher.UIThread.RunJobs();
+                vm.CurrentTaskItem = parent;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(treeName), treeName, "Unknown task tree.");
@@ -2510,6 +2632,13 @@ public class MainControlTreeCommandsUiTests
         return tree.SelectedItems
             .OfType<TaskWrapperViewModel>()
             .ToList();
+    }
+
+    private static void SelectTreeWrapper(TreeView tree, TaskWrapperViewModel wrapper)
+    {
+        tree.SelectedItems?.Clear();
+        tree.SelectedItems?.Add(wrapper);
+        tree.SelectedItem = wrapper;
     }
 
     private static int CountWrappers(IEnumerable<TaskWrapperViewModel> roots)
