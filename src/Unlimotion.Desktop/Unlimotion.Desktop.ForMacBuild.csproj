@@ -8,7 +8,7 @@
 		<TrimMode>copyused</TrimMode>
 		<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
 		<ApplicationIcon>Assets\Unlimotion.ico</ApplicationIcon>
-		<RuntimeIdentifiers>osx-x64</RuntimeIdentifiers>
+		<RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
 
     		<CFBundleName>Unlimotion</CFBundleName> <!-- Also defines .app file name -->
     		<CFBundleDisplayName>Unlimotion</CFBundleDisplayName>

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 APP_NAME="./Unlimotion.app"
-PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net10.0/osx-x64/publish/."
+VERSION=$1
+RUNTIME=${2:-osx-x64}
+PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net10.0/$RUNTIME/publish/."
 
 # PUBLISH_OUTPUT_DIRECTORY should point to the output directory of your dotnet publish command.
 # One example is /bin/Release/net10.0/osx-x64/publish/.
@@ -9,7 +11,6 @@ PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net10.0/osx-x64/p
 
 INFO_PLIST="./src/Unlimotion.Desktop/ci/osx/Info.plist"
 ICON_FILE="./src/Unlimotion.Desktop/Assets/Unlimotion.icns"
-VERSION=$1
 
 sed -i '' "s/CFBundleVersionExample/$VERSION/g" $INFO_PLIST
 sed -i '' "s/CFBundleShortVersionStringExample/$VERSION/g" $INFO_PLIST
