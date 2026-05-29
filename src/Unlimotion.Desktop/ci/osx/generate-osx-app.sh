@@ -11,9 +11,7 @@ PUBLISH_OUTPUT_DIRECTORY="./src/Unlimotion.Desktop/bin/Release/net10.0/$RUNTIME/
 
 INFO_PLIST="./src/Unlimotion.Desktop/ci/osx/Info.plist"
 ICON_FILE="./src/Unlimotion.Desktop/Assets/Unlimotion.icns"
-
-sed -i '' "s/CFBundleVersionExample/$VERSION/g" $INFO_PLIST
-sed -i '' "s/CFBundleShortVersionStringExample/$VERSION/g" $INFO_PLIST
+APP_INFO_PLIST="./Unlimotion.app/Contents/Info.plist"
 
 if [ -d "$APP_NAME" ]
 then
@@ -26,6 +24,8 @@ mkdir "$APP_NAME/Contents"
 mkdir "$APP_NAME/Contents/MacOS"
 mkdir "$APP_NAME/Contents/Resources"
 
-cp "$INFO_PLIST" "$APP_NAME/Contents/Info.plist"
+cp "$INFO_PLIST" "$APP_INFO_PLIST"
+sed -i '' "s/CFBundleVersionExample/$VERSION/g" "$APP_INFO_PLIST"
+sed -i '' "s/CFBundleShortVersionStringExample/$VERSION/g" "$APP_INFO_PLIST"
 cp "$ICON_FILE" "$APP_NAME/Contents/Resources/Unlimotion.icns"
 cp -a "$PUBLISH_OUTPUT_DIRECTORY" "$APP_NAME/Contents/MacOS"
