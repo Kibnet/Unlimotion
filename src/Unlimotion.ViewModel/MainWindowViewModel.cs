@@ -1859,6 +1859,17 @@ namespace Unlimotion.ViewModel
             CurrentRelationEditor.Open(kind, CurrentTaskItem);
         }
 
+        public bool TryHandleTaskCardBackGesture()
+        {
+            if (CurrentTaskItem == null)
+            {
+                return false;
+            }
+
+            DetailsAreOpen = !DetailsAreOpen;
+            return true;
+        }
+
         public async Task CopyTaskOutline(TaskItemViewModel? task = null)
         {
             var source = task ?? CurrentTaskItem;

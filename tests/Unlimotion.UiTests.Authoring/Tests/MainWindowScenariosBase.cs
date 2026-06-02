@@ -65,6 +65,42 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
+    public async Task Task_card_can_be_closed_and_reopened_from_details_toggle()
+    {
+        await Assert.That(Page.CurrentTaskDetailsScrollViewer.AutomationId)
+            .IsEqualTo("CurrentTaskDetailsScrollViewer");
+        await UiAssert.TextEqualsAsync(
+            () => Page.CurrentTaskTitleTextBox.Text,
+            ExpectedCurrentTaskTitle);
+        await Assert.That(Page.DetailsPaneToggleButton.IsToggled).IsFalse();
+
+        Page.DetailsPaneToggleButton.Toggle();
+        WaitUntil(
+            () => Page.DetailsPaneToggleButton.IsToggled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Details pane toggle did not switch to the closed state.");
+
+        Page.DetailsPaneToggleButton.Toggle();
+        WaitUntil(
+            () => !Page.DetailsPaneToggleButton.IsToggled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Details pane toggle did not switch to the open state.");
+        var detailsPane = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskDetailsScrollViewer),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Task details pane did not reappear after reopening.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(detailsPane.AutomationId).IsEqualTo("CurrentTaskDetailsScrollViewer");
+            await UiAssert.TextEqualsAsync(
+                () => Page.CurrentTaskTitleTextBox.Text,
+                ExpectedCurrentTaskTitle);
+        }
+    }
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
     public async Task Major_tabs_can_be_opened_from_main_window()
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");

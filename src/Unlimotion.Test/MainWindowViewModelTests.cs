@@ -1171,6 +1171,45 @@ namespace Unlimotion.Test
             await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsFalse();
         }
 
+        [Test]
+        public async Task TaskCardBackGesture_OpenTaskCard_ClosesTaskCard()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.DetailsAreOpen = true;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_ClosedTaskCard_OpensTaskCard()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_NoCurrentTask_DoesNotHandleBack()
+        {
+            mainWindowVM.CurrentTaskItem = null;
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsFalse();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsNull();
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
+        }
+
         /// <summary>
         /// Удаление ссылки из дерева задач
         /// </summary>

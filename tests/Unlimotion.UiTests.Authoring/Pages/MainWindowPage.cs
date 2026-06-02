@@ -36,6 +36,7 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("PullNowButton", UiControlType.Button, "PullNowButton")]
 [UiControl("PushNowButton", UiControlType.Button, "PushNowButton")]
 [UiControl("DetailsPaneToggleButton", UiControlType.ToggleButton, "DetailsPaneToggleButton")]
+[UiControl("CurrentTaskDetailsScrollViewer", UiControlType.AutomationElement, "CurrentTaskDetailsScrollViewer")]
 [UiControl("CurrentTaskCard", UiControlType.AutomationElement, "CurrentTaskCard")]
 [UiControl("CurrentTaskHeader", UiControlType.AutomationElement, "CurrentTaskHeader")]
 [UiControl("CurrentTaskCommandBar", UiControlType.AutomationElement, "CurrentTaskCommandBar")]
