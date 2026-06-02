@@ -61,6 +61,7 @@ Outcome contract:
   - назначить `CurrentAllTasksItem` на найденный актуальный wrapper, даже если старый wrapper ссылался на тот же `TaskItem`;
   - если wrapper не найден из-за других активных фильтров, не менять фильтры и не назначать stale wrapper;
   - при необходимости коротко сбросить `CurrentAllTasksItem` в `null` перед повторным назначением только если reproducing test покажет, что Avalonia не поднимает selection/scroll на замену wrapper-а. Такое решение должно остаться локальным к `CurrentAllTasksItem` и не менять `CurrentTaskItem`.
+- Follow-up edge case: если карточка деталей закрыта, `CurrentTaskItem` может быть потерян после выбора результата поиска, хотя `CurrentAllTasksItem` еще хранит последний выбранный search wrapper. Для этого нужен transient fallback на последний выбранный AllTasks task, но только в search-clear restore path. Обычное явное очищение `CurrentTaskItem` вне search-clear не должно самовосстанавливать selection.
 - Visual planning artifact для UI-facing изменений:
 ```text
 AS-IS after clearing search:
@@ -98,7 +99,7 @@ All Tasks tree viewport
 
 ## 9. Изменения модели данных / состояния
 - Новых persisted fields нет.
-- Возможны только private helper/state-free changes в `MainWindowViewModel`.
+- Возможны только private helper/transient state changes в `MainWindowViewModel`; follow-up фикс допускает private `_lastSelectedAllTasksItem` без persistence.
 - `TaskItemViewModel`, storage и migration не меняются.
 
 ## 10. Миграция / Rollout / Rollback
@@ -120,9 +121,11 @@ All Tasks tree viewport
 - UI video evidence: fallback по причине отсутствия recorder в текущем headless harness; next-best evidence - команда targeted UI test и assertion details по `SelectedItem`, `IsSelected`, expanded parent chain и selected item bounds относительно `AllTasksTree`.
 - Базовые замеры performance: Не применимо, изменение не добавляет дорогой цикл сверх существующего lookup.
 - Команды для проверки:
-  - `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItem"`
-  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj`
-  - `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails"`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_RestoresExpansionState"`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/*"`
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj --no-restore`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build`
   - `dotnet build src/Unlimotion.sln`
   - `dotnet test src/Unlimotion.sln`
 - Если full solution build/test блокируется отсутствующими mobile/browser workloads, next-best validation: test project build + targeted UI test + full `src/Unlimotion.Test` run, с явным отчетом о блокере.
@@ -133,6 +136,7 @@ All Tasks tree viewport
 - Если old wrapper и new wrapper указывают на один `TaskItem`, comparison только по task identity недостаточен; нужно учитывать актуальность wrapper-а в текущей коллекции.
 - `SelectedItem` в `TreeView` с `SelectionMode=Multiple` может не синхронизировать `SelectedItems`; test должен проверять user-visible selected row, а не только VM property.
 - Слишком ранний refresh до materialization visual item может не дать scroll; при необходимости refresh должен происходить после collection update / dispatcher jobs, но без таймеров в production-коде, если можно обойтись reactive collection event.
+- Если карточка деталей закрыта, `CurrentTaskItem` может стать `null` между выбором search result и очисткой поиска; fallback должен использовать последний выбранный AllTasks item только для восстановления после search clear, иначе появится регрессия явного сброса текущей задачи.
 
 ## 13. План выполнения
 1. Добавить Avalonia.Headless regression test, который создает вложенную задачу, выбирает ее в search view, очищает поиск и ожидает visible selected row в `AllTasksTree`.
@@ -153,13 +157,14 @@ All Tasks tree viewport
 | Файл | Изменения | Причина |
 | --- | --- | --- |
 | `specs/2026-06-02-search-selection-restore.md` | рабочая спецификация и QUEST audit trail | обязательный SPEC-first gate |
-| `src/Unlimotion.ViewModel/MainWindowViewModel.cs` | refresh актуального `CurrentAllTasksItem` после search-driven rebuild | восстановить highlight/scroll выбранной задачи |
-| `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` | UI regression test | зафиксировать пользовательский сценарий |
+| `src/Unlimotion.ViewModel/MainWindowViewModel.cs` | refresh актуального `CurrentAllTasksItem` после search-driven rebuild; transient fallback на последний выбранный AllTasks item для closed-details search-clear path | восстановить highlight/scroll выбранной задачи |
+| `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` | UI regression test с закрытой карточкой деталей | зафиксировать пользовательский сценарий |
 
 ## 17. Таблица соответствий (было -> стало)
 | Область | Было | Стало |
 | --- | --- | --- |
 | Очистка поиска после выбора задачи | `CurrentTaskItem` сохраняется, но tree selection может быть stale/невидимым | актуальный wrapper найден, родители раскрыты, row выделен и проскроллен |
+| Очистка поиска при закрытой карточке деталей | выбранная в search карточка может потеряться, если `CurrentTaskItem == null` | search-clear restore использует последний выбранный AllTasks task как transient fallback |
 | `CurrentAllTasksItem` | может указывать на wrapper из search projection или не обновляться | указывает на wrapper из текущего полного `CurrentAllTasksItems` |
 | UI tests | покрыто раскрытие после поиска, но не selection/scroll | добавлен regression на selection + visible selected row |
 
@@ -284,6 +289,49 @@ All Tasks tree viewport
 - Needs human: no further decision needed.
 - Residual risks / follow-ups: investigate suite-level UI parallelism/cross-thread instability separately if full solution test must become a reliable gate.
 
+### Follow-up Post-EXEC Review: closed details selection loss
+- Статус: PASS с residual LOW full-suite risks
+- Scope reviewed: follow-up user report "Если карточка закрыта, то выбранная карточка после закрытия поиска теряется"; approved spec addendum; current `git status --short`; current `git diff --stat`; relevant diffs for `MainWindowViewModel.cs`, `MainControlTreeCommandsUiTests.cs`, this spec; targeted and class-level TUnit outputs; full `Unlimotion.Test` outputs.
+- Decision: follow-up defect fixed in the same PR branch; можно коммитить и пушить update PR.
+- Review passes:
+  - Scope/Evidence pass: проверены только expected files `MainWindowViewModel.cs`, `MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md`; XAML diff отсутствует по content, только line-ending warnings/status noise.
+  - Contract pass: `CurrentAllTasksItem` subscription теперь запоминает последний выбранный AllTasks task; search-clear restore может использовать этот fallback, если `CurrentTaskItem == null`; обычный `RestoreCurrentAllTasksSelection()` без fallback не восстанавливает явно очищенный current task.
+  - Adversarial risk pass: проверены риски самовосстановления selection вне search-clear, stale wrapper из search projection, closed details path, expansion-state regression и full-suite order/pollution.
+  - Re-review after fixes / Fix and re-review: после добавления fallback targeted closed-details test прошел; старый expansion test прошел; весь `MainControlTreeCommandsUiTests` класс прошел; full `Unlimotion.Test` rerun показал failures вне изолированного targeted/class прогона и зафиксирован как LOW residual suite risk.
+  - Stop decision: PASS; нет BLOCKER/HIGH/MEDIUM findings по follow-up change.
+- Evidence inspected: `RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)`, `CurrentAllTasksItem` subscription, AllTasks search-clear DynamicData branch, closed-details UI regression test, expansion-state test, class-level test run, full `Unlimotion.Test` output.
+- Depth checklist:
+  - Scope drift / unrelated changes: no content diff outside ViewModel, UI test and spec; `MainControl.axaml`/`.cs` show status noise but no diff/stat.
+  - Acceptance criteria: closed-details regression asserts `DetailsAreOpen == false`, selected search wrapper, `CurrentTaskItem == null` pre-clear, restored full-tree wrapper, parent expanded, selected row visible.
+  - Validation evidence: targeted and class-level UI tests pass; build passes; full project suite attempted twice and reported below.
+  - Unsupported claims: fallback scope is backed by call sites: only search-clear passes `useLastSelectedFallback: true`.
+  - Regression / edge case: explicit task clearing outside search-clear remains non-restoring; expansion-state tests pass in isolated reruns.
+  - Comments/docs/changelog: no code comments/changelog required; spec updated with addendum.
+  - Hidden contract change: no persisted state, public API, XAML selector or automation-id changes.
+  - Manual-review challenge: likely reviewer concern is whether fallback reselects stale tasks outside search clear; helper default and call-site split address it.
+- No-findings justification: targeted defect is covered by a deterministic UI test and current diff is limited to the intended ViewModel/test/spec surface.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | validation | `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build` timed out after 5 minutes and reported unrelated failures in `BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows`, `SettingsViewModelTests.SwitchRemoteConnectionTypeCommand_UpdatesSelectedRemoteFromServiceResult`, plus order-sensitive `TreeSearch_ClearSearch_RestoresExpansionState` cases that pass when rerun separately | Report as residual full-suite blocker; use targeted/class UI evidence for this PR update | accepted-risk |
+| LOW | validation | `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --maximum-parallel-tests 1` completed with 420/423 passed and the same ACL failure plus order-sensitive tree cases | Report as residual suite/order issue; do not broaden this PR to unrelated test isolation | accepted-risk |
+| LOW | evidence | No UI video evidence because Avalonia.Headless harness does not provide recorder artifacts | Use deterministic UI assertions and HTML test report path as fallback | accepted-risk |
+
+- Fixed before final report: added `_lastSelectedAllTasksItem` transient state; search-clear restore passes `useLastSelectedFallback: true`; closed-details regression test now simulates lost `CurrentTaskItem` before clearing search.
+- Checks rerun:
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails"` -> PASS, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_RestoresExpansionState"` -> PASS, 7/7.
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj --no-restore` -> PASS, 4 line-ending warnings, 0 errors.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/*"` -> PASS, 42/42.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails"` -> PASS after full-suite failure rerun, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_RestoresExpansionState"` -> PASS after full-suite failure rerun, 7/7.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build` -> FAIL/TIMEOUT after 5 minutes; see LOW finding.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --maximum-parallel-tests 1` -> FAIL, 420/423 passed; see LOW finding.
+- Validation evidence: `src/Unlimotion.Test/bin/Debug/net10.0/TestResults/Unlimotion.Test-windows-net10.0-report.html`.
+- Unrelated changes: none intended; XAML files show status noise without content diff.
+- Needs human: no decision needed for this follow-up.
+- Residual risks / follow-ups: separate investigation needed for full `Unlimotion.Test` suite order/environment failures if it must be a reliable delivery gate.
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -301,3 +349,4 @@ All Tasks tree viewport
 | EXEC | Validation | 0.88 | Нет по targeted flow; full solution имеет unrelated runner instability | Обновить post-EXEC review | Нет | Нет | Новый UI regression test и старый expansion-state test прошли; build прошел; external validation anomalies зафиксированы как LOW | `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, test reports |
 | EXEC | Post-EXEC review | 0.93 | Нет | Финальная проверка diff/status | Нет | Нет | Scope соответствует approved spec; open findings выше LOW отсутствуют | `specs/2026-06-02-search-selection-restore.md` |
 | EXEC | Follow-up EXEC review | 0.94 | Нет | Финальный отчет пользователю | Нет | Нет | По запросу пользователя повторно сверен full post-EXEC review-loop с `review-loops.md`; найден и исправлен LOW gap в фиксации `git status --short`/`git diff --stat`; fresh targeted UI test прошел | `specs/2026-06-02-search-selection-restore.md`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `src/Unlimotion.ViewModel/MainWindowViewModel.cs` |
+| EXEC | Closed-details follow-up fix | 0.91 | Нет по targeted flow; full `Unlimotion.Test` suite имеет residual failures вне isolated UI surface | Коммит и push PR update | Нет | Да: пользователь сообщил новый edge case после PR | Добавлен fallback на последний выбранный AllTasks item только для search-clear restore, чтобы закрытая карточка деталей не теряла выбранную задачу; targeted/class UI tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md` |

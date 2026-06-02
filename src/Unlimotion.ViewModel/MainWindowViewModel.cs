@@ -269,8 +269,12 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentAllTasksItem)
                 .Subscribe(m =>
                 {
-                    if (m != null && CurrentTaskItem != m?.TaskItem)
-                        CurrentTaskItem = m?.TaskItem;
+                    if (m != null)
+                    {
+                        _lastSelectedAllTasksItem = m.TaskItem;
+                        if (CurrentTaskItem != m.TaskItem)
+                            CurrentTaskItem = m.TaskItem;
+                    }
                 })
                 .AddToDispose(connectionDisposableList);
 
@@ -849,8 +853,9 @@ namespace Unlimotion.ViewModel
                     var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
                     if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
                     {
-                        RestoreCurrentAllTasksSelection();
-                        RxSchedulers.MainThreadScheduler.Schedule(RestoreCurrentAllTasksSelection);
+                        RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
+                        RxSchedulers.MainThreadScheduler.Schedule(() =>
+                            RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
                     }
 
                     wasAllTasksSearchActive = isSearchActive;
@@ -2219,18 +2224,20 @@ namespace Unlimotion.ViewModel
                    string.Equals(left.Id, right.Id, StringComparison.Ordinal);
         }
 
-        private void RestoreCurrentAllTasksSelection()
+        private void RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)
         {
-            if (CurrentTaskItem == null)
+            var taskItem = CurrentTaskItem ??
+                           (useLastSelectedFallback ? _lastSelectedAllTasksItem : null);
+            if (taskItem == null)
             {
                 CurrentAllTasksItem = null;
                 return;
             }
 
-            var wrapper = FindTaskWrapperViewModel(CurrentTaskItem, CurrentAllTasksItems);
+            var wrapper = FindTaskWrapperViewModel(taskItem, CurrentAllTasksItems);
             if (wrapper == null)
             {
-                if (IsSameTask(CurrentAllTasksItem?.TaskItem, CurrentTaskItem))
+                if (IsSameTask(CurrentAllTasksItem?.TaskItem, taskItem))
                 {
                     CurrentAllTasksItem = null;
                 }
@@ -2238,7 +2245,12 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            ExpandParentNodesForTask(CurrentTaskItem);
+            if (CurrentTaskItem == null)
+            {
+                CurrentTaskItem = taskItem;
+            }
+
+            ExpandParentNodesForTask(taskItem);
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)
@@ -2284,6 +2296,7 @@ namespace Unlimotion.ViewModel
         public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs ?? string.Empty : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems = EmptyTaskWrappers;
+        private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;

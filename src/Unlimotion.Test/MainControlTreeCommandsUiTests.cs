@@ -418,7 +418,7 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItem()
+    public async Task TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -431,6 +431,7 @@ public class MainControlTreeCommandsUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
                 vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
                 vm.CurrentSortDefinition = vm.SortDefinitions.First(definition => definition.Id == "title-ascending");
 
                 var repository = vm.taskRepository
@@ -487,8 +488,6 @@ public class MainControlTreeCommandsUiTests
                     SearchExpansionWaitMilliseconds);
                 await Assert.That(searchWrapper).IsNotNull();
 
-                var searchResultControl = FindWrapperControl(allTasksTree, searchWrapper!);
-                await ClickControlAsync(window, searchResultControl);
                 SelectTreeWrapper(allTasksTree, searchWrapper!);
                 vm.CurrentAllTasksItem = searchWrapper;
                 Dispatcher.UIThread.RunJobs();
@@ -498,6 +497,11 @@ public class MainControlTreeCommandsUiTests
                     ReferenceEquals(vm.CurrentAllTasksItem, searchWrapper) &&
                     ReferenceEquals(allTasksTree.SelectedItem, searchWrapper));
                 await Assert.That(selectedInSearch).IsTrue();
+                await Assert.That(vm.DetailsAreOpen).IsFalse();
+
+                vm.CurrentTaskItem = null;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(vm.CurrentTaskItem).IsNull();
 
                 await ApplySearchAsync(vm, string.Empty);
 
