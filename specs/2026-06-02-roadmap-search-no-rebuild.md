@@ -272,6 +272,32 @@ Outcome contract:
 - Needs human: Нет.
 - Residual risks / follow-ups: Full solution build may need a restored/mobile-ready environment; no video artifact for headless UI path.
 
+### Post-EXEC Review Addendum: PR build warnings
+- Статус: PASS
+- Scope reviewed: PR #247 `android-build` log annotations for `src/Unlimotion.ViewModel/MainWindowViewModel.cs`; local `MainWindowViewModel.cs` diff.
+- Decision: можно завершать after warning cleanup.
+- Review passes:
+  - Scope/Evidence pass: Found two `CS0618` annotations at `MainWindowViewModel.cs(820,13)` and `(866,17)` for obsolete `ObservableCacheEx.Sort(...)`.
+  - Contract pass: Replaced only the two top-level `Sort(...).Bind(...)` chains with `SortAndBind(...)`; roadmap search behavior remains unchanged.
+  - Adversarial risk pass: Checked that warning source was existing top-level sorted bindings shifted into PR annotations by this diff, not `roadmapRootFilter` itself.
+  - Re-review after fixes / Fix and re-review: `Unlimotion.ViewModel.csproj` rebuild confirmed zero warnings/errors after the fix.
+  - Stop decision: PASS with unchanged residual limitation around broader test project build availability.
+- Evidence inspected: GitHub PR #247 `android-build` log; local `dotnet build src/Unlimotion.ViewModel/Unlimotion.ViewModel.csproj --no-restore -v:minimal`.
+- Depth checklist:
+  - Scope drift / unrelated changes: One file fix in `MainWindowViewModel.cs` plus this spec addendum.
+  - Acceptance criteria: PR `MainWindowViewModel.cs` CS0618 warnings removed locally.
+  - Validation evidence: ViewModel project build passed with `Предупреждений: 0`, `Ошибок: 0`.
+  - Unsupported claims: No claim that full test project rebuild completed after this warning-only fix.
+  - Regression / edge case: Top-level current/unlocked bindings still use the same observable comparers.
+  - Comments/docs/changelog: No production comments added.
+  - Hidden contract change: No API, persistence, search or roadmap topology contract changes.
+  - Manual-review challenge: Broader UI sort behavior is indirectly covered by existing tests but not rerun after this warning-only fix because concurrent build/test processes were active in the worktree.
+- No-findings justification: No BLOCKER/HIGH/MEDIUM findings; the warning cleanup is mechanically aligned with the compiler recommendation.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | validation | Test project rebuild was not completed after the warning-only fix because another `Unlimotion.Test` build was already running in the same worktree and the attempted build timed out | Report limitation; rely on focused `Unlimotion.ViewModel.csproj` build for this compiler warning fix | accepted-risk |
+
 ## Approval
 Получено подтверждение пользователя: "Спеку подтверждаю"
 
@@ -287,3 +313,4 @@ Outcome contract:
 | EXEC | Post-EXEC review | 0.88 | Нет блокирующих данных | Финальный отчет пользователю | Нет | Нет | Review не выявил blocker/high/medium findings; residual risks ограничены full solution build environment и отсутствием video artifact для headless UI | измененные файлы и validation evidence |
 | EXEC | Review format audit | 0.95 | Нет | Финальный отчет пользователю | Нет | Нет | Статус и decision post-EXEC review приведены к каноническим значениям `PASS` и `можно завершать`; code diff не менялся | `specs/2026-06-02-roadmap-search-no-rebuild.md` |
 | EXEC | Approval section audit | 0.95 | Нет | Финальный отчет пользователю | Нет | Нет | Убрана stale-формулировка, будто подтверждение спеки еще ожидается; re-review section обновлена после spec-only fix | `specs/2026-06-02-roadmap-search-no-rebuild.md` |
+| EXEC | PR build warning cleanup | 0.90 | Test project rebuild после warning-only fix не завершился из-за параллельного build процесса в worktree | Закоммитить и запушить warning fix в PR | Нет | Да, пользователь попросил посмотреть PR build warnings | Две CS0618 аннотации в `MainWindowViewModel.cs` исправлены через `SortAndBind`; focused ViewModel build прошел с 0 warnings/0 errors | `MainWindowViewModel.cs`, PR #247 build log, `specs/2026-06-02-roadmap-search-no-rebuild.md` |

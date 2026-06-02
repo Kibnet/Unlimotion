@@ -841,9 +841,7 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .Sort(sortObservable)
-                .TreatMovesAsRemoveAdd()
-                .Bind(out _currentItems)
+                .SortAndBind(out _currentItems, sortObservable)
                 .Subscribe(/*set => ExpandParentNodesForTask(CurrentTaskItem)*/)
                 .AddToDispose(connectionDisposableList);
 
@@ -894,8 +892,7 @@ namespace Unlimotion.ViewModel
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
-                    .Sort(sortObservableForUnlocked)
-                    .Bind(out _unlockedItems)
+                    .SortAndBind(out _unlockedItems, sortObservableForUnlocked)
                     .Subscribe()
                     .AddToDispose(connectionDisposableList);
 
