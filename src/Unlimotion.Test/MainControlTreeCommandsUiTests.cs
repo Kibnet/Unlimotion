@@ -418,6 +418,92 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeSearch_AllTasksSearchEditor_FiltersVisibleTree()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var repository = vm.taskRepository
+                    ?? throw new InvalidOperationException("Task repository was not initialized.");
+                var searchToken = Guid.NewGuid().ToString("N");
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+                    ?? throw new InvalidOperationException("Search parent task was not found.");
+                var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
+                    ?? throw new InvalidOperationException("Search target task was not found.");
+
+                parent.Title = $"zzzz all tasks search parent {Guid.NewGuid():N}";
+                selectedTask.Title = $"zzzz all tasks search target {searchToken}";
+                selectedTask.IsCompleted = false;
+                selectedTask.ArchiveDateTime = null;
+                await repository.Update(parent);
+                await repository.Update(selectedTask);
+
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Width = 900;
+                window.Height = 320;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var searchEditor = view.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .FirstOrDefault(textBox => textBox.Name == "SearchEditor" && textBox.IsEffectivelyVisible);
+                await Assert.That(searchEditor).IsNotNull();
+
+                var searchTextPropertyChangedCount = 0;
+                ((INotifyPropertyChanged)vm.Search).PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(SearchDefinition.SearchText))
+                    {
+                        searchTextPropertyChangedCount++;
+                    }
+                };
+
+                searchEditor!.Text = searchToken;
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
+
+                var filtered = WaitFor(() =>
+                    vm.Search.SearchText == searchToken &&
+                    vm.FindTaskWrapperViewModel(parent, vm.CurrentAllTasksItems) == null &&
+                    vm.FindTaskWrapperViewModel(selectedTask, vm.CurrentAllTasksItems) != null,
+                    SearchExpansionWaitMilliseconds);
+
+                if (!filtered)
+                {
+                    throw new InvalidOperationException(
+                        "AllTasks search editor did not filter the tree. " +
+                        $"SearchEditorText={searchEditor.Text ?? "<null>"}; " +
+                        $"VmSearchText={vm.Search.SearchText ?? "<null>"}; " +
+                        $"SearchTextPropertyChangedCount={searchTextPropertyChangedCount}; " +
+                        $"ParentVisible={vm.FindTaskWrapperViewModel(parent, vm.CurrentAllTasksItems) != null}; " +
+                        $"TargetVisible={vm.FindTaskWrapperViewModel(selectedTask, vm.CurrentAllTasksItems) != null}; " +
+                        $"RootCount={vm.CurrentAllTasksItems.Count}.");
+                }
+
+                await Assert.That(filtered).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));

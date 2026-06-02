@@ -678,8 +678,7 @@ namespace Unlimotion.ViewModel
 
             var searchTopFilter = searchInput
                 .Publish(shared => shared.Take(1).Concat(
-                    shared.Skip(1)
-                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
+                    shared.Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
                 .Select(searchText =>
                 {
                     var userText = (searchText.Item1 ?? "").Trim();
@@ -847,15 +846,15 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .SortAndBind(out _currentItems, sortObservable)
+                .Sort(sortObservable)
+                .TreatMovesAsRemoveAdd()
+                .Bind(out _currentItems)
                 .Subscribe(_ =>
                 {
                     var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
                     if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
                     {
-                        RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
-                        RxSchedulers.MainThreadScheduler.Schedule(() =>
-                            RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+                        RestoreCurrentAllTasksSelectionAfterSearchClear();
                     }
 
                     wasAllTasksSearchActive = isSearchActive;
@@ -2251,6 +2250,16 @@ namespace Unlimotion.ViewModel
             }
 
             ExpandParentNodesForTask(taskItem);
+        }
+
+        private void RestoreCurrentAllTasksSelectionAfterSearchClear()
+        {
+            RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
+            RxSchedulers.MainThreadScheduler.Schedule(() =>
+                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+            // TreeView can clear SelectedItem after processing search-clear collection changes.
+            RxSchedulers.MainThreadScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
+                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)

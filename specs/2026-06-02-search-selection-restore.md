@@ -332,6 +332,45 @@ All Tasks tree viewport
 - Needs human: no decision needed for this follow-up.
 - Residual risks / follow-ups: separate investigation needed for full `Unlimotion.Test` suite order/environment failures if it must be a reliable delivery gate.
 
+### Follow-up Post-EXEC Review: first AllTasks search after rebase
+- Статус: PASS
+- Scope reviewed: user report "теперь поиск во всех задачах вообще не работает"; approved spec and current follow-up scope; current `git diff --stat`; relevant diffs for `MainWindowViewModel.cs` and `MainControlTreeCommandsUiTests.cs`; targeted UI test evidence; full `Unlimotion.Test` run.
+- Decision: regression fixed in the same PR branch; можно коммитить и пушить update PR.
+- Review passes:
+  - Scope/Evidence pass: inspected AllTasks search predicate chain, AllTasks DynamicData bind/sort chain, search-clear restore path, new UI regression test and validation outputs.
+  - Contract pass: first real search event is no longer dropped after the initial empty value; AllTasks collection uses `TreatMovesAsRemoveAdd()` again to avoid Avalonia `TreeView` out-of-range move handling; search-clear restore repeats after UI selection reset.
+  - Adversarial risk pass: checked first search from visible `SearchEditor`, closed-details search clear, expansion-state restore across all task trees, and full project test run.
+  - Re-review after fixes / Fix and re-review: initial reproduction failed because search text reached `Search.SearchText` but parent stayed visible; after search predicate fix, `SortAndBind` exposed a TreeView collection-move exception; after restoring `TreatMovesAsRemoveAdd()` and delayed restore, all targeted tests passed.
+  - Stop decision: PASS; no BLOCKER/HIGH/MEDIUM findings remain.
+- Evidence inspected: `MainWindowViewModel.cs` `searchTopFilter`, AllTasks root pipeline, `RestoreCurrentAllTasksSelectionAfterSearchClear`, `MainControlTreeCommandsUiTests.TreeSearch_AllTasksSearchEditor_FiltersVisibleTree`, targeted and full test outputs.
+- Depth checklist:
+  - Scope drift / unrelated changes: expected ViewModel/test/spec surface only; accidental `SearchBar.axaml` probe removed before commit.
+  - Acceptance criteria: first AllTasks search filters out a non-matching parent and keeps the matching nested task; clearing search restores selected wrapper/row with closed details; expansion state still restores.
+  - Validation evidence: build passes; targeted UI tests pass; full `src/Unlimotion.Test` run passes 424/424.
+  - Unsupported claims: user-visible search/filter and restore claims are backed by Avalonia.Headless assertions.
+  - Regression / edge case: `TreatMovesAsRemoveAdd()` intentionally keeps deprecated `Sort` in this one AllTasks UI pipeline because `SortAndBind` caused an Avalonia `TreeView` insert index exception under search filtering.
+  - Comments/docs/changelog: no code comments or changelog needed; spec updated with follow-up audit.
+  - Hidden contract change: no public API, persisted state, XAML selector or automation-id changes.
+  - Manual-review challenge: reviewer may ask why not `SortAndBind`; targeted run reproduced the TreeView collection exception with `SortAndBind`, while explicit sort/move-as-remove-add passes.
+- No-findings justification: current regression is covered by deterministic UI tests and the full test project passes on the final diff.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | implementation | AllTasks root pipeline uses deprecated `Sort` API to retain `TreatMovesAsRemoveAdd()` semantics | Keep as scoped compatibility workaround; document in review evidence | accepted-risk |
+| LOW | evidence | No UI video evidence because Avalonia.Headless harness does not provide recorder artifacts | Use deterministic UI assertions and HTML test report path as fallback | accepted-risk |
+
+- Fixed before final report: removed skipped first search event in `searchTopFilter`; restored AllTasks `Sort(...).TreatMovesAsRemoveAdd().Bind(...)`; added delayed search-clear restore; added first-search UI regression.
+- Checks rerun:
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj --no-restore` -> PASS, warnings only.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree"` -> PASS, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails"` -> PASS, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_RestoresExpansionState"` -> PASS, 7/7.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build` -> PASS, 424/424.
+- Validation evidence: `src/Unlimotion.Test/bin/Debug/net10.0/TestResults/Unlimotion.Test-windows-net10.0-report.html`.
+- Unrelated changes: none.
+- Needs human: no decision needed.
+- Residual risks / follow-ups: none for this PR scope.
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -350,3 +389,4 @@ All Tasks tree viewport
 | EXEC | Post-EXEC review | 0.93 | Нет | Финальная проверка diff/status | Нет | Нет | Scope соответствует approved spec; open findings выше LOW отсутствуют | `specs/2026-06-02-search-selection-restore.md` |
 | EXEC | Follow-up EXEC review | 0.94 | Нет | Финальный отчет пользователю | Нет | Нет | По запросу пользователя повторно сверен full post-EXEC review-loop с `review-loops.md`; найден и исправлен LOW gap в фиксации `git status --short`/`git diff --stat`; fresh targeted UI test прошел | `specs/2026-06-02-search-selection-restore.md`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `src/Unlimotion.ViewModel/MainWindowViewModel.cs` |
 | EXEC | Closed-details follow-up fix | 0.91 | Нет по targeted flow; full `Unlimotion.Test` suite имеет residual failures вне isolated UI surface | Коммит и push PR update | Нет | Да: пользователь сообщил новый edge case после PR | Добавлен fallback на последний выбранный AllTasks item только для search-clear restore, чтобы закрытая карточка деталей не теряла выбранную задачу; targeted/class UI tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md` |
+| EXEC | First-search follow-up fix | 0.94 | Нет | Коммит и push PR update | Нет | Да: пользователь сообщил регрессию поиска после ребейза | Исправлен dropped first search event, возвращена безопасная AllTasks sort/bind цепочка для TreeView и добавлен UI regression на первый ввод поиска; targeted/full tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md` |
