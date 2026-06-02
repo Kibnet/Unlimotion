@@ -180,6 +180,7 @@
   <data name="MoveTasksHeader" xml:space="preserve"><value>Move tasks</value></data>
   <data name="MoveTasksMessage" xml:space="preserve"><value>Are you sure you want to move {0} selected tasks into "{1}"?</value></data>
   <data name="MoveToPath" xml:space="preserve"><value>Move to path</value></data>
+  <data name="MoreActions" xml:space="preserve"><value>More</value></data>
   <data name="NewBlockedSibling" xml:space="preserve"><value>➕🔒 Sibling</value></data>
   <data name="NewInner" xml:space="preserve"><value>➕ Inner</value></data>
   <data name="NewKey" xml:space="preserve"><value>New key</value></data>

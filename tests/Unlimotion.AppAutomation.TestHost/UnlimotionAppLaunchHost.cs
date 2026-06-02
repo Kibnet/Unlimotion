@@ -40,6 +40,7 @@ public static class UnlimotionAppLaunchHost
     public static DesktopAppLaunchOptions CreateDesktopLaunchOptions(
         UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke,
         string? language = null,
+        string? currentTaskId = null,
         string? buildConfiguration = null,
         bool buildBeforeLaunch = true,
         bool buildOncePerProcess = true,
@@ -47,7 +48,7 @@ public static class UnlimotionAppLaunchHost
         TimeSpan? mainWindowTimeout = null,
         TimeSpan? pollInterval = null)
     {
-        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language);
+        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId);
         var environmentVariables = CreateEnvironmentVariables(launchData);
 
         try
@@ -80,9 +81,10 @@ public static class UnlimotionAppLaunchHost
     public static HeadlessAppLaunchOptions CreateHeadlessLaunchOptions(
         UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke,
         string? language = null,
-        Action<MainWindowViewModel>? afterViewModelPrepared = null)
+        Action<MainWindowViewModel>? afterViewModelPrepared = null,
+        string? currentTaskId = null)
     {
-        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language);
+        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId);
         MainWindowViewModel? vm = null;
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
 
@@ -223,6 +225,13 @@ public static class UnlimotionAppLaunchHost
         if (string.Equals(currentTaskId, UnlimotionAutomationScenarioData.ReadmeDemoCurrentTaskId, StringComparison.Ordinal))
         {
             PreloadReadmeDemoLastOpened(vm);
+            return;
+        }
+
+        if (UnlimotionAutomationScenarioData.ReadmeDemoLastOpenedTaskIds.Contains(currentTaskId))
+        {
+            PreloadReadmeDemoLastOpened(vm);
+            SelectTaskById(vm, currentTaskId);
             return;
         }
 
@@ -394,16 +403,22 @@ public static class UnlimotionAppLaunchHost
 
         public static UnlimotionAutomationLaunchData Create(
             UnlimotionAutomationScenario scenario,
-            string? language = null)
+            string? language = null,
+            string? currentTaskIdOverride = null)
         {
             var repositoryRoot = FindRepositoryRoot();
             var rootPath = Path.Combine(Path.GetTempPath(), "Unlimotion.AppAutomation", Guid.NewGuid().ToString("N"));
             var tasksPath = Path.Combine(rootPath, "Tasks");
             var configPath = Path.Combine(rootPath, "Settings.json");
-            var currentTaskId = UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario);
-            var currentTaskTitle = UnlimotionAutomationScenarioData.GetCurrentTaskTitle(scenario, language);
+            var currentTaskId = string.IsNullOrWhiteSpace(currentTaskIdOverride)
+                ? UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario)
+                : currentTaskIdOverride;
+            var currentTaskTitle = UnlimotionAutomationScenarioData.GetTaskTitle(scenario, currentTaskId, language);
             var openedTaskIds = scenario == UnlimotionAutomationScenario.ReadmeDemo
                 ? UnlimotionAutomationScenarioData.ReadmeDemoLastOpenedTaskIds
+                    .Where(taskId => !string.Equals(taskId, currentTaskId, StringComparison.Ordinal))
+                    .Append(currentTaskId)
+                    .ToArray()
                 : [];
             var windowTitle = UnlimotionAutomationScenarioData.GetWindowTitle(scenario, language);
             var expandAllTaskTrees = scenario == UnlimotionAutomationScenario.ReadmeDemo;
