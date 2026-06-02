@@ -188,7 +188,8 @@
             <Setter Property="MinHeight" Value="36"/>
         </Style>
         <Style Selector="TextBox.TaskPlanningValueControl">
-            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="MinHeight" Value="44"/>
         </Style>
         <Style Selector="DropDownButton.TaskPlanningQuickAction">
             <Setter Property="MinHeight" Value="32"/>

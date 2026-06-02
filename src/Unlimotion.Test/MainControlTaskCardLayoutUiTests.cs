@@ -315,6 +315,9 @@ public class MainControlTaskCardLayoutUiTests
         var widths = planningControls
             .Select(control => control.Bounds.Width)
             .ToArray();
+        var heights = planningControls
+            .Select(control => control.Bounds.Height)
+            .ToArray();
 
         var beginTop = topEdges[0];
         var durationTop = topEdges[2];
@@ -340,6 +343,16 @@ public class MainControlTaskCardLayoutUiTests
         if (beginActionTop <= bottomEdges[0] || durationActionTop <= bottomEdges[2] || endActionTop <= bottomEdges[4])
         {
             throw new InvalidOperationException("Desktop planning quick actions should sit below their matching value controls.");
+        }
+
+        var beginPickerHeight = heights[0];
+        var durationHeight = heights[2];
+        var endPickerHeight = heights[4];
+        if (Math.Abs(beginPickerHeight - durationHeight) > 1 || Math.Abs(beginPickerHeight - endPickerHeight) > 1)
+        {
+            throw new InvalidOperationException(
+                "Desktop planning value controls should have matching heights: " +
+                $"begin={beginPickerHeight:F1}; duration={durationHeight:F1}; end={endPickerHeight:F1}.");
         }
     }
 
