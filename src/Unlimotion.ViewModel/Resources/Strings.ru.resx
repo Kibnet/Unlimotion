@@ -180,6 +180,7 @@
   <data name="MoveTasksHeader" xml:space="preserve"><value>Переместить задачи</value></data>
   <data name="MoveTasksMessage" xml:space="preserve"><value>Переместить {0} выбранных задач в "{1}"?</value></data>
   <data name="MoveToPath" xml:space="preserve"><value>Переместить в папку</value></data>
+  <data name="MoreActions" xml:space="preserve"><value>Еще</value></data>
   <data name="NewBlockedSibling" xml:space="preserve"><value>➕🔒 Соседняя</value></data>
   <data name="NewInner" xml:space="preserve"><value>➕ Внутренняя</value></data>
   <data name="NewKey" xml:space="preserve"><value>Новый ключ</value></data>
@@ -336,6 +337,8 @@
   <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Применить выбранные поля</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Выберите, как копировать аутлайн задач. Вставляемые аутлайны распознаются автоматически.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Буфер обмена аутлайном задач</value></data>
+  <data name="TaskCardPlanning" xml:space="preserve"><value>Планирование</value></data>
+  <data name="TaskCardRelations" xml:space="preserve"><value>Связи</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 дней</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 минут</value></data>

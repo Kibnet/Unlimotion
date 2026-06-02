@@ -27,6 +27,44 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
+    public async Task Current_task_card_exposes_redesigned_sections_on_launch()
+    {
+        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+
+        var card = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskCard),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Current task card did not become available.")!;
+        var header = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskHeader),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Current task header did not become available.")!;
+        var commandBar = WaitUntil(
+            () => TryResolveDuringWait(() => Page.CurrentTaskCommandBar),
+            static control => control is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Current task command bar did not become available.")!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(card.AutomationId).IsEqualTo("CurrentTaskCard");
+            await Assert.That(header.AutomationId).IsEqualTo("CurrentTaskHeader");
+            await Assert.That(commandBar.AutomationId).IsEqualTo("CurrentTaskCommandBar");
+            await Assert.That(Page.CurrentTaskDescriptionSection.AutomationId)
+                .IsEqualTo("CurrentTaskDescriptionSection");
+            await Assert.That(Page.CurrentTaskPlanningSection.AutomationId)
+                .IsEqualTo("CurrentTaskPlanningSection");
+            await Assert.That(Page.CurrentTaskRepeaterSection.AutomationId)
+                .IsEqualTo("CurrentTaskRepeaterSection");
+            await Assert.That(Page.CurrentTaskRelationsSection.AutomationId)
+                .IsEqualTo("CurrentTaskRelationsSection");
+        }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
     public async Task Major_tabs_can_be_opened_from_main_window()
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
