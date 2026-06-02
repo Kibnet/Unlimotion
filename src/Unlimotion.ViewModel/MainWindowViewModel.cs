@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -747,6 +748,7 @@ namespace Unlimotion.ViewModel
 
             #region Roots
 
+            var wasAllTasksSearchActive = false;
             var emojiRootFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .AutoRefreshOnObservable(filter => this.Search.WhenAnyValue(s => s.SearchText)
@@ -842,7 +844,17 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .SortAndBind(out _currentItems, sortObservable)
-                .Subscribe(/*set => ExpandParentNodesForTask(CurrentTaskItem)*/)
+                .Subscribe(_ =>
+                {
+                    var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
+                    if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
+                    {
+                        RestoreCurrentAllTasksSelection();
+                        RxSchedulers.MainThreadScheduler.Schedule(RestoreCurrentAllTasksSelection);
+                    }
+
+                    wasAllTasksSearchActive = isSearchActive;
+                })
                 .AddToDispose(connectionDisposableList);
 
             CurrentAllTasksItems = _currentItems;
@@ -1435,14 +1447,7 @@ namespace Unlimotion.ViewModel
             {
                 if (AllTasksMode)
                 {
-                    if (CurrentAllTasksItem?.TaskItem != CurrentTaskItem)
-                    {
-                        CurrentAllTasksItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentAllTasksItems);
-                        if (CurrentTaskItem != null)
-                        {
-                            ExpandParentNodesForTask(CurrentTaskItem);
-                        }
-                    }
+                    RestoreCurrentAllTasksSelection();
                 }
                 else if (UnlockedMode)
                 {
@@ -2212,6 +2217,28 @@ namespace Unlimotion.ViewModel
 
             return ReferenceEquals(left, right) ||
                    string.Equals(left.Id, right.Id, StringComparison.Ordinal);
+        }
+
+        private void RestoreCurrentAllTasksSelection()
+        {
+            if (CurrentTaskItem == null)
+            {
+                CurrentAllTasksItem = null;
+                return;
+            }
+
+            var wrapper = FindTaskWrapperViewModel(CurrentTaskItem, CurrentAllTasksItems);
+            if (wrapper == null)
+            {
+                if (IsSameTask(CurrentAllTasksItem?.TaskItem, CurrentTaskItem))
+                {
+                    CurrentAllTasksItem = null;
+                }
+
+                return;
+            }
+
+            ExpandParentNodesForTask(CurrentTaskItem);
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)

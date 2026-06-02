@@ -418,6 +418,133 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItem()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.CurrentSortDefinition = vm.SortDefinitions.First(definition => definition.Id == "title-ascending");
+
+                var repository = vm.taskRepository
+                    ?? throw new InvalidOperationException("Task repository was not initialized.");
+                var suffix = Guid.NewGuid().ToString("N");
+                var searchToken = Guid.NewGuid().ToString("N");
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+                    ?? throw new InvalidOperationException("Search selection parent task was not found.");
+                var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
+                    ?? throw new InvalidOperationException("Search selection child task was not found.");
+
+                for (var index = 0; index < 45; index++)
+                {
+                    var filler = await repository.Add();
+                    filler.Title = $"zzzz search selection filler {index:D2} {suffix}";
+                    await repository.Update(filler);
+                }
+
+                parent.Title = $"zzzz search selection parent {suffix}";
+                parent.IsCompleted = false;
+                parent.ArchiveDateTime = null;
+                selectedTask.Title = $"zzzz search selection target {searchToken}";
+                selectedTask.IsCompleted = false;
+                selectedTask.ArchiveDateTime = null;
+                await repository.Update(parent);
+                await repository.Update(selectedTask);
+
+                await Assert.That(await TestHelpers.WaitUntilAsync(
+                        () => parent.Contains.Contains(selectedTask.Id) &&
+                              selectedTask.Parents.Contains(parent.Id) &&
+                              parent.ContainsTasks.Any(task => task.Id == selectedTask.Id),
+                        TimeSpan.FromSeconds(10)))
+                    .IsTrue();
+
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Width = 900;
+                window.Height = 320;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                await Assert.That(allTasksTree!.Bounds.Height).IsGreaterThan(0);
+
+                vm.CollapseAllNodes(vm.CurrentAllTasksItems);
+                await ApplySearchAsync(vm, searchToken);
+
+                var searchWrapper = WaitForWrapper(
+                    () => vm.FindTaskWrapperViewModel(selectedTask, vm.CurrentAllTasksItems),
+                    SearchExpansionWaitMilliseconds);
+                await Assert.That(searchWrapper).IsNotNull();
+
+                var searchResultControl = FindWrapperControl(allTasksTree, searchWrapper!);
+                await ClickControlAsync(window, searchResultControl);
+                SelectTreeWrapper(allTasksTree, searchWrapper!);
+                vm.CurrentAllTasksItem = searchWrapper;
+                Dispatcher.UIThread.RunJobs();
+
+                var selectedInSearch = WaitFor(() =>
+                    vm.CurrentTaskItem?.Id == selectedTask.Id &&
+                    ReferenceEquals(vm.CurrentAllTasksItem, searchWrapper) &&
+                    ReferenceEquals(allTasksTree.SelectedItem, searchWrapper));
+                await Assert.That(selectedInSearch).IsTrue();
+
+                await ApplySearchAsync(vm, string.Empty);
+
+                TaskWrapperViewModel? restoredParentWrapper = null;
+                TaskWrapperViewModel? restoredSelectedWrapper = null;
+                TreeViewItem? selectedTreeItem = null;
+                var restoredSelectionVisible = WaitFor(() =>
+                {
+                    restoredParentWrapper = vm.FindTaskWrapperViewModel(parent, vm.CurrentAllTasksItems);
+                    restoredSelectedWrapper = vm.FindTaskWrapperViewModel(selectedTask, vm.CurrentAllTasksItems);
+                    selectedTreeItem = restoredSelectedWrapper == null
+                        ? null
+                        : FindWrapperTreeItemOrDefault(allTasksTree, restoredSelectedWrapper);
+
+                    return restoredParentWrapper?.IsExpanded == true &&
+                           restoredSelectedWrapper != null &&
+                           !ReferenceEquals(restoredSelectedWrapper, searchWrapper) &&
+                           ReferenceEquals(vm.CurrentAllTasksItem, restoredSelectedWrapper) &&
+                           ReferenceEquals(allTasksTree.SelectedItem, restoredSelectedWrapper) &&
+                           selectedTreeItem?.IsSelected == true &&
+                           IntersectsVisibleBounds(allTasksTree, selectedTreeItem);
+                }, SearchExpansionWaitMilliseconds);
+
+                if (!restoredSelectionVisible)
+                {
+                    throw new InvalidOperationException(
+                        "Selection was not restored after clearing search. " +
+                        $"ParentExpanded={restoredParentWrapper?.IsExpanded}; " +
+                        $"RestoredWrapper={(restoredSelectedWrapper == null ? "<null>" : restoredSelectedWrapper.TaskItem.Id)}; " +
+                        $"CurrentAllTasksItem={vm.CurrentAllTasksItem?.TaskItem.Id ?? "<null>"}; " +
+                        $"TreeSelectedItem={(allTasksTree.SelectedItem as TaskWrapperViewModel)?.TaskItem.Id ?? "<null>"}; " +
+                        $"TreeItemFound={selectedTreeItem != null}; " +
+                        $"TreeItemSelected={selectedTreeItem?.IsSelected}; " +
+                        $"TreeItemVisible={(selectedTreeItem == null ? null : IntersectsVisibleBounds(allTasksTree, selectedTreeItem))}.");
+                }
+
+                await Assert.That(restoredSelectionVisible).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -2625,6 +2752,28 @@ public class MainControlTreeCommandsUiTests
         return tree.GetVisualDescendants()
             .OfType<TreeViewItem>()
             .First(item => item.DataContext is TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == taskId);
+    }
+
+    private static TreeViewItem? FindWrapperTreeItemOrDefault(TreeView tree, TaskWrapperViewModel wrapper)
+    {
+        return tree.GetVisualDescendants()
+            .OfType<TreeViewItem>()
+            .FirstOrDefault(item => ReferenceEquals(item.DataContext, wrapper));
+    }
+
+    private static bool IntersectsVisibleBounds(Control relativeTo, Control control)
+    {
+        var topLeft = control.TranslatePoint(new Point(0, 0), relativeTo);
+        if (!topLeft.HasValue)
+        {
+            return false;
+        }
+
+        var controlBounds = new Rect(topLeft.Value, control.Bounds.Size);
+        var visibleBounds = new Rect(0, 0, relativeTo.Bounds.Width, relativeTo.Bounds.Height);
+        return controlBounds.Width > 0 &&
+               controlBounds.Height > 0 &&
+               visibleBounds.Intersects(controlBounds);
     }
 
     private static IReadOnlyList<TaskWrapperViewModel> GetSelectedWrappers(TreeView tree)
