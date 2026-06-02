@@ -176,6 +176,7 @@
   <data name="MigrateConfirmMessage" xml:space="preserve"><value>Local tasks will be uploaded to the current server storage. Continue?</value></data>
   <data name="MigrateLocalTasksToServer" xml:space="preserve"><value>Move local tasks to server</value></data>
   <data name="Monday" xml:space="preserve"><value>Monday</value></data>
+  <data name="MondayShort" xml:space="preserve"><value>Mon</value></data>
   <data name="MoveMissingParent" xml:space="preserve"><value>Cannot move: source parent is missing.</value></data>
   <data name="MoveTasksHeader" xml:space="preserve"><value>Move tasks</value></data>
   <data name="MoveTasksMessage" xml:space="preserve"><value>Are you sure you want to move {0} selected tasks into "{1}"?</value></data>
@@ -451,5 +452,11 @@
   <data name="StartGitPush" xml:space="preserve"><value>Starting Git push...</value></data>
   <data name="StashApplied" xml:space="preserve"><value>Stash applied.</value></data>
   <data name="Sunday" xml:space="preserve"><value>Sunday</value></data>
+  <data name="SundayShort" xml:space="preserve"><value>Sun</value></data>
+  <data name="TuesdayShort" xml:space="preserve"><value>Tue</value></data>
+  <data name="WednesdayShort" xml:space="preserve"><value>Wed</value></data>
+  <data name="ThursdayShort" xml:space="preserve"><value>Thu</value></data>
+  <data name="FridayShort" xml:space="preserve"><value>Fri</value></data>
+  <data name="SaturdayShort" xml:space="preserve"><value>Sat</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Unsupported Git connect action: {0}.</value></data>
 </root>

@@ -176,6 +176,7 @@
   <data name="MigrateConfirmMessage" xml:space="preserve"><value>Локальные задачи будут загружены в текущее серверное хранилище. Продолжить?</value></data>
   <data name="MigrateLocalTasksToServer" xml:space="preserve"><value>Перенести локальные задачи на сервер</value></data>
   <data name="Monday" xml:space="preserve"><value>Понедельник</value></data>
+  <data name="MondayShort" xml:space="preserve"><value>Пн</value></data>
   <data name="MoveMissingParent" xml:space="preserve"><value>Нельзя выполнить перемещение: не определён исходный родитель.</value></data>
   <data name="MoveTasksHeader" xml:space="preserve"><value>Переместить задачи</value></data>
   <data name="MoveTasksMessage" xml:space="preserve"><value>Переместить {0} выбранных задач в "{1}"?</value></data>
@@ -451,5 +452,11 @@
   <data name="StartGitPush" xml:space="preserve"><value>Запуск Git push...</value></data>
   <data name="StashApplied" xml:space="preserve"><value>Stash применен.</value></data>
   <data name="Sunday" xml:space="preserve"><value>Воскресенье</value></data>
+  <data name="SundayShort" xml:space="preserve"><value>Вс</value></data>
+  <data name="TuesdayShort" xml:space="preserve"><value>Вт</value></data>
+  <data name="WednesdayShort" xml:space="preserve"><value>Ср</value></data>
+  <data name="ThursdayShort" xml:space="preserve"><value>Чт</value></data>
+  <data name="FridayShort" xml:space="preserve"><value>Пт</value></data>
+  <data name="SaturdayShort" xml:space="preserve"><value>Сб</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Неподдерживаемое действие подключения Git: {0}.</value></data>
 </root>

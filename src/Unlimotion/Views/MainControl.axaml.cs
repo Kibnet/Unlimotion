@@ -51,9 +51,10 @@ namespace Unlimotion.Views
         private const int MaxRelationEditorFocusRetries = 5;
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
-        private const double RegularTaskPlanningGroupWidth = 180d;
-        private const double RegularRepeaterSelectorWidth = 240d;
-        private const double RegularRepeaterPeriodWidth = 120d;
+        private const double RegularTaskPlanningGroupWidth = 166d;
+        private const double RegularRepeaterSelectorWidth = 220d;
+        private const double RegularRepeaterPatternTypeWidth = 160d;
+        private const double RegularRepeaterPeriodWidth = 92d;
         private const double RegularTaskIdMaxWidth = 180d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
@@ -237,7 +238,7 @@ namespace Unlimotion.Views
                          .Where(static panel => panel.Classes.Contains("TaskPlanningGroup")))
             {
                 group.Width = isCompact ? compactCardContentWidth : RegularTaskPlanningGroupWidth;
-                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 10, 8);
+                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 6);
             }
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -245,15 +246,15 @@ namespace Unlimotion.Views
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector")))
             {
                 selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterSelectorWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 10, 8);
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
             }
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
                          .OfType<ComboBox>()
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterPatternTypeSelector")))
             {
-                selector.Width = isCompact ? compactCardContentWidth : double.NaN;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 10, 8);
+                selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternTypeWidth;
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
             }
 
             foreach (var input in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -261,7 +262,7 @@ namespace Unlimotion.Views
                          .Where(static numericUpDown => numericUpDown.Classes.Contains("RepeaterPeriodInput")))
             {
                 input.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterPeriodWidth;
-                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 10, 8);
+                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 8, 6);
             }
 
             foreach (var checkbox in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -269,7 +270,7 @@ namespace Unlimotion.Views
                          .Where(static checkBox => checkBox.Classes.Contains("RepeaterAfterCompleteCheckBox")))
             {
                 checkbox.Width = isCompact ? compactRepeaterSmallWidth : double.NaN;
-                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 10, 8);
+                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
             }
 
             foreach (var idText in TaskDetailsPanelRoot.GetVisualDescendants()

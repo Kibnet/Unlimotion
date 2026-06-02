@@ -5,10 +5,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Unlimotion.Domain;
+using Unlimotion.ViewModel;
 using Unlimotion.Views;
 
 namespace Unlimotion.Test;
@@ -45,6 +48,16 @@ public class MainControlTaskCardLayoutUiTests
         "CurrentTaskRepeaterSelector"
     ];
 
+    private static readonly string[] PlanningControlAutomationIds =
+    [
+        "CurrentTaskPlannedBeginPicker",
+        "CurrentTaskSetBeginButton",
+        "CurrentTaskPlannedDurationTextBox",
+        "CurrentTaskSetDurationButton",
+        "CurrentTaskPlannedEndPicker",
+        "CurrentTaskSetEndButton"
+    ];
+
     [Test]
     public async Task CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls()
     {
@@ -62,7 +75,7 @@ public class MainControlTaskCardLayoutUiTests
                 foreach (var automationId in SectionAutomationIds.Concat(KeyControlAutomationIds))
                 {
                     var control = FindControlByAutomationId<Control>(view, automationId);
-                    await Assert.That(IsVisibleAndArranged(control)).IsTrue();
+                    AssertVisibleAndArranged(control, automationId);
                 }
 
                 var createButton = FindControlByAutomationId<Button>(view, "CurrentTaskCreateButton");
@@ -81,6 +94,9 @@ public class MainControlTaskCardLayoutUiTests
                 AssertHasClass(setDurationButton, "TaskPlanningQuickAction");
                 AssertHasClass(setEndButton, "TaskPlanningQuickAction");
 
+                AssertDesktopPlanningGroupsStayCompactRow(view);
+                AssertDesktopRepeaterControlsStayCompact(view);
+
                 var relations = FindControlByAutomationId<Control>(view, "CurrentTaskRelationsSection");
                 var parentsAddButton = FindControlByAutomationId<Button>(relations, "CurrentTaskParentsRelationAddButton");
                 var parentsTree = FindControlByAutomationId<TreeView>(relations, "CurrentItemParentsTree");
@@ -88,6 +104,39 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(parentsAddButton)).IsTrue();
                 AssertHasClass(parentsAddButton, "RelationAddButton");
                 await Assert.That(parentsTree).IsNotNull();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RepeateTask9Id,
+                    task =>
+                    {
+                        task.Repeater!.Type = RepeaterType.Weekly;
+                        task.Repeater.WorkDays = true;
+                    });
+                window = createdWindow;
+
+                AssertDesktopRepeaterControlsStayCompact(view, requireWeekdayToggles: true);
             }
             finally
             {
@@ -193,13 +242,16 @@ public class MainControlTaskCardLayoutUiTests
     private static async Task<(MainControl View, Window Window)> CreateArrangedMainControlAsync(
         MainWindowViewModelFixture fixture,
         double width,
-        double height)
+        double height,
+        string selectedTaskId = MainWindowViewModelFixture.RootTask2Id,
+        Action<TaskItemViewModel>? configureCurrentTask = null)
     {
         var vm = fixture.MainWindowViewModelTest;
         await vm.Connect();
         vm.AllTasksMode = true;
         vm.DetailsAreOpen = true;
-        TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+        var currentTask = TestHelpers.SetCurrentTask(vm, selectedTaskId);
+        configureCurrentTask?.Invoke(currentTask);
 
         var view = new MainControl { DataContext = vm };
         var window = new Window
@@ -235,6 +287,104 @@ public class MainControlTaskCardLayoutUiTests
             throw new InvalidOperationException(
                 $"{control.GetType().Name}:{AutomationProperties.GetAutomationId(control)} " +
                 $"does not have expected class '{className}'.");
+        }
+    }
+
+    private static void AssertVisibleAndArranged(Control control, string automationId)
+    {
+        if (!IsVisibleAndArranged(control))
+        {
+            throw new InvalidOperationException(
+                $"{control.GetType().Name}:{automationId} is not visible and arranged: " +
+                $"visible={control.IsVisible}; bounds={control.Bounds}.");
+        }
+    }
+
+    private static void AssertDesktopPlanningGroupsStayCompactRow(Control root)
+    {
+        var planningControls = PlanningControlAutomationIds
+            .Select(automationId => FindControlByAutomationId<Control>(root, automationId))
+            .ToArray();
+
+        var topEdges = planningControls
+            .Select(control => GetTopEdge(root, control))
+            .ToArray();
+        var bottomEdges = planningControls
+            .Select(control => GetBottomEdge(root, control))
+            .ToArray();
+        var widths = planningControls
+            .Select(control => control.Bounds.Width)
+            .ToArray();
+
+        var beginTop = topEdges[0];
+        var durationTop = topEdges[2];
+        var endTop = topEdges[4];
+        if (Math.Abs(beginTop - durationTop) > 2 || Math.Abs(beginTop - endTop) > 2)
+        {
+            throw new InvalidOperationException(
+                "Desktop planning fields should stay in one compact row: " +
+                $"beginTop={beginTop:F1}; durationTop={durationTop:F1}; endTop={endTop:F1}.");
+        }
+
+        var maxPlanningControlWidth = widths.Max();
+        if (maxPlanningControlWidth > 260)
+        {
+            throw new InvalidOperationException(
+                "Desktop planning controls are too wide for a compact three-column row: " +
+                string.Join("; ", PlanningControlAutomationIds.Zip(widths, (id, width) => $"{id}={width:F1}")));
+        }
+
+        var beginActionTop = topEdges[1];
+        var durationActionTop = topEdges[3];
+        var endActionTop = topEdges[5];
+        if (beginActionTop <= bottomEdges[0] || durationActionTop <= bottomEdges[2] || endActionTop <= bottomEdges[4])
+        {
+            throw new InvalidOperationException("Desktop planning quick actions should sit below their matching value controls.");
+        }
+    }
+
+    private static void AssertDesktopRepeaterControlsStayCompact(Control root, bool requireWeekdayToggles = false)
+    {
+        var repeaterSelector = FindControlByAutomationId<ComboBox>(root, "CurrentTaskRepeaterSelector");
+        if (repeaterSelector.Bounds.Width > 300)
+        {
+            throw new InvalidOperationException(
+                $"Desktop repeater selector is too wide: width={repeaterSelector.Bounds.Width:F1}.");
+        }
+
+        var weekdayToggles = root.GetVisualDescendants()
+            .OfType<ToggleButton>()
+            .Where(static toggle => toggle.Classes.Contains("WeekdayToggle"))
+            .Where(IsVisibleAndArranged)
+            .ToArray();
+
+        if (requireWeekdayToggles && weekdayToggles.Length != 7)
+        {
+            throw new InvalidOperationException(
+                $"Expected seven visible desktop weekday toggles, found {weekdayToggles.Length}.");
+        }
+
+        if (requireWeekdayToggles)
+        {
+            var firstTop = GetTopEdge(root, weekdayToggles[0]);
+            var wrappedToggle = weekdayToggles
+                .Select(toggle => new { Toggle = toggle, Top = GetTopEdge(root, toggle) })
+                .FirstOrDefault(item => Math.Abs(item.Top - firstTop) > 2);
+            if (wrappedToggle is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Desktop weekday toggles should stay in one compact row: " +
+                    $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}.");
+            }
+        }
+
+        foreach (var toggle in weekdayToggles)
+        {
+            if (toggle.Bounds.Width > 64 || toggle.Bounds.Height > 36)
+            {
+                throw new InvalidOperationException(
+                    $"Desktop weekday toggle is too large: content={toggle.Content}; bounds={toggle.Bounds}.");
+            }
         }
     }
 
@@ -341,7 +491,7 @@ public class MainControlTaskCardLayoutUiTests
 
     private static void RunLayoutJobs()
     {
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < 20; i++)
         {
             Dispatcher.UIThread.RunJobs();
         }
