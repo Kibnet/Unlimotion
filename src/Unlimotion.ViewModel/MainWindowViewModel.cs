@@ -791,6 +791,32 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
+            var roadmapRootFilter = _emojiFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filter =>
+                {
+                    bool Predicate(TaskItemViewModel task)
+                    {
+                        if (filter.All(e => !e.ShowTasks))
+                        {
+                            return task.Parents.Count == 0;
+                        }
+
+                        foreach (var item in filter.Where(e => e.ShowTasks))
+                        {
+                            if (task.Id == item.Source?.Id)
+                            {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    }
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
             taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
@@ -815,9 +841,7 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .Sort(sortObservable)
-                .TreatMovesAsRemoveAdd()
-                .Bind(out _currentItems)
+                .SortAndBind(out _currentItems, sortObservable)
                 .Subscribe(/*set => ExpandParentNodesForTask(CurrentTaskItem)*/)
                 .AddToDispose(connectionDisposableList);
 
@@ -868,8 +892,7 @@ namespace Unlimotion.ViewModel
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
                     })
-                    .Sort(sortObservableForUnlocked)
-                    .Bind(out _unlockedItems)
+                    .SortAndBind(out _unlockedItems, sortObservableForUnlocked)
                     .Subscribe()
                     .AddToDispose(connectionDisposableList);
 
@@ -1147,7 +1170,7 @@ namespace Unlimotion.ViewModel
                         m => m.IsCompleted,
                         m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
                     .Filter(taskFilter)
-                    .Filter(emojiRootFilter)
+                    .Filter(roadmapRootFilter)
                     .Filter(emojiExcludeFilter)
                     .Transform(item =>
                     {

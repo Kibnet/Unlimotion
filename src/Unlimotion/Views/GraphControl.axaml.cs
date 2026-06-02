@@ -298,9 +298,9 @@ namespace Unlimotion.Views
                 .Subscribe(_ => ScheduleUpdateGraph())
                 .AddToDispose(disposableList);
 
-            dc.WhenAnyValue(m => m.Search.SearchText)
+            dc.WhenAnyValue(m => m.Search.SearchText, m => m.Search.IsFuzzySearch)
                 .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
-                .Select(t => (t ?? "").Trim())
+                .Select(search => ((search.Item1 ?? "").Trim(), search.Item2))
                 .DistinctUntilChanged()
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => UpdateHighlights())
