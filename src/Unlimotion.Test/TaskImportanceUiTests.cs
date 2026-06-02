@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Automation;
@@ -159,7 +160,13 @@ public class TaskImportanceUiTests
                 var emojiRun = runs.SingleOrDefault(run => run.Text == "📚");
                 await Assert.That(emojiRun).IsNotNull();
                 await Assert.That(emojiRun!.FontWeight).IsEqualTo(FontWeight.Normal);
-                await Assert.That(emojiRun.FontFamily.ToString()).Contains("Emoji");
+                var emojiFontName = emojiRun.FontFamily.ToString();
+                var expectedFamilyPart = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? "Segoe UI Emoji"
+                    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                        ? "Apple Color Emoji"
+                        : "Noto Color Emoji";
+                await Assert.That(emojiFontName).Contains(expectedFamilyPart);
             }
             finally
             {

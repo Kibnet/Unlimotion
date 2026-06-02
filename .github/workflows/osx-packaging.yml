@@ -13,11 +13,18 @@ env:
   INSTALLER_PUBLISHER: Kibnet
   VELOPACK_VERSION: 0.0.1298
   OSX_APP_PATH: ${{ github.workspace }}/Unlimotion.app
-  OSX_VELOPACK_DIR: ${{ github.workspace }}/artifacts/velopack/osx
 
 jobs:
   osx-build:
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: osx-x64
+            channel: osx
+          - runtime: osx-arm64
+            channel: osx-arm64
 
     steps:
     - name: Checkout
@@ -49,37 +56,61 @@ jobs:
 
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
-    - name: Publish
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ steps.release_version.outputs.version }}
-
-    - name: Generate App
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{ steps.release_version.outputs.version }}
-
     - name: Install Velopack CLI
       run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}" --ignore-failed-sources
+
+    - name: Publish
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-publish.sh ${{ steps.release_version.outputs.version }} ${{ matrix.runtime }}
+
+    - name: Generate App
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-app.sh ${{ steps.release_version.outputs.version }} ${{ matrix.runtime }}
 
     - name: Pack Velopack macOS Release
       shell: bash
       run: |
-        mkdir -p "${{ env.OSX_VELOPACK_DIR }}"
+        set -euo pipefail
+
+        OSX_VELOPACK_DIR="${{ github.workspace }}/artifacts/velopack/${{ matrix.channel }}"
+        mkdir -p "$OSX_VELOPACK_DIR"
 
         "$HOME/.dotnet/tools/vpk" pack \
           --packId Unlimotion \
           --packVersion "${{ steps.release_version.outputs.version }}" \
-          --packDir "${{ env.OSX_APP_PATH }}" \
-          --outputDir "${{ env.OSX_VELOPACK_DIR }}" \
-          --channel osx \
-          --runtime osx-x64 \
+          --packDir "$OSX_APP_PATH" \
+          --outputDir "$OSX_VELOPACK_DIR" \
+          --channel "${{ matrix.channel }}" \
+          --runtime "${{ matrix.runtime }}" \
           --mainExe Unlimotion.Desktop.ForMacBuild \
           --packTitle Unlimotion \
-          --packAuthors "${{ env.INSTALLER_PUBLISHER }}"
+          --packAuthors "$INSTALLER_PUBLISHER"
+
+    - name: Validate Velopack macOS Feed
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        OSX_VELOPACK_DIR="${{ github.workspace }}/artifacts/velopack/${{ matrix.channel }}"
+
+        for feed in "$OSX_VELOPACK_DIR/releases.${{ matrix.channel }}.json" "$OSX_VELOPACK_DIR/assets.${{ matrix.channel }}.json"; do
+          if [ ! -f "$feed" ]; then
+            echo "Velopack feed was not created: $feed" >&2
+            exit 1
+          fi
+
+          if ! grep -q "${{ matrix.runtime }}" "$feed"; then
+            echo "Velopack feed '$feed' does not include runtime '${{ matrix.runtime }}'." >&2
+            exit 1
+          fi
+        done
 
     - name: Upload Velopack macOS Release
       shell: bash
       run: |
+        OSX_VELOPACK_DIR="${{ github.workspace }}/artifacts/velopack/${{ matrix.channel }}"
+
         "$HOME/.dotnet/tools/vpk" upload github \
-          --outputDir "${{ env.OSX_VELOPACK_DIR }}" \
-          --channel osx \
+          --outputDir "$OSX_VELOPACK_DIR" \
+          --channel "${{ matrix.channel }}" \
           --repoUrl "https://github.com/${{ github.repository }}" \
           --token "${{ secrets.GITHUB_TOKEN }}" \
           --tag "${{ github.ref_name }}" \
@@ -87,7 +118,7 @@ jobs:
           --publish
 
     - name: Generate Pkg
-      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{ steps.release_version.outputs.version }}
+      run: sh ./src/Unlimotion.Desktop/ci/osx/generate-osx-pkg.sh ${{ steps.release_version.outputs.version }} ${{ matrix.runtime }}
 
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1
