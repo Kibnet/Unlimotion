@@ -50,9 +50,17 @@ namespace Unlimotion.Views
         private const int MaxTitleFocusRetries = 5;
         private const int MaxRelationEditorFocusRetries = 5;
         private const double NarrowFilterToolbarMaxWidth = 520d;
+        private const double CompactTaskDetailsMaxWidth = 430d;
+        private const double RegularTaskPlanningGroupWidth = 166d;
+        private const double RegularRepeaterSelectorWidth = 220d;
+        private const double RegularRepeaterPatternTypeWidth = 160d;
+        private const double RegularRepeaterPeriodWidth = 92d;
+        private const double RegularTaskIdMaxWidth = 180d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
+        private const string CompactTaskDetailsClass = "TaskDetailsCompact";
         private IDisposable? _titleFocusSubscription;
         private IDisposable? _relationEditorFocusSubscription;
+        private IDisposable? _taskDetailsBoundsSubscription;
         private MainWindowViewModel? _treeCommandViewModel;
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
@@ -64,6 +72,7 @@ namespace Unlimotion.Views
         private DateTimeOffset? _lastInlineTitleClickAt;
         private bool _treeDragInProgress;
         private bool _filterToolbarLayoutUpdateQueued;
+        private bool _taskDetailsLayoutUpdateQueued;
         private int _selectionRestoreVersion;
         private readonly HashSet<Grid> _observedFilterToolbars = [];
         private readonly List<IDisposable> _filterToolbarBoundsSubscriptions = [];
@@ -130,6 +139,7 @@ namespace Unlimotion.Views
             if (change.Property == BoundsProperty)
             {
                 QueueFilterToolbarLayoutUpdate();
+                QueueTaskDetailsLayoutUpdate();
             }
         }
 
@@ -148,6 +158,8 @@ namespace Unlimotion.Views
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
             QueueFilterToolbarLayoutUpdate();
+            ObserveTaskDetailsBounds();
+            QueueTaskDetailsLayoutUpdate();
         }
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -160,6 +172,127 @@ namespace Unlimotion.Views
             _filterToolbarBoundsSubscriptions.Clear();
             _observedFilterToolbars.Clear();
             _filterToolbarLayoutUpdateQueued = false;
+            _taskDetailsBoundsSubscription?.Dispose();
+            _taskDetailsBoundsSubscription = null;
+            _taskDetailsLayoutUpdateQueued = false;
+        }
+
+        private void ObserveTaskDetailsBounds()
+        {
+            _taskDetailsBoundsSubscription ??= CurrentTaskDetailsScrollViewer.GetObservable(BoundsProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueTaskDetailsLayoutUpdate());
+        }
+
+        private void QueueTaskDetailsLayoutUpdate()
+        {
+            if (_taskDetailsLayoutUpdateQueued)
+            {
+                return;
+            }
+
+            _taskDetailsLayoutUpdateQueued = true;
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    _taskDetailsLayoutUpdateQueued = false;
+                    UpdateTaskDetailsLayout();
+                },
+                DispatcherPriority.Loaded);
+        }
+
+        private void UpdateTaskDetailsLayout()
+        {
+            var detailsWidth = CurrentTaskDetailsScrollViewer.Bounds.Width > 0
+                ? CurrentTaskDetailsScrollViewer.Bounds.Width
+                : Bounds.Width;
+
+            if (detailsWidth <= 0)
+            {
+                return;
+            }
+
+            var isCompact = detailsWidth <= CompactTaskDetailsMaxWidth;
+            if (TaskDetailsPanelRoot.Classes.Contains(CompactTaskDetailsClass) != isCompact)
+            {
+                if (isCompact)
+                {
+                    TaskDetailsPanelRoot.Classes.Add(CompactTaskDetailsClass);
+                }
+                else
+                {
+                    TaskDetailsPanelRoot.Classes.Remove(CompactTaskDetailsClass);
+                }
+            }
+
+            ApplyTaskDetailsMeasuredWidths(detailsWidth, isCompact);
+        }
+
+        private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)
+        {
+            var compactCardContentWidth = Math.Max(180d, detailsWidth - 36d);
+            var compactRepeaterSmallWidth = Math.Max(120d, (compactCardContentWidth - 10d) / 2d);
+
+            foreach (var group in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<StackPanel>()
+                         .Where(static panel => panel.Classes.Contains("TaskPlanningGroup")))
+            {
+                group.Width = isCompact ? compactCardContentWidth : RegularTaskPlanningGroupWidth;
+                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 6);
+            }
+
+            foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<ComboBox>()
+                         .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector")))
+            {
+                selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterSelectorWidth;
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+            }
+
+            foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<ComboBox>()
+                         .Where(static comboBox => comboBox.Classes.Contains("RepeaterPatternTypeSelector")))
+            {
+                selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternTypeWidth;
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+            }
+
+            foreach (var input in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<NumericUpDown>()
+                         .Where(static numericUpDown => numericUpDown.Classes.Contains("RepeaterPeriodInput")))
+            {
+                input.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterPeriodWidth;
+                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 8, 6);
+            }
+
+            foreach (var checkbox in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<CheckBox>()
+                         .Where(static checkBox => checkBox.Classes.Contains("RepeaterAfterCompleteCheckBox")))
+            {
+                checkbox.Width = isCompact ? compactRepeaterSmallWidth : double.NaN;
+                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+            }
+
+            foreach (var idText in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<TextBlock>()
+                         .Where(static textBlock => textBlock.Classes.Contains("TaskHeaderIdMeta")))
+            {
+                idText.MaxWidth = isCompact ? compactCardContentWidth : RegularTaskIdMaxWidth;
+            }
+
+            foreach (var suggestions in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<ListBox>()
+                         .Where(static listBox => listBox.Classes.Contains("RelationEditorSuggestions")))
+            {
+                suggestions.MaxHeight = isCompact ? 180d : 240d;
+            }
+
+            foreach (var tree in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<TreeView>()
+                         .Where(static treeView => treeView.Classes.Contains("RelationTaskTree")))
+            {
+                tree.MaxWidth = isCompact ? compactCardContentWidth : double.PositiveInfinity;
+            }
         }
 
         private void MainTabs_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)

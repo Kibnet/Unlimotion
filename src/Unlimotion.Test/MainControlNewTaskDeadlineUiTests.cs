@@ -366,6 +366,21 @@ public class MainControlNewTaskDeadlineUiTests
 
     private static async Task ClickControlAsync(Window window, Control control)
     {
+        if (control is Button { Command: { } command } button)
+        {
+            if (!command.CanExecute(button.CommandParameter))
+            {
+                throw new InvalidOperationException($"Button command for {button.GetType().Name} cannot execute.");
+            }
+
+            command.Execute(button.CommandParameter);
+            RunLayoutJobs();
+            await Task.CompletedTask;
+            return;
+        }
+
+        RunLayoutJobs();
+
         var point = control.TranslatePoint(
             new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
             window);
@@ -377,7 +392,7 @@ public class MainControlNewTaskDeadlineUiTests
 
         window.MouseDown(point.Value, MouseButton.Left);
         window.MouseUp(point.Value, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
+        RunLayoutJobs();
         await Task.CompletedTask;
     }
 
@@ -394,5 +409,13 @@ public class MainControlNewTaskDeadlineUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
+    private static void RunLayoutJobs()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 }

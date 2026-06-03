@@ -51,12 +51,38 @@ public static class UnlimotionAutomationScenarioData
 
     public static string GetCurrentTaskTitle(UnlimotionAutomationScenario scenario, string? language)
     {
+        return GetTaskTitle(scenario, GetCurrentTaskId(scenario), language);
+    }
+
+    public static string GetTaskTitle(UnlimotionAutomationScenario scenario, string taskId, string? language)
+    {
         return scenario switch
         {
-            UnlimotionAutomationScenario.ReadmeDemo => IsRussian(language)
+            UnlimotionAutomationScenario.ReadmeDemo => GetReadmeDemoTaskTitle(taskId, language),
+            _ => SmokeCurrentTaskTitle
+        };
+    }
+
+    private static string GetReadmeDemoTaskTitle(string taskId, string? language)
+    {
+        var russian = IsRussian(language);
+        return taskId switch
+        {
+            "launch-pilot" => russian
+                ? "🚀 Запустить пилот учебного пространства"
+                : "🚀 Launch the learning space pilot",
+            "capture-readme-tour" => russian
+                ? "Записать GIF-тур по вкладкам README"
+                : "Capture the README tab tour GIF",
+            "publish-landing" => russian
+                ? "Опубликовать лендинг запуска"
+                : "Publish the launch landing page",
+            ReadmeDemoCurrentTaskId => russian
                 ? ReadmeDemoCurrentTaskTitleRu
                 : ReadmeDemoCurrentTaskTitle,
-            _ => SmokeCurrentTaskTitle
+            _ => russian
+                ? ReadmeDemoCurrentTaskTitleRu
+                : ReadmeDemoCurrentTaskTitle
         };
     }
 

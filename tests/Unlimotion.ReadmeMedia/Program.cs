@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Diagnostics;
 using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -56,6 +57,25 @@ internal static class Program
         new("ru", "Russian", "ru")
     ];
 
+    private static readonly IReadOnlyList<TaskCardUxReviewCase> TaskCardUxReviewCases =
+    [
+        new(
+            "root-description",
+            "launch-pilot",
+            "Root task with description",
+            "CurrentTaskDescriptionTextBox"),
+        new(
+            "repeater-planning",
+            "capture-readme-tour",
+            "Planning and repeater task",
+            "CurrentTaskRepeaterSelector"),
+        new(
+            "blocked-relation",
+            "publish-landing",
+            "Blocked relation task",
+            "CurrentTaskBlockedRelationAddButton")
+    ];
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -64,6 +84,20 @@ internal static class Program
         var options = CaptureOptions.Parse(args);
         var repoRoot = FindRepositoryRoot();
         var outputRoot = options.ResolveOutputRoot(repoRoot);
+
+        if (!string.IsNullOrWhiteSpace(options.UxReview))
+        {
+            if (!string.Equals(options.UxReview, "task-card", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"Unsupported UX review target '{options.UxReview}'. Supported value: task-card.");
+            }
+
+            Directory.CreateDirectory(outputRoot);
+            CaptureTaskCardUxReview(repoRoot, outputRoot, options);
+            Console.WriteLine(outputRoot);
+            return 0;
+        }
+
         DeleteStaleGeneratedFiles(outputRoot);
         Directory.CreateDirectory(outputRoot);
 
@@ -150,6 +184,336 @@ internal static class Program
             {
                 WriteIndented = true
             }));
+    }
+
+    private static void CaptureTaskCardUxReview(
+        string repositoryRoot,
+        string outputRoot,
+        CaptureOptions options)
+    {
+        var languages = options.ResolveLanguages();
+        if (languages.Count != 1)
+        {
+            throw new ArgumentException("--ux-review task-card expects exactly one --language value.");
+        }
+
+        var language = languages[0];
+        var report = new TaskCardUxReviewReport
+        {
+            GeneratedAt = DateTimeOffset.UtcNow,
+            Scenario = UnlimotionAutomationScenario.ReadmeDemo.ToString(),
+            Language = language.LanguageMode,
+            Branch = TryRunGit(repositoryRoot, "rev-parse", "--abbrev-ref", "HEAD"),
+            CommitSha = TryRunGit(repositoryRoot, "rev-parse", "HEAD"),
+            OutputRoot = outputRoot,
+            CaptureCommand = Environment.CommandLine,
+            DesktopViewport = $"{DesktopCaptureWindowWidth}x{DesktopCaptureWindowHeight}",
+            PhoneViewport = "390x844"
+        };
+
+        Directory.CreateDirectory(Path.Combine(outputRoot, "desktop"));
+        Directory.CreateDirectory(Path.Combine(outputRoot, "phone"));
+
+        foreach (var reviewCase in TaskCardUxReviewCases)
+        {
+            CaptureTaskCardUxDesktopCase(outputRoot, report, language.LanguageMode, reviewCase, options.NoBuildBeforeLaunch);
+            CaptureTaskCardUxPhoneCase(outputRoot, report, language.LanguageMode, reviewCase, options.NoBuildBeforeLaunch);
+        }
+
+        CaptureTaskCardUxRelationEditorCase(outputRoot, report, language.LanguageMode, isPhone: false, options.NoBuildBeforeLaunch);
+        CaptureTaskCardUxRelationEditorCase(outputRoot, report, language.LanguageMode, isPhone: true, options.NoBuildBeforeLaunch);
+
+        WriteReport(Path.Combine(outputRoot, "report.json"), report);
+    }
+
+    private static void CaptureTaskCardUxDesktopCase(
+        string outputRoot,
+        TaskCardUxReviewReport report,
+        string languageMode,
+        TaskCardUxReviewCase reviewCase,
+        bool noBuildBeforeLaunch)
+    {
+        using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        WaitForTaskCardReviewTask(page, reviewCase, languageMode);
+
+        ResizeDesktopWindow(session.MainWindow, DesktopCaptureWindowWidth, DesktopCaptureWindowHeight);
+        session.MainWindow.Focus();
+        Pause(800);
+
+        SaveTaskCardUxReviewCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "desktop", $"{reviewCase.Key}.png"),
+            report,
+            reviewCase,
+            viewport: "desktop",
+            assetKey: $"desktop/{reviewCase.Key}");
+    }
+
+    private static void CaptureTaskCardUxPhoneCase(
+        string outputRoot,
+        TaskCardUxReviewReport report,
+        string languageMode,
+        TaskCardUxReviewCase reviewCase,
+        bool noBuildBeforeLaunch)
+    {
+        using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        WaitForTaskCardReviewTask(page, reviewCase, languageMode);
+
+        ResizeWindowExact(session.MainWindow, 390, 844);
+        session.MainWindow.Focus();
+        Pause(800);
+
+        SaveTaskCardUxReviewCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "phone", $"{reviewCase.Key}-top.png"),
+            report,
+            reviewCase,
+            viewport: "phone-top",
+            assetKey: $"phone/{reviewCase.Key}-top");
+
+        if (!TryFocusAutomationElement(
+                session.MainWindow,
+                session.ConditionFactory,
+                reviewCase.CardFocusAutomationId,
+                report.Warnings))
+        {
+            report.Warnings.Add(
+                $"Phone card capture for '{reviewCase.Key}' reused current viewport because " +
+                $"'{reviewCase.CardFocusAutomationId}' could not be focused.");
+        }
+
+        Pause(700);
+        SaveTaskCardUxReviewCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "phone", $"{reviewCase.Key}-card.png"),
+            report,
+            reviewCase,
+            viewport: "phone-card",
+            assetKey: $"phone/{reviewCase.Key}-card");
+    }
+
+    private static void CaptureTaskCardUxRelationEditorCase(
+        string outputRoot,
+        TaskCardUxReviewReport report,
+        string languageMode,
+        bool isPhone,
+        bool noBuildBeforeLaunch)
+    {
+        var reviewCase = new TaskCardUxReviewCase(
+            "blocked-relation-editor-open",
+            "publish-landing",
+            "Blocked relation editor open",
+            "CurrentTaskBlockedRelationAddInput");
+
+        using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        WaitForTaskCardReviewTask(page, reviewCase, languageMode);
+
+        if (isPhone)
+        {
+            ResizeWindowExact(session.MainWindow, 390, 844);
+        }
+        else
+        {
+            ResizeDesktopWindow(session.MainWindow, DesktopCaptureWindowWidth, DesktopCaptureWindowHeight);
+        }
+
+        session.MainWindow.Focus();
+        Pause(800);
+        page.ClickButton(static window => window.CurrentTaskBlockedRelationAddButton);
+        WaitFor(
+            () =>
+            {
+                try
+                {
+                    return string.Equals(
+                        page.CurrentTaskBlockedRelationAddInput.AutomationId,
+                        "CurrentTaskBlockedRelationAddInput",
+                        StringComparison.Ordinal);
+                }
+                catch
+                {
+                    return false;
+                }
+            },
+            TimeSpan.FromSeconds(10),
+            "blocked relation editor input");
+
+        TryFocusAutomationElement(
+            session.MainWindow,
+            session.ConditionFactory,
+            "CurrentTaskBlockedRelationAddConfirmButton",
+            report.Warnings);
+
+        Pause(700);
+        var folder = isPhone ? "phone" : "desktop";
+        SaveTaskCardUxReviewCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, folder, "blocked-relation-editor-open.png"),
+            report,
+            reviewCase,
+            viewport: isPhone ? "phone-editor" : "desktop-editor",
+            assetKey: $"{folder}/blocked-relation-editor-open");
+    }
+
+    private static FlaUiDesktopAppSession LaunchTaskCardUxReviewSession(
+        string languageMode,
+        string currentTaskId,
+        bool noBuildBeforeLaunch)
+    {
+        var launchOptions = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+            scenario: UnlimotionAutomationScenario.ReadmeDemo,
+            language: languageMode,
+            currentTaskId: currentTaskId,
+            buildBeforeLaunch: !noBuildBeforeLaunch,
+            buildOncePerProcess: true);
+
+        return FlaUiDesktopAppSession.Launch(launchOptions);
+    }
+
+    private static void WaitForTaskCardReviewTask(
+        MainWindowPage page,
+        TaskCardUxReviewCase reviewCase,
+        string languageMode)
+    {
+        var expectedTitle = UnlimotionAutomationScenarioData.GetTaskTitle(
+            UnlimotionAutomationScenario.ReadmeDemo,
+            reviewCase.TaskId,
+            languageMode);
+
+        WaitFor(
+            () => string.Equals(page.CurrentTaskTitleTextBox.Text, expectedTitle, StringComparison.Ordinal),
+            TimeSpan.FromSeconds(20),
+            $"task-card UX review task '{expectedTitle}'");
+    }
+
+    private static bool TryFocusAutomationElement(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string automationId,
+        List<string> warnings)
+    {
+        var element = window.FindFirstDescendant(conditionFactory.ByAutomationId(automationId));
+        if (element is null)
+        {
+            warnings.Add($"Automation element '{automationId}' was not found for UX review focus.");
+            return false;
+        }
+
+        try
+        {
+            if (element.Patterns.ScrollItem.IsSupported)
+            {
+                element.Patterns.ScrollItem.Pattern.ScrollIntoView();
+            }
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"Automation element '{automationId}' ScrollIntoView failed: {ex.Message}");
+        }
+
+        try
+        {
+            element.Focus();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"Automation element '{automationId}' focus failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static void SaveTaskCardUxReviewCapture(
+        FlaUiWindow window,
+        string outputPath,
+        TaskCardUxReviewReport report,
+        TaskCardUxReviewCase reviewCase,
+        string viewport,
+        string assetKey)
+    {
+        using var bitmap = CaptureDesktopWindowBitmap(window);
+        VerifyNonBlankBitmap(bitmap, assetKey);
+        bitmap.Save(outputPath, ImageFormat.Png);
+
+        var exactWindowTitle = window.Title;
+        if (string.IsNullOrWhiteSpace(report.ExactWindowTitle))
+        {
+            report.ExactWindowTitle = exactWindowTitle;
+        }
+
+        report.Assets.Add(new TaskCardUxReviewAsset
+        {
+            Key = assetKey,
+            DisplayName = reviewCase.DisplayName,
+            TaskId = reviewCase.TaskId,
+            Viewport = viewport,
+            OutputPath = outputPath,
+            WindowTitle = exactWindowTitle,
+            Width = bitmap.Width,
+            Height = bitmap.Height
+        });
+    }
+
+    private static void VerifyNonBlankBitmap(Bitmap bitmap, string assetKey)
+    {
+        var minBrightness = 255;
+        var maxBrightness = 0;
+        var stepX = Math.Max(1, bitmap.Width / 24);
+        var stepY = Math.Max(1, bitmap.Height / 24);
+
+        for (var y = 0; y < bitmap.Height; y += stepY)
+        {
+            for (var x = 0; x < bitmap.Width; x += stepX)
+            {
+                var color = bitmap.GetPixel(x, y);
+                var brightness = (color.R + color.G + color.B) / 3;
+                minBrightness = Math.Min(minBrightness, brightness);
+                maxBrightness = Math.Max(maxBrightness, brightness);
+            }
+        }
+
+        if (maxBrightness - minBrightness < 4)
+        {
+            throw new InvalidOperationException($"Captured UX review image '{assetKey}' appears blank.");
+        }
+    }
+
+    private static string TryRunGit(string repositoryRoot, params string[] arguments)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = repositoryRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using var process = Process.Start(startInfo);
+
+            if (process is null)
+            {
+                return string.Empty;
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(5000);
+            return process.ExitCode == 0 ? output : string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static List<GifFrame> CaptureDesktopMedia(
@@ -894,6 +1258,46 @@ internal static class Program
         }
     }
 
+    private static void ResizeWindowExact(FlaUiWindow window, int width, int height)
+    {
+        var handle = new IntPtr(window.Properties.NativeWindowHandle.ValueOrDefault);
+        TryResize(window, width, height);
+        Pause(250);
+
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var placement = GetPreferredMonitorPlacement(handle);
+        var scale = placement.Scale;
+        var physicalWidth = Math.Max(1, (int)Math.Round(width * scale));
+        var physicalHeight = Math.Max(1, (int)Math.Round(height * scale));
+        var workArea = placement.WorkArea;
+        var appliedLeft = workArea.Left + Math.Max(0, (workArea.Width - physicalWidth) / 2);
+        var appliedTop = workArea.Top + Math.Max(0, (workArea.Height - physicalHeight) / 2);
+
+        try
+        {
+            if (NativeMethods.SetWindowPos(
+                    handle,
+                    IntPtr.Zero,
+                    appliedLeft,
+                    appliedTop,
+                    physicalWidth,
+                    physicalHeight,
+                    NativeMethods.SwpNoOwnerZOrder
+                    | NativeMethods.SwpShowWindow))
+            {
+                NativeMethods.SetForegroundWindow(handle);
+                Pause(300);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private static MonitorPlacement GetPreferredMonitorPlacement(IntPtr handle)
     {
         var placements = EnumerateMonitorPlacements();
@@ -1034,6 +1438,12 @@ internal static class Program
         string DisplayName,
         int DelayAfterSelectMs);
 
+    private sealed record TaskCardUxReviewCase(
+        string Key,
+        string TaskId,
+        string DisplayName,
+        string CardFocusAutomationId);
+
     private sealed record ReadmeCaptureLanguage(
         string LanguageMode,
         string DisplayName,
@@ -1053,6 +1463,7 @@ internal static class Program
     private sealed record CaptureOptions(
         bool CopyToMedia = false,
         bool NoBuildBeforeLaunch = false,
+        string? UxReview = null,
         string? OutputRoot = null,
         IReadOnlyList<string>? Languages = null)
     {
@@ -1070,6 +1481,14 @@ internal static class Program
                         break;
                     case "--no-build-before-launch":
                         options = options with { NoBuildBeforeLaunch = true };
+                        break;
+                    case "--ux-review":
+                        if (index + 1 >= args.Length)
+                        {
+                            throw new ArgumentException("--ux-review requires a value.");
+                        }
+
+                        options = options with { UxReview = args[++index] };
                         break;
                     case "--language":
                     case "--languages":
@@ -1120,9 +1539,21 @@ internal static class Program
 
         public string ResolveOutputRoot(string repositoryRoot)
         {
-            return string.IsNullOrWhiteSpace(OutputRoot)
-                ? Path.Combine(repositoryRoot, "artifacts", "readme-media", DateTime.Now.ToString("yyyyMMdd-HHmmss"))
-                : Path.GetFullPath(OutputRoot);
+            if (!string.IsNullOrWhiteSpace(OutputRoot))
+            {
+                return Path.GetFullPath(OutputRoot);
+            }
+
+            if (string.Equals(UxReview, "task-card", StringComparison.OrdinalIgnoreCase))
+            {
+                return Path.Combine(
+                    repositoryRoot,
+                    "artifacts",
+                    "ux-review",
+                    $"{DateTime.Now:yyyyMMdd-HHmm}-task-card");
+            }
+
+            return Path.Combine(repositoryRoot, "artifacts", "readme-media", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         }
 
         private static IReadOnlyList<string> ParseLanguageList(string value)
@@ -1166,6 +1597,52 @@ internal static class Program
         public string MediaRoot { get; init; } = string.Empty;
 
         public List<CaptureReport> Reports { get; init; } = [];
+    }
+
+    private sealed class TaskCardUxReviewReport
+    {
+        public DateTimeOffset GeneratedAt { get; init; }
+
+        public string Scenario { get; init; } = string.Empty;
+
+        public string Language { get; init; } = string.Empty;
+
+        public string Branch { get; init; } = string.Empty;
+
+        public string CommitSha { get; init; } = string.Empty;
+
+        public string OutputRoot { get; init; } = string.Empty;
+
+        public string CaptureCommand { get; init; } = string.Empty;
+
+        public string ExactWindowTitle { get; set; } = string.Empty;
+
+        public string DesktopViewport { get; init; } = string.Empty;
+
+        public string PhoneViewport { get; init; } = string.Empty;
+
+        public List<TaskCardUxReviewAsset> Assets { get; } = [];
+
+        public List<string> Warnings { get; } = [];
+    }
+
+    private sealed class TaskCardUxReviewAsset
+    {
+        public string Key { get; init; } = string.Empty;
+
+        public string DisplayName { get; init; } = string.Empty;
+
+        public string TaskId { get; init; } = string.Empty;
+
+        public string Viewport { get; init; } = string.Empty;
+
+        public string OutputPath { get; init; } = string.Empty;
+
+        public string WindowTitle { get; init; } = string.Empty;
+
+        public int Width { get; init; }
+
+        public int Height { get; init; }
     }
 
     private sealed class CaptureReport
