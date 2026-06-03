@@ -848,7 +848,7 @@ namespace Unlimotion.ViewModel
                 })
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
-                .Bind(out _currentItems)
+                .Bind(out _currentItems, resetThreshold: 1)
                 .Subscribe(_ =>
                 {
                     var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);

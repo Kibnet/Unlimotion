@@ -371,6 +371,44 @@ All Tasks tree viewport
 - Needs human: no decision needed.
 - Residual risks / follow-ups: none for this PR scope.
 
+### Follow-up Post-EXEC Review: CI TreeView collection notifications
+- Статус: PASS с residual LOW full-suite order risks
+- Scope reviewed: GitHub Actions run `26850784468`, failed job `79182075557`, CI log snippet for `TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails`, current diff in `MainWindowViewModel.cs`, targeted CI-mode test outputs.
+- Decision: push a small CI-stability update in the same PR branch.
+- Review passes:
+  - Scope/Evidence pass: inspected failing CI log; failure is Avalonia `AvaloniaList.Insert` out-of-range while `TreeView` processes collection changed events, not an assertion failure in the selection contract.
+  - Contract pass: AllTasks root collection now keeps remove/add semantics and asks DynamicData bind to emit reset events for this view (`resetThreshold: 1`), reducing granular insert/index notifications during search-clear rebuild.
+  - Adversarial risk pass: checked first-search filtering, closed-details search-clear restore, expansion-state restore, and CI runner arguments `--maximum-parallel-tests 1 --output Detailed`.
+  - Re-review after fixes / Fix and re-review: targeted tests pass with exact CI TUnit arguments; local full-suite CI-mode run still exposes unrelated order-sensitive tests, documented below.
+  - Stop decision: PASS for PR scope; unrelated full-suite order failures are not broadened into this PR.
+- Evidence inspected: `inspect_pr_checks.py --repo . --pr 248 --json`, `MainWindowViewModel.cs` AllTasks `.Bind(out _currentItems, resetThreshold: 1)`, targeted test outputs.
+- Depth checklist:
+  - Scope drift / unrelated changes: only `MainWindowViewModel.cs` changed for CI stabilization.
+  - Acceptance criteria: search still filters on first input; search clear still restores selected visible row with closed details; expansion state still restores in isolated targeted run.
+  - Validation evidence: build passes; targeted CI-mode UI tests pass; isolated expansion-state test passes 7/7.
+  - Unsupported claims: CI failure root cause is backed by GitHub Actions log snippet showing Avalonia `AvaloniaList.Insert`.
+  - Regression / edge case: reset bind may be less granular, but only for AllTasks UI collection and only to stabilize TreeView notification processing.
+  - Comments/docs/changelog: no code comment needed; spec updated with CI evidence.
+  - Hidden contract change: no public API, persisted state, selectors or automation-id changes.
+  - Manual-review challenge: reviewer may ask why local full suite still fails; targeted tests pass, while failures are existing order-sensitive tests unrelated to AllTasks search and are named below.
+- No-findings justification: the CI failure surface is narrowed to a collection notification crash; the production fix changes only notification granularity for the affected UI collection.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | validation | Exact local CI full-run `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-restore -p:UseSharedCompilation=false -- --maximum-parallel-tests 1 --output Detailed` failed on unrelated order-sensitive tests (`CopyTaskOutline_UsesMarkdownAndDescriptionSettings`, `PasteTaskOutline_CreatesNestedTasksUnderCurrentTask`, `RoadmapDropAndFolderPickerCompatibility_Work`) before/around this CI fix | Report as residual suite-order risk; use targeted CI-mode evidence for this PR | accepted-risk |
+| LOW | validation | Later ordinary full local run failed on unrelated `SwitchRemoteConnectionTypeCommand_UpdatesSelectedRemoteFromServiceResult`, copy-outline, and one order-sensitive precondition in expansion-state; isolated expansion-state rerun passed 7/7 | Report as residual local suite pollution/order risk | accepted-risk |
+
+- Fixed before final report: AllTasks bind now uses `resetThreshold: 1`.
+- Checks rerun:
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj --no-restore` -> PASS, warnings only.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-restore -p:UseSharedCompilation=false -- --maximum-parallel-tests 1 --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_ReselectsAndScrollsCurrentAllTasksItemWithClosedDetails" --output Detailed` -> PASS, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-restore -p:UseSharedCompilation=false -- --maximum-parallel-tests 1 --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree" --output Detailed` -> PASS, 1/1.
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj --no-build -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeSearch_ClearSearch_RestoresExpansionState"` -> PASS, 7/7.
+- Validation evidence: `src/Unlimotion.Test/bin/Debug/net10.0/TestResults/Unlimotion.Test-windows-net10.0-report.html`.
+- Unrelated changes: none.
+- Needs human: no decision needed.
+- Residual risks / follow-ups: re-run GitHub Actions on the new SHA; if full CI still fails on unrelated order-sensitive tests, handle as a separate CI isolation task.
+
 ## Approval
 Подтверждено пользователем: "Спеку подтверждаю"
 
@@ -390,3 +428,4 @@ All Tasks tree viewport
 | EXEC | Follow-up EXEC review | 0.94 | Нет | Финальный отчет пользователю | Нет | Нет | По запросу пользователя повторно сверен full post-EXEC review-loop с `review-loops.md`; найден и исправлен LOW gap в фиксации `git status --short`/`git diff --stat`; fresh targeted UI test прошел | `specs/2026-06-02-search-selection-restore.md`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `src/Unlimotion.ViewModel/MainWindowViewModel.cs` |
 | EXEC | Closed-details follow-up fix | 0.91 | Нет по targeted flow; full `Unlimotion.Test` suite имеет residual failures вне isolated UI surface | Коммит и push PR update | Нет | Да: пользователь сообщил новый edge case после PR | Добавлен fallback на последний выбранный AllTasks item только для search-clear restore, чтобы закрытая карточка деталей не теряла выбранную задачу; targeted/class UI tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md` |
 | EXEC | First-search follow-up fix | 0.94 | Нет | Коммит и push PR update | Нет | Да: пользователь сообщил регрессию поиска после ребейза | Исправлен dropped first search event, возвращена безопасная AllTasks sort/bind цепочка для TreeView и добавлен UI regression на первый ввод поиска; targeted/full tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, `specs/2026-06-02-search-selection-restore.md` |
+| EXEC | CI TreeView notification fix | 0.88 | Нужно подтверждение GitHub Actions на новом SHA | Коммит, push и recheck PR checks | Нет | Да: пользователь сообщил падение pipeline | По CI-логу падение было на Avalonia `TreeView` granular insert notification; AllTasks bind переведен на reset notification threshold; targeted CI-mode tests прошли | `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `specs/2026-06-02-search-selection-restore.md` |
