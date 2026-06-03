@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -268,8 +269,12 @@ namespace Unlimotion.ViewModel
             this.WhenAnyValue(m => m.CurrentAllTasksItem)
                 .Subscribe(m =>
                 {
-                    if (m != null && CurrentTaskItem != m?.TaskItem)
-                        CurrentTaskItem = m?.TaskItem;
+                    if (m != null)
+                    {
+                        _lastSelectedAllTasksItem = m.TaskItem;
+                        if (CurrentTaskItem != m.TaskItem)
+                            CurrentTaskItem = m.TaskItem;
+                    }
                 })
                 .AddToDispose(connectionDisposableList);
 
@@ -673,8 +678,7 @@ namespace Unlimotion.ViewModel
 
             var searchTopFilter = searchInput
                 .Publish(shared => shared.Take(1).Concat(
-                    shared.Skip(1)
-                        .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
+                    shared.Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
                 .Select(searchText =>
                 {
                     var userText = (searchText.Item1 ?? "").Trim();
@@ -747,6 +751,7 @@ namespace Unlimotion.ViewModel
 
             #region Roots
 
+            var wasAllTasksSearchActive = false;
             var emojiRootFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .AutoRefreshOnObservable(filter => this.Search.WhenAnyValue(s => s.SearchText)
@@ -841,8 +846,19 @@ namespace Unlimotion.ViewModel
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
                 })
-                .SortAndBind(out _currentItems, sortObservable)
-                .Subscribe(/*set => ExpandParentNodesForTask(CurrentTaskItem)*/)
+                .Sort(sortObservable)
+                .TreatMovesAsRemoveAdd()
+                .Bind(out _currentItems, resetThreshold: 1)
+                .Subscribe(_ =>
+                {
+                    var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
+                    if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
+                    {
+                        RestoreCurrentAllTasksSelectionAfterSearchClear();
+                    }
+
+                    wasAllTasksSearchActive = isSearchActive;
+                })
                 .AddToDispose(connectionDisposableList);
 
             CurrentAllTasksItems = _currentItems;
@@ -1435,14 +1451,7 @@ namespace Unlimotion.ViewModel
             {
                 if (AllTasksMode)
                 {
-                    if (CurrentAllTasksItem?.TaskItem != CurrentTaskItem)
-                    {
-                        CurrentAllTasksItem = FindTaskWrapperViewModel(CurrentTaskItem, CurrentAllTasksItems);
-                        if (CurrentTaskItem != null)
-                        {
-                            ExpandParentNodesForTask(CurrentTaskItem);
-                        }
-                    }
+                    RestoreCurrentAllTasksSelection();
                 }
                 else if (UnlockedMode)
                 {
@@ -2214,6 +2223,45 @@ namespace Unlimotion.ViewModel
                    string.Equals(left.Id, right.Id, StringComparison.Ordinal);
         }
 
+        private void RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)
+        {
+            var taskItem = CurrentTaskItem ??
+                           (useLastSelectedFallback ? _lastSelectedAllTasksItem : null);
+            if (taskItem == null)
+            {
+                CurrentAllTasksItem = null;
+                return;
+            }
+
+            var wrapper = FindTaskWrapperViewModel(taskItem, CurrentAllTasksItems);
+            if (wrapper == null)
+            {
+                if (IsSameTask(CurrentAllTasksItem?.TaskItem, taskItem))
+                {
+                    CurrentAllTasksItem = null;
+                }
+
+                return;
+            }
+
+            if (CurrentTaskItem == null)
+            {
+                CurrentTaskItem = taskItem;
+            }
+
+            ExpandParentNodesForTask(taskItem);
+        }
+
+        private void RestoreCurrentAllTasksSelectionAfterSearchClear()
+        {
+            RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
+            RxSchedulers.MainThreadScheduler.Schedule(() =>
+                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+            // TreeView can clear SelectedItem after processing search-clear collection changes.
+            RxSchedulers.MainThreadScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
+                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+        }
+
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)
         {
             if (taskItem == null)
@@ -2257,6 +2305,7 @@ namespace Unlimotion.ViewModel
         public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs ?? string.Empty : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems = EmptyTaskWrappers;
+        private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
