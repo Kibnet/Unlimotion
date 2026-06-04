@@ -51,7 +51,7 @@ namespace Unlimotion.Views
         private const int MaxRelationEditorFocusRetries = 5;
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
-        private const double RegularTaskPlanningGroupWidth = 166d;
+        private const double RegularTaskPlanningGroupWidth = 154d;
         private const double RegularRepeaterSelectorWidth = 220d;
         private const double RegularRepeaterPatternTypeWidth = 160d;
         private const double RegularRepeaterPeriodWidth = 92d;
