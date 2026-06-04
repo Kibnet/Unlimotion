@@ -178,6 +178,25 @@ public class App : Application
         return _mainWindowViewModel;
     }
 
+    public static bool TryHandleTaskCardBackGesture()
+    {
+        var viewModel = _mainWindowViewModel;
+        if (viewModel == null)
+        {
+            return false;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return viewModel.TryHandleTaskCardBackGesture();
+        }
+
+        return Dispatcher.UIThread
+            .InvokeAsync(() => viewModel.TryHandleTaskCardBackGesture())
+            .GetAwaiter()
+            .GetResult();
+    }
+
     private void SetupSettingsCommands(SettingsViewModel settings)
     {
         settings.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>

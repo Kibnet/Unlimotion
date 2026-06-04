@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using DynamicData;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -565,6 +566,31 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     }
 
     private async void TaskStorageOnUpdating(object? sender, TaskStorageUpdateEventArgs e)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var completion = new TaskCompletionSource();
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    await HandleTaskStorageUpdatingAsync(e);
+                    completion.SetResult();
+                }
+                catch (Exception exception)
+                {
+                    completion.SetException(exception);
+                }
+            });
+
+            await completion.Task;
+            return;
+        }
+
+        await HandleTaskStorageUpdatingAsync(e);
+    }
+
+    private async Task HandleTaskStorageUpdatingAsync(TaskStorageUpdateEventArgs e)
     {
         switch (e.Type)
         {

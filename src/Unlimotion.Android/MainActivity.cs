@@ -13,6 +13,7 @@ using Android.Provider;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
+using Android.Window;
 using Avalonia;
 using Avalonia.Android;
 using LibGit2Sharp;
@@ -32,7 +33,8 @@ namespace Unlimotion.Android;
     LaunchMode = LaunchMode.SingleTask,
     ResizeableActivity = true,
     WindowSoftInputMode = SoftInput.AdjustResize,
-    ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
+    ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode,
+    EnableOnBackInvokedCallback = true)]
 public class MainActivity : AvaloniaMainActivity
 {
     private const string DefaultConfigName = "Settings.json";
@@ -45,6 +47,7 @@ public class MainActivity : AvaloniaMainActivity
     private string? _dataDir;
     private TaskCompletionSource<string?>? _openTaskFolderCompletion;
     private TaskCompletionSource<bool>? _manageExternalStorageCompletion;
+    private IOnBackInvokedCallback? _backInvokedCallback;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -52,6 +55,93 @@ public class MainActivity : AvaloniaMainActivity
         ConfigureAppServices();
 
         base.OnCreate(savedInstanceState);
+        RegisterBackInvokedCallback();
+    }
+
+    protected override void OnDestroy()
+    {
+        UnregisterBackInvokedCallback();
+        base.OnDestroy();
+    }
+
+    public override void OnBackPressed()
+    {
+        HandleSystemBack();
+    }
+
+    private void HandleSystemBack()
+    {
+        if (App.TryHandleTaskCardBackGesture())
+        {
+            return;
+        }
+
+#pragma warning disable CA1422
+        base.OnBackPressed();
+#pragma warning restore CA1422
+    }
+
+    private void RegisterBackInvokedCallback()
+    {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(33) || _backInvokedCallback != null)
+        {
+            return;
+        }
+
+        var callback = new BackInvokedCallback(HandleSystemBack);
+        try
+        {
+            // The task card is an overlay-like pane; it must see Back before Avalonia's default activity callback.
+            OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(
+                IOnBackInvokedDispatcher.PriorityOverlay,
+                callback);
+            _backInvokedCallback = callback;
+        }
+        catch
+        {
+            callback.Dispose();
+            _backInvokedCallback = null;
+        }
+    }
+
+    private void UnregisterBackInvokedCallback()
+    {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(33) || _backInvokedCallback == null)
+        {
+            return;
+        }
+
+        try
+        {
+            OnBackInvokedDispatcher.UnregisterOnBackInvokedCallback(_backInvokedCallback);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            if (_backInvokedCallback is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            _backInvokedCallback = null;
+        }
+    }
+
+    private sealed class BackInvokedCallback : Java.Lang.Object, IOnBackInvokedCallback
+    {
+        private readonly Action _onBackInvoked;
+
+        public BackInvokedCallback(Action onBackInvoked)
+        {
+            _onBackInvoked = onBackInvoked;
+        }
+
+        public void OnBackInvoked()
+        {
+            _onBackInvoked();
+        }
     }
 
     private void ConfigureAppServices()

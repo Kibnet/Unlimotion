@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1169,6 +1170,93 @@ namespace Unlimotion.Test
             mainWindowVM.DetailsAreOpen = false;
 
             await Assert.That(mainWindowVM.CurrentRelationEditor.IsOpen).IsFalse();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_OpenTaskCard_ClosesTaskCard()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.DetailsAreOpen = true;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_ClosedTaskCard_OpensTaskCard()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_LastTaskItem_OpensTaskCardWhenCurrentTaskMissing()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            mainWindowVM.CurrentTaskItem = null;
+            mainWindowVM.CurrentAllTasksItem = null;
+            mainWindowVM.LastTaskItem = task;
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_SingleVisibleTask_OpensTaskCardWhenCurrentTaskMissing()
+        {
+            var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
+            var items = new ObservableCollection<TaskWrapperViewModel>
+            {
+                new(null, task, new TaskWrapperActions())
+            };
+            mainWindowVM.CurrentAllTasksItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(items);
+            mainWindowVM.CurrentAllTasksItem = null;
+            mainWindowVM.CurrentTaskItem = null;
+            mainWindowVM.LastTaskItem = null!;
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsTrue();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsEqualTo(task);
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+        }
+
+        [Test]
+        public async Task TaskCardBackGesture_NoCurrentTask_DoesNotHandleBack()
+        {
+            mainWindowVM.CurrentTaskItem = null;
+            mainWindowVM.CurrentAllTasksItem = null;
+            mainWindowVM.CurrentLastCreated = null;
+            mainWindowVM.CurrentLastUpdated = null;
+            mainWindowVM.CurrentUnlockedItem = null;
+            mainWindowVM.CurrentCompletedItem = null;
+            mainWindowVM.CurrentArchivedItem = null;
+            mainWindowVM.CurrentLastOpenedItem = null;
+            mainWindowVM.CurrentGraphItem = null;
+            mainWindowVM.LastTaskItem = null!;
+            mainWindowVM.CurrentAllTasksItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(
+                new ObservableCollection<TaskWrapperViewModel>());
+            mainWindowVM.DetailsAreOpen = false;
+
+            var handled = mainWindowVM.TryHandleTaskCardBackGesture();
+
+            await Assert.That(handled).IsFalse();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsNull();
+            await Assert.That(mainWindowVM.DetailsAreOpen).IsFalse();
         }
 
         /// <summary>

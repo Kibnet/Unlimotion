@@ -1859,6 +1859,43 @@ namespace Unlimotion.ViewModel
             CurrentRelationEditor.Open(kind, CurrentTaskItem);
         }
 
+        public bool TryHandleTaskCardBackGesture()
+        {
+            var taskItem = ResolveTaskCardBackGestureTask();
+            if (taskItem == null)
+            {
+                return false;
+            }
+
+            CurrentTaskItem = taskItem;
+            DetailsAreOpen = !DetailsAreOpen;
+            return true;
+        }
+
+        private TaskItemViewModel? ResolveTaskCardBackGestureTask()
+        {
+            TaskItemViewModel? lastTaskItem = LastTaskItem;
+            return CurrentTaskItem ??
+                   CurrentAllTasksItem?.TaskItem ??
+                   CurrentLastCreated?.TaskItem ??
+                   CurrentLastUpdated?.TaskItem ??
+                   CurrentUnlockedItem?.TaskItem ??
+                   CurrentCompletedItem?.TaskItem ??
+                   CurrentArchivedItem?.TaskItem ??
+                   CurrentLastOpenedItem?.TaskItem ??
+                   CurrentGraphItem?.TaskItem ??
+                   lastTaskItem ??
+                   ResolveSingleVisibleCurrentTask();
+        }
+
+        private TaskItemViewModel? ResolveSingleVisibleCurrentTask()
+        {
+            var firstTask = CurrentAllTasksItems.FirstOrDefault()?.TaskItem;
+            return firstTask != null && !CurrentAllTasksItems.Skip(1).Any()
+                ? firstTask
+                : null;
+        }
+
         public async Task CopyTaskOutline(TaskItemViewModel? task = null)
         {
             var source = task ?? CurrentTaskItem;

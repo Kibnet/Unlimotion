@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -137,6 +138,50 @@ public class MainControlTaskCardLayoutUiTests
                 window = createdWindow;
 
                 AssertDesktopRepeaterControlsStayCompact(view, requireWeekdayToggles: true);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_BackGestureFallback_OpensPaneForSingleVisibleTask()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 390, 844);
+                window = createdWindow;
+                var vm = fixture.MainWindowViewModelTest;
+                var task = vm.CurrentTaskItem!;
+                var items = new ObservableCollection<TaskWrapperViewModel>
+                {
+                    new(null, task, new TaskWrapperActions())
+                };
+                var splitView = view.GetVisualDescendants().OfType<SplitView>().First();
+
+                vm.CurrentAllTasksItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(items);
+                vm.CurrentAllTasksItem = null;
+                vm.CurrentTaskItem = null;
+                vm.LastTaskItem = null!;
+                vm.DetailsAreOpen = false;
+                RunLayoutJobs();
+                await Assert.That(splitView.IsPaneOpen).IsFalse();
+
+                var handled = vm.TryHandleTaskCardBackGesture();
+                RunLayoutJobs();
+
+                await Assert.That(handled).IsTrue();
+                await Assert.That(splitView.IsPaneOpen).IsTrue();
+                await Assert.That(vm.CurrentTaskItem).IsEqualTo(task);
             }
             finally
             {
