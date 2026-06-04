@@ -91,8 +91,9 @@ public class MainActivity : AvaloniaMainActivity
         var callback = new BackInvokedCallback(HandleSystemBack);
         try
         {
+            // The task card is an overlay-like pane; it must see Back before Avalonia's default activity callback.
             OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(
-                IOnBackInvokedDispatcher.PriorityDefault,
+                IOnBackInvokedDispatcher.PriorityOverlay,
                 callback);
             _backInvokedCallback = callback;
         }
