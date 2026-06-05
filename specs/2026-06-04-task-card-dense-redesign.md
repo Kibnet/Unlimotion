@@ -108,9 +108,11 @@ Narrow details pane
   - Existing key controls and relation editor remain visible/contained.
   - No horizontal overflow in phone-width task card layout.
   - Wide layout keeps planning/repeater controls compact.
+  - Wrapped planning/repeater rows use available width instead of leaving large unused right gaps.
 - Tests to add/update:
   - Update `MainControlTaskCardLayoutUiTests` to assert create menu button visibility and classes.
   - Add command/menu assertions without relying on localized text.
+  - Add right-edge row assertions for desktop planning/repeater rows and phone weekly weekday toggles.
 - Visual acceptance: compare rendered structure through headless layout bounds and containment assertions against the wireframe above.
 - UI video evidence: fallback; use headless layout assertions as next-best evidence because current test harness does not emit video.
 - Commands for verification:
@@ -266,6 +268,18 @@ Narrow details pane
 - Needs human: no.
 - Residual risks / follow-ups: investigate existing `SettingsViewModelTests` and `MainControlTreeCommandsUiTests` full-suite failures separately.
 
+### Follow-up Review: Wrapped Row Right Edge
+- Статус: PASS
+- Scope reviewed: user screenshot feedback about unused right gaps after wrapping, `MainControl.axaml.cs`, `MainControlTaskCardLayoutUiTests.cs`, v6 UX screenshots.
+- Decision: follow-up complete; update stays inside task-card responsive sizing and UI layout tests.
+- Evidence inspected:
+  - `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTaskCardLayoutUiTests/*" --maximum-parallel-tests 1` -> PASS, 8/8.
+  - `dotnet run --project tests\Unlimotion.ReadmeMedia\Unlimotion.ReadmeMedia.csproj -- --ux-review task-card --language ru --output-root C:\tmp\unlimotion-task-card-ux-v6` -> PASS.
+  - Visual screenshots:
+    - `C:\tmp\unlimotion-task-card-ux-v6\desktop\repeater-planning.png`
+    - `C:\tmp\unlimotion-task-card-ux-v6\phone\repeater-planning-card.png`
+- Notes: initial sandboxed `dotnet run` attempts failed on NuGet SSL/credentials; the same commands were rerun outside the sandbox and passed.
+
 ## Approval
 Пользователь запросил реализацию: "Сделай редизайн карточки задачи...".
 
@@ -282,3 +296,4 @@ Narrow details pane
 | EXEC | Update quick-date UI coverage | 0.90 | None for requested scope | Final report | Нет | Нет | Updated the localized quick-date test from old text button lookup to stable automation ids and emoji assertions | `src/Unlimotion.Test/MainControlDateQuickSelectionUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
 | EXEC | Final compact relation polish | 0.91 | None for requested scope | Final report | Нет | Нет | Restyled planning quick actions as visible compact chips, replaced verbose relation add text with compact plus buttons, reran layout/relation/FlaUI checks and refreshed screenshots | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
 | EXEC | Polish gear action button | 0.92 | None for requested scope | Final report | Нет | Пользователь указал, что кнопка с шестеренкой забыта | Enlarged and restyled the task action gear as an accent compact dropdown, stabilized the headless layout helper and captured v5 screenshots | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
+| EXEC | Fill wrapped row right edges | 0.91 | None for requested scope | Commit and update PR | Нет | Пользователь указал на лишние правые отступы при переносе элементов | Recomputed wide planning/repeater widths from available row width, floored weekday toggle widths to avoid layout-rounding wrap, and added desktop/phone right-edge assertions | `src/Unlimotion/Views/MainControl.axaml.cs`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |

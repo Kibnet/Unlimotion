@@ -8,6 +8,7 @@ using AutoMapper;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -58,6 +59,10 @@ namespace Unlimotion.Views
         private const double RegularRepeaterPatternTypeWidth = 120d;
         private const double RegularRepeaterPeriodWidth = 64d;
         private const double RegularRepeaterAfterCompleteWidth = 156d;
+        private const double RegularTaskDetailsContentInset = 24d;
+        private const double TaskPlanningGroupGap = 4d;
+        private const double RepeaterControlGap = 6d;
+        private const double WeekdayToggleGap = 4d;
         private const double RegularTaskIdMaxWidth = 180d;
         private const double MainTabsOverflowButtonSpacing = 6d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
@@ -323,37 +328,64 @@ namespace Unlimotion.Views
         private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)
         {
             var compactCardContentWidth = Math.Max(180d, detailsWidth - 36d);
+            var regularCardContentWidth = Math.Max(420d, detailsWidth - RegularTaskDetailsContentInset);
             var compactRepeaterSmallWidth = Math.Max(120d, (compactCardContentWidth - 10d) / 2d);
+            var planningGroups = TaskDetailsPanelRoot.GetVisualDescendants()
+                .OfType<StackPanel>()
+                .Where(static panel => panel.Classes.Contains("TaskPlanningGroup"))
+                .ToArray();
+            var regularPlanningGroupWidth = planningGroups.Length > 0
+                ? Math.Max(
+                    RegularTaskPlanningGroupWidth,
+                    (regularCardContentWidth - (planningGroups.Length - 1) * TaskPlanningGroupGap) / planningGroups.Length)
+                : RegularTaskPlanningGroupWidth;
 
-            foreach (var group in TaskDetailsPanelRoot.GetVisualDescendants()
-                         .OfType<StackPanel>()
-                         .Where(static panel => panel.Classes.Contains("TaskPlanningGroup")))
+            for (var i = 0; i < planningGroups.Length; i++)
             {
-                group.Width = isCompact ? compactCardContentWidth : RegularTaskPlanningGroupWidth;
-                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 4, 5);
+                var group = planningGroups[i];
+                var isLastGroup = i == planningGroups.Length - 1;
+                group.Width = isCompact ? compactCardContentWidth : regularPlanningGroupWidth;
+                group.Margin = isCompact
+                    ? new Thickness(0, 0, 0, 8)
+                    : new Thickness(0, 0, isLastGroup ? 0 : TaskPlanningGroupGap, 5);
             }
 
-            foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
-                         .OfType<ComboBox>()
-                         .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector")))
+            var repeaterSelectors = TaskDetailsPanelRoot.GetVisualDescendants()
+                .OfType<ComboBox>()
+                .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector"))
+                .ToArray();
+            var repeaterPatternHosts = TaskDetailsPanelRoot.GetVisualDescendants()
+                .OfType<Border>()
+                .Where(static border => border.Classes.Contains("RepeaterPatternHost"))
+                .ToArray();
+            var regularRepeaterSelectorWidth = Math.Max(
+                RegularRepeaterSelectorWidth,
+                Math.Min(220d, regularCardContentWidth * 0.30d));
+            var regularRepeaterPatternHostWidth = Math.Max(
+                RegularRepeaterPatternHostWidth,
+                regularCardContentWidth - regularRepeaterSelectorWidth - RepeaterControlGap);
+
+            foreach (var selector in repeaterSelectors)
             {
-                selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterSelectorWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
+                selector.Width = isCompact ? compactCardContentWidth : regularRepeaterSelectorWidth;
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
             }
 
-            foreach (var host in TaskDetailsPanelRoot.GetVisualDescendants()
-                         .OfType<Border>()
-                         .Where(static border => border.Classes.Contains("RepeaterPatternHost")))
+            foreach (var host in repeaterPatternHosts)
             {
-                host.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternHostWidth;
+                host.Width = isCompact ? compactCardContentWidth : regularRepeaterPatternHostWidth;
             }
+
+            var regularRepeaterPatternTypeWidth = Math.Max(
+                RegularRepeaterPatternTypeWidth,
+                regularRepeaterPatternHostWidth - RegularRepeaterPeriodWidth - RegularRepeaterAfterCompleteWidth - 2 * RepeaterControlGap);
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
                          .OfType<ComboBox>()
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterPatternTypeSelector")))
             {
-                selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternTypeWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
+                selector.Width = isCompact ? compactCardContentWidth : regularRepeaterPatternTypeWidth;
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
             }
 
             foreach (var input in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -361,7 +393,7 @@ namespace Unlimotion.Views
                          .Where(static numericUpDown => numericUpDown.Classes.Contains("RepeaterPeriodInput")))
             {
                 input.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterPeriodWidth;
-                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 6, 5);
+                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
             }
 
             foreach (var checkbox in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -369,7 +401,34 @@ namespace Unlimotion.Views
                          .Where(static checkBox => checkBox.Classes.Contains("RepeaterAfterCompleteCheckBox")))
             {
                 checkbox.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterAfterCompleteWidth;
-                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
+                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 5);
+            }
+
+            foreach (var weekdayPanel in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<WrapPanel>()
+                         .Where(static panel => panel.Classes.Contains("WeekdayToggles")))
+            {
+                var weekdayPanelWidth = isCompact ? compactCardContentWidth : regularRepeaterPatternHostWidth;
+                weekdayPanel.Width = weekdayPanelWidth;
+                weekdayPanel.Margin = isCompact ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 0, 5);
+
+                var weekdayToggles = weekdayPanel.GetVisualDescendants()
+                    .OfType<ToggleButton>()
+                    .Where(static toggle => toggle.Classes.Contains("WeekdayToggle"))
+                    .ToArray();
+                var weekdayWidth = weekdayToggles.Length > 0
+                    ? Math.Max(
+                        38d,
+                        Math.Floor((weekdayPanelWidth - (weekdayToggles.Length - 1) * WeekdayToggleGap) / weekdayToggles.Length))
+                    : 46d;
+
+                for (var i = 0; i < weekdayToggles.Length; i++)
+                {
+                    var toggle = weekdayToggles[i];
+                    var isLastToggle = i == weekdayToggles.Length - 1;
+                    toggle.Width = weekdayWidth;
+                    toggle.Margin = new Thickness(0, 0, isLastToggle ? 0 : WeekdayToggleGap, 4);
+                }
             }
 
             foreach (var idText in TaskDetailsPanelRoot.GetVisualDescendants()

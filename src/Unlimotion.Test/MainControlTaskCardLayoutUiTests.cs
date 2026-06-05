@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -197,6 +198,73 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(handled).IsTrue();
                 await Assert.That(splitView.IsPaneOpen).IsTrue();
                 await Assert.That(vm.CurrentTaskItem).IsEqualTo(task);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(360)]
+    [Arguments(390)]
+    public async Task CurrentTaskCard_PhoneWeeklyRepeaterLayout_FillsWeekdayRow(double width)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    width,
+                    844,
+                    MainWindowViewModelFixture.RepeateTask9Id,
+                    task =>
+                    {
+                        task.Repeater!.Type = RepeaterType.Weekly;
+                        task.Repeater.WorkDays = true;
+                    });
+                window = createdWindow;
+
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+                var weekdayPanel = view.GetVisualDescendants()
+                    .OfType<WrapPanel>()
+                    .FirstOrDefault(panel =>
+                        panel.Classes.Contains("WeekdayToggles") &&
+                        IsVisibleAndArranged(panel))
+                    ?? throw new InvalidOperationException("Visible phone weekday toggle panel was not found.");
+                var weekdayToggles = weekdayPanel.GetVisualDescendants()
+                    .OfType<ToggleButton>()
+                    .Where(static toggle => toggle.Classes.Contains("WeekdayToggle"))
+                    .Where(IsVisibleAndArranged)
+                    .ToArray();
+
+                if (weekdayToggles.Length != 7)
+                {
+                    throw new InvalidOperationException(
+                        $"Expected seven visible phone weekday toggles, found {weekdayToggles.Length}.");
+                }
+
+                var firstTop = GetTopEdge(view, weekdayToggles[0]);
+                var wrappedToggle = weekdayToggles
+                    .Select(toggle => new { Toggle = toggle, Top = GetTopEdge(view, toggle) })
+                    .FirstOrDefault(item => Math.Abs(item.Top - firstTop) > 2);
+                if (wrappedToggle is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"Phone weekday toggles should stay in one filled row: " +
+                        $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}.");
+                }
+
+                AssertRowUsesRightEdge(weekdayPanel, weekdayToggles, 8d, "Phone weekday toggle row");
+                AssertNoHorizontalOverflow(scrollViewer, card);
             }
             finally
             {
@@ -577,6 +645,9 @@ public class MainControlTaskCardLayoutUiTests
                 "Desktop planning value controls should have matching heights: " +
                 $"begin={beginPickerHeight:F1}; duration={durationHeight:F1}; end={endPickerHeight:F1}.");
         }
+
+        var planningSection = FindControlByAutomationId<Control>(root, "CurrentTaskPlanningSection");
+        AssertRowUsesRightEdge(planningSection, planningControls, 8d, "Desktop planning row");
     }
 
     private static void AssertDesktopRepeaterControlsStayCompact(Control root, bool requireWeekdayToggles = false)
@@ -604,6 +675,12 @@ public class MainControlTaskCardLayoutUiTests
 
         if (requireWeekdayToggles)
         {
+            var weekdayPanel = root.GetVisualDescendants()
+                .OfType<WrapPanel>()
+                .FirstOrDefault(panel =>
+                    panel.Classes.Contains("WeekdayToggles") &&
+                    IsVisibleAndArranged(panel))
+                ?? throw new InvalidOperationException("Visible weekday toggle panel was not found.");
             var firstTop = GetTopEdge(root, weekdayToggles[0]);
             var wrappedToggle = weekdayToggles
                 .Select(toggle => new { Toggle = toggle, Top = GetTopEdge(root, toggle) })
@@ -612,8 +689,12 @@ public class MainControlTaskCardLayoutUiTests
             {
                 throw new InvalidOperationException(
                     $"Desktop weekday toggles should stay in one compact row: " +
-                    $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}.");
+                    $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}; " +
+                    $"panelBounds={weekdayPanel.Bounds}; " +
+                    $"toggleBounds={string.Join(", ", weekdayToggles.Select(toggle => $"{toggle.Content}:{toggle.Bounds}"))}.");
             }
+
+            AssertRowUsesRightEdge(weekdayPanel, weekdayToggles, 8d, "Desktop weekday toggle row");
         }
 
         foreach (var toggle in weekdayToggles)
@@ -694,6 +775,25 @@ public class MainControlTaskCardLayoutUiTests
                 $"selectorRight={selectorRight:F1}; typeLeft={patternTypeLeft:F1}; " +
                 $"typeRight={patternTypeRight:F1}; periodLeft={periodLeft:F1}; " +
                 $"periodRight={periodRight:F1}; afterLeft={afterCompleteLeft:F1}.");
+        }
+
+        var repeaterSection = FindControlByAutomationId<Control>(root, "CurrentTaskRepeaterSection");
+        AssertRowUsesRightEdge(repeaterSection, visibleRepeaterControls, 8d, "Desktop repeater row");
+    }
+
+    private static void AssertRowUsesRightEdge(
+        Control rowContainer,
+        IReadOnlyCollection<Control> rowControls,
+        double maxTrailingGap,
+        string rowName)
+    {
+        var rightEdge = rowControls.Max(control => GetRightEdge(rowContainer, control));
+        var trailingGap = rowContainer.Bounds.Width - rightEdge;
+        if (trailingGap > maxTrailingGap)
+        {
+            throw new InvalidOperationException(
+                $"{rowName} leaves too much unused space on the right: " +
+                $"gap={trailingGap:F1}; allowed={maxTrailingGap:F1}; container={rowContainer.Bounds.Width:F1}.");
         }
     }
 
