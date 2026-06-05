@@ -92,20 +92,13 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
-        <Style Selector="Button.MainTabsOverflowButton Border.MainTabsOverflowButtonFrame">
-            <Setter Property="Background" Value="#141A20"/>
-            <Setter Property="BorderBrush" Value="#34404C"/>
+        <Style Selector="Button.MainTabsOverflowButton:pointerover">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
-        <Style Selector="Button.MainTabsOverflowButton:pointerover Border.MainTabsOverflowButtonFrame">
-            <Setter Property="Background" Value="#1B2430"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
-        </Style>
-        <Style Selector="Button.MainTabsOverflowButton:pressed Border.MainTabsOverflowButtonFrame">
-            <Setter Property="Background" Value="#0F3B5E"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
-        </Style>
-        <Style Selector="Button.MainTabsOverflowButton:pressed Border.MainTabsOverflowIconLine">
-            <Setter Property="Background" Value="#FFFFFF"/>
+        <Style Selector="Button.MainTabsOverflowButton:pressed">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
         <Style Selector="Border.CurrentTaskCard">
             <Setter Property="Padding" Value="12"/>
@@ -924,40 +917,34 @@
                         HorizontalAlignment="Left"
                         IsVisible="False"
                         AutomationProperties.AutomationId="MainTabsOverflowButton">
-                    <Border Classes="MainTabsOverflowButtonFrame"
-                            Width="34"
-                            Height="{DynamicResource AppTabMinHeight}"
-                            CornerRadius="6"
-                            BorderThickness="1">
-                        <Grid Width="18"
-                              Height="14"
-                              RowDefinitions="2,5,2,5,2"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center"
-                              AutomationProperties.AutomationId="MainTabsOverflowIcon">
-                            <Border Grid.Row="0"
-                                    Classes="MainTabsOverflowIconLine"
-                                    Width="18"
-                                    Height="2"
-                                    CornerRadius="1"
-                                    Background="{StaticResource AccentButtonBackground}"
-                                    AutomationProperties.AutomationId="MainTabsOverflowIconLine1"/>
-                            <Border Grid.Row="2"
-                                    Classes="MainTabsOverflowIconLine"
-                                    Width="18"
-                                    Height="2"
-                                    CornerRadius="1"
-                                    Background="{StaticResource AccentButtonBackground}"
-                                    AutomationProperties.AutomationId="MainTabsOverflowIconLine2"/>
-                            <Border Grid.Row="4"
-                                    Classes="MainTabsOverflowIconLine"
-                                    Width="18"
-                                    Height="2"
-                                    CornerRadius="1"
-                                    Background="{StaticResource AccentButtonBackground}"
-                                    AutomationProperties.AutomationId="MainTabsOverflowIconLine3"/>
-                        </Grid>
-                    </Border>
+                    <Grid Width="18"
+                          Height="14"
+                          RowDefinitions="2,5,2,5,2"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          AutomationProperties.AutomationId="MainTabsOverflowIcon">
+                        <Border Grid.Row="0"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine1"/>
+                        <Border Grid.Row="2"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine2"/>
+                        <Border Grid.Row="4"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine3"/>
+                    </Grid>
                     <Button.Flyout>
                         <MenuFlyout/>
                     </Button.Flyout>

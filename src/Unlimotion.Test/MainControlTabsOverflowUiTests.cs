@@ -525,6 +525,12 @@ public class MainControlTabsOverflowUiTests
 
     private static void AssertOverflowButtonUsesHorizontalLineIcon(Button overflowButton)
     {
+        if (overflowButton.Content is not Grid)
+        {
+            throw new InvalidOperationException(
+                $"Expected main tabs overflow button content to be an icon grid without a visual frame, got {overflowButton.Content?.GetType().Name ?? "null"}.");
+        }
+
         var lines = overflowButton.GetVisualDescendants()
             .OfType<Border>()
             .Where(border =>
