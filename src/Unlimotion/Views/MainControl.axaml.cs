@@ -52,10 +52,12 @@ namespace Unlimotion.Views
         private const int MaxRelationEditorFocusRetries = 5;
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
-        private const double RegularTaskPlanningGroupWidth = 154d;
-        private const double RegularRepeaterSelectorWidth = 220d;
-        private const double RegularRepeaterPatternTypeWidth = 160d;
-        private const double RegularRepeaterPeriodWidth = 92d;
+        private const double RegularTaskPlanningGroupWidth = 176d;
+        private const double RegularRepeaterSelectorWidth = 148d;
+        private const double RegularRepeaterPatternHostWidth = 360d;
+        private const double RegularRepeaterPatternTypeWidth = 120d;
+        private const double RegularRepeaterPeriodWidth = 64d;
+        private const double RegularRepeaterAfterCompleteWidth = 156d;
         private const double RegularTaskIdMaxWidth = 180d;
         private const double MainTabsOverflowButtonSpacing = 6d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
@@ -328,7 +330,7 @@ namespace Unlimotion.Views
                          .Where(static panel => panel.Classes.Contains("TaskPlanningGroup")))
             {
                 group.Width = isCompact ? compactCardContentWidth : RegularTaskPlanningGroupWidth;
-                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 6);
+                group.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 4, 5);
             }
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -336,7 +338,14 @@ namespace Unlimotion.Views
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector")))
             {
                 selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterSelectorWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
+            }
+
+            foreach (var host in TaskDetailsPanelRoot.GetVisualDescendants()
+                         .OfType<Border>()
+                         .Where(static border => border.Classes.Contains("RepeaterPatternHost")))
+            {
+                host.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternHostWidth;
             }
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -344,7 +353,7 @@ namespace Unlimotion.Views
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterPatternTypeSelector")))
             {
                 selector.Width = isCompact ? compactCardContentWidth : RegularRepeaterPatternTypeWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
             }
 
             foreach (var input in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -352,15 +361,15 @@ namespace Unlimotion.Views
                          .Where(static numericUpDown => numericUpDown.Classes.Contains("RepeaterPeriodInput")))
             {
                 input.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterPeriodWidth;
-                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 8, 6);
+                input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, 6, 5);
             }
 
             foreach (var checkbox in TaskDetailsPanelRoot.GetVisualDescendants()
                          .OfType<CheckBox>()
                          .Where(static checkBox => checkBox.Classes.Contains("RepeaterAfterCompleteCheckBox")))
             {
-                checkbox.Width = isCompact ? compactRepeaterSmallWidth : double.NaN;
-                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 8, 6);
+                checkbox.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterAfterCompleteWidth;
+                checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 6, 5);
             }
 
             foreach (var idText in TaskDetailsPanelRoot.GetVisualDescendants()
