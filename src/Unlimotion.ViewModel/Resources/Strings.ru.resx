@@ -113,6 +113,7 @@
   <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 минут</value></data>
   <data name="FolderPickerDataFolder" xml:space="preserve"><value>Папка с данными</value></data>
+  <data name="FolderPickerSshKeyStoragePath" xml:space="preserve"><value>Папка SSH-ключей</value></data>
   <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Папка хранилища задач</value></data>
   <data name="FontSize" xml:space="preserve"><value>Размер текста</value></data>
   <data name="FortyMinutes" xml:space="preserve"><value>40 минут</value></data>
@@ -309,6 +310,8 @@
   <data name="SshKeyCopied" xml:space="preserve"><value>Публичный SSH-ключ скопирован в буфер обмена.</value></data>
   <data name="SshKeyCreateFailed" xml:space="preserve"><value>Не удалось создать SSH-ключ: {0}</value></data>
   <data name="SshKeyCreated" xml:space="preserve"><value>SSH-ключ создан: {0}</value></data>
+  <data name="SshKeyStoragePath" xml:space="preserve"><value>Папка ключей</value></data>
+  <data name="SshKeyStorageEffectivePath" xml:space="preserve"><value>Будет использована папка: {0}</value></data>
   <data name="SshKeys" xml:space="preserve"><value>SSH-ключи</value></data>
   <data name="SshKeysHint" xml:space="preserve"><value>Нужны только если репозиторий использует SSH.</value></data>
   <data name="SshPrivateKeyPathNotConfigured" xml:space="preserve"><value>Путь к приватному SSH-ключу не настроен.</value></data>

@@ -101,6 +101,11 @@ public sealed class SettingsRemoteTypeHeadlessTests
             await Assert.That(tokenSection.AutomationId).IsEqualTo("TokenAuthSection");
             await Assert.That(sshButton.AutomationId).IsEqualTo("SwitchRemoteToSshButton");
             await Assert.That(sshSection.AutomationId).IsEqualTo("SshKeysSection");
+            await Assert.That(Page.SshKeyStoragePathTextBox.AutomationId).IsEqualTo("SshKeyStoragePathTextBox");
+            await Assert.That(Page.BrowseSshKeyStoragePathButton.AutomationId).IsEqualTo("BrowseSshKeyStoragePathButton");
+            await Assert.That(Page.SshKeyStorageEffectivePathTextBlock.AutomationId).IsEqualTo("SshKeyStorageEffectivePathTextBlock");
+            await Assert.That(vm.Settings.SshKeyStorageEffectivePathText)
+                .Contains(vm.Settings.EffectiveSshKeyStoragePath);
             await Assert.That(selectedRemoteUrl.SelectedRemoteName).IsEqualTo("origin-ssh");
             await Assert.That(selectedRemoteUrl.IsSshAuthSelected).IsTrue();
             await Assert.That(selectedRemoteUrl.SelectedRemoteUrl).IsEqualTo("git@github.com:org/unlimotion-backup.git");

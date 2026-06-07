@@ -231,7 +231,7 @@ public class BackupViaGitService : IRemoteBackupService
 
     public List<string> GetSshPublicKeys()
     {
-        var sshDirectory = GetSshDirectory();
+        var sshDirectory = GetSshDirectory(GetSettings().git);
         if (!Directory.Exists(sshDirectory))
         {
             return new List<string>();
@@ -244,7 +244,7 @@ public class BackupViaGitService : IRemoteBackupService
 
     public string GenerateSshKey(string keyName)
     {
-        var sshDirectory = GetSshDirectory();
+        var sshDirectory = GetSshDirectory(GetSettings().git);
         Directory.CreateDirectory(sshDirectory);
 
         var keyPaths = GetSshKeyPaths(sshDirectory, keyName);
@@ -451,7 +451,8 @@ public class BackupViaGitService : IRemoteBackupService
         return new FetchOptions
         {
             CredentialsProvider = GetCredentials(gitSettings),
-            CertificateCheck = CheckRemoteCertificate
+            CertificateCheck = (certificate, valid, host) =>
+                CheckRemoteCertificate(certificate, valid, host, gitSettings)
         };
     }
 
@@ -460,19 +461,30 @@ public class BackupViaGitService : IRemoteBackupService
         return new PushOptions
         {
             CredentialsProvider = GetCredentials(gitSettings),
-            CertificateCheck = CheckRemoteCertificate
+            CertificateCheck = (certificate, valid, host) =>
+                CheckRemoteCertificate(certificate, valid, host, gitSettings)
         };
     }
 
-    private static ProxyOptions CreateProxyOptions()
+    private static ProxyOptions CreateProxyOptions(GitSettings gitSettings)
     {
         return new ProxyOptions
         {
-            CertificateCheck = CheckRemoteCertificate
+            CertificateCheck = (certificate, valid, host) =>
+                CheckRemoteCertificate(certificate, valid, host, gitSettings)
         };
     }
 
     internal static bool CheckRemoteCertificate(Certificate certificate, bool valid, string host)
+    {
+        return CheckRemoteCertificate(certificate, valid, host, gitSettings: null);
+    }
+
+    private static bool CheckRemoteCertificate(
+        Certificate certificate,
+        bool valid,
+        string host,
+        GitSettings? gitSettings)
     {
         if (valid)
         {
@@ -487,7 +499,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         return IsKnownGitHubSshHostKey(host, sshCertificate.HashSHA1) ||
-               IsKnownOrTrustFirstUseSshHostKey(GetKnownHostsPath(), host, sshCertificate.HashSHA1);
+               IsKnownOrTrustFirstUseSshHostKey(GetKnownHostsPath(gitSettings), host, sshCertificate.HashSHA1);
     }
 
     internal static bool IsKnownGitHubSshHostKey(string host, byte[] sha1Hash)
@@ -1677,7 +1689,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         return Repository
-            .ListRemoteReferences(remoteUrl, GetCredentials(gitSettings), CreateProxyOptions())
+            .ListRemoteReferences(remoteUrl, GetCredentials(gitSettings), CreateProxyOptions(gitSettings))
             .Select(reference => reference.CanonicalName)
             .Where(reference => reference.StartsWith("refs/heads/", StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
@@ -2681,26 +2693,14 @@ public class BackupViaGitService : IRemoteBackupService
         return errorText.Trim();
     }
 
-    private static string GetSshDirectory()
+    internal static string GetSshDirectory(GitSettings? gitSettings = null)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(profile, ".ssh");
-        }
-
-        var home = Environment.GetEnvironmentVariable("HOME");
-        if (string.IsNullOrWhiteSpace(home))
-        {
-            home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        }
-
-        return Path.Combine(home, ".ssh");
+        return SshKeyStoragePathResolver.GetSshDirectory(gitSettings);
     }
 
-    private static string GetKnownHostsPath()
+    private static string GetKnownHostsPath(GitSettings? gitSettings = null)
     {
-        return Path.Combine(GetSshDirectory(), KnownHostsFileName);
+        return Path.Combine(GetSshDirectory(gitSettings), KnownHostsFileName);
     }
 
     private static bool IsPathWithinDirectory(string path, string directory)

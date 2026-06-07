@@ -113,6 +113,7 @@
   <data name="FiveDays" xml:space="preserve"><value>5 days</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 minutes</value></data>
   <data name="FolderPickerDataFolder" xml:space="preserve"><value>Data folder</value></data>
+  <data name="FolderPickerSshKeyStoragePath" xml:space="preserve"><value>SSH keys folder</value></data>
   <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Task storage folder</value></data>
   <data name="FontSize" xml:space="preserve"><value>Text size</value></data>
   <data name="FortyMinutes" xml:space="preserve"><value>40 minutes</value></data>
@@ -309,6 +310,8 @@
   <data name="SshKeyCopied" xml:space="preserve"><value>Public SSH key copied to clipboard.</value></data>
   <data name="SshKeyCreateFailed" xml:space="preserve"><value>Could not create SSH key: {0}</value></data>
   <data name="SshKeyCreated" xml:space="preserve"><value>SSH key created: {0}</value></data>
+  <data name="SshKeyStoragePath" xml:space="preserve"><value>Keys folder</value></data>
+  <data name="SshKeyStorageEffectivePath" xml:space="preserve"><value>Used folder: {0}</value></data>
   <data name="SshKeys" xml:space="preserve"><value>SSH keys</value></data>
   <data name="SshKeysHint" xml:space="preserve"><value>Needed only when the repository uses SSH.</value></data>
   <data name="SshPrivateKeyPathNotConfigured" xml:space="preserve"><value>SSH private key path is not configured.</value></data>

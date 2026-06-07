@@ -623,6 +623,20 @@ public class App : Application
             settings.ReloadGitMetadata();
         });
 
+        settings.BrowseSshKeyStoragePathCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_dialogs == null) return;
+
+            var path = await _dialogs.ShowOpenFolderDialogAsync(
+                L10n.Get("FolderPickerSshKeyStoragePath"),
+                settings.SshKeyStoragePath);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                settings.SshKeyStoragePath = path;
+                settings.ReloadGitMetadata();
+            }
+        });
+
         settings.RefreshGitMetadataCommand = ReactiveCommand.Create(settings.ReloadGitMetadata);
         SettingsRemoteConnectionTypeCommands.Configure(settings, _backupService, _notificationManager);
 
