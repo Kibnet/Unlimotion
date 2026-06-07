@@ -280,6 +280,18 @@ Narrow details pane
     - `C:\tmp\unlimotion-task-card-ux-v6\phone\repeater-planning-card.png`
 - Notes: initial sandboxed `dotnet run` attempts failed on NuGet SSL/credentials; the same commands were rerun outside the sandbox and passed.
 
+### Follow-up Review: Explicit Repeater Grid
+- Статус: PASS
+- Scope reviewed: user feedback that v6 screenshots still showed ragged wrapped rows, `MainControl.axaml`, `MainControl.axaml.cs`, v7 UX screenshots.
+- Decision: follow-up complete; repeater controls now use an explicit responsive grid instead of relying on `WrapPanel` for the pattern row.
+- Evidence inspected:
+  - `dotnet run --project src\Unlimotion.Test\Unlimotion.Test.csproj -- --treenode-filter "/*/*/MainControlTaskCardLayoutUiTests/*" --maximum-parallel-tests 1` -> PASS, 8/8.
+  - `dotnet run --project tests\Unlimotion.ReadmeMedia\Unlimotion.ReadmeMedia.csproj -- --ux-review task-card --language ru --output-root C:\tmp\unlimotion-task-card-ux-v7` -> PASS.
+  - Visual screenshots copied for review:
+    - `chat-artifacts\task-card-screenshots-v7\desktop-repeater-planning.png`
+    - `chat-artifacts\task-card-screenshots-v7\phone-repeater-planning-card.png`
+- Notes: desktop repeater pattern row now keeps type, period and `После выполнения` in one filled row; compact mode uses explicit rows rather than accidental wrap.
+
 ## Approval
 Пользователь запросил реализацию: "Сделай редизайн карточки задачи...".
 
@@ -297,3 +309,4 @@ Narrow details pane
 | EXEC | Final compact relation polish | 0.91 | None for requested scope | Final report | Нет | Нет | Restyled planning quick actions as visible compact chips, replaced verbose relation add text with compact plus buttons, reran layout/relation/FlaUI checks and refreshed screenshots | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
 | EXEC | Polish gear action button | 0.92 | None for requested scope | Final report | Нет | Пользователь указал, что кнопка с шестеренкой забыта | Enlarged and restyled the task action gear as an accent compact dropdown, stabilized the headless layout helper and captured v5 screenshots | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
 | EXEC | Fill wrapped row right edges | 0.91 | None for requested scope | Commit and update PR | Нет | Пользователь указал на лишние правые отступы при переносе элементов | Recomputed wide planning/repeater widths from available row width, floored weekday toggle widths to avoid layout-rounding wrap, and added desktop/phone right-edge assertions | `src/Unlimotion/Views/MainControl.axaml.cs`, `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
+| EXEC | Replace repeater wrap with responsive grid | 0.92 | None for requested scope | Commit and update PR | Нет | Пользователь указал, что по скриншотам отступы всё ещё не исправлены | Replaced repeater pattern `WrapPanel` with explicit regular/compact grid rows so whole controls no longer leave ragged wrapped-line gaps | `src/Unlimotion/Views/MainControl.axaml`, `src/Unlimotion/Views/MainControl.axaml.cs`, `specs/2026-06-04-task-card-dense-redesign.md` |
