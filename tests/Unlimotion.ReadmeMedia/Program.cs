@@ -87,9 +87,17 @@ internal static class Program
 
         if (!string.IsNullOrWhiteSpace(options.UxReview))
         {
+            if (string.Equals(options.UxReview, "filter-toolbar", StringComparison.OrdinalIgnoreCase))
+            {
+                Directory.CreateDirectory(outputRoot);
+                CaptureFilterToolbarUxReview(outputRoot, options);
+                Console.WriteLine(outputRoot);
+                return 0;
+            }
+
             if (!string.Equals(options.UxReview, "task-card", StringComparison.OrdinalIgnoreCase))
             {
-                throw new ArgumentException($"Unsupported UX review target '{options.UxReview}'. Supported value: task-card.");
+                throw new ArgumentException($"Unsupported UX review target '{options.UxReview}'. Supported values: task-card, filter-toolbar.");
             }
 
             Directory.CreateDirectory(outputRoot);
@@ -174,6 +182,123 @@ internal static class Program
 
         Console.WriteLine(outputRoot);
         return 0;
+    }
+
+    private static void CaptureFilterToolbarUxReview(string outputRoot, CaptureOptions options)
+    {
+        var languages = options.ResolveLanguages();
+        if (languages.Count != 1)
+        {
+            throw new ArgumentException("--ux-review filter-toolbar expects exactly one --language value.");
+        }
+
+        var language = languages[0];
+        var launchOptions = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+            scenario: UnlimotionAutomationScenario.ReadmeDemo,
+            language: language.LanguageMode,
+            buildBeforeLaunch: !options.NoBuildBeforeLaunch,
+            buildOncePerProcess: true);
+
+        using var session = FlaUiDesktopAppSession.Launch(launchOptions);
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        var currentTaskTitle = UnlimotionAppLaunchHost.GetCurrentTaskTitle(
+            UnlimotionAutomationScenario.ReadmeDemo,
+            language.LanguageMode);
+
+        WaitFor(
+            () => string.Equals(page.CurrentTaskTitleTextBox.Text, currentTaskTitle, StringComparison.Ordinal),
+            TimeSpan.FromSeconds(20),
+            $"current task '{currentTaskTitle}'");
+
+        if (!page.DetailsPaneToggleButton.IsToggled)
+        {
+            page.DetailsPaneToggleButton.Toggle();
+            WaitFor(
+                () => page.DetailsPaneToggleButton.IsToggled,
+                TimeSpan.FromSeconds(10),
+                "details pane closed for filter toolbar capture");
+        }
+
+        ResizeWindowExact(session.MainWindow, 390, 760);
+        session.MainWindow.Focus();
+        Pause(800);
+
+        page.SelectTabItem(static ui => ui.AllTasksTabItem, timeoutMs: 10_000);
+        Pause(800);
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "task-narrow-alltasks.png"),
+            "task-narrow-alltasks");
+        OpenFilterPanelAndCapture(
+            session.MainWindow,
+            session.ConditionFactory,
+            "AllTasksFiltersButton",
+            Path.Combine(outputRoot, "task-narrow-alltasks-open.png"),
+            "task-narrow-alltasks-open");
+
+        page.SelectTabItem(static ui => ui.LastCreatedTabItem, timeoutMs: 10_000);
+        Pause(800);
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "task-narrow-lastcreated.png"),
+            "task-narrow-lastcreated");
+        OpenFilterPanelAndCapture(
+            session.MainWindow,
+            session.ConditionFactory,
+            "LastCreatedFiltersButton",
+            Path.Combine(outputRoot, "task-narrow-lastcreated-open.png"),
+            "task-narrow-lastcreated-open");
+
+        page.SelectTabItem(static ui => ui.RoadmapTabItem, timeoutMs: 10_000);
+        Pause(1200);
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "roadmap-narrow.png"),
+            "roadmap-narrow");
+        OpenFilterPanelAndCapture(
+            session.MainWindow,
+            session.ConditionFactory,
+            "RoadmapFiltersButton",
+            Path.Combine(outputRoot, "roadmap-narrow-open.png"),
+            "roadmap-narrow-open");
+
+        ResizeWindowExact(session.MainWindow, 1200, 760);
+        session.MainWindow.Focus();
+        Pause(800);
+
+        page.SelectTabItem(static ui => ui.AllTasksTabItem, timeoutMs: 10_000);
+        Pause(800);
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "task-wide-alltasks.png"),
+            "task-wide-alltasks");
+    }
+
+    private static void SaveFilterToolbarCapture(
+        FlaUiWindow window,
+        string outputPath,
+        string assetKey,
+        bool includeDesktopOverlays = false)
+    {
+        using var bitmap = CaptureDesktopWindowBitmap(window, includeDesktopOverlays);
+        VerifyNonBlankBitmap(bitmap, assetKey);
+        bitmap.Save(outputPath, ImageFormat.Png);
+    }
+
+    private static void OpenFilterPanelAndCapture(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string filtersButtonAutomationId,
+        string outputPath,
+        string assetKey)
+    {
+        var filtersButton = window.FindFirstDescendant(conditionFactory.ByAutomationId(filtersButtonAutomationId))
+                            ?? throw new InvalidOperationException(
+                                $"Filter button '{filtersButtonAutomationId}' was not found for UX review capture.");
+
+        filtersButton.Click();
+        Pause(500);
+        SaveFilterToolbarCapture(window, outputPath, assetKey, includeDesktopOverlays: true);
     }
 
     private static void WriteReport<T>(string path, T report)
@@ -931,7 +1056,7 @@ internal static class Program
         });
     }
 
-    private static Bitmap CaptureDesktopWindowBitmap(FlaUiWindow window)
+    private static Bitmap CaptureDesktopWindowBitmap(FlaUiWindow window, bool includeDesktopOverlays = false)
     {
         var handle = new IntPtr(window.Properties.NativeWindowHandle.ValueOrDefault);
         if (handle == IntPtr.Zero)
@@ -941,6 +1066,20 @@ internal static class Program
 
         var windowBounds = GetWindowBounds(handle);
         var captureBounds = GetCaptureBounds(handle);
+
+        if (includeDesktopOverlays)
+        {
+            using var overlayBitmap = new Bitmap(captureBounds.Width, captureBounds.Height);
+            if (TryBitBltDesktop(
+                    captureBounds.Left,
+                    captureBounds.Top,
+                    overlayBitmap,
+                    captureBounds.Width,
+                    captureBounds.Height))
+            {
+                return new Bitmap(overlayBitmap);
+            }
+        }
 
         using var windowBitmap = new Bitmap(windowBounds.Width, windowBounds.Height);
         if (TryPrintWindow(handle, windowBitmap)

@@ -108,6 +108,12 @@
   <data name="ExpandCurrentNested" xml:space="preserve"><value>Expand nested for current</value></data>
   <data name="FileStorageNoAccess" xml:space="preserve"><value>No access to directory: {0}</value></data>
   <data name="FindTask" xml:space="preserve"><value>Find task</value></data>
+  <data name="Filters" xml:space="preserve"><value>Filters</value></data>
+  <data name="FilterDate" xml:space="preserve"><value>Date</value></data>
+  <data name="FilterState" xml:space="preserve"><value>State</value></data>
+  <data name="FilterTags" xml:space="preserve"><value>Tags</value></data>
+  <data name="FilterTiming" xml:space="preserve"><value>Timing</value></data>
+  <data name="FilterSort" xml:space="preserve"><value>Sort</value></data>
   <data name="NoRelationCandidates" xml:space="preserve"><value>No available tasks for this relation.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>First day of next month</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 days</value></data>

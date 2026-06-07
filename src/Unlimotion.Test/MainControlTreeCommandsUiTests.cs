@@ -102,11 +102,11 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
-                var filterCheckBox = FindVisibleFilterCheckBox(view, vm);
+                var toolbarFocusTarget = FindVisibleToolbarFocusTarget(view);
 
                 await Assert.That(allTasksTree).IsNotNull();
                 await ClickControlAsync(window, allTasksTree!);
-                filterCheckBox.Focus();
+                toolbarFocusTarget.Focus();
 
                 PressHotkey(window, Key.Right, PhysicalKey.ArrowRight, RawInputModifiers.Control | RawInputModifiers.Alt);
                 Dispatcher.UIThread.RunJobs();
@@ -1863,11 +1863,11 @@ public class MainControlTreeCommandsUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
-                var filterCheckBox = FindVisibleFilterCheckBox(view, vm);
+                var toolbarFocusTarget = FindVisibleToolbarFocusTarget(view);
                 await Assert.That(allTasksTree).IsNotNull();
 
                 await ClickControlAsync(window, allTasksTree!);
-                filterCheckBox.Focus();
+                toolbarFocusTarget.Focus();
                 PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
                 Dispatcher.UIThread.RunJobs();
 
@@ -2620,13 +2620,12 @@ public class MainControlTreeCommandsUiTests
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
-    private static CheckBox FindVisibleFilterCheckBox(Control root, MainWindowViewModel viewModel)
+    private static Control FindVisibleToolbarFocusTarget(Control root)
     {
         return root.GetVisualDescendants()
-            .OfType<CheckBox>()
+            .OfType<Control>()
             .First(control =>
-                ReferenceEquals(control.DataContext, viewModel) &&
-                control.Content != null &&
+                AutomationProperties.GetAutomationId(control) == "AllTasksFiltersButton" &&
                 control.IsAttachedToVisualTree() &&
                 control.IsVisible &&
                 control.IsEnabled);

@@ -57,6 +57,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -99,6 +100,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -153,6 +155,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -207,6 +210,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -262,6 +266,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -314,6 +319,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -434,6 +440,12 @@ public class MainControlResetFiltersUiTests
             Height = 1000,
             Content = content
         };
+    }
+
+    private static async Task DrainUiThrottlesAsync()
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs + 100));
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static T FindControlByAutomationId<T>(Control root, string automationId)
