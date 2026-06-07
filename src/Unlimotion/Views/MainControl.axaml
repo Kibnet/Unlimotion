@@ -534,14 +534,16 @@
                              AutomationProperties.AutomationId="AllTasksTabItem">
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="AllTasksFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -572,13 +574,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="AllTasksResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row= "1" AutoScrollToSelectedItem= "True"
                                       ItemsSource="{Binding CurrentAllTasksItems}"
@@ -602,14 +604,16 @@
                              AutomationProperties.AutomationId="LastCreatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="LastCreatedFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -655,13 +659,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="LastCreatedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
@@ -706,14 +710,16 @@
                              AutomationProperties.AutomationId="LastUpdatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="LastUpdatedFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -759,13 +765,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="LastUpdatedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastUpdatedItems}"
@@ -810,14 +816,16 @@
                              AutomationProperties.AutomationId="UnlockedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="UnlockedFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -854,13 +862,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="UnlockedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
@@ -904,14 +912,16 @@
                              AutomationProperties.AutomationId="CompletedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="CompletedFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -950,13 +960,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="CompletedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
@@ -1002,14 +1012,16 @@
                              AutomationProperties.AutomationId="ArchivedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0,0,6,0"
                                                     AutomationProperties.AutomationId="ArchivedFiltersButton">
                                         <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                            <Flyout Placement="BottomEdgeAlignedRight">
                                                 <Border Classes="FilterOverflowPanel"
                                                         MinWidth="300"
                                                         MaxWidth="360"
@@ -1048,13 +1060,13 @@
                                     </DropDownButton>
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="ArchivedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
@@ -1100,16 +1112,17 @@
                              AutomationProperties.AutomationId="LastOpenedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
+                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                                 <WrapPanel Grid.Column="1" Classes="FilterToolbarItems">
                                     <Button Classes="FilterToolbarResetButton"
                                             ToolTip.Tip="{DynamicResource ResetFilters}"
+                                            AutomationProperties.Name="{DynamicResource ResetFilters}"
                                             Command="{Binding ResetTaskFiltersCommand}"
                                             Margin="0"
                                             AutomationProperties.AutomationId="LastOpenedResetFiltersButton">
                                         <PathIcon Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
                                     </Button>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="0" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"

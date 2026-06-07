@@ -233,6 +233,7 @@ internal static class Program
             session.MainWindow,
             session.ConditionFactory,
             "AllTasksFiltersButton",
+            "AllTasksFilterPanel",
             Path.Combine(outputRoot, "task-narrow-alltasks-open.png"),
             "task-narrow-alltasks-open");
 
@@ -246,6 +247,7 @@ internal static class Program
             session.MainWindow,
             session.ConditionFactory,
             "LastCreatedFiltersButton",
+            "LastCreatedFilterPanel",
             Path.Combine(outputRoot, "task-narrow-lastcreated-open.png"),
             "task-narrow-lastcreated-open");
 
@@ -259,6 +261,7 @@ internal static class Program
             session.MainWindow,
             session.ConditionFactory,
             "RoadmapFiltersButton",
+            "RoadmapFilterPanel",
             Path.Combine(outputRoot, "roadmap-narrow-open.png"),
             "roadmap-narrow-open");
 
@@ -289,6 +292,7 @@ internal static class Program
         FlaUiWindow window,
         FlaUI.Core.Conditions.ConditionFactory conditionFactory,
         string filtersButtonAutomationId,
+        string filterPanelAutomationId,
         string outputPath,
         string assetKey)
     {
@@ -296,9 +300,43 @@ internal static class Program
                             ?? throw new InvalidOperationException(
                                 $"Filter button '{filtersButtonAutomationId}' was not found for UX review capture.");
 
-        filtersButton.Click();
+        var expandPattern = filtersButton.Patterns.ExpandCollapse.PatternOrDefault;
+        if (expandPattern != null)
+        {
+            expandPattern.Expand();
+        }
+        else
+        {
+            var invokePattern = filtersButton.Patterns.Invoke.PatternOrDefault
+                                ?? throw new InvalidOperationException(
+                                    $"Filter button '{filtersButtonAutomationId}' does not support UI Automation ExpandCollapse or Invoke.");
+            invokePattern.Invoke();
+        }
+
+        WaitForFilterPanel(window, conditionFactory, filterPanelAutomationId);
         Pause(500);
         SaveFilterToolbarCapture(window, outputPath, assetKey, includeDesktopOverlays: true);
+    }
+
+    private static void WaitForFilterPanel(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string filterPanelAutomationId)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var panel = window.Automation.GetDesktop()
+                .FindFirstDescendant(conditionFactory.ByAutomationId(filterPanelAutomationId));
+            if (panel != null)
+            {
+                return;
+            }
+
+            Pause(100);
+        }
+
+        throw new InvalidOperationException(
+            $"Filter panel '{filterPanelAutomationId}' was not opened for UX review capture.");
     }
 
     private static void WriteReport<T>(string path, T report)
