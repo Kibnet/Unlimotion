@@ -55,10 +55,11 @@ namespace Unlimotion.Views
         private const double CompactTaskDetailsMaxWidth = 430d;
         private const double RegularTaskPlanningGroupWidth = 176d;
         private const double RegularRepeaterSelectorWidth = 148d;
-        private const double RegularRepeaterPatternHostWidth = 360d;
+        private const double RegularRepeaterPatternControlsWidth = 360d;
         private const double RegularRepeaterPatternTypeWidth = 120d;
         private const double RegularRepeaterPeriodWidth = 64d;
         private const double RegularRepeaterAfterCompleteWidth = 156d;
+        private const double CompactTaskDetailsContentInset = 18d;
         private const double RegularTaskDetailsContentInset = 24d;
         private const double TaskPlanningGroupGap = 4d;
         private const double RepeaterControlGap = 6d;
@@ -327,9 +328,8 @@ namespace Unlimotion.Views
 
         private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)
         {
-            var compactCardContentWidth = Math.Max(180d, detailsWidth - 36d);
+            var compactCardContentWidth = Math.Max(180d, detailsWidth - CompactTaskDetailsContentInset);
             var regularCardContentWidth = Math.Max(420d, detailsWidth - RegularTaskDetailsContentInset);
-            var compactRepeaterSmallWidth = Math.Max(120d, (compactCardContentWidth - 10d) / 2d);
             var planningGroups = TaskDetailsPanelRoot.GetVisualDescendants()
                 .OfType<StackPanel>()
                 .Where(static panel => panel.Classes.Contains("TaskPlanningGroup"))
@@ -354,40 +354,23 @@ namespace Unlimotion.Views
                 .OfType<ComboBox>()
                 .Where(static comboBox => comboBox.Classes.Contains("RepeaterSelector"))
                 .ToArray();
-            var repeaterPatternHosts = TaskDetailsPanelRoot.GetVisualDescendants()
-                .OfType<Border>()
-                .Where(static border => border.Classes.Contains("RepeaterPatternHost"))
-                .ToArray();
-            var repeaterPatternGrids = TaskDetailsPanelRoot.GetVisualDescendants()
+            var repeaterControlGrids = TaskDetailsPanelRoot.GetVisualDescendants()
                 .OfType<Grid>()
-                .Where(static grid => grid.Classes.Contains("RepeaterPatternControls"))
+                .Where(static grid => grid.Classes.Contains("RepeaterControls"))
                 .ToArray();
             var regularRepeaterSelectorWidth = Math.Max(
                 RegularRepeaterSelectorWidth,
                 Math.Min(220d, regularCardContentWidth * 0.30d));
-            var regularRepeaterPatternHostWidth = Math.Max(
-                RegularRepeaterPatternHostWidth,
+            var regularRepeaterPatternControlsWidth = Math.Max(
+                RegularRepeaterPatternControlsWidth,
                 regularCardContentWidth - regularRepeaterSelectorWidth - RepeaterControlGap);
-            var compactRepeaterAfterCompleteWidth = Math.Max(
-                120d,
-                compactCardContentWidth - compactRepeaterSmallWidth - 10d);
 
-            foreach (var selector in repeaterSelectors)
+            foreach (var grid in repeaterControlGrids)
             {
-                selector.Width = isCompact ? compactCardContentWidth : regularRepeaterSelectorWidth;
-                selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
-            }
-
-            foreach (var host in repeaterPatternHosts)
-            {
-                host.Width = isCompact ? compactCardContentWidth : regularRepeaterPatternHostWidth;
-            }
-
-            foreach (var grid in repeaterPatternGrids)
-            {
+                grid.Width = isCompact ? compactCardContentWidth : regularCardContentWidth;
                 grid.ColumnDefinitions = isCompact
-                    ? new ColumnDefinitions("*,*")
-                    : new ColumnDefinitions("*,Auto,Auto");
+                    ? new ColumnDefinitions("1.1*,0.9*")
+                    : new ColumnDefinitions("Auto,*,Auto,Auto");
                 grid.RowDefinitions = isCompact
                     ? new RowDefinitions("Auto,Auto,Auto")
                     : new RowDefinitions("Auto,Auto");
@@ -395,16 +378,30 @@ namespace Unlimotion.Views
 
             var regularRepeaterPatternTypeWidth = Math.Max(
                 RegularRepeaterPatternTypeWidth,
-                regularRepeaterPatternHostWidth - RegularRepeaterPeriodWidth - RegularRepeaterAfterCompleteWidth - 2 * RepeaterControlGap);
+                regularRepeaterPatternControlsWidth - RegularRepeaterPeriodWidth - RegularRepeaterAfterCompleteWidth - 2 * RepeaterControlGap);
+
+            foreach (var selector in repeaterSelectors)
+            {
+                var hasVisiblePattern = selector.DataContext is TaskItemViewModel { IsHaveRepeater: true };
+                Grid.SetRow(selector, 0);
+                Grid.SetColumn(selector, 0);
+                Grid.SetColumnSpan(selector, isCompact && !hasVisiblePattern ? 2 : 1);
+                selector.Width = isCompact ? double.NaN : regularRepeaterSelectorWidth;
+                selector.HorizontalAlignment = HorizontalAlignment.Stretch;
+                selector.Margin = isCompact
+                    ? new Thickness(0, 0, hasVisiblePattern ? RepeaterControlGap : 0, 8)
+                    : new Thickness(0, 0, RepeaterControlGap, 5);
+            }
 
             foreach (var selector in TaskDetailsPanelRoot.GetVisualDescendants()
                          .OfType<ComboBox>()
                          .Where(static comboBox => comboBox.Classes.Contains("RepeaterPatternTypeSelector")))
             {
                 Grid.SetRow(selector, 0);
-                Grid.SetColumn(selector, 0);
-                Grid.SetColumnSpan(selector, isCompact ? 2 : 1);
-                selector.Width = isCompact ? compactCardContentWidth : regularRepeaterPatternTypeWidth;
+                Grid.SetColumn(selector, 1);
+                Grid.SetColumnSpan(selector, 1);
+                selector.Width = isCompact ? double.NaN : regularRepeaterPatternTypeWidth;
+                selector.HorizontalAlignment = HorizontalAlignment.Stretch;
                 selector.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
             }
 
@@ -413,9 +410,10 @@ namespace Unlimotion.Views
                          .Where(static numericUpDown => numericUpDown.Classes.Contains("RepeaterPeriodInput")))
             {
                 Grid.SetRow(input, isCompact ? 1 : 0);
-                Grid.SetColumn(input, isCompact ? 0 : 1);
+                Grid.SetColumn(input, isCompact ? 0 : 2);
                 Grid.SetColumnSpan(input, 1);
-                input.Width = isCompact ? compactRepeaterSmallWidth : RegularRepeaterPeriodWidth;
+                input.Width = isCompact ? double.NaN : RegularRepeaterPeriodWidth;
+                input.HorizontalAlignment = isCompact ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
                 input.Margin = isCompact ? new Thickness(0, 0, 10, 8) : new Thickness(0, 0, RepeaterControlGap, 5);
             }
 
@@ -424,9 +422,10 @@ namespace Unlimotion.Views
                          .Where(static checkBox => checkBox.Classes.Contains("RepeaterAfterCompleteCheckBox")))
             {
                 Grid.SetRow(checkbox, isCompact ? 1 : 0);
-                Grid.SetColumn(checkbox, isCompact ? 1 : 2);
+                Grid.SetColumn(checkbox, isCompact ? 1 : 3);
                 Grid.SetColumnSpan(checkbox, 1);
-                checkbox.Width = isCompact ? compactRepeaterAfterCompleteWidth : RegularRepeaterAfterCompleteWidth;
+                checkbox.Width = isCompact ? double.NaN : RegularRepeaterAfterCompleteWidth;
+                checkbox.HorizontalAlignment = isCompact ? HorizontalAlignment.Right : HorizontalAlignment.Left;
                 checkbox.Margin = isCompact ? new Thickness(0, 0, 0, 8) : new Thickness(0, 0, 0, 5);
             }
 
@@ -435,9 +434,9 @@ namespace Unlimotion.Views
                          .Where(static panel => panel.Classes.Contains("WeekdayToggles")))
             {
                 Grid.SetRow(weekdayPanel, isCompact ? 2 : 1);
-                Grid.SetColumn(weekdayPanel, 0);
+                Grid.SetColumn(weekdayPanel, isCompact ? 0 : 1);
                 Grid.SetColumnSpan(weekdayPanel, isCompact ? 2 : 3);
-                var weekdayPanelWidth = isCompact ? compactCardContentWidth : regularRepeaterPatternHostWidth;
+                var weekdayPanelWidth = isCompact ? compactCardContentWidth : regularRepeaterPatternControlsWidth;
                 weekdayPanel.Width = weekdayPanelWidth;
                 weekdayPanel.Margin = isCompact ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 0, 5);
 

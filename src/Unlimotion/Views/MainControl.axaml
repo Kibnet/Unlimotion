@@ -304,16 +304,12 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
         </Style>
-        <Style Selector="WrapPanel.RepeaterControls">
-            <Setter Property="Orientation" Value="Horizontal"/>
+        <Style Selector="Grid.RepeaterControls">
             <Setter Property="Margin" Value="0,0,0,2"/>
         </Style>
         <Style Selector="Grid.RepeaterPatternControls">
             <Setter Property="ColumnSpacing" Value="0"/>
             <Setter Property="RowSpacing" Value="0"/>
-        </Style>
-        <Style Selector="Border.RepeaterPatternHost">
-            <Setter Property="Width" Value="360"/>
         </Style>
         <Style Selector="ComboBox.RepeaterSelector">
             <Setter Property="Width" Value="148"/>
@@ -1593,8 +1589,11 @@
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskRepeaterSection">
                                         <StackPanel Classes="TaskCardSectionContent">
-                                            <WrapPanel Classes="RepeaterControls">
-                                                <ComboBox Classes="RepeaterSelector"
+                                            <Grid Classes="RepeaterControls RepeaterPatternControls"
+                                                  ColumnDefinitions="Auto,*,Auto,Auto"
+                                                  RowDefinitions="Auto,Auto">
+                                                <ComboBox Grid.Column="0"
+                                                          Classes="RepeaterSelector"
                                                           ItemsSource="{Binding Repeaters}"
                                                           SelectedItem="{Binding Repeater}"
                                                           PlaceholderText="{DynamicResource RepeaterTemplates}"
@@ -1605,43 +1604,39 @@
                                                         </DataTemplate>
                                                     </ComboBox.ItemTemplate>
                                                 </ComboBox>
-                                                <Border Classes="RepeaterPatternHost"
-                                                        IsVisible="{Binding IsHaveRepeater}">
-                                                    <Grid Classes="RepeaterPatternControls"
-                                                          ColumnDefinitions="*,Auto,Auto"
-                                                          RowDefinitions="Auto,Auto"
-                                                          DataContext="{Binding Repeater}">
-                                                        <ComboBox Grid.Column="0"
-                                                                  Classes="RepeaterPatternTypeSelector"
-                                                                  ItemsSource="{Binding RepeaterTypes}"
-                                                                  SelectedItem="{Binding SelectedRepeaterType}"
-                                                                  AutomationProperties.AutomationId="CurrentTaskRepeaterPatternTypeSelector"/>
-                                                        <NumericUpDown Grid.Column="1"
-                                                                       Classes="RepeaterPeriodInput"
-                                                                       Value="{Binding Period}"
-                                                                       PlaceholderText="{DynamicResource Period}"
-                                                                       ToolTip.Tip="{DynamicResource Period}"
-                                                                       AutomationProperties.AutomationId="CurrentTaskRepeaterPeriodInput"/>
-                                                        <CheckBox Grid.Column="2"
-                                                                  Classes="RepeaterAfterCompleteCheckBox"
-                                                                  IsChecked="{Binding AfterComplete}"
-                                                                  Content="{DynamicResource AfterComplete}"
-                                                                  AutomationProperties.AutomationId="CurrentTaskRepeaterAfterCompleteCheckBox"/>
-                                                        <WrapPanel Grid.Row="1"
-                                                                   Grid.ColumnSpan="3"
-                                                                   Classes="WeekdayToggles"
-                                                                   IsVisible="{Binding Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static domain:RepeaterType.Weekly}, FallbackValue={x:Static domain:RepeaterType.None}}">
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Monday}" Content="{DynamicResource MondayShort}" ToolTip.Tip="{DynamicResource Monday}" />
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Tuesday}" Content="{DynamicResource TuesdayShort}" ToolTip.Tip="{DynamicResource Tuesday}" />
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Wednesday}" Content="{DynamicResource WednesdayShort}" ToolTip.Tip="{DynamicResource Wednesday}"/>
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Thursday}" Content="{DynamicResource ThursdayShort}" ToolTip.Tip="{DynamicResource Thursday}" />
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Friday}" Content="{DynamicResource FridayShort}" ToolTip.Tip="{DynamicResource Friday}" />
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Saturday}" Content="{DynamicResource SaturdayShort}" ToolTip.Tip="{DynamicResource Saturday}" />
-                                                            <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Sunday}" Content="{DynamicResource SundayShort}" ToolTip.Tip="{DynamicResource Sunday}" />
-                                                        </WrapPanel>
-                                                    </Grid>
-                                                </Border>
-                                            </WrapPanel>
+                                                <ComboBox Grid.Column="1"
+                                                          Classes="RepeaterPatternTypeSelector"
+                                                          ItemsSource="{Binding Repeater.RepeaterTypes}"
+                                                          SelectedItem="{Binding Repeater.SelectedRepeaterType}"
+                                                          IsVisible="{Binding IsHaveRepeater}"
+                                                          AutomationProperties.AutomationId="CurrentTaskRepeaterPatternTypeSelector"/>
+                                                <NumericUpDown Grid.Column="2"
+                                                               Classes="RepeaterPeriodInput"
+                                                               Value="{Binding Repeater.Period}"
+                                                               IsVisible="{Binding IsHaveRepeater}"
+                                                               PlaceholderText="{DynamicResource Period}"
+                                                               ToolTip.Tip="{DynamicResource Period}"
+                                                               AutomationProperties.AutomationId="CurrentTaskRepeaterPeriodInput"/>
+                                                <CheckBox Grid.Column="3"
+                                                          Classes="RepeaterAfterCompleteCheckBox"
+                                                          IsChecked="{Binding Repeater.AfterComplete}"
+                                                          IsVisible="{Binding IsHaveRepeater}"
+                                                          Content="{DynamicResource AfterComplete}"
+                                                          AutomationProperties.AutomationId="CurrentTaskRepeaterAfterCompleteCheckBox"/>
+                                                <WrapPanel Grid.Row="1"
+                                                           Grid.Column="1"
+                                                           Grid.ColumnSpan="3"
+                                                           Classes="WeekdayToggles"
+                                                           IsVisible="{Binding Repeater.Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static domain:RepeaterType.Weekly}, FallbackValue={x:Static domain:RepeaterType.None}, TargetNullValue={x:Static domain:RepeaterType.None}}">
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Monday}" Content="{DynamicResource MondayShort}" ToolTip.Tip="{DynamicResource Monday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Tuesday}" Content="{DynamicResource TuesdayShort}" ToolTip.Tip="{DynamicResource Tuesday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Wednesday}" Content="{DynamicResource WednesdayShort}" ToolTip.Tip="{DynamicResource Wednesday}"/>
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Thursday}" Content="{DynamicResource ThursdayShort}" ToolTip.Tip="{DynamicResource Thursday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Friday}" Content="{DynamicResource FridayShort}" ToolTip.Tip="{DynamicResource Friday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Saturday}" Content="{DynamicResource SaturdayShort}" ToolTip.Tip="{DynamicResource Saturday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Sunday}" Content="{DynamicResource SundayShort}" ToolTip.Tip="{DynamicResource Sunday}" />
+                                                </WrapPanel>
+                                            </Grid>
                                         </StackPanel>
                                     </Border>
 

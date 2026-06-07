@@ -234,6 +234,11 @@ public class MainControlTaskCardLayoutUiTests
 
                 var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
                 var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+                var repeaterSection = FindControlByAutomationId<Control>(view, "CurrentTaskRepeaterSection");
+                var repeaterSelector = FindControlByAutomationId<ComboBox>(view, "CurrentTaskRepeaterSelector");
+                var patternTypeSelector = FindControlByAutomationId<ComboBox>(view, "CurrentTaskRepeaterPatternTypeSelector");
+                var periodInput = FindControlByAutomationId<NumericUpDown>(view, "CurrentTaskRepeaterPeriodInput");
+                var afterCompleteCheckBox = FindControlByAutomationId<CheckBox>(view, "CurrentTaskRepeaterAfterCompleteCheckBox");
                 var weekdayPanel = view.GetVisualDescendants()
                     .OfType<WrapPanel>()
                     .FirstOrDefault(panel =>
@@ -263,7 +268,26 @@ public class MainControlTaskCardLayoutUiTests
                         $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}.");
                 }
 
+                var repeaterSelectorTop = GetTopEdge(view, repeaterSelector);
+                var patternTypeTop = GetTopEdge(view, patternTypeSelector);
+                if (Math.Abs(patternTypeTop - repeaterSelectorTop) > 2)
+                {
+                    throw new InvalidOperationException(
+                        "Phone repeater template and type selectors should share the first compact row: " +
+                        $"templateTop={repeaterSelectorTop:F1}; typeTop={patternTypeTop:F1}.");
+                }
+
+                AssertRowUsesRightEdge(
+                    repeaterSection,
+                    [repeaterSelector, patternTypeSelector],
+                    8d,
+                    "Phone repeater selector row");
                 AssertRowUsesRightEdge(weekdayPanel, weekdayToggles, 8d, "Phone weekday toggle row");
+                AssertRowUsesRightEdge(
+                    repeaterSection,
+                    [periodInput, afterCompleteCheckBox],
+                    8d,
+                    "Phone repeater period row");
                 AssertNoHorizontalOverflow(scrollViewer, card);
             }
             finally
