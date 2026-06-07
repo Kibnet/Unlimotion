@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -135,6 +136,7 @@ public class MainControlTabsOverflowUiTests
                 AssertOverflowButtonUsesHorizontalLineIcon(overflowButton);
                 AssertVisibleTabsStayOnSingleRow(view, visibleTabs.Cast<Control>().Append(overflowButton).ToArray());
                 AssertOverflowButtonFollowsVisibleTabHeaders(view, visibleTabs, overflowButton);
+                AssertNoHiddenTabFitsRemainingHeaderSpace(view, hiddenTabs, overflowButton);
                 AssertMainTabsContentSpansHostWhenOverflowVisible(view);
             }
             finally
@@ -521,6 +523,53 @@ public class MainControlTabsOverflowUiTests
             throw new InvalidOperationException(
                 $"Main tabs overflow button must follow visible tab headers. Gap={gap}, ButtonBounds={buttonBounds}.");
         }
+    }
+
+    private static void AssertNoHiddenTabFitsRemainingHeaderSpace(
+        MainControl view,
+        IReadOnlyCollection<TabItem> hiddenTabs,
+        Button overflowButton)
+    {
+        if (hiddenTabs.Count == 0)
+        {
+            return;
+        }
+
+        var mainTabs = FindControlByAutomationId<TabControl>(view, "MainTabs");
+        var buttonBounds = GetBoundsRelativeTo(mainTabs, overflowButton);
+        var remainingWidth = Math.Max(0, mainTabs.Bounds.Width - buttonBounds.Right);
+        var tabWidths = GetMainTabWidthCache(view);
+        var fittingTabs = hiddenTabs
+            .Select(tab =>
+            {
+                var automationId = AutomationProperties.GetAutomationId(tab) ?? string.Empty;
+                return new
+                {
+                    AutomationId = automationId,
+                    Width = tabWidths.TryGetValue(automationId, out var width) ? width : 0
+                };
+            })
+            .Where(tab => tab.Width > 0 && tab.Width <= remainingWidth + 1)
+            .Select(tab => $"{tab.AutomationId} width={tab.Width}")
+            .ToArray();
+
+        if (fittingTabs.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Main tabs overflow left unused header space while hidden tabs still fit. RemainingWidth={remainingWidth}; FittingTabs={string.Join("; ", fittingTabs)}.");
+        }
+    }
+
+    private static IReadOnlyDictionary<string, double> GetMainTabWidthCache(MainControl view)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var field = typeof(MainControl).GetField("_mainTabWidthCache", flags);
+        if (field?.GetValue(view) is not IReadOnlyDictionary<string, double> tabWidths)
+        {
+            throw new InvalidOperationException("Main tab width cache was not available for overflow layout assertion.");
+        }
+
+        return tabWidths;
     }
 
     private static void AssertOverflowButtonUsesHorizontalLineIcon(Button overflowButton)

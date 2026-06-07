@@ -57,8 +57,6 @@ namespace Unlimotion.Views
         private const double RegularRepeaterPatternTypeWidth = 160d;
         private const double RegularRepeaterPeriodWidth = 92d;
         private const double RegularTaskIdMaxWidth = 180d;
-        // Keep DPI-scaled tab headers from pushing the overflow trigger to the window edge.
-        private const double MainTabsOverflowReservedWidth = 400d;
         private const double MainTabsOverflowButtonSpacing = 6d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
@@ -463,7 +461,7 @@ namespace Unlimotion.Views
             var overflowButtonWidth = GetMainTabsOverflowButtonWidth();
             var tabCapacity = Math.Max(
                 0,
-                availableWidth - overflowButtonWidth - MainTabsOverflowButtonSpacing - MainTabsOverflowReservedWidth);
+                availableWidth - overflowButtonWidth - MainTabsOverflowButtonSpacing);
             var visibleAutomationIds = new HashSet<string>(StringComparer.Ordinal)
             {
                 selectedAutomationId
