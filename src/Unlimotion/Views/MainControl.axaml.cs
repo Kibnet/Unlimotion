@@ -846,36 +846,36 @@ namespace Unlimotion.Views
             if (isNarrow)
             {
                 toolbar.Classes.Add(NarrowFilterToolbarClass);
-                toolbar.ColumnDefinitions = new ColumnDefinitions("*,Auto");
+                toolbar.ColumnDefinitions = new ColumnDefinitions("Auto,*");
                 toolbar.RowDefinitions = new RowDefinitions("Auto");
                 toolbar.ColumnSpacing = 8;
 
                 Grid.SetRow(searchBar, 0);
-                Grid.SetColumn(searchBar, 0);
+                Grid.SetColumn(searchBar, 1);
                 Grid.SetRow(filterItems, 0);
-                Grid.SetColumn(filterItems, 1);
+                Grid.SetColumn(filterItems, 0);
 
                 searchBar.HorizontalAlignment = HorizontalAlignment.Stretch;
                 searchBar.VerticalAlignment = VerticalAlignment.Top;
                 searchBar.Margin = new Thickness(0);
-                filterItems.HorizontalAlignment = HorizontalAlignment.Right;
+                filterItems.HorizontalAlignment = HorizontalAlignment.Left;
                 return;
             }
 
             toolbar.Classes.Remove(NarrowFilterToolbarClass);
-            toolbar.ColumnDefinitions = new ColumnDefinitions("*,Auto");
+            toolbar.ColumnDefinitions = new ColumnDefinitions("Auto,*");
             toolbar.RowDefinitions = new RowDefinitions("Auto");
-            toolbar.ColumnSpacing = 12;
+            toolbar.ColumnSpacing = 8;
 
             Grid.SetRow(searchBar, 0);
-            Grid.SetColumn(searchBar, 0);
+            Grid.SetColumn(searchBar, 1);
             Grid.SetRow(filterItems, 0);
-            Grid.SetColumn(filterItems, 1);
+            Grid.SetColumn(filterItems, 0);
 
             searchBar.HorizontalAlignment = HorizontalAlignment.Stretch;
             searchBar.VerticalAlignment = VerticalAlignment.Top;
             searchBar.Margin = new Thickness(0);
-            filterItems.HorizontalAlignment = HorizontalAlignment.Right;
+            filterItems.HorizontalAlignment = HorizontalAlignment.Left;
         }
 
         private static void ApplyFilterToolbarSearchWidth(

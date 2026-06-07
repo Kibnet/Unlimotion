@@ -18,7 +18,7 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlFilterToolbarResponsiveUiTests
 {
-    private static readonly (int TabIndex, string ResetButtonAutomationId, string? FiltersButtonAutomationId, string? FilterPanelAutomationId, bool ExpectsSortControl)[] TaskTabs =
+    private static readonly (int TabIndex, string ResetButtonAutomationId, string FiltersButtonAutomationId, string FilterPanelAutomationId, bool ExpectsSortControl)[] TaskTabs =
     [
         (0, "AllTasksResetFiltersButton", "AllTasksFiltersButton", "AllTasksFilterPanel", false),
         (1, "LastCreatedResetFiltersButton", "LastCreatedFiltersButton", "LastCreatedFilterPanel", false),
@@ -26,7 +26,7 @@ public class MainControlFilterToolbarResponsiveUiTests
         (3, "UnlockedResetFiltersButton", "UnlockedFiltersButton", "UnlockedFilterPanel", false),
         (4, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false),
         (5, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false),
-        (6, "LastOpenedResetFiltersButton", null, null, false)
+        (6, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false)
     ];
 
     [Test]
@@ -57,22 +57,16 @@ public class MainControlFilterToolbarResponsiveUiTests
                     var toolbar = FindVisibleFilterToolbar(view);
                     var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
                     var primaryActions = FindVisibleToolbarChild<WrapPanel>(toolbar);
-                    var resetButton = FindVisibleControlByAutomationId<Button>(view, tab.ResetButtonAutomationId);
+                    var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, tab.FiltersButtonAutomationId);
 
                     await AssertCompactPrimaryActions(primaryActions, tab.ExpectsSortControl);
                     await AssertPrimaryActionsUseSingleLine(primaryActions);
-                    await AssertSearchPrecedesActionsInLogicalOrder(toolbar, searchBar, primaryActions);
+                    await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
                     await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
-                    await AssertResetButtonMatchesSearchSize(resetButton, searchBar);
-                    await AssertAutomationName(resetButton, "ResetFilters");
-
-                    if (tab.FiltersButtonAutomationId != null)
-                    {
-                        var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, tab.FiltersButtonAutomationId);
-                        AssertFilterFlyoutPanel(filtersButton, tab.FilterPanelAutomationId!);
-                        await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
-                        await AssertAutomationName(filtersButton, "Filters");
-                    }
+                    AssertFilterFlyoutPanel(filtersButton, tab.FilterPanelAutomationId, tab.ResetButtonAutomationId);
+                    await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
+                    await AssertAutomationName(filtersButton, "Filters");
+                    await AssertResetButtonIsInsideFlyout(view, filtersButton, tab.ResetButtonAutomationId);
                 }
             }
             finally
@@ -110,17 +104,15 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
                 var primaryActions = FindVisibleToolbarChild<WrapPanel>(toolbar);
                 var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
-                var resetButton = FindVisibleControlByAutomationId<Button>(view, "RoadmapResetFiltersButton");
 
                 await AssertCompactPrimaryActions(primaryActions, expectsSortControl: false);
                 await AssertPrimaryActionsUseSingleLine(primaryActions);
-                await AssertSearchPrecedesActionsInLogicalOrder(toolbar, searchBar, primaryActions);
-                AssertFilterFlyoutPanel(filtersButton, "RoadmapFilterPanel");
+                await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
+                AssertFilterFlyoutPanel(filtersButton, "RoadmapFilterPanel", "RoadmapResetFiltersButton");
                 await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
                 await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
-                await AssertResetButtonMatchesSearchSize(resetButton, searchBar);
                 await AssertAutomationName(filtersButton, "Filters");
-                await AssertAutomationName(resetButton, "ResetFilters");
+                await AssertResetButtonIsInsideFlyout(view, filtersButton, "RoadmapResetFiltersButton");
             }
             finally
             {
@@ -157,7 +149,7 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                 await AssertCompactPrimaryActions(primaryActions, expectsSortControl: false);
                 await AssertPrimaryActionsUseSingleLine(primaryActions);
-                await AssertSearchPrecedesActionsInLogicalOrder(toolbar, searchBar, primaryActions);
+                await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
                 await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
             }
             finally
@@ -196,7 +188,7 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                 await AssertCompactPrimaryActions(widePrimaryActions, expectsSortControl: false);
                 await AssertPrimaryActionsUseSingleLine(widePrimaryActions);
-                await AssertSearchPrecedesActionsInLogicalOrder(wideToolbar, wideSearchBar, widePrimaryActions);
+                await AssertActionsPrecedeSearchInLogicalOrder(wideToolbar, wideSearchBar, widePrimaryActions);
                 await AssertSearchAndActionsShareToolbarRow(wideToolbar, wideSearchBar, widePrimaryActions);
 
                 vm.DetailsAreOpen = true;
@@ -209,7 +201,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await AssertCompactPrimaryActions(narrowPrimaryActions, expectsSortControl: false);
                 await AssertPrimaryActionsUseSingleLine(narrowPrimaryActions);
                 await Assert.That(narrowToolbar.Bounds.Width).IsLessThanOrEqualTo(520);
-                await AssertSearchPrecedesActionsInLogicalOrder(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
+                await AssertActionsPrecedeSearchInLogicalOrder(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
                 await AssertSearchAndActionsShareToolbarRow(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
             }
             finally
@@ -311,31 +303,22 @@ public class MainControlFilterToolbarResponsiveUiTests
         var searchBounds = GetBoundsRelativeTo(toolbar, searchBar);
         var primaryBounds = GetBoundsRelativeTo(toolbar, primaryActions);
 
-        await Assert.That(searchBounds.Right).IsLessThanOrEqualTo(primaryBounds.Left + 1);
+        await Assert.That(primaryBounds.Right).IsLessThanOrEqualTo(searchBounds.Left + 1);
         await Assert.That(searchBounds.Width).IsGreaterThan(0);
         await Assert.That(searchBounds.Right).IsLessThanOrEqualTo(toolbar.Bounds.Width + 1);
         await Assert.That(primaryBounds.Height).IsLessThanOrEqualTo(searchBounds.Height + 2);
         await Assert.That(Math.Abs(GetCenterY(searchBounds) - GetCenterY(primaryBounds))).IsLessThanOrEqualTo(2);
-        await Assert.That(primaryBounds.Right).IsLessThanOrEqualTo(toolbar.Bounds.Width + 1);
+        await Assert.That(primaryBounds.Left).IsGreaterThanOrEqualTo(-1);
     }
 
-    private static async Task AssertSearchPrecedesActionsInLogicalOrder(
+    private static async Task AssertActionsPrecedeSearchInLogicalOrder(
         Grid toolbar,
         SearchBar searchBar,
         WrapPanel primaryActions)
     {
         var children = toolbar.Children.ToArray();
         await Assert.That(Array.IndexOf(children, searchBar)).IsGreaterThanOrEqualTo(0);
-        await Assert.That(Array.IndexOf(children, primaryActions)).IsGreaterThan(Array.IndexOf(children, searchBar));
-    }
-
-    private static async Task AssertResetButtonMatchesSearchSize(Button button, SearchBar searchBar)
-    {
-        await Assert.That(button.Bounds.Width).IsGreaterThan(0);
-        await Assert.That(button.Bounds.Width).IsLessThanOrEqualTo(searchBar.Bounds.Height + 2);
-        await Assert.That(button.Bounds.Width).IsGreaterThanOrEqualTo(searchBar.Bounds.Height - 2);
-        await Assert.That(Math.Abs(button.Bounds.Height - searchBar.Bounds.Height)).IsLessThanOrEqualTo(2);
-        await Assert.That(button.Content).IsAssignableTo<PathIcon>();
+        await Assert.That(Array.IndexOf(children, primaryActions)).IsLessThan(Array.IndexOf(children, searchBar));
     }
 
     private static async Task AssertFilterButtonMatchesSearchHeight(DropDownButton button, SearchBar searchBar)
@@ -354,16 +337,19 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(AutomationProperties.GetName(control)).IsEqualTo(L10n.Get(resourceKey));
     }
 
-    private static void AssertFilterFlyoutPanel(DropDownButton filtersButton, string filterPanelAutomationId)
+    private static void AssertFilterFlyoutPanel(
+        DropDownButton filtersButton,
+        string filterPanelAutomationId,
+        string resetButtonAutomationId)
     {
         if (filtersButton.Flyout is not Flyout flyout)
         {
             throw new InvalidOperationException("Filter button must use a Flyout.");
         }
 
-        if (flyout.Placement != PlacementMode.BottomEdgeAlignedRight)
+        if (flyout.Placement != PlacementMode.BottomEdgeAlignedLeft)
         {
-            throw new InvalidOperationException("Filter flyout must stay aligned to the right edge on narrow screens.");
+            throw new InvalidOperationException("Filter flyout must stay aligned to the left edge of the filter button.");
         }
 
         if (flyout.Content is not Control flyoutContent)
@@ -375,6 +361,62 @@ public class MainControlFilterToolbarResponsiveUiTests
         if (panel == null)
         {
             throw new InvalidOperationException($"Filter panel '{filterPanelAutomationId}' was not found.");
+        }
+
+        if (FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId) == null)
+        {
+            throw new InvalidOperationException($"Reset button '{resetButtonAutomationId}' was not found in the filter flyout.");
+        }
+    }
+
+    private static async Task AssertResetButtonIsInsideFlyout(
+        Control root,
+        DropDownButton filtersButton,
+        string resetButtonAutomationId)
+    {
+        var visibleToolbarResetButtons = root.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(control =>
+                AutomationProperties.GetAutomationId(control) == resetButtonAutomationId &&
+                IsVisibleAndArranged(control))
+            .ToArray();
+
+        await Assert.That(visibleToolbarResetButtons).IsEmpty();
+
+        if (filtersButton.Flyout is not Flyout flyout)
+        {
+            throw new InvalidOperationException("Filter flyout content was not found.");
+        }
+
+        flyout.ShowAt(filtersButton);
+        RunLayoutJobs();
+
+        try
+        {
+            if (flyout.Content is not Control flyoutContent)
+            {
+                throw new InvalidOperationException("Filter flyout content was not found.");
+            }
+
+            var resetButton = FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId);
+            if (resetButton == null)
+            {
+                throw new InvalidOperationException($"Reset button '{resetButtonAutomationId}' was not found in the filter flyout.");
+            }
+
+            await Assert.That(resetButton.Classes.Contains("FilterPanelResetButton")).IsTrue();
+            await AssertAutomationName(resetButton, "ResetFilters");
+            await Assert.That(resetButton.Content).IsAssignableTo<StackPanel>();
+
+            var content = (StackPanel)resetButton.Content!;
+            await Assert.That(content.Children.OfType<PathIcon>().Any()).IsTrue();
+            await Assert.That(content.Children.OfType<TextBlock>().Any(textBlock =>
+                string.Equals(textBlock.Text, L10n.Get("ResetFilters"), StringComparison.Ordinal))).IsTrue();
+        }
+        finally
+        {
+            flyout.Hide();
+            RunLayoutJobs();
         }
     }
 
