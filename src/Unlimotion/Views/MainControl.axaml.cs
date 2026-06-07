@@ -19,6 +19,7 @@ using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views.Graph;
 using SearchBarView = Unlimotion.Views.SearchControl.SearchBar;
 using SearchControlView = Unlimotion.Views.SearchControl.SearchControl;
@@ -56,11 +57,13 @@ namespace Unlimotion.Views
         private const double RegularRepeaterPatternTypeWidth = 160d;
         private const double RegularRepeaterPeriodWidth = 92d;
         private const double RegularTaskIdMaxWidth = 180d;
+        private const double MainTabsOverflowButtonSpacing = 6d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
         private IDisposable? _titleFocusSubscription;
         private IDisposable? _relationEditorFocusSubscription;
         private IDisposable? _taskDetailsBoundsSubscription;
+        private readonly List<IDisposable> _mainTabsLayoutSubscriptions = [];
         private MainWindowViewModel? _treeCommandViewModel;
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
@@ -73,7 +76,11 @@ namespace Unlimotion.Views
         private bool _treeDragInProgress;
         private bool _filterToolbarLayoutUpdateQueued;
         private bool _taskDetailsLayoutUpdateQueued;
+        private bool _mainTabsOverflowUpdateQueued;
         private int _selectionRestoreVersion;
+        private ILocalizationService? _mainTabsLocalizationSubscriptionSource;
+        private readonly Dictionary<string, double> _mainTabWidthCache = [];
+        private readonly Dictionary<string, MainTabVisualState> _mainTabVisualStateCache = [];
         private readonly HashSet<Grid> _observedFilterToolbars = [];
         private readonly List<IDisposable> _filterToolbarBoundsSubscriptions = [];
 
@@ -120,6 +127,12 @@ namespace Unlimotion.Views
             public TaskWrapperViewModel? Wrapper { get; } = wrapper;
         }
 
+        private sealed record MainTabVisualState(
+            Thickness Padding,
+            double Width,
+            double MinWidth,
+            double MaxWidth);
+
         public MainControl()
         {
             InitializeComponent();
@@ -138,6 +151,7 @@ namespace Unlimotion.Views
 
             if (change.Property == BoundsProperty)
             {
+                QueueMainTabsOverflowUpdate();
                 QueueFilterToolbarLayoutUpdate();
                 QueueTaskDetailsLayoutUpdate();
             }
@@ -157,6 +171,10 @@ namespace Unlimotion.Views
 
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            ObserveMainTabsLayout();
+            ObserveMainTabsLocalization();
+            QueueMainTabsOverflowUpdate();
+            QueueLateMainTabsOverflowUpdate();
             QueueFilterToolbarLayoutUpdate();
             ObserveTaskDetailsBounds();
             QueueTaskDetailsLayoutUpdate();
@@ -175,6 +193,78 @@ namespace Unlimotion.Views
             _taskDetailsBoundsSubscription?.Dispose();
             _taskDetailsBoundsSubscription = null;
             _taskDetailsLayoutUpdateQueued = false;
+            foreach (var subscription in _mainTabsLayoutSubscriptions)
+            {
+                subscription.Dispose();
+            }
+
+            _mainTabsLayoutSubscriptions.Clear();
+            StopObservingMainTabsLocalization();
+            _mainTabsOverflowUpdateQueued = false;
+        }
+
+        private void ObserveMainTabsLayout()
+        {
+            if (_mainTabsLayoutSubscriptions.Count > 0)
+            {
+                return;
+            }
+
+            _mainTabsLayoutSubscriptions.Add(MainTabsHost.GetObservable(BoundsProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            _mainTabsLayoutSubscriptions.Add(MainTabs.GetObservable(BoundsProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            _mainTabsLayoutSubscriptions.Add(MainNavigationSplitView.GetObservable(BoundsProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            _mainTabsLayoutSubscriptions.Add(MainNavigationSplitView.GetObservable(SplitView.IsPaneOpenProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            _mainTabsLayoutSubscriptions.Add(MainNavigationSplitView.GetObservable(SplitView.OpenPaneLengthProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            _mainTabsLayoutSubscriptions.Add(MainNavigationSplitView.GetObservable(SplitView.CompactPaneLengthProperty)
+                .Skip(1)
+                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            foreach (var tab in MainTabs.Items.OfType<TabItem>())
+            {
+                _mainTabsLayoutSubscriptions.Add(tab.GetObservable(BoundsProperty)
+                    .Skip(1)
+                    .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+            }
+        }
+
+        private void ObserveMainTabsLocalization()
+        {
+            var localization = LocalizationService.Current;
+            if (ReferenceEquals(_mainTabsLocalizationSubscriptionSource, localization))
+            {
+                return;
+            }
+
+            StopObservingMainTabsLocalization();
+            _mainTabsLocalizationSubscriptionSource = localization;
+            localization.CultureChanged += MainControl_OnCultureChanged;
+        }
+
+        private void StopObservingMainTabsLocalization()
+        {
+            if (_mainTabsLocalizationSubscriptionSource == null)
+            {
+                return;
+            }
+
+            _mainTabsLocalizationSubscriptionSource.CultureChanged -= MainControl_OnCultureChanged;
+            _mainTabsLocalizationSubscriptionSource = null;
+        }
+
+        private void MainControl_OnCultureChanged(object? sender, EventArgs e)
+        {
+            _mainTabWidthCache.Clear();
+            QueueMainTabsOverflowUpdate();
+            QueueFilterToolbarLayoutUpdate();
         }
 
         private void ObserveTaskDetailsBounds()
@@ -299,8 +389,382 @@ namespace Unlimotion.Views
         {
             if (ReferenceEquals(sender, e.Source))
             {
+                QueueMainTabsOverflowUpdate();
                 QueueFilterToolbarLayoutUpdate();
             }
+        }
+
+        private void QueueMainTabsOverflowUpdate()
+        {
+            if (_mainTabsOverflowUpdateQueued)
+            {
+                return;
+            }
+
+            _mainTabsOverflowUpdateQueued = true;
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    _mainTabsOverflowUpdateQueued = false;
+                    UpdateMainTabsOverflow();
+                },
+                DispatcherPriority.Loaded);
+        }
+
+        private void QueueLateMainTabsOverflowUpdate()
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    _mainTabWidthCache.Clear();
+                    QueueMainTabsOverflowUpdate();
+                },
+                DispatcherPriority.Background);
+        }
+
+        private void UpdateMainTabsOverflow()
+        {
+            var tabs = MainTabs.Items.OfType<TabItem>().ToList();
+            if (tabs.Count == 0)
+            {
+                MainTabsOverflowButton.IsVisible = false;
+                GetMainTabsOverflowFlyout().Items.Clear();
+                return;
+            }
+
+            var availableWidth = GetMainTabsAvailableWidth();
+            if (availableWidth <= 0)
+            {
+                return;
+            }
+
+            ApplyMainTabsHostWidth(availableWidth);
+            var tabWidths = MeasureMainTabWidths(tabs);
+            var allTabsWidth = tabWidths.Values.Sum();
+            if (allTabsWidth <= availableWidth + 1)
+            {
+                ApplyMainTabsWidth(availableWidth);
+                foreach (var tab in tabs)
+                {
+                    ShowMainTab(tab);
+                }
+
+                MainTabsOverflowButton.IsVisible = false;
+                GetMainTabsOverflowFlyout().Items.Clear();
+                return;
+            }
+
+            var selectedTab = tabs.FirstOrDefault(static tab => tab.IsSelected) ??
+                              MainTabs.SelectedItem as TabItem ??
+                              tabs[0];
+            var selectedAutomationId = GetMainTabAutomationId(selectedTab);
+            var overflowButtonWidth = GetMainTabsOverflowButtonWidth();
+            var tabCapacity = Math.Max(
+                0,
+                availableWidth - overflowButtonWidth - MainTabsOverflowButtonSpacing);
+            var visibleAutomationIds = new HashSet<string>(StringComparer.Ordinal)
+            {
+                selectedAutomationId
+            };
+            var usedWidth = tabWidths[selectedAutomationId];
+
+            foreach (var tab in tabs)
+            {
+                var automationId = GetMainTabAutomationId(tab);
+                if (string.Equals(automationId, selectedAutomationId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var tabWidth = tabWidths[automationId];
+                if (usedWidth + tabWidth <= tabCapacity + 1)
+                {
+                    visibleAutomationIds.Add(automationId);
+                    usedWidth += tabWidth;
+                }
+            }
+
+            var hiddenTabs = new List<TabItem>();
+            foreach (var tab in tabs)
+            {
+                var isVisible = visibleAutomationIds.Contains(GetMainTabAutomationId(tab));
+                if (isVisible)
+                {
+                    ShowMainTab(tab);
+                }
+                else
+                {
+                    HideMainTab(tab);
+                    hiddenTabs.Add(tab);
+                }
+            }
+
+            ApplyMainTabsWidth(availableWidth);
+            ApplyMainTabsOverflowButtonOffset(usedWidth, availableWidth, overflowButtonWidth);
+            MainTabsOverflowButton.IsVisible = hiddenTabs.Count > 0;
+            RebuildMainTabsOverflowFlyout(hiddenTabs);
+        }
+
+        private void ApplyMainTabsHostWidth(double availableWidth)
+        {
+            if (availableWidth <= 0 || double.IsNaN(availableWidth) || double.IsInfinity(availableWidth))
+            {
+                return;
+            }
+
+            if (Math.Abs(MainTabsHost.Width - availableWidth) > 0.5 ||
+                double.IsNaN(MainTabsHost.Width))
+            {
+                MainTabsHost.Width = availableWidth;
+            }
+        }
+
+        private void ApplyMainTabsWidth(double width)
+        {
+            if (width <= 0 || double.IsNaN(width) || double.IsInfinity(width))
+            {
+                return;
+            }
+
+            if (Math.Abs(MainTabs.Width - width) > 0.5 ||
+                double.IsNaN(MainTabs.Width))
+            {
+                MainTabs.Width = width;
+            }
+        }
+
+        private double GetMainTabsAvailableWidth()
+        {
+            var availableWidth = Bounds.Width > 0
+                ? Bounds.Width
+                : MainTabsHost.Bounds.Width;
+            var splitViewContentWidth = GetMainNavigationContentWidth();
+            if (splitViewContentWidth > 0)
+            {
+                availableWidth = availableWidth > 0
+                    ? Math.Min(availableWidth, splitViewContentWidth)
+                    : splitViewContentWidth;
+            }
+
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.ClientSize.Width > 0)
+            {
+                var hostTopLeft = MainTabsHost.TranslatePoint(new Point(0, 0), topLevel);
+                var viewportWidth = hostTopLeft.HasValue
+                    ? Math.Max(0, topLevel.ClientSize.Width - hostTopLeft.Value.X - MainTabsHost.Margin.Right)
+                    : topLevel.ClientSize.Width;
+                availableWidth = availableWidth > 0
+                    ? Math.Min(availableWidth, viewportWidth)
+                    : viewportWidth;
+            }
+
+            return availableWidth;
+        }
+
+        private double GetMainNavigationContentWidth()
+        {
+            var splitViewWidth = MainNavigationSplitView.Bounds.Width;
+            if (splitViewWidth <= 0)
+            {
+                return 0;
+            }
+
+            var paneWidth = MainNavigationSplitView.DisplayMode switch
+            {
+                SplitViewDisplayMode.Inline => MainNavigationSplitView.IsPaneOpen
+                    ? MainNavigationSplitView.OpenPaneLength
+                    : 0,
+                SplitViewDisplayMode.CompactInline => MainNavigationSplitView.IsPaneOpen
+                    ? MainNavigationSplitView.OpenPaneLength
+                    : MainNavigationSplitView.CompactPaneLength,
+                _ => 0
+            };
+
+            return Math.Max(
+                0,
+                splitViewWidth - paneWidth - MainTabsHost.Margin.Left - MainTabsHost.Margin.Right);
+        }
+
+        private Dictionary<string, double> MeasureMainTabWidths(IReadOnlyCollection<TabItem> tabs)
+        {
+            var widths = new Dictionary<string, double>(StringComparer.Ordinal);
+            foreach (var tab in tabs)
+            {
+                ShowMainTab(tab);
+
+                var automationId = GetMainTabAutomationId(tab);
+                tab.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                var width = GetPositiveWidth(tab.Bounds.Width);
+                if (width <= 0)
+                {
+                    width = Math.Max(
+                        GetPositiveWidth(tab.DesiredSize.Width),
+                        MeasureMainTabHeaderWidth(tab));
+                }
+                if (_mainTabWidthCache.TryGetValue(automationId, out var cachedWidth))
+                {
+                    width = Math.Max(width, GetPositiveWidth(cachedWidth));
+                }
+
+                if (width <= 0)
+                {
+                    width = 72d;
+                }
+
+                _mainTabWidthCache[automationId] = width;
+                widths[automationId] = width;
+            }
+
+            return widths;
+        }
+
+        private static double MeasureMainTabHeaderWidth(TabItem tab)
+        {
+            var headerText = tab.Header?.ToString();
+            if (string.IsNullOrWhiteSpace(headerText))
+            {
+                return 0;
+            }
+
+            var headerTextBlock = new TextBlock
+            {
+                Text = headerText,
+                FontSize = tab.FontSize,
+                FontWeight = tab.FontWeight
+            };
+            headerTextBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+            var textWidth = headerTextBlock.DesiredSize.Width;
+            var tabChromeWidth = tab.Padding.Left + tab.Padding.Right +
+                                 tab.Margin.Left + tab.Margin.Right + 6d;
+            return GetPositiveWidth(textWidth + tabChromeWidth);
+        }
+
+        private static double GetPositiveWidth(double width)
+        {
+            return width > 0 && !double.IsNaN(width) && !double.IsInfinity(width)
+                ? width
+                : 0;
+        }
+
+        private void ApplyMainTabsOverflowButtonOffset(
+            double usedTabWidth,
+            double availableWidth,
+            double overflowButtonWidth)
+        {
+            var maxLeft = Math.Max(0, availableWidth - overflowButtonWidth);
+            var desiredLeft = usedTabWidth + MainTabsOverflowButtonSpacing;
+            var left = Math.Min(desiredLeft, maxLeft);
+            var margin = new Thickness(left, 0, 0, 0);
+            if (MainTabsOverflowButton.Margin != margin)
+            {
+                MainTabsOverflowButton.Margin = margin;
+            }
+        }
+
+        private double GetMainTabsOverflowButtonWidth()
+        {
+            MainTabsOverflowButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var width = GetPositiveWidth(MainTabsOverflowButton.Bounds.Width);
+            if (width <= 0)
+            {
+                width = GetPositiveWidth(MainTabsOverflowButton.Width);
+            }
+            if (width <= 0)
+            {
+                width = GetPositiveWidth(
+                    MainTabsOverflowButton.DesiredSize.Width -
+                    MainTabsOverflowButton.Margin.Left -
+                    MainTabsOverflowButton.Margin.Right);
+            }
+            if (width <= 0 || double.IsNaN(width))
+            {
+                width = 40d;
+            }
+
+            return width;
+        }
+
+        private void ShowMainTab(TabItem tab)
+        {
+            RestoreMainTabVisualState(tab);
+            tab.IsVisible = true;
+        }
+
+        private void HideMainTab(TabItem tab)
+        {
+            CacheMainTabVisualState(tab);
+            tab.IsVisible = false;
+            tab.Padding = new Thickness(0);
+            tab.Width = 0;
+            tab.MinWidth = 0;
+            tab.MaxWidth = 0;
+        }
+
+        private void CacheMainTabVisualState(TabItem tab)
+        {
+            var automationId = GetMainTabAutomationId(tab);
+            _mainTabVisualStateCache.TryAdd(
+                automationId,
+                new MainTabVisualState(
+                    tab.Padding,
+                    tab.Width,
+                    tab.MinWidth,
+                    tab.MaxWidth));
+        }
+
+        private void RestoreMainTabVisualState(TabItem tab)
+        {
+            var automationId = GetMainTabAutomationId(tab);
+            if (!_mainTabVisualStateCache.TryGetValue(automationId, out var state))
+            {
+                return;
+            }
+
+            tab.Padding = state.Padding;
+            tab.Width = state.Width;
+            tab.MinWidth = state.MinWidth;
+            tab.MaxWidth = state.MaxWidth;
+        }
+
+        private void RebuildMainTabsOverflowFlyout(IReadOnlyCollection<TabItem> hiddenTabs)
+        {
+            var flyout = GetMainTabsOverflowFlyout();
+            flyout.Items.Clear();
+            foreach (var tab in hiddenTabs)
+            {
+                var menuItem = new MenuItem
+                {
+                    Header = tab.Header
+                };
+                AutomationProperties.SetAutomationId(
+                    menuItem,
+                    $"MainTabsOverflow{GetMainTabAutomationId(tab)}");
+                menuItem.Click += (_, _) => SelectMainTabFromOverflow(tab);
+                flyout.Items.Add(menuItem);
+            }
+        }
+
+        private MenuFlyout GetMainTabsOverflowFlyout()
+        {
+            return MainTabsOverflowButton.Flyout as MenuFlyout ??
+                   throw new InvalidOperationException("Main tabs overflow button must use a MenuFlyout.");
+        }
+
+        private void SelectMainTabFromOverflow(TabItem tab)
+        {
+            ShowMainTab(tab);
+            MainTabs.SelectedItem = tab;
+            tab.IsSelected = true;
+            QueueMainTabsOverflowUpdate();
+            QueueFilterToolbarLayoutUpdate();
+        }
+
+        private static string GetMainTabAutomationId(TabItem tab)
+        {
+            return AutomationProperties.GetAutomationId(tab) ??
+                   throw new InvalidOperationException("Main tab item must have an automation id.");
         }
 
         private void QueueFilterToolbarLayoutUpdate()

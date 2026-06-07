@@ -80,6 +80,26 @@
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact DropDownButton.TaskCommandOverflowButton">
             <Setter Property="IsVisible" Value="True"/>
         </Style>
+        <Style Selector="Button.MainTabsOverflowButton">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="{DynamicResource AppTabMinHeight}"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+        <Style Selector="Button.MainTabsOverflowButton:pointerover">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.MainTabsOverflowButton:pressed">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
         <Style Selector="Border.CurrentTaskCard">
             <Setter Property="Padding" Value="12"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
@@ -443,14 +463,22 @@
         </Grid>
 
         <!--Панель навигации-->
-        <SplitView Grid.Row="1" IsPaneOpen="{Binding DetailsAreOpen}"
+        <SplitView x:Name="MainNavigationSplitView"
+                   Grid.Row="1"
+                   IsPaneOpen="{Binding DetailsAreOpen}"
                    DisplayMode="CompactInline"
                    UseLightDismissOverlayMode="False"
                    OpenPaneLength="{Binding #mainControl.Bounds.Width, Converter={converters:MinValueConverter}, ConverterParameter=600}"
                    CompactPaneLength="20"
                    PanePlacement="Right">
-            <Grid Margin="10,0,0,0">
-                <TabControl TabStripPlacement="Top" Margin="0" Padding="0"
+            <Grid x:Name="MainTabsHost"
+                  Margin="10,0,0,0"
+                  HorizontalAlignment="Left">
+                <TabControl x:Name="MainTabs"
+                            TabStripPlacement="Top"
+                            ClipToBounds="True"
+                            Margin="0"
+                            Padding="0"
                             SelectionChanged="MainTabs_OnSelectionChanged"
                             AutomationProperties.AutomationId="MainTabs">
                     <TabControl.Styles>
@@ -883,6 +911,44 @@
                         <views:SettingsControl DataContext="{Binding Settings}"/>
                     </TabItem>
                 </TabControl>
+                <Button x:Name="MainTabsOverflowButton"
+                        Classes="MainTabsOverflowButton"
+                        ZIndex="1"
+                        HorizontalAlignment="Left"
+                        IsVisible="False"
+                        AutomationProperties.AutomationId="MainTabsOverflowButton">
+                    <Grid Width="18"
+                          Height="14"
+                          RowDefinitions="2,5,2,5,2"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          AutomationProperties.AutomationId="MainTabsOverflowIcon">
+                        <Border Grid.Row="0"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine1"/>
+                        <Border Grid.Row="2"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine2"/>
+                        <Border Grid.Row="4"
+                                Classes="MainTabsOverflowIconLine"
+                                Width="18"
+                                Height="2"
+                                CornerRadius="1"
+                                Background="{StaticResource AccentButtonBackground}"
+                                AutomationProperties.AutomationId="MainTabsOverflowIconLine3"/>
+                    </Grid>
+                    <Button.Flyout>
+                        <MenuFlyout/>
+                    </Button.Flyout>
+                </Button>
             </Grid>
             <SplitView.Pane>
                 <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ColumnDefinitions="*,Auto">
