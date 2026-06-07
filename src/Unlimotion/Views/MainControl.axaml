@@ -65,7 +65,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
-        <Style Selector="DropDownButton.FilterToolbarFiltersButton PathIcon">
+        <Style Selector="PathIcon.FilterToolbarFiltersIcon">
             <Setter Property="Margin" Value="2,0"/>
         </Style>
         <Style Selector="PathIcon.FilterPanelResetIcon">
@@ -541,7 +541,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="AllTasksFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -613,7 +613,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="LastCreatedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -721,7 +721,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="LastUpdatedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -829,7 +829,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="UnlockedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -927,7 +927,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="CompletedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -1029,7 +1029,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="ArchivedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"
@@ -1131,7 +1131,7 @@
                                                     AutomationProperties.Name="{DynamicResource Filters}"
                                                     Margin="0"
                                                     AutomationProperties.AutomationId="LastOpenedFiltersButton">
-                                        <PathIcon Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
                                         <DropDownButton.Flyout>
                                             <Flyout Placement="BottomEdgeAlignedLeft">
                                                 <Border Classes="FilterOverflowPanel"

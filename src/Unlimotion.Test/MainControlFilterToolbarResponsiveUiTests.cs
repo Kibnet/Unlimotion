@@ -328,6 +328,7 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(Math.Abs(button.Bounds.Height - searchBar.Bounds.Height)).IsLessThanOrEqualTo(2);
         await Assert.That(button.Content).IsAssignableTo<PathIcon>();
         var icon = (PathIcon)button.Content!;
+        await Assert.That(icon.Classes.Contains("FilterToolbarFiltersIcon")).IsTrue();
         await Assert.That(icon.Margin.Left).IsGreaterThanOrEqualTo(2);
         await Assert.That(icon.Margin.Right).IsGreaterThanOrEqualTo(2);
     }
@@ -412,12 +413,29 @@ public class MainControlFilterToolbarResponsiveUiTests
             await Assert.That(content.Children.OfType<PathIcon>().Any()).IsTrue();
             await Assert.That(content.Children.OfType<TextBlock>().Any(textBlock =>
                 string.Equals(textBlock.Text, L10n.Get("ResetFilters"), StringComparison.Ordinal))).IsTrue();
+            await AssertFilterButtonIconStyleDoesNotLeakToFlyout(flyoutContent);
         }
         finally
         {
             flyout.Hide();
             RunLayoutJobs();
         }
+    }
+
+    private static async Task AssertFilterButtonIconStyleDoesNotLeakToFlyout(Control flyoutContent)
+    {
+        var leakedIcons = flyoutContent.GetVisualDescendants()
+            .OfType<PathIcon>()
+            .Where(static icon =>
+                !icon.Classes.Contains("FilterToolbarFiltersIcon") &&
+                !icon.Classes.Contains("FilterPanelResetIcon") &&
+                icon.Margin.Left == 2 &&
+                icon.Margin.Top == 0 &&
+                icon.Margin.Right == 2 &&
+                icon.Margin.Bottom == 0)
+            .ToArray();
+
+        await Assert.That(leakedIcons).IsEmpty();
     }
 
     private static T? FindControlInDetachedContent<T>(Control root, string automationId)
