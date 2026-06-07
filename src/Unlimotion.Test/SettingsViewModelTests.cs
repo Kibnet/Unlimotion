@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -1002,6 +1003,48 @@ public class SettingsViewModelTests : IDisposable
 
         await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(expectedPath);
         await Assert.That(settings.SshKeyStorageEffectivePathText).Contains(expectedPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SshKeyStoragePath_DoesNotThrowForInvalidIntermediateInput()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var backupService = new BackupViaGitService(configuration);
+        var settings = new SettingsViewModel(configuration, backupService);
+        var invalidPath = new string((char)0, 1);
+
+        settings.SshKeyStoragePath = invalidPath;
+
+        await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(invalidPath);
+        await Assert.That(settings.SshPublicKeys).IsEmpty();
+        await Assert.That(settings.SelectedSshPublicKeyPath).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageMode_UpdatesSshKeyStorageEffectivePathText()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        var settings = new SettingsViewModel(configuration, localizationService: localization)
+        {
+            SshKeyStoragePath = Path.Combine("Data", "SshKeys")
+        };
+        var changedProperties = new List<string>();
+        ((INotifyPropertyChanged)settings).PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != null)
+            {
+                changedProperties.Add(args.PropertyName);
+            }
+        };
+
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains("Used folder:");
+
+        settings.LanguageMode = LocalizationService.RussianLanguage;
+
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains("Будет использована папка:");
+        await Assert.That(changedProperties).Contains(nameof(SettingsViewModel.SshKeyStorageEffectivePathText));
     }
 
     [Test]

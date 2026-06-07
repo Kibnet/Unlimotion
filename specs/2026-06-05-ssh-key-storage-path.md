@@ -322,6 +322,24 @@ SSH keys
 - Needs human: no.
 - Residual risks / follow-ups: Android solution build AOT blocker remains outside this change; video evidence remains fallback because the existing headless runner did not emit video artifacts.
 
+### Post-EXEC Review Addendum: branch review fixes
+- Статус: PASS для исправлений по review findings.
+- Scope reviewed: `SettingsViewModel.ReloadSshPublicKeys`, `LanguageOptionsVersion` notifications, `SshKeyStorageEffectivePathText`, regression tests in `SettingsViewModelTests`.
+- Fixed findings:
+  - Invalid/intermediate SSH key storage path no longer crashes settings reload; path-list reload treats path/input exceptions as an empty key list while display fallback still shows the raw invalid input.
+  - Localized effective-path hint now raises `PropertyChanged` during localization refresh.
+- Evidence inspected:
+  - Before fix: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/SettingsViewModelTests/*"` failed on `SshKeyStoragePath_DoesNotThrowForInvalidIntermediateInput` and `LanguageMode_UpdatesSshKeyStorageEffectivePathText`, reproducing both review findings. One unrelated `SwitchRemoteConnectionTypeCommand_UpdatesSelectedRemoteFromServiceResult` failure appeared in that broad class run and did not reproduce after the fix.
+  - After fix: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/SettingsViewModelTests/SshKeyStoragePath_DoesNotThrowForInvalidIntermediateInput"` -> passed 1/1.
+  - After fix: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/SettingsViewModelTests/LanguageMode_UpdatesSshKeyStorageEffectivePathText"` -> passed 1/1.
+  - After fix: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/SettingsViewModelTests/*"` -> passed 68/68.
+  - After fix: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/*"` -> passed 51/51.
+  - After fix: `dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj -c Release --no-restore -- --treenode-filter "/*/*/SettingsRemoteTypeHeadlessTests/*"` -> passed 2/2.
+  - After fix: `dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj -c Release --no-restore` -> passed 28/28.
+  - After fix: `dotnet build src/Unlimotion.Desktop/Unlimotion.Desktop.csproj -c Release --no-restore` -> passed.
+  - Full `Unlimotion.Test` was attempted three times and remains unstable outside the changed surface: first run failed 1/439 on `SettingsControlResponsiveUiTests.SettingsControl_TaskTreeExpansionStateCheckBox_PersistsSetting`, second run failed 1/439 on `MainWindowViewModelTests.PasteTaskOutline_CreatesNestedTasksUnderCurrentTask`, third run with `--maximum-parallel-tests 1 --timeout 300s` failed 2/439 on `MainControlTaskCardLayoutUiTests.CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls` and `MainWindowViewModelTests.CopyTaskOutline_UsesMarkdownAndDescriptionSettings`. Each failed test passed when rerun individually.
+- Residual risks / follow-ups: full `Unlimotion.Test` has pre-existing or environment-sensitive flakiness in unrelated UI/outline tests; targeted SSH settings/service tests, headless UI suite and desktop build pass.
+
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
@@ -339,3 +357,4 @@ SSH keys
 | EXEC | Validation run | 0.82 | Post-EXEC review | Выполнить review diff/status | Нет | Нет | Targeted unit/service/headless UI and full unit/headless suites passed; solution build has unrelated Android AOT blocker, desktop build passed | test/build commands |
 | EXEC | Visual evidence capture | 0.86 | Нет | Передать GIF artifacts пользователю | Нет | Да, пользователь запросил GIF для desktop и Android | Captured desktop app screenshots and Android emulator screenshots, then assembled GIFs showing empty/default and custom SSH key folder states | `artifacts/ssh-key-storage-path-demo-9/desktop-ssh-key-storage-path.gif`, `artifacts/ssh-key-storage-path-demo-9/android/android-ssh-key-storage-path.gif` |
 | EXEC | UX clarification | 0.89 | Нет | Финальный diff/whitespace review | Нет | Да, пользователь уточнил, что пустое поле должно показывать фактический каталог | Added effective SSH key folder text under the field, shared resolver, localization, unit tests and headless selector coverage | `SshKeyStoragePathResolver.cs`, `SettingsViewModel.cs`, `SettingsControl.axaml`, tests |
+| EXEC | Branch review fixes | 0.89 | Нет | Финальный diff/status и при необходимости commit/push | Нет | Да, пользователь попросил исправить review findings | Added regression coverage and fixed invalid path reload safety plus localized effective-path notification; unrelated full-unit flakes passed in isolated reruns | `SettingsViewModel.cs`, `SettingsViewModelTests.cs`, `specs/2026-06-05-ssh-key-storage-path.md` |

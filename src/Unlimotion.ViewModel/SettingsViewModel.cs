@@ -214,7 +214,7 @@ public class SettingsViewModel
         }
     }
 
-    [AlsoNotifyFor(nameof(LanguageModeIndex))]
+    [AlsoNotifyFor(nameof(LanguageModeIndex), nameof(SshKeyStorageEffectivePathText))]
     public int LanguageOptionsVersion { get; private set; }
 
     public int LanguageModeIndex
@@ -775,7 +775,14 @@ public class SettingsViewModel
 
     public void ReloadSshPublicKeys(string? preferredSelection = null)
     {
-        SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+        try
+        {
+            SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+        }
+        catch (Exception ex) when (IsInvalidSshKeyStoragePathException(ex))
+        {
+            SshPublicKeys = new List<string>();
+        }
 
         var matchedSelection = MatchSshPublicKeyPath(preferredSelection)
                                ?? MatchSshPublicKeyPath(GitSshPublicKeyPath);
@@ -1129,6 +1136,9 @@ public class SettingsViewModel
             return SshKeyStoragePath ?? string.Empty;
         }
     }
+
+    private static bool IsInvalidSshKeyStoragePathException(Exception ex) =>
+        ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException;
 
     private void EnsureRemoteSelection()
     {
