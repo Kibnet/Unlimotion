@@ -24,14 +24,56 @@
     </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Grid.FilterToolbar">
-            <Setter Property="ColumnSpacing" Value="12"/>
+            <Setter Property="ColumnSpacing" Value="8"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
         <Style Selector="WrapPanel.FilterToolbarItems">
             <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
         <Style Selector="searchControl|SearchBar.FilterToolbarSearch">
             <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="Border.FilterOverflowPanel">
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+        </Style>
+        <Style Selector="ScrollViewer.FilterPanelScrollViewer">
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        </Style>
+        <Style Selector="TextBlock.FilterPanelGroupTitle">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Opacity" Value="0.72"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="Button.FilterPanelResetButton">
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="DropDownButton.FilterToolbarFiltersButton">
+            <Setter Property="Width" Value="44"/>
+            <Setter Property="Height" Value="{DynamicResource AppSearchControlHeight}"/>
+            <Setter Property="MinWidth" Value="44"/>
+            <Setter Property="MinHeight" Value="{DynamicResource AppSearchControlHeight}"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="PathIcon.FilterToolbarFiltersIcon">
+            <Setter Property="Margin" Value="2,0"/>
+        </Style>
+        <Style Selector="PathIcon.FilterPanelResetIcon">
+            <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
         <Style Selector="StackPanel.TaskDetailsPanel">
             <Setter Property="Margin" Value="10"/>
@@ -496,17 +538,56 @@
                     <TabItem Header="{DynamicResource AllTasks}" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="AllTasksTabItem">
                         <Grid RowDefinitions= "Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource= "{Binding EmojiFilters}" Margin= "0,0,10,0" />
-                                    <ComboBox ItemsSource= "{Binding EmojiExcludeFilters}" Margin= "0,0,10,0" BorderBrush= "Red" BorderThickness= "2"/>
-                                    <ComboBox ItemsSource= "{Binding SortDefinitions}" SelectedItem= "{Binding CurrentSortDefinition}" Margin= "0,0,10,0"/>
-                                    <CheckBox Content="{DynamicResource Completed}" IsChecked= "{Binding ShowCompleted}" Margin= "0,0,10,0"/>
-                                    <CheckBox Content="{DynamicResource Archived}" IsChecked= "{Binding ShowArchived}" Margin= "0,0,10,0"/>
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="AllTasksResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="AllTasksFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="AllTasksFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                        <StackPanel Spacing="10">
+                                                            <StackPanel>
+                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterSort}"/>
+                                                                <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" MinWidth="220"/>
+                                                            </StackPanel>
+                                                            <StackPanel>
+                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                                <WrapPanel>
+                                                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                            <StackPanel>
+                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                                <WrapPanel>
+                                                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
+                                                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                            <Button Classes="FilterPanelResetButton"
+                                                                    ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                    AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                    Command="{Binding ResetTaskFiltersCommand}"
+                                                                    AutomationProperties.AutomationId="AllTasksResetFiltersButton">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                    <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -531,28 +612,71 @@
                     <TabItem Header="{DynamicResource LastCreated}" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="LastCreatedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <Label Content="{DynamicResource From}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}"
-                                                        SelectedDate="{Binding LastCreatedDateFilter.From}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <Label Content="{DynamicResource To}" IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding LastCreatedDateFilter.To}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="LastCreatedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="LastCreatedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="LastCreatedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastCreatedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center"/>
+                                                                <ComboBox IsVisible="{Binding !LastCreatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastCreatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                            </WrapPanel>
+                                                            <WrapPanel IsVisible="{Binding LastCreatedDateFilter.IsCustom}">
+                                                                <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding LastCreatedDateFilter.From}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding LastCreatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                                <Label Content="{DynamicResource To}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding LastCreatedDateFilter.To}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding LastCreatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
+                                                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="LastCreatedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -598,28 +722,71 @@
                     <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="LastUpdatedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <Label Content="{DynamicResource From}" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}"
-                                                        SelectedDate="{Binding LastUpdatedDateFilter.From}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding LastUpdatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <Label Content="{DynamicResource To}" IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding LastUpdatedDateFilter.To}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding LastUpdatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <ComboBox IsVisible="{Binding !LastUpdatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastUpdatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,10,0"/>
-                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,10,0"/>
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="LastUpdatedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="LastUpdatedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="LastUpdatedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding LastUpdatedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center"/>
+                                                                <ComboBox IsVisible="{Binding !LastUpdatedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding LastUpdatedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                            </WrapPanel>
+                                                            <WrapPanel IsVisible="{Binding LastUpdatedDateFilter.IsCustom}">
+                                                                <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding LastUpdatedDateFilter.From}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding LastUpdatedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                                <Label Content="{DynamicResource To}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding LastUpdatedDateFilter.To}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding LastUpdatedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
+                                                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="LastUpdatedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -665,18 +832,62 @@
                     <TabItem Header="{DynamicResource Unlocked}" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="UnlockedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0" />
-                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,10,0" />
-                                    <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,10,0" />
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="UnlockedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="UnlockedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="UnlockedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterSort}"/>
+                                                            <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" MinWidth="220"/>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,12,6"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTiming}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding UnlockedTimeFilters}" Margin="0,0,8,6" />
+                                                                <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,8,6" />
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="UnlockedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -721,26 +932,64 @@
                     <TabItem Header="{DynamicResource Completed}" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="CompletedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <Label Content="{DynamicResource From}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding CompletedDateFilter.From}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <Label Content="{DynamicResource To}" IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding CompletedDateFilter.To}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="CompletedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="CompletedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="CompletedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding CompletedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center"/>
+                                                                <ComboBox IsVisible="{Binding !CompletedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding CompletedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                            </WrapPanel>
+                                                            <WrapPanel IsVisible="{Binding CompletedDateFilter.IsCustom}">
+                                                                <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding CompletedDateFilter.From}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding CompletedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                                <Label Content="{DynamicResource To}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding CompletedDateFilter.To}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="CompletedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -787,26 +1036,64 @@
                     <TabItem Header="{DynamicResource Archived}" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="ArchivedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,10,0" BorderBrush="Red" BorderThickness="2"/>
-                                    <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center" />
-                                    <Label Content="{DynamicResource From}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding ArchivedDateFilter.From}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <Label Content="{DynamicResource To}" IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <CalendarDatePicker IsVisible="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,10,0"
-                                                        SelectedDate="{Binding ArchivedDateFilter.To}"
-                                                        IsTodayHighlighted="True"
-                                                        DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
-                                    <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="ArchivedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="ArchivedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="ArchivedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
+                                                            <WrapPanel>
+                                                                <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center" />
+                                                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                            </WrapPanel>
+                                                            <WrapPanel IsVisible="{Binding ArchivedDateFilter.IsCustom}">
+                                                                <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding ArchivedDateFilter.From}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding ArchivedDateFilter.From, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                                <Label Content="{DynamicResource To}" Margin="0,0,6,6" VerticalAlignment="Center"/>
+                                                                <CalendarDatePicker Margin="0,0,8,6"
+                                                                                    SelectedDate="{Binding ArchivedDateFilter.To}"
+                                                                                    IsTodayHighlighted="True"
+                                                                                    DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="ArchivedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>
@@ -853,12 +1140,38 @@
                     <TabItem Header="{DynamicResource LastOpened}" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="LastOpenedTabItem">
                         <Grid RowDefinitions="Auto,*">
-                            <Grid Classes="FilterToolbar" ColumnDefinitions="*,Auto">
-                                <WrapPanel Classes="FilterToolbarItems">
-                                    <Button Content="{DynamicResource ResetFilters}"
-                                            Command="{Binding ResetTaskFiltersCommand}"
-                                            Margin="0,0,10,0"
-                                            AutomationProperties.AutomationId="LastOpenedResetFiltersButton"/>
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="LastOpenedFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="LastOpenedFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                    <StackPanel Spacing="10">
+                                                        <Button Classes="FilterPanelResetButton"
+                                                                ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                Command="{Binding ResetTaskFiltersCommand}"
+                                                                AutomationProperties.AutomationId="LastOpenedResetFiltersButton">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
                                 </WrapPanel>
                                 <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
                             </Grid>

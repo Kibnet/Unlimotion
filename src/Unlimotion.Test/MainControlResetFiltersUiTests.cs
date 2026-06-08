@@ -21,16 +21,16 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlResetFiltersUiTests
 {
-    private static readonly (int TabIndex, string ButtonAutomationId)[] TaskTabs =
+    private static readonly (int TabIndex, string FiltersButtonAutomationId, string ResetButtonAutomationId)[] TaskTabs =
     [
-        (0, "AllTasksResetFiltersButton"),
-        (1, "LastCreatedResetFiltersButton"),
-        (2, "LastUpdatedResetFiltersButton"),
-        (3, "UnlockedResetFiltersButton"),
-        (4, "CompletedResetFiltersButton"),
-        (5, "ArchivedResetFiltersButton"),
-        (6, "LastOpenedResetFiltersButton"),
-        (7, "RoadmapResetFiltersButton")
+        (0, "AllTasksFiltersButton", "AllTasksResetFiltersButton"),
+        (1, "LastCreatedFiltersButton", "LastCreatedResetFiltersButton"),
+        (2, "LastUpdatedFiltersButton", "LastUpdatedResetFiltersButton"),
+        (3, "UnlockedFiltersButton", "UnlockedResetFiltersButton"),
+        (4, "CompletedFiltersButton", "CompletedResetFiltersButton"),
+        (5, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
+        (6, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
+        (7, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
     ];
 
     [Test]
@@ -57,6 +57,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -88,7 +89,10 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 SelectTab(view, 0);
-                var resetButton = FindControlByAutomationId<Button>(view, "AllTasksResetFiltersButton");
+                var resetButton = OpenFilterPanelAndFindResetButton(
+                    view,
+                    "AllTasksFiltersButton",
+                    "AllTasksResetFiltersButton");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -99,6 +103,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -132,7 +137,10 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 SelectTab(view, 0);
-                var resetButton = FindControlByAutomationId<Button>(view, "AllTasksResetFiltersButton");
+                var resetButton = OpenFilterPanelAndFindResetButton(
+                    view,
+                    "AllTasksFiltersButton",
+                    "AllTasksResetFiltersButton");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -153,6 +161,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -186,7 +195,10 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 SelectTab(view, 1);
-                var resetButton = FindControlByAutomationId<Button>(view, "LastCreatedResetFiltersButton");
+                var resetButton = OpenFilterPanelAndFindResetButton(
+                    view,
+                    "LastCreatedFiltersButton",
+                    "LastCreatedResetFiltersButton");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -207,6 +219,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -241,7 +254,10 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 SelectTab(view, 7);
-                var resetButton = FindControlByAutomationId<Button>(view, "RoadmapResetFiltersButton");
+                var resetButton = OpenFilterPanelAndFindResetButton(
+                    view,
+                    "RoadmapFiltersButton",
+                    "RoadmapResetFiltersButton");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -262,6 +278,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -293,7 +310,10 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 SelectTab(view, 7);
-                var resetButton = FindControlByAutomationId<Button>(view, "RoadmapResetFiltersButton");
+                var resetButton = OpenFilterPanelAndFindResetButton(
+                    view,
+                    "RoadmapFiltersButton",
+                    "RoadmapResetFiltersButton");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -314,6 +334,7 @@ public class MainControlResetFiltersUiTests
             }
             finally
             {
+                await DrainUiThrottlesAsync();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -364,10 +385,22 @@ public class MainControlResetFiltersUiTests
 
     private static void AssertResetButtonsOnTaskTabs(MainControl view)
     {
-        foreach (var (tabIndex, buttonAutomationId) in TaskTabs)
+        foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId) in TaskTabs)
         {
             SelectTab(view, tabIndex);
-            FindControlByAutomationId<Button>(view, buttonAutomationId);
+            var resetButton = OpenFilterPanelAndFindResetButton(
+                view,
+                filtersButtonAutomationId,
+                resetButtonAutomationId);
+
+            if (!resetButton.Classes.Contains("FilterPanelResetButton"))
+            {
+                throw new InvalidOperationException($"Reset button '{resetButtonAutomationId}' must be styled as a filter panel action.");
+            }
+
+            var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+            ((Flyout)filtersButton.Flyout!).Hide();
+            Dispatcher.UIThread.RunJobs();
         }
     }
 
@@ -436,6 +469,12 @@ public class MainControlResetFiltersUiTests
         };
     }
 
+    private static async Task DrainUiThrottlesAsync()
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs + 100));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static T FindControlByAutomationId<T>(Control root, string automationId)
         where T : Control
     {
@@ -448,6 +487,53 @@ public class MainControlResetFiltersUiTests
                     StringComparison.Ordinal));
 
         return control ?? throw new InvalidOperationException($"Control with AutomationId '{automationId}' was not found.");
+    }
+
+    private static Button OpenFilterPanelAndFindResetButton(
+        MainControl view,
+        string filtersButtonAutomationId,
+        string resetButtonAutomationId)
+    {
+        var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+        if (filtersButton.Flyout is not Flyout flyout)
+        {
+            throw new InvalidOperationException($"Filter button '{filtersButtonAutomationId}' must use a Flyout.");
+        }
+
+        flyout.ShowAt(filtersButton);
+        Dispatcher.UIThread.RunJobs();
+
+        if (flyout.Content is not Control flyoutContent)
+        {
+            throw new InvalidOperationException($"Filter button '{filtersButtonAutomationId}' flyout content was not found.");
+        }
+
+        var resetButton = FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId);
+        if (resetButton == null)
+        {
+            throw new InvalidOperationException($"Reset button '{resetButtonAutomationId}' was not found in the filter flyout.");
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        return resetButton;
+    }
+
+    private static T? FindControlInDetachedContent<T>(Control root, string automationId)
+        where T : Control
+    {
+        if (root is T typedRoot &&
+            string.Equals(AutomationProperties.GetAutomationId(root), automationId, StringComparison.Ordinal))
+        {
+            return typedRoot;
+        }
+
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(candidate),
+                    automationId,
+                    StringComparison.Ordinal));
     }
 
     private static void SelectTab(MainControl view, int index)

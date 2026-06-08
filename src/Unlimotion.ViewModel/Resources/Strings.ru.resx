@@ -108,6 +108,12 @@
   <data name="ExpandCurrentNested" xml:space="preserve"><value>Развернуть вложенные текущего</value></data>
   <data name="FileStorageNoAccess" xml:space="preserve"><value>Нет доступа к каталогу: {0}</value></data>
   <data name="FindTask" xml:space="preserve"><value>Найти задачу</value></data>
+  <data name="Filters" xml:space="preserve"><value>Фильтры</value></data>
+  <data name="FilterDate" xml:space="preserve"><value>Дата</value></data>
+  <data name="FilterState" xml:space="preserve"><value>Состояние</value></data>
+  <data name="FilterTags" xml:space="preserve"><value>Теги</value></data>
+  <data name="FilterTiming" xml:space="preserve"><value>Тайминг</value></data>
+  <data name="FilterSort" xml:space="preserve"><value>Сортировка</value></data>
   <data name="NoRelationCandidates" xml:space="preserve"><value>Для этого типа связи нет доступных задач.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>Первый день следующего месяца</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
