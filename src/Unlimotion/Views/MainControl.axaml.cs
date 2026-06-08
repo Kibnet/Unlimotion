@@ -787,7 +787,9 @@ namespace Unlimotion.Views
         private void UpdateFilterToolbarLayouts()
         {
             foreach (var toolbar in this.GetVisualDescendants().OfType<Grid>()
-                         .Where(static grid => grid.Classes.Contains("FilterToolbar")))
+                         .Where(static grid =>
+                             grid.Classes.Contains("FilterToolbar") ||
+                             grid.Classes.Contains("RoadmapFilterToolbar")))
             {
                 UpdateFilterToolbarLayout(toolbar);
             }
@@ -803,9 +805,12 @@ namespace Unlimotion.Views
                 return;
             }
 
+            ApplyFilterFlyoutPanelBounds(toolbar);
+
             var filterItems = toolbar.Children
                 .OfType<WrapPanel>()
-                .FirstOrDefault(static panel => panel.Classes.Contains("FilterToolbarItems"));
+                .FirstOrDefault(static panel => panel.Classes.Contains("FilterToolbarItems")) ??
+                toolbar.Children.OfType<WrapPanel>().FirstOrDefault();
             var searchBar = toolbar.Children.OfType<SearchBarView>().FirstOrDefault();
 
             if (filterItems == null || searchBar == null)
@@ -903,6 +908,16 @@ namespace Unlimotion.Views
             {
                 searchControl.ClearValue(MinWidthProperty);
                 searchControl.ClearValue(MaxWidthProperty);
+            }
+        }
+
+        private void ApplyFilterFlyoutPanelBounds(Control toolbar)
+        {
+            foreach (var filtersButton in toolbar.GetVisualDescendants()
+                         .OfType<DropDownButton>()
+                         .Where(static button => button.Classes.Contains("FilterToolbarFiltersButton")))
+            {
+                FilterFlyoutLayout.ApplyResponsiveBounds(this, filtersButton);
             }
         }
 

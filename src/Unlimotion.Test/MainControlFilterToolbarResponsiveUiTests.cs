@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.Views;
@@ -203,6 +205,48 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(narrowToolbar.Bounds.Width).IsLessThanOrEqualTo(520);
                 await AssertActionsPrecedeSearchInLogicalOrder(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
                 await AssertSearchAndActionsShareToolbarRow(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task FilterFlyouts_CompactViewport_ConstrainPopupSizeAndScrollVertically()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 320, 360);
+                window.Show();
+                RunLayoutJobs();
+
+                foreach (var tab in TaskTabs)
+                {
+                    SelectTab(view, tab.TabIndex);
+
+                    var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, tab.FiltersButtonAutomationId);
+                    await AssertFilterFlyoutViewportContract(window, filtersButton, tab.FilterPanelAutomationId);
+                }
+
+                SelectTab(view, 7);
+
+                var roadmapFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
+                await AssertFilterFlyoutViewportContract(window, roadmapFiltersButton, "RoadmapFilterPanel");
             }
             finally
             {
@@ -438,6 +482,61 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(leakedIcons).IsEmpty();
     }
 
+    private static async Task AssertFilterFlyoutViewportContract(
+        Window window,
+        DropDownButton filtersButton,
+        string filterPanelAutomationId)
+    {
+        if (filtersButton.Flyout is not Flyout flyout)
+        {
+            throw new InvalidOperationException("Filter button must use a Flyout.");
+        }
+
+        flyout.ShowAt(filtersButton);
+        RunLayoutJobs();
+
+        try
+        {
+            if (flyout.Content is not Control flyoutContent)
+            {
+                throw new InvalidOperationException("Filter flyout content was not found.");
+            }
+
+            var panel = FindControlInDetachedContent<Border>(flyoutContent, filterPanelAutomationId);
+            if (panel == null)
+            {
+                throw new InvalidOperationException($"Filter panel '{filterPanelAutomationId}' was not found.");
+            }
+
+            var scrollViewer = panel.GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .FirstOrDefault(static control => control.Classes.Contains("FilterPanelScrollViewer"));
+            if (scrollViewer == null)
+            {
+                throw new InvalidOperationException($"Filter panel '{filterPanelAutomationId}' must use a scroll viewer.");
+            }
+
+            var buttonLeft = filtersButton.TranslatePoint(new Point(0, 0), window)?.X ?? 0;
+            var buttonBottom = filtersButton.TranslatePoint(new Point(0, filtersButton.Bounds.Height), window)?.Y ?? filtersButton.Bounds.Height;
+            var availableWidth = Math.Max(0, window.Bounds.Width - buttonLeft - 8);
+            var availableHeight = Math.Max(0, window.Bounds.Height - buttonBottom - 8);
+
+            await Assert.That(panel.MinWidth).IsEqualTo(0);
+            await Assert.That(panel.MaxWidth).IsLessThanOrEqualTo(availableWidth + 1);
+            await Assert.That(panel.Bounds.Width).IsLessThanOrEqualTo(panel.MaxWidth + 1);
+            await Assert.That(panel.MaxHeight).IsLessThanOrEqualTo(availableHeight + 1);
+            await Assert.That(panel.Bounds.Height).IsLessThanOrEqualTo(panel.MaxHeight + 1);
+            await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
+            await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);
+            await Assert.That(scrollViewer.MaxHeight).IsLessThanOrEqualTo(panel.MaxHeight + 1);
+        }
+        finally
+        {
+            flyout.Hide();
+            RunLayoutJobs();
+        }
+    }
+
     private static T? FindControlInDetachedContent<T>(Control root, string automationId)
         where T : Control
     {
@@ -448,7 +547,10 @@ public class MainControlFilterToolbarResponsiveUiTests
 
         return root.GetVisualDescendants()
             .OfType<T>()
-            .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+            .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId) ??
+            root.GetLogicalDescendants()
+                .OfType<T>()
+                .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
     private static bool IsVisibleAndArranged(Control control)

@@ -71,6 +71,7 @@ namespace Unlimotion.Views
         private const double RoadmapDragThreshold = 4;
         private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
         private static readonly TimeSpan RoadmapInlineTitleRepeatedClickDelay = TimeSpan.FromMilliseconds(500);
+        private bool roadmapFilterFlyoutLayoutUpdateQueued;
 
         public static readonly StyledProperty<bool> RoadmapGraphBuildInProgressProperty =
             AvaloniaProperty.Register<GraphControl, bool>(nameof(RoadmapGraphBuildInProgress));
@@ -118,6 +119,7 @@ namespace Unlimotion.Views
             graphUpdateTimer.Tick += GraphUpdateTimer_OnTick;
 
             DataContextChanged += GraphControl_DataContextChanged;
+            AttachedToVisualTree += (_, _) => QueueRoadmapFilterFlyoutLayoutUpdate();
             DetachedFromVisualTree += (_, _) =>
             {
                 CancelScheduledGraphUpdate();
@@ -148,6 +150,16 @@ namespace Unlimotion.Views
                 true);
             KeyDown += RoadmapEditor_KeyDown;
             RoadmapViewport.Control.KeyDown += RoadmapEditor_KeyDown;
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+
+            if (change.Property == BoundsProperty)
+            {
+                QueueRoadmapFilterFlyoutLayoutUpdate();
+            }
         }
 
         public ObservableCollection<RoadmapNode> RoadmapNodes { get; } = new();
@@ -218,6 +230,33 @@ namespace Unlimotion.Views
 
         private IRoadmapViewportAdapter RoadmapViewport =>
             roadmapViewport ??= new NodifyRoadmapViewportAdapter(RoadmapEditor);
+
+        private void QueueRoadmapFilterFlyoutLayoutUpdate()
+        {
+            if (roadmapFilterFlyoutLayoutUpdateQueued)
+            {
+                return;
+            }
+
+            roadmapFilterFlyoutLayoutUpdateQueued = true;
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    roadmapFilterFlyoutLayoutUpdateQueued = false;
+                    UpdateRoadmapFilterFlyoutLayout();
+                },
+                DispatcherPriority.Loaded);
+        }
+
+        private void UpdateRoadmapFilterFlyoutLayout()
+        {
+            foreach (var filtersButton in this.GetVisualDescendants()
+                         .OfType<DropDownButton>()
+                         .Where(static button => button.Classes.Contains("FilterToolbarFiltersButton")))
+            {
+                FilterFlyoutLayout.ApplyResponsiveBounds(this, filtersButton);
+            }
+        }
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }
 
