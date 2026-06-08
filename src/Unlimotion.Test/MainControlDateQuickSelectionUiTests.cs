@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -46,8 +47,11 @@ public class MainControlDateQuickSelectionUiTests
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
 
-                    var beginButton = GetDropDownButton(view, localization.Get("SetBegin"));
-                    var endButton = GetDropDownButton(view, localization.Get("SetEnd"));
+                    var beginButton = GetDropDownButton(view, "CurrentTaskSetBeginButton");
+                    var endButton = GetDropDownButton(view, "CurrentTaskSetEndButton");
+
+                    await Assert.That(beginButton.Content?.ToString()).IsEqualTo("📅");
+                    await Assert.That(endButton.Content?.ToString()).IsEqualTo("🏁");
 
                     await AssertMenuHeaders(beginButton, "Сегодня", "Завтра");
                     await AssertMenuHeaders(endButton, "Сегодня", "Завтра");
@@ -82,15 +86,18 @@ public class MainControlDateQuickSelectionUiTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static DropDownButton GetDropDownButton(Control root, string content)
+    private static DropDownButton GetDropDownButton(Control root, string automationId)
     {
         var button = root.GetVisualDescendants()
             .OfType<DropDownButton>()
-            .FirstOrDefault(candidate => string.Equals(candidate.Content?.ToString(), content, StringComparison.Ordinal));
+            .FirstOrDefault(candidate => string.Equals(
+                AutomationProperties.GetAutomationId(candidate),
+                automationId,
+                StringComparison.Ordinal));
 
         if (button == null)
         {
-            throw new InvalidOperationException($"DropDownButton with content '{content}' was not found.");
+            throw new InvalidOperationException($"DropDownButton with automation id '{automationId}' was not found.");
         }
 
         return button;

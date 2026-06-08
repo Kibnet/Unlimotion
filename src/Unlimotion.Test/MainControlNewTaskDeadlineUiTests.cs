@@ -3,7 +3,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -171,14 +173,7 @@ public class MainControlNewTaskDeadlineUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
-                var createButton = view.GetVisualDescendants()
-                    .OfType<Button>()
-                    .First(button =>
-                        ReferenceEquals(button.Command, vm.Create) &&
-                        button.IsVisible &&
-                        button.IsEnabled);
-
-                createButton.Command?.Execute(createButton.CommandParameter);
+                ExecuteCreateCommandThroughMenu(view, vm.Create);
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -306,14 +301,7 @@ public class MainControlNewTaskDeadlineUiTests
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
                 var createCommand = commandSelector(vm);
-                var createButton = view.GetVisualDescendants()
-                    .OfType<Button>()
-                    .First(button =>
-                        ReferenceEquals(button.Command, createCommand) &&
-                        button.IsVisible &&
-                        button.IsEnabled);
-
-                createButton.Command?.Execute(createButton.CommandParameter);
+                ExecuteCreateCommandThroughMenu(view, createCommand);
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -353,6 +341,28 @@ public class MainControlNewTaskDeadlineUiTests
             Height = 900,
             Content = content
         };
+    }
+
+    private static void ExecuteCreateCommandThroughMenu(
+        Control root,
+        System.Windows.Input.ICommand createCommand)
+    {
+        var createMenuButton = root.GetVisualDescendants()
+            .OfType<DropDownButton>()
+            .First(button =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(button),
+                    "GlobalTaskCreateMenuButton",
+                    StringComparison.Ordinal) &&
+                button.IsVisible &&
+                button.IsEnabled);
+
+        if (!createCommand.CanExecute(null))
+        {
+            throw new InvalidOperationException("Expected create command to be executable from the global create menu.");
+        }
+
+        createCommand.Execute(null);
     }
 
     private static TextBox FindPlannedDurationTextBox(Control root, TaskItemViewModel task)
