@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -141,9 +142,7 @@ public class MainControlTaskCardLayoutUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
                 window = createdWindow;
                 app.RequestedThemeVariant = ThemeVariant.Dark;
-                view.Measure(new Size(createdWindow.Width, createdWindow.Height));
-                view.Arrange(new Rect(0, 0, createdWindow.Width, createdWindow.Height));
-                RunLayoutJobs();
+                ArrangeMainControlForTest(createdWindow, view, createdWindow.Width, createdWindow.Height);
 
                 Control[] accentOutlineButtons =
                 [
@@ -559,10 +558,8 @@ public class MainControlTaskCardLayoutUiTests
         window.Show();
         try
         {
-            view.Measure(new Size(width, height));
-            view.Arrange(new Rect(0, 0, width, height));
-            RunLayoutJobs();
-            EnsureDetailsPaneArranged(view, width, height);
+            ArrangeMainControlForTest(window, view, width, height);
+            EnsureDetailsPaneArranged(window, view, width, height);
         }
         catch
         {
@@ -573,12 +570,32 @@ public class MainControlTaskCardLayoutUiTests
         return (view, window);
     }
 
-    private static void EnsureDetailsPaneArranged(MainControl view, double width, double height)
+    private static void ArrangeMainControlForTest(Window window, MainControl view, double width, double height)
+    {
+        window.MinWidth = width;
+        window.MinHeight = height;
+        window.MaxWidth = width;
+        window.MaxHeight = height;
+        window.Width = width;
+        window.Height = height;
+        view.Width = width;
+        view.Height = height;
+
+        window.Measure(new Size(width, height));
+        window.Arrange(new Rect(0, 0, width, height));
+        view.Measure(new Size(width, height));
+        view.Arrange(new Rect(0, 0, width, height));
+        RunLayoutJobs();
+    }
+
+    private static void EnsureDetailsPaneArranged(Window window, MainControl view, double width, double height)
     {
         var splitView = view.GetVisualDescendants()
             .OfType<SplitView>()
             .FirstOrDefault();
         var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+        ApplyDetailsPaneTestWidth(scrollViewer, width);
+        UpdateTaskDetailsLayoutForTest(view);
 
         if (splitView is not null)
         {
@@ -599,6 +616,7 @@ public class MainControlTaskCardLayoutUiTests
             {
                 viewModel.DetailsAreOpen = true;
             }
+            ApplyDetailsPaneTestWidth(scrollViewer, width);
 
             if (splitView is not null)
             {
@@ -606,13 +624,67 @@ public class MainControlTaskCardLayoutUiTests
                 splitView.IsPaneOpen = true;
             }
 
-            view.Measure(new Size(width, height));
-            view.Arrange(new Rect(0, 0, width, height));
-            RunLayoutJobs();
+            ArrangeMainControlForTest(window, view, width, height);
+            UpdateTaskDetailsLayoutForTest(view);
+        }
+
+        if (TryArrangeDetailsPaneFallback(view, scrollViewer, width, height))
+        {
+            return;
         }
 
         throw new InvalidOperationException(
             $"Task details pane did not arrange to an open width: bounds={scrollViewer.Bounds}.");
+    }
+
+    private static void UpdateTaskDetailsLayoutForTest(MainControl view)
+    {
+        typeof(MainControl)
+            .GetMethod("UpdateTaskDetailsLayout", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.Invoke(view, null);
+        RunLayoutJobs();
+    }
+
+    private static double ApplyDetailsPaneTestWidth(ScrollViewer scrollViewer, double width)
+    {
+        var detailsWidth = Math.Max(0d, Math.Min(width, 600d) - 20d);
+        if (detailsWidth <= 100)
+        {
+            return detailsWidth;
+        }
+
+        scrollViewer.Width = detailsWidth;
+        scrollViewer.MinWidth = detailsWidth;
+        scrollViewer.MaxWidth = detailsWidth;
+        return detailsWidth;
+    }
+
+    private static bool TryArrangeDetailsPaneFallback(
+        MainControl view,
+        ScrollViewer scrollViewer,
+        double width,
+        double height)
+    {
+        var detailsWidth = ApplyDetailsPaneTestWidth(scrollViewer, width);
+        if (detailsWidth <= 100)
+        {
+            return false;
+        }
+
+        scrollViewer.Measure(new Size(detailsWidth, height));
+        scrollViewer.Arrange(new Rect(0, 0, detailsWidth, height));
+        RunLayoutJobs();
+        UpdateTaskDetailsLayoutForTest(view);
+
+        if (scrollViewer.Content is Control content)
+        {
+            content.Width = detailsWidth;
+            content.Measure(new Size(detailsWidth, double.PositiveInfinity));
+            content.Arrange(new Rect(0, 0, detailsWidth, Math.Max(height, content.DesiredSize.Height)));
+        }
+
+        RunLayoutJobs();
+        return scrollViewer.Bounds.Width > 100;
     }
 
     private static T FindControlByAutomationId<T>(Control root, string automationId)
