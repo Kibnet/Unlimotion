@@ -340,6 +340,14 @@ SSH keys
   - Full `Unlimotion.Test` was attempted three times and remains unstable outside the changed surface: first run failed 1/439 on `SettingsControlResponsiveUiTests.SettingsControl_TaskTreeExpansionStateCheckBox_PersistsSetting`, second run failed 1/439 on `MainWindowViewModelTests.PasteTaskOutline_CreatesNestedTasksUnderCurrentTask`, third run with `--maximum-parallel-tests 1 --timeout 300s` failed 2/439 on `MainControlTaskCardLayoutUiTests.CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls` and `MainWindowViewModelTests.CopyTaskOutline_UsesMarkdownAndDescriptionSettings`. Each failed test passed when rerun individually.
 - Residual risks / follow-ups: full `Unlimotion.Test` has pre-existing or environment-sensitive flakiness in unrelated UI/outline tests; targeted SSH settings/service tests, headless UI suite and desktop build pass.
 
+### Post-EXEC Review Addendum: GitHub reviewer comment
+- Статус: PASS для reviewer feedback thread `PRRT_kwDOGtM4f86Hst7X`.
+- Reviewer finding: Windows SSH CLI transport bypassed the libgit2 certificate callback path, so OpenSSH still used the default profile `~/.ssh/known_hosts` even when `Git:SshKeyStoragePath` was configured.
+- Fix: `RunGitCommandWithConfiguredSshKey` now computes the effective `known_hosts_unlimotion` path from current `GitSettings`, ensures the parent directory exists, and passes it to `GIT_SSH_COMMAND` through `-o UserKnownHostsFile=...`.
+- Regression coverage: `BuildGitSshCommand_UsesExplicitKeyAndConfiguredKnownHostsFile` verifies the configured SSH storage folder is reflected in the generated CLI command.
+- Evidence inspected:
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/*"` -> passed 52/52.
+
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
@@ -358,3 +366,4 @@ SSH keys
 | EXEC | Visual evidence capture | 0.86 | Нет | Передать GIF artifacts пользователю | Нет | Да, пользователь запросил GIF для desktop и Android | Captured desktop app screenshots and Android emulator screenshots, then assembled GIFs showing empty/default and custom SSH key folder states | `artifacts/ssh-key-storage-path-demo-9/desktop-ssh-key-storage-path.gif`, `artifacts/ssh-key-storage-path-demo-9/android/android-ssh-key-storage-path.gif` |
 | EXEC | UX clarification | 0.89 | Нет | Финальный diff/whitespace review | Нет | Да, пользователь уточнил, что пустое поле должно показывать фактический каталог | Added effective SSH key folder text under the field, shared resolver, localization, unit tests and headless selector coverage | `SshKeyStoragePathResolver.cs`, `SettingsViewModel.cs`, `SettingsControl.axaml`, tests |
 | EXEC | Branch review fixes | 0.89 | Нет | Финальный diff/status и при необходимости commit/push | Нет | Да, пользователь попросил исправить review findings | Added regression coverage and fixed invalid path reload safety plus localized effective-path notification; unrelated full-unit flakes passed in isolated reruns | `SettingsViewModel.cs`, `SettingsViewModelTests.cs`, `specs/2026-06-05-ssh-key-storage-path.md` |
+| EXEC | GitHub reviewer feedback | 0.91 | Нет | Проверить, закоммитить и запушить | Нет | Да, пользователь сообщил о комментарии ревьювера на GitHub | Addressed the P2 reviewer thread by routing Windows Git CLI SSH host trust to the configured `known_hosts_unlimotion` path | `BackupViaGitService.cs`, `BackupViaGitServiceTests.cs`, `specs/2026-06-05-ssh-key-storage-path.md` |

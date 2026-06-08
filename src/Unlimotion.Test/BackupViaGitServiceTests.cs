@@ -948,6 +948,29 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task BuildGitSshCommand_UsesExplicitKeyAndConfiguredKnownHostsFile()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "id_ed25519");
+        var sshKeyStoragePath = Path.Combine(_rootPath, "portable-ssh");
+        File.WriteAllText(privateKeyPath, "private key");
+
+        var command = BackupViaGitService.BuildGitSshCommand(new GitSettings
+        {
+            SshPrivateKeyPath = privateKeyPath,
+            SshKeyStoragePath = sshKeyStoragePath
+        });
+        var expectedKnownHostsPath = Path.Combine(sshKeyStoragePath, "known_hosts_unlimotion")
+            .Replace('\\', '/');
+
+        await Assert.That(command).Contains("ssh -i");
+        await Assert.That(command).Contains(privateKeyPath.Replace('\\', '/'));
+        await Assert.That(command).Contains("IdentitiesOnly=yes");
+        await Assert.That(command).Contains("BatchMode=yes");
+        await Assert.That(command).Contains("StrictHostKeyChecking=accept-new");
+        await Assert.That(command).Contains($"UserKnownHostsFile=\"{expectedKnownHostsPath}\"");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task BuildGitFetchArguments_IncludesRemoteAndConfiguredRefSpecs()
     {
         var arguments = BackupViaGitService.BuildGitFetchArguments(

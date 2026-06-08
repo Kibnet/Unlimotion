@@ -2170,16 +2170,28 @@ public class BackupViaGitService : IRemoteBackupService
         return (privateKeyPath, $"{privateKeyPath}.pub");
     }
 
-    internal static string BuildGitSshCommand(string privateKeyPath)
+    internal static string BuildGitSshCommand(string privateKeyPath, string? knownHostsPath = null)
     {
         if (string.IsNullOrWhiteSpace(privateKeyPath))
         {
             throw new InvalidOperationException(L10n.Get("SshPrivateKeyPathNotConfigured"));
         }
 
-        var normalizedPath = privateKeyPath.Replace('\\', '/').Replace("\"", "\\\"");
-        return $"ssh -i \"{normalizedPath}\" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new";
+        var normalizedPath = ToGitSshCommandPath(privateKeyPath);
+        var command = $"ssh -i \"{normalizedPath}\" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new";
+        if (!string.IsNullOrWhiteSpace(knownHostsPath))
+        {
+            command += $" -o UserKnownHostsFile=\"{ToGitSshCommandPath(knownHostsPath)}\"";
+        }
+
+        return command;
     }
+
+    internal static string BuildGitSshCommand(GitSettings gitSettings) =>
+        BuildGitSshCommand(GetConfiguredSshPrivateKeyPath(gitSettings), GetKnownHostsPath(gitSettings));
+
+    private static string ToGitSshCommandPath(string path) =>
+        path.Replace('\\', '/').Replace("\"", "\\\"");
 
     internal static void GenerateManagedRsaSshKey(string privateKeyPath, string publicKeyPath)
     {
@@ -2581,9 +2593,11 @@ public class BackupViaGitService : IRemoteBackupService
         params string[] arguments)
     {
         var privateKeyPath = GetConfiguredSshPrivateKeyPath(gitSettings);
+        var knownHostsPath = GetKnownHostsPath(gitSettings);
+        Directory.CreateDirectory(Path.GetDirectoryName(knownHostsPath) ?? ".");
         var startInfo = CreateProcessStartInfo("git", workingDirectory, arguments);
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        startInfo.Environment["GIT_SSH_COMMAND"] = BuildGitSshCommand(privateKeyPath);
+        startInfo.Environment["GIT_SSH_COMMAND"] = BuildGitSshCommand(privateKeyPath, knownHostsPath);
 
         var processResult = RunProcess(startInfo);
         if (processResult.ExitCode != 0)
