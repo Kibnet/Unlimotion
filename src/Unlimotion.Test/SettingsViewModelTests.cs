@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -978,6 +979,75 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task SshKeyStorageEffectivePathText_UsesDefaultDirectoryWhenPathIsEmpty()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+        var defaultDirectory = SshKeyStoragePathResolver.GetDefaultSshDirectory();
+
+        settings.SshKeyStoragePath = string.Empty;
+
+        await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(defaultDirectory);
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains(defaultDirectory);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SshKeyStorageEffectivePathText_UsesConfiguredFullPath()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+        var configuredPath = Path.Combine("Data", "SshKeys");
+        var expectedPath = Path.GetFullPath(configuredPath);
+
+        settings.SshKeyStoragePath = configuredPath;
+
+        await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(expectedPath);
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains(expectedPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SshKeyStoragePath_DoesNotThrowForInvalidIntermediateInput()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var backupService = new BackupViaGitService(configuration);
+        var settings = new SettingsViewModel(configuration, backupService);
+        var invalidPath = new string((char)0, 1);
+
+        settings.SshKeyStoragePath = invalidPath;
+
+        await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(invalidPath);
+        await Assert.That(settings.SshPublicKeys).IsEmpty();
+        await Assert.That(settings.SelectedSshPublicKeyPath).IsNull();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageMode_UpdatesSshKeyStorageEffectivePathText()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        var settings = new SettingsViewModel(configuration, localizationService: localization)
+        {
+            SshKeyStoragePath = Path.Combine("Data", "SshKeys")
+        };
+        var changedProperties = new List<string>();
+        ((INotifyPropertyChanged)settings).PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != null)
+            {
+                changedProperties.Add(args.PropertyName);
+            }
+        };
+
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains("Used folder:");
+
+        settings.LanguageMode = LocalizationService.RussianLanguage;
+
+        await Assert.That(settings.SshKeyStorageEffectivePathText).Contains("Будет использована папка:");
+        await Assert.That(changedProperties).Contains(nameof(SettingsViewModel.SshKeyStorageEffectivePathText));
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadGitMetadata_FillsEmptyRepositoryUrlFromSelectedRemote()
     {
         var backupService = new FakeRemoteBackupService
@@ -1525,6 +1595,37 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task SshKeyStoragePath_PersistsChoiceAndClearsSelectionOutsideReloadedKeys()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            PublicKeys = new List<string>
+            {
+                @"C:\Users\Test\.ssh\id_first.pub"
+            }
+        };
+
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, backupService);
+        settings.SelectedSshPublicKeyPath = @"C:\Users\Test\.ssh\id_first.pub";
+
+        backupService.PublicKeys = new List<string>
+        {
+            @"D:\Keys\id_second.pub"
+        };
+        settings.SshKeyStoragePath = @"D:\Keys";
+
+        await Assert.That(configuration
+                .GetSection("Git")
+                .GetSection(nameof(GitSettings.SshKeyStoragePath))
+                .Get<string>())
+            .IsEqualTo(@"D:\Keys");
+        await Assert.That(settings.SshPublicKeys).IsEquivalentTo(new[] { @"D:\Keys\id_second.pub" });
+        await Assert.That(settings.SelectedSshPublicKeyPath).IsNull();
+        await Assert.That(settings.GitSshPrivateKeyPath).IsNull();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task SelectedSshPublicKeyPath_UpdatesPrivateKeyPath()
     {
         IConfigurationRoot configuration = CreateConfiguration();
@@ -1534,6 +1635,19 @@ public class SettingsViewModelTests : IDisposable
 
         await Assert.That(settings.GitSshPublicKeyPath).IsEqualTo(@"C:\Users\Test\.ssh\id_ed25519.pub");
         await Assert.That(settings.GitSshPrivateKeyPath).IsEqualTo(@"C:\Users\Test\.ssh\id_ed25519");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SelectedSshPublicKeyPath_ClearsPrivateKeyPathWhenSelectionIsCleared()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+
+        settings.SelectedSshPublicKeyPath = @"C:\Users\Test\.ssh\id_ed25519.pub";
+        settings.SelectedSshPublicKeyPath = null;
+
+        await Assert.That(settings.GitSshPublicKeyPath).IsNull();
+        await Assert.That(settings.GitSshPrivateKeyPath).IsNull();
     }
 
     [Test]

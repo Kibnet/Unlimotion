@@ -368,6 +368,22 @@
                                 <TextBlock Classes="SectionHint" Text="{DynamicResource SshKeysHint}" />
 
                                 <StackPanel Classes="FieldGroup">
+                                    <TextBlock Classes="FieldLabel" Text="{DynamicResource SshKeyStoragePath}" />
+                                    <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                                        <TextBox AutomationProperties.AutomationId="SshKeyStoragePathTextBox"
+                                                 Text="{Binding SshKeyStoragePath}" />
+                                        <Button Grid.Column="1"
+                                                AutomationProperties.AutomationId="BrowseSshKeyStoragePathButton"
+                                                Content="{DynamicResource Browse}"
+                                                Command="{Binding BrowseSshKeyStoragePathCommand}" />
+                                    </Grid>
+                                    <TextBlock Classes="SectionHint"
+                                               Text="{Binding SshKeyStorageEffectivePathText}"
+                                               ToolTip.Tip="{Binding EffectiveSshKeyStoragePath}"
+                                               AutomationProperties.AutomationId="SshKeyStorageEffectivePathTextBlock" />
+                                </StackPanel>
+
+                                <StackPanel Classes="FieldGroup">
                                     <TextBlock Classes="FieldLabel" Text="{DynamicResource ActiveKey}" />
                                     <ComboBox SelectedItem="{Binding SelectedSshPublicKeyPath}"
                                               AutomationProperties.AutomationId="SelectedSshPublicKeyComboBox"

@@ -948,6 +948,29 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task BuildGitSshCommand_UsesExplicitKeyAndConfiguredKnownHostsFile()
+    {
+        var privateKeyPath = Path.Combine(_rootPath, "id_ed25519");
+        var sshKeyStoragePath = Path.Combine(_rootPath, "portable-ssh");
+        File.WriteAllText(privateKeyPath, "private key");
+
+        var command = BackupViaGitService.BuildGitSshCommand(new GitSettings
+        {
+            SshPrivateKeyPath = privateKeyPath,
+            SshKeyStoragePath = sshKeyStoragePath
+        });
+        var expectedKnownHostsPath = Path.Combine(sshKeyStoragePath, "known_hosts_unlimotion")
+            .Replace('\\', '/');
+
+        await Assert.That(command).Contains("ssh -i");
+        await Assert.That(command).Contains(privateKeyPath.Replace('\\', '/'));
+        await Assert.That(command).Contains("IdentitiesOnly=yes");
+        await Assert.That(command).Contains("BatchMode=yes");
+        await Assert.That(command).Contains("StrictHostKeyChecking=accept-new");
+        await Assert.That(command).Contains($"UserKnownHostsFile=\"{expectedKnownHostsPath}\"");
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task BuildGitFetchArguments_IncludesRemoteAndConfiguredRefSpecs()
     {
         var arguments = BackupViaGitService.BuildGitFetchArguments(
@@ -1014,6 +1037,82 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
         await Assert.That(() => credentials("git@github.com:owner/repo.git", "git", SupportedCredentialTypes.Default))
             .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSshPublicKeys_ReadsConfiguredSshKeyStoragePath()
+    {
+        var sshDirectory = Path.Combine(_rootPath, "custom-ssh");
+        Directory.CreateDirectory(sshDirectory);
+        var firstPublicKey = Path.Combine(sshDirectory, "id_b.pub");
+        var secondPublicKey = Path.Combine(sshDirectory, "id_a.pub");
+        File.WriteAllText(firstPublicKey, "ssh-ed25519 b");
+        File.WriteAllText(secondPublicKey, "ssh-ed25519 a");
+        File.WriteAllText(Path.Combine(sshDirectory, "id_private"), "private");
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        configuration.GetSection("Git")
+            .GetSection(nameof(GitSettings.SshKeyStoragePath))
+            .Set(sshDirectory);
+        var service = new BackupViaGitService(configuration);
+
+        var keys = service.GetSshPublicKeys();
+
+        await Assert.That(keys.Count).IsEqualTo(2);
+        await Assert.That(keys[0]).IsEqualTo(secondPublicKey);
+        await Assert.That(keys[1]).IsEqualTo(firstPublicKey);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GenerateSshKey_CreatesKeyPairInConfiguredSshKeyStoragePath()
+    {
+        var sshDirectory = Path.Combine(_rootPath, "generated-ssh");
+        var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _configurationDisposables.Add(disposable);
+        }
+
+        configuration.GetSection("Git")
+            .GetSection(nameof(GitSettings.SshKeyStoragePath))
+            .Set(sshDirectory);
+        var service = new BackupViaGitService(configuration);
+
+        var publicKeyPath = service.GenerateSshKey("id_generated");
+
+        var privateKeyPath = Path.Combine(sshDirectory, "id_generated");
+        await Assert.That(publicKeyPath).IsEqualTo($"{privateKeyPath}.pub");
+        await Assert.That(File.Exists(privateKeyPath)).IsTrue();
+        await Assert.That(File.Exists(publicKeyPath)).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSshDirectory_UsesDefaultWhenConfiguredPathIsBlank()
+    {
+        var defaultDirectory = BackupViaGitService.GetSshDirectory(new GitSettings());
+        var blankDirectory = BackupViaGitService.GetSshDirectory(new GitSettings
+        {
+            SshKeyStoragePath = " "
+        });
+
+        await Assert.That(blankDirectory).IsEqualTo(defaultDirectory);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSshDirectory_NormalizesConfiguredPath()
+    {
+        var configuredPath = Path.Combine(_rootPath, "relative", "..", "keys");
+
+        var sshDirectory = BackupViaGitService.GetSshDirectory(new GitSettings
+        {
+            SshKeyStoragePath = configuredPath
+        });
+
+        await Assert.That(sshDirectory).IsEqualTo(Path.GetFullPath(configuredPath));
     }
 
     [Test]

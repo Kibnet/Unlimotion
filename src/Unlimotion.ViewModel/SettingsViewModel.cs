@@ -61,6 +61,7 @@ public class SettingsViewModel
     private string? _gitCommitterEmail;
     private string? _gitSshPrivateKeyPath;
     private string? _gitSshPublicKeyPath;
+    private string? _sshKeyStoragePath;
     private bool _copyTaskOutlineAsMarkdown;
     private bool _copyTaskOutlineDescription;
     private bool _persistTaskTreeExpansionState;
@@ -114,6 +115,7 @@ public class SettingsViewModel
         _gitCommitterEmail = _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Get<string>();
         _gitSshPrivateKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Get<string>();
         _gitSshPublicKeyPath = _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Get<string>();
+        _sshKeyStoragePath = _gitSettings.GetSection(nameof(GitSettings.SshKeyStoragePath)).Get<string>();
         _copyTaskOutlineAsMarkdown = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyAsMarkdownKey).Get<bool>();
         _copyTaskOutlineDescription = _taskOutlineClipboardSettings.GetSection(TaskOutlineCopyDescriptionKey).Get<bool>();
         _persistTaskTreeExpansionState = _taskTreeExpansionStateSettings
@@ -160,6 +162,7 @@ public class SettingsViewModel
     public ICommand? OpenConflictResolutionWindowCommand { get; set; }
     public ICommand? GenerateSshKeyCommand { get; set; }
     public ICommand? RefreshSshKeysCommand { get; set; }
+    public ICommand? BrowseSshKeyStoragePathCommand { get; set; }
     public ICommand? RefreshGitMetadataCommand { get; set; }
     public ICommand? SwitchRemoteConnectionTypeCommand { get; set; }
     public ICommand? SwitchRemoteToHttpCommand { get; set; }
@@ -211,7 +214,7 @@ public class SettingsViewModel
         }
     }
 
-    [AlsoNotifyFor(nameof(LanguageModeIndex))]
+    [AlsoNotifyFor(nameof(LanguageModeIndex), nameof(SshKeyStorageEffectivePathText))]
     public int LanguageOptionsVersion { get; private set; }
 
     public int LanguageModeIndex
@@ -611,6 +614,31 @@ public class SettingsViewModel
         }
     }
 
+    [AlsoNotifyFor(nameof(EffectiveSshKeyStoragePath), nameof(SshKeyStorageEffectivePathText))]
+    public string? SshKeyStoragePath
+    {
+        get => _sshKeyStoragePath;
+        set
+        {
+            if (string.Equals(_sshKeyStoragePath, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _sshKeyStoragePath = value;
+            _gitSettings.GetSection(nameof(GitSettings.SshKeyStoragePath)).Set(value);
+            ReloadSshPublicKeys();
+        }
+    }
+
+    public string EffectiveSshKeyStoragePath => ResolveEffectiveSshKeyStoragePath();
+
+    public string SshKeyStorageEffectivePathText =>
+        string.Format(
+            CultureInfo.CurrentCulture,
+            _localization.Get("SshKeyStorageEffectivePath"),
+            EffectiveSshKeyStoragePath);
+
     public string? NewSshKeyName { get; set; } = "id_ed25519_unlimotion";
 
     public List<string> SshPublicKeys { get; private set; } = new();
@@ -621,7 +649,11 @@ public class SettingsViewModel
         set
         {
             GitSshPublicKeyPath = value;
-            if (!string.IsNullOrWhiteSpace(value) && value.EndsWith(".pub", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                GitSshPrivateKeyPath = null;
+            }
+            else if (value.EndsWith(".pub", StringComparison.OrdinalIgnoreCase))
             {
                 GitSshPrivateKeyPath = value[..^4];
             }
@@ -743,7 +775,14 @@ public class SettingsViewModel
 
     public void ReloadSshPublicKeys(string? preferredSelection = null)
     {
-        SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+        try
+        {
+            SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+        }
+        catch (Exception ex) when (IsInvalidSshKeyStoragePathException(ex))
+        {
+            SshPublicKeys = new List<string>();
+        }
 
         var matchedSelection = MatchSshPublicKeyPath(preferredSelection)
                                ?? MatchSshPublicKeyPath(GitSshPublicKeyPath);
@@ -753,10 +792,7 @@ public class SettingsViewModel
             return;
         }
 
-        if (SshPublicKeys.Count == 0)
-        {
-            SelectedSshPublicKeyPath = null;
-        }
+        SelectedSshPublicKeyPath = null;
 
         RefreshBackupState();
     }
@@ -1088,6 +1124,21 @@ public class SettingsViewModel
             return effectivePath;
         }
     }
+
+    private string ResolveEffectiveSshKeyStoragePath()
+    {
+        try
+        {
+            return SshKeyStoragePathResolver.ResolveSshDirectory(SshKeyStoragePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return SshKeyStoragePath ?? string.Empty;
+        }
+    }
+
+    private static bool IsInvalidSshKeyStoragePathException(Exception ex) =>
+        ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException;
 
     private void EnsureRemoteSelection()
     {
