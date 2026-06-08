@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using Unlimotion.Views.SearchControl;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
@@ -65,6 +66,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await AssertPrimaryActionsUseSingleLine(primaryActions);
                     await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
                     await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
+                    await AssertNestedSearchControlShrinksWithToolbar(toolbar, searchBar);
                     AssertFilterFlyoutPanel(filtersButton, tab.FilterPanelAutomationId, tab.ResetButtonAutomationId);
                     await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
                     await AssertAutomationName(filtersButton, "Filters");
@@ -112,6 +114,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
                 AssertFilterFlyoutPanel(filtersButton, "RoadmapFilterPanel", "RoadmapResetFiltersButton");
                 await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
+                await AssertNestedSearchControlShrinksWithToolbar(toolbar, searchBar);
                 await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
                 await AssertAutomationName(filtersButton, "Filters");
                 await AssertResetButtonIsInsideFlyout(view, filtersButton, "RoadmapResetFiltersButton");
@@ -120,6 +123,38 @@ public class MainControlFilterToolbarResponsiveUiTests
             {
                 window?.Close();
                 fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task RoadmapFilterToolbar_StandaloneNarrowViewport_ShrinksNestedSearchControl()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            Window? window = null;
+
+            try
+            {
+                var view = new GraphControl
+                {
+                    DataContext = new GraphViewModel()
+                };
+                window = CreateWindow(view, 320, 360);
+                window.Show();
+                RunLayoutJobs();
+
+                var toolbar = FindVisibleRoadmapFilterToolbar(view);
+                var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                var primaryActions = FindVisibleToolbarChild<WrapPanel>(toolbar);
+
+                await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
+                await AssertNestedSearchControlShrinksWithToolbar(toolbar, searchBar);
+            }
+            finally
+            {
+                window?.Close();
             }
         }, CancellationToken.None);
     }
@@ -281,7 +316,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             .First(control => control.Classes.Contains("FilterToolbar") && IsVisibleAndArranged(control));
     }
 
-    private static Grid FindVisibleRoadmapFilterToolbar(MainControl view)
+    private static Grid FindVisibleRoadmapFilterToolbar(Control view)
     {
         return view.GetVisualDescendants()
             .OfType<Grid>()
@@ -363,6 +398,18 @@ public class MainControlFilterToolbarResponsiveUiTests
         var children = toolbar.Children.ToArray();
         await Assert.That(Array.IndexOf(children, searchBar)).IsGreaterThanOrEqualTo(0);
         await Assert.That(Array.IndexOf(children, primaryActions)).IsLessThan(Array.IndexOf(children, searchBar));
+    }
+
+    private static async Task AssertNestedSearchControlShrinksWithToolbar(Grid toolbar, SearchBar searchBar)
+    {
+        var searchControl = searchBar.GetVisualDescendants()
+            .OfType<SearchControl>()
+            .First(IsVisibleAndArranged);
+        var searchControlBounds = GetBoundsRelativeTo(toolbar, searchControl);
+
+        await Assert.That(searchControl.MinWidth).IsEqualTo(0);
+        await Assert.That(searchControl.Bounds.Width).IsLessThanOrEqualTo(searchBar.Bounds.Width + 1);
+        await Assert.That(searchControlBounds.Right).IsLessThanOrEqualTo(toolbar.Bounds.Width + 1);
     }
 
     private static async Task AssertFilterButtonMatchesSearchHeight(DropDownButton button, SearchBar searchBar)

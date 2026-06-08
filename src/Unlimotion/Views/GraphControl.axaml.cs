@@ -26,6 +26,8 @@ using ReactiveUI;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Search;
 using Unlimotion.Views.Graph;
+using SearchBarView = Unlimotion.Views.SearchControl.SearchBar;
+using SearchControlView = Unlimotion.Views.SearchControl.SearchControl;
 
 namespace Unlimotion.Views
 {
@@ -71,7 +73,7 @@ namespace Unlimotion.Views
         private const double RoadmapDragThreshold = 4;
         private static readonly TimeSpan RoadmapGraphUpdateDelay = TimeSpan.FromMilliseconds(100);
         private static readonly TimeSpan RoadmapInlineTitleRepeatedClickDelay = TimeSpan.FromMilliseconds(500);
-        private bool roadmapFilterFlyoutLayoutUpdateQueued;
+        private bool roadmapFilterToolbarLayoutUpdateQueued;
 
         public static readonly StyledProperty<bool> RoadmapGraphBuildInProgressProperty =
             AvaloniaProperty.Register<GraphControl, bool>(nameof(RoadmapGraphBuildInProgress));
@@ -119,7 +121,7 @@ namespace Unlimotion.Views
             graphUpdateTimer.Tick += GraphUpdateTimer_OnTick;
 
             DataContextChanged += GraphControl_DataContextChanged;
-            AttachedToVisualTree += (_, _) => QueueRoadmapFilterFlyoutLayoutUpdate();
+            AttachedToVisualTree += (_, _) => QueueRoadmapFilterToolbarLayoutUpdate();
             DetachedFromVisualTree += (_, _) =>
             {
                 CancelScheduledGraphUpdate();
@@ -158,7 +160,7 @@ namespace Unlimotion.Views
 
             if (change.Property == BoundsProperty)
             {
-                QueueRoadmapFilterFlyoutLayoutUpdate();
+                QueueRoadmapFilterToolbarLayoutUpdate();
             }
         }
 
@@ -231,31 +233,64 @@ namespace Unlimotion.Views
         private IRoadmapViewportAdapter RoadmapViewport =>
             roadmapViewport ??= new NodifyRoadmapViewportAdapter(RoadmapEditor);
 
-        private void QueueRoadmapFilterFlyoutLayoutUpdate()
+        private void QueueRoadmapFilterToolbarLayoutUpdate()
         {
-            if (roadmapFilterFlyoutLayoutUpdateQueued)
+            if (roadmapFilterToolbarLayoutUpdateQueued)
             {
                 return;
             }
 
-            roadmapFilterFlyoutLayoutUpdateQueued = true;
+            roadmapFilterToolbarLayoutUpdateQueued = true;
             Dispatcher.UIThread.Post(
                 () =>
                 {
-                    roadmapFilterFlyoutLayoutUpdateQueued = false;
-                    UpdateRoadmapFilterFlyoutLayout();
+                    roadmapFilterToolbarLayoutUpdateQueued = false;
+                    UpdateRoadmapFilterToolbarLayout();
                 },
                 DispatcherPriority.Loaded);
         }
 
-        private void UpdateRoadmapFilterFlyoutLayout()
+        private void UpdateRoadmapFilterToolbarLayout()
         {
-            foreach (var filtersButton in this.GetVisualDescendants()
-                         .OfType<DropDownButton>()
-                         .Where(static button => button.Classes.Contains("FilterToolbarFiltersButton")))
+            foreach (var toolbar in this.GetVisualDescendants()
+                         .OfType<Grid>()
+                         .Where(static grid => grid.Classes.Contains("RoadmapFilterToolbar")))
             {
-                FilterFlyoutLayout.ApplyResponsiveBounds(this, filtersButton);
+                ApplyRoadmapFilterToolbarSearchWidth(toolbar);
+
+                foreach (var filtersButton in toolbar.GetVisualDescendants()
+                             .OfType<DropDownButton>()
+                             .Where(static button => button.Classes.Contains("FilterToolbarFiltersButton")))
+                {
+                    FilterFlyoutLayout.ApplyResponsiveBounds(this, filtersButton);
+                }
             }
+        }
+
+        private static void ApplyRoadmapFilterToolbarSearchWidth(Grid toolbar)
+        {
+            var toolbarWidth = Math.Max(0, toolbar.Bounds.Width);
+            var searchBar = toolbar.GetVisualDescendants()
+                .OfType<SearchBarView>()
+                .FirstOrDefault();
+            if (searchBar == null)
+            {
+                return;
+            }
+
+            searchBar.MinWidth = 0;
+            searchBar.MaxWidth = toolbarWidth;
+
+            var searchControl = searchBar.GetVisualDescendants()
+                .OfType<SearchControlView>()
+                .FirstOrDefault();
+            if (searchControl == null)
+            {
+                return;
+            }
+
+            searchControl.MinWidth = 0;
+            searchControl.MaxWidth = toolbarWidth;
         }
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }
