@@ -675,6 +675,140 @@ public class SettingsControlResponsiveUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task ConflictResolutionControl_PhoneWidth_WithManyConflicts_KeepsDetailsAndActionsVisible()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverMany_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+                configurationDisposable = configuration as IDisposable;
+                var settings = new SettingsViewModel(
+                    configuration,
+                    new FakeRemoteBackupService { ConflictStatus = CreateManyConflictStatus(24) });
+                var view = new ConflictResolutionControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var filePane = FindControlByAutomationId<Border>(view, "ConflictResolutionFilePane");
+                var conflictList = FindControlByAutomationId<ListBox>(view, "ConflictResolutionFileList");
+                var detailsPane = FindControlByAutomationId<Border>(view, "ConflictResolutionDetailPanel");
+                var useCurrentButton = FindControlByAutomationId<Button>(view, "ConflictResolutionUseCurrentButton");
+                var useIncomingButton = FindControlByAutomationId<Button>(view, "ConflictResolutionUseIncomingButton");
+                var applyFieldsButton = FindControlByAutomationId<Button>(view, "ConflictResolutionApplyFieldsButton");
+                var refreshButton = FindControlByAutomationId<Button>(view, "ConflictResolutionRefreshButton");
+                var commitButton = FindControlByAutomationId<Button>(view, "ConflictResolutionCommitButton");
+
+                var filePaneBounds = GetBoundsRelativeTo(view, filePane);
+                var conflictListBounds = GetBoundsRelativeTo(view, conflictList);
+                var detailsPaneBounds = GetBoundsRelativeTo(view, detailsPane);
+                var actionButtonBounds = new[]
+                {
+                    GetBoundsRelativeTo(view, useCurrentButton),
+                    GetBoundsRelativeTo(view, useIncomingButton),
+                    GetBoundsRelativeTo(view, applyFieldsButton),
+                    GetBoundsRelativeTo(view, refreshButton),
+                    GetBoundsRelativeTo(view, commitButton)
+                };
+                var actionBottom = actionButtonBounds.Max(static bounds => bounds.Bottom);
+
+                await Assert.That(conflictList.ItemCount).IsEqualTo(24);
+                await Assert.That(filePaneBounds.Bottom).IsLessThanOrEqualTo(view.Bounds.Height + 1);
+                await Assert.That(detailsPaneBounds.Bottom).IsLessThanOrEqualTo(view.Bounds.Height + 1);
+                await Assert.That(actionBottom).IsLessThanOrEqualTo(view.Bounds.Height + 1);
+                await Assert.That(actionBottom).IsLessThanOrEqualTo(detailsPaneBounds.Bottom + 1);
+                await Assert.That(conflictListBounds.Height).IsLessThanOrEqualTo(filePaneBounds.Height);
+                await Assert.That(filePaneBounds.Height).IsLessThanOrEqualTo(view.Bounds.Height * 0.45);
+                await Assert.That(detailsPaneBounds.Height).IsGreaterThan(filePaneBounds.Height);
+                await Assert.That(detailsPaneBounds.Height).IsGreaterThan(180);
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ConflictResolutionControl_PhoneWidth_WhenAllConflictsResolved_HidesFilePane()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverResolved_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+                configurationDisposable = configuration as IDisposable;
+                var settings = new SettingsViewModel(
+                    configuration,
+                    new FakeRemoteBackupService
+                    {
+                        ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>())
+                    });
+                settings.CommitConflictResolutionCommand = new TestParameterCommand(_ => { });
+                var view = new ConflictResolutionControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var filePane = FindControlByAutomationId<Border>(view, "ConflictResolutionFilePane");
+                var resolverGrid = view.FindControl<Grid>("ResolverGrid")!;
+                var detailsPane = FindControlByAutomationId<Border>(view, "ConflictResolutionDetailPanel");
+                var commitButton = FindControlByAutomationId<Button>(view, "ConflictResolutionCommitButton");
+
+                var detailsPaneBounds = GetBoundsRelativeTo(view, detailsPane);
+                var commitButtonBounds = GetBoundsRelativeTo(view, commitButton);
+
+                await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+                await Assert.That(settings.HasBackupConflictFiles).IsFalse();
+                await Assert.That(filePane.IsVisible).IsFalse();
+                await Assert.That(resolverGrid.RowDefinitions.Count).IsEqualTo(1);
+                await Assert.That(resolverGrid.ColumnDefinitions.Count).IsEqualTo(1);
+                await Assert.That(Grid.GetColumn(detailsPane)).IsEqualTo(0);
+                await Assert.That(Grid.GetRow(detailsPane)).IsEqualTo(0);
+                await Assert.That(commitButton.IsEnabled).IsTrue();
+                await Assert.That(detailsPaneBounds.Height).IsGreaterThan(view.Bounds.Height * 0.65);
+                await Assert.That(detailsPaneBounds.Bottom).IsLessThanOrEqualTo(view.Bounds.Height + 1);
+                await Assert.That(commitButtonBounds.Bottom).IsLessThanOrEqualTo(view.Bounds.Height + 1);
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
     private static Window CreateWindow(Control content, double width, double height)
     {
         return new Window
@@ -721,6 +855,45 @@ public class SettingsControlResponsiveUiTests
                     }),
                 new("Tasks/deleted-task.json", true, false)
             });
+    }
+
+    private static BackupConflictStatus CreateManyConflictStatus(int conflictCount)
+    {
+        var fields = new List<BackupConflictField>
+        {
+            new(
+                "Title",
+                "Title",
+                "Old task title",
+                "Current task title with enough words to wrap on a phone width",
+                "Incoming task title with another long value to compare",
+                "Current task title\nIncoming task title",
+                true,
+                BackupConflictFieldSource.UseCurrent,
+                BackupConflictFieldChangeKind.BothDifferent,
+                true),
+            new(
+                "Description",
+                "Description",
+                "Short previous description",
+                "Local description with several lines and details that must remain available inside the detail scroll area.",
+                "Remote description with alternative text for conflict resolution.",
+                "Local description\nRemote description",
+                true,
+                BackupConflictFieldSource.Merge,
+                BackupConflictFieldChangeKind.BothDifferent,
+                true)
+        };
+
+        var conflicts = Enumerable.Range(1, conflictCount)
+            .Select(index => new BackupConflictFile(
+                $"Tasks/2026/very-long-conflicting-task-file-name-{index:00}.json",
+                true,
+                true,
+                fields))
+            .ToList();
+
+        return new BackupConflictStatus(true, conflicts);
     }
 
     private static async Task ClickControlAsync(Window window, Control control)
@@ -845,6 +1018,17 @@ public class SettingsControlResponsiveUiTests
         }
 
         return point.Value.X;
+    }
+
+    private static Rect GetBoundsRelativeTo(Visual relativeTo, Control control)
+    {
+        var topLeft = control.TranslatePoint(new Point(0, 0), relativeTo);
+        if (!topLeft.HasValue)
+        {
+            throw new InvalidOperationException($"Cannot translate bounds for control {control.GetType().Name}.");
+        }
+
+        return new Rect(topLeft.Value, control.Bounds.Size);
     }
 
     private sealed class FakeApplicationUpdateService : IApplicationUpdateService

@@ -148,7 +148,7 @@
   <data name="ConflictResolutionFilesTitle" xml:space="preserve"><value>Конфликтующие файлы</value></data>
   <data name="ConflictResolutionSelectedFileHint" xml:space="preserve"><value>Просмотрите измененные свойства, сравните обе версии и выберите итоговое значение.</value></data>
   <data name="ConflictResolutionWholeFileHint" xml:space="preserve"><value>Этот файл нельзя исправить по отдельным полям. Выберите текущую или входящую версию целиком.</value></data>
-  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Исправьте конфликты синхронизации перед продолжением. Это окно работает на компьютере и телефоне.</value></data>
+  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Исправьте конфликты синхронизации перед продолжением.</value></data>
   <data name="ConflictResolutionWindowTitle" xml:space="preserve"><value>Исправление конфликтов синхронизации</value></data>
   <data name="ConflictSelectedValue" xml:space="preserve"><value>Выбранное значение</value></data>
   <data name="ConflictResolutionComplete" xml:space="preserve"><value>Конфликты синхронизации исправлены.</value></data>

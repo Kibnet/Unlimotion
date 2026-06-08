@@ -148,7 +148,7 @@
   <data name="ConflictResolutionFilesTitle" xml:space="preserve"><value>Conflicting files</value></data>
   <data name="ConflictResolutionSelectedFileHint" xml:space="preserve"><value>Review changed properties, compare both versions, and choose the resulting value.</value></data>
   <data name="ConflictResolutionWholeFileHint" xml:space="preserve"><value>This file cannot be resolved field by field. Choose the current or incoming version for the whole file.</value></data>
-  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Resolve sync conflicts before continuing. This dialog works on desktop and mobile.</value></data>
+  <data name="ConflictResolutionWindowHint" xml:space="preserve"><value>Resolve sync conflicts before continuing.</value></data>
   <data name="ConflictResolutionWindowTitle" xml:space="preserve"><value>Resolve sync conflicts</value></data>
   <data name="ConflictSelectedValue" xml:space="preserve"><value>Selected value</value></data>
   <data name="ConflictResolutionComplete" xml:space="preserve"><value>Sync conflicts resolved.</value></data>
