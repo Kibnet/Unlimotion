@@ -2430,7 +2430,6 @@ public class MainControlTreeCommandsUiTests
     {
         var repository = vm.taskRepository
             ?? throw new InvalidOperationException("Task repository was not initialized.");
-        var suffix = Guid.NewGuid().ToString("N");
         var searchToken = Guid.NewGuid().ToString("N");
 
         if (treeName == "UnlockedTree")
@@ -2443,12 +2442,15 @@ public class MainControlTreeCommandsUiTests
             return await CreateArchivedSearchExpansionScenarioAsync(vm, repository, searchToken);
         }
 
-        var parent = await repository.Add();
-        parent.Title = $"Search expansion parent {treeName} {suffix}";
-        await repository.Update(parent);
+        if (treeName == "CompletedTree")
+        {
+            return await CreateCompletedSearchExpansionScenarioAsync(vm, repository, searchToken);
+        }
 
-        var child = await repository.AddChild(parent);
-        child.Title = $"Search expansion child {treeName} {suffix}";
+        var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+            ?? throw new InvalidOperationException("Search expansion parent task was not found.");
+        var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
+            ?? throw new InvalidOperationException("Search expansion child task was not found.");
         await Assert.That(await TestHelpers.WaitUntilAsync(
                 () => parent.Contains.Contains(child.Id) &&
                       child.Parents.Contains(parent.Id) &&
@@ -2460,42 +2462,12 @@ public class MainControlTreeCommandsUiTests
         searchTarget.Title = $"Search expansion target {treeName} {searchToken}";
         var searchText = searchToken;
 
-        ApplySearchExpansionCompletionState(treeName, parent, child);
-
-        await repository.Update(parent);
-        await repository.Update(child);
         await repository.Update(searchTarget);
 
         await TestHelpers.WaitThrottleTime();
         Dispatcher.UIThread.RunJobs();
 
         return new SearchExpansionScenario(parent, child, searchText);
-    }
-
-    private static void ApplySearchExpansionCompletionState(
-        string treeName,
-        TaskItemViewModel parent,
-        TaskItemViewModel child)
-    {
-        switch (treeName)
-        {
-            case "CompletedTree":
-                parent.IsCompleted = true;
-                parent.CompletedDateTime ??= DateTimeOffset.UtcNow;
-                child.IsCompleted = true;
-                child.CompletedDateTime ??= DateTimeOffset.UtcNow;
-                break;
-            case "UnlockedTree":
-                child.IsCompleted = true;
-                child.CompletedDateTime ??= DateTimeOffset.UtcNow;
-                break;
-            case "ArchivedTree":
-                parent.IsCompleted = null;
-                parent.ArchiveDateTime ??= DateTimeOffset.UtcNow;
-                child.IsCompleted = null;
-                child.ArchiveDateTime ??= DateTimeOffset.UtcNow;
-                break;
-        }
     }
 
     private static async Task<SearchExpansionScenario> CreateUnlockedSearchExpansionScenarioAsync(
@@ -2520,6 +2492,46 @@ public class MainControlTreeCommandsUiTests
 
         var searchTarget = await repository.Add();
         searchTarget.Title = $"Search expansion target UnlockedTree {searchToken}";
+        await repository.Update(searchTarget);
+
+        await TestHelpers.WaitThrottleTime();
+        Dispatcher.UIThread.RunJobs();
+
+        return new SearchExpansionScenario(parent, child, searchToken);
+    }
+
+    private static async Task<SearchExpansionScenario> CreateCompletedSearchExpansionScenarioAsync(
+        MainWindowViewModel vm,
+        ITaskStorage repository,
+        string searchToken)
+    {
+        var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.CompletedTaskId)
+            ?? throw new InvalidOperationException("Completed search parent task was not found.");
+        var child = parent.ContainsTasks.FirstOrDefault();
+        if (child == null)
+        {
+            child = await repository.AddChild(parent);
+            child.Title = "Completed search expansion child";
+        }
+
+        parent.IsCompleted = true;
+        parent.CompletedDateTime ??= DateTimeOffset.UtcNow;
+        child.IsCompleted = true;
+        child.CompletedDateTime ??= DateTimeOffset.UtcNow;
+        await repository.Update(parent);
+        await repository.Update(child);
+
+        await Assert.That(await TestHelpers.WaitUntilAsync(
+                () => parent.Contains.Contains(child.Id) &&
+                      child.Parents.Contains(parent.Id) &&
+                      parent.ContainsTasks.Any(task => task.Id == child.Id),
+                TimeSpan.FromSeconds(10)))
+            .IsTrue();
+
+        var searchTarget = await repository.Add();
+        searchTarget.Title = $"Search expansion target CompletedTree {searchToken}";
+        searchTarget.IsCompleted = true;
+        searchTarget.CompletedDateTime ??= DateTimeOffset.UtcNow;
         await repository.Update(searchTarget);
 
         await TestHelpers.WaitThrottleTime();

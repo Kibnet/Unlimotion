@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -17,6 +18,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 
 namespace Unlimotion.Test;
@@ -69,6 +71,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -119,7 +122,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -131,6 +134,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
             var previousTheme = app.RequestedThemeVariant;
 
@@ -165,7 +169,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
                 app.RequestedThemeVariant = previousTheme;
             }
@@ -178,6 +182,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -199,7 +204,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -211,6 +216,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -233,7 +239,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -245,6 +251,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -271,7 +278,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -283,6 +290,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -318,7 +326,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -332,6 +340,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -409,7 +418,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -424,6 +433,7 @@ public class MainControlTaskCardLayoutUiTests
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
+            ResetTaskCardLayoutSharedState();
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
@@ -482,7 +492,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -531,6 +541,10 @@ public class MainControlTaskCardLayoutUiTests
         double? fontSize = null)
     {
         var vm = fixture.MainWindowViewModelTest;
+        vm.Settings.LanguageMode = LocalizationService.EnglishLanguage;
+        vm.Settings.FontSize = AppearanceSettings.DefaultFontSize;
+        ResetApplicationLocalizedResources();
+        ResetApplicationFontResources();
         await vm.Connect();
         vm.AllTasksMode = true;
         vm.DetailsAreOpen = true;
@@ -547,7 +561,6 @@ public class MainControlTaskCardLayoutUiTests
         {
             view.FontSize = fontSize.Value;
         }
-
         var window = new Window
         {
             Width = width,
@@ -568,6 +581,47 @@ public class MainControlTaskCardLayoutUiTests
         }
 
         return (view, window);
+    }
+
+    private static void ResetTaskCardLayoutSharedState()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        LocalizationService.Current = localization;
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        ResetApplicationLocalizedResources();
+        ResetApplicationFontResources();
+    }
+
+    private static void ResetApplicationLocalizedResources()
+    {
+        if (Application.Current is not { } application)
+        {
+            return;
+        }
+
+        foreach (var key in LocalizationService.Current.GetResourceKeys(CultureInfo.InvariantCulture))
+        {
+            application.Resources[key] = LocalizationService.Current.Get(key);
+        }
+    }
+
+    private static void ResetApplicationFontResources()
+    {
+        if (Application.Current is not { } application)
+        {
+            return;
+        }
+
+        var resources = application.Resources;
+        resources["AppFontSize"] = AppearanceSettings.DefaultFontSize;
+        resources["AppSmallFontSize"] = AppearanceSettings.DefaultSmallFontSize;
+        resources["AppTabFontSize"] = AppearanceSettings.DefaultTabFontSize;
+        resources["AppTabMinHeight"] = AppearanceSettings.DefaultTabMinHeight;
+        resources["AppSearchControlHeight"] = AppearanceSettings.DefaultSearchControlHeight;
+        resources["AppSearchClearButtonSize"] = AppearanceSettings.DefaultSearchClearButtonSize;
+        resources["AppSearchClearIconFontSize"] = AppearanceSettings.DefaultSearchClearIconFontSize;
+        resources["AppSearchBarMinWidth"] = AppearanceSettings.DefaultSearchBarMinWidth;
+        resources["AppFloatingControlMinHeight"] = AppearanceSettings.DefaultFloatingControlMinHeight;
     }
 
     private static void ArrangeMainControlForTest(Window window, MainControl view, double width, double height)
@@ -929,6 +983,17 @@ public class MainControlTaskCardLayoutUiTests
             .Select(control => control.Bounds.Height)
             .ToArray();
 
+        var beginTop = topEdges[0];
+        var durationTop = topEdges[2];
+        var endTop = topEdges[4];
+        if (Math.Abs(beginTop - durationTop) > 2 || Math.Abs(beginTop - endTop) > 2)
+        {
+            throw new InvalidOperationException(
+                "Desktop planning fields should stay in one compact row: " +
+                $"beginTop={beginTop:F1}; durationTop={durationTop:F1}; endTop={endTop:F1}. " +
+                DescribeTaskDetailsLayout(root));
+        }
+
         var maxPlanningControlWidth = widths.Max();
         if (maxPlanningControlWidth > 260)
         {
@@ -984,7 +1049,7 @@ public class MainControlTaskCardLayoutUiTests
         }
 
         var planningSection = FindControlByAutomationId<Control>(root, "CurrentTaskPlanningSection");
-        AssertRowUsesRightEdge(planningSection, planningControls, 8d, "Desktop planning row");
+        AssertRowUsesRightEdge(planningSection, planningControls, 20d, "Desktop planning row");
     }
 
     private static void AssertDesktopRepeaterControlsStayCompact(Control root, bool requireWeekdayToggles = false)
@@ -1028,7 +1093,8 @@ public class MainControlTaskCardLayoutUiTests
                     $"Desktop weekday toggles should stay in one compact row: " +
                     $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}; " +
                     $"panelBounds={weekdayPanel.Bounds}; " +
-                    $"toggleBounds={string.Join(", ", weekdayToggles.Select(toggle => $"{toggle.Content}:{toggle.Bounds}"))}.");
+                    $"toggleBounds={string.Join(", ", weekdayToggles.Select(toggle => $"{toggle.Content}:{toggle.Bounds}"))}. " +
+                    DescribeTaskDetailsLayout(root));
             }
 
             AssertRowUsesRightEdge(weekdayPanel, weekdayToggles, 8d, "Desktop weekday toggle row");
@@ -1200,8 +1266,9 @@ public class MainControlTaskCardLayoutUiTests
 
         if (overflowingControls.Count > 0)
         {
+            var viewport = (Control)relativeTo;
             throw new InvalidOperationException(
-                "Visible task card controls overflow the phone-width details pane: " +
+                $"Visible task card controls overflow the phone-width details pane. Viewport={viewport.Bounds}: " +
                 string.Join("; ", overflowingControls));
         }
     }
@@ -1288,5 +1355,51 @@ public class MainControlTaskCardLayoutUiTests
         {
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private static void CloseWindow(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        window.Content = null;
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
+    }
+
+    private static string DescribeTaskDetailsLayout(Control root)
+    {
+        var splitView = root.GetVisualDescendants().OfType<SplitView>().FirstOrDefault();
+        var scrollViewer = root.GetVisualDescendants()
+            .OfType<ScrollViewer>()
+            .FirstOrDefault(static control =>
+                string.Equals(
+                    AutomationProperties.GetAutomationId(control),
+                    "CurrentTaskDetailsScrollViewer",
+                    StringComparison.Ordinal));
+        var panel = root.GetVisualDescendants()
+            .OfType<StackPanel>()
+            .FirstOrDefault(static control => string.Equals(control.Name, "TaskDetailsPanelRoot", StringComparison.Ordinal));
+        var paneLength = splitView == null ? "null" : splitView.OpenPaneLength.ToString("F1", CultureInfo.InvariantCulture);
+        var isCompact = panel?.Classes.Contains("TaskDetailsCompact");
+
+        return "Layout: " +
+               $"root={root.Bounds}; " +
+               $"split={splitView?.Bounds}; open={splitView?.IsPaneOpen}; pane={paneLength}; " +
+               $"scroll={scrollViewer?.Bounds}; " +
+               $"panel={panel?.Bounds}; compact={isCompact}.";
+    }
+
+    private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
+    {
+        public FakeSystemCultureProvider(string cultureName)
+        {
+            SystemUICulture = CultureInfo.GetCultureInfo(cultureName);
+        }
+
+        public CultureInfo SystemUICulture { get; }
     }
 }

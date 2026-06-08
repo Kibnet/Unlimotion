@@ -58,7 +58,7 @@ public class MainControlDateQuickSelectionUiTests
                 }
                 finally
                 {
-                    window?.Close();
+                    CloseWindow(window);
                     fixture?.CleanTasks();
                 }
             }, CancellationToken.None);
@@ -111,6 +111,27 @@ public class MainControlDateQuickSelectionUiTests
             Height = 2200,
             Content = content
         };
+    }
+
+    private static void CloseWindow(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        window.Content = null;
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
+    }
+
+    private static void RunLayoutJobs()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider

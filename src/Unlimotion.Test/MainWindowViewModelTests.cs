@@ -62,33 +62,40 @@ namespace Unlimotion.Test
         protected async Task RunWithTreeProjectionAsync(
             Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
         {
-            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-            await session.DispatchAsync(async () =>
+            var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            try
             {
-                var projectionFixture = new MainWindowViewModelFixture();
-
-                try
+                await session.DispatchAsync(async () =>
                 {
-                    var viewModel = projectionFixture.MainWindowViewModelTest;
-                    await viewModel.Connect();
-                    viewModel.AllTasksMode = true;
-                    Dispatcher.UIThread.RunJobs();
+                    var projectionFixture = new MainWindowViewModelFixture();
 
-                    var repository = viewModel.taskRepository
-                        ?? throw new InvalidOperationException("Task repository was not initialized.");
-
-                    if (viewModel.CurrentAllTasksItems.Count == 0)
+                    try
                     {
-                        throw new TimeoutException("Main window task tree was not loaded in time for the test.");
-                    }
+                        var viewModel = projectionFixture.MainWindowViewModelTest;
+                        await viewModel.Connect();
+                        viewModel.AllTasksMode = true;
+                        Dispatcher.UIThread.RunJobs();
 
-                    await action(projectionFixture, viewModel, repository);
-                }
-                finally
-                {
-                    projectionFixture.CleanTasks();
-                }
-            }, CancellationToken.None);
+                        var repository = viewModel.taskRepository
+                            ?? throw new InvalidOperationException("Task repository was not initialized.");
+
+                        if (viewModel.CurrentAllTasksItems.Count == 0)
+                        {
+                            throw new TimeoutException("Main window task tree was not loaded in time for the test.");
+                        }
+
+                        await action(projectionFixture, viewModel, repository);
+                    }
+                    finally
+                    {
+                        projectionFixture.CleanTasks();
+                    }
+                }, CancellationToken.None);
+            }
+            finally
+            {
+                await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+            }
         }
 
         protected TaskItemViewModel GetTask(string taskId)

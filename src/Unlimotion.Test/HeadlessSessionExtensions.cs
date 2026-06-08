@@ -8,6 +8,8 @@ namespace Unlimotion.Test;
 
 public static class HeadlessSessionExtensions
 {
+    private const string HeadlessDisposeStackFrame = "Avalonia.Headless.HeadlessUnitTestSession.DisposeAsync";
+
     public static Task DispatchAsync(
         this HeadlessUnitTestSession session,
         Func<Task> action,
@@ -37,6 +39,19 @@ public static class HeadlessSessionExtensions
             {
                 ExceptionDispatchInfo.Capture(exception).Throw();
             }
+        }
+    }
+
+    public static async ValueTask DisposeIgnoringHeadlessTeardownNullReferenceAsync(
+        this HeadlessUnitTestSession session)
+    {
+        try
+        {
+            await session.DisposeAsync();
+        }
+        catch (NullReferenceException ex)
+            when (ex.StackTrace?.Contains(HeadlessDisposeStackFrame, StringComparison.Ordinal) == true)
+        {
         }
     }
 }

@@ -59,7 +59,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -101,7 +101,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -141,7 +141,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -177,7 +177,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -213,7 +213,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -245,7 +245,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -299,7 +299,7 @@ public class MainControlTabsOverflowUiTests
                 {
                     localization.SetLanguage(LocalizationService.EnglishLanguage);
                     RunLayoutJobs();
-                    window?.Close();
+                    CloseWindow(window);
                     fixture.CleanTasks();
                 }
             }, CancellationToken.None);
@@ -340,7 +340,7 @@ public class MainControlTabsOverflowUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -407,6 +407,8 @@ public class MainControlTabsOverflowUiTests
         }
 
         await ClickControlAsync(window, menuItem);
+        menuFlyout.Hide();
+        RunLayoutJobs();
     }
 
     private static TabItem[] GetMainTabItems(MainControl view)
@@ -685,6 +687,19 @@ public class MainControlTabsOverflowUiTests
         window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         await Task.CompletedTask;
+    }
+
+    private static void CloseWindow(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        window.Content = null;
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
     }
 
     private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
