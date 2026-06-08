@@ -78,6 +78,7 @@
   <data name="CreatedLabelFormat" xml:space="preserve"><value>Created: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="CreatedPrefix" xml:space="preserve"><value>Created:</value></data>
   <data name="Create" xml:space="preserve"><value>Create</value></data>
+  <data name="CreateTaskMenuTip" xml:space="preserve"><value>Create task</value></data>
   <data name="CustomPeriod" xml:space="preserve"><value>Custom period</value></data>
   <data name="DataFolder" xml:space="preserve"><value>Data folder</value></data>
   <data name="DateFilterAllTime" xml:space="preserve"><value>All Time</value></data>
@@ -347,6 +348,7 @@
   <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Apply selected fields</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Choose how task outlines are copied. Pasted outlines are recognized automatically.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Task outline clipboard</value></data>
+  <data name="TaskActionsMenuTip" xml:space="preserve"><value>Task actions</value></data>
   <data name="TaskCardPlanning" xml:space="preserve"><value>Planning</value></data>
   <data name="TaskCardRelations" xml:space="preserve"><value>Relations</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>

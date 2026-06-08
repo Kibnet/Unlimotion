@@ -78,6 +78,7 @@
   <data name="CreatedLabelFormat" xml:space="preserve"><value>Создано: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="CreatedPrefix" xml:space="preserve"><value>Создано:</value></data>
   <data name="Create" xml:space="preserve"><value>Создать</value></data>
+  <data name="CreateTaskMenuTip" xml:space="preserve"><value>Создать задачу</value></data>
   <data name="CustomPeriod" xml:space="preserve"><value>Произвольный период</value></data>
   <data name="DataFolder" xml:space="preserve"><value>Папка с данными</value></data>
   <data name="DateFilterAllTime" xml:space="preserve"><value>За все время</value></data>
@@ -347,6 +348,7 @@
   <data name="ApplyConflictFieldResolution" xml:space="preserve"><value>Применить выбранные поля</value></data>
   <data name="TaskOutlineClipboardSettingsHint" xml:space="preserve"><value>Выберите, как копировать аутлайн задач. Вставляемые аутлайны распознаются автоматически.</value></data>
   <data name="TaskOutlineClipboardSettingsTitle" xml:space="preserve"><value>Буфер обмена аутлайном задач</value></data>
+  <data name="TaskActionsMenuTip" xml:space="preserve"><value>Действия с задачей</value></data>
   <data name="TaskCardPlanning" xml:space="preserve"><value>Планирование</value></data>
   <data name="TaskCardRelations" xml:space="preserve"><value>Связи</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>

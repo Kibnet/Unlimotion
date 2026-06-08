@@ -10,6 +10,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.Domain;
@@ -88,22 +90,18 @@ public class MainControlTaskCardLayoutUiTests
                 var setEndButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetEndButton");
 
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
-                await Assert.That(createMenuButton.Content?.ToString()).IsEqualTo("➕");
-                await Assert.That(createMenuButton.Bounds.Width).IsGreaterThanOrEqualTo(48);
+                AssertIconOnlyDropDownButton(createMenuButton, "➕", 42);
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
-                await Assert.That(actionsMenuButton.Content?.ToString()).IsEqualTo("⚙");
-                await Assert.That(actionsMenuButton.Bounds.Width).IsGreaterThanOrEqualTo(50);
-                await Assert.That(actionsMenuButton.Bounds.Width).IsLessThanOrEqualTo(58);
-                await Assert.That(actionsMenuButton.Bounds.Height).IsGreaterThanOrEqualTo(30);
+                AssertIconOnlyDropDownButton(actionsMenuButton, "⚙", 36);
                 AssertActionsMenuContainsTaskCommands(actionsMenuButton);
                 AssertHasClass(descriptionTextBox, "TaskDescriptionEditor");
                 AssertHasClass(setBeginButton, "TaskPlanningQuickAction");
                 AssertHasClass(setDurationButton, "TaskPlanningQuickAction");
                 AssertHasClass(setEndButton, "TaskPlanningQuickAction");
-                await Assert.That(setBeginButton.Bounds.Width).IsGreaterThanOrEqualTo(40);
-                await Assert.That(setDurationButton.Bounds.Width).IsGreaterThanOrEqualTo(40);
-                await Assert.That(setEndButton.Bounds.Width).IsGreaterThanOrEqualTo(40);
+                AssertIconOnlyDropDownButton(setBeginButton, "📅", 40);
+                AssertIconOnlyDropDownButton(setDurationButton, "⏱", 40);
+                AssertIconOnlyDropDownButton(setEndButton, "🏁", 40);
 
                 AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
                 AssertDesktopPlanningGroupsStayCompactRow(view);
@@ -115,14 +113,62 @@ public class MainControlTaskCardLayoutUiTests
 
                 await Assert.That(IsVisibleAndArranged(parentsAddButton)).IsTrue();
                 AssertHasClass(parentsAddButton, "RelationAddButton");
-                await Assert.That(parentsAddButton.Content?.ToString()).IsEqualTo("＋");
-                await Assert.That(parentsAddButton.Bounds.Width).IsLessThanOrEqualTo(40);
+                AssertIconOnlyButton(parentsAddButton, "＋", 32);
                 await Assert.That(parentsTree).IsNotNull();
             }
             finally
             {
                 window?.Close();
                 fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
+            var previousTheme = app.RequestedThemeVariant;
+
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
+                window = createdWindow;
+                app.RequestedThemeVariant = ThemeVariant.Dark;
+                view.Measure(new Size(createdWindow.Width, createdWindow.Height));
+                view.Arrange(new Rect(0, 0, createdWindow.Width, createdWindow.Height));
+                RunLayoutJobs();
+
+                Control[] accentOutlineButtons =
+                [
+                    FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton"),
+                    FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetBeginButton"),
+                    FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetDurationButton"),
+                    FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetEndButton"),
+                    FindControlByAutomationId<Button>(view, "CurrentTaskParentsRelationAddButton"),
+                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockingRelationAddButton"),
+                    FindControlByAutomationId<Button>(view, "CurrentTaskContainingRelationAddButton"),
+                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockedRelationAddButton"),
+                    FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton")
+                ];
+
+                foreach (var button in accentOutlineButtons)
+                {
+                    AssertDoesNotUseLightThemeAccentBackground(button);
+                    AssertHasClass(button, "TaskAccentOutlineButton");
+                }
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+                app.RequestedThemeVariant = previousTheme;
             }
         }, CancellationToken.None);
     }
@@ -500,6 +546,110 @@ public class MainControlTaskCardLayoutUiTests
                 $"{control.GetType().Name}:{AutomationProperties.GetAutomationId(control)} " +
                 $"does not have expected class '{className}'.");
         }
+    }
+
+    private static void AssertIconOnlyDropDownButton(DropDownButton button, string expectedContent, double expectedSize)
+    {
+        AssertIconOnlyButton(button, expectedContent, expectedSize);
+        AssertHasClass(button, "TaskIconOnlyDropDownButton");
+
+        var unexpectedChrome = button.GetVisualDescendants()
+            .OfType<Control>()
+            .Where(IsVisibleAndArranged)
+            .Where(control =>
+                control.GetType().Name.Contains("Path", StringComparison.OrdinalIgnoreCase) ||
+                control.GetType().Name.Contains("Chevron", StringComparison.OrdinalIgnoreCase) ||
+                control.GetType().Name.Contains("DropDownGlyph", StringComparison.OrdinalIgnoreCase) ||
+                control is TextBlock textBlock &&
+                !string.IsNullOrWhiteSpace(textBlock.Text) &&
+                !string.Equals(textBlock.Text, expectedContent, StringComparison.Ordinal))
+            .Select(control =>
+                $"{control.GetType().Name}:{(control as TextBlock)?.Text ?? control.Name ?? string.Empty}")
+            .ToArray();
+
+        if (unexpectedChrome.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId(button)} should not render arrow chrome: " +
+                string.Join("; ", unexpectedChrome));
+        }
+    }
+
+    private static void AssertIconOnlyButton(ContentControl button, string expectedContent, double expectedSize)
+    {
+        if (!string.Equals(button.Content?.ToString(), expectedContent, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId(button)} should render '{expectedContent}', " +
+                $"got '{button.Content}'.");
+        }
+
+        if (Math.Abs(button.Bounds.Width - button.Bounds.Height) > 1 ||
+            Math.Abs(button.Bounds.Width - expectedSize) > 1)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId(button)} should be a {expectedSize:F0}px square, " +
+                $"bounds={button.Bounds}.");
+        }
+
+        var tooltip = ToolTip.GetTip(button)?.ToString();
+        if (string.IsNullOrWhiteSpace(tooltip))
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId(button)} should have a descriptive tooltip.");
+        }
+
+        var automationName = AutomationProperties.GetName(button);
+        if (string.IsNullOrWhiteSpace(automationName))
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId(button)} should have an automation name.");
+        }
+    }
+
+    private static void AssertDoesNotUseLightThemeAccentBackground(Control control)
+    {
+        var lightAccentBackground = Color.Parse("#F7FAFF");
+        var lightBackgroundUsages = GetBackgroundColors(control)
+            .Where(color => color == lightAccentBackground)
+            .ToArray();
+
+        if (lightBackgroundUsages.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"{control.GetType().Name}:{AutomationProperties.GetAutomationId(control)} " +
+                $"uses the light-theme accent background in dark theme.");
+        }
+    }
+
+    private static IEnumerable<Color> GetBackgroundColors(Control control)
+    {
+        return new[] { control }
+            .Concat(control.GetVisualDescendants().OfType<Control>())
+            .Select(GetBackground)
+            .Where(static brush => brush is not null)
+            .Select(brush => GetSolidBrushColor(brush!));
+    }
+
+    private static IBrush? GetBackground(Control control)
+    {
+        return control switch
+        {
+            Border border => border.Background,
+            DropDownButton dropDownButton => dropDownButton.Background,
+            Button button => button.Background,
+            _ => null
+        };
+    }
+
+    private static Color GetSolidBrushColor(IBrush brush)
+    {
+        if (brush is ISolidColorBrush solidColorBrush)
+        {
+            return solidColorBrush.Color;
+        }
+
+        return Colors.Transparent;
     }
 
     private static void AssertCreateMenuContainsTaskCommands(DropDownButton createMenuButton)

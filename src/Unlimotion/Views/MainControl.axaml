@@ -95,8 +95,8 @@
             <Setter Property="Padding" Value="8,4"/>
         </Style>
         <Style Selector="Button.TaskCommandPrimaryButton">
-            <Setter Property="Background" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.TaskCommandSecondaryButton">
@@ -118,36 +118,62 @@
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Padding" Value="8,4"/>
         </Style>
-        <Style Selector="DropDownButton.TaskActionsMenuButton">
-            <Setter Property="Width" Value="52"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="MinWidth" Value="52"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Padding" Value="7,0,3,0"/>
+        <Style Selector="DropDownButton.TaskAccentOutlineButton">
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="Foreground" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="Background" Value="#F7FAFF"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
         </Style>
-        <Style Selector="DropDownButton.TaskCreateMenuButton">
-            <Setter Property="Width" Value="50"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="MinWidth" Value="50"/>
-            <Setter Property="MinHeight" Value="38"/>
-            <Setter Property="Padding" Value="7,0,5,0"/>
+        <Style Selector="Button.TaskAccentOutlineButton">
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}"/>
             <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="DropDownButton.TaskIconOnlyDropDownButton">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="DropDownButton.TaskAccentOutlineButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}"/>
+        </Style>
+        <Style Selector="Button.TaskAccentOutlineButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}"/>
+        </Style>
+        <Style Selector="DropDownButton.TaskActionsMenuButton">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinWidth" Value="36"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="FontSize" Value="17"/>
+        </Style>
+        <Style Selector="DropDownButton.TaskCreateMenuButton">
+            <Setter Property="Width" Value="42"/>
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="MinWidth" Value="42"/>
+            <Setter Property="MinHeight" Value="42"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="CornerRadius" Value="12"/>
         </Style>
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Button.TaskCommandSecondaryButton">
             <Setter Property="IsVisible" Value="False"/>
@@ -290,19 +316,11 @@
             <Setter Property="MinHeight" Value="40"/>
         </Style>
         <Style Selector="DropDownButton.TaskPlanningQuickAction">
-            <Setter Property="Width" Value="46"/>
+            <Setter Property="Width" Value="40"/>
             <Setter Property="Height" Value="40"/>
-            <Setter Property="MinWidth" Value="46"/>
+            <Setter Property="MinWidth" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
-            <Setter Property="Padding" Value="5,0,2,0"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="15"/>
-            <Setter Property="Foreground" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="Background" Value="#F7FAFF"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="FontSize" Value="17"/>
         </Style>
         <Style Selector="Grid.RepeaterControls">
             <Setter Property="Margin" Value="0,0,0,2"/>
@@ -361,19 +379,12 @@
         </Style>
         <Style Selector="Button.RelationAddButton">
             <Setter Property="Width" Value="32"/>
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="MinWidth" Value="32"/>
-            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="Background" Value="#F7FAFF"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButtonBackground}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="StackPanel.RelationPickerRow">
             <Setter Property="Spacing" Value="8"/>
@@ -565,9 +576,10 @@
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
             <DropDownButton Grid.Column="1"
-                            Classes="TaskCreateMenuButton"
+                            Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                             Content="➕"
-                            ToolTip.Tip="{DynamicResource NewTask}"
+                            ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
+                            AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
                             AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
                 <DropDownButton.Flyout>
                     <MenuFlyout>
@@ -1411,9 +1423,10 @@
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
                                                        AutomationProperties.AutomationId="CurrentTaskCommandBar">
-                                                <DropDownButton Classes="TaskActionsMenuButton"
+                                                <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                 Content="⚙"
-                                                                ToolTip.Tip="{DynamicResource MoreActions}"
+                                                                ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
+                                                                AutomationProperties.Name="{DynamicResource TaskActionsMenuTip}"
                                                                 AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
                                                     <DropDownButton.Flyout>
                                                         <MenuFlyout>
@@ -1499,7 +1512,8 @@
                                                         <DropDownButton Grid.Column="1"
                                                                         Content="📅"
                                                                         ToolTip.Tip="{DynamicResource SetBegin}"
-                                                                        Classes="TaskPlanningQuickAction"
+                                                                        AutomationProperties.Name="{DynamicResource SetBegin}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                         AutomationProperties.AutomationId="CurrentTaskSetBeginButton">
                                                             <DropDownButton.Flyout>
                                                                 <MenuFlyout>
@@ -1526,7 +1540,8 @@
                                                         <DropDownButton Grid.Column="1"
                                                                         Content="⏱"
                                                                         ToolTip.Tip="{DynamicResource SetDuration}"
-                                                                        Classes="TaskPlanningQuickAction"
+                                                                        AutomationProperties.Name="{DynamicResource SetDuration}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                         AutomationProperties.AutomationId="CurrentTaskSetDurationButton">
                                                             <DropDownButton.Flyout>
                                                                 <MenuFlyout>
@@ -1562,7 +1577,8 @@
                                                         <DropDownButton Grid.Column="1"
                                                                         Content="🏁"
                                                                         ToolTip.Tip="{DynamicResource SetEnd}"
-                                                                        Classes="TaskPlanningQuickAction"
+                                                                        AutomationProperties.Name="{DynamicResource SetEnd}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                         AutomationProperties.AutomationId="CurrentTaskSetEndButton">
                                                             <DropDownButton.Flyout>
                                                                 <MenuFlyout>
@@ -1648,9 +1664,10 @@
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource ParentsTasks}"/>
                                         <Button Grid.Column="1"
-                                                Classes="RelationAddButton"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
-                                                ToolTip.Tip="{DynamicResource Add}"
+                                                ToolTip.Tip="{DynamicResource AddParentRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddParentRelation}"
                                                 Click="RelationAddButton_OnClick"
                                                 Tag="Parents"
                                                 AutomationProperties.AutomationId="CurrentTaskParentsRelationAddButton"/>
@@ -1704,9 +1721,10 @@
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource BlockingTasks}"/>
                                         <Button Grid.Column="1"
-                                                Classes="RelationAddButton"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
-                                                ToolTip.Tip="{DynamicResource Add}"
+                                                ToolTip.Tip="{DynamicResource AddBlockingRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddBlockingRelation}"
                                                 Click="RelationAddButton_OnClick"
                                                 Tag="Blocking"
                                                 AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddButton"/>
@@ -1760,9 +1778,10 @@
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource ContainingTasks}"/>
                                         <Button Grid.Column="1"
-                                                Classes="RelationAddButton"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
-                                                ToolTip.Tip="{DynamicResource Add}"
+                                                ToolTip.Tip="{DynamicResource AddContainingRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddContainingRelation}"
                                                 Click="RelationAddButton_OnClick"
                                                 Tag="Containing"
                                                 AutomationProperties.AutomationId="CurrentTaskContainingRelationAddButton"/>
@@ -1816,9 +1835,10 @@
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <Label Content="{DynamicResource BlockedTasks}"/>
                                         <Button Grid.Column="1"
-                                                Classes="RelationAddButton"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
-                                                ToolTip.Tip="{DynamicResource Add}"
+                                                ToolTip.Tip="{DynamicResource AddBlockedRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddBlockedRelation}"
                                                 Click="RelationAddButton_OnClick"
                                                 Tag="Blocked"
                                                 AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddButton"/>
