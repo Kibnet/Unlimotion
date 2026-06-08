@@ -330,25 +330,21 @@
             <Setter Property="RowSpacing" Value="0"/>
         </Style>
         <Style Selector="ComboBox.RepeaterSelector">
-            <Setter Property="Width" Value="148"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Margin" Value="0,0,6,5"/>
         </Style>
         <Style Selector="ComboBox.RepeaterPatternTypeSelector">
-            <Setter Property="Width" Value="120"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Margin" Value="0,0,6,5"/>
         </Style>
         <Style Selector="NumericUpDown.RepeaterPeriodInput">
-            <Setter Property="Width" Value="64"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Margin" Value="0,0,6,5"/>
         </Style>
         <Style Selector="CheckBox.RepeaterAfterCompleteCheckBox">
-            <Setter Property="Width" Value="156"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Margin" Value="0,0,6,5"/>
@@ -1606,7 +1602,7 @@
                                             AutomationProperties.AutomationId="CurrentTaskRepeaterSection">
                                         <StackPanel Classes="TaskCardSectionContent">
                                             <Grid Classes="RepeaterControls RepeaterPatternControls"
-                                                  ColumnDefinitions="Auto,*,Auto,Auto"
+                                                  ColumnDefinitions="*,*,Auto,*"
                                                   RowDefinitions="Auto,Auto">
                                                 <ComboBox Grid.Column="0"
                                                           Classes="RepeaterSelector"

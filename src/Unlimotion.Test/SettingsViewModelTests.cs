@@ -1219,7 +1219,8 @@ public class SettingsViewModelTests : IDisposable
 
         await WaitForConditionAsync(
             () => backupService.SwitchRemoteConnectionTypeCalls == 1 &&
-                  settings.GitRemoteName == "origin-ssh",
+                  settings.GitRemoteName == "origin-ssh" &&
+                  settings.BackupAuthMode == BackupAuthMode.Ssh,
             "Remote connection type switch did not complete.");
 
         await Assert.That(backupService.LastSwitchRemoteName).IsEqualTo("origin");

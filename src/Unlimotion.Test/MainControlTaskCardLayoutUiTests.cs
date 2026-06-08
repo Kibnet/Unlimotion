@@ -207,6 +207,78 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_IntermediateDesktopWidthRepeaterLayout_DoesNotOverlap()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1032,
+                    900,
+                    MainWindowViewModelFixture.RepeateTask9Id,
+                    task =>
+                    {
+                        task.Repeater!.Type = RepeaterType.Weekly;
+                        task.Repeater.WorkDays = true;
+                    });
+                window = createdWindow;
+
+                AssertDesktopRepeaterControlsStayCompact(view, requireWeekdayToggles: true);
+                AssertRepeaterControlsDoNotOverlap(view);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_IntermediateDesktopWidthRepeaterLayout_WithLargeFontDoesNotOverlap()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1032,
+                    900,
+                    MainWindowViewModelFixture.RepeateTask9Id,
+                    task =>
+                    {
+                        task.Repeater!.Type = RepeaterType.Weekly;
+                        task.Repeater.WorkDays = true;
+                    },
+                    fontSize: 24d);
+                window = createdWindow;
+
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+
+                AssertRepeaterControlsDoNotOverlap(view);
+                AssertNoHorizontalOverflow(scrollViewer, card);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_BackGestureFallback_OpensPaneForSingleVisibleTask()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -456,7 +528,8 @@ public class MainControlTaskCardLayoutUiTests
         double width,
         double height,
         string selectedTaskId = MainWindowViewModelFixture.RootTask2Id,
-        Action<TaskItemViewModel>? configureCurrentTask = null)
+        Action<TaskItemViewModel>? configureCurrentTask = null,
+        double? fontSize = null)
     {
         var vm = fixture.MainWindowViewModelTest;
         await vm.Connect();
@@ -465,7 +538,17 @@ public class MainControlTaskCardLayoutUiTests
         var currentTask = TestHelpers.SetCurrentTask(vm, selectedTaskId);
         configureCurrentTask?.Invoke(currentTask);
 
-        var view = new MainControl { DataContext = vm };
+        var view = new MainControl
+        {
+            DataContext = vm,
+            Width = width,
+            Height = height
+        };
+        if (fontSize.HasValue)
+        {
+            view.FontSize = fontSize.Value;
+        }
+
         var window = new Window
         {
             Width = width,
@@ -510,8 +593,16 @@ public class MainControlTaskCardLayoutUiTests
                 return;
             }
 
+            view.Width = width;
+            view.Height = height;
+            if (view.DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.DetailsAreOpen = true;
+            }
+
             if (splitView is not null)
             {
+                splitView.OpenPaneLength = Math.Min(width, 600d);
                 splitView.IsPaneOpen = true;
             }
 
@@ -953,6 +1044,53 @@ public class MainControlTaskCardLayoutUiTests
 
         var repeaterSection = FindControlByAutomationId<Control>(root, "CurrentTaskRepeaterSection");
         AssertRowUsesRightEdge(repeaterSection, visibleRepeaterControls, 8d, "Desktop repeater row");
+    }
+
+    private static void AssertRepeaterControlsDoNotOverlap(Control root)
+    {
+        var repeaterSection = FindControlByAutomationId<Control>(root, "CurrentTaskRepeaterSection");
+        var repeaterControls = new List<Control>
+        {
+            FindControlByAutomationId<ComboBox>(root, "CurrentTaskRepeaterSelector"),
+            FindControlByAutomationId<ComboBox>(root, "CurrentTaskRepeaterPatternTypeSelector"),
+            FindControlByAutomationId<NumericUpDown>(root, "CurrentTaskRepeaterPeriodInput"),
+            FindControlByAutomationId<CheckBox>(root, "CurrentTaskRepeaterAfterCompleteCheckBox")
+        };
+        repeaterControls.AddRange(root.GetVisualDescendants()
+            .OfType<ToggleButton>()
+            .Where(static toggle => toggle.Classes.Contains("WeekdayToggle")));
+
+        var visibleControls = repeaterControls
+            .Where(IsVisibleAndArranged)
+            .ToArray();
+
+        foreach (var control in visibleControls)
+        {
+            AssertHorizontallyContained(repeaterSection, control);
+        }
+
+        for (var i = 0; i < visibleControls.Length; i++)
+        {
+            for (var j = i + 1; j < visibleControls.Length; j++)
+            {
+                var first = visibleControls[i];
+                var second = visibleControls[j];
+                var verticalOverlap =
+                    GetTopEdge(repeaterSection, first) < GetBottomEdge(repeaterSection, second) - 1 &&
+                    GetTopEdge(repeaterSection, second) < GetBottomEdge(repeaterSection, first) - 1;
+                var horizontalOverlap =
+                    GetLeftEdge(repeaterSection, first) < GetRightEdge(repeaterSection, second) - 1 &&
+                    GetLeftEdge(repeaterSection, second) < GetRightEdge(repeaterSection, first) - 1;
+
+                if (verticalOverlap && horizontalOverlap)
+                {
+                    throw new InvalidOperationException(
+                        "Repeater controls should not overlap: " +
+                        $"{AutomationProperties.GetAutomationId(first)} bounds={first.Bounds}; " +
+                        $"{AutomationProperties.GetAutomationId(second)} bounds={second.Bounds}.");
+                }
+            }
+        }
     }
 
     private static void AssertRowUsesRightEdge(
