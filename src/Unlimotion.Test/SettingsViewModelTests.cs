@@ -17,7 +17,8 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
- [ParallelLimiter<SharedUiStateParallelLimit>]
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class SettingsViewModelTests : IDisposable
 {
     private readonly string _configPath;

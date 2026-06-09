@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class StartupProjectionAndRelationsTests : BaseModelTests
 {

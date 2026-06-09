@@ -134,7 +134,7 @@ public class MainControlNewTaskDeadlineUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -190,7 +190,7 @@ public class MainControlNewTaskDeadlineUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -237,7 +237,7 @@ public class MainControlNewTaskDeadlineUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
             }
         }, CancellationToken.None);
     }
@@ -327,7 +327,7 @@ public class MainControlNewTaskDeadlineUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -423,9 +423,22 @@ public class MainControlNewTaskDeadlineUiTests
 
     private static void RunLayoutJobs()
     {
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 20; i++)
         {
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private static void CloseWindow(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        window.Content = null;
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
     }
 }

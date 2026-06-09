@@ -68,7 +68,7 @@ public class TaskImportanceUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -112,7 +112,7 @@ public class TaskImportanceUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -170,7 +170,7 @@ public class TaskImportanceUiTests
             }
             finally
             {
-                window?.Close();
+                CloseWindow(window);
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
@@ -197,6 +197,27 @@ public class TaskImportanceUiTests
             Height = 900,
             Content = content
         };
+    }
+
+    private static void CloseWindow(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        window.Content = null;
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
+    }
+
+    private static void RunLayoutJobs()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     private static TextBlock WaitForTaskTitleTextBlock(
