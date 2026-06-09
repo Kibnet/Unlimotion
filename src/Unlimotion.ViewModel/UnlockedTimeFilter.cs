@@ -85,7 +85,7 @@ namespace Unlimotion.ViewModel
             });
         }
 
-        public static readonly Predicate<TaskItemViewModel> IsUnlocked = e => e.IsCanBeCompleted && 
-                                                                                    e.IsCompleted == false;
+        public static readonly Predicate<TaskItemViewModel> IsUnlocked = e => e.IsCanBeCompleted &&
+                                                                                    e.Status != Unlimotion.Domain.TaskStatus.Archived;
     }
 }

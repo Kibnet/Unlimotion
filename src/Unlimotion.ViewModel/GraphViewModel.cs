@@ -13,6 +13,8 @@ public class GraphViewModel
 
     private static readonly ReadOnlyObservableCollection<EmojiFilter> EmptyEmojiFilters =
         new(new ObservableCollectionExtended<EmojiFilter>());
+    private static readonly ReadOnlyObservableCollection<TaskStatusFilter> EmptyStatusFilters =
+        new(new ObservableCollectionExtended<TaskStatusFilter>());
 
     private MainWindowViewModel? _mainWindowViewModel;
 
@@ -22,6 +24,7 @@ public class GraphViewModel
         UnlockedTasks = EmptyTaskWrappers;
         EmojiFilters = EmptyEmojiFilters;
         EmojiExcludeFilters = EmptyEmojiFilters;
+        StatusFilters = EmptyStatusFilters;
     }
 
     public void SetMainWindowViewModel(MainWindowViewModel mainWindowViewModel)
@@ -36,6 +39,11 @@ public class GraphViewModel
 
     public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; }
     public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; }
+    public ReadOnlyObservableCollection<TaskStatusFilter> StatusFilters
+    {
+        get => _mainWindowViewModel?.StatusFilters ?? EmptyStatusFilters;
+        set { }
+    }
 
     public bool UpdateGraph { get; set; }
 

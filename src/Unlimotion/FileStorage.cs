@@ -73,6 +73,7 @@ namespace Unlimotion
 
         public async Task<TaskItem> Save(TaskItem taskItem)
         {
+            taskItem.EnsureStatusHistory(taskItem.UserId ?? "local-user");
             if (!string.IsNullOrWhiteSpace(taskItem.Id))
             {
                 var exist = await Load(taskItem.Id, true);
@@ -99,7 +100,7 @@ namespace Unlimotion
             try
             {
                 using var writer = fileInfo.CreateText();
-                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter);
+                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter, new StringEnumConverter());
                 await writer.WriteAsync(json);
                 taskItem.Id = item.Id;
 
@@ -142,6 +143,7 @@ namespace Unlimotion
                 return value;
             }
             var jsonSerializer = new JsonSerializer();
+            jsonSerializer.Converters.Add(new StringEnumConverter());
             try
             {
                 var fullPath = System.IO.Path.Combine(Path, itemId);

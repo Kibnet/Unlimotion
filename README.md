@@ -30,30 +30,57 @@ to your computer in any folder using your favorite git-client (for example [Fork
 ## Conceptual description
 
 ### Task states
-Any task can be in only one of the four states:
-1. Not completed - an empty checkbox
-2. Archived - a checkbox with a square
-3. In progress - an empty checkbox with a clock next to it
-4. Completed - a checkbox with a check mark
+Any task can be in only one of five statuses:
+1. Not ready - an empty square
+2. Prepared - a square with `!`
+3. In progress - a square with a play sign
+4. Completed - a square with a check mark
+5. Archived - a square inside a square
+
+`Prepared` means the task has enough context to be started or delegated. Dependency and planned-date blocking is not a status: it is calculated separately and makes the task visually muted.
+
 Acceptable transitions are described by the diagram:
 ```mermaid
 stateDiagram-v2
-    uncomplited: Not completed
-    inprogress: In progress
-    archieved: Archieved
+    notReady: Not ready
+    prepared: Prepared
+    inProgress: In progress
     completed: Completed
-    [*] --> uncomplited: Creation
-    uncomplited --> [*]: Deleting
-    completed--> [*]: Deleting
-    archieved --> [*]: Deleting
-    uncomplited --> completed
-    uncomplited --> archieved
-    uncomplited --> inprogress
-    inprogress --> uncomplited
-    inprogress --> completed
-    completed --> uncomplited
-    archieved --> uncomplited
+    archived: Archived
+    [*] --> notReady: Creation
+    notReady --> prepared
+    notReady --> inProgress
+    notReady --> completed
+    notReady --> archived
+    prepared --> notReady
+    prepared --> inProgress
+    prepared --> completed
+    prepared --> archived
+    inProgress --> notReady
+    inProgress --> prepared
+    inProgress --> completed
+    inProgress --> archived
+    archived --> notReady
+    archived --> prepared
+    archived --> inProgress
+    completed --> notReady
+    completed --> prepared
+    completed --> inProgress
 ```
+
+Moving to `In progress` is blocked when dependency blockers are incomplete or the planned begin date is still in the future. Moving to `Completed` is blocked when child tasks, blockers, or completion criteria are unfinished.
+
+Markdown outline import/export uses these markers:
+
+| Marker | Status |
+| --- | --- |
+| `[ ]` | Not ready |
+| `[!]` | Prepared |
+| `[>]` | In progress |
+| `[x]` | Completed |
+| `[#]` | Archived |
+
+On first startup with the new model, old active tasks (`IsCompleted=false`) migrate to `Not ready`, because `Prepared` now means an explicit user decision that the task has enough context. Migration rollback is expected to use the Git history of the task storage directory.
 
 ### Tasks links
 Each task can have links to other tasks of 4 types:
@@ -109,6 +136,9 @@ Window of Opportunity - represents only those tasks that are currently available
 ### Completed
 The list of completed tasks in the reverse order of execution - the last ones from the top.
 ![Completed](media/readme/en/completed.png)
+
+### In Progress
+A flat list of tasks with the `In progress` status. The tab helps track current work and how long each task has already been in that status.
 
 ### Archived
 The list of archived tasks in the reverse order of archiving - the last ones from the top. This includes tasks that no longer need to be performed, but you don't want to delete them either.

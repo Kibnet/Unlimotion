@@ -29,6 +29,7 @@ public class MainControlTabsOverflowUiTests
         "LastCreatedTabItem",
         "LastUpdatedTabItem",
         "UnlockedTabItem",
+        "InProgressTabItem",
         "CompletedTabItem",
         "ArchivedTabItem",
         "LastOpenedTabItem",
@@ -47,7 +48,7 @@ public class MainControlTabsOverflowUiTests
 
             try
             {
-                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1800, 760);
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 2200, 760);
                 window = createdWindow;
 
                 var tabs = GetMainTabItems(view);
@@ -328,7 +329,7 @@ public class MainControlTabsOverflowUiTests
 
                 await Assert.That(GetMainTabItems(view).Any(tab => !tab.IsVisible)).IsTrue();
 
-                window.Width = 1800;
+                window.Width = 2200;
                 RunLayoutJobs();
 
                 var tabs = GetMainTabItems(view);

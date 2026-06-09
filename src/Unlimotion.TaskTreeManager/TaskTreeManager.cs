@@ -5,17 +5,22 @@ using System.Threading.Tasks;
 using Polly;
 using Polly.Retry;
 using Unlimotion.Domain;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.TaskTree;
 
 public class TaskTreeManager
 {
     public IStorage Storage { get; init; }
+    public Func<TaskItem, string>? StatusAuthorProvider { get; set; }
 
     public TaskTreeManager(IStorage storage)
     {
         Storage = storage;
     }
+
+    private string ResolveStatusAuthor(TaskItem task) =>
+        TaskItem.NormalizeAuthor(StatusAuthorProvider?.Invoke(task) ?? task.UserId ?? "local-user");
 
     public async Task<List<TaskItem>> AddTask(TaskItem change, TaskItem? currentTask = null, bool isBlocked = false)
     {
@@ -30,6 +35,7 @@ public class TaskTreeManager
                 {
                     change.Version = 1;
                     change.UpdatedDateTime ??= change.CreatedDateTime;
+                    change.EnsureStatusHistory(ResolveStatusAuthor(change));
                     await Storage.Save(change);
                     result.AddOrUpdate(change);
 
@@ -55,6 +61,7 @@ public class TaskTreeManager
                     {
                         change.Version = 1;
                         change.UpdatedDateTime ??= change.CreatedDateTime;
+                        change.EnsureStatusHistory(ResolveStatusAuthor(change));
                         await Storage.Save(change);
                         newTaskId = change.Id;
                         result.AddOrUpdate(change);
@@ -108,6 +115,7 @@ public class TaskTreeManager
                     change.Version = 1;
                     change.Wanted = currentTask.Wanted;
                     change.UpdatedDateTime ??= change.CreatedDateTime;
+                    change.EnsureStatusHistory(ResolveStatusAuthor(change));
                     await Storage.Save(change);
                     newTaskId = change.Id;
                     result.AddOrUpdate(change);
@@ -370,25 +378,22 @@ public class TaskTreeManager
         {
             try
             {
-                // Load the existing task to check if IsCompleted changed
+                // Load the existing task to check if Status changed
                 var existingTask = await Storage.Load(change.Id);
-                bool isCompletedChanged = existingTask?.IsCompleted != change.IsCompleted;
+                var isStatusChanged = existingTask?.Status != change.Status;
 
-                if (isCompletedChanged)
+                if (isStatusChanged)
                 {
-                    // Handle IsCompleted changes with the dedicated method
-                    var completionTasks = await HandleTaskCompletionChange(change);
-                    foreach (var task in completionTasks)
-                    {
-                        result.AddOrUpdate(task);
-                    }
+                    result.AddOrUpdateRange(await HandleTaskStatusChange(change, existingTask));
                 }
                 else
                 {
-                    // Regular update without IsCompleted change
+                    change.EnsureStatusHistory(ResolveStatusAuthor(change));
+                    ApplyAutomaticInProgressRollbackIfNeeded(change);
                     change.UpdatedDateTime = GetNextUpdatedDateTime(change);
                     await Storage.Save(change);
                     result.AddOrUpdate(change);
+                    result.AddOrUpdateRange(await CalculateAndUpdateAvailability(change));
                 }
 
                 return true;
@@ -419,6 +424,7 @@ public class TaskTreeManager
                     Wanted = change.Wanted,
                     Version = 1,
                 };
+                clone.EnsureStatusHistory(ResolveStatusAuthor(clone));
 
                 await Storage.Save(clone);
 
@@ -853,6 +859,7 @@ public class TaskTreeManager
             // Update IsCanBeCompleted only when it changed to avoid unnecessary disk writes.
             task.IsCanBeCompleted = newIsCanBeCompleted;
             task.UnlockedDateTime = newUnlockedDateTime;
+            ApplyAutomaticInProgressRollbackIfNeeded(task);
             await Storage.Save(task);
             result.AddOrUpdate(task);
         }
@@ -930,7 +937,7 @@ public class TaskTreeManager
         foreach (var childId in task.ContainsTasks)
         {
             var childTask = await Storage.Load(childId);
-            if (childTask != null && childTask.IsCompleted == false)
+            if (childTask != null && childTask.Status.IsIncompleteForAvailability())
             {
                 return false;
             }
@@ -981,7 +988,7 @@ public class TaskTreeManager
         foreach (var blockerId in task.BlockedByTasks)
         {
             var blockerTask = await Storage.Load(blockerId);
-            if (blockerTask != null && blockerTask.IsCompleted == false)
+            if (blockerTask != null && blockerTask.Status.IsIncompleteForAvailability())
             {
                 return true;
             }
@@ -990,13 +997,68 @@ public class TaskTreeManager
         return false;
     }
 
+    private async Task<bool> CanTransitionToStatus(TaskItem task, DomainTaskStatus targetStatus)
+    {
+        return targetStatus switch
+        {
+            DomainTaskStatus.NotReady => true,
+            DomainTaskStatus.Prepared => true,
+            DomainTaskStatus.Archived => task.Status != DomainTaskStatus.Completed,
+            DomainTaskStatus.InProgress => await IsTaskStartable(task),
+            DomainTaskStatus.Completed => await IsTaskCompletable(task),
+            _ => false
+        };
+    }
+
+    private async Task<bool> IsTaskStartable(TaskItem task)
+    {
+        if (HasFuturePlannedBegin(task))
+        {
+            return false;
+        }
+
+        return await AreContainedTasksCompleted(task) &&
+               !await HasIncompleteBlockerInTaskOrAncestors(
+                   task,
+                   new HashSet<string>(StringComparer.Ordinal));
+    }
+
+    private async Task<bool> IsTaskCompletable(TaskItem task)
+    {
+        return AreCompletionCriteriaSatisfied(task) &&
+               await AreContainedTasksCompleted(task) &&
+               !await HasIncompleteBlockerInTaskOrAncestors(
+                   task,
+                   new HashSet<string>(StringComparer.Ordinal));
+    }
+
+    private static bool AreCompletionCriteriaSatisfied(TaskItem task) =>
+        task.CompletionCriteria?.All(static criterion => criterion.IsSatisfied) != false;
+
+    private static bool HasFuturePlannedBegin(TaskItem task) =>
+        task.PlannedBeginDateTime.HasValue &&
+        task.PlannedBeginDateTime.Value > DateTimeOffset.UtcNow;
+
+    private static void ApplyAutomaticInProgressRollbackIfNeeded(TaskItem task)
+    {
+        if (task.Status != DomainTaskStatus.InProgress)
+        {
+            return;
+        }
+
+        if (!task.IsCanBeCompleted || HasFuturePlannedBegin(task))
+        {
+            task.SetStatus(DomainTaskStatus.Prepared, DateTimeOffset.UtcNow, "System");
+        }
+    }
+
     /// <summary>
-    /// Handles logic when a task's IsCompleted property changes
+    /// Handles logic when a task's Status property changes
     /// </summary>
     /// <param name="task">The task that has changed</param>
-    /// <param name="previousIsCompleted">The previous value of IsCompleted</param>
+    /// <param name="existingTask">The existing persisted task before the status change.</param>
     /// <returns>List of affected tasks</returns>
-    public async Task<List<TaskItem>> HandleTaskCompletionChange(TaskItem task)
+    public async Task<List<TaskItem>> HandleTaskStatusChange(TaskItem task, TaskItem? existingTask = null)
     {
         var result = new Dictionary<string, TaskItem>();
 
@@ -1004,12 +1066,29 @@ public class TaskTreeManager
         {
             try
             {
-                // Handle completion state changes
-                if (task.IsCompleted == true && task.CompletedDateTime == null)
-                {
-                    task.CompletedDateTime ??= DateTimeOffset.UtcNow;
-                    task.ArchiveDateTime = null;
+                existingTask ??= await Storage.Load(task.Id);
+                var requestedStatus = task.Status;
+                var author = ResolveStatusAuthor(task);
+                var now = DateTimeOffset.UtcNow;
 
+                if (existingTask != null)
+                {
+                    task.StatusHistory = existingTask.StatusHistory?.ToList() ?? new List<TaskStatusHistoryEntry>();
+                    task.Status = existingTask.Status;
+                }
+
+                if (!await CanTransitionToStatus(task, requestedStatus))
+                {
+                    task.UpdatedDateTime = GetNextUpdatedDateTime(task);
+                    await Storage.Save(task);
+                    result.AddOrUpdate(task);
+                    return true;
+                }
+
+                task.SetStatus(requestedStatus, now, author);
+
+                if (task.Status == DomainTaskStatus.Completed)
+                {
                     // Handle repeater logic
                     if (task.Repeater != null && task.Repeater.Type != RepeaterType.None &&
                         task.PlannedBeginDateTime.HasValue)
@@ -1024,8 +1103,10 @@ public class TaskTreeManager
                             Title = task.Title,
                             PlannedDuration = task.PlannedDuration,
                             Repeater = task.Repeater,
+                            Status = DomainTaskStatus.Prepared,
                             Wanted = task.Wanted,
                         };
+                        clone.SetStatus(DomainTaskStatus.Prepared, now, "System");
                         clone.PlannedBeginDateTime = task.Repeater.GetNextOccurrence(task.PlannedBeginDateTime.Value);
                         if (task.PlannedEndDateTime.HasValue)
                         {
@@ -1087,16 +1168,7 @@ public class TaskTreeManager
                     }
                 }
 
-                if (task.IsCompleted == false)
-                {
-                    task.ArchiveDateTime = null;
-                    task.CompletedDateTime = null;
-                }
-
-                if (task.IsCompleted == null && task.ArchiveDateTime == null)
-                {
-                    task.ArchiveDateTime ??= DateTimeOffset.UtcNow;
-                }
+                ApplyAutomaticInProgressRollbackIfNeeded(task);
 
                 // Save the updated task
                 task.UpdatedDateTime = GetNextUpdatedDateTime(task);

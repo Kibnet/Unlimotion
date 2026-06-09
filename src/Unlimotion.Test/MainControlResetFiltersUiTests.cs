@@ -27,10 +27,11 @@ public class MainControlResetFiltersUiTests
         (1, "LastCreatedFiltersButton", "LastCreatedResetFiltersButton"),
         (2, "LastUpdatedFiltersButton", "LastUpdatedResetFiltersButton"),
         (3, "UnlockedFiltersButton", "UnlockedResetFiltersButton"),
-        (4, "CompletedFiltersButton", "CompletedResetFiltersButton"),
-        (5, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
-        (6, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
-        (7, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
+        (4, "InProgressFiltersButton", "InProgressResetFiltersButton"),
+        (5, "CompletedFiltersButton", "CompletedResetFiltersButton"),
+        (6, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
+        (7, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
+        (8, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
     ];
 
     [Test]
@@ -253,7 +254,7 @@ public class MainControlResetFiltersUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
                 var resetButton = OpenFilterPanelAndFindResetButton(
                     view,
                     "RoadmapFiltersButton",
@@ -309,7 +310,7 @@ public class MainControlResetFiltersUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
                 var resetButton = OpenFilterPanelAndFindResetButton(
                     view,
                     "RoadmapFiltersButton",

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -16,6 +17,7 @@ using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
 using Unlimotion.Domain;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
@@ -36,12 +38,12 @@ namespace Unlimotion.ViewModel
             Func<bool>? isInitializedProvider = null)
         {
             IsInitializedProvider = isInitializedProvider ?? (() => true);
-            Model = model;
             _taskStorage = taskStorage;
             _containsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_containsTasksSource);
             _parentsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_parentsTasksSource);
             _blocksTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_blocksTasksSource);
             _blockedByTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_blockedByTasksSource);
+            Model = model;
             Init(taskStorage);
         }
 
@@ -58,6 +60,8 @@ namespace Unlimotion.ViewModel
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blocksTasks;
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
         private readonly SerialDisposable _repeaterPropertyChangedSubscription = new();
+        private readonly SerialDisposable _completionCriteriaPropertyChangedSubscription = new();
+        private bool _isUpdatingFromModel;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands? commands;
@@ -69,57 +73,88 @@ namespace Unlimotion.ViewModel
         private void Init(ITaskStorage taskStorage)
         {
             _repeaterPropertyChangedSubscription.AddToDispose(this);
+            _completionCriteriaPropertyChangedSubscription.AddToDispose(this);
             SetDurationCommands = new SetDurationCommands(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                  await taskStorage.Update(this);
             });
 
+            var canEditCompletionCriteria = this.WhenAnyValue(
+                t => t.Status,
+                status => status != DomainTaskStatus.Completed);
+
+            AddCompletionCriterionCommand = ReactiveCommand.Create(() =>
+            {
+                CompletionCriteria.Add(new TaskCompletionCriterion());
+            }, canEditCompletionCriteria).AddToDisposeAndReturn(this);
+
+            RemoveCompletionCriterionCommand = ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
+            {
+                if (criterion != null)
+                {
+                    CompletionCriteria.Remove(criterion);
+                }
+            }, canEditCompletionCriteria).AddToDisposeAndReturn(this);
+
+            NotifyCollectionChangedEventHandler completionCriteriaChangedHandler = (_, __) => OnCompletionCriteriaChanged();
+            CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
+            Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
+            RegisterCompletionCriteriaPropertyChangedSubscription();
+
             // Пересчитываем вычисляемые поля при локальном изменении заголовка.
             this.WhenAnyValue(t => t.Title)
                 .Subscribe(_ => RecalculateEmoji())
                 .AddToDispose(this);
 
-            //Subscribe IsCompleted
-            this.WhenAnyValue(m => m.IsCompleted).Subscribe(async b =>
+            this.WhenAnyValue(m => m.Status).Subscribe(status =>
             {
-                // Use TaskTreeManager to handle IsCompleted changes
+                RefreshStatusOptions();
+
                 if (IsInitialized)
                 {
-                    _ = SaveItemCommand.Execute();
+                    SaveItemCommand.Execute().Subscribe();
                 }
             });
+
+            Observable.Merge(
+                    this.WhenAnyValue(m => m.IsCanBeCompleted).Select(_ => Unit.Default),
+                    this.WhenAnyValue(m => m.PlannedBeginDateTime).Select(_ => Unit.Default))
+                .Subscribe(_ => RefreshStatusOptions())
+                .AddToDispose(this);
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 var notificationManager = NotificationManager ?? NotificationManagerInstance;
 
-                switch (IsCompleted)
+                switch (Status)
                 {
-                    case null:
+                    case DomainTaskStatus.Archived:
                         {
-                            IsCompleted = false;
+                            Status = Model.GetRestoreStatusAfterArchive();
 
-                            var archivedChildrenTasks = GetChildrenTasks(e => e.IsCompleted == null).ToList();
+                            var archivedChildrenTasks = GetChildrenTasks(e => e.Status == DomainTaskStatus.Archived).ToList();
 
                             ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, archivedChildrenTasks,
                                 ArchiveMethodType.Unarchive);
 
                             break;
                         }
-                    case false:
+                    case DomainTaskStatus.NotReady:
+                    case DomainTaskStatus.Prepared:
+                    case DomainTaskStatus.InProgress:
                         {
-                            IsCompleted = null;
+                            Status = DomainTaskStatus.Archived;
 
-                            var notCompletedChildrenTasks = GetChildrenTasks(e => e.IsCompleted == false).ToList();
+                            var activeChildrenTasks = GetChildrenTasks(e => e.Status.IsActive()).ToList();
 
-                            ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, notCompletedChildrenTasks,
+                            ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, activeChildrenTasks,
                                 ArchiveMethodType.Archive);
 
                             break;
                         }
                 }
-            }, this.WhenAnyValue(m => m.IsCompleted, b => b != true));
+            }, this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed));
 
             RemoveFunc = async parent =>
             {
@@ -161,6 +196,7 @@ namespace Unlimotion.ViewModel
                         {
                             case nameof(Title):
                             case nameof(Description):
+                            case nameof(Status):
                             case nameof(PlannedBeginDateTime):
                             case nameof(PlannedEndDateTime):
                             case nameof(PlannedDuration):
@@ -351,6 +387,8 @@ namespace Unlimotion.ViewModel
             {
                 RefreshComputedFields();
             }
+
+            RefreshStatusOptions();
         }
 
         public void RefreshComputedFields()
@@ -463,6 +501,8 @@ namespace Unlimotion.ViewModel
         }
 
         public ICommand ArchiveCommand { get; set; } = null!;
+        public ICommand AddCompletionCriterionCommand { get; set; } = null!;
+        public ICommand RemoveCompletionCriterionCommand { get; set; } = null!;
         public Func<TaskItemViewModel?, Task<bool>> RemoveFunc { get; set; } = null!;
         public Func<TaskItemViewModel, Task<TaskItemViewModel>> CloneFunc { get; set; } = null!;
 
@@ -480,15 +520,15 @@ namespace Unlimotion.ViewModel
                     CreatedDateTime = CreatedDateTime,
                     UpdatedDateTime = UpdatedDateTime,
                     UnlockedDateTime = UnlockedDateTime,
-                    CompletedDateTime = CompletedDateTime,
-                    ArchiveDateTime = ArchiveDateTime,
+                    Status = Status,
+                    StatusHistory = StatusHistory.ToList(),
+                    CompletionCriteria = CompletionCriteria.ToList(),
                     PlannedBeginDateTime = PlannedBeginDateTime,
                     PlannedEndDateTime = PlannedEndDateTime,
                     PlannedDuration = PlannedDuration,
                     Importance = Importance,
                     Wanted = Wanted,
                     IsCanBeCompleted = IsCanBeCompleted,
-                    IsCompleted = IsCompleted,
                     Version = Version,
                     BlocksTasks = Blocks.ToList(),
                     BlockedByTasks = BlockedBy.ToList(),
@@ -509,13 +549,70 @@ namespace Unlimotion.ViewModel
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
         public bool IsCanBeCompleted { get; set; }
-        public bool? IsCompleted { get; set; }
+        [AlsoNotifyFor(
+            nameof(IsCompleted),
+            nameof(StatusOption),
+            nameof(StatusTitle),
+            nameof(StatusToolTip),
+            nameof(CanEditCompletionCriteria),
+            nameof(CompletedDateTime),
+            nameof(ArchiveDateTime),
+            nameof(StartedDateTime),
+            nameof(InProgressElapsed))]
+        public DomainTaskStatus Status { get; set; }
+        public ObservableCollection<TaskStatusHistoryEntry> StatusHistory { get; set; } = new();
+        public ObservableCollection<TaskCompletionCriterion> CompletionCriteria { get; set; } = new();
+        public ObservableCollection<TaskStatusOption> StatusOptions { get; } =
+            new(Enum.GetValues<DomainTaskStatus>().Select(TaskStatusOption.CreateTransitionOption));
+        public TaskStatusOption StatusOption
+        {
+            get => StatusOptions.First(option => option.Status == Status);
+            set
+            {
+                if (value == null || value.Status == Status)
+                {
+                    return;
+                }
+
+                if (!CanTransitionToStatus(value.Status, out var reason))
+                {
+                    (NotificationManager ?? NotificationManagerInstance)?.ErrorToast(reason);
+                    RefreshStatusOptions();
+                    OnPropertyChanged(nameof(StatusOption));
+                    return;
+                }
+
+                Status = value.Status;
+            }
+        }
+        public string StatusTitle => StatusOption.Title;
+        public string StatusToolTip => StatusTitle;
+        public bool CanEditCompletionCriteria => Status != DomainTaskStatus.Completed;
+        public bool? IsCompleted
+        {
+            get => Status switch
+            {
+                DomainTaskStatus.Completed => true,
+                DomainTaskStatus.Archived => null,
+                _ => false
+            };
+            set => Status = value switch
+            {
+                true => DomainTaskStatus.Completed,
+                null => DomainTaskStatus.Archived,
+                _ => DomainTaskStatus.NotReady
+            };
+        }
         public int Version { get; set; }
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
+        public DateTimeOffset? StartedDateTime { get; set; }
+        public string InProgressElapsed => StartedDateTime is null
+            ? string.Empty
+            : (DateTimeOffset.Now - StartedDateTime.Value.ToLocalTime()).ToString(@"hh\:mm");
         public DateTime? PlannedBeginDateTime { get; set; }
         public DateTime? PlannedEndDateTime { get; set; }
 
@@ -699,7 +796,7 @@ namespace Unlimotion.ViewModel
                 {
                     foreach (var task in childrenTasks)
                     {
-                        task.IsCompleted = null;
+                        task.Status = DomainTaskStatus.Archived;
                     }
                 }
                 ,
@@ -707,7 +804,7 @@ namespace Unlimotion.ViewModel
                 {
                     foreach (var task in childrenTasks)
                     {
-                        task.IsCompleted = false;
+                        task.Status = task.Model.GetRestoreStatusAfterArchive();
                     }
                 }
                 ,
@@ -746,6 +843,7 @@ namespace Unlimotion.ViewModel
             if (UnlockedDateTime != taskItem.UnlockedDateTime) UnlockedDateTime = taskItem.UnlockedDateTime;
             if (CompletedDateTime != taskItem.CompletedDateTime) CompletedDateTime = taskItem.CompletedDateTime;
             if (ArchiveDateTime != taskItem.ArchiveDateTime) ArchiveDateTime = taskItem.ArchiveDateTime;
+            if (StartedDateTime != taskItem.StartedDateTime) StartedDateTime = taskItem.StartedDateTime;
             if (PlannedBeginDateTime != taskItem.PlannedBeginDateTime?.LocalDateTime)
                 PlannedBeginDateTime = taskItem.PlannedBeginDateTime?.LocalDateTime;
             if (PlannedEndDateTime != taskItem.PlannedEndDateTime?.LocalDateTime)
@@ -753,7 +851,18 @@ namespace Unlimotion.ViewModel
             if (PlannedDuration != taskItem.PlannedDuration) PlannedDuration = taskItem.PlannedDuration;
             if (Importance != taskItem.Importance) Importance = taskItem.Importance;
             if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
-            if (IsCompleted != taskItem.IsCompleted) IsCompleted = taskItem.IsCompleted;
+            if (Status != taskItem.Status) Status = taskItem.Status;
+            _isUpdatingFromModel = true;
+            try
+            {
+                SynchronizeCollections(StatusHistory, taskItem.StatusHistory ?? new List<TaskStatusHistoryEntry>());
+                SynchronizeCollections(CompletionCriteria, taskItem.CompletionCriteria ?? new List<TaskCompletionCriterion>());
+            }
+            finally
+            {
+                _isUpdatingFromModel = false;
+                RegisterCompletionCriteriaPropertyChangedSubscription();
+            }
             if (Version != taskItem.Version) Version = taskItem.Version;
 
 
@@ -784,6 +893,8 @@ namespace Unlimotion.ViewModel
                     Repeater = null;
                 }
             }
+
+            RefreshStatusOptions();
         }
 
         public static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
@@ -828,5 +939,152 @@ namespace Unlimotion.ViewModel
                 }
             }
         }
+
+        private static void SynchronizeCollections<T>(ObservableCollection<T> observableCollection, List<T> list)
+        {
+            if (observableCollection == null)
+            {
+                throw new ArgumentNullException(nameof(observableCollection));
+            }
+
+            list ??= new List<T>();
+            if (observableCollection.SequenceEqual(list))
+            {
+                return;
+            }
+
+            observableCollection.Clear();
+            foreach (var item in list)
+            {
+                observableCollection.Add(item);
+            }
+        }
+
+        private void OnCompletionCriteriaChanged()
+        {
+            RegisterCompletionCriteriaPropertyChangedSubscription();
+            RefreshStatusOptions();
+            SaveCompletionCriteriaIfNeeded();
+        }
+
+        private void RegisterCompletionCriteriaPropertyChangedSubscription()
+        {
+            var subscriptions = new CompositeDisposable();
+
+            foreach (var criterion in CompletionCriteria.OfType<INotifyPropertyChanged>())
+            {
+                subscriptions.Add(Observable
+                    .FromEventPattern<PropertyChangedEventHandler, PropertyChangedEventArgs>(
+                        handler => criterion.PropertyChanged += handler,
+                        handler => criterion.PropertyChanged -= handler)
+                    .Where(change => string.IsNullOrEmpty(change.EventArgs.PropertyName) ||
+                                     change.EventArgs.PropertyName == nameof(TaskCompletionCriterion.Text) ||
+                                     change.EventArgs.PropertyName == nameof(TaskCompletionCriterion.IsSatisfied))
+                    .Throttle(PropertyChangedThrottleTimeSpanDefault)
+                    .Subscribe(_ => SaveCompletionCriteriaIfNeeded()));
+            }
+
+            _completionCriteriaPropertyChangedSubscription.Disposable = subscriptions;
+        }
+
+        private void SaveCompletionCriteriaIfNeeded()
+        {
+            if (!IsInitialized || _isUpdatingFromModel)
+            {
+                return;
+            }
+
+            SaveItemCommand.Execute().Subscribe();
+        }
+
+        private void RefreshStatusOptions()
+        {
+            foreach (var option in StatusOptions)
+            {
+                var canSelect = CanTransitionToStatus(option.Status, out var reason);
+                option.IsEnabled = canSelect;
+                option.ToolTip = canSelect ? option.Title : reason;
+            }
+        }
+
+        private bool CanTransitionToStatus(DomainTaskStatus targetStatus, out string reason)
+        {
+            reason = TaskStatusOption.Find(targetStatus).Title;
+
+            if (targetStatus == Status)
+            {
+                return true;
+            }
+
+            switch (targetStatus)
+            {
+                case DomainTaskStatus.NotReady:
+                case DomainTaskStatus.Prepared:
+                    return true;
+                case DomainTaskStatus.Archived:
+                    if (Status == DomainTaskStatus.Completed)
+                    {
+                        reason = L10n.Get("TaskStatusArchiveCompletedBlocked");
+                        return false;
+                    }
+
+                    return true;
+                case DomainTaskStatus.InProgress:
+                    if (HasFuturePlannedBegin())
+                    {
+                        reason = L10n.Get("TaskStatusStartFutureDateBlocked");
+                        return false;
+                    }
+
+                    return CanTransitionByAvailability(out reason);
+                case DomainTaskStatus.Completed:
+                    if (CompletionCriteria.Any(static criterion => !criterion.IsSatisfied))
+                    {
+                        reason = L10n.Get("TaskStatusCompleteCriteriaBlocked");
+                        return false;
+                    }
+
+                    return CanTransitionByAvailability(out reason);
+                default:
+                    reason = L10n.Get("TaskStatusTransitionBlocked");
+                    return false;
+            }
+        }
+
+        private bool CanTransitionByAvailability(out string reason)
+        {
+            if (ContainsTasks.Any(static task => task.Status.IsIncompleteForAvailability()))
+            {
+                reason = L10n.Get("TaskStatusContainedTasksBlocked");
+                return false;
+            }
+
+            if (HasIncompleteBlockerInTaskOrAncestors(new HashSet<string>(StringComparer.Ordinal)))
+            {
+                reason = L10n.Get("TaskStatusBlockersBlocked");
+                return false;
+            }
+
+            reason = string.Empty;
+            return true;
+        }
+
+        private bool HasIncompleteBlockerInTaskOrAncestors(ISet<string> visitedTaskIds)
+        {
+            if (string.IsNullOrWhiteSpace(Id) || !visitedTaskIds.Add(Id))
+            {
+                return false;
+            }
+
+            if (BlockedByTasks.Any(static task => task.Status.IsIncompleteForAvailability()))
+            {
+                return true;
+            }
+
+            return ParentsTasks.Any(parent => parent.HasIncompleteBlockerInTaskOrAncestors(visitedTaskIds));
+        }
+
+        private bool HasFuturePlannedBegin() =>
+            PlannedBeginDateTime.HasValue && PlannedBeginDateTime.Value > DateTime.Now;
     }
 }

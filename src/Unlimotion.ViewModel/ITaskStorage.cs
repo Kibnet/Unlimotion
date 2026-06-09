@@ -12,6 +12,7 @@ public interface ITaskStorage
     public SourceCache<TaskItemViewModel, string> Tasks { get; }  
     public ITaskRelationsIndex Relations { get; }
     public TaskTreeManager TaskTreeManager { get; }
+    public bool StatusModelMigrationWasApplied => false;
     public Task Init();
     public event EventHandler<EventArgs> Initiated;
     public Task<TaskItemViewModel> Add(TaskItemViewModel? currentTask = null, bool isBlocked = false);

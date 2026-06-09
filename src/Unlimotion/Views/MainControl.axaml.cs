@@ -18,6 +18,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
+using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -42,6 +43,7 @@ namespace Unlimotion.Views
             "LastCreatedTree",
             "LastUpdatedTree",
             "UnlockedTree",
+            "InProgressTree",
             "CompletedTree",
             "ArchivedTree",
             "LastOpenedTree"
@@ -1058,6 +1060,18 @@ namespace Unlimotion.Views
                 ExecuteTreeCommand(kind);
                 e.Handled = true;
             }
+        }
+
+        private void CompletionCriterionRemoveButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not Control { DataContext: TaskCompletionCriterion criterion } ||
+                DataContext is not MainWindowViewModel { CurrentTaskItem: { } currentTask })
+            {
+                return;
+            }
+
+            currentTask.CompletionCriteria.Remove(criterion);
+            e.Handled = true;
         }
 
         private static bool TryGetTreeCommandHotkey(KeyEventArgs e, out TreeCommandKind kind)
@@ -2708,6 +2722,7 @@ namespace Unlimotion.Views
                 _ when vm.LastCreatedMode => "LastCreatedTree",
                 _ when vm.LastUpdatedMode => "LastUpdatedTree",
                 _ when vm.UnlockedMode => "UnlockedTree",
+                _ when vm.InProgressMode => "InProgressTree",
                 _ when vm.CompletedMode => "CompletedTree",
                 _ when vm.ArchivedMode => "ArchivedTree",
                 _ when vm.LastOpenedMode => "LastOpenedTree",
@@ -2822,6 +2837,7 @@ namespace Unlimotion.Views
                 "LastCreatedTree" => vm.CurrentLastCreated,
                 "LastUpdatedTree" => vm.CurrentLastUpdated,
                 "UnlockedTree" => vm.CurrentUnlockedItem,
+                "InProgressTree" => vm.CurrentInProgressItem,
                 "CompletedTree" => vm.CurrentCompletedItem,
                 "ArchivedTree" => vm.CurrentArchivedItem,
                 "LastOpenedTree" => vm.CurrentLastOpenedItem,
@@ -2911,6 +2927,9 @@ namespace Unlimotion.Views
                     break;
                 case "UnlockedTree":
                     vm.CurrentUnlockedItem = wrapper;
+                    break;
+                case "InProgressTree":
+                    vm.CurrentInProgressItem = wrapper;
                     break;
                 case "CompletedTree":
                     vm.CurrentCompletedItem = wrapper;

@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
              xmlns:views="clr-namespace:Unlimotion.Views"
+             xmlns:unlimotion="clr-namespace:Unlimotion"
              xmlns:local="clr-namespace:Unlimotion.Views.Graph"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
@@ -15,7 +16,55 @@
              x:CompileBindings="False"
              AutomationProperties.AutomationId="RoadmapRoot"
              Focusable="True">
+    <UserControl.Resources>
+        <DataTemplate x:Key="TaskStatusOptionDropDownTemplate" DataType="viewModel:TaskStatusOption">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" MinHeight="24">
+                <unlimotion:TaskStatusIcon Status="{Binding Status}"
+                                           Width="16"
+                                           Height="16"
+                                           VerticalAlignment="Center"
+                                           IsEnabled="{Binding IsEnabled}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Title}"
+                           VerticalAlignment="Center"
+                           IsEnabled="{Binding IsEnabled}"
+                           ToolTip.Tip="{Binding ToolTip}"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="viewModel:TaskStatusOption">
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TaskStatusOptionDropDownTemplate}"/>
+        </DataTemplate>
+        <DataTemplate DataType="viewModel:TaskStatusFilter">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center" />
+                <unlimotion:TaskStatusIcon Grid.Column="1"
+                                           Status="{Binding Status}"
+                                           Width="16"
+                                           Height="16"
+                                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Title}" VerticalAlignment="Center" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.DataTemplates>
     <UserControl.Styles>
+        <Style Selector="Button.TaskStatusPicker">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Padding" Value="3,0"/>
+            <Setter Property="Background" Value="#01000000"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.TaskStatusPicker:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
         <Style Selector="TextBlock.highlighted">
             <Setter Property="Foreground" Value="#2F80ED" />
             <Setter Property="FontWeight" Value="Bold" />
@@ -193,8 +242,7 @@
                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}" />
                                             <WrapPanel>
                                                 <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,12,6" IsVisible="{Binding OnlyUnlocked}" />
-                                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6" IsVisible="{Binding !OnlyUnlocked}" />
-                                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6" IsVisible="{Binding !OnlyUnlocked}" />
+                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="RoadmapStatusFilterComboBox" />
                                                 <CheckBox Content="{DynamicResource GraphOnlyUnlocked}" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,12,6" />
                                             </WrapPanel>
                                         </StackPanel>
@@ -281,10 +329,9 @@
                                 PointerReleased="InputElement_OnPointerReleased"
                                 DoubleTapped="TaskTree_OnDoubleTapped">
                             <Grid ColumnDefinitions="Auto,Auto,Auto,*">
-                                <CheckBox DataContext="{Binding TaskItem}"
-                                          IsChecked="{Binding IsCompleted}"
-                                          VerticalAlignment="Center"
-                                          IsEnabled="{Binding IsCanBeCompleted}" />
+                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}"
+                                                             VerticalAlignment="Center"
+                                                             AutomationProperties.AutomationId="TaskStatusButton" />
                                 <Label Grid.Column="1"
                                        DataContext="{Binding TaskItem}"
                                        Content="{Binding GetAllEmoji}"

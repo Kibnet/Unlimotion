@@ -350,7 +350,8 @@ namespace Unlimotion.Views
 
             dc.WhenAnyValue(
                     m => m.EmojiFilters,
-                    m => m.EmojiExcludeFilters)
+                    m => m.EmojiExcludeFilters,
+                    m => m.StatusFilters)
                 .Subscribe(_ =>
                 {
                     RegisterRoadmapFilterSubscriptions();
@@ -397,6 +398,7 @@ namespace Unlimotion.Views
 
             AddFilterCollectionSubscription(localDc.EmojiFilters, subscriptions, rebuildTrigger);
             AddFilterCollectionSubscription(localDc.EmojiExcludeFilters, subscriptions, rebuildTrigger);
+            AddFilterCollectionSubscription(localDc.StatusFilters, subscriptions, rebuildTrigger);
 
             roadmapFilterSubscriptions.Disposable = subscriptions;
         }
@@ -1015,7 +1017,7 @@ namespace Unlimotion.Views
                 return dc?.ShowWanted.HasValue == true;
             }
 
-            return propertyName is nameof(TaskItemViewModel.IsCompleted)
+            return propertyName is nameof(TaskItemViewModel.Status)
                        or nameof(TaskItemViewModel.IsCanBeCompleted)
                        or nameof(TaskItemViewModel.UnlockedDateTime);
         }
@@ -1039,6 +1041,8 @@ namespace Unlimotion.Views
                 or nameof(TaskItemViewModel.RepeaterListMarkerToolTip)
                 or nameof(TaskItemViewModel.IsHaveRepeater)
                 or nameof(TaskItemViewModel.Wanted)
+                or nameof(TaskItemViewModel.Status)
+                or nameof(TaskItemViewModel.StatusTitle)
                 or nameof(TaskItemViewModel.IsCanBeCompleted);
         }
 
@@ -1064,8 +1068,8 @@ namespace Unlimotion.Views
                 .Subscribe(_ => InvalidateRoadmapScopeSubscriptionsAndScheduleUpdate()));
         }
 
-        private void AddFilterCollectionSubscription(
-            ReadOnlyObservableCollection<EmojiFilter> collection,
+        private void AddFilterCollectionSubscription<TFilter>(
+            ReadOnlyObservableCollection<TFilter> collection,
             CompositeDisposable subscriptions,
             TimeSpan throttle)
         {
@@ -1086,7 +1090,7 @@ namespace Unlimotion.Views
                         handler => filter.PropertyChanged += handler,
                         handler => filter.PropertyChanged -= handler)
                     .Where(change => string.IsNullOrEmpty(change.EventArgs.PropertyName) ||
-                                     change.EventArgs.PropertyName == nameof(EmojiFilter.ShowTasks))
+                                     change.EventArgs.PropertyName == "ShowTasks")
                     .Throttle(throttle)
                     .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ => ScheduleUpdateGraph()));

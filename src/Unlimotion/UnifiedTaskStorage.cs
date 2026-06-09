@@ -12,12 +12,14 @@ using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion;
 
 public class UnifiedTaskStorage : ITaskStorage, IDisposable
 {
     private const int AvailabilityMigrationVersion = 2;
+    private const int StatusModelMigrationVersion = 1;
     private const int InitialLoadBatchSize = 64;
     private readonly bool isFileStorage;
     private bool disposed;
@@ -34,11 +36,13 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     public ITaskRelationsIndex Relations { get; }
 
     public TaskTreeManager TaskTreeManager { get; }
+    public bool StatusModelMigrationWasApplied { get; private set; }
 
     public event EventHandler<EventArgs>? Initiated;
 
     public async Task Init()
     {
+        StatusModelMigrationWasApplied = false;
         Tasks.Edit(operations => operations.Clear());
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
 
@@ -79,6 +83,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         {
             if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
             {
+                StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
                 var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
                 await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
@@ -338,6 +343,241 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         RefreshRelations();
     }
 
+    private static async Task<bool> MigrateTaskStatusModel(FileStorage fileStorage)
+    {
+        var migrationTime = DateTimeOffset.UtcNow;
+        var gitWorkTreePath = FindGitWorkTreePath(fileStorage.Path);
+        var changed = 0;
+        var processed = 0;
+
+        foreach (var filePath in EnumerateTaskFilePaths(fileStorage.Path))
+        {
+            JObject taskJson;
+            try
+            {
+                var rawJson = await File.ReadAllTextAsync(filePath);
+                taskJson = JObject.Parse(rawJson);
+            }
+            catch
+            {
+                continue;
+            }
+
+            processed++;
+            if (!TryMigrateTaskStatusJson(taskJson, migrationTime))
+            {
+                continue;
+            }
+
+            if (gitWorkTreePath == null)
+            {
+                throw new InvalidOperationException(
+                    $"Task status migration requires task storage path to be inside a Git worktree: {fileStorage.Path}");
+            }
+
+            await File.WriteAllTextAsync(
+                filePath,
+                JsonConvert.SerializeObject(taskJson, Formatting.Indented));
+            changed++;
+        }
+
+        if (changed == 0)
+        {
+            return false;
+        }
+
+        var report = new
+        {
+            Version = StatusModelMigrationVersion,
+            Timestamp = DateTimeOffset.UtcNow,
+            TasksProcessed = processed,
+            ChangedTasks = changed,
+            Message = "Task status model migrated from IsCompleted to Status/StatusHistory",
+            RollbackPath = $"Use Git revert/checkout for migrated task files under {fileStorage.Path}",
+            GitWorkTreePath = gitWorkTreePath
+        };
+
+        await File.WriteAllTextAsync(
+            Path.Combine(fileStorage.Path, "status-model.migration.report"),
+            JsonConvert.SerializeObject(report, Formatting.Indented));
+
+        return true;
+    }
+
+    private static string? FindGitWorkTreePath(string path)
+    {
+        var directory = new DirectoryInfo(path);
+        while (directory != null)
+        {
+            var gitPath = Path.Combine(directory.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateTaskFilePaths(string tasksPath)
+    {
+        foreach (var filePath in Directory.EnumerateFiles(tasksPath))
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (fileName == "migration.report" ||
+                fileName == "availability.migration.report" ||
+                fileName == "status-model.migration.report" ||
+                fileName.EndsWith(".migration.report", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var extension = Path.GetExtension(filePath);
+            if (!string.IsNullOrEmpty(extension) &&
+                !string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            yield return filePath;
+        }
+    }
+
+    private static bool TryMigrateTaskStatusJson(JObject taskJson, DateTimeOffset migrationTime)
+    {
+        var hasOldStatus = TryGetProperty(taskJson, nameof(TaskItem.IsCompleted), out var isCompletedProperty);
+        var hasOldCompletedDate = TryGetProperty(taskJson, nameof(TaskItem.CompletedDateTime), out var completedDateProperty);
+        var hasOldArchiveDate = TryGetProperty(taskJson, nameof(TaskItem.ArchiveDateTime), out var archiveDateProperty);
+        var hasStatus = TryGetProperty(taskJson, nameof(TaskItem.Status), out var statusProperty);
+        var hasHistory = TryGetProperty(taskJson, nameof(TaskItem.StatusHistory), out var historyProperty) &&
+                         historyProperty?.Value is JArray { Count: > 0 };
+
+        if (!hasOldStatus && !hasOldCompletedDate && !hasOldArchiveDate && hasStatus && hasHistory)
+        {
+            return false;
+        }
+
+        var status = hasOldStatus
+            ? ReadLegacyStatus(isCompletedProperty?.Value)
+            : ReadTaskStatus(statusProperty?.Value) ?? DomainTaskStatus.NotReady;
+        var createdAt = ReadDateTimeOffset(taskJson[nameof(TaskItem.CreatedDateTime)]) ?? migrationTime;
+        var updatedAt = ReadDateTimeOffset(taskJson[nameof(TaskItem.UpdatedDateTime)]);
+        var completedAt = ReadDateTimeOffset(completedDateProperty?.Value) ?? updatedAt ?? createdAt;
+        var archivedAt = ReadDateTimeOffset(archiveDateProperty?.Value) ?? updatedAt ?? createdAt;
+
+        var history = new JArray
+        {
+            CreateHistoryEntry(DomainTaskStatus.NotReady, createdAt, "System")
+        };
+
+        if (status == DomainTaskStatus.Completed)
+        {
+            history.Add(CreateHistoryEntry(DomainTaskStatus.Completed, completedAt, "System"));
+        }
+        else if (status == DomainTaskStatus.Archived)
+        {
+            history.Add(CreateHistoryEntry(DomainTaskStatus.Archived, archivedAt, "System"));
+        }
+        else if (status != DomainTaskStatus.NotReady)
+        {
+            history.Add(CreateHistoryEntry(status, updatedAt ?? createdAt, "System"));
+        }
+
+        taskJson[nameof(TaskItem.Status)] = status.ToString();
+        taskJson[nameof(TaskItem.StatusHistory)] = history;
+        taskJson[nameof(TaskItem.CompletionCriteria)] ??= new JArray();
+
+        isCompletedProperty?.Remove();
+        completedDateProperty?.Remove();
+        archiveDateProperty?.Remove();
+
+        return true;
+    }
+
+    private static JToken CreateHistoryEntry(DomainTaskStatus status, DateTimeOffset changedAt, string author) =>
+        new JObject
+        {
+            [nameof(TaskStatusHistoryEntry.Status)] = status.ToString(),
+            [nameof(TaskStatusHistoryEntry.ChangedAt)] = JToken.FromObject(changedAt),
+            [nameof(TaskStatusHistoryEntry.Author)] = author
+        };
+
+    private static DomainTaskStatus ReadLegacyStatus(JToken? token)
+    {
+        if (token == null || token.Type == JTokenType.Null)
+        {
+            return DomainTaskStatus.Archived;
+        }
+
+        return token.Value<bool?>() == true
+            ? DomainTaskStatus.Completed
+            : DomainTaskStatus.NotReady;
+    }
+
+    private static DomainTaskStatus? ReadTaskStatus(JToken? token)
+    {
+        if (token == null || token.Type == JTokenType.Null)
+        {
+            return null;
+        }
+
+        if (token.Type == JTokenType.Integer)
+        {
+            var value = token.Value<int>();
+            return Enum.IsDefined(typeof(DomainTaskStatus), value) ? (DomainTaskStatus)value : null;
+        }
+
+        var text = token.Value<string>();
+        return Enum.TryParse<DomainTaskStatus>(text, ignoreCase: true, out var status)
+            ? status
+            : null;
+    }
+
+    private static DateTimeOffset? ReadDateTimeOffset(JToken? token)
+    {
+        if (token == null || token.Type == JTokenType.Null)
+        {
+            return null;
+        }
+
+        if (token is JValue { Value: DateTimeOffset timestampOffset })
+        {
+            return timestampOffset;
+        }
+
+        if (token is JValue { Value: DateTime timestampDateTime })
+        {
+            return timestampDateTime.Kind == DateTimeKind.Unspecified
+                ? new DateTimeOffset(DateTime.SpecifyKind(timestampDateTime, DateTimeKind.Utc))
+                : new DateTimeOffset(timestampDateTime);
+        }
+
+        var timestampText = token.Type == JTokenType.String
+            ? token.Value<string>()
+            : token.ToString();
+
+        return DateTimeOffset.TryParse(
+            timestampText,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsedTimestamp)
+            ? parsedTimestamp
+            : null;
+    }
+
+    private static bool TryGetProperty(JObject obj, string propertyName, out JProperty? property)
+    {
+        property = obj
+            .Properties()
+            .FirstOrDefault(candidate => string.Equals(
+                candidate.Name,
+                propertyName,
+                StringComparison.OrdinalIgnoreCase));
+        return property != null;
+    }
+
     private static async Task<FileTaskMigrator.MigrationResult> MigrateReverseLinks(TaskTreeManager taskTreeManager,
         bool forceRecheck = false)
     {
@@ -515,7 +755,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
         foreach (var childId in task.ContainsTasks)
         {
-            if (taskById.TryGetValue(childId, out var childTask) && childTask?.IsCompleted == false)
+            if (taskById.TryGetValue(childId, out var childTask) &&
+                childTask?.Status.IsIncompleteForAvailability() == true)
                 return false;
         }
 
@@ -558,7 +799,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
         foreach (var blockerId in task.BlockedByTasks)
         {
-            if (taskById.TryGetValue(blockerId, out var blockerTask) && blockerTask?.IsCompleted == false)
+            if (taskById.TryGetValue(blockerId, out var blockerTask) &&
+                blockerTask?.Status.IsIncompleteForAvailability() == true)
                 return true;
         }
 

@@ -20,6 +20,7 @@ using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -35,12 +36,14 @@ public class MainControlTaskCardLayoutUiTests
         "CurrentTaskDescriptionSection",
         "CurrentTaskPlanningSection",
         "CurrentTaskRepeaterSection",
-        "CurrentTaskRelationsSection"
+        "CurrentTaskRelationsSection",
+        "CurrentTaskCompletionCriteriaSection",
+        "CurrentTaskStatusHistorySection"
     ];
 
     private static readonly string[] KeyControlAutomationIds =
     [
-        "CurrentTaskCompletedCheckBox",
+        "CurrentTaskStatusButton",
         "CurrentTaskTitleTextBox",
         "CurrentTaskWantedCheckBox",
         "CurrentTaskImportanceInput",
@@ -52,7 +55,9 @@ public class MainControlTaskCardLayoutUiTests
         "CurrentTaskSetDurationButton",
         "CurrentTaskPlannedEndPicker",
         "CurrentTaskSetEndButton",
-        "CurrentTaskRepeaterSelector"
+        "CurrentTaskRepeaterSelector",
+        "AddCompletionCriterionButton",
+        "StatusHistoryExpander"
     ];
 
     private static readonly string[] PlanningControlAutomationIds =
@@ -275,6 +280,51 @@ public class MainControlTaskCardLayoutUiTests
 
                 AssertRepeaterControlsDoNotOverlap(view);
                 AssertNoHorizontalOverflow(scrollViewer, card);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_CompletedTask_DisablesCompletionCriteriaEditing()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RootTask1Id,
+                    task =>
+                    {
+                        task.Status = DomainTaskStatus.Completed;
+                        task.CompletionCriteria.Add(new TaskCompletionCriterion
+                        {
+                            Text = "Проверить результат",
+                            IsSatisfied = true
+                        });
+                    });
+                window = createdWindow;
+                RunLayoutJobs();
+
+                var section = FindControlByAutomationId<Control>(view, "CurrentTaskCompletionCriteriaSection");
+                var addButton = FindControlByAutomationId<Button>(section, "AddCompletionCriterionButton");
+                var items = FindControlByAutomationId<ItemsControl>(section, "CompletionCriteriaItems");
+
+                AssertVisibleAndArranged(section, "CurrentTaskCompletionCriteriaSection");
+                await Assert.That(addButton.IsEnabled).IsFalse();
+                await Assert.That(items.IsEnabled).IsFalse();
             }
             finally
             {

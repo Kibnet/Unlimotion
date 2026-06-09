@@ -19,6 +19,7 @@ using Avalonia.VisualTree;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -718,9 +719,10 @@ public class MainControlTreeCommandsUiTests
                         pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
                         pastedGrandchild = FindTaskByTitle(vm, "Outline UI paste grandchild");
                         pastedSibling = FindTaskByTitle(vm, "Outline UI paste sibling");
+                        var currentParent = TestHelpers.GetTask(vm, parent.Id);
 
-                        return parent.Contains.Contains(pastedRoot.Id) &&
-                               parent.Contains.Contains(pastedSibling.Id) &&
+                        return currentParent.Contains.Contains(pastedRoot.Id) &&
+                               currentParent.Contains.Contains(pastedSibling.Id) &&
                                pastedRoot.Parents.Contains(parent.Id) &&
                                pastedRoot.Contains.Contains(pastedChild.Id) &&
                                pastedChild.Contains.Contains(pastedGrandchild.Id) &&
@@ -1372,9 +1374,9 @@ public class MainControlTreeCommandsUiTests
 
     [Test]
     [Arguments(3, "UnlockedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.SubTask22Id)]
-    [Arguments(4, "CompletedTree", MainWindowViewModelFixture.CompletedTaskId, MainWindowViewModelFixture.CompletedTaskId)]
-    [Arguments(5, "ArchivedTree", MainWindowViewModelFixture.ArchivedTask1Id, MainWindowViewModelFixture.ArchivedTask11Id)]
-    [Arguments(6, "LastOpenedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.RootTask2Id)]
+    [Arguments(5, "CompletedTree", MainWindowViewModelFixture.CompletedTaskId, MainWindowViewModelFixture.CompletedTaskId)]
+    [Arguments(6, "ArchivedTree", MainWindowViewModelFixture.ArchivedTask1Id, MainWindowViewModelFixture.ArchivedTask11Id)]
+    [Arguments(7, "LastOpenedTree", MainWindowViewModelFixture.RootTask2Id, MainWindowViewModelFixture.RootTask2Id)]
     public async Task TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work(
         int tabIndex,
         string treeName,
@@ -1884,50 +1886,57 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.DispatchAsync(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = true;
-                vm.DetailsAreOpen = true;
-                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = true;
+                    vm.DetailsAreOpen = true;
+                    TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
 
-                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
-                var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
-                await Assert.That(allTasksTree).IsNotNull();
-                await Assert.That(relationTree).IsNotNull();
-                await Assert.That(CountWrappers(vm.CurrentItemContains.SubTasks)).IsGreaterThan(0);
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
 
-                await ClickControlAsync(window, allTasksTree!);
-                var focused = relationTree!.Focus();
-                Dispatcher.UIThread.RunJobs();
-                await Assert.That(focused).IsTrue();
+                    var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                    var relationTree = view.FindControl<TreeView>("CurrentItemContainsTree");
+                    await Assert.That(allTasksTree).IsNotNull();
+                    await Assert.That(relationTree).IsNotNull();
+                    await Assert.That(CountWrappers(vm.CurrentItemContains.SubTasks)).IsGreaterThan(0);
 
-                PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
-                Dispatcher.UIThread.RunJobs();
+                    await ClickControlAsync(window, allTasksTree!);
+                    var focused = relationTree!.Focus();
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(focused).IsTrue();
 
-                await Assert.That(GetSelectedWrappers(relationTree).Count)
-                    .IsEqualTo(CountWrappers(vm.CurrentItemContains.SubTasks));
-                await Assert.That(GetSelectedWrappers(allTasksTree).Count)
-                    .IsNotEqualTo(CountWrappers(vm.CurrentAllTasksItems));
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    PressHotkey(window, Key.A, PhysicalKey.A, RawInputModifiers.Control);
+                    Dispatcher.UIThread.RunJobs();
+
+                    await Assert.That(GetSelectedWrappers(relationTree).Count)
+                        .IsEqualTo(CountWrappers(vm.CurrentItemContains.SubTasks));
+                    await Assert.That(GetSelectedWrappers(allTasksTree).Count)
+                        .IsNotEqualTo(CountWrappers(vm.CurrentAllTasksItems));
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
@@ -2376,6 +2385,7 @@ public class MainControlTreeCommandsUiTests
             "Last Created" => "LastCreatedTabItem",
             "Last Updated" => "LastUpdatedTabItem",
             "Unlocked" => "UnlockedTabItem",
+            "In Progress" => "InProgressTabItem",
             "Completed" => "CompletedTabItem",
             "Archived" => "ArchivedTabItem",
             "Last Opened" => "LastOpenedTabItem",
@@ -2391,9 +2401,10 @@ public class MainControlTreeCommandsUiTests
             "Last Created" => 1,
             "Last Updated" => 2,
             "Unlocked" => 3,
-            "Completed" => 4,
-            "Archived" => 5,
-            "Last Opened" => 6,
+            "In Progress" => 4,
+            "Completed" => 5,
+            "Archived" => 6,
+            "Last Opened" => 7,
             _ => 0
         };
     }
@@ -2591,10 +2602,12 @@ public class MainControlTreeCommandsUiTests
                 vm.UnlockedMode = true;
                 break;
             case "CompletedTree":
+                EnsureStatusFilterSelected(vm, DomainTaskStatus.Completed);
                 SetDateFilterAllTime(vm.CompletedDateFilter);
                 vm.CompletedMode = true;
                 break;
             case "ArchivedTree":
+                EnsureStatusFilterSelected(vm, DomainTaskStatus.Archived);
                 SetDateFilterAllTime(vm.ArchivedDateFilter);
                 vm.ArchivedMode = true;
                 break;
@@ -2960,6 +2973,7 @@ public class MainControlTreeCommandsUiTests
             }
             case "CompletedTree":
             {
+                EnsureStatusFilterSelected(vm, DomainTaskStatus.Completed);
                 SetDateFilterAllTime(vm.CompletedDateFilter);
 
                 var completedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.CompletedTaskId);
@@ -2983,6 +2997,7 @@ public class MainControlTreeCommandsUiTests
             }
             case "ArchivedTree":
             {
+                EnsureStatusFilterSelected(vm, DomainTaskStatus.Archived);
                 SetDateFilterAllTime(vm.ArchivedDateFilter);
                 break;
             }
@@ -3006,6 +3021,24 @@ public class MainControlTreeCommandsUiTests
         }
 
         return null;
+    }
+
+    private static void EnsureStatusFilterSelected(MainWindowViewModel vm, DomainTaskStatus status)
+    {
+        var filter = vm.StatusFilters.FirstOrDefault(item => item.Status == status)
+                     ?? throw new InvalidOperationException($"Status filter for {status} was not found.");
+        filter.ShowTasks = true;
+
+        if (status == DomainTaskStatus.Completed)
+        {
+            vm.ShowCompleted = true;
+        }
+        else if (status == DomainTaskStatus.Archived)
+        {
+            vm.ShowArchived = true;
+        }
+
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static bool IsExpandedRecursive(TaskWrapperViewModel wrapper)

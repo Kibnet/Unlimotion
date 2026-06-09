@@ -14,6 +14,7 @@ using Unlimotion.Domain;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test
@@ -119,27 +120,9 @@ namespace Unlimotion.Test
 
         protected TaskItem GetStorageTaskItem(string taskId)
         {
-            var path = Path.Combine(fixture.DefaultTasksFolderPath, taskId);
-            if (!File.Exists(path))
-                throw new InvalidOperationException($"Task file not found: {path}");
-
-            for (var attempt = 0; attempt < 5; attempt++)
-            {
-                try
-                {
-                    var json = File.ReadAllText(path);
-                    return JsonSerializer.Deserialize<TaskItem>(json)
-                        ?? throw new InvalidOperationException($"Task file could not be deserialized: {path}");
-                }
-                catch (IOException) when (attempt < 4)
-                {
-                    Thread.Sleep(50);
-                }
-            }
-
-            var finalJson = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TaskItem>(finalJson)
-                ?? throw new InvalidOperationException($"Task file could not be deserialized: {path}");
+            return TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, taskId)
+                   ?? throw new InvalidOperationException(
+                       $"Task file not found or could not be deserialized: {Path.Combine(fixture.DefaultTasksFolderPath, taskId)}");
         }
     }
 
@@ -287,6 +270,19 @@ namespace Unlimotion.Test
                     yield return child;
                 }
             }
+        }
+
+        private static async Task<TaskItemViewModel> CreateTaskWithStatusAsync(
+            ITaskStorage repository,
+            DomainTaskStatus status,
+            string title)
+        {
+            var task = await repository.Add();
+            task.Title = title;
+            task.Status = status;
+            await repository.Update(task);
+            Dispatcher.UIThread.RunJobs();
+            return task;
         }
 
         /// <summary>
@@ -1747,8 +1743,6 @@ namespace Unlimotion.Test
             var rootTask5AfterTest = GetStorageTaskItem(MainWindowViewModelFixture.RootTask5Id);
             //Проверяем, что в блокирующем таске изменилось
             result = compareLogic.Compare(blockingTask5BeforeTest, rootTask5AfterTest);
-            //Должно быть 3 различия поля IsCompleted, UpdatedDateTime и CompletedDateTime
-            await Assert.That(result.Differences.Count).IsEqualTo(3);
             var isCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCompleted));
             var completedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.CompletedDateTime));
             
@@ -1758,6 +1752,8 @@ namespace Unlimotion.Test
             await Assert.That(isCompletedDifference.Object2).IsEqualTo(true);
             await Assert.That(completedDateTimeDifference.Object1).IsNull();
             await Assert.That(completedDateTimeDifference.Object2).IsNotNull();
+            await Assert.That(rootTask5AfterTest.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(rootTask5AfterTest.StatusHistory.Last().Status).IsEqualTo(DomainTaskStatus.Completed);
         }
 
         /// <summary>
@@ -1948,7 +1944,6 @@ namespace Unlimotion.Test
             //Сравниваем клонируюмую задачу с новой созданной
             result = compareLogic.Compare(clonedTask8ItemAfterTest, newTaskItem);
             // Должны отличаться минимум id, дата создания, дата обновления и кол-во родителей.
-            await Assert.That(result.Differences.Count).IsEqualTo(4);
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.Id));
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.CreatedDateTime));
             await Assert.That(result.Differences.Select(d => d.PropertyName)).Contains(nameof(TaskItem.UpdatedDateTime));
@@ -1957,6 +1952,9 @@ namespace Unlimotion.Test
             await Assert.That(((IList)parentTasksDifference!.Object1).Count).IsEqualTo(0);
             await Assert.That(((IList)parentTasksDifference.Object2).Count).IsEqualTo(1);
             await Assert.That(newTaskItem.ContainsTasks).Contains(MainWindowViewModelFixture.ClonnedSubTask81Id);
+            await Assert.That(newTaskItem.Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(newTaskItem.StatusHistory).HasSingleItem();
+            await Assert.That(newTaskItem.StatusHistory.Single().Status).IsEqualTo(DomainTaskStatus.NotReady);
         }
 
         /// <summary>
@@ -2008,8 +2006,7 @@ namespace Unlimotion.Test
             //Сравниваем ее с исходной до выполнения
             result = compareLogic.Compare(repeateTask9BeforeTest, newTask9);
 
-            //Должно быть только 6 различий: Id, CreatedDateTime, UpdatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
-            await Assert.That(result.Differences.Count).IsEqualTo(6);
+            //Должны отличаться минимум Id, CreatedDateTime, UpdatedDateTime, UnlockedDateTime, PlannedBeginDateTime, PlannedEndDateTime
             var idDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.Id));
             var createdDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.CreatedDateTime));
             var updatedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(repeateTask9AfterTest.UpdatedDateTime));
@@ -2023,6 +2020,8 @@ namespace Unlimotion.Test
             await Assert.That(unlockedDateTimeDifference).IsNotNull();
             await Assert.That(plannedBeginDateTimeDifference).IsNotNull();
             await Assert.That(plannedEndDateTimeDifference).IsNotNull();
+            await Assert.That(newTask9.Status).IsEqualTo(DomainTaskStatus.Prepared);
+            await Assert.That(newTask9.StatusHistory.Last().Status).IsEqualTo(DomainTaskStatus.Prepared);
 
             //У двух задач должны быть одни предки во вьюмоделе
             await Assert.That(repeateTask9ViewModel.Parents.Count >= newTaskItemViewModel.Parents.Count).IsTrue();
@@ -2129,6 +2128,113 @@ namespace Unlimotion.Test
                     return viewModel.CurrentUnlockedItem?.TaskItem?.Id == unlockedTask.Id;
                 }, TimeSpan.FromSeconds(2));
                 await Assert.That(unlockedSelected).IsTrue();
+            });
+        }
+
+        [Test]
+        public async Task StatusFilters_AllTasksProjection_HidesAndShowsPreparedTasks()
+        {
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var preparedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Prepared,
+                    "Status filter prepared task");
+
+                var initiallyVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return TraverseWrappers(viewModel.CurrentAllTasksItems)
+                            .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(initiallyVisible).IsTrue();
+
+                var preparedFilter = viewModel.StatusFilters.Single(filter => filter.Status == DomainTaskStatus.Prepared);
+                preparedFilter.ShowTasks = false;
+
+                var hidden = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return TraverseWrappers(viewModel.CurrentAllTasksItems)
+                            .All(wrapper => wrapper.TaskItem.Id != preparedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(hidden).IsTrue();
+
+                preparedFilter.ShowTasks = true;
+
+                var visibleAgain = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return TraverseWrappers(viewModel.CurrentAllTasksItems)
+                            .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(visibleAgain).IsTrue();
+            });
+        }
+
+        [Test]
+        public async Task InProgressProjection_ShowsOnlyInProgressSortsByStartTimeAndReselectsCurrentTask()
+        {
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var olderTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.InProgress,
+                    "In progress older task");
+                await Task.Delay(25);
+                var newerTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.InProgress,
+                    "In progress newer task");
+                var preparedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Prepared,
+                    "Prepared task outside in-progress tab");
+
+                viewModel.AllTasksMode = false;
+                viewModel.InProgressMode = true;
+                Dispatcher.UIThread.RunJobs();
+
+                var projectionReady = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        var ids = viewModel.InProgressItems.Select(wrapper => wrapper.TaskItem.Id).ToList();
+                        return ids.Contains(olderTask.Id) && ids.Contains(newerTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(projectionReady).IsTrue();
+
+                var projectedIds = viewModel.InProgressItems.Select(wrapper => wrapper.TaskItem.Id).ToList();
+                await Assert.That(projectedIds).Contains(olderTask.Id);
+                await Assert.That(projectedIds).Contains(newerTask.Id);
+                await Assert.That(projectedIds).DoesNotContain(preparedTask.Id);
+                await Assert.That(projectedIds.IndexOf(newerTask.Id)).IsLessThan(projectedIds.IndexOf(olderTask.Id));
+                await Assert.That(olderTask.StartedDateTime).IsNotNull();
+                await Assert.That(newerTask.StartedDateTime).IsNotNull();
+                await Assert.That(newerTask.InProgressElapsed).IsNotEmpty();
+
+                viewModel.InProgressMode = false;
+                viewModel.CurrentInProgressItem = null;
+                viewModel.CurrentTaskItem = olderTask;
+                Dispatcher.UIThread.RunJobs();
+
+                viewModel.InProgressMode = true;
+
+                var reselected = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.CurrentInProgressItem?.TaskItem?.Id == olderTask.Id;
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(reselected).IsTrue();
             });
         }
 

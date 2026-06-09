@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using SignalR.EasyUse.Interface;
+using Unlimotion.Domain;
 
 namespace Unlimotion.Interface
 {
@@ -16,13 +17,13 @@ namespace Unlimotion.Interface
         public string UserId { get; set; } = null!;
         public string Title { get; set; } = null!;
         public string Description { get; set; } = null!;
-        public bool? IsCompleted { get; set; } = false;
+        public TaskStatus Status { get; set; } = TaskStatus.NotReady;
+        public List<TaskStatusHistoryEntry> StatusHistory { get; set; } = new();
+        public List<TaskCompletionCriterion> CompletionCriteria { get; set; } = new();
         public bool IsCanBeCompleted { get; set; } = false;
         public DateTimeOffset CreatedDateTime { get; set; }
         public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
-        public DateTimeOffset? CompletedDateTime { get; set; }
-        public DateTimeOffset? ArchiveDateTime { get; set; }
         public DateTimeOffset? PlannedBeginDateTime { get; set; }
         public DateTimeOffset? PlannedEndDateTime { get; set; }
         public TimeSpan? PlannedDuration { get; set; }

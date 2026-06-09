@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Unlimotion.ViewModel.Search;
 using Unlimotion.ViewModel.Localization;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
@@ -37,11 +38,13 @@ namespace Unlimotion.ViewModel
         private DisposableList connectionDisposableList = new DisposableListRealization();
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
+        private bool _isInProgressTabInitialized;
         private bool _isLastCreatedTabInitialized;
         private bool _isLastUpdatedTabInitialized;
         private bool _isRoadmapTabInitialized;
         private bool _isUnlockedTabInitialized;
         private bool _isLastOpenedTabInitialized;
+        private bool _isSynchronizingStatusFilters;
         private readonly bool _defaultShowCompleted;
         private readonly bool _defaultShowArchived;
         private readonly bool? _defaultShowWanted;
@@ -73,6 +76,7 @@ namespace Unlimotion.ViewModel
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
+            InProgressItems = EmptyTaskWrappers;
             CompletedItems = EmptyTaskWrappers;
             ArchivedItems = EmptyTaskWrappers;
             LastCreatedItems = EmptyTaskWrappers;
@@ -83,8 +87,12 @@ namespace Unlimotion.ViewModel
             ResetTaskFiltersCommand = ReactiveCommand.Create(ConfirmResetTaskFilters)
                 .AddToDisposeAndReturn(this);
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
-            ShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
-            ShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
+            var configuredShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
+            var configuredShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
+            var statusFilterSelections = LoadStatusFilterSelections(configuredShowCompleted, configuredShowArchived);
+            StatusFilters = TaskStatusFilter.GetDefinitions(statusFilterSelections);
+            ShowCompleted = IsStatusFilterSelected(DomainTaskStatus.Completed);
+            ShowArchived = IsStatusFilterSelected(DomainTaskStatus.Archived);
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
             _defaultShowCompleted = ShowCompleted;
             _defaultShowArchived = ShowArchived;
@@ -94,11 +102,24 @@ namespace Unlimotion.ViewModel
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortName)) ?? SortDefinitions.First();
             CurrentSortDefinitionForUnlocked = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortNameForUnlocked)) ?? SortDefinitions.First();
 
+            StatusFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .Subscribe(_ => SyncLegacyVisibilityFromStatusFilters())
+                .AddToDispose(this);
+
             this.WhenAnyValue(m => m.ShowCompleted)
-                .Subscribe(b => _configuration?.GetSection("AllTasks:ShowCompleted").Set(b))
+                .Subscribe(b =>
+                {
+                    _configuration?.GetSection("AllTasks:ShowCompleted").Set(b);
+                    SyncStatusFilterFromLegacyVisibility(DomainTaskStatus.Completed, b);
+                })
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowArchived)
-                .Subscribe(b => _configuration?.GetSection("AllTasks:ShowArchived").Set(b))
+                .Subscribe(b =>
+                {
+                    _configuration?.GetSection("AllTasks:ShowArchived").Set(b);
+                    SyncStatusFilterFromLegacyVisibility(DomainTaskStatus.Archived, b);
+                })
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowWanted)
                 .Subscribe(b => _configuration?.GetSection("AllTasks:ShowWanted").Set(b))
@@ -174,6 +195,104 @@ namespace Unlimotion.ViewModel
             {
                 filter.RefreshLocalization();
             }
+
+            foreach (var filter in StatusFilters)
+            {
+                filter.RefreshLocalization();
+            }
+        }
+
+        private Dictionary<DomainTaskStatus, bool> LoadStatusFilterSelections(
+            bool showCompletedFallback,
+            bool showArchivedFallback)
+        {
+            var selections = new Dictionary<DomainTaskStatus, bool>
+            {
+                [DomainTaskStatus.NotReady] = true,
+                [DomainTaskStatus.Prepared] = true,
+                [DomainTaskStatus.InProgress] = true,
+                [DomainTaskStatus.Completed] = showCompletedFallback,
+                [DomainTaskStatus.Archived] = showArchivedFallback
+            };
+
+            foreach (var status in Enum.GetValues<DomainTaskStatus>())
+            {
+                var configured = _configuration?
+                    .GetSection($"AllTasks:StatusFilters:{status}")
+                    .Get<bool?>();
+
+                if (configured.HasValue)
+                {
+                    selections[status] = configured.Value;
+                }
+            }
+
+            return selections;
+        }
+
+        private bool IsStatusFilterSelected(DomainTaskStatus status) =>
+            StatusFilters.FirstOrDefault(filter => filter.Status == status)?.ShowTasks == true;
+
+        private void SyncLegacyVisibilityFromStatusFilters()
+        {
+            if (_isSynchronizingStatusFilters)
+            {
+                return;
+            }
+
+            _isSynchronizingStatusFilters = true;
+            try
+            {
+                if (ShowCompleted != IsStatusFilterSelected(DomainTaskStatus.Completed))
+                {
+                    ShowCompleted = IsStatusFilterSelected(DomainTaskStatus.Completed);
+                }
+
+                if (ShowArchived != IsStatusFilterSelected(DomainTaskStatus.Archived))
+                {
+                    ShowArchived = IsStatusFilterSelected(DomainTaskStatus.Archived);
+                }
+
+                PersistStatusFilters();
+            }
+            finally
+            {
+                _isSynchronizingStatusFilters = false;
+            }
+        }
+
+        private void SyncStatusFilterFromLegacyVisibility(DomainTaskStatus status, bool selected)
+        {
+            if (_isSynchronizingStatusFilters)
+            {
+                return;
+            }
+
+            _isSynchronizingStatusFilters = true;
+            try
+            {
+                var filter = StatusFilters.FirstOrDefault(item => item.Status == status);
+                if (filter != null && filter.ShowTasks != selected)
+                {
+                    filter.ShowTasks = selected;
+                }
+
+                PersistStatusFilters();
+            }
+            finally
+            {
+                _isSynchronizingStatusFilters = false;
+            }
+        }
+
+        private void PersistStatusFilters()
+        {
+            foreach (var filter in StatusFilters)
+            {
+                _configuration?
+                    .GetSection($"AllTasks:StatusFilters:{filter.Status}")
+                    .Set(filter.ShowTasks);
+            }
         }
 
         private void RegisterCommands()
@@ -234,6 +353,20 @@ namespace Unlimotion.ViewModel
             }).AddToDisposeAndReturn(connectionDisposableList);
 
             Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));
+            CompleteCurrentTaskCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                if (CurrentTaskItem == null)
+                {
+                    return;
+                }
+
+                CurrentTaskItem.Status = DomainTaskStatus.Completed;
+                await taskRepository!.Update(CurrentTaskItem);
+                if (CurrentTaskItem.Status != DomainTaskStatus.Completed)
+                {
+                    ManagerWrapper?.ErrorToast(L10n.Get("TaskStatusTransitionBlocked"));
+                }
+            }).AddToDisposeAndReturn(connectionDisposableList);
             ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))
                 .AddToDisposeAndReturn(connectionDisposableList);
@@ -279,6 +412,14 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             this.WhenAnyValue(m => m.CurrentUnlockedItem)
+                .Subscribe(m =>
+                {
+                    if (m != null && CurrentTaskItem != m?.TaskItem)
+                        CurrentTaskItem = m?.TaskItem;
+                })
+                .AddToDispose(connectionDisposableList);
+
+            this.WhenAnyValue(m => m.CurrentInProgressItem)
                 .Subscribe(m =>
                 {
                     if (m != null && CurrentTaskItem != m?.TaskItem)
@@ -337,6 +478,7 @@ namespace Unlimotion.ViewModel
             Observable.Merge(
                     this.WhenAnyValue(m => m.AllTasksMode),
                     this.WhenAnyValue(m => m.UnlockedMode),
+                    this.WhenAnyValue(m => m.InProgressMode),
                     this.WhenAnyValue(m => m.CompletedMode),
                     this.WhenAnyValue(m => m.ArchivedMode),
                     this.WhenAnyValue(m => m.GraphMode),
@@ -429,6 +571,7 @@ namespace Unlimotion.ViewModel
                 connectionDisposableList.Disposables.Clear();
                 _isCompletedTabInitialized = false;
                 _isArchivedTabInitialized = false;
+                _isInProgressTabInitialized = false;
                 _isLastCreatedTabInitialized = false;
                 _isLastUpdatedTabInitialized = false;
                 _isRoadmapTabInitialized = false;
@@ -445,13 +588,18 @@ namespace Unlimotion.ViewModel
                         .Select(d => d.Comparer);
 
                 //Set All Tasks Filter
-                var taskFilter = this.WhenAnyValue(m => m.ShowCompleted, m => m.ShowArchived)
+                var taskFilter = StatusFilters.ToObservableChangeSet()
+                    .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                    .ToCollection()
                     .Select(filters =>
                     {
+                        var selectedStatuses = filters
+                            .Where(static filter => filter.ShowTasks)
+                            .Select(static filter => filter.Status)
+                            .ToHashSet();
+
                         bool Predicate(TaskItemViewModel task) =>
-                            task.IsCompleted == false ||
-                            ((task.IsCompleted == true) && filters.Item1) ||
-                            ((task.IsCompleted == null) && filters.Item2);
+                            selectedStatuses.Contains(task.Status);
 
                         return (Func<TaskItemViewModel, bool>)Predicate;
                     });
@@ -836,8 +984,8 @@ namespace Unlimotion.ViewModel
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
                     m => m.IsCanBeCompleted,
-                    m => m.IsCompleted,
-                    m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    m => m.Status,
+                    m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                 .Filter(taskFilter)
                 .Filter(searchTopFilter)
                 .Filter(emojiRootFilter)
@@ -890,7 +1038,7 @@ namespace Unlimotion.ViewModel
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         m => m.IsCanBeCompleted,
-                        m => m.IsCompleted,
+                        m => m.Status,
                         m => m.UnlockedDateTime,
                         m => m.PlannedBeginDateTime,
                         m => m.Wanted,
@@ -900,6 +1048,7 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .Filter(taskFilter)
                     .Filter(unlockedTimeFilter)
                     .Filter(durationFilter)
                     .Filter(emojiFilter)
@@ -948,6 +1097,47 @@ namespace Unlimotion.ViewModel
                 });
 
             #endregion Unlocked
+
+            void ActivateInProgressProjection()
+            {
+                if (_isInProgressTabInitialized)
+                {
+                    return;
+                }
+
+                _isInProgressTabInitialized = true;
+                taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Status,
+                        x => x.StartedDateTime))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(
+                        x => x.Title,
+                        x => x.Description,
+                        x => x.GetAllEmoji))
+                    .Filter(m => m.Status == DomainTaskStatus.InProgress)
+                    .Filter(taskFilter)
+                    .Filter(emojiFilter)
+                    .Filter(emojiExcludeFilter)
+                    .Filter(searchTopFilter)
+                    .Transform(item =>
+                    {
+                        var actions = TrackExpansionState(new TaskWrapperActions
+                        {
+                            ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
+                            RemoveAction = RemoveTask,
+                            GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                        }, "InProgressTree");
+                        var wrapper = new TaskWrapperViewModel(null, item, actions);
+                        return wrapper;
+                    })
+                    .SortBy(m => m.TaskItem.StartedDateTime!, SortDirection.Descending)
+                    .Bind(out _inProgressItems)
+                    .Subscribe()
+                    .AddToDispose(connectionDisposableList);
+
+                InProgressItems = _inProgressItems;
+            }
             
             this.WhenAnyValue(m => m.LastCreatedDateFilter.CurrentOption, m => m.LastCreatedDateFilter.IsCustom)
                 .Subscribe(filter =>
@@ -1008,12 +1198,13 @@ namespace Unlimotion.ViewModel
                 _isCompletedTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
-                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == true))
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.Status, status => status.Value == DomainTaskStatus.Completed))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
-                    .Filter(m => m.IsCompleted == true)
+                    .Filter(m => m.Status == DomainTaskStatus.Completed)
+                    .Filter(taskFilter)
                     .Filter(completedDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1047,12 +1238,13 @@ namespace Unlimotion.ViewModel
                 _isArchivedTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
-                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCompleted, (c) => c.Value == null))
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.Status, status => status.Value == DomainTaskStatus.Archived))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
-                    .Filter(m => m.IsCompleted == null)
+                    .Filter(m => m.Status == DomainTaskStatus.Archived)
+                    .Filter(taskFilter)
                     .Filter(archiveDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1086,8 +1278,8 @@ namespace Unlimotion.ViewModel
                 _isLastCreatedTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
-                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
-                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.Status,
+                        m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
@@ -1126,8 +1318,8 @@ namespace Unlimotion.ViewModel
                 _isLastUpdatedTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
-                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.IsCompleted,
-                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                    .AutoRefreshOnObservable(m => m.WhenAny(m => m.IsCanBeCompleted, m => m.Status,
+                        m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.UpdatedDateTime))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
@@ -1167,6 +1359,7 @@ namespace Unlimotion.ViewModel
                 _isRoadmapTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status))
                     .Filter(taskFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1192,8 +1385,8 @@ namespace Unlimotion.ViewModel
                     .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
                     .AutoRefreshOnObservable(m => m.WhenAny(
                         m => m.IsCanBeCompleted,
-                        m => m.IsCompleted,
-                        m => m.UnlockedDateTime, (c, d, u) => c.Value && (d.Value == false)))
+                        m => m.Status,
+                        m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                     .Filter(taskFilter)
                     .Filter(roadmapRootFilter)
                     .Filter(emojiExcludeFilter)
@@ -1251,6 +1444,12 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => ActivateUnlockedProjection())
                 .AddToDispose(connectionDisposableList);
 
+            this.WhenAnyValue(m => m.InProgressMode)
+                .Where(mode => mode)
+                .Take(1)
+                .Subscribe(_ => ActivateInProgressProjection())
+                .AddToDispose(connectionDisposableList);
+
             this.WhenAnyValue(m => m.GraphMode)
                 .Where(mode => mode)
                 .Take(1)
@@ -1278,9 +1477,11 @@ namespace Unlimotion.ViewModel
                 LastOpenedSource
                     .Connect()
                     .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
-                        x => x.IsCompleted,
+                        x => x.Status,
                         x => x.CompletedDateTime,
                         x => x.ArchiveDateTime))
+                    .Filter(taskFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
+                        wrapper => predicate(wrapper.TaskItem))))
                     .Filter(lastOpenedSearchFilter)
                     .Reverse()
                     .Bind(out _lastOpenedItems)
@@ -1440,6 +1641,7 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
                 await taskStorage.Init();
+                NotifyTaskStatusMigrationIfNeeded(taskStorage);
                 foreach (var taskItem in taskRepository.Tasks.Items)
                 {
                     AttachTaskContext(taskItem);
@@ -1454,9 +1656,25 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        private void NotifyTaskStatusMigrationIfNeeded(ITaskStorage taskStorage)
+        {
+            if (_configuration.GetSection("TaskStatusModel:MigrationNoticeShown").Get<bool?>() == true)
+            {
+                return;
+            }
+
+            if (!taskStorage.StatusModelMigrationWasApplied)
+            {
+                return;
+            }
+
+            ManagerWrapper.SuccessToast(L10n.Get("TaskStatusMigrationNotice"));
+            _configuration.GetSection("TaskStatusModel:MigrationNoticeShown").Set(true);
+        }
+
         public void SelectCurrentTask()
         {
-            if (AllTasksMode ^ UnlockedMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastUpdatedMode ^ LastOpenedMode)
+            if (AllTasksMode ^ UnlockedMode ^ InProgressMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastUpdatedMode ^ LastOpenedMode)
             {
                 if (AllTasksMode)
                 {
@@ -1466,6 +1684,11 @@ namespace Unlimotion.ViewModel
                 {
                     if (CurrentUnlockedItem?.TaskItem != CurrentTaskItem)
                         CurrentUnlockedItem = FindTaskWrapperViewModel(CurrentTaskItem, UnlockedItems);
+                }
+                else if (InProgressMode)
+                {
+                    if (CurrentInProgressItem?.TaskItem != CurrentTaskItem)
+                        CurrentInProgressItem = FindTaskWrapperViewModel(CurrentTaskItem, InProgressItems);
                 }
                 else if (CompletedMode)
                 {
@@ -1526,6 +1749,10 @@ namespace Unlimotion.ViewModel
             {
                 ResetUnlockedTabFilters();
             }
+            else if (InProgressMode)
+            {
+                ResetInProgressTabFilters();
+            }
             else if (CompletedMode)
             {
                 ResetCompletedTabFilters();
@@ -1576,6 +1803,12 @@ namespace Unlimotion.ViewModel
             ResetToggleFilters(DurationFilters);
         }
 
+        private void ResetInProgressTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+        }
+
         private void ResetCompletedTabFilters()
         {
             ResetSearchFilter();
@@ -1622,8 +1855,21 @@ namespace Unlimotion.ViewModel
 
         private void ResetCompletionVisibilityFilters()
         {
-            ShowCompleted = _defaultShowCompleted;
-            ShowArchived = _defaultShowArchived;
+            SetStatusFilterSelection(DomainTaskStatus.NotReady, true);
+            SetStatusFilterSelection(DomainTaskStatus.Prepared, true);
+            SetStatusFilterSelection(DomainTaskStatus.InProgress, true);
+            SetStatusFilterSelection(DomainTaskStatus.Completed, _defaultShowCompleted);
+            SetStatusFilterSelection(DomainTaskStatus.Archived, _defaultShowArchived);
+            SyncLegacyVisibilityFromStatusFilters();
+        }
+
+        private void SetStatusFilterSelection(DomainTaskStatus status, bool selected)
+        {
+            var filter = StatusFilters.FirstOrDefault(item => item.Status == status);
+            if (filter != null && filter.ShowTasks != selected)
+            {
+                filter.ShowTasks = selected;
+            }
         }
 
         private static void ResetToggleFilters(IEnumerable<EmojiFilter>? filters)
@@ -1889,6 +2135,7 @@ namespace Unlimotion.ViewModel
                    CurrentLastCreated?.TaskItem ??
                    CurrentLastUpdated?.TaskItem ??
                    CurrentUnlockedItem?.TaskItem ??
+                   CurrentInProgressItem?.TaskItem ??
                    CurrentCompletedItem?.TaskItem ??
                    CurrentArchivedItem?.TaskItem ??
                    CurrentLastOpenedItem?.TaskItem ??
@@ -2016,13 +2263,16 @@ namespace Unlimotion.ViewModel
                 created.Description = node.Description;
             }
 
-            if (node.IsCompleted.HasValue)
+            if (node.Status.HasValue)
             {
-                created.IsCompleted = node.IsCompleted.Value;
-                created.ArchiveDateTime = null;
-                created.CompletedDateTime = node.IsCompleted.Value
-                    ? created.CompletedDateTime ?? DateTimeOffset.UtcNow
-                    : null;
+                created.Status = node.Status.Value;
+                created.StatusHistory.Clear();
+                created.StatusHistory.Add(new Unlimotion.Domain.TaskStatusHistoryEntry
+                {
+                    Status = node.Status.Value,
+                    ChangedAt = DateTimeOffset.UtcNow,
+                    Author = created.Model.UserId ?? "local-user"
+                });
             }
 
             var createdId = created.Id;
@@ -2338,6 +2588,7 @@ namespace Unlimotion.ViewModel
         public bool IsTasksLoading { get; private set; }
         public bool AllTasksMode { get; set; }
         public bool UnlockedMode { get; set; }
+        public bool InProgressMode { get; set; }
         public bool CompletedMode { get; set; }
         public bool ArchivedMode { get; set; }
         public bool GraphMode { get; set; }
@@ -2356,6 +2607,9 @@ namespace Unlimotion.ViewModel
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
+
+        private ReadOnlyObservableCollection<TaskWrapperViewModel> _inProgressItems = EmptyTaskWrappers;
+        public ReadOnlyObservableCollection<TaskWrapperViewModel> InProgressItems { get; set; }
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _completedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CompletedItems { get; set; }
@@ -2382,6 +2636,7 @@ namespace Unlimotion.ViewModel
         public TaskItemViewModel LastTaskItem { get; set; } = null!;
         public TaskWrapperViewModel? CurrentAllTasksItem { get; set; }
         public TaskWrapperViewModel? CurrentUnlockedItem { get; set; }
+        public TaskWrapperViewModel? CurrentInProgressItem { get; set; }
         public TaskWrapperViewModel? CurrentCompletedItem { get; set; }
         public TaskWrapperViewModel? CurrentArchivedItem { get; set; }
         public TaskWrapperViewModel? CurrentLastCreated { get; set; }
@@ -2407,6 +2662,8 @@ namespace Unlimotion.ViewModel
         public ICommand MoveToPath { get; set; } = null!;
 
         public ICommand Remove { get; set; } = null!;
+
+        public ICommand CompleteCurrentTaskCommand { get; set; } = null!;
 
         public ICommand ExpandCurrentNestedCommand { get; set; } = null!;
 
@@ -2463,6 +2720,7 @@ namespace Unlimotion.ViewModel
 
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public ReadOnlyObservableCollection<DurationFilter> DurationFilters { get; set; } = DurationFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> StatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
         public long TitleFocusRequestVersion { get; private set; }
 

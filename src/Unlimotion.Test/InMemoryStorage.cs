@@ -60,13 +60,27 @@ public class InMemoryStorage : IStorage
             UserId = taskItem.UserId,
             Title = taskItem.Title,
             Description = taskItem.Description,
-            IsCompleted = taskItem.IsCompleted,
+            Status = taskItem.Status,
+            StatusHistory = taskItem.StatusHistory?
+                .Select(entry => new TaskStatusHistoryEntry
+                {
+                    Status = entry.Status,
+                    ChangedAt = entry.ChangedAt,
+                    Author = entry.Author
+                })
+                .ToList() ?? new(),
+            CompletionCriteria = taskItem.CompletionCriteria?
+                .Select(criterion => new TaskCompletionCriterion
+                {
+                    Id = criterion.Id,
+                    Text = criterion.Text,
+                    IsSatisfied = criterion.IsSatisfied
+                })
+                .ToList() ?? new(),
             IsCanBeCompleted = taskItem.IsCanBeCompleted,
             CreatedDateTime = taskItem.CreatedDateTime,
             UpdatedDateTime = taskItem.UpdatedDateTime,
             UnlockedDateTime = taskItem.UnlockedDateTime,
-            CompletedDateTime = taskItem.CompletedDateTime,
-            ArchiveDateTime = taskItem.ArchiveDateTime,
             PlannedBeginDateTime = taskItem.PlannedBeginDateTime,
             PlannedEndDateTime = taskItem.PlannedEndDateTime,
             PlannedDuration = taskItem.PlannedDuration,
