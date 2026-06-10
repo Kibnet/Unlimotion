@@ -109,6 +109,9 @@
   <data name="ExpandCurrentNested" xml:space="preserve"><value>Развернуть вложенные текущего</value></data>
   <data name="FileStorageNoAccess" xml:space="preserve"><value>Нет доступа к каталогу: {0}</value></data>
   <data name="FindTask" xml:space="preserve"><value>Найти задачу</value></data>
+  <data name="EmojiFilterSearchWatermark" xml:space="preserve"><value>Найти тег</value></data>
+  <data name="EmojiExcludeFilterSearchWatermark" xml:space="preserve"><value>Исключить тег</value></data>
+  <data name="EmojiFilterNoMatches" xml:space="preserve"><value>Ничего не найдено</value></data>
   <data name="Filters" xml:space="preserve"><value>Фильтры</value></data>
   <data name="FilterDate" xml:space="preserve"><value>Дата</value></data>
   <data name="FilterState" xml:space="preserve"><value>Состояние</value></data>
