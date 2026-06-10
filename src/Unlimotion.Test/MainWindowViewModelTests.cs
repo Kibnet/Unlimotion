@@ -279,10 +279,71 @@ namespace Unlimotion.Test
         {
             var task = await repository.Add();
             task.Title = title;
-            task.Status = status;
-            await repository.Update(task);
+            var isInitializedProvider = task.IsInitializedProvider;
+            task.IsInitializedProvider = () => false;
+            try
+            {
+                task.Status = status;
+                await repository.Update(task);
+            }
+            finally
+            {
+                task.IsInitializedProvider = isInitializedProvider;
+            }
+
+            Dispatcher.UIThread.RunJobs();
+            var updated = repository.Tasks.Lookup(task.Id);
+            return updated.HasValue ? updated.Value : task;
+        }
+
+        private static TaskItemViewModel MoveLatestStatusHistoryEntry(
+            TaskItemViewModel task,
+            DomainTaskStatus status,
+            DateTimeOffset changedAt)
+        {
+            var entry = task.StatusHistory
+                .Where(historyEntry => historyEntry.Status == status)
+                .OrderBy(historyEntry => historyEntry.ChangedAt)
+                .LastOrDefault()
+                ?? throw new InvalidOperationException($"Status history entry for {status} was not found.");
+
+            entry.ChangedAt = changedAt;
+            if (status == DomainTaskStatus.Completed)
+            {
+                task.CompletedDateTime = changedAt;
+            }
+            else if (status == DomainTaskStatus.Archived)
+            {
+                task.ArchiveDateTime = changedAt;
+            }
+
             Dispatcher.UIThread.RunJobs();
             return task;
+        }
+
+        private static void EnsureStatusFilterSelected(MainWindowViewModel viewModel, DomainTaskStatus status)
+        {
+            var filter = viewModel.StatusFilters.FirstOrDefault(item => item.Status == status)
+                         ?? throw new InvalidOperationException($"Status filter for {status} was not found.");
+            filter.ShowTasks = true;
+
+            if (status == DomainTaskStatus.Completed)
+            {
+                viewModel.ShowCompleted = true;
+            }
+            else if (status == DomainTaskStatus.Archived)
+            {
+                viewModel.ShowArchived = true;
+            }
+
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        private static void SetDateFilterAllTime(DateFilter filter)
+        {
+            filter.CurrentOption = DateFilterDefinition.AllTime;
+            filter.SetDateTimes(DateFilterDefinition.AllTime);
+            Dispatcher.UIThread.RunJobs();
         }
 
         /// <summary>
@@ -2235,6 +2296,103 @@ namespace Unlimotion.Test
                     },
                     TimeSpan.FromSeconds(2));
                 await Assert.That(reselected).IsTrue();
+            });
+        }
+
+        [Test]
+        public async Task CompletedAndArchivedProjections_DateFiltersCanRevealOlderStatusHistoryTasks()
+        {
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var oldTimestamp = DateTimeOffset.UtcNow.AddDays(-7);
+                var oldCompletedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Completed,
+                    "Completed task outside today");
+                var todayCompletedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Completed,
+                    "Completed task today");
+
+                var oldArchivedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Archived,
+                    "Archived task outside today");
+                var todayArchivedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Archived,
+                    "Archived task today");
+
+                oldCompletedTask = MoveLatestStatusHistoryEntry(
+                    oldCompletedTask,
+                    DomainTaskStatus.Completed,
+                    oldTimestamp);
+                oldArchivedTask = MoveLatestStatusHistoryEntry(
+                    oldArchivedTask,
+                    DomainTaskStatus.Archived,
+                    oldTimestamp);
+                await Assert.That(oldCompletedTask.CompletedDateTime?.UtcDateTime.Date)
+                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
+                await Assert.That(oldArchivedTask.ArchiveDateTime?.UtcDateTime.Date)
+                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
+
+                EnsureStatusFilterSelected(viewModel, DomainTaskStatus.Completed);
+                viewModel.AllTasksMode = false;
+                viewModel.CompletedMode = true;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(viewModel.CompletedDateFilter.From).IsEqualTo(DateTime.Today);
+                await Assert.That(viewModel.CompletedDateFilter.To).IsEqualTo(DateTime.Today);
+
+                var completedTodayVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.CompletedItems.Any(wrapper => wrapper.TaskItem.Id == todayCompletedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(completedTodayVisible).IsTrue();
+                await Assert.That(viewModel.CompletedItems.Select(wrapper => wrapper.TaskItem.Id))
+                    .DoesNotContain(oldCompletedTask.Id);
+
+                SetDateFilterAllTime(viewModel.CompletedDateFilter);
+                var oldCompletedVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.CompletedItems.Any(wrapper => wrapper.TaskItem.Id == oldCompletedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldCompletedVisible).IsTrue();
+
+                EnsureStatusFilterSelected(viewModel, DomainTaskStatus.Archived);
+                viewModel.CompletedMode = false;
+                viewModel.ArchivedMode = true;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(viewModel.ArchivedDateFilter.From).IsEqualTo(DateTime.Today);
+                await Assert.That(viewModel.ArchivedDateFilter.To).IsEqualTo(DateTime.Today);
+
+                var archivedTodayVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.ArchivedItems.Any(wrapper => wrapper.TaskItem.Id == todayArchivedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(archivedTodayVisible).IsTrue();
+                await Assert.That(viewModel.ArchivedItems.Select(wrapper => wrapper.TaskItem.Id))
+                    .DoesNotContain(oldArchivedTask.Id);
+
+                SetDateFilterAllTime(viewModel.ArchivedDateFilter);
+                var oldArchivedVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.ArchivedItems.Any(wrapper => wrapper.TaskItem.Id == oldArchivedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldArchivedVisible).IsTrue();
             });
         }
 

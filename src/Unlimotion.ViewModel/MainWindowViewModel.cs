@@ -809,6 +809,7 @@ namespace Unlimotion.ViewModel
 
             var archiveDateFilter = this.WhenAnyValue(m => m.ArchivedDateFilter.From, m => m.ArchivedDateFilter.To,
                     m => m.ArchivedDateFilter.IsCustom)
+                .StartWith((ArchivedDateFilter.From, ArchivedDateFilter.To, ArchivedDateFilter.IsCustom))
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)
@@ -1082,6 +1083,7 @@ namespace Unlimotion.ViewModel
 
             var completedDateFilter = this.WhenAnyValue(m => m.CompletedDateFilter.From, m => m.CompletedDateFilter.To,
                     m => m.CompletedDateFilter.IsCustom)
+                .StartWith((CompletedDateFilter.From, CompletedDateFilter.To, CompletedDateFilter.IsCustom))
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)
@@ -1148,6 +1150,7 @@ namespace Unlimotion.ViewModel
 
             var lastCreatedDateFilter = this.WhenAnyValue(m => m.LastCreatedDateFilter.From,
                     m => m.LastCreatedDateFilter.To, m => m.LastCreatedDateFilter.IsCustom)
+                .StartWith((LastCreatedDateFilter.From, LastCreatedDateFilter.To, LastCreatedDateFilter.IsCustom))
 
                 .Select(filter =>
                 {
@@ -1172,6 +1175,7 @@ namespace Unlimotion.ViewModel
 
             var lastUpdatedDateFilter = this.WhenAnyValue(m => m.LastUpdatedDateFilter.From,
                     m => m.LastUpdatedDateFilter.To, m => m.LastUpdatedDateFilter.IsCustom)
+                .StartWith((LastUpdatedDateFilter.From, LastUpdatedDateFilter.To, LastUpdatedDateFilter.IsCustom))
                 .Select(filter =>
                 {
                     bool Predicate(TaskItemViewModel task)

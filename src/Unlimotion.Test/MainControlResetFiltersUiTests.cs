@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,6 +14,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test;
@@ -32,6 +34,19 @@ public class MainControlResetFiltersUiTests
         (6, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
         (7, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
         (8, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
+    ];
+
+    private static readonly (int TabIndex, string FiltersButtonAutomationId, string StatusFilterAutomationId)[] StatusFilterTabs =
+    [
+        (0, "AllTasksFiltersButton", "AllTasksStatusFilterComboBox"),
+        (1, "LastCreatedFiltersButton", "LastCreatedStatusFilterComboBox"),
+        (2, "LastUpdatedFiltersButton", "LastUpdatedStatusFilterComboBox"),
+        (3, "UnlockedFiltersButton", "UnlockedStatusFilterComboBox"),
+        (4, "InProgressFiltersButton", "InProgressStatusFilterComboBox"),
+        (5, "CompletedFiltersButton", "CompletedStatusFilterComboBox"),
+        (6, "ArchivedFiltersButton", "ArchivedStatusFilterComboBox"),
+        (7, "LastOpenedFiltersButton", "LastOpenedStatusFilterComboBox"),
+        (8, "RoadmapFiltersButton", "RoadmapStatusFilterComboBox")
     ];
 
     [Test]
@@ -55,6 +70,61 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 AssertResetButtonsOnTaskTabs(view);
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task StatusFilterComboBox_IsAvailableOnEveryTaskTab()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var expectedStatuses = Enum.GetValues<DomainTaskStatus>();
+                foreach (var (tabIndex, filtersButtonAutomationId, statusFilterAutomationId) in StatusFilterTabs)
+                {
+                    SelectTab(view, tabIndex);
+                    var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+                    var flyout = filtersButton.Flyout as Flyout
+                                  ?? throw new InvalidOperationException(
+                                      $"Filter button '{filtersButtonAutomationId}' must use a Flyout.");
+
+                    flyout.ShowAt(filtersButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var flyoutContent = flyout.Content as Control
+                                        ?? throw new InvalidOperationException(
+                                            $"Filter button '{filtersButtonAutomationId}' flyout content was not found.");
+                    var statusFilter = FindControlInDetachedContent<ComboBox>(
+                        flyoutContent,
+                        statusFilterAutomationId);
+
+                    await Assert.That(statusFilter).IsNotNull();
+                    await Assert.That(ReadStatusFilterStatuses(statusFilter!)).IsEquivalentTo(expectedStatuses);
+
+                    flyout.Hide();
+                    Dispatcher.UIThread.RunJobs();
+                }
             }
             finally
             {
@@ -535,6 +605,19 @@ public class MainControlResetFiltersUiTests
                     AutomationProperties.GetAutomationId(candidate),
                     automationId,
                     StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<DomainTaskStatus> ReadStatusFilterStatuses(ComboBox comboBox)
+    {
+        if (comboBox.ItemsSource is not IEnumerable source)
+        {
+            throw new InvalidOperationException("Status filter combo box must be bound to an ItemsSource.");
+        }
+
+        return source
+            .Cast<TaskStatusFilter>()
+            .Select(filter => filter.Status)
+            .ToList();
     }
 
     private static void SelectTab(MainControl view, int index)

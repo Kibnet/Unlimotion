@@ -3,9 +3,12 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -176,6 +179,89 @@ public class MainControlTaskStatusIconUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var storage = new InMemoryStorage();
+            var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var storedTask = new TaskItem
+            {
+                Id = "status-picker-transition-task",
+                Title = "Status picker transition task",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = true,
+                CreatedDateTime = DateTimeOffset.UtcNow.AddMinutes(-10)
+            };
+            storedTask.EnsureStatusHistory("owner");
+            await storage.Save(storedTask);
+            await repository.Init();
+
+            Window? window = null;
+
+            try
+            {
+                var taskLookup = repository.Tasks.Lookup(storedTask.Id);
+                await Assert.That(taskLookup.HasValue).IsTrue();
+                var task = taskLookup.Value;
+                task.IsInitializedProvider = () => true;
+                var statusPicker = new TaskStatusPicker
+                {
+                    Task = task,
+                    Width = 28,
+                    Height = 24
+                };
+
+                window = CreateWindow(statusPicker);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                PressControl(window, statusPicker);
+                var flyout = statusPicker.Flyout as MenuFlyout;
+
+                await Assert.That(flyout).IsNotNull();
+                var inProgressItem = flyout!.Items
+                    .OfType<MenuItem>()
+                    .Single(item =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(item),
+                            "TaskStatusOptionInProgress",
+                            StringComparison.Ordinal));
+
+                await Assert.That(inProgressItem.IsEnabled).IsTrue();
+                InvokeMenuItemClick(inProgressItem);
+
+                var changed = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return task.Status == DomainTaskStatus.InProgress &&
+                           task.StartedDateTime.HasValue &&
+                           task.StatusHistory.LastOrDefault()?.Status == DomainTaskStatus.InProgress;
+                }, TimeSpan.FromSeconds(2));
+
+                await Assert.That(changed).IsTrue();
+                await Assert.That(task.StatusHistory.Select(entry => entry.Status))
+                    .Contains(DomainTaskStatus.Prepared);
+                await Assert.That(task.StatusHistory.Last().Status).IsEqualTo(DomainTaskStatus.InProgress);
+                await Assert.That(task.InProgressElapsed).IsNotEmpty();
+
+                var persisted = await storage.Load(task.Id);
+                await Assert.That(persisted).IsNotNull();
+                await Assert.That(persisted!.Status).IsEqualTo(DomainTaskStatus.InProgress);
+                await Assert.That(persisted.StatusHistory.Select(entry => entry.Status))
+                    .Contains(DomainTaskStatus.Prepared);
+                await Assert.That(persisted.StatusHistory.Last().Status).IsEqualTo(DomainTaskStatus.InProgress);
+            }
+            finally
+            {
+                window?.Close();
+                repository.Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
     private static Window CreateWindow(Control content)
     {
         return new Window
@@ -184,6 +270,29 @@ public class MainControlTaskStatusIconUiTests
             Height = 900,
             Content = content
         };
+    }
+
+    private static void PressControl(Window window, Control control)
+    {
+        var point = control.TranslatePoint(
+            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
+            window);
+
+        if (!point.HasValue)
+        {
+            throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
+        }
+
+        window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void InvokeMenuItemClick(MenuItem menuItem)
+    {
+        menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static TaskStatusPicker WaitForTaskStatusPicker(
