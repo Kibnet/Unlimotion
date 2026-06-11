@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:views="clr-namespace:Unlimotion.Views"
              xmlns:local="clr-namespace:Unlimotion.Views.Graph"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
@@ -121,7 +122,7 @@
             <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
         </Style>
         <Style Selector="TextBlock.FilterPanelGroupTitle">
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Opacity" Value="0.72" />
             <Setter Property="Margin" Value="0,0,0,4" />
@@ -169,8 +170,23 @@
                                         <StackPanel>
                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}" />
                                             <WrapPanel>
-                                                <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6" />
-                                                <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2" />
+                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                                       ListAutomationId="IncludeEmojiFilterList"
+                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches" />
+                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                                       IsExclude="True"
+                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                                       ListAutomationId="ExcludeEmojiFilterList"
+                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches" />
                                             </WrapPanel>
                                         </StackPanel>
                                         <StackPanel>

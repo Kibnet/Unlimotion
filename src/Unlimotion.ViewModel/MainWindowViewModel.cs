@@ -358,7 +358,16 @@ namespace Unlimotion.ViewModel
                     }
                 })
                 .AddToDispose(connectionDisposableList);
-            ;
+
+            AllEmojiExcludeFilter.WhenAnyValue(f => f.ShowTasks)
+                .Subscribe(b =>
+                {
+                    foreach (var filter in EmojiExcludeFilters)
+                    {
+                        filter.ShowTasks = b;
+                    }
+                })
+                .AddToDispose(connectionDisposableList);
         }
 
         private async Task<TaskItemViewModel?> CreateSiblingTaskAsync(bool isBlocked = false)
@@ -502,7 +511,7 @@ namespace Unlimotion.ViewModel
                     filter.ShowTasks = false;
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
-                    filter.SortText = (first.Title ?? "").Replace(first.Emoji, "").Trim();
+                    filter.SortText = first.TitleWithoutEmoji.Trim();
                     return filter;
                 })
                 .SortBy(f => f.SortText)
@@ -530,7 +539,7 @@ namespace Unlimotion.ViewModel
                     filter.ShowTasks = false;
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
-                    filter.SortText = (first.Title ?? "").Replace(first.Emoji, "").Trim();
+                    filter.SortText = first.TitleWithoutEmoji.Trim();
                     return filter;
                 })
                 .SortBy(f => f.SortText)
@@ -2470,10 +2479,34 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class EmojiFilter
     {
+        [AlsoNotifyFor(nameof(DisplayTitle), nameof(SearchText))]
         public string Title { get; set; } = "";
+        [AlsoNotifyFor(nameof(DisplayTitle), nameof(SearchText))]
         public string Emoji { get; set; } = "";
         public bool ShowTasks { get; set; }
+        [AlsoNotifyFor(nameof(DisplayTitle), nameof(SearchText))]
         public string SortText { get; set; } = "";
+        public string DisplayTitle
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(Emoji))
+                {
+                    return Title;
+                }
+
+                if (!string.IsNullOrWhiteSpace(SortText))
+                {
+                    return SortText.Trim();
+                }
+
+                return EmojiTextHelper.RemoveEmoji(Title, trimStart: true).Trim();
+            }
+        }
+
+        public string SearchText => $"{Emoji} {DisplayTitle} {Title} {SortText}".Trim();
         public TaskItemViewModel Source { get; set; } = null!;
+
+        public override string ToString() => SearchText;
     }
 }
