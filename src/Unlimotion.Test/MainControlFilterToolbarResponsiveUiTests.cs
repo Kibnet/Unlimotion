@@ -11,6 +11,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -213,12 +214,15 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(includeListItems.Count).IsEqualTo(vm.EmojiFilters.Count);
                     await Assert.That(includeListItems[0].Title).IsEqualTo("All");
                     await Assert.That(includeListItems[0].Emoji).IsEqualTo(string.Empty);
-                    await Assert.That(GetVisibleEmojiListBoxItems(includeList).Max(item => item.Bounds.Height)).IsLessThanOrEqualTo(34);
+                    await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
 
                     var inputBounds = GetBoundsRelativeTo(window, includeInput);
-                    var dropDownBounds = GetBoundsRelativeTo(window, GetEmojiFilterDropDown(includeControl));
+                    var dropDown = GetEmojiFilterDropDown(includeControl);
+                    var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
                     await Assert.That(Math.Abs(dropDownBounds.Left - inputBounds.Left)).IsLessThanOrEqualTo(2);
                     await Assert.That(Math.Abs(dropDownBounds.Top - inputBounds.Bottom)).IsLessThanOrEqualTo(2);
+                    await Assert.That(dropDown.CornerRadius).IsEqualTo(new CornerRadius(4));
+                    AssertVisibleItemsStayInsideDropDown(dropDown, includeList);
 
                     await ClickControlAsync(window, includeInput);
                     RunLayoutJobs();
@@ -229,9 +233,10 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                     var libraryFilter = vm.EmojiFilters.First(filter =>
                         filter.SearchText.Contains("library", StringComparison.OrdinalIgnoreCase));
-                    includeInput.Text = "library";
+                    TypeText(window, "library");
                     RunLayoutJobs();
 
+                    await Assert.That(includeInput.Text).IsEqualTo("library");
                     var filteredItems = GetEmojiFilterListItems(includeList);
                     await Assert.That(filteredItems.Count).IsEqualTo(1);
                     await Assert.That(filteredItems[0].SearchText).IsEqualTo(libraryFilter.SearchText);
@@ -246,10 +251,12 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(libraryFilter.ShowTasks).IsTrue();
                     await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
 
-                    var flyoutContentBounds = GetBoundsRelativeTo(window, flyoutContent);
-                    window.MouseDown(flyoutContentBounds.TopLeft + new Point(4, 4), MouseButton.Left);
+                    var sideDismissPoint = new Point(
+                        Math.Min(window.Bounds.Width - 6, inputBounds.Right + 24),
+                        GetCenterY(inputBounds));
+                    window.MouseDown(sideDismissPoint, MouseButton.Left);
                     RunLayoutJobs();
-                    window.MouseUp(flyoutContentBounds.TopLeft + new Point(4, 4), MouseButton.Left);
+                    window.MouseUp(sideDismissPoint, MouseButton.Left);
                     RunLayoutJobs();
 
                     await Assert.That(IsEmojiDropDownOpen(includeControl)).IsFalse();
@@ -459,7 +466,10 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                     await Assert.That(noMatchesPanel.IsVisible).IsTrue();
                     await Assert.That(noMatchesPanel.Background).IsNotNull();
+                    await Assert.That(noMatchesPanel.Background).IsAssignableTo<ISolidColorBrush>();
+                    await Assert.That(((ISolidColorBrush)noMatchesPanel.Background!).Color.A).IsEqualTo(byte.MaxValue);
                     await Assert.That(noMatches.Text).IsEqualTo(L10n.Get("EmojiFilterNoMatches"));
+                    await Assert.That(includeList.IsVisible).IsTrue();
                     await Assert.That(GetEmojiFilterListItems(includeList).Count).IsEqualTo(vm.EmojiFilters.Count);
                     await Assert.That(vm.EmojiFilters.Any(static filter => filter.ShowTasks)).IsFalse();
                 }
@@ -473,6 +483,71 @@ public class MainControlFilterToolbarResponsiveUiTests
             {
                 window?.Close();
                 fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task FilterFlyout_EmojiFilters_RespondsToLargeFontResources()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                ApplyApplicationFontResources(24d);
+
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                var flyout = ShowFilterFlyout(filtersButton);
+                RunLayoutJobs();
+
+                try
+                {
+                    var flyoutContent = GetFlyoutContent(flyout);
+                    var groupTitle = flyoutContent.GetVisualDescendants()
+                                         .OfType<TextBlock>()
+                                         .FirstOrDefault(static textBlock =>
+                                             textBlock.Classes.Contains("FilterPanelGroupTitle") &&
+                                             IsVisibleAndArranged(textBlock)) ??
+                                     throw new InvalidOperationException("Filter panel title was not found.");
+                    var includeControl = FindEmojiFilterControl(flyoutContent, isExclude: false);
+                    var includeInput = GetEmojiFilterInput(includeControl);
+
+                    await ClickControlAsync(window, includeInput);
+                    RunLayoutJobs();
+
+                    var includeList = GetEmojiFilterList(includeControl);
+                    await Assert.That(groupTitle.FontSize).IsEqualTo(AppearanceSettings.GetFloatingWatermarkFontSize(24d));
+                    await Assert.That(includeInput.FontSize).IsEqualTo(24d);
+                    await Assert.That(includeList.FontSize).IsEqualTo(24d);
+                    await Assert.That(includeInput.Bounds.Height).IsGreaterThan(AppearanceSettings.DefaultSearchControlHeight);
+                }
+                finally
+                {
+                    flyout.Hide();
+                    RunLayoutJobs();
+                }
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+                ApplyApplicationFontResources(AppearanceSettings.DefaultFontSize);
             }
         }, CancellationToken.None);
     }
@@ -605,6 +680,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(dropDownBounds.Right).IsGreaterThanOrEqualTo(inputBounds.Left);
                     await Assert.That(dropDown.MaxHeight).IsLessThanOrEqualTo(260);
                     await Assert.That(GetEmojiFilterList(includeControl).MaxHeight).IsLessThanOrEqualTo(dropDown.MaxHeight);
+                    AssertVisibleItemsStayInsideDropDown(dropDown, GetEmojiFilterList(includeControl));
                 }
                 finally
                 {
@@ -821,6 +897,25 @@ public class MainControlFilterToolbarResponsiveUiTests
         {
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private static void ApplyApplicationFontResources(double fontSize)
+    {
+        if (Application.Current is not { } application)
+        {
+            return;
+        }
+
+        var normalized = AppearanceSettings.NormalizeFontSize(fontSize);
+        application.Resources["AppFontSize"] = normalized;
+        application.Resources["AppSmallFontSize"] = AppearanceSettings.GetFloatingWatermarkFontSize(normalized);
+        application.Resources["AppTabFontSize"] = AppearanceSettings.GetTabFontSize(normalized);
+        application.Resources["AppTabMinHeight"] = AppearanceSettings.GetTabMinHeight(normalized);
+        application.Resources["AppSearchControlHeight"] = AppearanceSettings.GetSearchControlHeight(normalized);
+        application.Resources["AppSearchClearButtonSize"] = AppearanceSettings.GetSearchClearButtonSize(normalized);
+        application.Resources["AppSearchClearIconFontSize"] = AppearanceSettings.GetSearchClearIconFontSize(normalized);
+        application.Resources["AppSearchBarMinWidth"] = AppearanceSettings.GetSearchBarMinWidth(normalized);
+        application.Resources["AppFloatingControlMinHeight"] = AppearanceSettings.GetFloatingControlMinHeight(normalized);
     }
 
     private static Grid FindVisibleFilterToolbar(MainControl view)
@@ -1213,6 +1308,68 @@ public class MainControlFilterToolbarResponsiveUiTests
             .ToArray();
     }
 
+    private static void AssertVisibleItemsStayInsideDropDown(Border dropDown, ListBox list)
+    {
+        var visibleItems = GetVisibleEmojiListBoxItems(list);
+        if (visibleItems.Count == 0)
+        {
+            throw new InvalidOperationException("Expected visible emoji filter rows.");
+        }
+
+        var listBounds = GetBoundsRelativeTo(dropDown, list);
+        foreach (var item in visibleItems)
+        {
+            var itemBounds = GetBoundsRelativeTo(dropDown, item);
+            if (itemBounds.Bottom <= listBounds.Top + 1 ||
+                itemBounds.Top >= listBounds.Bottom - 1)
+            {
+                continue;
+            }
+
+            if (itemBounds.Top < listBounds.Top - 1 ||
+                itemBounds.Bottom > listBounds.Bottom + 1 ||
+                itemBounds.Top < -1 ||
+                itemBounds.Bottom > dropDown.Bounds.Height + 1)
+            {
+                throw new InvalidOperationException(
+                    $"Emoji filter row is clipped by dropdown bounds: " +
+                    $"itemTop={itemBounds.Top:F1}; itemBottom={itemBounds.Bottom:F1}; " +
+                    $"listTop={listBounds.Top:F1}; listBottom={listBounds.Bottom:F1}; dropdownHeight={dropDown.Bounds.Height:F1}.");
+            }
+        }
+    }
+
+    private static async Task AssertEmojiRowsMeasureContentAndCenterVertically(ListBox list)
+    {
+        var visibleItems = GetVisibleEmojiListBoxItems(list);
+        await Assert.That(visibleItems).IsNotEmpty();
+
+        foreach (var item in visibleItems)
+        {
+            var rowControls = item.GetVisualDescendants()
+                .OfType<Control>()
+                .Where(static control =>
+                    control is CheckBox ||
+                    control.Classes.Contains("EmojiFilterItemEmoji") ||
+                    control.Classes.Contains("EmojiFilterItemTitle"))
+                .Where(IsVisibleAndArranged)
+                .ToArray();
+            await Assert.That(rowControls).IsNotEmpty();
+
+            var rowCenterY = item.Bounds.Height / 2d;
+            var tallestContentHeight = rowControls.Max(static control => control.Bounds.Height);
+            await Assert.That(item.Bounds.Height).IsGreaterThanOrEqualTo(tallestContentHeight);
+
+            foreach (var control in rowControls)
+            {
+                var bounds = GetBoundsRelativeTo(item, control);
+                await Assert.That(bounds.Top).IsGreaterThanOrEqualTo(-1);
+                await Assert.That(bounds.Bottom).IsLessThanOrEqualTo(item.Bounds.Height + 1);
+                await Assert.That(Math.Abs(GetCenterY(bounds) - rowCenterY)).IsLessThanOrEqualTo(2);
+            }
+        }
+    }
+
     private static IReadOnlyList<string?> GetVisibleEmojiItemTexts(ListBox list)
     {
         return list.GetVisualDescendants()
@@ -1275,6 +1432,12 @@ public class MainControlFilterToolbarResponsiveUiTests
         RawInputModifiers modifiers = RawInputModifiers.None)
     {
         window.KeyPress(key, modifiers, physicalKey, null);
+        RunLayoutJobs();
+    }
+
+    private static void TypeText(Window window, string text)
+    {
+        window.KeyTextInput(text);
         RunLayoutJobs();
     }
 

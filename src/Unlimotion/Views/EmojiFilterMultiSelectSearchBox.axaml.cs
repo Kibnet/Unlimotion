@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
 
@@ -18,12 +19,15 @@ namespace Unlimotion.Views;
 
 public partial class EmojiFilterMultiSelectSearchBox : UserControl
 {
-    private const double PopupEdgeGap = 8d;
+    private const double PopupEdgeGap = 4d;
     private const double MinPopupHeight = 120d;
     private const double MaxPopupHeight = 260d;
     private const double MinPopupWidth = 280d;
     private const double MaxPopupWidth = 340d;
     private const double InputTextHorizontalReserve = 36d;
+    private const double DropDownNonListHeight = 8d;
+    private const double MinListHeight = 60d;
+    private const double NoMatchesPanelReservedHeight = 40d;
     private static WeakReference<EmojiFilterMultiSelectSearchBox>? openDropDownReference;
 
     public static readonly StyledProperty<IEnumerable?> FiltersProperty =
@@ -57,6 +61,9 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private readonly List<EmojiFilter> selectableFilters = [];
     private readonly List<INotifyPropertyChanged> subscribedFilters = [];
     private INotifyCollectionChanged? subscribedCollection;
+    private bool isProgrammaticClose;
+    private bool pendingSearchAfterLightDismiss;
+    private bool restorePopupAfterInputDismiss;
     private bool isSearchActive;
     private bool isUpdatingInputText;
     private string searchText = string.Empty;
@@ -173,6 +180,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
             UpdateInputTextFromState();
             UpdatePopupBounds();
         }
+
+        if (change.Property == FontSizeProperty)
+        {
+            UpdateInputTextFromState();
+            UpdatePopupBounds();
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -186,6 +199,11 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     {
         if (PART_DropDownPopup.IsOpen)
         {
+            restorePopupAfterInputDismiss = true;
+            Dispatcher.UIThread.Post(
+                () => restorePopupAfterInputDismiss = false,
+                DispatcherPriority.Background);
+
             if (isSearchActive)
             {
                 PART_Input.Focus();
@@ -198,22 +216,16 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         }
         else
         {
-            OpenDropDown();
-        }
-
-        e.Handled = true;
-    }
-
-    private void InputHitArea_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (isSearchActive)
-        {
-            PART_Input.Focus();
-            PART_Input.CaretIndex = PART_Input.Text?.Length ?? 0;
-        }
-        else
-        {
-            EnterSearchMode();
+            if (pendingSearchAfterLightDismiss)
+            {
+                pendingSearchAfterLightDismiss = false;
+                OpenDropDown();
+                EnterSearchMode();
+            }
+            else
+            {
+                OpenDropDown();
+            }
         }
 
         e.Handled = true;
@@ -255,7 +267,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private void Input_OnTextInput(object? sender, TextInputEventArgs e)
     {
-        if (!PART_DropDownPopup.IsOpen || string.IsNullOrEmpty(e.Text))
+        if (!PART_DropDownPopup.IsOpen || isSearchActive || string.IsNullOrEmpty(e.Text))
         {
             return;
         }
@@ -300,6 +312,23 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private void DropDownPopup_OnClosed(object? sender, EventArgs e)
     {
+        if (!isProgrammaticClose && restorePopupAfterInputDismiss)
+        {
+            Dispatcher.UIThread.Post(RestorePopupAfterInputDismiss, DispatcherPriority.Input);
+            return;
+        }
+
+        restorePopupAfterInputDismiss = false;
+        if (!isProgrammaticClose)
+        {
+            pendingSearchAfterLightDismiss = true;
+            Dispatcher.UIThread.Post(() => pendingSearchAfterLightDismiss = false);
+        }
+        else
+        {
+            pendingSearchAfterLightDismiss = false;
+        }
+
         ClearOpenDropDownReference(this);
         ClearSearchState();
         UpdateInputTextFromState();
@@ -308,6 +337,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private void OpenDropDown()
     {
         CloseOpenDropDownForAnotherControl();
+        pendingSearchAfterLightDismiss = false;
         ClearSearchState(updateInput: false);
         ApplySearchFilter();
         UpdatePopupBounds();
@@ -315,6 +345,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         if (!PART_DropDownPopup.IsOpen)
         {
             PART_DropDownPopup.IsOpen = true;
+            Dispatcher.UIThread.Post(UpdatePopupBounds, DispatcherPriority.Loaded);
         }
 
         openDropDownReference = new WeakReference<EmojiFilterMultiSelectSearchBox>(this);
@@ -323,14 +354,47 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private void CloseDropDown()
     {
-        if (PART_DropDownPopup.IsOpen)
+        var wasOpen = PART_DropDownPopup.IsOpen;
+        if (wasOpen)
         {
-            PART_DropDownPopup.IsOpen = false;
+            isProgrammaticClose = true;
+
+            try
+            {
+                PART_DropDownPopup.IsOpen = false;
+            }
+            finally
+            {
+                isProgrammaticClose = false;
+            }
         }
 
+        pendingSearchAfterLightDismiss = false;
+        restorePopupAfterInputDismiss = false;
         ClearOpenDropDownReference(this);
         ClearSearchState();
         UpdateInputTextFromState();
+    }
+
+    private void RestorePopupAfterInputDismiss()
+    {
+        restorePopupAfterInputDismiss = false;
+        pendingSearchAfterLightDismiss = false;
+
+        if (!isSearchActive ||
+            PART_DropDownPopup.IsOpen ||
+            TopLevel.GetTopLevel(this) is null)
+        {
+            return;
+        }
+
+        ApplySearchFilter();
+        UpdatePopupBounds();
+        PART_DropDownPopup.IsOpen = true;
+        openDropDownReference = new WeakReference<EmojiFilterMultiSelectSearchBox>(this);
+        UpdateInputTextFromState();
+        PART_Input.Focus();
+        PART_Input.CaretIndex = PART_Input.Text?.Length ?? 0;
     }
 
     private void EnterSearchMode(string? initialText = null)
@@ -475,6 +539,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         }
 
         PART_NoMatchesPanel.IsVisible = hasNoMatches;
+        PART_List.IsVisible = true;
+        if (PART_DropDownPopup.IsOpen)
+        {
+            UpdatePopupBounds();
+        }
+
         if (PART_List.SelectedIndex >= displayedFilters.Count)
         {
             PART_List.SelectedIndex = displayedFilters.Count - 1;
@@ -533,15 +603,43 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
         var popupWidth = Math.Min(MaxPopupWidth, Math.Max(MinPopupWidth, inputWidth));
         popupWidth = Math.Min(popupWidth, Math.Max(inputWidth, availableWidth));
-        var inputHeight = PART_Input.Bounds.Height > 0 ? PART_Input.Bounds.Height : PART_Input.MinHeight;
-        PART_InputHitArea.Width = inputWidth;
-        PART_InputHitArea.Height = inputHeight;
-        PART_DropDownPopup.VerticalOffset = -inputHeight;
+        PART_DropDownPopup.VerticalOffset = 0;
         PART_DropDown.Width = popupWidth;
         PART_DropDown.MinWidth = inputWidth;
         PART_DropDown.MaxWidth = popupWidth;
         PART_DropDown.MaxHeight = availableHeight;
-        PART_List.MaxHeight = Math.Max(60, availableHeight - (PART_NoMatchesPanel.IsVisible ? 48 : 12));
+        PART_List.MaxHeight = FitListHeightToWholeRows(Math.Max(
+            MinListHeight,
+            availableHeight - DropDownNonListHeight - (PART_NoMatchesPanel.IsVisible ? NoMatchesPanelReservedHeight : 0)));
+    }
+
+    private double FitListHeightToWholeRows(double availableHeight)
+    {
+        var rowHeight = GetMeasuredOrEstimatedRowHeight();
+        if (rowHeight <= 0 || availableHeight <= rowHeight)
+        {
+            return availableHeight;
+        }
+
+        var wholeRows = Math.Max(1, Math.Floor((availableHeight - 1) / rowHeight));
+        return Math.Min(availableHeight, wholeRows * rowHeight);
+    }
+
+    private double GetMeasuredOrEstimatedRowHeight()
+    {
+        var measuredRowHeight = PART_List.GetVisualDescendants()
+            .OfType<ListBoxItem>()
+            .Where(static item => item.Bounds.Height > 0)
+            .Select(static item => item.Bounds.Height)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        if (measuredRowHeight > 0)
+        {
+            return Math.Ceiling(measuredRowHeight);
+        }
+
+        return Math.Ceiling(Math.Max(28d, PART_Input.FontSize * 1.35d + 4d));
     }
 
     private void UpdateExcludeClass()
@@ -684,4 +782,5 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         return string.IsNullOrWhiteSpace(filter.Emoji) &&
                string.Equals(filter.Title, "All", StringComparison.Ordinal);
     }
+
 }

@@ -48,7 +48,7 @@
             <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
         <Style Selector="TextBlock.FilterPanelGroupTitle">
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Opacity" Value="0.72"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
