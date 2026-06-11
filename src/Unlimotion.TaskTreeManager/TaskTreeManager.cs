@@ -1005,7 +1005,8 @@ public class TaskTreeManager
             DomainTaskStatus.Prepared => true,
             DomainTaskStatus.Archived => task.Status != DomainTaskStatus.Completed,
             DomainTaskStatus.InProgress => await IsTaskStartable(task),
-            DomainTaskStatus.Completed => await IsTaskCompletable(task),
+            DomainTaskStatus.Completed => task.Status != DomainTaskStatus.Archived &&
+                                          await IsTaskCompletable(task),
             _ => false
         };
     }

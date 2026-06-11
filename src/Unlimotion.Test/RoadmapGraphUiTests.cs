@@ -2391,80 +2391,87 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RightDragOnEmptyCanvas_PansViewportWithSelection()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-            var mouseIsDown = false;
-            var releasePoint = default(Point);
-
-            try
+            await session.Dispatch(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
+                var mouseIsDown = false;
+                var releasePoint = default(Point);
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
-                graphControl!.IsRoadmapViewportToolbarExpanded = false;
-                graphControl.IsRoadmapMinimapExpanded = false;
-                Dispatcher.UIThread.RunJobs();
-
-                var root2 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask2Id);
-                var root3 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask3Id);
-                await ClickControlAsync(window, root2);
-                await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Control);
-
-                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
-                var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
-                var startLocation = (Point)locationProperty.GetValue(editor)!;
-                var startPoint = FindEmptyEditorPoint(window, editor, FindRoadmapNodeBorders(graphControl));
-                releasePoint = new Point(startPoint.X + 90, startPoint.Y + 44);
-
-                window.MouseDown(startPoint, MouseButton.Right, RawInputModifiers.None);
-                mouseIsDown = true;
-                Dispatcher.UIThread.RunJobs();
-
-                window.MouseMove(releasePoint, RawInputModifiers.RightMouseButton);
-                Dispatcher.UIThread.RunJobs();
-
-                var panned = WaitFor(() =>
+                try
                 {
-                    var currentLocation = (Point)locationProperty.GetValue(editor)!;
-                    return Math.Abs(currentLocation.X - startLocation.X) > 1 ||
-                           Math.Abs(currentLocation.Y - startLocation.Y) > 1;
-                });
-                await Assert.That(panned).IsTrue();
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
 
-                window.MouseUp(releasePoint, MouseButton.Right, RawInputModifiers.RightMouseButton);
-                mouseIsDown = false;
-                Dispatcher.UIThread.RunJobs();
-
-                await Assert.That(GetSelectedRoadmapTaskIds(graphControl)).IsEquivalentTo(new[]
-                {
-                    MainWindowViewModelFixture.RootTask2Id,
-                    MainWindowViewModelFixture.RootTask3Id
-                });
-            }
-            finally
-            {
-                if (mouseIsDown && window is { } topLevel)
-                {
-                    topLevel.MouseUp(releasePoint, MouseButton.Right, RawInputModifiers.None);
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
                     Dispatcher.UIThread.RunJobs();
-                }
 
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
+                    graphControl!.IsRoadmapViewportToolbarExpanded = false;
+                    graphControl.IsRoadmapMinimapExpanded = false;
+                    Dispatcher.UIThread.RunJobs();
+
+                    var root2 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask2Id);
+                    var root3 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask3Id);
+                    await ClickControlAsync(window, root2);
+                    await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Control);
+
+                    var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                    var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+                    var startLocation = (Point)locationProperty.GetValue(editor)!;
+                    var startPoint = FindEmptyEditorPoint(window, editor, FindRoadmapNodeBorders(graphControl));
+                    releasePoint = new Point(startPoint.X + 90, startPoint.Y + 44);
+
+                    window.MouseDown(startPoint, MouseButton.Right, RawInputModifiers.None);
+                    mouseIsDown = true;
+                    Dispatcher.UIThread.RunJobs();
+
+                    window.MouseMove(releasePoint, RawInputModifiers.RightMouseButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var panned = WaitFor(() =>
+                    {
+                        var currentLocation = (Point)locationProperty.GetValue(editor)!;
+                        return Math.Abs(currentLocation.X - startLocation.X) > 1 ||
+                               Math.Abs(currentLocation.Y - startLocation.Y) > 1;
+                    });
+                    await Assert.That(panned).IsTrue();
+
+                    window.MouseUp(releasePoint, MouseButton.Right, RawInputModifiers.RightMouseButton);
+                    mouseIsDown = false;
+                    Dispatcher.UIThread.RunJobs();
+
+                    await Assert.That(GetSelectedRoadmapTaskIds(graphControl)).IsEquivalentTo(new[]
+                    {
+                        MainWindowViewModelFixture.RootTask2Id,
+                        MainWindowViewModelFixture.RootTask3Id
+                    });
+                }
+                finally
+                {
+                    if (mouseIsDown && window is { } topLevel)
+                    {
+                        topLevel.MouseUp(releasePoint, MouseButton.Right, RawInputModifiers.None);
+                        Dispatcher.UIThread.RunJobs();
+                    }
+
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]

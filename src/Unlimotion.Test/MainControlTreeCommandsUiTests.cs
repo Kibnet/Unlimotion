@@ -1265,66 +1265,73 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.DispatchAsync(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                SetDateFilterAllTime(vm.LastUpdatedDateFilter);
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
-                await Assert.That(selectedTask).IsNotNull();
+                try
+                {
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    SetDateFilterAllTime(vm.LastUpdatedDateFilter);
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
+                    var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                    await Assert.That(selectedTask).IsNotNull();
 
-                await ClickTabHeaderAsync(window, view, "Last Updated");
-                var lastUpdatedReady = WaitFor(() => vm.LastUpdatedItems.Any());
-                await Assert.That(lastUpdatedReady).IsTrue();
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
 
-                var lastUpdatedTree = view.FindControl<TreeView>("LastUpdatedTree");
-                await Assert.That(lastUpdatedTree).IsNotNull();
+                    await ClickTabHeaderAsync(window, view, "Last Updated");
+                    var lastUpdatedReady = WaitFor(() => vm.LastUpdatedItems.Any());
+                    await Assert.That(lastUpdatedReady).IsTrue();
 
-                vm.ExpandAllNodes(vm.LastUpdatedItems);
-                Dispatcher.UIThread.RunJobs();
+                    var lastUpdatedTree = view.FindControl<TreeView>("LastUpdatedTree");
+                    await Assert.That(lastUpdatedTree).IsNotNull();
 
-                var selectedControl = FindWrapperControl(lastUpdatedTree!, selectedTask!.Id);
-                await ClickControlAsync(window, selectedControl);
+                    vm.ExpandAllNodes(vm.LastUpdatedItems);
+                    Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(vm.CurrentLastUpdated?.TaskItem.Id).IsEqualTo(selectedTask.Id);
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
+                    var selectedControl = FindWrapperControl(lastUpdatedTree!, selectedTask!.Id);
+                    await ClickControlAsync(window, selectedControl);
 
-                vm.AllTasksMode = false;
-                vm.LastCreatedMode = false;
-                vm.LastUpdatedMode = true;
-                vm.UnlockedMode = false;
-                vm.CompletedMode = false;
-                vm.ArchivedMode = false;
-                vm.LastOpenedMode = false;
+                    await Assert.That(vm.CurrentLastUpdated?.TaskItem.Id).IsEqualTo(selectedTask.Id);
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
 
-                var taskCountBefore = vm.taskRepository!.Tasks.Count;
-                PressHotkey(window, Key.Enter, PhysicalKey.Enter, RawInputModifiers.Control);
+                    vm.AllTasksMode = false;
+                    vm.LastCreatedMode = false;
+                    vm.LastUpdatedMode = true;
+                    vm.UnlockedMode = false;
+                    vm.CompletedMode = false;
+                    vm.ArchivedMode = false;
+                    vm.LastOpenedMode = false;
 
-                var created = WaitFor(() =>
-                    vm.taskRepository.Tasks.Count == taskCountBefore + 1 &&
-                    vm.CurrentTaskItem != null &&
-                    vm.CurrentTaskItem.Id != selectedTask.Id);
-                await Assert.That(created).IsTrue();
-                await Assert.That(vm.CurrentTaskItem!.Parents).IsEquivalentTo(selectedTask.Parents);
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    var taskCountBefore = vm.taskRepository!.Tasks.Count;
+                    PressHotkey(window, Key.Enter, PhysicalKey.Enter, RawInputModifiers.Control);
+
+                    var created = WaitFor(() =>
+                        vm.taskRepository.Tasks.Count == taskCountBefore + 1 &&
+                        vm.CurrentTaskItem != null &&
+                        vm.CurrentTaskItem.Id != selectedTask.Id);
+                    await Assert.That(created).IsTrue();
+                    await Assert.That(vm.CurrentTaskItem!.Parents).IsEquivalentTo(selectedTask.Parents);
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]

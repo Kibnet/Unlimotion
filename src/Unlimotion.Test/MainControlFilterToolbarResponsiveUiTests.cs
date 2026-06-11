@@ -718,7 +718,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 window = CreateWindow(view, 390, 760);
                 window.Show();
                 RunLayoutJobs();
-                SelectTab(view, 7);
+                SelectTab(view, 8);
 
                 var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
                 var flyout = ShowFilterFlyout(filtersButton);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -10,8 +11,11 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using DynamicData;
 using Unlimotion;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
@@ -67,11 +71,12 @@ public class MainControlTaskStatusIconUiTests
 
                 await Assert.That(task).IsNotNull();
                 await Assert.That(statusPicker.Classes.Contains("TaskStatusPicker")).IsTrue();
-                await Assert.That(statusPicker.Bounds.Width).IsGreaterThanOrEqualTo(24);
-                await Assert.That(statusPicker.Bounds.Width).IsLessThanOrEqualTo(34);
+                await Assert.That(statusPicker.Bounds.Width).IsEqualTo(20);
+                await Assert.That(statusPicker.Bounds.Height).IsEqualTo(20);
+                await Assert.That(statusPicker.Margin.Right).IsEqualTo(8);
                 await Assert.That(statusIcons).HasSingleItem();
-                await Assert.That(statusIcons[0].Bounds.Width).IsGreaterThanOrEqualTo(14);
-                await Assert.That(statusIcons[0].Bounds.Height).IsGreaterThanOrEqualTo(14);
+                await Assert.That(statusIcons[0].Bounds.Width).IsEqualTo(20);
+                await Assert.That(statusIcons[0].Bounds.Height).IsEqualTo(20);
                 await Assert.That(statusIcons[0].Status).IsEqualTo(task!.Status);
                 await Assert.That(leakedGlyphText).IsFalse();
                 await Assert.That(nestedComboBoxes).IsEmpty();
@@ -83,6 +88,377 @@ public class MainControlTaskStatusIconUiTests
                 fixture.CleanTasks();
             }
         }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskTreeStatusControl_ClickOpensStatusFlyout()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+
+                var statusPicker = WaitForTaskStatusPicker(allTasksTree!);
+                var task = statusPicker.Task ?? statusPicker.DataContext as TaskItemViewModel;
+                PressControl(window, statusPicker);
+                Dispatcher.UIThread.RunJobs();
+
+                var flyout = statusPicker.Flyout as MenuFlyout;
+
+                await Assert.That(flyout).IsNotNull();
+                var menuItems = flyout!.Items.OfType<MenuItem>().ToList();
+                var automationIds = menuItems
+                    .Select(AutomationProperties.GetAutomationId)
+                    .ToList();
+
+                await Assert.That(menuItems).IsNotEmpty();
+                await Assert.That(menuItems.All(item => item.IsEnabled)).IsTrue();
+                await Assert.That(automationIds).DoesNotContain($"TaskStatusOption{task!.Status}");
+                await Assert.That(flyout.IsOpen).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskStatusPicker_MatchesStandaloneCheckBoxIndicatorSize()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var task = new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = "status-picker-size-task",
+                    Status = DomainTaskStatus.NotReady
+                },
+                new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
+                () => false);
+            var statusPicker = new TaskStatusPicker
+            {
+                Task = task
+            };
+            var checkBox = new CheckBox();
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Children =
+                {
+                    statusPicker,
+                    checkBox
+                }
+            };
+            var window = CreateWindow(panel);
+
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var statusIcon = statusPicker.GetVisualDescendants().OfType<TaskStatusIcon>().Single();
+                var checkBoxIndicator = FindCheckBoxIndicator(checkBox);
+
+                await Assert.That(checkBoxIndicator).IsNotNull();
+                await Assert.That(statusPicker.Bounds.Width).IsEqualTo(checkBoxIndicator!.Bounds.Width);
+                await Assert.That(statusPicker.Bounds.Height).IsEqualTo(checkBoxIndicator.Bounds.Height);
+                await Assert.That(statusIcon.Bounds.Width).IsEqualTo(checkBoxIndicator.Bounds.Width);
+                await Assert.That(statusIcon.Bounds.Height).IsEqualTo(checkBoxIndicator.Bounds.Height);
+                await Assert.That(GetStatusBorderThickness(scale: 1d))
+                    .IsEqualTo(checkBoxIndicator.BorderThickness.Left);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskStatusPicker_DimsUnavailableTaskLikeTaskText()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var task = new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = "status-picker-unavailable-task",
+                    Status = DomainTaskStatus.Prepared,
+                    IsCanBeCompleted = false
+                },
+                new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
+                () => false);
+            var statusPicker = new TaskStatusPicker
+            {
+                Task = task
+            };
+            var window = CreateWindow(statusPicker);
+
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(statusPicker.Opacity).IsEqualTo(0.4);
+
+                await Task.Run(() => task.IsCanBeCompleted = true);
+                var becameAvailable = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return statusPicker.Opacity == 1d;
+                }, TimeSpan.FromSeconds(2));
+
+                await Assert.That(becameAvailable).IsTrue();
+
+                await Task.Run(() => task.IsCanBeCompleted = false);
+                var becameUnavailable = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return statusPicker.Opacity == 0.4;
+                }, TimeSpan.FromSeconds(2));
+
+                await Assert.That(becameUnavailable).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("Light")]
+    [Arguments("Dark")]
+    public async Task TaskStatusIcon_UsesCheckBoxUncheckedBorderBrushForTheme(string themeName)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
+            var previousTheme = app.RequestedThemeVariant;
+            var theme = string.Equals(themeName, "Dark", StringComparison.Ordinal)
+                ? ThemeVariant.Dark
+                : ThemeVariant.Light;
+            var statusIcon = new TaskStatusIcon
+            {
+                Status = DomainTaskStatus.NotReady,
+                Width = 20,
+                Height = 20
+            };
+            var checkBox = new CheckBox();
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Children =
+                {
+                    statusIcon,
+                    checkBox
+                }
+            };
+            var window = CreateWindow(panel);
+
+            try
+            {
+                app.RequestedThemeVariant = theme;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var checkBoxIndicator = FindCheckBoxIndicator(checkBox);
+                var statusBorderBrush = GetStatusBorderBrush(statusIcon, DomainTaskStatus.NotReady, isEnabled: true);
+
+                await Assert.That(checkBoxIndicator).IsNotNull();
+                await Assert.That(GetSolidColor(statusBorderBrush, "TaskStatusIcon border brush"))
+                    .IsEqualTo(GetSolidColor(checkBoxIndicator!.BorderBrush, "CheckBox indicator border brush"));
+            }
+            finally
+            {
+                window.Close();
+                app.RequestedThemeVariant = previousTheme;
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("Prepared", "#008575")]
+    [Arguments("InProgress", "#0F6CBD")]
+    public async Task TaskStatusIcon_PreparedAndInProgressUseDistinctStatusBorderBrush(
+        string statusName,
+        string expectedColor)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var status = Enum.Parse<DomainTaskStatus>(statusName);
+            var statusIcon = new TaskStatusIcon
+            {
+                Status = status,
+                Width = 20,
+                Height = 20
+            };
+            var checkBox = new CheckBox();
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Children =
+                {
+                    statusIcon,
+                    checkBox
+                }
+            };
+            var window = CreateWindow(panel);
+
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var checkBoxIndicator = FindCheckBoxIndicator(checkBox);
+                var statusBorderBrush = GetStatusBorderBrush(statusIcon, status, isEnabled: true);
+                var statusBorderColor = GetSolidColor(statusBorderBrush, "TaskStatusIcon border brush");
+
+                await Assert.That(checkBoxIndicator).IsNotNull();
+                await Assert.That(statusBorderColor).IsEqualTo(Color.Parse(expectedColor));
+                await Assert.That(statusBorderColor)
+                    .IsNotEqualTo(GetSolidColor(checkBoxIndicator!.BorderBrush, "CheckBox indicator border brush"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskStatusIcon_NotReadyBorderBrushTracksThemeChangesOnSameControl()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
+            var previousTheme = app.RequestedThemeVariant;
+            var statusIcon = new TaskStatusIcon
+            {
+                Status = DomainTaskStatus.NotReady,
+                Width = 20,
+                Height = 20
+            };
+            var checkBox = new CheckBox();
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Children =
+                {
+                    statusIcon,
+                    checkBox
+                }
+            };
+            var window = CreateWindow(panel);
+
+            try
+            {
+                app.RequestedThemeVariant = ThemeVariant.Dark;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var darkCheckBoxIndicator = FindCheckBoxIndicator(checkBox);
+                var darkStatusBorder = GetSolidColor(
+                    GetStatusBorderBrush(statusIcon, DomainTaskStatus.NotReady, isEnabled: true),
+                    "dark TaskStatusIcon border brush");
+
+                await Assert.That(darkCheckBoxIndicator).IsNotNull();
+                await Assert.That(darkStatusBorder)
+                    .IsEqualTo(GetSolidColor(darkCheckBoxIndicator!.BorderBrush, "dark CheckBox indicator border brush"));
+
+                app.RequestedThemeVariant = ThemeVariant.Light;
+                Dispatcher.UIThread.RunJobs();
+
+                var lightCheckBoxIndicator = FindCheckBoxIndicator(checkBox);
+                var lightStatusBorder = GetSolidColor(
+                    GetStatusBorderBrush(statusIcon, DomainTaskStatus.NotReady, isEnabled: true),
+                    "light TaskStatusIcon border brush");
+
+                await Assert.That(lightCheckBoxIndicator).IsNotNull();
+                await Assert.That(lightStatusBorder)
+                    .IsEqualTo(GetSolidColor(lightCheckBoxIndicator!.BorderBrush, "light CheckBox indicator border brush"));
+                await Assert.That(lightStatusBorder).IsNotEqualTo(darkStatusBorder);
+            }
+            finally
+            {
+                window.Close();
+                app.RequestedThemeVariant = previousTheme;
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskItemViewModel_CompletionCriterionChange_SavesOnMainThreadAfterThrottle()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
+        {
+            await session.DispatchAsync(async () =>
+            {
+                var storage = new RecordingTaskStorage();
+                using var task = new TaskItemViewModel(
+                    new TaskItem
+                    {
+                        Id = "completion-criterion-thread-task",
+                        Title = "Completion criterion thread task",
+                        Status = DomainTaskStatus.Prepared,
+                        IsCanBeCompleted = true
+                    },
+                    storage);
+
+                task.PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromMilliseconds(20);
+                task.AddCompletionCriterionCommand.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+
+                var criterion = task.CompletionCriteria.Single();
+                criterion.Text = "Проверить результат";
+
+                var savedAfterThrottle = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return storage.UpdateAccessChecks.Count >= 2;
+                    },
+                    TimeSpan.FromSeconds(2),
+                    TimeSpan.FromMilliseconds(10));
+
+                await Assert.That(savedAfterThrottle).IsTrue();
+                foreach (var updateWasOnMainThread in storage.UpdateAccessChecks)
+                {
+                    await Assert.That(updateWasOnMainThread).IsTrue();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
@@ -136,7 +512,61 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
-    public async Task TaskStatusPickerFlyout_ExposesOneIconOptionForEachLifecycleStatus()
+    public async Task InProgressTree_DisplaysStartedDateTimeInLocalTime()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var utcInstant = new DateTimeOffset(2026, 01, 02, 12, 34, 00, TimeSpan.Zero);
+                var localOffset = TimeZoneInfo.Local.GetUtcOffset(utcInstant.UtcDateTime);
+                var sourceOffset = localOffset == TimeSpan.Zero ? TimeSpan.FromHours(3) : TimeSpan.Zero;
+                var startedAt = utcInstant.ToOffset(sourceOffset);
+                var expectedLocalText = startedAt.LocalDateTime.ToString("yyyy.MM.dd HH:mm");
+                var rawSourceText = startedAt.ToString("yyyy.MM.dd HH:mm");
+                var task = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id)
+                    ?? throw new InvalidOperationException("Root task was not found.");
+                task.IsInitializedProvider = () => false;
+                task.Status = DomainTaskStatus.InProgress;
+                task.StartedDateTime = startedAt;
+                vm.InProgressMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                SelectTab(view, "InProgressTabItem");
+
+                var startedLabel = WaitForAutomationControl<Label>(view, "InProgressStartedDateLabel");
+                var elapsedLabel = WaitForAutomationControl<Label>(view, "InProgressElapsedLabel");
+
+                await Assert.That(startedLabel.Content?.ToString()).IsEqualTo(expectedLocalText);
+                await Assert.That(startedLabel.Padding.Left).IsEqualTo(0);
+                await Assert.That(startedLabel.Margin.Right).IsEqualTo(16);
+                await Assert.That(elapsedLabel.Padding.Left).IsEqualTo(0);
+                await Assert.That(elapsedLabel.Margin.Right).IsEqualTo(16);
+                if (!string.Equals(expectedLocalText, rawSourceText, StringComparison.Ordinal))
+                {
+                    await Assert.That(startedLabel.Content?.ToString()).IsNotEqualTo(rawSourceText);
+                }
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -145,7 +575,8 @@ public class MainControlTaskStatusIconUiTests
                 new TaskItem
                 {
                     Id = "status-picker-task",
-                    Status = DomainTaskStatus.Prepared
+                    Status = DomainTaskStatus.Prepared,
+                    IsCanBeCompleted = true
                 },
                 new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
                 () => false);
@@ -156,10 +587,13 @@ public class MainControlTaskStatusIconUiTests
 
             var flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
             var items = flyout.Items.OfType<MenuItem>().ToList();
-            var statuses = Enum.GetValues<DomainTaskStatus>();
+            var availableTransitionStatuses = task.StatusOptions
+                .Where(option => option.Status != task.Status && option.IsEnabled)
+                .Select(option => option.Status)
+                .ToList();
 
-            await Assert.That(items.Count).IsEqualTo(statuses.Length);
-            foreach (var status in statuses)
+            await Assert.That(items.Count).IsEqualTo(availableTransitionStatuses.Count);
+            foreach (var status in availableTransitionStatuses)
             {
                 var item = items.Single(candidate =>
                     string.Equals(
@@ -176,6 +610,9 @@ public class MainControlTaskStatusIconUiTests
                 await Assert.That(text.Text).IsNotNull();
                 await Assert.That(text.Text).IsNotEmpty();
             }
+
+            await Assert.That(items.Select(AutomationProperties.GetAutomationId))
+                .DoesNotContain($"TaskStatusOption{task.Status}");
         }, CancellationToken.None);
     }
 
@@ -262,6 +699,111 @@ public class MainControlTaskStatusIconUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var task = new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = "status-picker-criteria-task",
+                    Title = "Status picker criteria task",
+                    Status = DomainTaskStatus.Prepared,
+                    IsCanBeCompleted = true,
+                    CompletionCriteria =
+                    [
+                        new TaskCompletionCriterion
+                        {
+                            Text = "Проверить результат",
+                            IsSatisfied = false
+                        }
+                    ]
+                },
+                new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
+                () => false);
+            var buildFlyout = typeof(TaskStatusPicker).GetMethod(
+                "BuildStatusFlyout",
+                BindingFlags.NonPublic | BindingFlags.Static)
+                ?? throw new InvalidOperationException("TaskStatusPicker.BuildStatusFlyout was not found.");
+
+            var flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+            var completedItem = flyout.Items
+                .OfType<MenuItem>()
+                .SingleOrDefault(item =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(item),
+                        "TaskStatusOptionCompleted",
+                        StringComparison.Ordinal));
+
+            await Assert.That(completedItem).IsNull();
+
+            task.CompletionCriteria.Single().IsSatisfied = true;
+            Dispatcher.UIThread.RunJobs();
+
+            await Assert.That(task.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed).IsEnabled)
+                .IsTrue();
+            flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+            completedItem = flyout.Items
+                .OfType<MenuItem>()
+                .Single(item =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(item),
+                        "TaskStatusOptionCompleted",
+                        StringComparison.Ordinal));
+            await Assert.That(completedItem.IsEnabled).IsTrue();
+
+            InvokeMenuItemClick(completedItem);
+
+            await Assert.That(task.Status).IsEqualTo(DomainTaskStatus.Completed);
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskStatusPicker_DetachedFromVisualTree_UnsubscribesFromTask()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var task = new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = "status-picker-detach-task",
+                    Title = "Status picker detach task",
+                    Status = DomainTaskStatus.Prepared
+                },
+                new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
+                () => false);
+            var statusPicker = new TaskStatusPicker
+            {
+                Task = task
+            };
+            var subscribedTaskField = typeof(TaskStatusPicker).GetField(
+                "_subscribedTask",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("TaskStatusPicker._subscribedTask was not found.");
+            var window = CreateWindow(statusPicker);
+
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(subscribedTaskField.GetValue(statusPicker)).IsSameReferenceAs(task);
+
+                window.Content = null;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(subscribedTaskField.GetValue(statusPicker)).IsNull();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static Window CreateWindow(Control content)
     {
         return new Window
@@ -289,10 +831,92 @@ public class MainControlTaskStatusIconUiTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    private static void SelectTab(Control root, string automationId)
+    {
+        var tab = root.GetVisualDescendants()
+            .OfType<TabItem>()
+            .First(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+        tab.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static TControl WaitForAutomationControl<TControl>(
+        Control root,
+        string automationId,
+        int timeoutMilliseconds = 3000)
+        where TControl : Control
+    {
+        TControl? control = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            control = root.GetVisualDescendants()
+                .OfType<TControl>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        automationId,
+                        StringComparison.Ordinal));
+            return control != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || control == null)
+        {
+            throw new InvalidOperationException($"Control '{automationId}' was not found.");
+        }
+
+        return control;
+    }
+
     private static void InvokeMenuItemClick(MenuItem menuItem)
     {
         menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
         Dispatcher.UIThread.RunJobs();
+    }
+
+    private static Border? FindCheckBoxIndicator(CheckBox checkBox)
+    {
+        return checkBox.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border =>
+                border.Bounds.Width > 0 &&
+                border.Bounds.Height > 0 &&
+                Math.Abs(border.Bounds.Width - border.Bounds.Height) < 0.1 &&
+                border.Bounds.Width >= 16 &&
+                border.Bounds.Width <= 24)
+            .OrderBy(border => Math.Abs(border.Bounds.Width - 20))
+            .FirstOrDefault();
+    }
+
+    private static Color GetSolidColor(IBrush? brush, string source)
+    {
+        if (brush is ISolidColorBrush solidColorBrush)
+        {
+            return solidColorBrush.Color;
+        }
+
+        throw new InvalidOperationException($"{source} is not a solid color brush.");
+    }
+
+    private static IBrush GetStatusBorderBrush(TaskStatusIcon statusIcon, DomainTaskStatus status, bool isEnabled)
+    {
+        var getBorderBrush = typeof(TaskStatusIcon).GetMethod(
+            "GetBorderBrush",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetBorderBrush was not found.");
+
+        return (IBrush)getBorderBrush.Invoke(statusIcon, [status, isEnabled])!;
+    }
+
+    private static double GetStatusBorderThickness(double scale)
+    {
+        var getBorderThickness = typeof(TaskStatusIcon).GetMethod(
+            "GetBorderThickness",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetBorderThickness was not found.");
+
+        return (double)getBorderThickness.Invoke(null, [scale])!;
     }
 
     private static TaskStatusPicker WaitForTaskStatusPicker(
@@ -321,5 +945,59 @@ public class MainControlTaskStatusIconUiTests
         }
 
         return statusPicker;
+    }
+
+    private sealed class RecordingTaskStorage : ITaskStorage
+    {
+        public SourceCache<TaskItemViewModel, string> Tasks { get; } = new(task => task.Id);
+        public ITaskRelationsIndex Relations => throw new NotSupportedException();
+        public TaskTreeManager TaskTreeManager { get; } = new(new InMemoryStorage());
+        public List<bool> UpdateAccessChecks { get; } = [];
+        public event EventHandler<EventArgs>? Initiated
+        {
+            add { }
+            remove { }
+        }
+
+        public Task Init() => Task.CompletedTask;
+
+        public Task<TaskItemViewModel> Add(TaskItemViewModel? currentTask = null, bool isBlocked = false) =>
+            throw new NotSupportedException();
+
+        public Task<TaskItemViewModel> AddChild(TaskItemViewModel currentTask) =>
+            throw new NotSupportedException();
+
+        public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true) =>
+            throw new NotSupportedException();
+
+        public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent) =>
+            throw new NotSupportedException();
+
+        public Task<TaskItemViewModel> Update(TaskItemViewModel change)
+        {
+            UpdateAccessChecks.Add(Dispatcher.UIThread.CheckAccess());
+            return Task.FromResult(change);
+        }
+
+        public Task<TaskItemViewModel> Update(TaskItem change) =>
+            throw new NotSupportedException();
+
+        public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents) =>
+            throw new NotSupportedException();
+
+        public Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents) =>
+            throw new NotSupportedException();
+
+        public Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask) =>
+            throw new NotSupportedException();
+
+        public Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask) =>
+            throw new NotSupportedException();
+
+        public Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask) =>
+            throw new NotSupportedException();
+
+        public Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child) =>
+            throw new NotSupportedException();
     }
 }

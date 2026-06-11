@@ -79,6 +79,45 @@ public class SingleViewStartupUiTests
     }
 
     [Test]
+    public async Task SingleViewStartup_ConnectsMigratedLocalFolderOutsideGitAndAllowsCreate()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit();
+
+            var app = new App();
+            var vm = context.MainWindowViewModel;
+
+            var startupTask = app.InitializeStartupViewModelAsync(vm);
+            var startupCompleted = WaitFor(() =>
+                startupTask.IsCompleted &&
+                vm.IsInitialized &&
+                vm.taskRepository?.Tasks.Count == 1 &&
+                vm.CurrentAllTasksItems.Count == 1);
+
+            await Assert.That(startupCompleted).IsTrue();
+            await Assert.That(vm.Settings.StorageConnectionState).IsEqualTo(SettingsConnectionState.Connected);
+            await Assert.That(context.NotificationManager.LastErrorMessage).IsNull();
+            await Assert.That(Directory.Exists(Path.Combine(context.TasksPath, ".git"))).IsFalse();
+            await Assert.That(File.Exists(Path.Combine(
+                    context.TasksPath,
+                    "status-model.migration.backup",
+                    "legacy-task")))
+                .IsTrue();
+
+            vm.Create.Execute(null);
+            var createCompleted = WaitFor(() =>
+                vm.taskRepository?.Tasks.Count == 2 &&
+                vm.CurrentTaskItem is { Id: not null } &&
+                vm.CurrentTaskItem.Id != "legacy-task");
+
+            await Assert.That(createCompleted).IsTrue();
+            await Assert.That(vm.CurrentAllTasksItems.Count).IsEqualTo(2);
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SingleViewStartup_ReplaysStartupUpdateCheck_WhenUpdateServiceAttachesAfterStartup()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -182,6 +221,123 @@ public class SingleViewStartupUiTests
             {
                 File.Delete(_configPath);
             }
+        }
+    }
+
+    private sealed class FileStorageStartupContext : IDisposable
+    {
+        private readonly string _configPath;
+        private readonly IDisposable? _configurationDisposable;
+
+        private FileStorageStartupContext(
+            string configPath,
+            string tasksPath,
+            NotificationManagerWrapperMock notificationManager,
+            UnifiedTaskStorage taskStorage,
+            MainWindowViewModel mainWindowViewModel,
+            IDisposable? configurationDisposable)
+        {
+            _configPath = configPath;
+            TasksPath = tasksPath;
+            NotificationManager = notificationManager;
+            TaskStorage = taskStorage;
+            MainWindowViewModel = mainWindowViewModel;
+            _configurationDisposable = configurationDisposable;
+        }
+
+        public string TasksPath { get; }
+
+        public NotificationManagerWrapperMock NotificationManager { get; }
+
+        public UnifiedTaskStorage TaskStorage { get; }
+
+        public MainWindowViewModel MainWindowViewModel { get; }
+
+        public static FileStorageStartupContext CreateWithLegacyTaskOutsideGit()
+        {
+            var rootPath = Path.Combine(
+                Path.GetTempPath(),
+                $"SingleViewStartup_{Guid.NewGuid():N}");
+            var tasksPath = Path.Combine(rootPath, "Tasks");
+            Directory.CreateDirectory(tasksPath);
+            WriteLegacyTask(tasksPath, "legacy-task");
+
+            var configPath = Path.Combine(rootPath, "settings.json");
+            File.WriteAllText(configPath, "{}");
+
+            IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+            configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(tasksPath);
+
+            var notificationManager = new NotificationManagerWrapperMock();
+            var fileStorage = new FileStorage(tasksPath, watcher: false, notificationManager);
+            var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+            var settings = new SettingsViewModel(configuration)
+            {
+                TaskStoragePath = tasksPath
+            };
+            var mainWindowViewModel = new MainWindowViewModel(
+                new AppNameDefinitionService(),
+                notificationManager,
+                configuration,
+                () => taskStorage,
+                settings);
+
+            TaskItemViewModel.NotificationManagerInstance = notificationManager;
+            TaskItemViewModel.MainWindowInstance = mainWindowViewModel;
+
+            return new FileStorageStartupContext(
+                configPath,
+                tasksPath,
+                notificationManager,
+                taskStorage,
+                mainWindowViewModel,
+                configuration as IDisposable);
+        }
+
+        public void Dispose()
+        {
+            MainWindowViewModel.Dispose();
+            TaskStorage.Dispose();
+            _configurationDisposable?.Dispose();
+
+            var rootPath = Path.GetDirectoryName(_configPath);
+            if (!string.IsNullOrWhiteSpace(rootPath) && Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
+        }
+
+        private static void WriteLegacyTask(string tasksPath, string id)
+        {
+            var createdAt = new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.Zero);
+            var json = $$"""
+            {
+              "Id": "{{id}}",
+              "UserId": "startup-test",
+              "Title": "{{id}}",
+              "Description": "",
+              "IsCompleted": false,
+              "IsCanBeCompleted": true,
+              "CreatedDateTime": "{{createdAt:O}}",
+              "UpdatedDateTime": null,
+              "UnlockedDateTime": null,
+              "CompletedDateTime": null,
+              "ArchiveDateTime": null,
+              "PlannedBeginDateTime": null,
+              "PlannedEndDateTime": null,
+              "PlannedDuration": null,
+              "ContainsTasks": [],
+              "ParentTasks": [],
+              "BlocksTasks": [],
+              "BlockedByTasks": [],
+              "Repeater": null,
+              "Importance": 0,
+              "Wanted": false,
+              "Version": 1
+            }
+            """;
+
+            File.WriteAllText(Path.Combine(tasksPath, id), json);
         }
     }
 

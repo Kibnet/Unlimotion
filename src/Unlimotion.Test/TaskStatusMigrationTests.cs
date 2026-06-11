@@ -149,7 +149,7 @@ public class TaskStatusMigrationTests
     }
 
     [Test]
-    public async Task Init_OldStatusFileOutsideGitWorktree_BlocksDestructiveMigration()
+    public async Task Init_OldStatusFileOutsideGitWorktree_MigratesAndWritesLocalBackup()
     {
         var tempDir = CreateTempDirectory(createGitWorkTree: false);
         try
@@ -163,22 +163,21 @@ public class TaskStatusMigrationTests
             var fileStorage = new FileStorage(tempDir, watcher: false);
             var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
 
-            InvalidOperationException? exception = null;
-            try
-            {
-                await unified.Init();
-            }
-            catch (InvalidOperationException ex)
-            {
-                exception = ex;
-            }
+            await unified.Init();
 
             var migratedJson = await ReadTaskJson(tempDir, "active");
+            var backupPath = Path.Combine(tempDir, "status-model.migration.backup");
+            var backupJson = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(backupPath, "active")));
+            var reportJson = JsonDocument.Parse(await File.ReadAllTextAsync(
+                Path.Combine(tempDir, "status-model.migration.report")));
 
-            await Assert.That(exception).IsNotNull();
-            await Assert.That(exception!.Message).Contains("Git worktree");
-            await Assert.That(migratedJson.RootElement.TryGetProperty("IsCompleted", out _)).IsTrue();
-            await Assert.That(migratedJson.RootElement.TryGetProperty("Status", out _)).IsFalse();
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsTrue();
+            await Assert.That(migratedJson.RootElement.TryGetProperty("IsCompleted", out _)).IsFalse();
+            await Assert.That(migratedJson.RootElement.TryGetProperty("Status", out _)).IsTrue();
+            await Assert.That(backupJson.RootElement.TryGetProperty("IsCompleted", out _)).IsTrue();
+            await Assert.That(reportJson.RootElement.GetProperty("GitWorkTreePath").ValueKind)
+                .IsEqualTo(JsonValueKind.Null);
+            await Assert.That(reportJson.RootElement.GetProperty("BackupPath").GetString()).IsEqualTo(backupPath);
         }
         finally
         {

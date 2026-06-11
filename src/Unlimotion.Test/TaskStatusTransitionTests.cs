@@ -1,7 +1,12 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Headless;
+using Avalonia.Threading;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -9,6 +14,8 @@ using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public class TaskStatusTransitionTests
 {
     [Test]
@@ -354,6 +361,35 @@ public class TaskStatusTransitionTests
     }
 
     [Test]
+    public async Task HandleTaskStatusChange_ArchivedTaskToCompleted_IsRejected()
+    {
+        var storage = new InMemoryStorage();
+        var manager = new TaskTreeManager(storage);
+
+        var existing = new TaskItem
+        {
+            Id = "test-task",
+            Status = DomainTaskStatus.Archived
+        };
+        existing.EnsureStatusHistory("owner");
+        await storage.Save(existing);
+
+        var change = new TaskItem
+        {
+            Id = existing.Id,
+            Status = DomainTaskStatus.Completed
+        };
+
+        var result = await manager.UpdateTask(change);
+
+        var saved = await storage.Load(existing.Id);
+        await Assert.That(saved).IsNotNull();
+        await Assert.That(saved!.Status).IsEqualTo(DomainTaskStatus.Archived);
+        await Assert.That(saved.CompletedDateTime).IsNull();
+        await Assert.That(result.Single(task => task.Id == existing.Id).Status).IsEqualTo(DomainTaskStatus.Archived);
+    }
+
+    [Test]
     public async Task HandleTaskStatusChange_JumpToCompleted_AppendsOnlyRequestedStatus()
     {
         var storage = new InMemoryStorage();
@@ -413,6 +449,155 @@ public class TaskStatusTransitionTests
         viewModel.StatusOption = completedOption;
 
         await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
+    public async Task TaskItemViewModel_StatusOptions_DisablesCompletedWhenArchived()
+    {
+        var storage = new InMemoryStorage();
+        var viewModel = new TaskItemViewModel(
+            new TaskItem
+            {
+                Id = "test-task",
+                Status = DomainTaskStatus.Archived,
+                IsCanBeCompleted = true
+            },
+            new UnifiedTaskStorage(new TaskTreeManager(storage)),
+            () => false);
+        var completedOption = viewModel.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
+        var preparedOption = viewModel.StatusOptions.Single(option => option.Status == DomainTaskStatus.Prepared);
+
+        await Assert.That(completedOption.IsEnabled).IsFalse();
+        await Assert.That(completedOption.ToolTip).IsNotNull();
+        await Assert.That(completedOption.ToolTip).IsNotEqualTo(completedOption.Title);
+        await Assert.That(preparedOption.IsEnabled).IsTrue();
+
+        viewModel.StatusOption = completedOption;
+
+        await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Archived);
+    }
+
+    [Test]
+    public async Task TaskItemViewModel_StatusOptions_EnablesCompletedWhenCriterionBecomesSatisfied()
+    {
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
+        {
+            await session.DispatchAsync(async () =>
+            {
+                var storage = new InMemoryStorage();
+                var criterion = new TaskCompletionCriterion
+                {
+                    Text = "Проверить результат",
+                    IsSatisfied = false
+                };
+                var viewModel = new TaskItemViewModel(
+                    new TaskItem
+                    {
+                        Id = "test-task",
+                        Status = DomainTaskStatus.Prepared,
+                        IsCanBeCompleted = true,
+                        CompletionCriteria = [criterion]
+                    },
+                    new UnifiedTaskStorage(new TaskTreeManager(storage)),
+                    () => false);
+                var completedOption = viewModel.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
+
+                await Assert.That(completedOption.IsEnabled).IsFalse();
+
+                viewModel.CompletionCriteria.Single().IsSatisfied = true;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(await TestHelpers.WaitUntilAsync(
+                        () =>
+                        {
+                            Dispatcher.UIThread.RunJobs();
+                            return completedOption.IsEnabled;
+                        },
+                        TimeSpan.FromSeconds(2)))
+                    .IsTrue();
+
+                viewModel.StatusOption = completedOption;
+
+                await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
+    }
+
+    [Test]
+    public async Task TaskItemViewModel_InProgressElapsed_UsesTotalHoursAndRefreshesPeriodically()
+    {
+        var previousInterval = TaskItemViewModel.InProgressElapsedRefreshInterval;
+        var previousScheduler = TaskItemViewModel.InProgressElapsedRefreshScheduler;
+        TaskItemViewModel.InProgressElapsedRefreshInterval = TimeSpan.FromMilliseconds(10);
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+
+        try
+        {
+            await session.DispatchAsync(async () =>
+            {
+                TaskItemViewModel.InProgressElapsedRefreshScheduler = RxSchedulers.MainThreadScheduler;
+                var startedAt = DateTimeOffset.Now.AddHours(-26).AddMinutes(-5);
+                using var viewModel = new TaskItemViewModel(
+                    new TaskItem
+                    {
+                        Id = "elapsed-task",
+                        Title = "Elapsed task",
+                        Status = DomainTaskStatus.InProgress,
+                        StatusHistory =
+                        [
+                            new TaskStatusHistoryEntry
+                            {
+                                Status = DomainTaskStatus.InProgress,
+                                ChangedAt = startedAt,
+                                Author = "owner"
+                            }
+                        ]
+                    },
+                    new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
+                    () => false);
+
+                var notificationCount = 0;
+                var notificationWasOnUiThread = 0;
+                ((INotifyPropertyChanged)viewModel).PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(TaskItemViewModel.InProgressElapsed))
+                    {
+                        if (Dispatcher.UIThread.CheckAccess())
+                        {
+                            Interlocked.Exchange(ref notificationWasOnUiThread, 1);
+                        }
+
+                        Interlocked.Increment(ref notificationCount);
+                    }
+                };
+
+                await Assert.That(viewModel.InProgressElapsed.StartsWith("26:", StringComparison.Ordinal)).IsTrue();
+                await Assert.That(viewModel.InProgressElapsed.StartsWith("02:", StringComparison.Ordinal)).IsFalse();
+
+                var refreshed = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return Volatile.Read(ref notificationCount) > 0;
+                    },
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromMilliseconds(10));
+
+                await Assert.That(refreshed).IsTrue();
+                await Assert.That(Volatile.Read(ref notificationWasOnUiThread)).IsEqualTo(1);
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TaskItemViewModel.InProgressElapsedRefreshInterval = previousInterval;
+            TaskItemViewModel.InProgressElapsedRefreshScheduler = previousScheduler;
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]

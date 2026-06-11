@@ -49,6 +49,15 @@ public class MainControlResetFiltersUiTests
         (8, "RoadmapFiltersButton", "RoadmapStatusFilterComboBox")
     ];
 
+    private static readonly (int TabIndex, string FiltersButtonAutomationId, string ResetButtonAutomationId, int ForcedVisibleStatus)[] StatusResetTabs =
+    [
+        (3, "UnlockedFiltersButton", "UnlockedResetFiltersButton", -1),
+        (4, "InProgressFiltersButton", "InProgressResetFiltersButton", (int)DomainTaskStatus.InProgress),
+        (5, "CompletedFiltersButton", "CompletedResetFiltersButton", (int)DomainTaskStatus.Completed),
+        (6, "ArchivedFiltersButton", "ArchivedResetFiltersButton", (int)DomainTaskStatus.Archived),
+        (7, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton", -1)
+    ];
+
     [Test]
     public async Task ResetFiltersButton_IsAvailableOnTaskTabs()
     {
@@ -124,6 +133,61 @@ public class MainControlResetFiltersUiTests
 
                     flyout.Hide();
                     Dispatcher.UIThread.RunJobs();
+                }
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ResetFiltersButton_OnStatusFilteredTabs_ResetsStatusFilters()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                var defaultShowCompleted = vm.ShowCompleted;
+                var defaultShowArchived = vm.ShowArchived;
+
+                var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
+                notificationManager.AskResult = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId, forcedVisibleStatus) in StatusResetTabs)
+                {
+                    notificationManager.ClearMessages();
+                    SetAllStatusFilters(vm, false);
+
+                    SelectTab(view, tabIndex);
+                    var resetButton = OpenFilterPanelAndFindResetButton(
+                        view,
+                        filtersButtonAutomationId,
+                        resetButtonAutomationId);
+                    await ClickControlAsync(window, resetButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var forcedStatus = forcedVisibleStatus >= 0
+                        ? (DomainTaskStatus)forcedVisibleStatus
+                        : (DomainTaskStatus?)null;
+                    await Assert.That(notificationManager.AskCount).IsEqualTo(1);
+                    await AssertStatusFiltersReset(vm, defaultShowCompleted, defaultShowArchived, forcedStatus);
+
+                    HideFilterPanel(view, filtersButtonAutomationId);
                 }
             }
             finally
@@ -454,6 +518,14 @@ public class MainControlResetFiltersUiTests
         filter.To = DateTime.Today.AddDays(-1);
     }
 
+    private static void SetAllStatusFilters(MainWindowViewModel vm, bool selected)
+    {
+        foreach (var filter in vm.StatusFilters)
+        {
+            filter.ShowTasks = selected;
+        }
+    }
+
     private static void AssertResetButtonsOnTaskTabs(MainControl view)
     {
         foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId) in TaskTabs)
@@ -491,6 +563,40 @@ public class MainControlResetFiltersUiTests
         await AssertCustomDateFilter(vm.ArchivedDateFilter);
         await AssertCustomDateFilter(vm.LastCreatedDateFilter);
         await AssertCustomDateFilter(vm.LastUpdatedDateFilter);
+    }
+
+    private static async Task AssertStatusFiltersReset(
+        MainWindowViewModel vm,
+        bool defaultShowCompleted,
+        bool defaultShowArchived,
+        DomainTaskStatus? forcedVisibleStatus)
+    {
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.NotReady, true);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Prepared, true);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.InProgress, true);
+
+        var expectedShowCompleted = forcedVisibleStatus == DomainTaskStatus.Completed || defaultShowCompleted;
+        var expectedShowArchived = forcedVisibleStatus == DomainTaskStatus.Archived || defaultShowArchived;
+
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Completed, expectedShowCompleted);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Archived, expectedShowArchived);
+        await Assert.That(vm.ShowCompleted).IsEqualTo(expectedShowCompleted);
+        await Assert.That(vm.ShowArchived).IsEqualTo(expectedShowArchived);
+    }
+
+    private static async Task AssertStatusFilterSelected(
+        MainWindowViewModel vm,
+        DomainTaskStatus status,
+        bool expected)
+    {
+        var filter = vm.StatusFilters.Single(item => item.Status == status);
+        if (expected)
+        {
+            await Assert.That(filter.ShowTasks).IsTrue();
+            return;
+        }
+
+        await Assert.That(filter.ShowTasks).IsFalse();
     }
 
     private static async Task AssertFirstFilterActive(IEnumerable<EmojiFilter> filters)
@@ -587,6 +693,13 @@ public class MainControlResetFiltersUiTests
 
         Dispatcher.UIThread.RunJobs();
         return resetButton;
+    }
+
+    private static void HideFilterPanel(MainControl view, string filtersButtonAutomationId)
+    {
+        var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+        ((Flyout)filtersButton.Flyout!).Hide();
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static T? FindControlInDetachedContent<T>(Control root, string automationId)

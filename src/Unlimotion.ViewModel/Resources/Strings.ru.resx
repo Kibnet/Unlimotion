@@ -35,6 +35,7 @@
   <data name="TaskStatusArchived" xml:space="preserve"><value>Архивировано</value></data>
   <data name="TaskStatusTransitionBlocked" xml:space="preserve"><value>Переход статуса недоступен для этой задачи.</value></data>
   <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Выполненную задачу нельзя архивировать. Сначала верните задачу в активный статус.</value></data>
+  <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Архивную задачу нельзя выполнить. Сначала верните задачу в активный статус.</value></data>
   <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>Задачу нельзя начать раньше плановой даты начала.</value></data>
   <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Отметьте все критерии выполнения перед завершением задачи.</value></data>
   <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Сначала выполните все вложенные задачи.</value></data>

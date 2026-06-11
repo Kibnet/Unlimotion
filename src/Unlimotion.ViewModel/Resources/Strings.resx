@@ -35,6 +35,7 @@
   <data name="TaskStatusArchived" xml:space="preserve"><value>Archived</value></data>
   <data name="TaskStatusTransitionBlocked" xml:space="preserve"><value>Status transition is not available for this task.</value></data>
   <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Completed tasks cannot be archived. Return the task to an active status first.</value></data>
+  <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Archived tasks cannot be completed. Return the task to an active status first.</value></data>
   <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>The task cannot be started before its planned start date.</value></data>
   <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Mark all completion criteria before completing the task.</value></data>
   <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Complete all contained tasks before starting or completing this task.</value></data>

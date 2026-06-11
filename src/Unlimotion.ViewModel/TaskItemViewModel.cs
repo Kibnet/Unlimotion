@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reactive;
+using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text.RegularExpressions;
@@ -67,6 +68,8 @@ namespace Unlimotion.ViewModel
         private DateCommands? commands;
         public SetDurationCommands SetDurationCommands { get; set; } = null!;
         public static TimeSpan DefaultThrottleTime = TimeSpan.FromSeconds(10);
+        public static TimeSpan InProgressElapsedRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
+        public static IScheduler? InProgressElapsedRefreshScheduler { get; set; }
         public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = DefaultThrottleTime;
         private bool IsInitialized => IsInitializedProvider?.Invoke() ?? true;
 
@@ -86,8 +89,10 @@ namespace Unlimotion.ViewModel
 
             AddCompletionCriterionCommand = ReactiveCommand.Create(() =>
             {
-                CompletionCriteria.Add(new TaskCompletionCriterion());
-            }, canEditCompletionCriteria).AddToDisposeAndReturn(this);
+                var criterion = new TaskCompletionCriterion();
+                CompletionCriteria.Add(criterion);
+                RequestCompletionCriterionFocus(criterion);
+            }, canEditCompletionCriteria, RxSchedulers.MainThreadScheduler).AddToDisposeAndReturn(this);
 
             RemoveCompletionCriterionCommand = ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
             {
@@ -95,7 +100,7 @@ namespace Unlimotion.ViewModel
                 {
                     CompletionCriteria.Remove(criterion);
                 }
-            }, canEditCompletionCriteria).AddToDisposeAndReturn(this);
+            }, canEditCompletionCriteria, RxSchedulers.MainThreadScheduler).AddToDisposeAndReturn(this);
 
             NotifyCollectionChangedEventHandler completionCriteriaChangedHandler = (_, __) => OnCompletionCriteriaChanged();
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
@@ -116,6 +121,26 @@ namespace Unlimotion.ViewModel
                     SaveItemCommand.Execute().Subscribe();
                 }
             });
+
+            this.WhenAnyValue(m => m.Status)
+                .Select(status => status == DomainTaskStatus.InProgress
+                    ? Observable
+                        .Timer(
+                            TimeSpan.Zero,
+                            InProgressElapsedRefreshInterval,
+                            InProgressElapsedRefreshScheduler ?? RxSchedulers.MainThreadScheduler)
+                        .Select(_ => Unit.Default)
+                    : Observable.Empty<Unit>())
+                .Switch()
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ => OnPropertyChanged(nameof(InProgressElapsed)))
+                .AddToDispose(this);
+
+            this.WhenAnyValue(m => m.Status, m => m.StartedDateTime)
+                .Where(values => values.Item1 == DomainTaskStatus.InProgress)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ => OnPropertyChanged(nameof(InProgressElapsed)))
+                .AddToDispose(this);
 
             Observable.Merge(
                     this.WhenAnyValue(m => m.IsCanBeCompleted).Select(_ => Unit.Default),
@@ -548,7 +573,9 @@ namespace Unlimotion.ViewModel
         [AlsoNotifyFor(nameof(TitleWithoutEmoji), nameof(Emoji), nameof(OnlyTextTitle))]
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
+        [AlsoNotifyFor(nameof(AvailabilityOpacity))]
         public bool IsCanBeCompleted { get; set; }
+        public double AvailabilityOpacity => IsCanBeCompleted ? 1d : 0.4;
         [AlsoNotifyFor(
             nameof(IsCompleted),
             nameof(StatusOption),
@@ -558,12 +585,17 @@ namespace Unlimotion.ViewModel
             nameof(CompletedDateTime),
             nameof(ArchiveDateTime),
             nameof(StartedDateTime),
+            nameof(StartedLocalDateTime),
             nameof(InProgressElapsed))]
         public DomainTaskStatus Status { get; set; }
         public ObservableCollection<TaskStatusHistoryEntry> StatusHistory { get; set; } = new();
         public ObservableCollection<TaskCompletionCriterion> CompletionCriteria { get; set; } = new();
+        public long CompletionCriterionFocusRequestVersion { get; private set; }
+        public string? CompletionCriterionFocusTargetId { get; private set; }
         public ObservableCollection<TaskStatusOption> StatusOptions { get; } =
             new(Enum.GetValues<DomainTaskStatus>().Select(TaskStatusOption.CreateTransitionOption));
+        public IEnumerable<TaskStatusOption> AvailableStatusTransitionOptions =>
+            StatusOptions.Where(option => option.Status != Status && option.IsEnabled);
         public TaskStatusOption StatusOption
         {
             get => StatusOptions.First(option => option.Status == Status);
@@ -609,12 +641,25 @@ namespace Unlimotion.ViewModel
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? CompletedDateTime { get; set; }
         public DateTimeOffset? ArchiveDateTime { get; set; }
+        [AlsoNotifyFor(nameof(StartedLocalDateTime))]
         public DateTimeOffset? StartedDateTime { get; set; }
+        public DateTime? StartedLocalDateTime => StartedDateTime?.LocalDateTime;
         public string InProgressElapsed => StartedDateTime is null
             ? string.Empty
-            : (DateTimeOffset.Now - StartedDateTime.Value.ToLocalTime()).ToString(@"hh\:mm");
+            : FormatInProgressElapsed(DateTimeOffset.Now - StartedDateTime.Value.ToLocalTime());
         public DateTime? PlannedBeginDateTime { get; set; }
         public DateTime? PlannedEndDateTime { get; set; }
+
+        private static string FormatInProgressElapsed(TimeSpan elapsed)
+        {
+            if (elapsed < TimeSpan.Zero)
+            {
+                elapsed = TimeSpan.Zero;
+            }
+
+            var totalHours = (int)Math.Floor(elapsed.TotalHours);
+            return $"{totalHours:00}:{elapsed.Minutes:00}";
+        }
 
         /// <summary>
         /// Период планируемых дат, вычислимое поле
@@ -973,15 +1018,23 @@ namespace Unlimotion.ViewModel
 
             foreach (var criterion in CompletionCriteria.OfType<INotifyPropertyChanged>())
             {
-                subscriptions.Add(Observable
+                var criterionChanges = Observable
                     .FromEventPattern<PropertyChangedEventHandler, PropertyChangedEventArgs>(
                         handler => criterion.PropertyChanged += handler,
                         handler => criterion.PropertyChanged -= handler)
                     .Where(change => string.IsNullOrEmpty(change.EventArgs.PropertyName) ||
                                      change.EventArgs.PropertyName == nameof(TaskCompletionCriterion.Text) ||
                                      change.EventArgs.PropertyName == nameof(TaskCompletionCriterion.IsSatisfied))
-                    .Throttle(PropertyChangedThrottleTimeSpanDefault)
+                    .Publish();
+
+                subscriptions.Add(criterionChanges
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
+                    .Subscribe(_ => RefreshStatusOptions()));
+                subscriptions.Add(criterionChanges
+                    .Throttle(PropertyChangedThrottleTimeSpanDefault, RxSchedulers.MainThreadScheduler)
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ => SaveCompletionCriteriaIfNeeded()));
+                subscriptions.Add(criterionChanges.Connect());
             }
 
             _completionCriteriaPropertyChangedSubscription.Disposable = subscriptions;
@@ -1005,6 +1058,8 @@ namespace Unlimotion.ViewModel
                 option.IsEnabled = canSelect;
                 option.ToolTip = canSelect ? option.Title : reason;
             }
+
+            OnPropertyChanged(nameof(AvailableStatusTransitionOptions));
         }
 
         private bool CanTransitionToStatus(DomainTaskStatus targetStatus, out string reason)
@@ -1038,6 +1093,12 @@ namespace Unlimotion.ViewModel
 
                     return CanTransitionByAvailability(out reason);
                 case DomainTaskStatus.Completed:
+                    if (Status == DomainTaskStatus.Archived)
+                    {
+                        reason = L10n.Get("TaskStatusCompleteArchivedBlocked");
+                        return false;
+                    }
+
                     if (CompletionCriteria.Any(static criterion => !criterion.IsSatisfied))
                     {
                         reason = L10n.Get("TaskStatusCompleteCriteriaBlocked");
@@ -1048,6 +1109,15 @@ namespace Unlimotion.ViewModel
                 default:
                     reason = L10n.Get("TaskStatusTransitionBlocked");
                     return false;
+            }
+        }
+
+        private void RequestCompletionCriterionFocus(TaskCompletionCriterion criterion)
+        {
+            CompletionCriterionFocusTargetId = criterion.Id;
+            unchecked
+            {
+                CompletionCriterionFocusRequestVersion++;
             }
         }
 

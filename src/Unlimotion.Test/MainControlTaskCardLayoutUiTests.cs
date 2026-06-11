@@ -115,6 +115,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
                 AssertDesktopPlanningGroupsStayCompactRow(view);
                 AssertDesktopRepeaterControlsStayCompact(view);
+                AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(view);
 
                 var relations = FindControlByAutomationId<Control>(view, "CurrentTaskRelationsSection");
                 var parentsAddButton = FindControlByAutomationId<Button>(relations, "CurrentTaskParentsRelationAddButton");
@@ -184,35 +185,42 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            ResetTaskCardLayoutSharedState();
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.DispatchAsync(async () =>
             {
-                var (view, createdWindow) = await CreateArrangedMainControlAsync(
-                    fixture,
-                    1400,
-                    900,
-                    MainWindowViewModelFixture.RepeateTask9Id,
-                    task =>
-                    {
-                        task.Repeater!.Type = RepeaterType.Weekly;
-                        task.Repeater.WorkDays = true;
-                    });
-                window = createdWindow;
+                ResetTaskCardLayoutSharedState();
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                AssertDesktopRepeaterControlsStayCompact(view, requireWeekdayToggles: true);
-            }
-            finally
-            {
-                CloseWindow(window);
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                try
+                {
+                    var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                        fixture,
+                        1400,
+                        900,
+                        MainWindowViewModelFixture.RepeateTask9Id,
+                        task =>
+                        {
+                            task.Repeater!.Type = RepeaterType.Weekly;
+                            task.Repeater.WorkDays = true;
+                        });
+                    window = createdWindow;
+
+                    AssertDesktopRepeaterControlsStayCompact(view, requireWeekdayToggles: true);
+                }
+                finally
+                {
+                    CloseWindow(window);
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
@@ -325,6 +333,168 @@ public class MainControlTaskCardLayoutUiTests
                 AssertVisibleAndArranged(section, "CurrentTaskCompletionCriteriaSection");
                 await Assert.That(addButton.IsEnabled).IsFalse();
                 await Assert.That(items.IsEnabled).IsFalse();
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_CompletionCriterionRow_UsesBorderlessCompactEditing()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RootTask1Id,
+                    task =>
+                    {
+                        task.CompletionCriteria.Add(new TaskCompletionCriterion
+                        {
+                            Text = "Проверить результат",
+                            IsSatisfied = true
+                        });
+                    });
+                window = createdWindow;
+                RunLayoutJobs();
+
+                var section = FindControlByAutomationId<Control>(view, "CurrentTaskCompletionCriteriaSection");
+                var checkBox = FindControlByAutomationId<CheckBox>(section, "CompletionCriterionSatisfiedCheckBox");
+                var textBox = FindControlByAutomationId<TextBox>(section, "CompletionCriterionTextBox");
+                var removeButton = FindControlByAutomationId<Button>(section, "CompletionCriterionRemoveButton");
+                var templateBorder = FindTextBoxTemplateBorder(textBox);
+                var gapAfterCheckBox = GetLeftEdge(section, textBox) - GetRightEdge(section, checkBox);
+
+                await Assert.That(textBox.Classes.Contains("CompletionCriterionTextBox")).IsTrue();
+                await Assert.That(textBox.BorderThickness).IsEqualTo(new Thickness(0));
+                AssertTransparentBrush(textBox.BorderBrush, "Completion criterion text box border");
+                AssertTransparentBrush(textBox.Background, "Completion criterion text box background");
+                await Assert.That(templateBorder.BorderThickness).IsEqualTo(new Thickness(0));
+                AssertTransparentBrush(templateBorder.BorderBrush, "Completion criterion template border");
+                AssertTransparentBrush(templateBorder.Background, "Completion criterion template background");
+                await Assert.That(gapAfterCheckBox).IsLessThanOrEqualTo(6);
+                AssertVectorRemoveButton(removeButton, 28);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_AddCompletionCriterion_FocusesNewCriterionTextBox()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RootTask1Id);
+                window = createdWindow;
+                RunLayoutJobs();
+
+                var section = FindControlByAutomationId<Control>(view, "CurrentTaskCompletionCriteriaSection");
+                var addButton = FindControlByAutomationId<Button>(section, "AddCompletionCriterionButton");
+
+                await Assert.That(addButton.Command?.CanExecute(addButton.CommandParameter)).IsTrue();
+                addButton.Command!.Execute(addButton.CommandParameter);
+                RunLayoutJobs();
+
+                TextBox? focusedTextBox = null;
+                var focused = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        RunLayoutJobs();
+                        focusedTextBox = section.GetVisualDescendants()
+                            .OfType<TextBox>()
+                            .Where(candidate =>
+                                string.Equals(
+                                    AutomationProperties.GetAutomationId(candidate),
+                                    "CompletionCriterionTextBox",
+                                    StringComparison.Ordinal))
+                            .SingleOrDefault();
+
+                        return focusedTextBox != null && IsFocused(window, focusedTextBox);
+                    },
+                    TimeSpan.FromSeconds(2));
+
+                await Assert.That(focused).IsTrue();
+                await Assert.That(focusedTextBox).IsNotNull();
+                await Assert.That(focusedTextBox!.DataContext).IsAssignableTo<TaskCompletionCriterion>();
+                await Assert.That(focusedTextBox.CaretIndex).IsEqualTo(focusedTextBox.Text?.Length ?? 0);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_RemoveButtonsUseCenteredVectorIcons()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RootTask1Id,
+                    task =>
+                    {
+                        task.CompletionCriteria.Add(new TaskCompletionCriterion
+                        {
+                            Text = "Проверить результат",
+                            IsSatisfied = false
+                        });
+                    });
+                window = createdWindow;
+                RunLayoutJobs();
+
+                var completionCriteriaSection = FindControlByAutomationId<Control>(
+                    view,
+                    "CurrentTaskCompletionCriteriaSection");
+                var completionCriterionRemoveButton = FindControlByAutomationId<Button>(
+                    completionCriteriaSection,
+                    "CompletionCriterionRemoveButton");
+                var relationRemoveButton = view.GetVisualDescendants()
+                    .OfType<Button>()
+                    .Where(button => button.Classes.Contains("TaskRowRemoveButton"))
+                    .FirstOrDefault(IsVisibleAndArranged)
+                    ?? throw new InvalidOperationException("Visible task row remove button was not found.");
+
+                AssertVectorRemoveButton(completionCriterionRemoveButton, 28);
+                AssertVectorRemoveButton(relationRemoveButton, 28);
             }
             finally
             {
@@ -874,6 +1044,88 @@ public class MainControlTaskCardLayoutUiTests
         }
     }
 
+    private static void AssertVectorRemoveButton(ContentControl button, double expectedSize)
+    {
+        AssertVisibleAndArranged((Control)button, AutomationProperties.GetAutomationId((Control)button) ?? string.Empty);
+
+        if (button.Content is string content)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                $"should use a vector remove icon, got text content '{content}'.");
+        }
+
+        if (Math.Abs(button.Bounds.Width - button.Bounds.Height) > 1 ||
+            Math.Abs(button.Bounds.Width - expectedSize) > 1)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                $"should be a {expectedSize:F0}px square, bounds={button.Bounds}.");
+        }
+
+        if (button is Button avaloniaButton)
+        {
+            if (avaloniaButton.BorderThickness != new Thickness(0))
+            {
+                throw new InvalidOperationException(
+                    $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                    $"should not render default button border, border={avaloniaButton.BorderThickness}.");
+            }
+
+            if (avaloniaButton.Background is ISolidColorBrush background &&
+                background.Color != Colors.Transparent)
+            {
+                throw new InvalidOperationException(
+                    $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                    $"should use a transparent background, background={background.Color}.");
+            }
+        }
+
+        var icons = ((Control)button).GetVisualDescendants()
+            .OfType<PathIcon>()
+            .Where(IsVisibleAndArranged)
+            .ToArray();
+        if (icons.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                $"should render exactly one visible vector icon, found {icons.Length}.");
+        }
+
+        var icon = icons[0];
+        var buttonCenterX = GetLeftEdge((Control)button, (Control)button) + button.Bounds.Width / 2;
+        var iconCenterX = GetLeftEdge((Control)button, icon) + icon.Bounds.Width / 2;
+        var buttonCenterY = GetTopEdge((Control)button, (Control)button) + button.Bounds.Height / 2;
+        var iconCenterY = GetTopEdge((Control)button, icon) + icon.Bounds.Height / 2;
+        if (Math.Abs(buttonCenterX - iconCenterX) > 1.5 ||
+            Math.Abs(buttonCenterY - iconCenterY) > 1.5)
+        {
+            throw new InvalidOperationException(
+                $"{button.GetType().Name}:{AutomationProperties.GetAutomationId((Control)button)} " +
+                $"remove icon should be centered: buttonCenter=({buttonCenterX:F1},{buttonCenterY:F1}); " +
+                $"iconCenter=({iconCenterX:F1},{iconCenterY:F1}).");
+        }
+    }
+
+    private static Border FindTextBoxTemplateBorder(TextBox textBox)
+    {
+        return textBox.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(static border =>
+                string.Equals(border.Name, "PART_BorderElement", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException(
+                $"{textBox.GetType().Name}:{AutomationProperties.GetAutomationId(textBox)} template border was not found.");
+    }
+
+    private static void AssertTransparentBrush(IBrush? brush, string source)
+    {
+        if (brush is not ISolidColorBrush solidColorBrush ||
+            solidColorBrush.Color != Colors.Transparent)
+        {
+            throw new InvalidOperationException($"{source} should be transparent, got {brush?.ToString() ?? "null"}.");
+        }
+    }
+
     private static void AssertDoesNotUseLightThemeAccentBackground(Control control)
     {
         var lightAccentBackground = Color.Parse("#F7FAFF");
@@ -988,6 +1240,11 @@ public class MainControlTaskCardLayoutUiTests
         }
     }
 
+    private static bool IsFocused(Window? window, Control control)
+    {
+        return ReferenceEquals(window?.FocusManager?.GetFocusedElement(), control) || control.IsFocused;
+    }
+
     private static void AssertTaskActionsMenuSitsAfterIdBelowTitle(Control root)
     {
         var title = FindControlByAutomationId<Control>(root, "CurrentTaskTitleTextBox");
@@ -1011,6 +1268,50 @@ public class MainControlTaskCardLayoutUiTests
             throw new InvalidOperationException(
                 $"Task actions menu should sit to the right of the task identifier: " +
                 $"idRight={idRight:F1}; actionsLeft={actionsLeft:F1}.");
+        }
+    }
+
+    private static void AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(Control root)
+    {
+        var statusHistorySection = FindControlByAutomationId<Control>(root, "CurrentTaskStatusHistorySection");
+        var statusHistoryExpander = FindControlByAutomationId<Expander>(statusHistorySection, "StatusHistoryExpander");
+        var statusHistoryToggle = statusHistoryExpander.GetVisualDescendants()
+            .OfType<ToggleButton>()
+            .FirstOrDefault(IsVisibleAndArranged)
+            ?? throw new InvalidOperationException("Status history expander toggle was not found.");
+        var statusHistoryTop = GetTopEdge(root, statusHistorySection);
+        var misplacedSection = SectionAutomationIds
+            .Where(static automationId =>
+                !string.Equals(automationId, "CurrentTaskCard", StringComparison.Ordinal) &&
+                !string.Equals(automationId, "CurrentTaskStatusHistorySection", StringComparison.Ordinal))
+            .Select(automationId => new
+            {
+                AutomationId = automationId,
+                Top = GetTopEdge(root, FindControlByAutomationId<Control>(root, automationId))
+            })
+            .FirstOrDefault(section => section.Top > statusHistoryTop + 1);
+
+        if (misplacedSection is not null)
+        {
+            throw new InvalidOperationException(
+                $"Status history should be the bottom task card section, but " +
+                $"{misplacedSection.AutomationId} starts below it: " +
+                $"statusTop={statusHistoryTop:F1}; sectionTop={misplacedSection.Top:F1}.");
+        }
+
+        if (statusHistoryExpander.ExpandDirection != ExpandDirection.Down)
+        {
+            throw new InvalidOperationException(
+                $"Status history expander should open down, got {statusHistoryExpander.ExpandDirection}.");
+        }
+
+        if (string.Equals(statusHistoryToggle.Content?.ToString(), "<", StringComparison.Ordinal) ||
+            statusHistoryToggle.Bounds.Width < statusHistorySection.Bounds.Width / 2)
+        {
+            throw new InvalidOperationException(
+                "Status history expander should render as a horizontal bottom section header, " +
+                $"not as the old side toggle: content={statusHistoryToggle.Content}; " +
+                $"toggleBounds={statusHistoryToggle.Bounds}; sectionBounds={statusHistorySection.Bounds}.");
         }
     }
 

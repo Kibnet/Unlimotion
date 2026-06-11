@@ -21,6 +21,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     private const int AvailabilityMigrationVersion = 2;
     private const int StatusModelMigrationVersion = 1;
     private const int InitialLoadBatchSize = 64;
+    private const string StatusModelMigrationBackupDirectoryName = "status-model.migration.backup";
     private readonly bool isFileStorage;
     private bool disposed;
 
@@ -347,15 +348,17 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     {
         var migrationTime = DateTimeOffset.UtcNow;
         var gitWorkTreePath = FindGitWorkTreePath(fileStorage.Path);
+        string? backupPath = null;
         var changed = 0;
         var processed = 0;
 
         foreach (var filePath in EnumerateTaskFilePaths(fileStorage.Path))
         {
+            string rawJson;
             JObject taskJson;
             try
             {
-                var rawJson = await File.ReadAllTextAsync(filePath);
+                rawJson = await File.ReadAllTextAsync(filePath);
                 taskJson = JObject.Parse(rawJson);
             }
             catch
@@ -371,8 +374,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
             if (gitWorkTreePath == null)
             {
-                throw new InvalidOperationException(
-                    $"Task status migration requires task storage path to be inside a Git worktree: {fileStorage.Path}");
+                backupPath ??= Path.Combine(fileStorage.Path, StatusModelMigrationBackupDirectoryName);
+                Directory.CreateDirectory(backupPath);
+                await File.WriteAllTextAsync(
+                    Path.Combine(backupPath, Path.GetFileName(filePath)),
+                    rawJson);
             }
 
             await File.WriteAllTextAsync(
@@ -393,8 +399,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             TasksProcessed = processed,
             ChangedTasks = changed,
             Message = "Task status model migrated from IsCompleted to Status/StatusHistory",
-            RollbackPath = $"Use Git revert/checkout for migrated task files under {fileStorage.Path}",
-            GitWorkTreePath = gitWorkTreePath
+            RollbackPath = gitWorkTreePath == null
+                ? $"Restore original task files from {backupPath}"
+                : $"Use Git revert/checkout for migrated task files under {fileStorage.Path}",
+            GitWorkTreePath = gitWorkTreePath,
+            BackupPath = backupPath
         };
 
         await File.WriteAllTextAsync(

@@ -12,6 +12,7 @@ namespace Unlimotion.Interface
         public TaskStatus Status { get; set; } = TaskStatus.NotReady;
         public List<TaskStatusHistoryEntry> StatusHistory { get; set; } = new();
         public List<TaskCompletionCriterion> CompletionCriteria { get; set; } = new();
+        public bool IsCanBeCompleted { get; set; } = true;
         public DateTimeOffset? UpdatedDateTime { get; set; }
         public DateTimeOffset? UnlockedDateTime { get; set; }
         public DateTimeOffset? PlannedBeginDateTime { get; set; }

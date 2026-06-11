@@ -3,9 +3,11 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 
@@ -15,14 +17,15 @@ public class TaskStatusPicker : Button
 {
     private readonly TaskStatusIcon _icon = new()
     {
-        Width = 16,
-        Height = 16,
+        Width = 20,
+        Height = 20,
         HorizontalAlignment = HorizontalAlignment.Center,
-        VerticalAlignment = VerticalAlignment.Center
+        VerticalAlignment = VerticalAlignment.Center,
+        IsHitTestVisible = false
     };
 
     private TaskItemViewModel? _subscribedTask;
-    private bool _ignoreNextClick;
+    private bool _openOnPointerRelease;
 
     public static readonly StyledProperty<TaskItemViewModel?> TaskProperty =
         AvaloniaProperty.Register<TaskStatusPicker, TaskItemViewModel?>(nameof(Task));
@@ -31,13 +34,17 @@ public class TaskStatusPicker : Button
     {
         Classes.Add("TaskStatusPicker");
         Content = _icon;
-        Width = 28;
-        MinWidth = 28;
-        MinHeight = 24;
-        Padding = new Thickness(3, 0);
+        Width = 20;
+        Height = 20;
+        MinWidth = 20;
+        MinHeight = 20;
+        Margin = new Thickness(0, 0, 8, 0);
+        Padding = new Thickness(0);
+        Background = Avalonia.Media.Brushes.Transparent;
+        BorderBrush = Avalonia.Media.Brushes.Transparent;
+        BorderThickness = new Thickness(0);
         HorizontalContentAlignment = HorizontalAlignment.Center;
         VerticalContentAlignment = VerticalAlignment.Center;
-        AddHandler(PointerPressedEvent, OpenOnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     public TaskItemViewModel? Task
@@ -56,39 +63,39 @@ public class TaskStatusPicker : Button
         }
     }
 
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        ClearTaskSubscription();
+        base.OnDetachedFromVisualTree(e);
+    }
+
     protected override void OnClick()
     {
-        if (_ignoreNextClick)
+        if (!IsStatusFlyoutOpen())
         {
-            _ignoreNextClick = false;
-            return;
+            OpenStatusFlyout();
         }
 
-        OpenStatusFlyout();
         base.OnClick();
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        _openOnPointerRelease = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
         base.OnPointerPressed(e);
         e.Handled = true;
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        var shouldOpen = _openOnPointerRelease;
+        _openOnPointerRelease = false;
         base.OnPointerReleased(e);
-        e.Handled = true;
-    }
-
-    private void OpenOnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (shouldOpen && !IsStatusFlyoutOpen())
         {
-            return;
+            OpenStatusFlyout();
         }
 
-        _ignoreNextClick = true;
-        OpenStatusFlyout();
         e.Handled = true;
     }
 
@@ -105,6 +112,8 @@ public class TaskStatusPicker : Button
         flyout.ShowAt(this);
     }
 
+    private bool IsStatusFlyoutOpen() => Flyout is MenuFlyout { IsOpen: true };
+
     private TaskItemViewModel? GetEffectiveTask() => Task ?? DataContext as TaskItemViewModel;
 
     private void SyncTaskSubscription()
@@ -116,10 +125,7 @@ public class TaskStatusPicker : Button
             return;
         }
 
-        if (_subscribedTask is INotifyPropertyChanged oldTask)
-        {
-            oldTask.PropertyChanged -= TaskOnPropertyChanged;
-        }
+        ClearTaskSubscription();
 
         _subscribedTask = task;
 
@@ -131,20 +137,46 @@ public class TaskStatusPicker : Button
         UpdateIcon(task);
     }
 
+    private void ClearTaskSubscription()
+    {
+        if (_subscribedTask is INotifyPropertyChanged oldTask)
+        {
+            oldTask.PropertyChanged -= TaskOnPropertyChanged;
+        }
+
+        _subscribedTask = null;
+    }
+
     private void TaskOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (string.IsNullOrEmpty(e.PropertyName) ||
             e.PropertyName == nameof(TaskItemViewModel.Status) ||
+            e.PropertyName == nameof(TaskItemViewModel.IsCanBeCompleted) ||
+            e.PropertyName == nameof(TaskItemViewModel.AvailabilityOpacity) ||
             e.PropertyName == nameof(TaskItemViewModel.StatusOption) ||
             e.PropertyName == nameof(TaskItemViewModel.StatusToolTip))
         {
-            UpdateIcon(_subscribedTask);
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                UpdateIcon(_subscribedTask);
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(sender, _subscribedTask))
+                    {
+                        UpdateIcon(_subscribedTask);
+                    }
+                });
+            }
         }
     }
 
     private void UpdateIcon(TaskItemViewModel? task)
     {
         IsEnabled = task != null;
+        Opacity = task?.AvailabilityOpacity ?? 1d;
         _icon.Status = task?.Status ?? TaskStatus.NotReady;
         ToolTip.SetTip(this, task?.StatusToolTip);
     }
@@ -156,14 +188,21 @@ public class TaskStatusPicker : Button
             Placement = PlacementMode.BottomEdgeAlignedLeft
         };
 
-        foreach (var option in task.StatusOptions)
+        foreach (var option in task.AvailableStatusTransitionOptions)
         {
             var menuItem = new MenuItem
             {
                 Header = CreateStatusMenuHeader(option),
-                IsEnabled = option.IsEnabled
+                DataContext = option
             };
-            ToolTip.SetTip(menuItem, option.ToolTip);
+            menuItem.Bind(InputElement.IsEnabledProperty, new Binding(nameof(TaskStatusOption.IsEnabled))
+            {
+                Source = option
+            });
+            menuItem.Bind(ToolTip.TipProperty, new Binding(nameof(TaskStatusOption.ToolTip))
+            {
+                Source = option
+            });
             AutomationProperties.SetAutomationId(menuItem, $"TaskStatusOption{option.Status}");
             menuItem.Click += (_, _) =>
             {
@@ -181,26 +220,36 @@ public class TaskStatusPicker : Button
 
     private static Control CreateStatusMenuHeader(TaskStatusOption option)
     {
+        var icon = new TaskStatusIcon
+        {
+            Status = option.Status,
+            Width = 16,
+            Height = 16,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        icon.Bind(InputElement.IsEnabledProperty, new Binding(nameof(TaskStatusOption.IsEnabled))
+        {
+            Source = option
+        });
+
+        var text = new TextBlock
+        {
+            Text = option.Title,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        text.Bind(InputElement.IsEnabledProperty, new Binding(nameof(TaskStatusOption.IsEnabled))
+        {
+            Source = option
+        });
+
         return new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children =
             {
-                new TaskStatusIcon
-                {
-                    Status = option.Status,
-                    Width = 16,
-                    Height = 16,
-                    IsEnabled = option.IsEnabled,
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                new TextBlock
-                {
-                    Text = option.Title,
-                    IsEnabled = option.IsEnabled,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                icon,
+                text
             }
         };
     }

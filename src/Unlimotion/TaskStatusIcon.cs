@@ -1,16 +1,19 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Styling;
 using Unlimotion.Domain;
 
 namespace Unlimotion;
 
 public class TaskStatusIcon : Control
 {
-    private const double DesignSize = 16;
-    private const double BoxSize = 14;
+    private const double DesignSize = 20;
+    private const double BoxInset = 0.5;
+    private const double BoxSize = 19;
 
     private static readonly IBrush AccentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6C, 0xBD));
     private static readonly IBrush AccentBrushDisabled = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0x0F, 0x6C, 0xBD));
@@ -24,12 +27,49 @@ public class TaskStatusIcon : Control
     private static readonly IBrush ArchivedMarkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x6B, 0x74, 0x80));
     private static readonly IBrush ArchivedMarkBrushDisabled = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0x6B, 0x74, 0x80));
 
+    private static readonly string[] UncheckedBorderResourceKeys =
+    [
+        "CheckBoxCheckBackgroundStrokeUnchecked",
+        "CheckBoxBorderBrush",
+        "ThemeControlHighBrush",
+        "ThemeControlMidBrush"
+    ];
+
+    private static readonly string[] UncheckedPointerOverBorderResourceKeys =
+    [
+        "CheckBoxCheckBackgroundStrokeUncheckedPointerOver",
+        "CheckBoxBorderBrushPointerOver",
+        "ThemeControlHighBrush",
+        "ThemeControlMidBrush"
+    ];
+
+    private static readonly string[] UncheckedDisabledBorderResourceKeys =
+    [
+        "CheckBoxCheckBackgroundStrokeUncheckedDisabled",
+        "CheckBoxBorderBrushDisabled",
+        "ThemeControlDisabledBrush",
+        "ThemeControlMidBrush"
+    ];
+
+    private static readonly string[] CheckedFillResourceKeys =
+    [
+        "CheckBoxCheckBackgroundFillChecked",
+        "AccentButtonBackground",
+        "SystemAccentColor"
+    ];
+
+    private static readonly string[] CheckedGlyphResourceKeys =
+    [
+        "CheckBoxCheckGlyphForegroundChecked",
+        "SystemControlForegroundChromeWhiteBrush"
+    ];
+
     public static readonly StyledProperty<TaskStatus> StatusProperty =
         AvaloniaProperty.Register<TaskStatusIcon, TaskStatus>(nameof(Status));
 
     static TaskStatusIcon()
     {
-        AffectsRender<TaskStatusIcon>(StatusProperty, IsEnabledProperty);
+        AffectsRender<TaskStatusIcon>(StatusProperty, IsEnabledProperty, IsPointerOverProperty);
     }
 
     public TaskStatus Status
@@ -43,6 +83,16 @@ public class TaskStatusIcon : Control
         var width = double.IsNaN(Width) ? DesignSize : Width;
         var height = double.IsNaN(Height) ? DesignSize : Height;
         return new Size(width, height);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (string.Equals(change.Property.Name, "ActualThemeVariant", StringComparison.Ordinal))
+        {
+            InvalidateVisual();
+        }
     }
 
     public override void Render(DrawingContext context)
@@ -64,12 +114,12 @@ public class TaskStatusIcon : Control
         var isEnabled = IsEffectivelyEnabled;
         var borderBrush = GetBorderBrush(Status, isEnabled);
         var boxFillBrush = Status == TaskStatus.Completed
-            ? isEnabled ? CompletedFillBrush : CompletedFillBrushDisabled
+            ? ResolveBrush(CheckedFillResourceKeys, isEnabled ? CompletedFillBrush : CompletedFillBrushDisabled)
             : null;
-        var borderPen = new Pen(borderBrush, 1.45 * scale);
-        var boxRect = r(1.25, 1.25, BoxSize - 0.5, BoxSize - 0.5);
+        var borderPen = new Pen(borderBrush, GetBorderThickness(scale));
+        var boxRect = r(BoxInset, BoxInset, BoxSize, BoxSize);
 
-        context.DrawRectangle(boxFillBrush, borderPen, boxRect, 2 * scale, 2 * scale);
+        context.DrawRectangle(boxFillBrush, borderPen, boxRect, 3 * scale, 3 * scale);
 
         switch (Status)
         {
@@ -80,22 +130,57 @@ public class TaskStatusIcon : Control
                 DrawInProgressMark(context, p, isEnabled ? AccentBrush : AccentBrushDisabled);
                 break;
             case TaskStatus.Completed:
-                DrawCompletedMark(context, p, CompletedMarkBrush, scale);
+                DrawCompletedMark(context, p, ResolveBrush(CheckedGlyphResourceKeys, CompletedMarkBrush));
                 break;
             case TaskStatus.Archived:
-                DrawArchivedMark(context, p, r, isEnabled, scale);
+                DrawArchivedMark(context, r, isEnabled, scale);
                 break;
         }
     }
 
-    private static IBrush GetBorderBrush(TaskStatus status, bool isEnabled)
+    private IBrush GetBorderBrush(TaskStatus status, bool isEnabled)
     {
+        if (!isEnabled)
+        {
+            return status switch
+            {
+                TaskStatus.Prepared => PreparedBrushDisabled,
+                TaskStatus.InProgress or TaskStatus.Completed => AccentBrushDisabled,
+                _ => ResolveBrush(UncheckedDisabledBorderResourceKeys, BorderBrushDisabled)
+            };
+        }
+
         return status switch
         {
-            TaskStatus.Prepared => isEnabled ? PreparedBrush : PreparedBrushDisabled,
-            TaskStatus.InProgress or TaskStatus.Completed => isEnabled ? AccentBrush : AccentBrushDisabled,
-            _ => isEnabled ? BorderBrush : BorderBrushDisabled
+            TaskStatus.Prepared => PreparedBrush,
+            TaskStatus.InProgress => AccentBrush,
+            TaskStatus.Completed => ResolveBrush(CheckedFillResourceKeys, CompletedFillBrush),
+            _ => ResolveBrush(
+                IsPointerOver ? UncheckedPointerOverBorderResourceKeys : UncheckedBorderResourceKeys,
+                BorderBrush)
         };
+    }
+
+    private IBrush ResolveBrush(IReadOnlyList<string> resourceKeys, IBrush fallback)
+    {
+        foreach (var resourceKey in resourceKeys)
+        {
+            if (TryGetResource(resourceKey, ActualThemeVariant, out var resource) ||
+                Application.Current?.TryGetResource(resourceKey, ActualThemeVariant, out resource) == true)
+            {
+                if (resource is IBrush brush)
+                {
+                    return brush;
+                }
+
+                if (resource is Color color)
+                {
+                    return new ImmutableSolidColorBrush(color);
+                }
+            }
+        }
+
+        return fallback;
     }
 
     private static void DrawPreparedMark(
@@ -105,8 +190,8 @@ public class TaskStatusIcon : Control
         double scale)
     {
         var pen = new Pen(brush, 1.85 * scale);
-        context.DrawLine(pen, point(8, 4.2), point(8, 9.1));
-        context.DrawEllipse(brush, null, point(8, 11.9), 1 * scale, 1 * scale);
+        context.DrawLine(pen, point(10, 5.2), point(10, 11.7));
+        context.DrawEllipse(brush, null, point(10, 15), 1.1 * scale, 1.1 * scale);
     }
 
     private static void DrawInProgressMark(
@@ -117,36 +202,45 @@ public class TaskStatusIcon : Control
         var geometry = new StreamGeometry();
         using (var geometryContext = geometry.Open())
         {
-            geometryContext.BeginFigure(point(6.2, 4.8), true);
-            geometryContext.LineTo(point(11.5, 8));
-            geometryContext.LineTo(point(6.2, 11.2));
+            geometryContext.BeginFigure(point(8, 6.1), true);
+            geometryContext.LineTo(point(14, 10));
+            geometryContext.LineTo(point(8, 13.9));
             geometryContext.EndFigure(true);
         }
 
         context.DrawGeometry(brush, null, geometry);
     }
 
+    private static double GetBorderThickness(double scale) => scale;
+
     private static void DrawCompletedMark(
         DrawingContext context,
         Func<double, double, Point> point,
-        IBrush brush,
-        double scale)
+        IBrush brush)
     {
-        var pen = new Pen(brush, 2.2 * scale);
-        context.DrawLine(pen, point(4.1, 8.4), point(6.8, 11));
-        context.DrawLine(pen, point(6.8, 11), point(12.2, 5));
+        var geometry = new StreamGeometry();
+        using (var geometryContext = geometry.Open())
+        {
+            geometryContext.BeginFigure(point(8.35, 13.55), true);
+            geometryContext.LineTo(point(4.65, 9.85));
+            geometryContext.LineTo(point(6.2, 8.3));
+            geometryContext.LineTo(point(8.35, 10.45));
+            geometryContext.LineTo(point(14.3, 4.5));
+            geometryContext.LineTo(point(15.85, 6.05));
+            geometryContext.EndFigure(true);
+        }
+
+        context.DrawGeometry(brush, null, geometry);
     }
 
     private static void DrawArchivedMark(
         DrawingContext context,
-        Func<double, double, Point> point,
         Func<double, double, double, double, Rect> rect,
         bool isEnabled,
         double scale)
     {
         var fill = isEnabled ? ArchivedMarkBrush : ArchivedMarkBrushDisabled;
-        var lidPen = new Pen(fill, 1.2 * scale);
-        context.DrawLine(lidPen, point(5.2, 5.2), point(10.8, 5.2));
-        context.DrawRectangle(fill, null, rect(5, 7, 6, 4.2), 0.75 * scale, 0.75 * scale);
+        context.DrawRectangle(fill, null, rect(4.8, 5.9, 10.4, 2.5), 0.7 * scale, 0.7 * scale);
+        context.DrawRectangle(fill, null, rect(5.8, 8.8, 8.4, 6.4), 1.1 * scale, 1.1 * scale);
     }
 }

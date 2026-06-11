@@ -58,9 +58,11 @@ public class TaskStatusMappingTests
         await Assert.That(hubMold.Status).IsEqualTo(source.Status);
         await Assert.That(hubMold.StatusHistory.Count).IsEqualTo(2);
         await Assert.That(hubMold.CompletionCriteria.Single().Id).IsEqualTo("criterion-1");
+        await Assert.That(hubMold.IsCanBeCompleted).IsEqualTo(source.IsCanBeCompleted);
         await Assert.That(received.Status).IsEqualTo(DomainTaskStatus.Archived);
         await Assert.That(received.StatusHistory.Count).IsEqualTo(2);
         await Assert.That(received.CompletionCriteria.Single().Text).IsEqualTo("Проверить результат");
+        await Assert.That(received.IsCanBeCompleted).IsEqualTo(source.IsCanBeCompleted);
     }
 
     private static TaskItem CreateTaskItem()
@@ -74,6 +76,7 @@ public class TaskStatusMappingTests
             Title = "Mapping task",
             Description = "Mapping contract",
             Status = DomainTaskStatus.InProgress,
+            IsCanBeCompleted = true,
             StatusHistory = new List<TaskStatusHistoryEntry>
             {
                 new()

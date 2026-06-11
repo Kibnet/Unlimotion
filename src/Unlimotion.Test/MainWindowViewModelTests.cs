@@ -541,6 +541,8 @@ namespace Unlimotion.Test
         [Test]
         public async Task CopyTaskOutline_UsesMarkdownAndDescriptionSettings()
         {
+            mainWindowVM.ResetCurrentTabFilters();
+
             var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
             parent!.Description = "Parent description";
             parent.IsCompleted = true;

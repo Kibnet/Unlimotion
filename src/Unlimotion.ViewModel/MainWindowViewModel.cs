@@ -1767,7 +1767,7 @@ namespace Unlimotion.ViewModel
             }
             else if (LastOpenedMode)
             {
-                ResetSearchFilter();
+                ResetLastOpenedTabFilters();
             }
             else if (GraphMode)
             {
@@ -1802,6 +1802,7 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
+            ResetCompletionVisibilityFilters();
             ShowWanted = _defaultShowWanted;
             ResetToggleFilters(UnlockedTimeFilters);
             ResetToggleFilters(DurationFilters);
@@ -1811,12 +1812,14 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
+            ResetCompletionVisibilityFilters(DomainTaskStatus.InProgress);
         }
 
         private void ResetCompletedTabFilters()
         {
             ResetSearchFilter();
             ResetEmojiFilters();
+            ResetCompletionVisibilityFilters(DomainTaskStatus.Completed);
             ResetDateFilter(CompletedDateFilter);
         }
 
@@ -1824,7 +1827,15 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
+            ResetCompletionVisibilityFilters(DomainTaskStatus.Archived);
             ResetDateFilter(ArchivedDateFilter);
+        }
+
+        private void ResetLastOpenedTabFilters()
+        {
+            ResetSearchFilter();
+            ResetEmojiFilters();
+            ResetCompletionVisibilityFilters();
         }
 
         private void ResetRoadmapTabFilters()
@@ -1857,13 +1868,19 @@ namespace Unlimotion.ViewModel
             ResetToggleFilters(EmojiExcludeFilters);
         }
 
-        private void ResetCompletionVisibilityFilters()
+        private void ResetCompletionVisibilityFilters(params DomainTaskStatus[] forcedVisibleStatuses)
         {
+            bool IsForcedVisible(DomainTaskStatus status) => forcedVisibleStatuses.Contains(status);
+
             SetStatusFilterSelection(DomainTaskStatus.NotReady, true);
             SetStatusFilterSelection(DomainTaskStatus.Prepared, true);
             SetStatusFilterSelection(DomainTaskStatus.InProgress, true);
-            SetStatusFilterSelection(DomainTaskStatus.Completed, _defaultShowCompleted);
-            SetStatusFilterSelection(DomainTaskStatus.Archived, _defaultShowArchived);
+            SetStatusFilterSelection(
+                DomainTaskStatus.Completed,
+                IsForcedVisible(DomainTaskStatus.Completed) || _defaultShowCompleted);
+            SetStatusFilterSelection(
+                DomainTaskStatus.Archived,
+                IsForcedVisible(DomainTaskStatus.Archived) || _defaultShowArchived);
             SyncLegacyVisibilityFromStatusFilters();
         }
 
