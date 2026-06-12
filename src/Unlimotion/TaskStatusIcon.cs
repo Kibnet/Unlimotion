@@ -14,6 +14,10 @@ public class TaskStatusIcon : Control
     private const double DesignSize = 20;
     private const double BoxInset = 0.5;
     private const double BoxSize = 19;
+    private const double CheckGlyphCanvasSize = 16;
+    private const double CheckedGlyphWidth = 9;
+    private const double DefaultCornerRadius = 4;
+    private const string CheckMarkPathData = "M5.5 10.586 1.707 6.793A1 1 0 0 0 .293 8.207l4.5 4.5a1 1 0 0 0 1.414 0l11-11A1 1 0 0 0 15.793.293L5.5 10.586Z";
 
     private static readonly IBrush AccentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6C, 0xBD));
     private static readonly IBrush AccentBrushDisabled = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0x0F, 0x6C, 0xBD));
@@ -24,6 +28,7 @@ public class TaskStatusIcon : Control
     private static readonly IBrush CompletedFillBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6C, 0xBD));
     private static readonly IBrush CompletedFillBrushDisabled = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0x0F, 0x6C, 0xBD));
     private static readonly IBrush CompletedMarkBrush = new ImmutableSolidColorBrush(Colors.White);
+    private static readonly Geometry CompletedMarkFallbackGeometry = Geometry.Parse(CheckMarkPathData);
     private static readonly IBrush ArchivedMarkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x6B, 0x74, 0x80));
     private static readonly IBrush ArchivedMarkBrushDisabled = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0x6B, 0x74, 0x80));
 
@@ -58,9 +63,41 @@ public class TaskStatusIcon : Control
         "SystemAccentColor"
     ];
 
+    private static readonly string[] CheckedFillDisabledResourceKeys =
+    [
+        "CheckBoxCheckBackgroundFillCheckedDisabled",
+        "CheckBoxBackgroundCheckedDisabled",
+        "AccentButtonBackgroundDisabled",
+        "SystemAccentColor"
+    ];
+
+    private static readonly string[] CheckedBorderResourceKeys =
+    [
+        "CheckBoxCheckBackgroundFillChecked",
+        "CheckBoxBorderBrushChecked",
+        "AccentButtonBackground",
+        "SystemAccentColor"
+    ];
+
+    private static readonly string[] CheckedBorderDisabledResourceKeys =
+    [
+        "CheckBoxCheckBackgroundStrokeCheckedDisabled",
+        "CheckBoxCheckBackgroundFillCheckedDisabled",
+        "CheckBoxBorderBrushCheckedDisabled",
+        "AccentButtonBackgroundDisabled",
+        "SystemAccentColor"
+    ];
+
     private static readonly string[] CheckedGlyphResourceKeys =
     [
         "CheckBoxCheckGlyphForegroundChecked",
+        "SystemControlForegroundChromeWhiteBrush"
+    ];
+
+    private static readonly string[] CheckedGlyphDisabledResourceKeys =
+    [
+        "CheckBoxCheckGlyphForegroundCheckedDisabled",
+        "SystemControlDisabledChromeDisabledLowBrush",
         "SystemControlForegroundChromeWhiteBrush"
     ];
 
@@ -113,13 +150,12 @@ public class TaskStatusIcon : Control
 
         var isEnabled = IsEffectivelyEnabled;
         var borderBrush = GetBorderBrush(Status, isEnabled);
-        var boxFillBrush = Status == TaskStatus.Completed
-            ? ResolveBrush(CheckedFillResourceKeys, isEnabled ? CompletedFillBrush : CompletedFillBrushDisabled)
-            : null;
+        var boxFillBrush = GetBoxFillBrush(Status, isEnabled);
         var borderPen = new Pen(borderBrush, GetBorderThickness(scale));
         var boxRect = r(BoxInset, BoxInset, BoxSize, BoxSize);
+        var cornerRadius = GetBoxCornerRadius() * scale;
 
-        context.DrawRectangle(boxFillBrush, borderPen, boxRect, 3 * scale, 3 * scale);
+        context.DrawRectangle(boxFillBrush, borderPen, boxRect, cornerRadius, cornerRadius);
 
         switch (Status)
         {
@@ -130,7 +166,7 @@ public class TaskStatusIcon : Control
                 DrawInProgressMark(context, p, isEnabled ? AccentBrush : AccentBrushDisabled);
                 break;
             case TaskStatus.Completed:
-                DrawCompletedMark(context, p, ResolveBrush(CheckedGlyphResourceKeys, CompletedMarkBrush));
+                DrawCompletedMark(context, p, GetCompletedGlyphBrush(isEnabled), GetCompletedGlyphGeometry(), scale);
                 break;
             case TaskStatus.Archived:
                 DrawArchivedMark(context, r, isEnabled, scale);
@@ -145,7 +181,8 @@ public class TaskStatusIcon : Control
             return status switch
             {
                 TaskStatus.Prepared => PreparedBrushDisabled,
-                TaskStatus.InProgress or TaskStatus.Completed => AccentBrushDisabled,
+                TaskStatus.InProgress => AccentBrushDisabled,
+                TaskStatus.Completed => ResolveBrush(CheckedBorderDisabledResourceKeys, CompletedFillBrushDisabled),
                 _ => ResolveBrush(UncheckedDisabledBorderResourceKeys, BorderBrushDisabled)
             };
         }
@@ -154,19 +191,53 @@ public class TaskStatusIcon : Control
         {
             TaskStatus.Prepared => PreparedBrush,
             TaskStatus.InProgress => AccentBrush,
-            TaskStatus.Completed => ResolveBrush(CheckedFillResourceKeys, CompletedFillBrush),
+            TaskStatus.Completed => ResolveBrush(CheckedBorderResourceKeys, CompletedFillBrush),
             _ => ResolveBrush(
                 IsPointerOver ? UncheckedPointerOverBorderResourceKeys : UncheckedBorderResourceKeys,
                 BorderBrush)
         };
     }
 
+    private IBrush? GetBoxFillBrush(TaskStatus status, bool isEnabled)
+    {
+        return status == TaskStatus.Completed
+            ? ResolveBrush(isEnabled ? CheckedFillResourceKeys : CheckedFillDisabledResourceKeys, isEnabled ? CompletedFillBrush : CompletedFillBrushDisabled)
+            : null;
+    }
+
+    private IBrush GetCompletedGlyphBrush(bool isEnabled) =>
+        ResolveBrush(isEnabled ? CheckedGlyphResourceKeys : CheckedGlyphDisabledResourceKeys, CompletedMarkBrush);
+
+    private Geometry GetCompletedGlyphGeometry()
+    {
+        return ResolveResource("CheckMarkPathData") as Geometry
+               ?? CompletedMarkFallbackGeometry;
+    }
+
+    private double GetBoxCornerRadius()
+    {
+        return ResolveResource("ControlCornerRadius") switch
+        {
+            CornerRadius cornerRadius => cornerRadius.TopLeft,
+            double value => value,
+            _ => DefaultCornerRadius
+        };
+    }
+
+    private object? ResolveResource(string resourceKey)
+    {
+        return TryGetResource(resourceKey, ActualThemeVariant, out var resource) ||
+               Application.Current?.TryGetResource(resourceKey, ActualThemeVariant, out resource) == true
+            ? resource
+            : null;
+    }
+
     private IBrush ResolveBrush(IReadOnlyList<string> resourceKeys, IBrush fallback)
     {
         foreach (var resourceKey in resourceKeys)
         {
-            if (TryGetResource(resourceKey, ActualThemeVariant, out var resource) ||
-                Application.Current?.TryGetResource(resourceKey, ActualThemeVariant, out resource) == true)
+            var resource = ResolveResource(resourceKey);
+            if (resource != null)
             {
                 if (resource is IBrush brush)
                 {
@@ -216,21 +287,45 @@ public class TaskStatusIcon : Control
     private static void DrawCompletedMark(
         DrawingContext context,
         Func<double, double, Point> point,
-        IBrush brush)
+        IBrush brush,
+        Geometry geometry,
+        double scale)
     {
-        var geometry = new StreamGeometry();
-        using (var geometryContext = geometry.Open())
+        var target = GetCompletedGlyphTargetRect(geometry, scale);
+        if (target.Width <= 0 || target.Height <= 0)
         {
-            geometryContext.BeginFigure(point(8.35, 13.55), true);
-            geometryContext.LineTo(point(4.65, 9.85));
-            geometryContext.LineTo(point(6.2, 8.3));
-            geometryContext.LineTo(point(8.35, 10.45));
-            geometryContext.LineTo(point(14.3, 4.5));
-            geometryContext.LineTo(point(15.85, 6.05));
-            geometryContext.EndFigure(true);
+            return;
         }
 
-        context.DrawGeometry(brush, null, geometry);
+        var bounds = geometry.Bounds;
+        target = new Rect(point(target.X, target.Y), target.Size);
+        var transform = Matrix.CreateTranslation(-bounds.X, -bounds.Y) *
+                        Matrix.CreateScale(target.Width / bounds.Width, target.Height / bounds.Height) *
+                        Matrix.CreateTranslation(target.X, target.Y);
+
+        using (context.PushTransform(transform))
+        {
+            context.DrawGeometry(brush, null, geometry);
+        }
+    }
+
+    private static Rect GetCompletedGlyphTargetRect(Geometry geometry, double scale)
+    {
+        var bounds = geometry.Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return default;
+        }
+
+        var canvasScale = DesignSize / CheckGlyphCanvasSize;
+        var glyphSize = CheckedGlyphWidth * canvasScale;
+        var glyphX = (DesignSize - glyphSize) / 2;
+        var glyphY = (DesignSize - glyphSize) / 2;
+        return new Rect(
+            glyphX,
+            glyphY,
+            glyphSize * scale,
+            glyphSize * scale);
     }
 
     private static void DrawArchivedMark(

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -242,6 +243,85 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("Light")]
+    [Arguments("Dark")]
+    public async Task TaskStatusIcon_CompletedMatchesCheckedCheckBoxIndicatorForTheme(string themeName)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
+            var previousTheme = app.RequestedThemeVariant;
+            var theme = string.Equals(themeName, "Dark", StringComparison.Ordinal)
+                ? ThemeVariant.Dark
+                : ThemeVariant.Light;
+            var statusIcon = new TaskStatusIcon
+            {
+                Status = DomainTaskStatus.Completed,
+                Width = 20,
+                Height = 20
+            };
+            var checkBox = new CheckBox
+            {
+                IsChecked = true
+            };
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Children =
+                {
+                    statusIcon,
+                    checkBox
+                }
+            };
+            var window = CreateWindow(panel);
+
+            try
+            {
+                app.RequestedThemeVariant = theme;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var checkBoxIndicator = FindCheckBoxIndicator(checkBox);
+                var checkGlyph = FindCheckBoxCheckGlyph(checkBox);
+                var statusBorderBrush = GetStatusBorderBrush(statusIcon, DomainTaskStatus.Completed, isEnabled: true);
+                var statusFillBrush = GetStatusBoxFillBrush(statusIcon, DomainTaskStatus.Completed, isEnabled: true);
+                var statusGlyphBrush = GetStatusCompletedGlyphBrush(statusIcon, isEnabled: true);
+                var statusGlyphGeometry = GetStatusCompletedGlyphGeometry(statusIcon);
+                var statusGlyphTarget = GetStatusCompletedGlyphTargetRect(statusGlyphGeometry, scale: 1d);
+
+                await Assert.That(checkBoxIndicator).IsNotNull();
+                await Assert.That(checkGlyph).IsNotNull();
+                var checkGlyphOffset = checkGlyph!.TranslatePoint(default, checkBoxIndicator!);
+                await Assert.That(checkGlyphOffset).IsNotNull();
+                await Assert.That(statusFillBrush).IsNotNull();
+                await Assert.That(statusIcon.Bounds.Width).IsEqualTo(checkBoxIndicator.Bounds.Width);
+                await Assert.That(statusIcon.Bounds.Height).IsEqualTo(checkBoxIndicator.Bounds.Height);
+                await Assert.That(GetStatusBorderThickness(scale: 1d))
+                    .IsEqualTo(checkBoxIndicator.BorderThickness.Left);
+                await Assert.That(GetStatusBoxCornerRadius(statusIcon))
+                    .IsEqualTo(checkBoxIndicator.CornerRadius.TopLeft);
+                await Assert.That(GetSolidColor(statusFillBrush, "TaskStatusIcon completed fill brush"))
+                    .IsEqualTo(GetSolidColor(checkBoxIndicator.Background, "CheckBox checked indicator background"));
+                await Assert.That(GetSolidColor(statusBorderBrush, "TaskStatusIcon completed border brush"))
+                    .IsEqualTo(GetSolidColor(checkBoxIndicator.BorderBrush, "CheckBox checked indicator border brush"));
+                await Assert.That(GetSolidColor(statusGlyphBrush, "TaskStatusIcon completed glyph brush"))
+                    .IsEqualTo(GetSolidColor(checkGlyph.Fill, "CheckBox checked glyph fill"));
+                await Assert.That(statusGlyphGeometry.Bounds).IsEqualTo(checkGlyph.Data!.Bounds);
+                await Assert.That(statusGlyphTarget.X).IsEqualTo(checkGlyphOffset!.Value.X).Within(0.1);
+                await Assert.That(statusGlyphTarget.Y).IsEqualTo(checkGlyphOffset.Value.Y).Within(0.1);
+                await Assert.That(checkGlyph.Bounds.Width).IsEqualTo(9);
+            }
+            finally
+            {
+                window.Close();
+                app.RequestedThemeVariant = previousTheme;
             }
         }, CancellationToken.None);
     }
@@ -889,6 +969,13 @@ public class MainControlTaskStatusIconUiTests
             .FirstOrDefault();
     }
 
+    private static Path? FindCheckBoxCheckGlyph(CheckBox checkBox)
+    {
+        return checkBox.GetVisualDescendants()
+            .OfType<Path>()
+            .FirstOrDefault(path => string.Equals(path.Name, "CheckGlyph", StringComparison.Ordinal));
+    }
+
     private static Color GetSolidColor(IBrush? brush, string source)
     {
         if (brush is ISolidColorBrush solidColorBrush)
@@ -907,6 +994,56 @@ public class MainControlTaskStatusIconUiTests
             ?? throw new InvalidOperationException("TaskStatusIcon.GetBorderBrush was not found.");
 
         return (IBrush)getBorderBrush.Invoke(statusIcon, [status, isEnabled])!;
+    }
+
+    private static IBrush? GetStatusBoxFillBrush(TaskStatusIcon statusIcon, DomainTaskStatus status, bool isEnabled)
+    {
+        var getBoxFillBrush = typeof(TaskStatusIcon).GetMethod(
+            "GetBoxFillBrush",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetBoxFillBrush was not found.");
+
+        return (IBrush?)getBoxFillBrush.Invoke(statusIcon, [status, isEnabled]);
+    }
+
+    private static IBrush GetStatusCompletedGlyphBrush(TaskStatusIcon statusIcon, bool isEnabled)
+    {
+        var getCompletedGlyphBrush = typeof(TaskStatusIcon).GetMethod(
+            "GetCompletedGlyphBrush",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetCompletedGlyphBrush was not found.");
+
+        return (IBrush)getCompletedGlyphBrush.Invoke(statusIcon, [isEnabled])!;
+    }
+
+    private static Geometry GetStatusCompletedGlyphGeometry(TaskStatusIcon statusIcon)
+    {
+        var getCompletedGlyphGeometry = typeof(TaskStatusIcon).GetMethod(
+            "GetCompletedGlyphGeometry",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetCompletedGlyphGeometry was not found.");
+
+        return (Geometry)getCompletedGlyphGeometry.Invoke(statusIcon, [])!;
+    }
+
+    private static Rect GetStatusCompletedGlyphTargetRect(Geometry geometry, double scale)
+    {
+        var getCompletedGlyphTargetRect = typeof(TaskStatusIcon).GetMethod(
+            "GetCompletedGlyphTargetRect",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetCompletedGlyphTargetRect was not found.");
+
+        return (Rect)getCompletedGlyphTargetRect.Invoke(null, [geometry, scale])!;
+    }
+
+    private static double GetStatusBoxCornerRadius(TaskStatusIcon statusIcon)
+    {
+        var getBoxCornerRadius = typeof(TaskStatusIcon).GetMethod(
+            "GetBoxCornerRadius",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("TaskStatusIcon.GetBoxCornerRadius was not found.");
+
+        return (double)getBoxCornerRadius.Invoke(statusIcon, [])!;
     }
 
     private static double GetStatusBorderThickness(double scale)
