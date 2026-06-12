@@ -1674,63 +1674,70 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ModifierDoubleClick_PreservesCurrentTaskSemantics()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.Dispatch(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
-                vm.CurrentTaskItem = null;
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
+                    vm.CurrentTaskItem = null;
 
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
 
-                var root2 = WaitForTaskNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
-                var root3 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask3Id);
-                var blocked = WaitForTaskNode(graphControl, MainWindowViewModelFixture.BlockedTask2Id);
-                var root2Node = (RoadmapNode)root2.DataContext!;
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
 
-                await ClickControlAsync(window, blocked);
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
-                await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Shift);
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
+                    var root2 = WaitForTaskNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
+                    var root3 = WaitForTaskNode(graphControl, MainWindowViewModelFixture.RootTask3Id);
+                    var blocked = WaitForTaskNode(graphControl, MainWindowViewModelFixture.BlockedTask2Id);
+                    var root2Node = (RoadmapNode)root2.DataContext!;
 
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
+                    await ClickControlAsync(window, blocked);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
+                    await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Shift);
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
 
-                await Assert.That(root2Node.IsSelected).IsFalse();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Control);
 
-                await Task.Delay(600);
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Shift);
-                await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Shift);
-                await Assert.That(root2Node.IsSelected).IsTrue();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
+                    await Assert.That(root2Node.IsSelected).IsFalse();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
 
-                await Task.Delay(600);
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Alt);
-                await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Alt);
+                    await Task.Delay(600);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Shift);
+                    await ClickControlAsync(window, root3, modifiers: RawInputModifiers.Shift);
+                    await Assert.That(root2Node.IsSelected).IsTrue();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
 
-                await Assert.That(root2Node.IsSelected).IsFalse();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    await Task.Delay(600);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Alt);
+                    await ClickControlAsync(window, root2, modifiers: RawInputModifiers.Alt);
+
+                    await Assert.That(root2Node.IsSelected).IsFalse();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask3Id);
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]

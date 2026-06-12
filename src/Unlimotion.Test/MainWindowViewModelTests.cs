@@ -2354,8 +2354,14 @@ namespace Unlimotion.Test
                     },
                     TimeSpan.FromSeconds(2));
                 await Assert.That(completedTodayVisible).IsTrue();
-                await Assert.That(viewModel.CompletedItems.Select(wrapper => wrapper.TaskItem.Id))
-                    .DoesNotContain(oldCompletedTask.Id);
+                var oldCompletedHidden = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.CompletedItems.All(wrapper => wrapper.TaskItem.Id != oldCompletedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldCompletedHidden).IsTrue();
 
                 SetDateFilterAllTime(viewModel.CompletedDateFilter);
                 var oldCompletedVisible = await TestHelpers.WaitUntilAsync(
@@ -2383,8 +2389,14 @@ namespace Unlimotion.Test
                     },
                     TimeSpan.FromSeconds(2));
                 await Assert.That(archivedTodayVisible).IsTrue();
-                await Assert.That(viewModel.ArchivedItems.Select(wrapper => wrapper.TaskItem.Id))
-                    .DoesNotContain(oldArchivedTask.Id);
+                var oldArchivedHidden = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.ArchivedItems.All(wrapper => wrapper.TaskItem.Id != oldArchivedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldArchivedHidden).IsTrue();
 
                 SetDateFilterAllTime(viewModel.ArchivedDateFilter);
                 var oldArchivedVisible = await TestHelpers.WaitUntilAsync(
