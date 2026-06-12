@@ -27,6 +27,21 @@
   <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Archive contained tasks</value></data>
   <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to archive the {0} contained tasks from "{1}"?</value></data>
   <data name="Archived" xml:space="preserve"><value>Archived</value></data>
+  <data name="InProgress" xml:space="preserve"><value>In progress</value></data>
+  <data name="TaskStatusNotReady" xml:space="preserve"><value>Not ready</value></data>
+  <data name="TaskStatusPrepared" xml:space="preserve"><value>Prepared</value></data>
+  <data name="TaskStatusInProgress" xml:space="preserve"><value>In progress</value></data>
+  <data name="TaskStatusCompleted" xml:space="preserve"><value>Completed</value></data>
+  <data name="TaskStatusArchived" xml:space="preserve"><value>Archived</value></data>
+  <data name="TaskStatusTransitionBlocked" xml:space="preserve"><value>Status transition is not available for this task.</value></data>
+  <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Completed tasks cannot be archived. Return the task to an active status first.</value></data>
+  <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Archived tasks cannot be completed. Return the task to an active status first.</value></data>
+  <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>The task cannot be started before its planned start date.</value></data>
+  <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Mark all completion criteria before completing the task.</value></data>
+  <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Complete all contained tasks before starting or completing this task.</value></data>
+  <data name="TaskStatusBlockersBlocked" xml:space="preserve"><value>Complete blocking tasks before starting or completing this task.</value></data>
+  <data name="TaskStatusMigrationNotice" xml:space="preserve"><value>Active tasks were migrated to Not ready. Mark prepared tasks manually.</value></data>
+  <data name="StatusHistory" xml:space="preserve"><value>Status history</value></data>
   <data name="ArchivedLabelFormat" xml:space="preserve"><value>Archived: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="ArchivedPrefix" xml:space="preserve"><value>Archived:</value></data>
   <data name="BackupAuto" xml:space="preserve"><value>Create backups automatically</value></data>
@@ -62,6 +77,8 @@
   <data name="Completed" xml:space="preserve"><value>Completed</value></data>
   <data name="CompletedLabelFormat" xml:space="preserve"><value>Completed: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="CompletedPrefix" xml:space="preserve"><value>Completed:</value></data>
+  <data name="CompletionCriteria" xml:space="preserve"><value>Completion criteria</value></data>
+  <data name="CompletionCriterionWatermark" xml:space="preserve"><value>Criterion</value></data>
   <data name="Connect" xml:space="preserve"><value>Connect</value></data>
   <data name="ConnectHint" xml:space="preserve"><value>After changing address or credentials, click "Connect".</value></data>
   <data name="ConnectRepository" xml:space="preserve"><value>Connect repository</value></data>
@@ -302,8 +319,8 @@
   <data name="SortImportanceDescending" xml:space="preserve"><value>Importance Descending</value></data>
   <data name="SortIsCanBeCompletedAscending" xml:space="preserve"><value>Can Be Completed Ascending</value></data>
   <data name="SortIsCanBeCompletedDescending" xml:space="preserve"><value>Can Be Completed Descending</value></data>
-  <data name="SortIsCompletedAscending" xml:space="preserve"><value>Completion Ascending</value></data>
-  <data name="SortIsCompletedDescending" xml:space="preserve"><value>Completion Descending</value></data>
+  <data name="SortStatusAscending" xml:space="preserve"><value>Status Ascending</value></data>
+  <data name="SortStatusDescending" xml:space="preserve"><value>Status Descending</value></data>
   <data name="SortPlannedBeginAscending" xml:space="preserve"><value>Planned Begin Ascending</value></data>
   <data name="SortPlannedBeginDescending" xml:space="preserve"><value>Planned Begin Descending</value></data>
   <data name="SortPlannedDurationAscending" xml:space="preserve"><value>Planned Duration Ascending</value></data>

@@ -21,8 +21,79 @@
         <unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
         <unlimotion:EqualConverter x:Key="EqualConverter"/>
         <unlimotion:NotEqualConverter x:Key="NotEqualConverter"/>
+        <DataTemplate x:Key="TaskStatusOptionDropDownTemplate" DataType="viewModel:TaskStatusOption">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" MinHeight="24">
+                <unlimotion:TaskStatusIcon Status="{Binding Status}"
+                                           Width="20"
+                                           Height="20"
+                                           VerticalAlignment="Center"
+                                           IsEnabled="{Binding IsEnabled}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Title}"
+                           VerticalAlignment="Center"
+                           IsEnabled="{Binding IsEnabled}"
+                           ToolTip.Tip="{Binding ToolTip}"/>
+            </Grid>
+        </DataTemplate>
     </UserControl.Resources>
     <UserControl.Styles>
+        <Style Selector="Button.TaskStatusPicker">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="MinWidth" Value="20"/>
+            <Setter Property="MinHeight" Value="20"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.TaskStatusPicker:pointerover">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="TreeView.TaskTree Label">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="TreeView.TaskTree Label.TaskTreeMetaLabel">
+            <Setter Property="Margin" Value="0,0,16,0"/>
+        </Style>
+        <Style Selector="Expander.TaskStatusHistoryExpander">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid MinWidth="{TemplateBinding MinWidth}"
+                          MaxWidth="{TemplateBinding MaxWidth}"
+                          RowDefinitions="Auto,Auto">
+                        <ToggleButton x:Name="PART_HeaderSite"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Left"
+                                      Content="{TemplateBinding Header}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      IsEnabled="{TemplateBinding IsEnabled}"
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"/>
+                        <Border Grid.Row="1"
+                                x:Name="ExpanderContent"
+                                IsVisible="{TemplateBinding IsExpanded}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1,0,1,1"
+                                MinHeight="{TemplateBinding MinHeight}"
+                                HorizontalAlignment="Stretch"
+                                Padding="8">
+                            <ContentPresenter x:Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
         <Style Selector="Grid.FilterToolbar">
             <Setter Property="ColumnSpacing" Value="8"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
@@ -441,14 +512,64 @@
         <Style Selector="TextBox.InlineTaskTitleEditor.IsWanted">
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
+        <Style Selector="TextBox.CompletionCriterionTextBox">
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBox.CompletionCriterionTextBox /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.CompletionCriterionTextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.CompletionCriterionTextBox:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.CompletionCriterionTextBox:focus:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
         <Style Selector="Button.TaskRowRemoveButton">
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="#B3261E"/>
-            <Setter Property="Opacity" Value="0.62"/>
-            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="Opacity" Value="0.72"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.CompletionCriterionRemoveButton">
             <Setter Property="MinWidth" Value="28"/>
             <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#B3261E"/>
+            <Setter Property="Opacity" Value="0.72"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="PathIcon.RemoveButtonIcon">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Foreground" Value="#B3261E"/>
         </Style>
         <Style Selector="TreeView.TaskTree">
             <Setter Property="Focusable" Value="True"/>
@@ -501,9 +622,51 @@
         </Style>
     </UserControl.Styles>
     <UserControl.DataTemplates>
+        <DataTemplate DataType="viewModel:TaskStatusOption">
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TaskStatusOptionDropDownTemplate}"/>
+        </DataTemplate>
+        <DataTemplate DataType="viewModel:TaskStatusFilter">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
+                <unlimotion:TaskStatusIcon Grid.Column="1"
+                                           Status="{Binding Status}"
+                                           Width="20"
+                                           Height="20"
+                                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Title}" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="domain:TaskCompletionCriterion">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4" Margin="0,0,0,2">
+                <CheckBox IsChecked="{Binding IsSatisfied}"
+                          VerticalAlignment="Center"
+                          AutomationProperties.AutomationId="CompletionCriterionSatisfiedCheckBox"/>
+                <TextBox Grid.Column="1"
+                         Classes="CompletionCriterionTextBox"
+                         Text="{Binding Text}"
+                         PlaceholderText="{DynamicResource CompletionCriterionWatermark}"
+                         AutomationProperties.AutomationId="CompletionCriterionTextBox"/>
+                <Button Grid.Column="2"
+                        Classes="CompletionCriterionRemoveButton"
+                        Click="CompletionCriterionRemoveButton_OnClick"
+                        ToolTip.Tip="{DynamicResource Remove}"
+                        AutomationProperties.AutomationId="CompletionCriterionRemoveButton">
+                    <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                </Button>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="domain:TaskStatusHistoryEntry">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8" Margin="0,0,0,4">
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding ChangedAt, StringFormat={}{0:yyyy.MM.dd HH:mm}}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Author}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </Grid>
+        </DataTemplate>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
             <Grid ColumnDefinitions="Auto, Auto, *" Background="Transparent" DragDrop.AllowDrop="True">
-                <CheckBox IsChecked="{Binding IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding IsCanBeCompleted}" />
+                <unlimotion:TaskStatusPicker Task="{Binding}"
+                                             VerticalAlignment="Center"
+                                             AutomationProperties.AutomationId="TaskStatusButton"/>
                 <TextBlock Grid.Column="1"
                            Text="{Binding RepeaterListMarker}"
                            IsVisible="{Binding IsHaveRepeater}"
@@ -519,9 +682,10 @@
                 <ContentControl Content="{Binding TaskItem}" MinWidth="0"/>
                 <Button Grid.Column="1"
                         Classes="TaskRowRemoveButton"
-                        Content="×"
                         ToolTip.Tip="{DynamicResource Remove}"
-                        Command="{Binding RemoveCommand}"/>
+                        Command="{Binding RemoveCommand}">
+                    <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                </Button>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskRelationCandidateViewModel">
@@ -555,6 +719,7 @@
         <KeyBinding Gesture="Ctrl+Alt+Left" Command="{Binding CollapseAllTreeNodesCommand}"/>
         <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyTaskOutlineTreeCommand}"/>
         <KeyBinding Gesture="Ctrl+Shift+V" Command="{Binding PasteTaskOutlineTreeCommand}"/>
+        <KeyBinding Gesture="Ctrl+D" Command="{Binding CompleteCurrentTaskCommand}"/>
     </UserControl.KeyBindings>
 
     <Grid RowDefinitions="Auto,*">
@@ -675,8 +840,7 @@
                                                             <StackPanel>
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                                 <WrapPanel>
-                                                                    <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
-                                                                    <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                                    <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="AllTasksStatusFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
                                                             <Button Classes="FilterPanelResetButton"
@@ -779,8 +943,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
-                                                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastCreatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -815,8 +978,8 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.CreatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.CreatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="3"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -830,10 +993,11 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -904,8 +1068,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <CheckBox Content="{DynamicResource Completed}" IsChecked="{Binding ShowCompleted}" Margin="0,0,12,6"/>
-                                                                <CheckBox Content="{DynamicResource Archived}" IsChecked="{Binding ShowArchived}" Margin="0,0,12,6"/>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastUpdatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -940,8 +1103,8 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="3"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -955,10 +1118,11 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -1014,6 +1178,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedStatusFilterComboBox"/>
                                                                 <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,12,6"/>
                                                             </WrapPanel>
                                                         </StackPanel>
@@ -1056,7 +1221,7 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
                                                 <Label Grid.Column="1" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="2"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -1070,10 +1235,109 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
+                                        </Grid>
+                                    </TreeDataTemplate>
+                                </TreeView.ItemTemplate>
+                            </TreeView>
+                        </Grid>
+                    </TabItem>
+                    <!--In Progress-->
+                    <TabItem Header="{DynamicResource InProgress}" IsSelected="{Binding InProgressMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="InProgressTabItem">
+                        <Grid RowDefinitions="Auto,*">
+                            <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
+                                <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <DropDownButton Classes="FilterToolbarFiltersButton"
+                                                    ToolTip.Tip="{DynamicResource Filters}"
+                                                    AutomationProperties.Name="{DynamicResource Filters}"
+                                                    Margin="0"
+                                                    AutomationProperties.AutomationId="InProgressFiltersButton">
+                                        <PathIcon Classes="FilterToolbarFiltersIcon" Width="15" Height="15" Data="M3,5 L21,5 L21,7 L3,7 Z M7,11 L17,11 L17,13 L7,13 Z M10,17 L14,17 L14,19 L10,19 Z"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                                <Border Classes="FilterOverflowPanel"
+                                                        MinWidth="0"
+                                                        MaxWidth="360"
+                                                        AutomationProperties.AutomationId="InProgressFilterPanel">
+                                                    <ScrollViewer Classes="FilterPanelScrollViewer">
+                                                        <StackPanel Spacing="10">
+                                                            <StackPanel>
+                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
+                                                                <WrapPanel>
+                                                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
+                                                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                            <StackPanel>
+                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                                <WrapPanel>
+                                                                    <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="InProgressStatusFilterComboBox"/>
+                                                                </WrapPanel>
+                                                            </StackPanel>
+                                                            <Button Classes="FilterPanelResetButton"
+                                                                    ToolTip.Tip="{DynamicResource ResetFilters}"
+                                                                    AutomationProperties.Name="{DynamicResource ResetFilters}"
+                                                                    Command="{Binding ResetTaskFiltersCommand}"
+                                                                    AutomationProperties.AutomationId="InProgressResetFiltersButton">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
+                                                                    <TextBlock Text="{DynamicResource ResetFilters}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+                                </WrapPanel>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                            </Grid>
+                            <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
+                                      ItemsSource="{Binding InProgressItems}"
+                                      SelectedItem="{Binding CurrentInProgressItem}"
+                                      SelectionMode="Multiple"
+                                      Classes="TaskTree"
+                                      PointerPressed="TaskTree_OnPointerPressed"
+                                      KeyDown="TaskTree_OnKeyDown"
+                                      AutomationProperties.AutomationId="InProgressTree"
+                                      x:Name="InProgressTree">
+                                <TreeView.ItemTemplate>
+                                    <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                        <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
+                                            <Grid ColumnDefinitions="Auto, Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1"
+                                                       Classes="TaskTreeMetaLabel"
+                                                       Content="{Binding TaskItem.StartedLocalDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       Foreground="{StaticResource AccentButtonBackground}"
+                                                       FontFamily="Consolas"
+                                                       VerticalAlignment="Center"
+                                                       AutomationProperties.AutomationId="InProgressStartedDateLabel" />
+                                                <Label Grid.Column="2" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.InProgressElapsed}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" AutomationProperties.AutomationId="InProgressElapsedLabel" />
+                                                <Label Grid.Column="3" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="4"
+                                                           Text="{Binding TaskItem.RepeaterListMarker}"
+                                                           IsVisible="{Binding TaskItem.IsHaveRepeater}"
+                                                           ToolTip.Tip="{Binding TaskItem.RepeaterListMarkerToolTip}"
+                                                           AutomationProperties.AutomationId="TaskRepeaterListMarker"
+                                                           Margin="4,0,4,0"
+                                                           VerticalAlignment="Center" />
+                                                <Grid Grid.Column="5" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                </Grid>
+                                            </Grid>
+                                            <Button Classes="TaskRowRemoveButton"
+                                                    ToolTip.Tip="{DynamicResource Remove}"
+                                                    HorizontalAlignment="Right"
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -1120,6 +1384,12 @@
                                                                                                        DropDownAutomationId="ExcludeEmojiFilterDropDown"
                                                                                                        ListAutomationId="ExcludeEmojiFilterList"
                                                                                                        NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="CompletedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1173,9 +1443,9 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="3"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -1189,10 +1459,11 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -1239,6 +1510,12 @@
                                                                                                        DropDownAutomationId="ExcludeEmojiFilterDropDown"
                                                                                                        ListAutomationId="ExcludeEmojiFilterList"
                                                                                                        NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="ArchivedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1292,9 +1569,9 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
-                                                <Label Grid.Column="1" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.CompletedDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding TaskItem.ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="3"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -1308,10 +1585,11 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -1338,6 +1616,12 @@
                                                         AutomationProperties.AutomationId="LastOpenedFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                     <StackPanel Spacing="10">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
+                                                            <WrapPanel>
+                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastOpenedStatusFilterComboBox"/>
+                                                            </WrapPanel>
+                                                        </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1370,8 +1654,8 @@
                                     <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
                                         <Grid DoubleTapped="TaskTree_OnDoubleTapped" Background="Transparent">
                                             <Grid ColumnDefinitions="Auto, Auto, Auto, Auto,*" DragDrop.AllowDrop="True" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased">
-                                                <CheckBox IsChecked="{Binding TaskItem.IsCompleted}" VerticalAlignment="Center" IsEnabled="{Binding TaskItem.IsCanBeCompleted}" />
-                                                <Label Grid.Column="1" Content="{Binding SpecialDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm:ss}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
+                                                <unlimotion:TaskStatusPicker Task="{Binding TaskItem}" VerticalAlignment="Center" AutomationProperties.AutomationId="TaskStatusButton" />
+                                                <Label Grid.Column="1" Classes="TaskTreeMetaLabel" Content="{Binding SpecialDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm:ss}}" Foreground="{StaticResource AccentButtonBackground}" FontFamily="Consolas" VerticalAlignment="Center" />
                                                 <Label Grid.Column="2" Content="{Binding TaskItem.GetAllEmoji}" VerticalAlignment="Center" />
                                                 <TextBlock Grid.Column="3"
                                                            Text="{Binding TaskItem.RepeaterListMarker}"
@@ -1385,10 +1669,11 @@
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
-                                                    Content="×"
                                                     ToolTip.Tip="{DynamicResource Remove}"
                                                     HorizontalAlignment="Right"
-                                                    Command="{Binding RemoveCommand}"/>
+                                                    Command="{Binding RemoveCommand}">
+                                                <PathIcon Classes="RemoveButtonIcon" Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                                            </Button>
                                         </Grid>
                                     </TreeDataTemplate>
                                 </TreeView.ItemTemplate>
@@ -1470,11 +1755,11 @@
                                           AutomationProperties.ControlTypeOverride="Group"
                                           AutomationProperties.IsControlElementOverride="True"
                                           AutomationProperties.AutomationId="CurrentTaskHeader">
-                                        <CheckBox IsChecked="{Binding IsCompleted}"
-                                                  Classes="TaskHeaderCompletionCheckBox"
+                                        <unlimotion:TaskStatusPicker Task="{Binding}"
+                                                  Margin="0,0,8,0"
                                                   VerticalAlignment="Center"
-                                                  IsEnabled="{Binding IsCanBeCompleted}"
-                                                  AutomationProperties.AutomationId="CurrentTaskCompletedCheckBox"/>
+                                                  ToolTip.Tip="{Binding StatusToolTip}"
+                                                  AutomationProperties.AutomationId="CurrentTaskStatusButton"/>
                                         <TextBox Grid.Column="1"
                                                  x:Name="CurrentTaskTitleTextBox"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
@@ -1576,6 +1861,27 @@
                                                      AcceptsReturn="True"
                                                      AcceptsTab="True"
                                                      HorizontalAlignment="Stretch"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskCompletionCriteriaSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Classes="TaskCardSectionTitle"
+                                                           Text="{DynamicResource CompletionCriteria}"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding AddCompletionCriterionCommand}"
+                                                        IsEnabled="{Binding CanEditCompletionCriteria}"
+                                                        AutomationProperties.AutomationId="AddCompletionCriterionButton"/>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding CompletionCriteria}"
+                                                          IsEnabled="{Binding CanEditCompletionCriteria}"
+                                                          AutomationProperties.AutomationId="CompletionCriteriaItems"/>
                                         </StackPanel>
                                     </Border>
 
@@ -1976,6 +2282,19 @@
                                     </TreeView>
 
                                         </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskStatusHistorySection">
+                                        <Expander Header="{DynamicResource StatusHistory}"
+                                                  Classes="TaskStatusHistoryExpander"
+                                                  ExpandDirection="Down"
+                                                  AutomationProperties.AutomationId="StatusHistoryExpander">
+                                            <ItemsControl ItemsSource="{Binding StatusHistory}"
+                                                          AutomationProperties.AutomationId="StatusHistoryItems"/>
+                                        </Expander>
                                     </Border>
 
                                 </StackPanel>

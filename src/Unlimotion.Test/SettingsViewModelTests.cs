@@ -884,6 +884,40 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ConnectCommand_ConnectsLocalStorage_WhenAutoPullFails()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var currentPath = Path.Combine(Environment.CurrentDirectory, $"CurrentTasks-{Guid.NewGuid():N}");
+        var selectedPath = Path.Combine(Environment.CurrentDirectory, $"SelectedTasks-{Guid.NewGuid():N}");
+        var events = new ConcurrentQueue<string>();
+        var backupService = new FakeRemoteBackupService
+        {
+            PullExistingRepositoryAction = () =>
+            {
+                events.Enqueue("pull");
+                throw new InvalidOperationException("repository is unavailable");
+            }
+        };
+        using var storageFactory = new RecordingTaskStorageFactory(currentPath, events);
+        var settings = new SettingsViewModel(configuration, backupService, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = selectedPath
+        };
+        using var appScope = ConfigureAppSettingsCommands(settings, configuration, backupService, storageFactory);
+
+        settings.ConnectCommand?.Execute(null);
+
+        await WaitForConditionAsync(
+            () => settings.StorageConnectionState == SettingsConnectionState.Connected,
+            "Connect command did not finish after pull failure.");
+        await Assert.That(backupService.PullExistingRepositoryCalls).IsEqualTo(1);
+        await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.Error);
+        await Assert.That(settings.BackupStatusText).Contains("repository is unavailable");
+        await Assert.That(string.Join("|", events)).IsEqualTo($"pull|switch-local:{selectedPath}");
+        await Assert.That(storageFactory.CurrentFileStoragePath).IsEqualTo(selectedPath);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ConnectCommand_DoesNotAutoPull_WhenServerModeIsSelected()
     {
         IConfigurationRoot configuration = CreateConfiguration();

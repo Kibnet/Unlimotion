@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -70,7 +71,7 @@ public class MainControlAvailabilityUiTests
     }
 
     [Test]
-    public async Task DescendantCheckbox_ShouldBeDisabled_WhenAncestorHasIncompleteBlocker()
+    public async Task DescendantCompletedStatusOption_ShouldBeDisabled_WhenAncestorHasIncompleteBlocker()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -106,12 +107,14 @@ public class MainControlAvailabilityUiTests
                 var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
                 await Assert.That(allTasksTree).IsNotNull();
 
-                var childCheckBox = WaitForTaskCheckBox(allTasksTree!, MainWindowViewModelFixture.SubTask22Id);
+                var childStatusPicker = WaitForTaskStatusPicker(allTasksTree!, MainWindowViewModelFixture.SubTask22Id);
+                var completedOption = childStatusPicker.Task!.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
                 var storedChild = TestHelpers.GetStorageTaskItem(
                     fixture.DefaultTasksFolderPath,
                     MainWindowViewModelFixture.SubTask22Id);
 
-                await Assert.That(childCheckBox.IsEnabled).IsFalse();
+                await Assert.That(childStatusPicker.IsEnabled).IsTrue();
+                await Assert.That(completedOption.IsEnabled).IsFalse();
                 await Assert.That(storedChild).IsNotNull();
                 await Assert.That(storedChild!.IsCanBeCompleted).IsFalse();
                 await Assert.That(storedChild.BlockedByTasks).DoesNotContain(blockerTask.Id);
@@ -144,24 +147,24 @@ public class MainControlAvailabilityUiTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static CheckBox WaitForTaskCheckBox(TreeView tree, string taskId, int timeoutMilliseconds = 2000)
+    private static TaskStatusPicker WaitForTaskStatusPicker(TreeView tree, string taskId, int timeoutMilliseconds = 2000)
     {
-        CheckBox? checkBox = null;
+        TaskStatusPicker? statusPicker = null;
         var ready = SpinWait.SpinUntil(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            checkBox = tree.GetVisualDescendants()
-                .OfType<CheckBox>()
-                .FirstOrDefault(control => control.DataContext is TaskItemViewModel task && task.Id == taskId);
-            return checkBox != null;
+            statusPicker = tree.GetVisualDescendants()
+                .OfType<TaskStatusPicker>()
+                .FirstOrDefault(control => control.Task?.Id == taskId);
+            return statusPicker != null;
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
 
-        if (!ready || checkBox == null)
+        if (!ready || statusPicker == null)
         {
-            throw new InvalidOperationException($"Checkbox for task '{taskId}' was not found.");
+            throw new InvalidOperationException($"Status picker for task '{taskId}' was not found.");
         }
 
-        return checkBox;
+        return statusPicker;
     }
 
     private static TaskWrapperViewModel WaitForTaskWrapper(

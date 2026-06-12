@@ -32,9 +32,10 @@ public class MainControlFilterToolbarResponsiveUiTests
         (1, "LastCreatedResetFiltersButton", "LastCreatedFiltersButton", "LastCreatedFilterPanel", false),
         (2, "LastUpdatedResetFiltersButton", "LastUpdatedFiltersButton", "LastUpdatedFilterPanel", false),
         (3, "UnlockedResetFiltersButton", "UnlockedFiltersButton", "UnlockedFilterPanel", false),
-        (4, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false),
-        (5, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false),
-        (6, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false)
+        (4, "InProgressResetFiltersButton", "InProgressFiltersButton", "InProgressFilterPanel", false),
+        (5, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false),
+        (6, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false),
+        (7, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false)
     ];
 
     [Test]
@@ -107,7 +108,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 window.Show();
                 RunLayoutJobs();
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
 
                 var toolbar = FindVisibleRoadmapFilterToolbar(view);
                 var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
@@ -717,7 +718,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 window = CreateWindow(view, 390, 760);
                 window.Show();
                 RunLayoutJobs();
-                SelectTab(view, 7);
+                SelectTab(view, 8);
 
                 var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
                 var flyout = ShowFilterFlyout(filtersButton);
@@ -868,7 +869,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await AssertFilterFlyoutViewportContract(window, filtersButton, tab.FilterPanelAutomationId);
                 }
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
 
                 var roadmapFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
                 await AssertFilterFlyoutViewportContract(window, roadmapFiltersButton, "RoadmapFilterPanel");

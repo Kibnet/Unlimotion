@@ -915,7 +915,16 @@ public class App : Application
             return true;
         }
 
-        await Task.Run(() => backupService?.PullExistingRepository());
+        try
+        {
+            await Task.Run(() => backupService?.PullExistingRepository());
+        }
+        catch (Exception ex)
+        {
+            settings.SetBackupConnectionState(BackupStatusState.Error, L10n.Format("PullErrorStatus", ex.Message));
+            return true;
+        }
+
         settings.ReloadGitMetadata();
         if (!settings.IsConflictResolutionMode)
         {
@@ -1155,9 +1164,11 @@ public class App : Application
                 EnterConflictResolutionMode(vm.Settings);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Existing startup behavior ignored connect failures here.
+            vm.Settings.SetStorageConnectionState(SettingsConnectionState.Error);
+            var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
+            vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
         }
 
         _startupUpdateSettings = vm.Settings;

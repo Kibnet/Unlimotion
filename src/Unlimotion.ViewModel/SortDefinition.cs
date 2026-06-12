@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using DynamicData.Binding;
+using Unlimotion.Domain;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel;
@@ -82,13 +83,13 @@ public class SortDefinition
         {
             new(w => w.TaskItem.CompletedDateTime!, SortDirection.Descending)
         });
-        yield return Create("is-completed-ascending", "IsCompleted Ascending", "SortIsCompletedAscending", new SortExpressionComparer<TaskWrapperViewModel>
+        yield return Create("status-ascending", "Status Ascending", "SortStatusAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.IsCompleted!)
+            new(w => w.TaskItem.Status.WorkflowOrder())
         });
-        yield return Create("is-completed-descending", "IsCompleted Descending", "SortIsCompletedDescending", new SortExpressionComparer<TaskWrapperViewModel>
+        yield return Create("status-descending", "Status Descending", "SortStatusDescending", new SortExpressionComparer<TaskWrapperViewModel>
         {
-            new(w => w.TaskItem.IsCompleted!, SortDirection.Descending)
+            new(w => w.TaskItem.Status.WorkflowOrder(), SortDirection.Descending)
         });
         yield return Create("is-can-be-completed-ascending", "IsCanBeCompleted Ascending", "SortIsCanBeCompletedAscending", new SortExpressionComparer<TaskWrapperViewModel>
         {

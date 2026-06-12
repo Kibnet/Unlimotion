@@ -9,4 +9,8 @@
 		<PackageReference Include="ServiceStack.Interfaces" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
+	</ItemGroup>
+
 </Project>

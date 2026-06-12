@@ -24,18 +24,34 @@ namespace Unlimotion
         {
             cfg.CreateMap<AttachmentHubMold, AttachmentMold>();
             cfg.CreateMap<AttachmentMold, AttachmentHubMold>();
-            cfg.CreateMap<TaskItemMold, TaskItem>().ReverseMap();
+            cfg.CreateMap<TaskItemMold, TaskItem>()
+                .IgnoreComputedStatusMembers()
+                .ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternMold>().ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>().ReverseMap();
             cfg.CreateMap<RepeaterTypeMold, RepeaterType>().ReverseMap();
-            cfg.CreateMap<ReceiveTaskItem, TaskItem>();
+            cfg.CreateMap<ReceiveTaskItem, TaskItem>()
+                .IgnoreComputedStatusMembers();
             cfg.CreateMap<TaskItem, TaskItemHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterType>().ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPattern>().ReverseMap();
             cfg.CreateMap<TaskItem, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())
+                .IgnoreComputedStatusMembers()
                 .ReverseMap();
+        }
+    }
+
+    internal static class TaskItemMappingExpressionExtensions
+    {
+        public static IMappingExpression<TSource, TaskItem> IgnoreComputedStatusMembers<TSource>(
+            this IMappingExpression<TSource, TaskItem> expression)
+        {
+            return expression
+                .ForMember(task => task.IsCompleted, options => options.Ignore())
+                .ForMember(task => task.CompletedDateTime, options => options.Ignore())
+                .ForMember(task => task.ArchiveDateTime, options => options.Ignore());
         }
     }
 }

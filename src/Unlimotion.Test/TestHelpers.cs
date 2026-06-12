@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -13,6 +14,11 @@ namespace Unlimotion.Test
 {
     public static class TestHelpers
     {
+        private static readonly JsonSerializerOptions StorageJsonSerializerOptions = new()
+        {
+            Converters = { new JsonStringEnumConverter() }
+        };
+
         public static TaskItemViewModel SetCurrentTask(MainWindowViewModel viewModel, string taskId)
         {
             var task = GetTask(viewModel, taskId);
@@ -166,7 +172,7 @@ namespace Unlimotion.Test
                 try
                 {
                     var json = File.ReadAllText(path);
-                    return JsonSerializer.Deserialize<TaskItem>(json);
+                    return JsonSerializer.Deserialize<TaskItem>(json, StorageJsonSerializerOptions);
                 }
                 catch (IOException) when (attempt < attempts - 1)
                 {
@@ -175,7 +181,7 @@ namespace Unlimotion.Test
             }
 
             var finalJson = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TaskItem>(finalJson);
+            return JsonSerializer.Deserialize<TaskItem>(finalJson, StorageJsonSerializerOptions);
         }
     }
 }

@@ -27,6 +27,21 @@
   <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Архивировать вложенные задачи</value></data>
   <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Архивировать {0} вложенных задач из "{1}"?</value></data>
   <data name="Archived" xml:space="preserve"><value>Архивные</value></data>
+  <data name="InProgress" xml:space="preserve"><value>Выполняется</value></data>
+  <data name="TaskStatusNotReady" xml:space="preserve"><value>Не готово</value></data>
+  <data name="TaskStatusPrepared" xml:space="preserve"><value>Подготовлено</value></data>
+  <data name="TaskStatusInProgress" xml:space="preserve"><value>Выполняется</value></data>
+  <data name="TaskStatusCompleted" xml:space="preserve"><value>Выполнено</value></data>
+  <data name="TaskStatusArchived" xml:space="preserve"><value>Архивировано</value></data>
+  <data name="TaskStatusTransitionBlocked" xml:space="preserve"><value>Переход статуса недоступен для этой задачи.</value></data>
+  <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Выполненную задачу нельзя архивировать. Сначала верните задачу в активный статус.</value></data>
+  <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Архивную задачу нельзя выполнить. Сначала верните задачу в активный статус.</value></data>
+  <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>Задачу нельзя начать раньше плановой даты начала.</value></data>
+  <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Отметьте все критерии выполнения перед завершением задачи.</value></data>
+  <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Сначала выполните все вложенные задачи.</value></data>
+  <data name="TaskStatusBlockersBlocked" xml:space="preserve"><value>Сначала выполните блокирующие задачи.</value></data>
+  <data name="TaskStatusMigrationNotice" xml:space="preserve"><value>Активные задачи перенесены в статус Не готово. Отметьте подготовленные задачи вручную.</value></data>
+  <data name="StatusHistory" xml:space="preserve"><value>История статусов</value></data>
   <data name="ArchivedLabelFormat" xml:space="preserve"><value>Архивировано: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="ArchivedPrefix" xml:space="preserve"><value>Архивировано:</value></data>
   <data name="BackupAuto" xml:space="preserve"><value>Автоматически создавать резервную копию</value></data>
@@ -62,6 +77,8 @@
   <data name="Completed" xml:space="preserve"><value>Завершенные</value></data>
   <data name="CompletedLabelFormat" xml:space="preserve"><value>Завершено: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="CompletedPrefix" xml:space="preserve"><value>Завершено:</value></data>
+  <data name="CompletionCriteria" xml:space="preserve"><value>Критерии выполнения</value></data>
+  <data name="CompletionCriterionWatermark" xml:space="preserve"><value>Критерий</value></data>
   <data name="Connect" xml:space="preserve"><value>Подключить</value></data>
   <data name="ConnectHint" xml:space="preserve"><value>После изменения адреса или входа нажмите "Подключить".</value></data>
   <data name="ConnectRepository" xml:space="preserve"><value>Подключить репозиторий</value></data>
@@ -302,8 +319,8 @@
   <data name="SortImportanceDescending" xml:space="preserve"><value>Важность по убыванию</value></data>
   <data name="SortIsCanBeCompletedAscending" xml:space="preserve"><value>Готовность к выполнению по возрастанию</value></data>
   <data name="SortIsCanBeCompletedDescending" xml:space="preserve"><value>Готовность к выполнению по убыванию</value></data>
-  <data name="SortIsCompletedAscending" xml:space="preserve"><value>Статус выполнения по возрастанию</value></data>
-  <data name="SortIsCompletedDescending" xml:space="preserve"><value>Статус выполнения по убыванию</value></data>
+  <data name="SortStatusAscending" xml:space="preserve"><value>Статус по возрастанию</value></data>
+  <data name="SortStatusDescending" xml:space="preserve"><value>Статус по убыванию</value></data>
   <data name="SortPlannedBeginAscending" xml:space="preserve"><value>Планируемое начало по возрастанию</value></data>
   <data name="SortPlannedBeginDescending" xml:space="preserve"><value>Планируемое начало по убыванию</value></data>
   <data name="SortPlannedDurationAscending" xml:space="preserve"><value>Планируемая длительность по возрастанию</value></data>

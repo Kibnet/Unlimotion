@@ -10,6 +10,11 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class DateFilter
     {
+        public DateFilter()
+        {
+            SetDateTimes(CurrentOption);
+        }
+
         public DateTime? From { get; set; } 
         public DateTime? To { get; set; }
         public DateFilterOption CurrentOption { get; set; } = DateFilterDefinition.Today;

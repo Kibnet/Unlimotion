@@ -18,6 +18,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
+using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -42,6 +43,7 @@ namespace Unlimotion.Views
             "LastCreatedTree",
             "LastUpdatedTree",
             "UnlockedTree",
+            "InProgressTree",
             "CompletedTree",
             "ArchivedTree",
             "LastOpenedTree"
@@ -51,6 +53,7 @@ namespace Unlimotion.Views
         public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
         private const int MaxRelationEditorFocusRetries = 5;
+        private const int MaxCompletionCriterionFocusRetries = 5;
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
         private const double RegularTaskPlanningGroupWidth = 176d;
@@ -65,6 +68,8 @@ namespace Unlimotion.Views
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
         private IDisposable? _titleFocusSubscription;
         private IDisposable? _relationEditorFocusSubscription;
+        private IDisposable? _currentTaskCompletionCriterionSubscription;
+        private IDisposable? _completionCriterionFocusSubscription;
         private IDisposable? _taskDetailsBoundsSubscription;
         private readonly List<IDisposable> _mainTabsLayoutSubscriptions = [];
         private MainWindowViewModel? _treeCommandViewModel;
@@ -1060,6 +1065,22 @@ namespace Unlimotion.Views
             }
         }
 
+        private void CompletionCriterionRemoveButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not Control { DataContext: TaskCompletionCriterion criterion } ||
+                DataContext is not MainWindowViewModel { CurrentTaskItem: { } currentTask })
+            {
+                return;
+            }
+
+            if (currentTask.RemoveCompletionCriterionCommand.CanExecute(criterion))
+            {
+                currentTask.RemoveCompletionCriterionCommand.Execute(criterion);
+            }
+
+            e.Handled = true;
+        }
+
         private static bool TryGetTreeCommandHotkey(KeyEventArgs e, out TreeCommandKind kind)
         {
             if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.A)
@@ -1126,6 +1147,10 @@ namespace Unlimotion.Views
             _titleFocusSubscription = null;
             _relationEditorFocusSubscription?.Dispose();
             _relationEditorFocusSubscription = null;
+            _currentTaskCompletionCriterionSubscription?.Dispose();
+            _currentTaskCompletionCriterionSubscription = null;
+            _completionCriterionFocusSubscription?.Dispose();
+            _completionCriterionFocusSubscription = null;
             if (_treeCommandViewModel != null)
             {
                 _treeCommandViewModel.ExecuteTreeCommandAction = null;
@@ -1154,6 +1179,25 @@ namespace Unlimotion.Views
                             requestVersion,
                             vm.CurrentRelationEditor.InputAutomationId,
                             MaxRelationEditorFocusRetries));
+                _currentTaskCompletionCriterionSubscription = vm.WhenAnyValue(m => m.CurrentTaskItem)
+                    .Subscribe(task =>
+                    {
+                        _completionCriterionFocusSubscription?.Dispose();
+                        _completionCriterionFocusSubscription = null;
+
+                        if (task == null)
+                        {
+                            return;
+                        }
+
+                        _completionCriterionFocusSubscription = task.WhenAnyValue(m => m.CompletionCriterionFocusRequestVersion)
+                            .Subscribe(requestVersion =>
+                                QueueCompletionCriterionFocus(
+                                    requestVersion,
+                                    task.Id,
+                                    task.CompletionCriterionFocusTargetId,
+                                    MaxCompletionCriterionFocusRetries));
+                    });
                 vm.MoveToPath = ReactiveCommand.CreateFromTask(async () =>
                 {
                     if (vm.CurrentTaskItem == null)
@@ -1349,6 +1393,80 @@ namespace Unlimotion.Views
             }
 
             QueueRelationEditorFocus(requestVersion, automationId, retriesRemaining - 1);
+        }
+
+        private void QueueCompletionCriterionFocus(
+            long requestVersion,
+            string? targetTaskId,
+            string? criterionId,
+            int retriesRemaining)
+        {
+            if (requestVersion <= 0 ||
+                string.IsNullOrWhiteSpace(targetTaskId) ||
+                string.IsNullOrWhiteSpace(criterionId))
+            {
+                return;
+            }
+
+            Dispatcher.UIThread.Post(
+                () => TryFocusCompletionCriterion(requestVersion, targetTaskId, criterionId, retriesRemaining),
+                DispatcherPriority.Loaded);
+        }
+
+        private void TryFocusCompletionCriterion(
+            long requestVersion,
+            string targetTaskId,
+            string criterionId,
+            int retriesRemaining)
+        {
+            if (DataContext is not MainWindowViewModel { CurrentTaskItem: { } currentTask } ||
+                currentTask.Id != targetTaskId ||
+                currentTask.CompletionCriterionFocusRequestVersion != requestVersion ||
+                !string.Equals(currentTask.CompletionCriterionFocusTargetId, criterionId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var input = this.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        "CompletionCriterionTextBox",
+                        StringComparison.Ordinal) &&
+                    candidate.DataContext is TaskCompletionCriterion criterion &&
+                    string.Equals(criterion.Id, criterionId, StringComparison.Ordinal) &&
+                    candidate.IsAttachedToVisualTree() &&
+                    candidate.IsVisible &&
+                    candidate.IsEnabled);
+
+            if (input == null)
+            {
+                RetryCompletionCriterionFocus(requestVersion, targetTaskId, criterionId, retriesRemaining);
+                return;
+            }
+
+            if (!input.Focus())
+            {
+                RetryCompletionCriterionFocus(requestVersion, targetTaskId, criterionId, retriesRemaining);
+                return;
+            }
+
+            input.CaretIndex = input.Text?.Length ?? 0;
+        }
+
+        private void RetryCompletionCriterionFocus(
+            long requestVersion,
+            string targetTaskId,
+            string criterionId,
+            int retriesRemaining)
+        {
+            if (retriesRemaining <= 0)
+            {
+                return;
+            }
+
+            QueueCompletionCriterionFocus(requestVersion, targetTaskId, criterionId, retriesRemaining - 1);
         }
 
         private const string CustomFormat = "application/xxx-unlimotion-task";
@@ -2708,6 +2826,7 @@ namespace Unlimotion.Views
                 _ when vm.LastCreatedMode => "LastCreatedTree",
                 _ when vm.LastUpdatedMode => "LastUpdatedTree",
                 _ when vm.UnlockedMode => "UnlockedTree",
+                _ when vm.InProgressMode => "InProgressTree",
                 _ when vm.CompletedMode => "CompletedTree",
                 _ when vm.ArchivedMode => "ArchivedTree",
                 _ when vm.LastOpenedMode => "LastOpenedTree",
@@ -2822,6 +2941,7 @@ namespace Unlimotion.Views
                 "LastCreatedTree" => vm.CurrentLastCreated,
                 "LastUpdatedTree" => vm.CurrentLastUpdated,
                 "UnlockedTree" => vm.CurrentUnlockedItem,
+                "InProgressTree" => vm.CurrentInProgressItem,
                 "CompletedTree" => vm.CurrentCompletedItem,
                 "ArchivedTree" => vm.CurrentArchivedItem,
                 "LastOpenedTree" => vm.CurrentLastOpenedItem,
@@ -2911,6 +3031,9 @@ namespace Unlimotion.Views
                     break;
                 case "UnlockedTree":
                     vm.CurrentUnlockedItem = wrapper;
+                    break;
+                case "InProgressTree":
+                    vm.CurrentInProgressItem = wrapper;
                     break;
                 case "CompletedTree":
                     vm.CurrentCompletedItem = wrapper;

@@ -1,8 +1,10 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion;
+using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -31,12 +33,12 @@ public class TaskOutlineClipboardServiceTests
         var root = await storage.Add();
         root.Title = "Root";
         root.Description = "Root description\nSecond line";
-        root.IsCompleted = true;
+        root.Status = DomainTaskStatus.Completed;
         await storage.Update(root);
         var child = await storage.AddChild(root);
         child.Title = "Child";
         child.Description = "Child description";
-        child.IsCompleted = null;
+        child.Status = DomainTaskStatus.Archived;
         await storage.Update(child);
 
         var outline = TaskOutlineClipboardService.BuildOutline(
@@ -47,8 +49,49 @@ public class TaskOutlineClipboardServiceTests
             "- [x] Root\n" +
             "    Root description\n" +
             "    Second line\n" +
-            "    - [ ] Child\n" +
+            "    - [#] Child\n" +
             "        Child description");
+    }
+
+    [Test]
+    public async Task BuildOutline_Markdown_UsesAllStatusMarkers()
+    {
+        var storage = await CreateStorageAsync();
+        var root = await storage.Add();
+        root.Title = "Not ready";
+        root.Status = DomainTaskStatus.NotReady;
+        await storage.Update(root);
+
+        var prepared = await storage.AddChild(root);
+        prepared.Title = "Prepared";
+        prepared.Status = DomainTaskStatus.Prepared;
+        await storage.Update(prepared);
+
+        var inProgress = await storage.AddChild(root);
+        inProgress.Title = "In progress";
+        inProgress.Status = DomainTaskStatus.InProgress;
+        await storage.Update(inProgress);
+
+        var completed = await storage.AddChild(root);
+        completed.Title = "Completed";
+        completed.Status = DomainTaskStatus.Completed;
+        await storage.Update(completed);
+
+        var archived = await storage.AddChild(root);
+        archived.Title = "Archived";
+        archived.Status = DomainTaskStatus.Archived;
+        await storage.Update(archived);
+
+        var outline = TaskOutlineClipboardService.BuildOutline(
+            root,
+            new TaskOutlineClipboardOptions(CopyAsMarkdown: true, CopyDescription: false));
+
+        await Assert.That(NormalizeNewLines(outline)).IsEqualTo(
+            "- [ ] Not ready\n" +
+            "    - [!] Prepared\n" +
+            "    - [>] In progress\n" +
+            "    - [x] Completed\n" +
+            "    - [#] Archived");
     }
 
     [Test]
@@ -106,13 +149,34 @@ public class TaskOutlineClipboardServiceTests
 
         await Assert.That(nodes.Count).IsEqualTo(2);
         await Assert.That(nodes[0].Title).IsEqualTo("Root");
+        await Assert.That(nodes[0].Status).IsEqualTo(DomainTaskStatus.Completed);
         await Assert.That(nodes[0].IsCompleted).IsTrue();
         await Assert.That(NormalizeNewLines(nodes[0].Description)).IsEqualTo("Root description\nsecond line");
         await Assert.That(nodes[0].Children.Single().Title).IsEqualTo("Child");
+        await Assert.That(nodes[0].Children.Single().Status).IsEqualTo(DomainTaskStatus.NotReady);
         await Assert.That(nodes[0].Children.Single().IsCompleted).IsFalse();
         await Assert.That(nodes[0].Children.Single().Description).IsEqualTo("Child description");
         await Assert.That(nodes[1].Title).IsEqualTo("Plain sibling");
         await Assert.That(nodes[1].IsCompleted).IsNull();
+    }
+
+    [Test]
+    public async Task ParseOutline_ReadsPreparedInProgressAndArchivedMarkers()
+    {
+        const string outline =
+            "- [!] Prepared\n" +
+            "- [>] In progress\n" +
+            "- [#] Archived";
+
+        var nodes = TaskOutlineClipboardService.ParseOutline(outline);
+
+        await Assert.That(nodes.Select(node => node.Status)).IsEquivalentTo(
+            new DomainTaskStatus?[]
+            {
+                DomainTaskStatus.Prepared,
+                DomainTaskStatus.InProgress,
+                DomainTaskStatus.Archived
+            });
     }
 
     [Test]

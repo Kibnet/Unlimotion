@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,6 +14,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test;
@@ -27,10 +29,33 @@ public class MainControlResetFiltersUiTests
         (1, "LastCreatedFiltersButton", "LastCreatedResetFiltersButton"),
         (2, "LastUpdatedFiltersButton", "LastUpdatedResetFiltersButton"),
         (3, "UnlockedFiltersButton", "UnlockedResetFiltersButton"),
-        (4, "CompletedFiltersButton", "CompletedResetFiltersButton"),
-        (5, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
-        (6, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
-        (7, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
+        (4, "InProgressFiltersButton", "InProgressResetFiltersButton"),
+        (5, "CompletedFiltersButton", "CompletedResetFiltersButton"),
+        (6, "ArchivedFiltersButton", "ArchivedResetFiltersButton"),
+        (7, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton"),
+        (8, "RoadmapFiltersButton", "RoadmapResetFiltersButton")
+    ];
+
+    private static readonly (int TabIndex, string FiltersButtonAutomationId, string StatusFilterAutomationId)[] StatusFilterTabs =
+    [
+        (0, "AllTasksFiltersButton", "AllTasksStatusFilterComboBox"),
+        (1, "LastCreatedFiltersButton", "LastCreatedStatusFilterComboBox"),
+        (2, "LastUpdatedFiltersButton", "LastUpdatedStatusFilterComboBox"),
+        (3, "UnlockedFiltersButton", "UnlockedStatusFilterComboBox"),
+        (4, "InProgressFiltersButton", "InProgressStatusFilterComboBox"),
+        (5, "CompletedFiltersButton", "CompletedStatusFilterComboBox"),
+        (6, "ArchivedFiltersButton", "ArchivedStatusFilterComboBox"),
+        (7, "LastOpenedFiltersButton", "LastOpenedStatusFilterComboBox"),
+        (8, "RoadmapFiltersButton", "RoadmapStatusFilterComboBox")
+    ];
+
+    private static readonly (int TabIndex, string FiltersButtonAutomationId, string ResetButtonAutomationId, int ForcedVisibleStatus)[] StatusResetTabs =
+    [
+        (3, "UnlockedFiltersButton", "UnlockedResetFiltersButton", -1),
+        (4, "InProgressFiltersButton", "InProgressResetFiltersButton", (int)DomainTaskStatus.InProgress),
+        (5, "CompletedFiltersButton", "CompletedResetFiltersButton", (int)DomainTaskStatus.Completed),
+        (6, "ArchivedFiltersButton", "ArchivedResetFiltersButton", (int)DomainTaskStatus.Archived),
+        (7, "LastOpenedFiltersButton", "LastOpenedResetFiltersButton", -1)
     ];
 
     [Test]
@@ -54,6 +79,116 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 AssertResetButtonsOnTaskTabs(view);
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task StatusFilterComboBox_IsAvailableOnEveryTaskTab()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var expectedStatuses = Enum.GetValues<DomainTaskStatus>();
+                foreach (var (tabIndex, filtersButtonAutomationId, statusFilterAutomationId) in StatusFilterTabs)
+                {
+                    SelectTab(view, tabIndex);
+                    var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+                    var flyout = filtersButton.Flyout as Flyout
+                                  ?? throw new InvalidOperationException(
+                                      $"Filter button '{filtersButtonAutomationId}' must use a Flyout.");
+
+                    flyout.ShowAt(filtersButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var flyoutContent = flyout.Content as Control
+                                        ?? throw new InvalidOperationException(
+                                            $"Filter button '{filtersButtonAutomationId}' flyout content was not found.");
+                    var statusFilter = FindControlInDetachedContent<ComboBox>(
+                        flyoutContent,
+                        statusFilterAutomationId);
+
+                    await Assert.That(statusFilter).IsNotNull();
+                    await Assert.That(ReadStatusFilterStatuses(statusFilter!)).IsEquivalentTo(expectedStatuses);
+
+                    flyout.Hide();
+                    Dispatcher.UIThread.RunJobs();
+                }
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ResetFiltersButton_OnStatusFilteredTabs_ResetsStatusFilters()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                var defaultShowCompleted = vm.ShowCompleted;
+                var defaultShowArchived = vm.ShowArchived;
+
+                var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
+                notificationManager.AskResult = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId, forcedVisibleStatus) in StatusResetTabs)
+                {
+                    notificationManager.ClearMessages();
+                    SetAllStatusFilters(vm, false);
+
+                    SelectTab(view, tabIndex);
+                    var resetButton = OpenFilterPanelAndFindResetButton(
+                        view,
+                        filtersButtonAutomationId,
+                        resetButtonAutomationId);
+                    await ClickControlAsync(window, resetButton);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var forcedStatus = forcedVisibleStatus >= 0
+                        ? (DomainTaskStatus)forcedVisibleStatus
+                        : (DomainTaskStatus?)null;
+                    await Assert.That(notificationManager.AskCount).IsEqualTo(1);
+                    await AssertStatusFiltersReset(vm, defaultShowCompleted, defaultShowArchived, forcedStatus);
+
+                    HideFilterPanel(view, filtersButtonAutomationId);
+                }
             }
             finally
             {
@@ -253,7 +388,7 @@ public class MainControlResetFiltersUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
                 var resetButton = OpenFilterPanelAndFindResetButton(
                     view,
                     "RoadmapFiltersButton",
@@ -309,7 +444,7 @@ public class MainControlResetFiltersUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                SelectTab(view, 7);
+                SelectTab(view, 8);
                 var resetButton = OpenFilterPanelAndFindResetButton(
                     view,
                     "RoadmapFiltersButton",
@@ -383,6 +518,14 @@ public class MainControlResetFiltersUiTests
         filter.To = DateTime.Today.AddDays(-1);
     }
 
+    private static void SetAllStatusFilters(MainWindowViewModel vm, bool selected)
+    {
+        foreach (var filter in vm.StatusFilters)
+        {
+            filter.ShowTasks = selected;
+        }
+    }
+
     private static void AssertResetButtonsOnTaskTabs(MainControl view)
     {
         foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId) in TaskTabs)
@@ -420,6 +563,40 @@ public class MainControlResetFiltersUiTests
         await AssertCustomDateFilter(vm.ArchivedDateFilter);
         await AssertCustomDateFilter(vm.LastCreatedDateFilter);
         await AssertCustomDateFilter(vm.LastUpdatedDateFilter);
+    }
+
+    private static async Task AssertStatusFiltersReset(
+        MainWindowViewModel vm,
+        bool defaultShowCompleted,
+        bool defaultShowArchived,
+        DomainTaskStatus? forcedVisibleStatus)
+    {
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.NotReady, true);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Prepared, true);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.InProgress, true);
+
+        var expectedShowCompleted = forcedVisibleStatus == DomainTaskStatus.Completed || defaultShowCompleted;
+        var expectedShowArchived = forcedVisibleStatus == DomainTaskStatus.Archived || defaultShowArchived;
+
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Completed, expectedShowCompleted);
+        await AssertStatusFilterSelected(vm, DomainTaskStatus.Archived, expectedShowArchived);
+        await Assert.That(vm.ShowCompleted).IsEqualTo(expectedShowCompleted);
+        await Assert.That(vm.ShowArchived).IsEqualTo(expectedShowArchived);
+    }
+
+    private static async Task AssertStatusFilterSelected(
+        MainWindowViewModel vm,
+        DomainTaskStatus status,
+        bool expected)
+    {
+        var filter = vm.StatusFilters.Single(item => item.Status == status);
+        if (expected)
+        {
+            await Assert.That(filter.ShowTasks).IsTrue();
+            return;
+        }
+
+        await Assert.That(filter.ShowTasks).IsFalse();
     }
 
     private static async Task AssertFirstFilterActive(IEnumerable<EmojiFilter> filters)
@@ -518,6 +695,13 @@ public class MainControlResetFiltersUiTests
         return resetButton;
     }
 
+    private static void HideFilterPanel(MainControl view, string filtersButtonAutomationId)
+    {
+        var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+        ((Flyout)filtersButton.Flyout!).Hide();
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static T? FindControlInDetachedContent<T>(Control root, string automationId)
         where T : Control
     {
@@ -534,6 +718,19 @@ public class MainControlResetFiltersUiTests
                     AutomationProperties.GetAutomationId(candidate),
                     automationId,
                     StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<DomainTaskStatus> ReadStatusFilterStatuses(ComboBox comboBox)
+    {
+        if (comboBox.ItemsSource is not IEnumerable source)
+        {
+            throw new InvalidOperationException("Status filter combo box must be bound to an ItemsSource.");
+        }
+
+        return source
+            .Cast<TaskStatusFilter>()
+            .Select(filter => filter.Status)
+            .ToList();
     }
 
     private static void SelectTab(MainControl view, int index)

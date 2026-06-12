@@ -2,23 +2,37 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Unlimotion.Domain;
 
 namespace Unlimotion.ViewModel;
 
 public sealed class TaskOutlineNode
 {
-    public TaskOutlineNode(string title, string? description = null, bool? isCompleted = null)
+    public TaskOutlineNode(string title, string? description = null, bool? isCompleted = null, TaskStatus? status = null)
     {
         Title = title;
         Description = description ?? string.Empty;
-        IsCompleted = isCompleted;
+        Status = status ?? (isCompleted switch
+        {
+            true => TaskStatus.Completed,
+            false => TaskStatus.NotReady,
+            _ => null
+        });
     }
 
     public string Title { get; }
 
     public string Description { get; private set; }
 
-    public bool? IsCompleted { get; }
+    public TaskStatus? Status { get; }
+
+    public bool? IsCompleted => Status switch
+    {
+        TaskStatus.Completed => true,
+        TaskStatus.Archived => null,
+        null => null,
+        _ => false
+    };
 
     public List<TaskOutlineNode> Children { get; } = new();
 
@@ -139,7 +153,7 @@ public static class TaskOutlineClipboardService
                 continue;
             }
 
-            var node = new TaskOutlineNode(title, isCompleted: parsed.IsCompleted);
+            var node = new TaskOutlineNode(title, status: parsed.Status);
             var normalizedLevel = Math.Min(level, stack.Count);
 
             if (normalizedLevel == 0)
@@ -254,7 +268,9 @@ public static class TaskOutlineClipboardService
         AppendIndent(builder, level, options.CopyAsMarkdown || options.CopyDescription);
         if (options.CopyAsMarkdown)
         {
-            builder.Append(task.IsCompleted == true ? "- [x] " : "- [ ] ");
+            builder.Append("- ");
+            builder.Append(task.Status.ToLegacyMarker());
+            builder.Append(' ');
         }
         else if (options.CopyDescription)
         {
@@ -291,12 +307,9 @@ public static class TaskOutlineClipboardService
         }
 
         AppendIndent(builder, level, true);
-        builder.Append(node.IsCompleted switch
-        {
-            true => "- [x] ",
-            false => "- [ ] ",
-            _ => "- "
-        });
+        builder.Append(node.Status.HasValue
+            ? $"- {node.Status.Value.ToLegacyMarker()} "
+            : "- ");
         builder.Append(NormalizeTitle(node.Title));
 
         foreach (var line in NormalizeDescriptionLines(node.Description))
@@ -398,9 +411,9 @@ public static class TaskOutlineClipboardService
 
     private static ParsedTaskContent TryParseTaskContent(string text)
     {
-        if (TryParseMarkdownChecklist(text, out var checklistTitle, out var isCompleted))
+        if (TryParseMarkdownChecklist(text, out var checklistTitle, out var status))
         {
-            return new ParsedTaskContent(checklistTitle, isCompleted, true);
+            return new ParsedTaskContent(checklistTitle, status, true);
         }
 
         if (text.Length >= 2 && text[1] == ' ' && (text[0] == '-' || text[0] == '*' || text[0] == '+'))
@@ -411,10 +424,10 @@ public static class TaskOutlineClipboardService
         return new ParsedTaskContent(text, null, false);
     }
 
-    private static bool TryParseMarkdownChecklist(string text, out string title, out bool isCompleted)
+    private static bool TryParseMarkdownChecklist(string text, out string title, out TaskStatus status)
     {
         title = string.Empty;
-        isCompleted = false;
+        status = TaskStatus.NotReady;
 
         if (text.Length < 6 ||
             text[0] != '-' ||
@@ -428,18 +441,31 @@ public static class TaskOutlineClipboardService
 
         switch (text[3])
         {
+            case ' ':
+                title = text[6..];
+                status = TaskStatus.NotReady;
+                return true;
+            case '!':
+                title = text[6..];
+                status = TaskStatus.Prepared;
+                return true;
+            case '>':
+                title = text[6..];
+                status = TaskStatus.InProgress;
+                return true;
             case 'x':
             case 'X':
                 title = text[6..];
-                isCompleted = true;
+                status = TaskStatus.Completed;
                 return true;
-            case ' ':
+            case '#':
                 title = text[6..];
+                status = TaskStatus.Archived;
                 return true;
             default:
                 return false;
         }
     }
 
-    private readonly record struct ParsedTaskContent(string Title, bool? IsCompleted, bool HasMarker);
+    private readonly record struct ParsedTaskContent(string Title, TaskStatus? Status, bool HasMarker);
 }
