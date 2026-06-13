@@ -82,6 +82,8 @@ Markdown outline import/export uses these markers:
 
 On first startup with the new model, old active tasks (`IsCompleted=false`) migrate to `Not ready`, because `Prepared` now means an explicit user decision that the task has enough context. Migration rollback is expected to use the Git history of the task storage directory.
 
+The same status picker is available in task lists, the roadmap and the current task card, so a task can move between planning, active work, completion and archive without changing views.
+
 ### Tasks links
 Each task can have links to other tasks of 4 types:
 1. **Parents Tasks** - parent tasks that contain this task within themselves as an integral part necessary for execution.
@@ -139,6 +141,7 @@ The list of completed tasks in the reverse order of execution - the last ones fr
 
 ### In Progress
 A flat list of tasks with the `In progress` status. The tab helps track current work and how long each task has already been in that status.
+![In Progress](media/readme/en/in-progress.png)
 
 ### Archived
 The list of archived tasks in the reverse order of archiving - the last ones from the top. This includes tasks that no longer need to be performed, but you don't want to delete them either.
@@ -158,6 +161,7 @@ Red arrows - the ratio of the blocking task to the blocked one
 Settings window - allows you to change the parameters that affect the operation of the program.
 - **TaskStorage Path** - Path to the directory(folder) with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
 If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.
+- **SSH Key Storage Path** - Folder where Git backup keeps SSH keys and the dedicated `known_hosts` file when an SSH remote is used.
 
 ![Settings](media/readme/en/settings.png)
 
@@ -200,6 +204,8 @@ To add an emoji to the text field, use the special menu:
 
 On the tabs where the tasks are not displayed in a hierarchical form, all the emoji that the parent tasks have are displayed to the left of the name of each task.
 This allows you to visually immediately understand where this task comes from.
+
+Emoji filters open as a searchable multi-select dropdown: type part of a tag title or emoji, keep the list open and toggle several include or exclude filters without resetting the panel.
 
 ## Backlog of features
 - [x] Emoji in the title is inherited for subtasks

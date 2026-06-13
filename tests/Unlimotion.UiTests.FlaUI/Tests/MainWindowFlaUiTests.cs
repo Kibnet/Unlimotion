@@ -1,6 +1,7 @@
 using AppAutomation.FlaUI.Automation;
 using AppAutomation.FlaUI.Session;
 using AppAutomation.TUnit;
+using FlaUI.Core.Definitions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
@@ -14,10 +15,14 @@ public sealed class MainWindowFlaUiTests
 {
     protected override FlaUiRuntimeSession LaunchSession()
     {
-        return new FlaUiRuntimeSession(
-            DesktopAppSession.Launch(
-                UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
-                    mainWindowTimeout: TimeSpan.FromSeconds(90))));
+        var session = DesktopAppSession.Launch(
+            UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+                mainWindowTimeout: TimeSpan.FromSeconds(90)));
+
+        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
+        session.MainWindow.Focus();
+
+        return new FlaUiRuntimeSession(session);
     }
 
     protected override MainWindowPage CreatePage(FlaUiRuntimeSession session)

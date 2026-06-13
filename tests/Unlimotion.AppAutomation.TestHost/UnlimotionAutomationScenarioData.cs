@@ -11,10 +11,11 @@ public static class UnlimotionAutomationScenarioData
     public const string SmokeCurrentTaskId = "f41774af-38f6-486c-9c5d-e4ba3300438c";
     public const string SmokeCurrentTaskTitle = "Blocked task 7";
     public const string ReadmeDemoCurrentTaskId = "workshop-narrative";
+    public const string ReadmeDemoCurrentTaskIdRu = "сценарий-воркшопа";
     public const string ReadmeDemoCurrentTaskTitle = "Design launch week workshop narrative";
     public const string ReadmeDemoCurrentTaskTitleRu = "Собрать сценарий воркшопа к неделе запуска";
     public const string ReadmeDemoWindowTitle = "Unlimotion README Demo";
-    public const string ReadmeDemoWindowTitleRu = "Unlimotion README демо";
+    public const string ReadmeDemoWindowTitleRu = "Unlimotion демо документации";
     public static readonly IReadOnlyList<string> ReadmeDemoLastOpenedTaskIds =
     [
         "launch-pilot",
@@ -27,11 +28,32 @@ public static class UnlimotionAutomationScenarioData
 
     public static string GetCurrentTaskId(UnlimotionAutomationScenario scenario)
     {
+        return GetCurrentTaskId(scenario, LocalizationService.EnglishLanguage);
+    }
+
+    public static string GetCurrentTaskId(UnlimotionAutomationScenario scenario, string? language)
+    {
         return scenario switch
         {
-            UnlimotionAutomationScenario.ReadmeDemo => ReadmeDemoCurrentTaskId,
+            UnlimotionAutomationScenario.ReadmeDemo => IsRussian(language)
+                ? ReadmeDemoCurrentTaskIdRu
+                : ReadmeDemoCurrentTaskId,
             _ => SmokeCurrentTaskId
         };
+    }
+
+    public static IReadOnlyList<string> GetReadmeDemoLastOpenedTaskIds(string? language)
+    {
+        var currentTaskId = GetCurrentTaskId(UnlimotionAutomationScenario.ReadmeDemo, language);
+        return
+        [
+            "launch-pilot",
+            "release-checklist",
+            "activity-flow",
+            "mentor-outreach",
+            "translate-readme-copy",
+            currentTaskId
+        ];
     }
 
     public static string NormalizeReadmeLanguage(string? language)
@@ -51,7 +73,7 @@ public static class UnlimotionAutomationScenarioData
 
     public static string GetCurrentTaskTitle(UnlimotionAutomationScenario scenario, string? language)
     {
-        return GetTaskTitle(scenario, GetCurrentTaskId(scenario), language);
+        return GetTaskTitle(scenario, GetCurrentTaskId(scenario, language), language);
     }
 
     public static string GetTaskTitle(UnlimotionAutomationScenario scenario, string taskId, string? language)
@@ -72,12 +94,12 @@ public static class UnlimotionAutomationScenarioData
                 ? "🚀 Запустить пилот учебного пространства"
                 : "🚀 Launch the learning space pilot",
             "capture-readme-tour" => russian
-                ? "Записать GIF-тур по вкладкам README"
+                ? "Записать тур по вкладкам документации"
                 : "Capture the README tab tour GIF",
             "publish-landing" => russian
                 ? "Опубликовать лендинг запуска"
                 : "Publish the launch landing page",
-            ReadmeDemoCurrentTaskId => russian
+            ReadmeDemoCurrentTaskId or ReadmeDemoCurrentTaskIdRu => russian
                 ? ReadmeDemoCurrentTaskTitleRu
                 : ReadmeDemoCurrentTaskTitle,
             _ => russian
@@ -288,6 +310,10 @@ public static class UnlimotionAutomationScenarioData
                 CurrentSortDefinition = "Comfort",
                 CurrentSortDefinitionForUnlocked = "Comfort"
             },
+            TaskStatusModel = new
+            {
+                MigrationNoticeShown = "True"
+            },
             Appearance = new
             {
                 Theme = AppearanceSettings.LightTheme,
@@ -308,6 +334,7 @@ public static class UnlimotionAutomationScenarioData
         var createdBase = new DateTimeOffset(now.Year, now.Month, now.Day, 12, 0, 0, now.Offset);
         var completedAt = createdBase.AddHours(-1);
         var archivedAt = createdBase.AddHours(-2);
+        var currentTaskId = GetCurrentTaskId(UnlimotionAutomationScenario.ReadmeDemo, language);
 
         var tasks = new[]
         {
@@ -319,7 +346,7 @@ public static class UnlimotionAutomationScenarioData
                     "Скоординировать материалы недели запуска, которые связывают продуктовую историю, фасилитацию и публичный релиз."),
                 created: createdBase.AddHours(-10),
                 updated: createdBase.AddMinutes(-50),
-                contains: ["workshop-narrative", "publish-landing"],
+                contains: [currentTaskId, "publish-landing"],
                 importance: 95,
                 wanted: true),
             CreateTask(
@@ -330,11 +357,11 @@ public static class UnlimotionAutomationScenarioData
                     "Подготовить материалы, которые понадобятся фасилитаторам на сессиях пилотной недели."),
                 created: createdBase.AddHours(-9),
                 updated: createdBase.AddMinutes(-35),
-                contains: ["workshop-narrative", "feedback-summary"],
+                contains: [currentTaskId, "feedback-summary"],
                 importance: 80,
                 wanted: true),
             CreateTask(
-                id: ReadmeDemoCurrentTaskId,
+                id: currentTaskId,
                 title: Text(ReadmeDemoCurrentTaskTitle, ReadmeDemoCurrentTaskTitleRu),
                 description: Text(
                     """
@@ -343,9 +370,9 @@ public static class UnlimotionAutomationScenarioData
                     The task intentionally carries dates, relations, a repeater, and a longer description to make the README screenshots representative.
                     """,
                     """
-                    Сформировать основную историю пилота так, чтобы demo desktop UI, заметки фасилитатора и тексты запуска описывали один и тот же опыт.
+                    Сформировать основную историю пилота так, чтобы демонстрация интерфейса, заметки фасилитатора и тексты запуска описывали один и тот же опыт.
 
-                    В задаче специально есть даты, связи, повторитель и длинное описание, чтобы скриншоты README выглядели репрезентативно.
+                    В задаче специально есть даты, связи, повторитель и длинное описание, чтобы скриншоты документации выглядели репрезентативно.
                     """),
                 created: createdBase.AddHours(-4),
                 updated: createdBase.AddMinutes(-20),
@@ -355,7 +382,6 @@ public static class UnlimotionAutomationScenarioData
                 blockedBy: ["sync-visual-assets"],
                 plannedBegin: createdBase.AddDays(1),
                 plannedEnd: createdBase.AddDays(5),
-                plannedDuration: TimeSpan.FromDays(6),
                 repeater: new RepeaterPattern
                 {
                     Type = RepeaterType.Weekly,
@@ -374,7 +400,7 @@ public static class UnlimotionAutomationScenarioData
                     "Разбить воркшоп на понятные этапы и оценить длительность каждого шага."),
                 created: createdBase.AddHours(-3),
                 updated: createdBase.AddMinutes(-90),
-                parents: [ReadmeDemoCurrentTaskId],
+                parents: [currentTaskId],
                 plannedBegin: createdBase.AddDays(1),
                 plannedEnd: createdBase.AddDays(3),
                 plannedDuration: TimeSpan.FromDays(2),
@@ -389,7 +415,7 @@ public static class UnlimotionAutomationScenarioData
                     "Собрать примеры, переходы и запасные заметки, которые делают живую сессию плавнее."),
                 created: createdBase.AddHours(-2),
                 updated: createdBase.AddMinutes(-70),
-                parents: [ReadmeDemoCurrentTaskId],
+                parents: [currentTaskId],
                 plannedBegin: createdBase.AddDays(2),
                 plannedEnd: createdBase.AddDays(5),
                 plannedDuration: TimeSpan.FromDays(2),
@@ -405,7 +431,7 @@ public static class UnlimotionAutomationScenarioData
                 created: createdBase.AddHours(-8),
                 updated: createdBase.AddMinutes(-45),
                 parents: ["release-checklist"],
-                blocks: [ReadmeDemoCurrentTaskId],
+                blocks: [currentTaskId],
                 plannedBegin: createdBase.AddHours(1),
                 plannedEnd: createdBase.AddDays(1),
                 plannedDuration: TimeSpan.FromDays(1),
@@ -421,7 +447,7 @@ public static class UnlimotionAutomationScenarioData
                 created: createdBase.AddHours(-7),
                 updated: createdBase.AddMinutes(-30),
                 parents: ["launch-pilot"],
-                blockedBy: [ReadmeDemoCurrentTaskId],
+                blockedBy: [currentTaskId],
                 plannedBegin: createdBase.AddDays(3),
                 plannedEnd: createdBase.AddDays(4),
                 plannedDuration: TimeSpan.FromDays(2),
@@ -496,7 +522,7 @@ public static class UnlimotionAutomationScenarioData
                 isCanBeCompleted: true),
             CreateTask(
                 id: "release-checklist",
-                title: Text("🛠 Prepare the desktop release checklist", "🛠 Подготовить чеклист desktop-релиза"),
+                title: Text("🛠 Prepare the desktop release checklist", "🛠 Подготовить чеклист выпуска для компьютеров"),
                 description: Text(
                     "Track the tasks needed to ship refreshed visuals, packaging, and docs together.",
                     "Отследить задачи, нужные для одновременного выпуска обновленных визуалов, пакетов и документации."),
@@ -507,10 +533,10 @@ public static class UnlimotionAutomationScenarioData
                 wanted: true),
             CreateTask(
                 id: "capture-readme-tour",
-                title: Text("Capture the README tab tour GIF", "Записать GIF-тур по вкладкам README"),
+                title: Text("Capture the README tab tour GIF", "Записать тур по вкладкам документации"),
                 description: Text(
                     "Produce the animated pass that demonstrates the current desktop tabs.",
-                    "Собрать анимированный проход, который показывает актуальные вкладки desktop-приложения."),
+                    "Собрать анимированный проход, который показывает актуальные вкладки приложения для компьютера."),
                 created: createdBase.AddHours(-1),
                 updated: createdBase.AddMinutes(-15),
                 parents: ["release-checklist"],
@@ -573,7 +599,7 @@ public static class UnlimotionAutomationScenarioData
                 unlocked: createdBase.AddMinutes(-22)),
             CreateTask(
                 id: "translate-readme-copy",
-                title: Text("Update the English and Russian README copy", "Обновить английский и русский текст README"),
+                title: Text("Update the English and Russian README copy", "Обновить русский и английский текст документации"),
                 description: Text(
                     "Bring the screenshots and the written walkthrough back in sync.",
                     "Синхронизировать скриншоты и текстовое описание приложения."),
@@ -623,7 +649,7 @@ public static class UnlimotionAutomationScenarioData
                 ChangedTasks = 0,
                 Message = Text(
                     "Synthetic demo availability already seeded.",
-                    "Доступность синтетического demo-набора уже подготовлена.")
+                    "Доступность демонстрационного набора уже подготовлена.")
             });
     }
 

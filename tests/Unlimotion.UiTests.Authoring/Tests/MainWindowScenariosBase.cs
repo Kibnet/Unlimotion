@@ -114,6 +114,9 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
         Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.UnlockedTree.AutomationId).IsEqualTo("UnlockedTree");
 
+        Page.SelectTabItem(static page => page.InProgressTabItem, timeoutMs: 10_000);
+        await Assert.That(Page.InProgressTree.AutomationId).IsEqualTo("InProgressTree");
+
         Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.CompletedTree.AutomationId).IsEqualTo("CompletedTree");
 

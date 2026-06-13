@@ -37,6 +37,7 @@ internal static class Program
         new("last-created", "last-created.png", static page => page.LastCreatedTabItem, "Last Created", 900),
         new("last-updated", "last-updated.png", static page => page.LastUpdatedTabItem, "Last Updated", 900),
         new("unlocked", "unlocked.png", static page => page.UnlockedTabItem, "Unlocked", 900),
+        new("in-progress", "in-progress.png", static page => page.InProgressTabItem, "In Progress", 900),
         new("completed", "completed.png", static page => page.CompletedTabItem, "Completed", 900),
         new("archived", "archived.png", static page => page.ArchivedTabItem, "Archived", 900),
         new("last-opened", "last-opened.png", static page => page.LastOpenedTabItem, "Last Opened", 900),
@@ -702,6 +703,7 @@ internal static class Program
             $"current task '{currentTaskTitle}'");
 
         ResizeDesktopWindow(session.MainWindow, DesktopCaptureWindowWidth, DesktopCaptureWindowHeight);
+        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(FlaUI.Core.Definitions.WindowVisualState.Maximized);
         session.MainWindow.Focus();
         Pause(1000);
 
@@ -719,7 +721,7 @@ internal static class Program
 
         foreach (var step in CaptureSteps.Skip(1))
         {
-            page.SelectTabItem(step.Selector, timeoutMs: 10_000);
+            SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory, step);
             Pause(step.DelayAfterSelectMs);
 
             if (string.Equals(step.Key, "roadmap", StringComparison.Ordinal))
@@ -1035,6 +1037,88 @@ internal static class Program
             },
             TimeSpan.FromSeconds(10),
             "Settings root");
+    }
+
+    private static void SelectDesktopCaptureTab(
+        MainWindowPage page,
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        ReadmeCaptureStep step)
+    {
+        try
+        {
+            page.SelectTabItem(step.Selector, timeoutMs: 10_000);
+            return;
+        }
+        catch (FlaUI.Core.Exceptions.ElementNotAvailableException)
+        {
+            if (TrySelectMainTabFromOverflow(window, conditionFactory, step.Key))
+            {
+                return;
+            }
+
+            throw;
+        }
+    }
+
+    private static bool TrySelectMainTabFromOverflow(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string stepKey)
+    {
+        var tabAutomationId = stepKey switch
+        {
+            "roadmap" => "RoadmapTabItem",
+            "settings" => "SettingsTabItem",
+            _ => null
+        };
+
+        if (tabAutomationId is null)
+        {
+            return false;
+        }
+
+        var overflowButton = window.FindFirstDescendant(conditionFactory.ByAutomationId("MainTabsOverflowButton"));
+        var overflowInvoke = overflowButton?.Patterns.Invoke.PatternOrDefault;
+        if (overflowButton is null)
+        {
+            return false;
+        }
+
+        if (overflowInvoke is not null)
+        {
+            overflowInvoke.Invoke();
+        }
+        else
+        {
+            overflowButton.Click();
+        }
+
+        var menuItemAutomationId = $"MainTabsOverflow{tabAutomationId}";
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var menuItem = window.Automation.GetDesktop()
+                .FindFirstDescendant(conditionFactory.ByAutomationId(menuItemAutomationId));
+            if (menuItem is not null)
+            {
+                var menuItemInvoke = menuItem.Patterns.Invoke.PatternOrDefault;
+                if (menuItemInvoke is not null)
+                {
+                    menuItemInvoke.Invoke();
+                }
+                else
+                {
+                    menuItem.Click();
+                }
+
+                Pause(500);
+                return true;
+            }
+
+            Pause(150);
+        }
+
+        return false;
     }
 
     private static void CaptureCurrentHeadlessWindow(

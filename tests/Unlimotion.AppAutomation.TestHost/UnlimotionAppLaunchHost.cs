@@ -99,7 +99,7 @@ public static class UnlimotionAppLaunchHost
 
                 vm = CreateHeadlessViewModel(launchData);
                 await vm.Connect();
-                SelectAutomationTask(vm, launchData.CurrentTaskId);
+                SelectAutomationTask(vm, launchData);
                 ApplyAutomationWindowTitle(vm, launchData);
                 afterViewModelPrepared?.Invoke(vm);
             },
@@ -126,6 +126,13 @@ public static class UnlimotionAppLaunchHost
     public static string GetCurrentTaskId(UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke)
     {
         return UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario);
+    }
+
+    public static string GetCurrentTaskId(
+        UnlimotionAutomationScenario scenario,
+        string? language)
+    {
+        return UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario, language);
     }
 
     public static string GetCurrentTaskTitle(UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke)
@@ -217,20 +224,17 @@ public static class UnlimotionAppLaunchHost
         builder.BuildApp();
     }
 
-    private static void SelectAutomationTask(MainWindowViewModel vm, string currentTaskId)
+    private static void SelectAutomationTask(
+        MainWindowViewModel vm,
+        UnlimotionAutomationLaunchData launchData)
     {
+        var currentTaskId = launchData.CurrentTaskId;
         vm.AllTasksMode = true;
         vm.DetailsAreOpen = true;
 
-        if (string.Equals(currentTaskId, UnlimotionAutomationScenarioData.ReadmeDemoCurrentTaskId, StringComparison.Ordinal))
+        if (launchData.OpenedTaskIds.Contains(currentTaskId))
         {
-            PreloadReadmeDemoLastOpened(vm);
-            return;
-        }
-
-        if (UnlimotionAutomationScenarioData.ReadmeDemoLastOpenedTaskIds.Contains(currentTaskId))
-        {
-            PreloadReadmeDemoLastOpened(vm);
+            PreloadReadmeDemoLastOpened(vm, launchData.OpenedTaskIds);
             SelectTaskById(vm, currentTaskId);
             return;
         }
@@ -339,9 +343,11 @@ public static class UnlimotionAppLaunchHost
         vm.ExpandNodeAndDescendants(vm.CurrentItemBlockedBy);
     }
 
-    private static void PreloadReadmeDemoLastOpened(MainWindowViewModel vm)
+    private static void PreloadReadmeDemoLastOpened(
+        MainWindowViewModel vm,
+        IReadOnlyList<string> openedTaskIds)
     {
-        foreach (var taskId in UnlimotionAutomationScenarioData.ReadmeDemoLastOpenedTaskIds)
+        foreach (var taskId in openedTaskIds)
         {
             SelectTaskById(vm, taskId);
         }
@@ -411,11 +417,11 @@ public static class UnlimotionAppLaunchHost
             var tasksPath = Path.Combine(rootPath, "Tasks");
             var configPath = Path.Combine(rootPath, "Settings.json");
             var currentTaskId = string.IsNullOrWhiteSpace(currentTaskIdOverride)
-                ? UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario)
+                ? UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario, language)
                 : currentTaskIdOverride;
             var currentTaskTitle = UnlimotionAutomationScenarioData.GetTaskTitle(scenario, currentTaskId, language);
             var openedTaskIds = scenario == UnlimotionAutomationScenario.ReadmeDemo
-                ? UnlimotionAutomationScenarioData.ReadmeDemoLastOpenedTaskIds
+                ? UnlimotionAutomationScenarioData.GetReadmeDemoLastOpenedTaskIds(language)
                     .Where(taskId => !string.Equals(taskId, currentTaskId, StringComparison.Ordinal))
                     .Append(currentTaskId)
                     .ToArray()

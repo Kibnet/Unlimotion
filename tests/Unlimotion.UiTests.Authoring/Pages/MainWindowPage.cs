@@ -11,6 +11,8 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("LastUpdatedTree", UiControlType.Tree, "LastUpdatedTree")]
 [UiControl("UnlockedTabItem", UiControlType.TabItem, "UnlockedTabItem")]
 [UiControl("UnlockedTree", UiControlType.Tree, "UnlockedTree")]
+[UiControl("InProgressTabItem", UiControlType.TabItem, "InProgressTabItem")]
+[UiControl("InProgressTree", UiControlType.Tree, "InProgressTree")]
 [UiControl("CompletedTabItem", UiControlType.TabItem, "CompletedTabItem")]
 [UiControl("CompletedTree", UiControlType.Tree, "CompletedTree")]
 [UiControl("ArchivedTabItem", UiControlType.TabItem, "ArchivedTabItem")]

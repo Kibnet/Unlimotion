@@ -42,8 +42,11 @@ public abstract class ReadmeDemoHeadlessTestsBase
     public async Task Readme_demo_uses_capture_presentation_state()
     {
         var vm = GetMainWindowViewModel();
+        var expectedCurrentTaskId = UnlimotionAppLaunchHost.GetCurrentTaskId(
+            UnlimotionAutomationScenario.ReadmeDemo,
+            Language);
         WaitForExpandedTree(() =>
-            FindExpandedWrapper(vm.CurrentAllTasksItems, UnlimotionAutomationScenarioData.ReadmeDemoCurrentTaskId) is not null
+            FindExpandedWrapper(vm.CurrentAllTasksItems, expectedCurrentTaskId) is not null
             && AllParentNodesExpanded(vm.CurrentAllTasksItems));
 
         using (Assert.Multiple())
@@ -53,7 +56,7 @@ public abstract class ReadmeDemoHeadlessTestsBase
                     UnlimotionAutomationScenario.ReadmeDemo,
                     Language));
             await Assert.That(AllParentNodesExpanded(vm.CurrentAllTasksItems)).IsTrue();
-            await Assert.That(FindExpandedWrapper(vm.CurrentAllTasksItems, UnlimotionAutomationScenarioData.ReadmeDemoCurrentTaskId) is not null).IsTrue();
+            await Assert.That(FindExpandedWrapper(vm.CurrentAllTasksItems, expectedCurrentTaskId) is not null).IsTrue();
         }
 
         Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
