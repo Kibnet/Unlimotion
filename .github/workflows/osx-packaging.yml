@@ -110,6 +110,30 @@ jobs:
           fi
         done
 
+    - name: Remove Existing macOS Release Assets
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        existing_assets="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+
+        delete_asset() {
+          local asset="$1"
+          if grep -Fxq "$asset" <<< "$existing_assets"; then
+            gh release delete-asset "$RELEASE_TAG" "$asset" --repo "${{ github.repository }}" --yes
+          fi
+        }
+
+        delete_asset "releases.${{ matrix.channel }}.json"
+        delete_asset "assets.${{ matrix.channel }}.json"
+        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}-${{ matrix.channel }}-full.nupkg"
+        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}-${{ matrix.runtime }}.pkg"
+        delete_asset "Unlimotion-${{ matrix.channel }}-Portable.zip"
+        delete_asset "Unlimotion-${{ matrix.channel }}-Setup.pkg"
+
     - name: Upload Velopack macOS Release
       shell: bash
       run: |

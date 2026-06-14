@@ -98,6 +98,29 @@ jobs:
           --packAuthors "${{ env.INSTALLER_PUBLISHER }}" \
           --icon "${{ github.workspace }}/src/Unlimotion.Android/Icon.png"
 
+    - name: Remove Existing Linux Release Assets
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        existing_assets="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+
+        delete_asset() {
+          local asset="$1"
+          if grep -Fxq "$asset" <<< "$existing_assets"; then
+            gh release delete-asset "$RELEASE_TAG" "$asset" --repo "${{ github.repository }}" --yes
+          fi
+        }
+
+        delete_asset "releases.linux.json"
+        delete_asset "assets.linux.json"
+        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}-linux-full.nupkg"
+        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}.deb"
+        delete_asset "Unlimotion.AppImage"
+
     - name: Upload Velopack Linux Release
       shell: bash
       run: |
