@@ -1846,74 +1846,81 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RectangleSelection_AppliesModifierSemanticsAndDoesNotChangeCurrentTask()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.Dispatch(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
 
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
-                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
-                var selectionRectangle = WaitForAutomationControl<Border>(view, "RoadmapSelectionRectangle");
-                var root2 = WaitForTaskNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
 
-                await ClickControlAsync(window, root2);
-                var currentTaskId = vm.CurrentTaskItem?.Id;
-                await Assert.That(currentTaskId).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
+                    var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                    var selectionRectangle = WaitForAutomationControl<Border>(view, "RoadmapSelectionRectangle");
+                    var root2 = WaitForTaskNode(graphControl!, MainWindowViewModelFixture.RootTask2Id);
 
-                var allNodeBorders = FindRoadmapNodeBorders(graphControl).ToArray();
-                var start = FindEmptyEditorPoint(window, editor, allNodeBorders);
-                var end = FindRectangleEndPoint(window, editor, start, allNodeBorders);
-                var rectangle = CreateNormalizedRect(start, end);
-                var hitIds = GetRoadmapNodeIdsIntersectingWindowRect(window, graphControl, rectangle);
+                    await ClickControlAsync(window, root2);
+                    var currentTaskId = vm.CurrentTaskItem?.Id;
+                    await Assert.That(currentTaskId).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
 
-                await Assert.That(hitIds.Count).IsGreaterThan(0);
+                    var allNodeBorders = FindRoadmapNodeBorders(graphControl).ToArray();
+                    var start = FindEmptyEditorPoint(window, editor, allNodeBorders);
+                    var end = FindRectangleEndPoint(window, editor, start, allNodeBorders);
+                    var rectangle = CreateNormalizedRect(start, end);
+                    var hitIds = GetRoadmapNodeIdsIntersectingWindowRect(window, graphControl, rectangle);
 
-                window.MouseDown(start, MouseButton.Left, RawInputModifiers.None);
-                Dispatcher.UIThread.RunJobs();
-                window.MouseMove(end, RawInputModifiers.LeftMouseButton);
-                Dispatcher.UIThread.RunJobs();
+                    await Assert.That(hitIds.Count).IsGreaterThan(0);
 
-                await Assert.That(selectionRectangle.IsVisible).IsTrue();
+                    window.MouseDown(start, MouseButton.Left, RawInputModifiers.None);
+                    Dispatcher.UIThread.RunJobs();
+                    window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+                    Dispatcher.UIThread.RunJobs();
 
-                window.MouseUp(end, MouseButton.Left, RawInputModifiers.LeftMouseButton);
-                Dispatcher.UIThread.RunJobs();
+                    await Assert.That(selectionRectangle.IsVisible).IsTrue();
 
-                await Assert.That(selectionRectangle.IsVisible).IsFalse();
-                await Assert.That(GetSelectedRoadmapTaskIds(graphControl)).IsEquivalentTo(hitIds);
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
+                    window.MouseUp(end, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                    Dispatcher.UIThread.RunJobs();
 
-                await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Control);
-                await Assert.That(GetSelectedRoadmapTaskIds(graphControl).Intersect(hitIds)).IsEmpty();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
+                    await Assert.That(selectionRectangle.IsVisible).IsFalse();
+                    await Assert.That(GetSelectedRoadmapTaskIds(graphControl)).IsEquivalentTo(hitIds);
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
 
-                await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Shift);
-                await Assert.That(hitIds.All(id => FindRoadmapNode(graphControl, id)?.IsSelected == true)).IsTrue();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
+                    await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Control);
+                    await Assert.That(GetSelectedRoadmapTaskIds(graphControl).Intersect(hitIds)).IsEmpty();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
 
-                await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Alt);
-                await Assert.That(GetSelectedRoadmapTaskIds(graphControl).Intersect(hitIds)).IsEmpty();
-                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Shift);
+                    await Assert.That(hitIds.All(id => FindRoadmapNode(graphControl, id)?.IsSelected == true)).IsTrue();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
+
+                    await DragRoadmapRectangleAsync(window, start, end, RawInputModifiers.Alt);
+                    await Assert.That(GetSelectedRoadmapTaskIds(graphControl).Intersect(hitIds)).IsEmpty();
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(currentTaskId);
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]

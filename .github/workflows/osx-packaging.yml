@@ -4,12 +4,19 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and upload
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
   INSTALLER_PUBLISHER: Kibnet
   VELOPACK_VERSION: 0.0.1298
   OSX_APP_PATH: ${{ github.workspace }}/Unlimotion.app
@@ -30,7 +37,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.sha }}
+        ref: ${{ env.RELEASE_TAG }}
 
     - name: Setup .NET 10 SDK
       uses: actions/setup-dotnet@v4
@@ -41,16 +48,16 @@ jobs:
       id: release_version
       shell: bash
       run: |
-        version="${GITHUB_REF_NAME}"
+        version="${RELEASE_TAG}"
         version="${version#v}"
 
         if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "Release tag '${GITHUB_REF_NAME}' cannot be used by the current macOS Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
+          echo "Release tag '${RELEASE_TAG}' cannot be used by the current macOS Velopack workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
           exit 1
         fi
 
         if [[ "$version" == "0.0.0" ]]; then
-          echo "Release tag '${GITHUB_REF_NAME}' cannot be used as a Velopack package version. Use 0.0.1 or greater." >&2
+          echo "Release tag '${RELEASE_TAG}' cannot be used as a Velopack package version. Use 0.0.1 or greater." >&2
           exit 1
         fi
 
@@ -97,8 +104,8 @@ jobs:
             exit 1
           fi
 
-          if ! grep -q "${{ matrix.runtime }}" "$feed"; then
-            echo "Velopack feed '$feed' does not include runtime '${{ matrix.runtime }}'." >&2
+          if ! grep -q "${{ matrix.channel }}" "$feed"; then
+            echo "Velopack feed '$feed' does not include channel '${{ matrix.channel }}'." >&2
             exit 1
           fi
         done
@@ -113,7 +120,7 @@ jobs:
           --channel "${{ matrix.channel }}" \
           --repoUrl "https://github.com/${{ github.repository }}" \
           --token "${{ secrets.GITHUB_TOKEN }}" \
-          --tag "${{ github.ref_name }}" \
+          --tag "${{ env.RELEASE_TAG }}" \
           --merge \
           --publish
 
@@ -123,4 +130,5 @@ jobs:
     - name: Upload MacOSPkg To Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: ${{ env.RELEASE_TAG }}
         files: ./*.pkg
