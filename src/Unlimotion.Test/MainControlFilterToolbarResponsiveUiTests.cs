@@ -89,7 +89,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task MainControlFilterToolbar_NarrowWindow_CompressesEmojiFiltersWhenSearchGetsTooSmall()
+    public async Task MainControlFilterToolbar_NarrowWindow_KeepsEmojiSummariesInsideWindow()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -103,33 +103,29 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await vm.Connect();
                 vm.AllTasksMode = true;
                 vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
 
                 var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view, 900, 760);
+                window = CreateWindow(view, 500, 760);
                 window.Show();
                 RunLayoutJobs();
+                SelectTab(view, 0);
 
-                var wideToolbar = FindVisibleFilterToolbar(view);
-                var (wideIncludeControl, wideExcludeControl) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
-                var wideFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var regularPrimaryActionsWidth = wideIncludeControl.Bounds.Width +
-                                                 wideExcludeControl.Bounds.Width +
-                                                 wideFiltersButton.Bounds.Width;
-
-                window.Width = 500;
-                RunLayoutJobs();
+                foreach (var filter in vm.EmojiFilters
+                             .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
+                             .Take(6))
+                {
+                    filter.ShowTasks = true;
+                }
 
                 var toolbar = FindVisibleFilterToolbar(view);
                 var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
                 var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var toolbarBounds = GetBoundsRelativeTo(window, toolbar);
-                var regularSearchBudget = window.Bounds.Width -
-                                          toolbarBounds.Left -
-                                          regularPrimaryActionsWidth -
-                                          toolbar.ColumnSpacing;
 
-                await Assert.That(regularSearchBudget).IsLessThan(AppearanceSettings.DefaultSearchBarMinWidth);
-                await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
+                await Assert.That(GetEmojiFilterInput(includeControl).Text).Contains("+");
+                await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+                await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
                 await AssertControlStaysInsideWindow(window, filtersButton);
                 await AssertControlStaysInsideWindow(window, searchBar);
 
@@ -139,17 +135,15 @@ public class MainControlFilterToolbarResponsiveUiTests
                     RunLayoutJobs();
 
                     toolbar = FindVisibleFilterToolbar(view);
+                    searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                    (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
                     filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                    await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
+
+                    await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+                    await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
+                    await AssertControlStaysInsideWindow(window, filtersButton);
+                    await AssertControlStaysInsideWindow(window, searchBar);
                 }
-
-                window.Width = 900;
-                RunLayoutJobs();
-
-                toolbar = FindVisibleFilterToolbar(view);
-                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
-                filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                await AssertEmojiFilterInputsUseRegularWidth(includeControl, excludeControl, filtersButton);
             }
             finally
             {
@@ -318,9 +312,10 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(libraryFilter.ShowTasks).IsTrue();
                 await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
 
+                var currentInputBounds = GetBoundsRelativeTo(window, includeInput);
                 var sideDismissPoint = new Point(
-                    Math.Min(window.Bounds.Width - 6, inputBounds.Right + 24),
-                    GetCenterY(inputBounds));
+                    Math.Min(window.Bounds.Width - 6, currentInputBounds.Right + 24),
+                    GetCenterY(currentInputBounds));
                 window.MouseDown(sideDismissPoint, MouseButton.Left);
                 RunLayoutJobs();
                 window.MouseUp(sideDismissPoint, MouseButton.Left);
@@ -429,10 +424,6 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var toolbar = FindVisibleFilterToolbar(view);
                 var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
                 var includeInput = GetEmojiFilterInput(includeControl);
-                includeInput.MinWidth = 140;
-                includeInput.Width = 140;
-                includeControl.Width = 156;
-                RunLayoutJobs();
 
                 var selectedFilters = vm.EmojiFilters
                     .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
@@ -447,10 +438,10 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
 
                 var summaryParts = includeInput.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                await Assert.That(summaryParts[0]).IsEqualTo(selectedFilters.Length.ToString());
-                await Assert.That(summaryParts[1]).IsEqualTo(selectedFilters[0].Emoji);
+                await Assert.That(summaryParts[0]).IsEqualTo(selectedFilters[0].Emoji);
                 await Assert.That(summaryParts[^1]).StartsWith("+");
-                await Assert.That(summaryParts.Length).IsLessThan(selectedFilters.Length + 1);
+                await Assert.That(summaryParts.Length).IsLessThan(selectedFilters.Length);
+                await Assert.That(includeInput.Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
             }
             finally
             {
@@ -812,7 +803,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task MainControlFilterToolbar_DetailsPaneMediumNarrow_CompressesEmojiFiltersBeforeSearchCollapse()
+    public async Task MainControlFilterToolbar_DetailsPaneMediumNarrow_KeepsEmptyEmojiSummariesSquare()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -834,11 +825,13 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
 
                 var wideToolbar = FindVisibleFilterToolbar(view);
-                var (wideIncludeControl, _) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
+                var (wideIncludeControl, wideExcludeControl) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
                 var wideFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var regularEmojiInputWidth = GetEmojiFilterInput(wideIncludeControl).Bounds.Width;
 
-                await Assert.That(regularEmojiInputWidth).IsGreaterThan(wideFiltersButton.Bounds.Width + 1);
+                await AssertEmojiFilterInputIsEmptySquare(wideIncludeControl);
+                await AssertEmojiFilterInputIsEmptySquare(wideExcludeControl);
+                await Assert.That(GetEmojiFilterInput(wideIncludeControl).Bounds.Width)
+                    .IsLessThanOrEqualTo(wideFiltersButton.Bounds.Width + 1);
 
                 vm.DetailsAreOpen = true;
                 RunLayoutJobs();
@@ -846,11 +839,10 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var toolbar = FindVisibleFilterToolbar(view);
                 var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
                 var primaryActions = FindVisibleToolbarChild<WrapPanel>(toolbar);
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
 
-                var regularEmojiInputsFootprint = regularEmojiInputWidth * 2 + toolbar.ColumnSpacing / 2;
-                await Assert.That(toolbar.Bounds.Width).IsGreaterThan(regularEmojiInputsFootprint);
-                await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
+                await AssertEmojiFilterInputIsEmptySquare(includeControl);
+                await AssertEmojiFilterInputIsEmptySquare(excludeControl);
                 await AssertPrimaryActionsUseSingleLine(primaryActions);
                 await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
                 await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
@@ -1056,30 +1048,19 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(includeIndex).IsGreaterThanOrEqualTo(0);
         await Assert.That(excludeIndex).IsEqualTo(includeIndex + 1);
         await Assert.That(filtersButtonIndex).IsEqualTo(excludeIndex + 1);
-        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(88);
-        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(88);
+        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width)
+            .IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width)
+            .IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
     }
 
-    private static async Task AssertEmojiFilterInputsFitFilterButtonWidth(
-        Grid toolbar,
-        DropDownButton filtersButton)
+    private static async Task AssertEmojiFilterInputIsEmptySquare(EmojiFilterMultiSelectSearchBox control)
     {
-        var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
-        var maxInputWidth = filtersButton.Bounds.Width + 1;
+        var input = GetEmojiFilterInput(control);
 
-        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
-        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
-    }
-
-    private static async Task AssertEmojiFilterInputsUseRegularWidth(
-        EmojiFilterMultiSelectSearchBox includeControl,
-        EmojiFilterMultiSelectSearchBox excludeControl,
-        DropDownButton filtersButton)
-    {
-        var minimumRegularInputWidth = filtersButton.Bounds.Width + 1;
-
-        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsGreaterThan(minimumRegularInputWidth);
-        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsGreaterThan(minimumRegularInputWidth);
+        await Assert.That(input.Text).IsEqualTo("🙂");
+        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(8);
+        await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(control.SummaryMinWidth + 8);
     }
 
     private static async Task AssertControlStaysInsideWindow(Window window, Control control)

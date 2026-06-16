@@ -278,14 +278,6 @@ namespace Unlimotion.Views
                 return;
             }
 
-            var primaryActions = toolbar.Children
-                .OfType<WrapPanel>()
-                .FirstOrDefault();
-            if (primaryActions != null)
-            {
-                FilterToolbarLayout.ApplyAdaptiveEmojiFilterWidths(toolbar, primaryActions, searchBar);
-            }
-
             searchBar.MinWidth = 0;
             searchBar.MaxWidth = toolbarWidth;
 
