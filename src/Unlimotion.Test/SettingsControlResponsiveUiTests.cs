@@ -28,48 +28,55 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.DispatchAsync(async () =>
             {
-                var settings = fixture.MainWindowViewModelTest.Settings;
-                var view = new SettingsControl
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
+
+                try
                 {
-                    DataContext = settings
-                };
+                    var settings = fixture.MainWindowViewModelTest.Settings;
+                    var view = new SettingsControl
+                    {
+                        DataContext = settings
+                    };
 
-                window = CreateWindow(view, 720, 800);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
+                    window = CreateWindow(view, 720, 800);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
 
-                var markdownCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineAsMarkdownCheckBox");
-                var descriptionCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineDescriptionCheckBox");
+                    var markdownCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineAsMarkdownCheckBox");
+                    var descriptionCheckBox = FindControlByAutomationId<CheckBox>(view, "CopyTaskOutlineDescriptionCheckBox");
 
-                await Assert.That(markdownCheckBox.IsChecked).IsFalse();
-                await Assert.That(descriptionCheckBox.IsChecked).IsFalse();
+                    await Assert.That(markdownCheckBox.IsChecked).IsFalse();
+                    await Assert.That(descriptionCheckBox.IsChecked).IsFalse();
 
-                await ClickControlAsync(window, markdownCheckBox);
-                await ClickControlAsync(window, descriptionCheckBox);
+                    await ClickControlAsync(window, markdownCheckBox);
+                    await ClickControlAsync(window, descriptionCheckBox);
 
-                await Assert.That(settings.CopyTaskOutlineAsMarkdown).IsTrue();
-                await Assert.That(settings.CopyTaskOutlineDescription).IsTrue();
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    await Assert.That(settings.CopyTaskOutlineAsMarkdown).IsTrue();
+                    await Assert.That(settings.CopyTaskOutlineDescription).IsTrue();
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
     public async Task SettingsControl_TaskTreeExpansionStateCheckBox_PersistsSetting()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -109,86 +116,93 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.Dispatch(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await session.Dispatch(async () =>
             {
-                var settings = fixture.MainWindowViewModelTest.Settings;
-                var updateService = new FakeApplicationUpdateService
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
+
+                try
                 {
-                    CurrentVersion = "1.2.3",
-                    NextUpdate = new ApplicationUpdateInfo("1.2.4")
-                };
-                settings.ConfigureUpdateService(updateService);
-                settings.CheckForUpdatesCommand = new TestAsyncCommand(() => settings.CheckForUpdatesAsync());
-                settings.DownloadUpdateCommand = new TestAsyncCommand(() => settings.DownloadUpdateAsync());
-                settings.ApplyUpdateCommand = new TestAsyncCommand(settings.ApplyUpdateAsync);
+                    var settings = fixture.MainWindowViewModelTest.Settings;
+                    var updateService = new FakeApplicationUpdateService
+                    {
+                        CurrentVersion = "1.2.3",
+                        NextUpdate = new ApplicationUpdateInfo("1.2.4")
+                    };
+                    settings.ConfigureUpdateService(updateService);
+                    settings.CheckForUpdatesCommand = new TestAsyncCommand(() => settings.CheckForUpdatesAsync());
+                    settings.DownloadUpdateCommand = new TestAsyncCommand(() => settings.DownloadUpdateAsync());
+                    settings.ApplyUpdateCommand = new TestAsyncCommand(settings.ApplyUpdateAsync);
 
-                var view = new SettingsControl
+                    var view = new SettingsControl
+                    {
+                        DataContext = settings
+                    };
+
+                    window = CreateWindow(view, 720, 800);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var currentVersionText = FindControlByAutomationId<TextBlock>(view, "CurrentApplicationVersionText");
+                    var availableVersionText = FindControlByAutomationId<TextBlock>(view, "AvailableUpdateVersionText");
+                    var checkButton = FindControlByAutomationId<Button>(view, "CheckForUpdatesButton");
+                    var downloadButton = FindControlByAutomationId<Button>(view, "DownloadUpdateButton");
+                    var applyButton = FindControlByAutomationId<Button>(view, "ApplyUpdateButton");
+
+                    await Assert.That(currentVersionText.Text).IsEqualTo("1.2.3");
+                    await Assert.That(checkButton.IsEnabled).IsTrue();
+                    await Assert.That(downloadButton.IsEnabled).IsFalse();
+
+                    await ClickControlAsync(window, checkButton);
+                    await WaitForConditionAsync(
+                        () => settings.UpdateState == ApplicationUpdateState.UpdateAvailable,
+                        "Settings update section did not show an available update.");
+
+                    await Assert.That(availableVersionText.Text).IsEqualTo("1.2.4");
+                    await Assert.That(downloadButton.IsEnabled).IsTrue();
+
+                    await ClickControlAsync(window, downloadButton);
+                    await WaitForConditionAsync(
+                        () => settings.UpdateState == ApplicationUpdateState.ReadyToApply,
+                        "Settings update section did not switch to ready-to-apply after download.");
+
+                    await Assert.That(updateService.DownloadCalls).IsEqualTo(1);
+                    await Assert.That(applyButton.IsEnabled).IsTrue();
+
+                    const string permissionStatus = "Grant install permission, then tap Install update again.";
+                    updateService.ApplyException = new ApplicationUpdateUserActionRequiredException(permissionStatus);
+
+                    await ClickControlAsync(window, applyButton);
+                    await WaitForConditionAsync(
+                        () => settings.UpdateState == ApplicationUpdateState.ReadyToApply &&
+                              settings.UpdateStatusText == permissionStatus,
+                        "Settings update section did not remain ready after Android install permission redirect.");
+
+                    var statusText = FindControlByAutomationId<TextBlock>(view, "UpdateStatusText");
+                    await Assert.That(updateService.ApplyCalls).IsEqualTo(1);
+                    await Assert.That(statusText.Text).IsEqualTo(permissionStatus);
+                    await Assert.That(applyButton.IsEnabled).IsTrue();
+                }
+                finally
                 {
-                    DataContext = settings
-                };
-
-                window = CreateWindow(view, 720, 800);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-
-                var currentVersionText = FindControlByAutomationId<TextBlock>(view, "CurrentApplicationVersionText");
-                var availableVersionText = FindControlByAutomationId<TextBlock>(view, "AvailableUpdateVersionText");
-                var checkButton = FindControlByAutomationId<Button>(view, "CheckForUpdatesButton");
-                var downloadButton = FindControlByAutomationId<Button>(view, "DownloadUpdateButton");
-                var applyButton = FindControlByAutomationId<Button>(view, "ApplyUpdateButton");
-
-                await Assert.That(currentVersionText.Text).IsEqualTo("1.2.3");
-                await Assert.That(checkButton.IsEnabled).IsTrue();
-                await Assert.That(downloadButton.IsEnabled).IsFalse();
-
-                await ClickControlAsync(window, checkButton);
-                await WaitForConditionAsync(
-                    () => settings.UpdateState == ApplicationUpdateState.UpdateAvailable,
-                    "Settings update section did not show an available update.");
-
-                await Assert.That(availableVersionText.Text).IsEqualTo("1.2.4");
-                await Assert.That(downloadButton.IsEnabled).IsTrue();
-
-                await ClickControlAsync(window, downloadButton);
-                await WaitForConditionAsync(
-                    () => settings.UpdateState == ApplicationUpdateState.ReadyToApply,
-                    "Settings update section did not switch to ready-to-apply after download.");
-
-                await Assert.That(updateService.DownloadCalls).IsEqualTo(1);
-                await Assert.That(applyButton.IsEnabled).IsTrue();
-
-                const string permissionStatus = "Grant install permission, then tap Install update again.";
-                updateService.ApplyException = new ApplicationUpdateUserActionRequiredException(permissionStatus);
-
-                await ClickControlAsync(window, applyButton);
-                await WaitForConditionAsync(
-                    () => settings.UpdateState == ApplicationUpdateState.ReadyToApply &&
-                          settings.UpdateStatusText == permissionStatus,
-                    "Settings update section did not remain ready after Android install permission redirect.");
-
-                var statusText = FindControlByAutomationId<TextBlock>(view, "UpdateStatusText");
-                await Assert.That(updateService.ApplyCalls).IsEqualTo(1);
-                await Assert.That(statusText.Text).IsEqualTo(permissionStatus);
-                await Assert.That(applyButton.IsEnabled).IsTrue();
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
     public async Task SettingsControl_UpdateAutoCheckSettings_UpdateViewModelFromControls()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -242,7 +256,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_NarrowViewport_DoesNotOverflowHorizontally()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -321,7 +335,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_BrowseTaskStoragePath_UpdatesPathFromFolderPicker()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -394,7 +408,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_LocalStorageConnect_UsesEditedTaskStoragePath()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -444,7 +458,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_SyncConflictResolutionMode_ShowsOpenResolverAction()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"SyncConflictSettings_{Guid.NewGuid():N}.json");
@@ -525,7 +539,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_ShowsFieldDecisionsAndDeleteSideAction()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolver_{Guid.NewGuid():N}.json");
@@ -631,7 +645,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_UsesSingleColumnLayoutOnPhoneWidth()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverPhone_{Guid.NewGuid():N}.json");
@@ -678,7 +692,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_PhoneWidth_WithManyConflicts_KeepsDetailsAndActionsVisible()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverMany_{Guid.NewGuid():N}.json");
@@ -749,7 +763,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task ConflictResolutionControl_PhoneWidth_WhenAllConflictsResolved_HidesFilePane()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var configPath = Path.Combine(Environment.CurrentDirectory, $"ConflictResolverResolved_{Guid.NewGuid():N}.json");

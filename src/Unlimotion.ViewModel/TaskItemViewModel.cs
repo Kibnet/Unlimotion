@@ -26,9 +26,7 @@ namespace Unlimotion.ViewModel
     [AddINotifyPropertyChangedInterface]
     public class TaskItemViewModel : DisposableList
     {
-        // Static dependencies - set once during app initialization
-        public static INotificationManagerWrapper? NotificationManagerInstance { get; set; }
-        public static MainWindowViewModel? MainWindowInstance { get; set; }
+        public string SourceId { get; }
         public INotificationManagerWrapper? NotificationManager { get; set; }
         public MainWindowViewModel? MainWindow { get; set; }
         public Func<bool>? IsInitializedProvider { get; set; }
@@ -36,9 +34,13 @@ namespace Unlimotion.ViewModel
         public TaskItemViewModel(
             TaskItem model,
             ITaskStorage taskStorage,
-            Func<bool>? isInitializedProvider = null)
+            Func<bool>? isInitializedProvider = null,
+            TaskItemViewModelContext? context = null)
         {
             IsInitializedProvider = isInitializedProvider ?? (() => true);
+            SourceId = context?.SourceId ?? TaskSourceDescriptor.DefaultSourceId;
+            NotificationManager = context?.NotificationManager;
+            MainWindow = context?.MainWindow;
             _taskStorage = taskStorage;
             _containsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_containsTasksSource);
             _parentsTasks = new ReadOnlyObservableCollection<TaskItemViewModel>(_parentsTasksSource);
@@ -150,7 +152,7 @@ namespace Unlimotion.ViewModel
 
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
-                var notificationManager = NotificationManager ?? NotificationManagerInstance;
+                var notificationManager = NotificationManager;
 
                 switch (Status)
                 {
@@ -608,7 +610,7 @@ namespace Unlimotion.ViewModel
 
                 if (!CanTransitionToStatus(value.Status, out var reason))
                 {
-                    (NotificationManager ?? NotificationManagerInstance)?.ErrorToast(reason);
+                    NotificationManager?.ErrorToast(reason);
                     RefreshStatusOptions();
                     OnPropertyChanged(nameof(StatusOption));
                     return;
@@ -807,7 +809,7 @@ namespace Unlimotion.ViewModel
             Wanted = wanted;
 
             var childrenTasks = GetChildrenTasks(task => task.Wanted != wanted).ToList();
-            ShowModalAndChangeChildrenWanted(NotificationManager ?? NotificationManagerInstance, Title, childrenTasks, wanted);
+            ShowModalAndChangeChildrenWanted(NotificationManager, Title, childrenTasks, wanted);
         }
 
         private void ShowModalAndChangeChildrenWanted(

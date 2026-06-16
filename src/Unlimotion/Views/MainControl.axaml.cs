@@ -50,7 +50,6 @@ namespace Unlimotion.Views
         ];
 
         // Static dependencies - set once during app initialization
-        public static IDialogs? DialogsInstance { get; set; }
         private const int MaxTitleFocusRetries = 5;
         private const int MaxRelationEditorFocusRetries = 5;
         private const int MaxCompletionCriterionFocusRetries = 5;
@@ -1202,7 +1201,7 @@ namespace Unlimotion.Views
                 {
                     if (vm.CurrentTaskItem == null)
                         return;
-                    var dialogs = DialogsInstance;
+                    var dialogs = vm.Dialogs;
                     if (dialogs == null) return;
                     
                     var currentTaskStoragePath = (vm.taskRepository?.TaskTreeManager.Storage as FileStorage)?.Path;
@@ -1212,31 +1211,10 @@ namespace Unlimotion.Views
 
                     if (!string.IsNullOrWhiteSpace(path))
                     {
-                        var fileStorage = new FileStorage(path);
-                        var set = new HashSet<string>();
-                        var queue = new Queue<TaskItemViewModel>();
-                        queue.Enqueue(vm.CurrentTaskItem);
-                        while (queue.Count > 0)
+                        var moveTask = vm.MoveTaskTreeToFileStorageAsync;
+                        if (moveTask != null)
                         {
-                            var task = queue.Dequeue();
-                            if (!set.Contains(task.Id))
-                            {
-                                set.Add(task.Id);
-                                await fileStorage.Save(task.Model);
-                                foreach (var item in task.ContainsTasks)
-                                {
-                                    queue.Enqueue(item);
-                                }
-                            }
-                        }
-
-                        var currentTaskStorage = vm.taskRepository?.TaskTreeManager.Storage;
-                        if (currentTaskStorage != null)
-                        {
-                            foreach (var id in set)
-                            {
-                                await currentTaskStorage.Remove(id);
-                            }
+                            await moveTask(vm.CurrentTaskItem, vm.taskRepository, path);
                         }
                     }
                 });

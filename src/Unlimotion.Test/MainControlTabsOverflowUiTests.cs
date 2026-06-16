@@ -40,7 +40,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_DesktopWidth_ShowsAllTabsWithoutOverflow()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -69,7 +69,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_DesktopWidthWithOpenDetailsPane_UsesSplitViewContentWidthForOverflow()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -111,7 +111,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_IntermediateWidth_MovesInactiveTabsToOverflowAndKeepsCurrentVisible()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -151,7 +151,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_PhoneWidth_KeepsCurrentTabVisibleWithOverflowButton()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -187,7 +187,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_PhoneWidth_KeepsLongCurrentTabVisibleWithOverflowButton()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -223,7 +223,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_OverflowMenu_SelectsHiddenTabAndMakesItVisible()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -264,7 +264,7 @@ public class MainControlTabsOverflowUiTests
             LocalizationService.Current = localization;
             localization.SetLanguage(LocalizationService.EnglishLanguage);
 
-            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
             await session.DispatchAsync(async () =>
             {
                 var fixture = new MainWindowViewModelFixture();
@@ -315,7 +315,7 @@ public class MainControlTabsOverflowUiTests
     [Test]
     public async Task MainTabs_ResizeFromPhoneToDesktop_RestoresAllTabs()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

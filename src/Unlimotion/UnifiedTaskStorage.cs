@@ -23,11 +23,13 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     private const int InitialLoadBatchSize = 64;
     private const string StatusModelMigrationBackupDirectoryName = "status-model.migration.backup";
     private readonly bool isFileStorage;
+    private readonly TaskItemViewModelContext? taskContext;
     private bool disposed;
 
-    public UnifiedTaskStorage(TaskTreeManager taskTreeManager)
+    public UnifiedTaskStorage(TaskTreeManager taskTreeManager, TaskItemViewModelContext? taskContext = null)
     {
         TaskTreeManager = taskTreeManager;
+        this.taskContext = taskContext;
         isFileStorage = taskTreeManager.Storage is FileStorage;
         Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
         Relations = new TaskRelationsIndex();
@@ -98,7 +100,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
             // Initial view models subscribe immediately; keep startup hydration from saving tasks.
             var initialTaskViews = initialTasks
-                .Select(task => new TaskItemViewModel(task, this, () => false))
+                .Select(task => CreateTaskViewModel(task, () => false))
                 .ToList();
 
             new TaskRelationsIndex().Rebuild(initialTaskViews);
@@ -147,7 +149,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             isBlocked)).ToList();
 
         var newTask = taskItemList.First(t => t.Id == createdTask.Id);
-        var vm = new TaskItemViewModel(newTask, this);
+        var vm = CreateTaskViewModel(newTask);
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.Where(t => t.Id != createdTask.Id)) UpdateCache(task);
@@ -165,7 +167,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             .ToList();
 
         var newTask = taskItemList.First(t => t.Id == createdTask.Id);
-        var vm = new TaskItemViewModel(newTask, this);
+        var vm = CreateTaskViewModel(newTask);
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.Where(t => t.Id != createdTask.Id)) UpdateCache(task);
@@ -246,7 +248,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         var last = connItemList.Last();
         if (connItemList.Count>1)
         {
-            var vm = new TaskItemViewModel(last, this);
+            var vm = CreateTaskViewModel(last);
             Tasks.AddOrUpdate(vm);
 
             foreach (var task in connItemList.SkipLast(1)) UpdateCache(task);
@@ -269,7 +271,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         var taskItemList = (await TaskTreeManager.CloneTask(change.Model, additionalItemParents)).OrderBy(t => t.CreatedDateTime).ToList();
 
         var clone = taskItemList.Last();
-        var vm = new TaskItemViewModel(clone, this);
+        var vm = CreateTaskViewModel(clone);
         Tasks.AddOrUpdate(vm);
 
         foreach (var task in taskItemList.SkipLast(1)) UpdateCache(task);
@@ -890,10 +892,15 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         }
         else if(create) 
         {
-            vm = new TaskItemViewModel(task, this);
+            vm = CreateTaskViewModel(task);
             Tasks.AddOrUpdate(vm.Value);
         }
     }
+
+    private TaskItemViewModel CreateTaskViewModel(
+        TaskItem task,
+        Func<bool>? isInitializedProvider = null) =>
+        new(task, this, isInitializedProvider, taskContext);
 
     private static bool ShouldForceReverseLinkRecheck(FileStorage fileStorage)
     {

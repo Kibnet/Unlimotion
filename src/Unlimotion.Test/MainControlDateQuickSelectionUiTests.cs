@@ -27,7 +27,7 @@ public class MainControlDateQuickSelectionUiTests
             LocalizationService.Current = localization;
             localization.SetLanguage(LocalizationService.RussianLanguage);
 
-            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
             await session.DispatchAsync(async () =>
             {
                 MainWindowViewModelFixture? fixture = null;

@@ -153,7 +153,6 @@ public class MainActivity : AvaloniaMainActivity
 
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
-            TaskStorageFactory.PrepareFileStoragePathAsync = EnsureFileStoragePathAccessAsync;
         }
         catch (Exception ex)
         {
@@ -168,6 +167,11 @@ public class MainActivity : AvaloniaMainActivity
         {
             if (_coreAppServicesConfigured && !string.IsNullOrWhiteSpace(_configuredDataDir))
             {
+                if (context is MainActivity mainActivity)
+                {
+                    App.ConfigureFileStoragePathPreparation(mainActivity.EnsureFileStoragePathAccessAsync);
+                }
+
                 return _configuredDataDir;
             }
 
@@ -175,9 +179,6 @@ public class MainActivity : AvaloniaMainActivity
             Directory.CreateDirectory(dataDir);
 
             var tasksPath = Path.Combine(dataDir, TasksFolderName);
-            App.DefaultStoragePath = tasksPath;
-            TaskStorageFactory.DefaultStoragePath = tasksPath;
-            BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
 
             EnsureGitSafeDirectory(dataDir, dataDir);
             EnsureGitSslCertBundle(context, dataDir);
@@ -189,10 +190,18 @@ public class MainActivity : AvaloniaMainActivity
                 stream.Write(@"{}");
             }
 
-            App.Init(configPath);
+            App.Init(
+                configPath,
+                new UnlimotionClientOptions
+                {
+                    DefaultTaskStoragePath = tasksPath,
+                    GetAbsolutePath = path => Path.Combine(dataDir, path),
+                    PrepareFileStoragePathAsync = context is MainActivity activity
+                        ? activity.EnsureFileStoragePathAccessAsync
+                        : null
+                });
 
-            BackupViaGitService.GetAbsolutePath = path => Path.Combine(dataDir, path);
-            EnsureGitSafeDirectory(dataDir, TaskStorageFactory.DefaultStoragePath);
+            EnsureGitSafeDirectory(dataDir, tasksPath);
 
             _configuredDataDir = dataDir;
             _coreAppServicesConfigured = true;

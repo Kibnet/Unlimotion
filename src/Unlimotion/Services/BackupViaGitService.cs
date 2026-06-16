@@ -56,20 +56,22 @@ public class BackupViaGitService : IRemoteBackupService
     };
 
     private static readonly object LockObject = new();
-    public static Func<string, string> GetAbsolutePath = null!;
 
     private readonly IConfiguration _configuration;
     private readonly INotificationManagerWrapper? _notificationManager;
     private readonly ITaskStorageFactory? _storageFactory;
+    private readonly Func<string, string> _getAbsolutePath;
 
     public BackupViaGitService(
         IConfiguration configuration,
         INotificationManagerWrapper? notificationManager = null,
-        ITaskStorageFactory? storageFactory = null)
+        ITaskStorageFactory? storageFactory = null,
+        Func<string, string>? getAbsolutePath = null)
     {
         _configuration = configuration;
         _notificationManager = notificationManager;
         _storageFactory = storageFactory;
+        _getAbsolutePath = getAbsolutePath ?? (path => new DirectoryInfo(path).FullName);
     }
 
     public List<string> Refs()
@@ -661,7 +663,7 @@ public class BackupViaGitService : IRemoteBackupService
                 return;
             }
 
-            var dbwatcher = _storageFactory?.CurrentWatcher;
+            var dbwatcher = _storageFactory?.SourceManager.ActiveWatcher;
 
             ShowUiMessage(L10n.Get("StartGitPush"));
             try
@@ -719,7 +721,7 @@ public class BackupViaGitService : IRemoteBackupService
     {
         lock (LockObject)
         {
-            PullCurrentRepository(notifyCurrentWatcher: true);
+            PullCurrentRepository(notifyActiveWatcher: true);
         }
     }
 
@@ -745,11 +747,11 @@ public class BackupViaGitService : IRemoteBackupService
                 EnsurePushRefSpecMatchesLocalRepository(repo, settings.git);
             }
 
-            PullCurrentRepository(notifyCurrentWatcher: false);
+            PullCurrentRepository(notifyActiveWatcher: false);
         }
     }
 
-    private void PullCurrentRepository(bool notifyCurrentWatcher)
+    private void PullCurrentRepository(bool notifyActiveWatcher)
     {
         var settings = GetSettings();
         var path = GetRepositoryPath(settings.repositoryPath);
@@ -770,7 +772,7 @@ public class BackupViaGitService : IRemoteBackupService
 
         ShowUiMessage(L10n.Get("StartGitPull"));
 
-        var dbwatcher = notifyCurrentWatcher ? _storageFactory?.CurrentWatcher : null;
+        var dbwatcher = notifyActiveWatcher ? _storageFactory?.SourceManager.ActiveWatcher : null;
         try
         {
             dbwatcher?.SetEnable(false);
@@ -2326,17 +2328,12 @@ public class BackupViaGitService : IRemoteBackupService
             PropagationFlags.None,
             AccessControlType.Allow);
 
-    private static string GetRepositoryPath(string? pathFromSettings)
+    private string GetRepositoryPath(string? pathFromSettings)
     {
         var path = string.IsNullOrWhiteSpace(pathFromSettings) ? TasksFolderName : pathFromSettings;
         if (!IsAbsolutePath(path))
         {
-            if (GetAbsolutePath == null)
-            {
-                throw new Exception(L10n.Get("CannotGetAbsolutePath"));
-            }
-
-            path = GetAbsolutePath(path);
+            path = _getAbsolutePath(path);
         }
 
         return path;
@@ -2742,13 +2739,18 @@ public class BackupViaGitService : IRemoteBackupService
 
     private string? ResolveRepositoryPathFromSettings()
     {
+        var activePath = (_storageFactory?.SourceManager.ActiveStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+        if (!string.IsNullOrWhiteSpace(activePath))
+        {
+            return activePath;
+        }
+
         var configuredPath = _configuration.Get<TaskStorageSettings>("TaskStorage")?.Path;
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             return configuredPath;
         }
-
-        return (_storageFactory?.CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+        return null;
     }
 
     private void ShowUiError(string message, Exception? ex = null)

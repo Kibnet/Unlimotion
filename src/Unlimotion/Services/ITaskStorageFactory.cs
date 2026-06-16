@@ -5,9 +5,10 @@ namespace Unlimotion.Services;
 
 public interface ITaskStorageFactory
 {
-    ITaskStorage? CurrentStorage { get; }
-    IDatabaseWatcher? CurrentWatcher { get; }
+    ITaskSourceManager SourceManager { get; }
+    ITaskStorage CreateConfiguredStorage();
     ITaskStorage CreateFileStorage(string? path);
+    ITaskStorage CreateDetachedFileStorage(string? path);
     ITaskStorage CreateServerStorage(string? url);
     void SwitchStorage(bool isServerMode, IConfiguration configuration);
 }

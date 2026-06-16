@@ -20,7 +20,7 @@ public class PackageUpdateCompatibilityUiTests
     [Test]
     public async Task RoadmapDropAndFolderPickerCompatibility_Work()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

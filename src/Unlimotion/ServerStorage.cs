@@ -16,6 +16,7 @@ using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server.ServiceModel;
 using Unlimotion.Server.ServiceModel.Molds.Tasks;
+using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 
@@ -45,31 +46,48 @@ public class ServerStorage : IStorage
     private HubConnection? _connection;
     private readonly IJsonServiceClient serviceClient;
     private IChatHub? _hub;
-    private ClientSettings settings;
+    private ClientSettings settings = new();
     private IConfiguration? configuration;
+    private readonly TaskSourceServerSettings? sourceServerSettings;
+    private readonly Action<TaskSourceServerSettings>? persistServerSettings;
     private IMapper? mapper;
 
     public ServerStorage(string url, IConfiguration configuration)
+        : this(url, configuration, sourceServerSettings: null, persistServerSettings: null)
+    {
+    }
+
+    public ServerStorage(
+        string url,
+        IConfiguration configuration,
+        TaskSourceServerSettings? sourceServerSettings,
+        Action<TaskSourceServerSettings>? persistServerSettings)
     {
         Url = url;
         serviceClient = new JsonServiceClient(Url);
         ServicePointManager.ServerCertificateValidationCallback +=
             (sender, cert, chain, sslPolicyErrors) => true;
         this.configuration = configuration;
+        this.sourceServerSettings = sourceServerSettings;
+        this.persistServerSettings = persistServerSettings;
 
-        try
+        if (sourceServerSettings != null)
         {
-            settings = configuration.Get<ClientSettings>("ClientSettings");
+            settings = TaskSourceSettingsAdapter.ToClientSettings(sourceServerSettings);
         }
-        catch (Exception e)
+        else
         {
-            Debug.WriteLine(e);
+            try
+            {
+                settings = configuration.Get<ClientSettings>("ClientSettings") ?? new ClientSettings();
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+                settings = new ClientSettings();
+            }
         }
 
-        if (settings == null)
-        {
-            settings = new ClientSettings();
-        }
         //Создание маппера
         mapper = AppModelMapping.ConfigureMapping();
     }
@@ -139,28 +157,25 @@ public class ServerStorage : IStorage
 
                 if (!string.IsNullOrEmpty(settings.RefreshToken) && settings.ExpireTime < DateTimeOffset.Now)
                 {
-                    await RefreshToken(settings, configuration!).ConfigureAwait(false);
+                    await RefreshToken(settings).ConfigureAwait(false);
                 }
 
                 if (string.IsNullOrEmpty(settings.AccessToken))
                 {
-                    var storageSettings = configuration?.Get<TaskStorageSettings>("TaskStorage");
+                    var credentials = GetCredentials();
                     try
                     {
                         var tokens = await serviceClient.PostAsync(new AuthViaPassword
                         {
-                            Login = storageSettings?.Login ?? string.Empty,
-                            Password = storageSettings?.Password ?? string.Empty
+                            Login = credentials.Login,
+                            Password = credentials.Password
                         }).ConfigureAwait(false);
 
                         settings.AccessToken = tokens.AccessToken;
                         settings.RefreshToken = tokens.RefreshToken;
-                        settings.Login = storageSettings?.Login ?? string.Empty;
+                        settings.Login = credentials.Login;
                         serviceClient.BearerToken = tokens.AccessToken;
-                        if (configuration != null)
-                        {
-                            configuration.Set("ClientSettings", settings);
-                        }
+                        PersistSettings();
                     }
                     catch (Exception authEx)
                     {
@@ -191,10 +206,15 @@ public class ServerStorage : IStorage
 
     public async Task Disconnect()
     {
-        await SignOut();
+        await CloseConnectionAsync(clearCredentials: false, notifySignOut: false).ConfigureAwait(false);
     }
 
     public async Task SignOut()
+    {
+        await CloseConnectionAsync(clearCredentials: true, notifySignOut: true).ConfigureAwait(false);
+    }
+
+    private async Task CloseConnectionAsync(bool clearCredentials, bool notifySignOut)
     {
         try
         {
@@ -220,15 +240,22 @@ public class ServerStorage : IStorage
             _connection = null;
             _hub = null;
 
-            settings.AccessToken = string.Empty;
-            settings.RefreshToken = string.Empty;
-            if (configuration != null)
+            if (clearCredentials)
             {
-                configuration.Set("ClientSettings", settings);
+                settings.AccessToken = string.Empty;
+                settings.RefreshToken = string.Empty;
+                PersistSettings();
             }
 
             //WindowStates(WindowState.SignOut);
-            OnSignOut?.Invoke(this, EventArgs.Empty);
+            if (notifySignOut)
+            {
+                OnSignOut?.Invoke(this, EventArgs.Empty);
+            }
+            else
+            {
+                OnDisconnected?.Invoke();
+            }
         }
         catch (Exception)
         {
@@ -371,12 +398,13 @@ public class ServerStorage : IStorage
                         await RegisterUser().ConfigureAwait(false);
                         return;
                     case LogOn.LogOnStatus.ErrorExpiredToken:
-                        await RefreshToken(settings, configuration!).ConfigureAwait(false);
+                        await RefreshToken(settings).ConfigureAwait(false);
                         break;
                     case LogOn.LogOnStatus.Ok:
                         settings.UserId = data.Id;
                         settings.Login = data.UserLogin;
                         settings.ExpireTime = data.ExpireTime;
+                        PersistSettings();
 
                         OnConnected?.Invoke();
                         break;
@@ -426,9 +454,9 @@ public class ServerStorage : IStorage
         var request = new RegisterNewUser();
         try
         {
-            var storageSettings = configuration?.Get<TaskStorageSettings>("TaskStorage");
-            var login = storageSettings?.Login;
-            var password = storageSettings?.Password;
+            var credentials = GetCredentials();
+            var login = credentials.Login;
+            var password = credentials.Password;
             if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
             {
                 //TODO показать ошибку пользователю
@@ -446,10 +474,7 @@ public class ServerStorage : IStorage
             settings.AccessToken = tokenResult.AccessToken;
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.Login = login;
-            if (configuration != null)
-            {
-                configuration.Set("ClientSettings", settings);
-            }
+            PersistSettings();
             await Connect();
         }
         catch (Exception)
@@ -462,7 +487,7 @@ public class ServerStorage : IStorage
         }
     }
 
-    private async Task RefreshToken(ClientSettings settings, IConfiguration configuration)
+    private async Task RefreshToken(ClientSettings settings)
     {
         serviceClient.BearerToken = settings.RefreshToken;
         try
@@ -472,7 +497,7 @@ public class ServerStorage : IStorage
             settings.RefreshToken = tokenResult.RefreshToken;
             settings.ExpireTime = tokenResult.ExpireTime;
             serviceClient.BearerToken = settings.AccessToken;
-            configuration.Set("ClientSettings", settings);
+            PersistSettings();
             await Login();
             IsSignedIn = true;
         }
@@ -518,5 +543,28 @@ public class ServerStorage : IStorage
     protected virtual void OnUpdating(TaskStorageUpdateEventArgs e)
     {
         Updating?.Invoke(this, e);
+    }
+
+    private (string Login, string Password) GetCredentials()
+    {
+        if (sourceServerSettings != null)
+        {
+            return (sourceServerSettings.Login, sourceServerSettings.Password);
+        }
+
+        var storageSettings = configuration?.Get<TaskStorageSettings>("TaskStorage");
+        return (storageSettings?.Login ?? string.Empty, storageSettings?.Password ?? string.Empty);
+    }
+
+    private void PersistSettings()
+    {
+        if (sourceServerSettings != null)
+        {
+            TaskSourceSettingsAdapter.CopyFromClientSettings(settings, sourceServerSettings);
+            persistServerSettings?.Invoke(sourceServerSettings);
+            return;
+        }
+
+        configuration?.Set("ClientSettings", settings);
     }
 }

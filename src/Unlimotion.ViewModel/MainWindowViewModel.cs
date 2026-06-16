@@ -63,6 +63,8 @@ namespace Unlimotion.ViewModel
             new(new ObservableCollectionExtended<EmojiFilter>());
 
         public ITaskStorage? taskRepository;
+        public IDialogs? Dialogs { get; set; }
+        public Func<TaskItemViewModel, ITaskStorage?, string, Task>? MoveTaskTreeToFileStorageAsync { get; set; }
         private readonly Func<ITaskStorage?>? _getTaskStorage;
         private readonly string? _taskTreeExpansionStatePath;
 
@@ -737,15 +739,16 @@ namespace Unlimotion.ViewModel
                     return;
                 }
 
-                if (Settings.IsServerMode)
+                var storage = taskStorage.TaskTreeManager.Storage;
+                Action<Exception?> connectionErrorHandler = _ =>
                 {
-                    taskStorage.TaskTreeManager.Storage.OnConnectionError += ex =>
-                    {
-                        ManagerWrapper?.ErrorToast(L10n.Get("ServerConnectionError"));
-                    };
-                }
+                    ManagerWrapper?.ErrorToast(L10n.Get("ServerConnectionError"));
+                };
+                storage.OnConnectionError += connectionErrorHandler;
+                Disposable.Create(() => storage.OnConnectionError -= connectionErrorHandler)
+                    .AddToDispose(connectionDisposableList);
 
-                await taskStorage.TaskTreeManager.Storage.Connect();
+                await storage.Connect();
                 taskRepository = taskStorage;
 
                 //Если из коллекции пропадает итем, то очищаем выделенный итем.
@@ -1328,6 +1331,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAny(m => m.Status, status => status.Value == DomainTaskStatus.Completed))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.CompletedDateTime))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
@@ -1368,6 +1372,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAny(m => m.Status, status => status.Value == DomainTaskStatus.Archived))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.ArchiveDateTime))
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(
                         x => x.Title,
                         x => x.Description,
@@ -2406,7 +2411,18 @@ namespace Unlimotion.ViewModel
 
             foreach (var node in nodes)
             {
-                var created = await CreateTaskFromOutlineNode(node, parent);
+                var destinationParent = parent;
+                if (!string.IsNullOrWhiteSpace(capturedParentId))
+                {
+                    destinationParent = FindTaskById(capturedParentId);
+                    if (destinationParent == null)
+                    {
+                        ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
+                        return;
+                    }
+                }
+
+                var created = await CreateTaskFromOutlineNode(node, destinationParent);
                 firstCreated ??= created;
             }
 
@@ -2428,25 +2444,34 @@ namespace Unlimotion.ViewModel
                 ? await taskRepository!.Add()
                 : await taskRepository!.AddChild(parent);
 
-            created.Title = node.Title;
-            if (!string.IsNullOrWhiteSpace(node.Description))
-            {
-                created.Description = node.Description;
-            }
-
-            if (node.Status.HasValue)
-            {
-                created.Status = node.Status.Value;
-                created.StatusHistory.Clear();
-                created.StatusHistory.Add(new Unlimotion.Domain.TaskStatusHistoryEntry
-                {
-                    Status = node.Status.Value,
-                    ChangedAt = DateTimeOffset.UtcNow,
-                    Author = created.Model.UserId ?? "local-user"
-                });
-            }
-
             var createdId = created.Id;
+            var isInitializedProvider = created.IsInitializedProvider;
+            created.IsInitializedProvider = () => false;
+            try
+            {
+                created.Title = node.Title;
+                if (!string.IsNullOrWhiteSpace(node.Description))
+                {
+                    created.Description = node.Description;
+                }
+
+                if (node.Status.HasValue)
+                {
+                    created.Status = node.Status.Value;
+                    created.StatusHistory.Clear();
+                    created.StatusHistory.Add(new Unlimotion.Domain.TaskStatusHistoryEntry
+                    {
+                        Status = node.Status.Value,
+                        ChangedAt = DateTimeOffset.UtcNow,
+                        Author = created.Model.UserId ?? "local-user"
+                    });
+                }
+            }
+            finally
+            {
+                created.IsInitializedProvider = isInitializedProvider;
+            }
+
             var updated = await taskRepository.Update(created);
             created = updated?.Id == createdId
                 ? updated

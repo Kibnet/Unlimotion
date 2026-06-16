@@ -1,4 +1,7 @@
-﻿namespace Unlimotion.ViewModel;
+﻿using System;
+using System.Collections.Generic;
+
+namespace Unlimotion.ViewModel;
 
 public class TaskStorageSettings
 {
@@ -13,6 +16,46 @@ public class TaskStorageSettings
 
     public bool IsServerMode { get ; set ; }
     public bool IsFuzzySearch { get; set; }
+}
+
+public enum TaskSourceKind
+{
+    File,
+    Server
+}
+
+public class TaskSourceDescriptor
+{
+    public const string DefaultSourceId = "default";
+
+    public string Id { get; set; } = DefaultSourceId;
+    public string DisplayName { get; set; } = string.Empty;
+    public TaskSourceKind Kind { get; set; } = TaskSourceKind.File;
+    public string Path { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+}
+
+public class TaskSourceServerSettings
+{
+    public string SourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
+    public string Login { get; set; } = string.Empty;
+
+    //TODO стоит подумать над шифрованным хранением
+    public string Password { get; set; } = string.Empty;
+    public string AccessToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public DateTimeOffset ExpireTime { get; set; }
+    public string UserId { get; set; } = string.Empty;
+}
+
+public class TaskSourcesSettings
+{
+    public const string SectionName = "TaskSources";
+
+    public string ActiveSourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
+    public List<TaskSourceDescriptor> Sources { get; set; } = new();
+    public List<TaskSourceServerSettings> ServerSettings { get; set; } = new();
 }
 
 public class GitSettings

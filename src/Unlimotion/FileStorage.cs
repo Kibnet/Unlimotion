@@ -36,7 +36,7 @@ namespace Unlimotion
 
         public FileStorage(string path, bool watcher = false, INotificationManagerWrapper? notificationManager = null)
         {
-            var normalizedPath = string.IsNullOrWhiteSpace(path) ? TaskStorageFactory.DefaultStoragePath : path;
+            var normalizedPath = string.IsNullOrWhiteSpace(path) ? "Tasks" : path;
             if (string.IsNullOrWhiteSpace(normalizedPath))
             {
                 normalizedPath = "Tasks";

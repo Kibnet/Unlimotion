@@ -31,7 +31,7 @@ public class TaskListRepeaterMarkerUiTests
         {
             CultureSnapshot.Apply(CultureInfo.GetCultureInfo(LocalizationService.RussianLanguage));
 
-            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
             await session.DispatchAsync(async () =>
             {
                 var fixture = new MainWindowViewModelFixture();
