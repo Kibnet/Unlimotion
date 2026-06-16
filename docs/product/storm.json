@@ -4,7 +4,7 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-16",
+    "updated_at": "2026-06-17",
     "generated_by": "Codex /storm:bootstrap",
     "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
@@ -38,11 +38,12 @@
       "Бутстрап считает текущие README, код и тесты более авторитетными, чем старые сгенерированные страницы repowiki, если источники расходятся.",
       "Главное найденное расхождение: часть repowiki ещё описывает старую модель из четырёх статусов, а актуальные README, код и тесты используют пять статусов с Prepared.",
       "Записи являются гипотезами о продукте, восстановленными из реализации и спецификаций; перед утверждением целей и потребностей нужна проверка владельцем продукта.",
-      "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта."
+      "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
+      "CV-0004 callbacks получили automated evidence через TS-0023; Git timer/conflict-safety часть AC-0040 оставлена отдельным implementation gap, потому что текущий TelegramBot StartTimers запускает GitService без conflict-resolution guard."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover ST-0014 CV-0003 Telegram command/auth coverage + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -2322,19 +2323,31 @@
           "id": "AC-0040",
           "text": "Callback-действия позволяют открыть задачу, создать sub/sibling, изменить статус, удалить, смотреть отношения и использовать file storage/Git timers при настройке.",
           "coverage_level": "partial",
-          "linked_tests": [],
+          "linked_tests": [
+            "TS-0023"
+          ],
           "evidence": [
             {
               "path": "src/Unlimotion.TelegramBot/Bot.cs",
               "symbol": "StartAsync / StartTimers"
+            },
+            {
+              "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+              "symbol": "TelegramCallbackHandler.HandleCallbackAsync"
+            },
+            {
+              "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+              "symbol": "TelegramBotCallback_*"
             }
           ],
           "linked_rules": [
             "GR-040"
           ],
           "linked_scenarios": [
-            "SC-0014-002"
-          ]
+            "SC-0014-002",
+            "SC-0014-003"
+          ],
+          "coverage_note": "Callback subset покрыт TS-0023: unauthorized callback, open, status, delete, create sub/sibling prompts and relation lists. Git timer/conflict-safety часть не покрыта: текущий TelegramBot StartTimers запускает GitService timers без conflict-resolution guard, поэтому требуется отдельная /storm:bdd-implement или product decision."
         }
       ],
       "supports_needs": [
@@ -2342,9 +2355,10 @@
       ],
       "threatens_needs": [],
       "linked_tests": [
-        "TS-0022"
+        "TS-0022",
+        "TS-0023"
       ],
-      "test_strategy": "TS-0022 покрывает allowed-user gate и базовые команды /start, /help, /search, /task, /root без реального Telegram API; callbacks и Git timers остаются отдельным CV-0004 delivery-task.",
+      "test_strategy": "TS-0022 покрывает allowed-user gate и базовые команды /start, /help, /search, /task, /root без реального Telegram API; TS-0023 покрывает callback open/status/delete/create prompt/relation paths через pure callback handler seam; Git timer/conflict-safety часть AC-0040 остаётся отдельным implementation gap.",
       "linked_code": [
         "CU-0013",
         "CU-0003"
@@ -2366,10 +2380,11 @@
       "open_questions": [],
       "linked_scenarios": [
         "SC-0014-001",
-        "SC-0014-002"
+        "SC-0014-002",
+        "SC-0014-003"
       ],
       "behavior_coverage_level": 3,
-      "behavior_coverage_note": "SC-0014-001 имеет passing command/auth evidence через TS-0022; SC-0014-002 callbacks/Git timers остаётся draft для CV-0004."
+      "behavior_coverage_note": "SC-0014-001 имеет passing command/auth evidence через TS-0022; SC-0014-003 имеет passing callback evidence через TS-0023; SC-0014-002 остаётся draft для Git timer/conflict-safety gap."
     },
     {
       "id": "ST-0015",
@@ -3621,6 +3636,63 @@
         "TelegramBotCommand_RootWithResults_ShowsRootTaskListForAllowedUser"
       ],
       "trace_confidence": 0.83
+    },
+    {
+      "id": "TS-0023",
+      "name": "TelegramBotCallbackCoverageTests",
+      "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+      "framework": "TUnit",
+      "type": "unit/telegram-callbacks",
+      "status": "active",
+      "provenance": "added_by_approved_quest_delivery_for_ST-0014_CV-0004",
+      "confidence": 0.82,
+      "linked_stories": [
+        "ST-0014"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0040"
+      ],
+      "linked_constraints": [],
+      "linked_scenarios": [
+        "SC-0014-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "symbol": "TelegramBotCallback_UnauthorizedUser_DoesNotSendTaskDataOrTouchTasks",
+          "description": "Verifies unauthorized callback does not trigger task operations or user-facing task output."
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "symbol": "TelegramBotCallback_Open / Status / Delete / Create / Relations tests",
+          "description": "Verifies callback open, status update, delete, create sub/sibling prompt state and relation list behavior through fakes without real Telegram API."
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+          "symbol": "TelegramCallbackHandler.HandleCallbackAsync",
+          "description": "Production callback routing logic is extracted into a deterministic handler used by Bot and tests."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*\" --output Detailed",
+          "result": "passed 7/7 on 2026-06-17"
+        }
+      ],
+      "assumptions": [
+        "Tests intentionally cover callback handling through a pure handler seam; real Telegram polling, bot credentials, external network and real Git side effects are out of scope.",
+        "Git timer/conflict-safety part of AC-0040 remains a separate gap because current TelegramBot timers do not expose a conflict-resolution guard."
+      ],
+      "open_questions": [
+        "Should TelegramBot Git timers receive conflict-resolution guard behavior in a separate /storm:bdd-implement task?"
+      ],
+      "trace_method_examples": [
+        "TelegramBotCallback_UnauthorizedUser_DoesNotSendTaskDataOrTouchTasks",
+        "TelegramBotCallback_Open_ShowsSelectedTaskForAllowedUser",
+        "TelegramBotCallback_Status_UpdatesAndSavesSelectedTask",
+        "TelegramBotCallback_Delete_DeletesTaskAndTelegramMessage",
+        "TelegramBotCallback_CreateSubAndSibling_RecordUserStateAndAskForTitle",
+        "TelegramBotCallback_Relations_ShowExistingListsAndEmptyStates"
+      ],
+      "trace_confidence": 0.82
     }
   ],
   "code_units": [
@@ -3958,6 +4030,18 @@
         {
           "path": "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
           "symbol": "TelegramBotCommandAuthorizationTests"
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+          "symbol": "TelegramCallbackHandler"
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/Bot.cs",
+          "symbol": "OnCallbackQueryReceived -> TelegramCallbackHandler"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "symbol": "TelegramBotCallbackCoverageTests"
         }
       ],
       "assumptions": [],
@@ -4508,8 +4592,8 @@
       "type": "coverage_backlog",
       "target": "AC-0040",
       "story": "ST-0014",
-      "status": "proposed",
-      "condition": "После CV-0003 и выбора test seam для Telegram.Bot/file/Git side effects",
+      "status": "partially_covered_callbacks_timer_gap",
+      "condition": "Callbacks covered by TS-0023; timer part split because current TelegramBot StartTimers directly invokes GitService without conflict-resolution guard.",
       "depends_on": [
         "CV-0003"
       ],
@@ -4534,14 +4618,20 @@
         "cost_star": 15,
         "priority_star": 0.6208
       },
-      "rationale": "Callbacks и sync timers имеют больше side effects, поэтому должны идти после command/auth coverage.",
+      "rationale": "Callback actions now have deterministic TUnit evidence; timer/conflict-safety remains a separate behavior gap, not a coverage-only task.",
       "minimal_tests": [
-        "TelegramBot_Callback_CreateSubTask_AddsChildToSelectedTask",
-        "TelegramBot_Callback_SetStatus_UpdatesTaskStatusAndHistory",
-        "TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress"
+        "TelegramBotCallback_UnauthorizedUser_DoesNotSendTaskDataOrTouchTasks",
+        "TelegramBotCallback_Status_UpdatesAndSavesSelectedTask",
+        "TelegramBotCallback_Relations_ShowExistingListsAndEmptyStates",
+        "TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress remains implementation gap"
       ],
-      "prerequisite": "Выбрать test seam для Telegram.Bot API и file/Git side effects.",
-      "reason": "Callbacks, relation/status flows и sync timers не покрыты automated tests."
+      "prerequisite": "Callback seam selected and implemented; product decision or /storm:bdd-implement required for timer conflict-safety.",
+      "reason": "Callbacks, relation/status/create/delete/open flows covered by TS-0023; TelegramBot Git timers still lack current conflict-resolution behavior to cover.",
+      "covered_by_tests": [
+        "TS-0023"
+      ],
+      "coverage_result": "TS-0023 passed 7/7 on 2026-06-17 and covers unauthorized callback, open, status, delete, create sub/sibling prompts and relation lists without Telegram API or Git side effects.",
+      "remaining_gap": "Git timer/conflict-safety behavior is not covered and should be handled by a separate /storm:bdd-implement task if TelegramBot timers remain product-supported."
     },
     {
       "id": "RK-0006",
@@ -5727,21 +5817,21 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-16",
-    "command": "/storm:cover ST-0014 CV-0003 Telegram command/auth coverage + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "delivery-task",
+    "updated_at": "2026-06-17",
+    "command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap",
+    "mode": "delivery-task after approved SPEC; production code and tests changed for callback seam/tests, test annotations unchanged; timer behavior not changed",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
     "summary": {
       "acceptance_criteria_total": 44,
-      "acceptance_criteria_with_tests": 43,
+      "acceptance_criteria_with_tests": 44,
       "acceptance_criteria_full_or_critical": 42,
       "acceptance_criteria_partial": 2,
-      "acceptance_criteria_without_tests": 1,
+      "acceptance_criteria_without_tests": 0,
       "improved_by_existing_evidence": 6,
       "proposed_coverage_items": 3,
-      "improved_by_delivery_evidence": 3
+      "improved_by_delivery_evidence": 4
     },
     "improved_by_existing_evidence": [
       {
@@ -5806,8 +5896,10 @@
       {
         "id": "AC-0040",
         "story": "ST-0014",
-        "tests": [],
-        "reason": "Требуется отдельное coverage decision или новые тесты."
+        "tests": [
+          "TS-0023"
+        ],
+        "reason": "Callback subset covered by TS-0023; Git timer/conflict-safety part remains split implementation gap."
       },
       {
         "id": "AC-0042",
@@ -5818,13 +5910,7 @@
         "reason": "Нужна product/platform policy confirmation для non-desktop shells."
       }
     ],
-    "acceptance_criteria_without_tests": [
-      {
-        "id": "AC-0040",
-        "story": "ST-0014",
-        "reason": "Новые Telegram automated tests не добавлялись в текущем ST-0011 delivery-task."
-      }
-    ],
+    "acceptance_criteria_without_tests": [],
     "coverage_backlog": [
       {
         "id": "CV-0001",
@@ -5958,16 +6044,17 @@
         "id": "CV-0004",
         "target": "AC-0040",
         "story": "ST-0014",
-        "status": "proposed",
-        "route_required": "delivery-task/QUEST",
-        "priority": "medium_if_telegram_supported",
+        "status": "partially_covered_callbacks_timer_gap",
+        "route_required": "delivery-task/QUEST partially completed; separate /storm:bdd-implement needed only for timer behavior",
+        "priority": "medium_if_telegram_timer_supported",
         "minimal_tests": [
-          "TelegramBot_Callback_CreateSubTask_AddsChildToSelectedTask",
-          "TelegramBot_Callback_SetStatus_UpdatesTaskStatusAndHistory",
-          "TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress"
+          "TelegramBotCallback_UnauthorizedUser_DoesNotSendTaskDataOrTouchTasks",
+          "TelegramBotCallback_Status_UpdatesAndSavesSelectedTask",
+          "TelegramBotCallback_Relations_ShowExistingListsAndEmptyStates",
+          "TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress remains implementation gap"
         ],
-        "reason": "Callbacks, relation/status flows и sync timers не покрыты automated tests.",
-        "prerequisite": "Выбрать test seam для Telegram.Bot API и file/Git side effects.",
+        "reason": "Callbacks, relation/status/create/delete/open flows covered by TS-0023; TelegramBot Git timers still lack current conflict-resolution behavior to cover.",
+        "prerequisite": "Callback seam selected and implemented; product decision or /storm:bdd-implement required for timer conflict-safety.",
         "rank": 5,
         "depends_on": [
           "CV-0003"
@@ -5989,7 +6076,12 @@
           "cost_star": 15,
           "priority_star": 0.6208
         },
-        "condition": "После CV-0003 и выбора test seam для Telegram.Bot/file/Git side effects"
+        "condition": "Callbacks covered by TS-0023; timer part split because current TelegramBot StartTimers directly invokes GitService without conflict-resolution guard.",
+        "covered_by_tests": [
+          "TS-0023"
+        ],
+        "coverage_result": "TS-0023 passed 7/7 on 2026-06-17 and covers unauthorized callback, open, status, delete, create sub/sibling prompts and relation lists without Telegram API or Git side effects.",
+        "remaining_gap": "Git timer/conflict-safety behavior is not covered and should be handled by a separate /storm:bdd-implement task if TelegramBot timers remain product-supported."
       },
       {
         "id": "CV-0005",
@@ -6117,36 +6209,37 @@
       }
     ],
     "open_questions": [
-      "Выбирать ли CV-0004 как следующий delivery-task для Telegram callbacks, status/relation flows и Git timers?",
-      "Подтвердить, есть ли attachment workflow в актуальном продукте."
+      "Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный /storm:bdd-implement task?",
+      "Какие non-desktop shells считаются release-supported для ST-0015/CV-0005?",
+      "Есть ли attachment workflow в актуальном продукте?"
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-16",
-      "command": "/storm:cover ST-0014 CV-0003 Telegram command/auth coverage + /storm:bdd-sync + /storm:bdd-lint",
+      "updated_at": "2026-06-17",
+      "command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap + /storm:bdd-sync + /storm:bdd-lint",
       "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
-      "scenarios_total": 44,
+      "scenarios_total": 45,
       "active_stories_total": 16,
       "active_stories_with_scenarios": 16,
       "acceptance_criteria_total": 44,
-      "acceptance_criteria_with_tests": 43,
+      "acceptance_criteria_with_tests": 44,
       "acceptance_criteria_full_or_critical": 42,
       "acceptance_criteria_partial": 2,
-      "acceptance_criteria_without_tests": 1,
+      "acceptance_criteria_without_tests": 0,
       "acceptance_criteria_with_rules": 44,
       "acceptance_criteria_with_scenarios": 44,
       "automated_scenarios": 39,
-      "automated_or_passing_scenarios": 43,
+      "automated_or_passing_scenarios": 44,
       "draft_scenarios": 1,
       "manual_scenarios": 0,
-      "passing_scenarios": 4,
+      "passing_scenarios": 5,
       "failing_scenarios": 0,
-      "scenario_test_links": 43,
+      "scenario_test_links": 44,
       "scenarios_without_test_links": 1,
       "step_definitions_total": 0,
-      "executable_specification_ratio": "4/44",
-      "automation_coverage_ratio": "43/44",
+      "executable_specification_ratio": "5/45",
+      "automation_coverage_ratio": "44/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
       "tests_changed": true,
@@ -6154,12 +6247,11 @@
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet restore src/Unlimotion.Test/Unlimotion.Test.csproj => restored new Unlimotion.TelegramBot project reference assets",
         "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => passed 7/7",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK, 0 errors, 0 warnings",
-        "git diff --check => passed, no whitespace errors"
-      ]
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*\" --output Detailed => passed 7/7",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => passed 7/7"
+      ],
+      "bdd_lint_issues": 0
     },
     "bdd_sync_summary": {
       "features_total": 16,
@@ -6203,8 +6295,8 @@
       }
     ],
     "code_changed": true,
-    "full_suite_result": "not_run_for_ST-0014_CV-0003_targeted_delivery",
-    "targeted_validation_result": "passed_build_and_telegram_command_auth_tests_validator_diff_check"
+    "full_suite_result": "Not run in this EXEC; scoped Telegram build/tests are green and previous full-suite runs in this worktree are known to be expensive/timeout-prone.",
+    "targeted_validation_result": "TelegramBotCallbackCoverageTests passed 7/7 and TelegramBotCommandAuthorizationTests passed 7/7 on 2026-06-17."
   },
   "ranking_analysis": {
     "updated_at": "2026-06-16",
@@ -6559,6 +6651,14 @@
         {
           "path": "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
           "symbol": "TelegramBotCommandAuthorizationTests"
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+          "symbol": "TelegramCallbackHandler"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "symbol": "TelegramBotCallbackCoverageTests"
         }
       ]
     },
@@ -7606,12 +7706,21 @@
       ],
       "linked_constraints": [],
       "scenarios": [
-        "SC-0014-002"
+        "SC-0014-002",
+        "SC-0014-003"
       ],
       "evidence": [
         {
           "path": "src/Unlimotion.TelegramBot/Bot.cs",
           "symbol": "StartAsync / StartTimers"
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+          "symbol": "TelegramCallbackHandler.HandleCallbackAsync"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "symbol": "TelegramBotCallbackCoverageTests"
         }
       ]
     },
@@ -9905,13 +10014,14 @@
       "file": "features/storm/st-0014-telegram-bot.feature",
       "line": 17,
       "tags": [
+        "@coverage:business_rule",
+        "@draft",
         "@feature:GF-014",
+        "@gap:git-timers",
+        "@need:ND-0006",
         "@rule:GR-040",
         "@scenario:SC-0014-002",
-        "@story:ST-0014",
-        "@need:ND-0006",
-        "@coverage:business_rule",
-        "@draft"
+        "@story:ST-0014"
       ],
       "linked_story": "ST-0014",
       "linked_acceptance_criteria": [
@@ -9922,7 +10032,7 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "manual_required_before_automation",
+      "automation_status": "callbacks_covered_by_SC-0014-003_timer_part_requires_implementation_decision",
       "linked_tests": [],
       "step_definitions": [],
       "coverage_role": "business_rule",
@@ -9943,7 +10053,15 @@
         {
           "path": "src/Unlimotion.TelegramBot/Bot.cs",
           "symbol": "StartAsync / StartTimers"
+        },
+        {
+          "path": "src/Unlimotion.TelegramBot/Bot.cs",
+          "symbol": "StartTimers",
+          "description": "Timer part remains draft because TelegramBot StartTimers directly invokes GitService pull/push timers and has no current conflict-resolution guard to cover as existing behavior."
         }
+      ],
+      "open_questions": [
+        "Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный /storm:bdd-implement task, или считать timer часть AC-0040 операционным/unsupported behavior?"
       ]
     },
     {
@@ -10991,6 +11109,67 @@
           "test_id": "TS-0009"
         }
       ]
+    },
+    {
+      "id": "SC-0014-003",
+      "title": "Callback-действия открывают задачу, меняют статус, удаляют и показывают отношения.",
+      "file": "features/storm/st-0014-telegram-bot.feature",
+      "line": 25,
+      "tags": [
+        "@feature:GF-014",
+        "@rule:GR-040",
+        "@scenario:SC-0014-003",
+        "@story:ST-0014",
+        "@need:ND-0006",
+        "@coverage:business_rule",
+        "@passing",
+        "@test:TS-0023"
+      ],
+      "linked_story": "ST-0014",
+      "linked_acceptance_criteria": [
+        "AC-0040"
+      ],
+      "verifies_needs": [
+        "ND-0006"
+      ],
+      "protects_constraints": [],
+      "threatens_needs": [],
+      "automation_status": "passing_telegram_callback_coverage",
+      "linked_tests": [
+        "TS-0023"
+      ],
+      "step_definitions": [],
+      "coverage_role": "business_rule",
+      "status": "passing",
+      "gherkin": {
+        "given": [
+          "у пользователя открыт актуальный набор задач Unlimotion",
+          "пользователь входит в allowed users Telegram bot"
+        ],
+        "when": [
+          "пользователь выполняет callback-действие Telegram bot для выбранной задачи"
+        ],
+        "then": [
+          "бот открывает задачу, меняет статус, удаляет задачу, создаёт prompt для sub/sibling и показывает relation lists без раскрытия данных неразрешённым пользователям"
+        ]
+      },
+      "evidence": [
+        {
+          "path": "src/Unlimotion.TelegramBot/TelegramCallbackHandler.cs",
+          "symbol": "TelegramCallbackHandler.HandleCallbackAsync",
+          "description": "Production Bot delegates callback routing through the same handler tested by TS-0023."
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
+          "test_id": "TS-0023",
+          "description": "Targeted TUnit run passed 7/7 on 2026-06-17: unauthorized callback, open, status, invalid status, delete, create sub/sibling prompts and relation lists."
+        }
+      ],
+      "assumptions": [
+        "Scenario covers Telegram callback behavior through a pure handler seam without real Telegram API, token, polling or network side effects.",
+        "Git timer behavior is intentionally not claimed by this scenario and remains in SC-0014-002 gap."
+      ],
+      "open_questions": []
     }
   ],
   "step_definitions": [],

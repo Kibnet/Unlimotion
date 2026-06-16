@@ -20,15 +20,15 @@ namespace Unlimotion.TelegramBot
 {
     public class Bot
     {
-        private const string Open = "open_";
-        private const string CreateSub = "createSub_";
-        private const string CreateSib = "createSib_";
-        private const string SetStatus = "status_";
-        private const string Delete = "delete_";
-        private const string Parents = "parents_";
-        private const string Blocking = "blocking_";
-        private const string Containing = "containing_";
-        private const string Blocked = "blocked_";
+        private const string Open = TelegramCallbackHandler.OpenPrefix;
+        private const string CreateSub = TelegramCallbackHandler.CreateSubPrefix;
+        private const string CreateSib = TelegramCallbackHandler.CreateSibPrefix;
+        private const string SetStatus = TelegramCallbackHandler.SetStatusPrefix;
+        private const string Delete = TelegramCallbackHandler.DeletePrefix;
+        private const string Parents = TelegramCallbackHandler.ParentsPrefix;
+        private const string Blocking = TelegramCallbackHandler.BlockingPrefix;
+        private const string Containing = TelegramCallbackHandler.ContainingPrefix;
+        private const string Blocked = TelegramCallbackHandler.BlockedPrefix;
         private static TelegramBotClient _client;
         private static TaskService _taskService;
         private static GitService _gitService;
@@ -36,6 +36,7 @@ namespace Unlimotion.TelegramBot
         private static IConfigurationRoot config;
         private static HashSet<long> AllowedUsers = new HashSet<long>();
         private static TelegramCommandHandler? _commandHandler;
+        private static TelegramCallbackHandler? _callbackHandler;
 
         // Static dependency - set during initialization
         public static ITaskStorage? TaskStorageInstance { get; set; }
@@ -59,6 +60,11 @@ namespace Unlimotion.TelegramBot
                 AllowedUsers,
                 new TelegramTaskQueryAdapter(_taskService),
                 new TelegramCommandResponder());
+            _callbackHandler = new TelegramCallbackHandler(
+                AllowedUsers,
+                new TelegramCallbackTaskOperationsAdapter(_taskService),
+                new TelegramCallbackResponder(),
+                new DictionaryTelegramUserStateStore(_userStates));
 
             _gitService.CloneOrUpdateRepo();
 
@@ -402,126 +408,16 @@ namespace Unlimotion.TelegramBot
             var userId = callbackQuery.From.Id;
             Log.Information("Обработка колбэка от {User}: {Data}", callbackQuery.From.Username, callbackData);
 
-            if (await CheckAccess(userId, callbackQuery.From.Username)) return;
             try
             {
-                if (callbackData.StartsWith(SetStatus))
-                {
-                    var payload = callbackData[SetStatus.Length..];
-                    var statusAndTaskId = payload.SplitOnFirst('_');
-                    if (!Enum.TryParse<DomainTaskStatus>(statusAndTaskId[0], out var status))
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Неизвестный статус задачи");
-                        return;
-                    }
-
-                    string id = statusAndTaskId[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null)
-                    {
-                        task.Status = status;
-                        await task.SaveItemCommand.Execute();
-                        //_gitService.CommitAndPushChanges($"Изменен статус задачи {task.Title}");
-                        var refreshedTask = _taskService.GetTask(id) ?? task;
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, $"Статус задачи: {GetStatusText(refreshedTask.Status)}");
-                        await ShowTask(chatId, refreshedTask);
-                    }
-                }
-                else if (callbackData.StartsWith(Delete))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    _taskService.DeleteTask(id);
-                    //_gitService.CommitAndPushChanges($"Удалена задача с ID {id}");
-                    await _client.AnswerCallbackQuery(callbackQuery.Id, "Задача удалена");
-                    await _client.DeleteMessage(chatId, messageId);
-                }
-                else if (callbackData.StartsWith(CreateSub))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    _userStates[userId] = $"{CreateSub}{id}";
-                    await _client.AnswerCallbackQuery(callbackQuery.Id, "Введите название подзадачи");
-                }
-                else if (callbackData.StartsWith(CreateSib))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    _userStates[userId] = $"{CreateSib}{id}";
-                    await _client.AnswerCallbackQuery(callbackQuery.Id, "Введите название соседней задачи");
-                }
-                else if (callbackData.StartsWith("parent_"))
-                {
-                    string parentId = callbackData.SplitOnFirst('_')[1];
-                    if (parentId == "null")
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "У данной задачи нет родителя");
-                    }
-                    else
-                    {
-                        await ShowTask(chatId, parentId);
-                        await _client.AnswerCallbackQuery(callbackQuery.Id);
-                    }
-                }
-                else if (callbackData.StartsWith(Parents))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null && task.ParentsTasks.Count > 0)
-                    {
-                        await ShowTaskList(task.ParentsTasks, "Родительские задачи:\n", chatId);
-                        await _client.AnswerCallbackQuery(callbackQuery.Id);
-                    }
-                    else
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Нет родительских задач");
-                    }
-                }
-                else if (callbackData.StartsWith(Blocking))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null && task.BlockedByTasks.Count > 0)
-                    {
-                        await ShowTaskList(task.BlockedByTasks, "Блокирующие задачи:\n", chatId);
-                        await _client.AnswerCallbackQuery(callbackQuery.Id);
-                    }
-                    else
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Нет блокирующих задач");
-                    }
-                }
-                else if (callbackData.StartsWith(Containing))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null && task.ContainsTasks.Count > 0)
-                    {
-                        await ShowTaskList(task.ContainsTasks, "Дочерние задачи:\n", chatId);
-                        await _client.AnswerCallbackQuery(callbackQuery.Id);
-                    }
-                    else
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Нет дочерних задач");
-                    }
-                }
-                else if (callbackData.StartsWith(Blocked))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null && task.BlocksTasks.Count > 0)
-                    {
-                        await ShowTaskList(task.BlocksTasks, "Блокируемые задачи:\n", chatId);
-                        await _client.AnswerCallbackQuery(callbackQuery.Id);
-                    }
-                    else
-                    {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Нет блокируемых задач");
-                    }
-                }
-                else if (callbackData.StartsWith(Open))
-                {
-                    string id = callbackData.SplitOnFirst('_')[1];
-                    await ShowTask(chatId, id);
-                    await _client.AnswerCallbackQuery(callbackQuery.Id);
-                }
+                await CurrentCallbackHandler().HandleCallbackAsync(
+                    new TelegramCallbackRequest(
+                        callbackQuery.Id,
+                        callbackData,
+                        userId,
+                        callbackQuery.From.Username,
+                        chatId,
+                        messageId));
             }
             catch (Exception ex)
             {
@@ -541,6 +437,15 @@ namespace Unlimotion.TelegramBot
                 AllowedUsers,
                 new TelegramTaskQueryAdapter(_taskService),
                 new TelegramCommandResponder());
+        }
+
+        private static TelegramCallbackHandler CurrentCallbackHandler()
+        {
+            return _callbackHandler ??= new TelegramCallbackHandler(
+                AllowedUsers,
+                new TelegramCallbackTaskOperationsAdapter(_taskService),
+                new TelegramCallbackResponder(),
+                new DictionaryTelegramUserStateStore(_userStates));
         }
 
         private sealed class TelegramTaskQueryAdapter(TaskService taskService) : ITelegramCommandTaskQuery
@@ -576,6 +481,69 @@ namespace Unlimotion.TelegramBot
             public Task ShowTaskList(IEnumerable<TaskItemViewModel> results, string messageText, long chatId)
             {
                 return Bot.ShowTaskList(results, messageText, chatId);
+            }
+        }
+
+        private sealed class TelegramCallbackTaskOperationsAdapter(TaskService taskService)
+            : ITelegramCallbackTaskOperations
+        {
+            public TaskItemViewModel? GetTask(string id)
+            {
+                return taskService.GetTask(id);
+            }
+
+            public async Task SaveTask(TaskItemViewModel task)
+            {
+                await task.SaveItemCommand.Execute();
+            }
+
+            public void DeleteTask(string id)
+            {
+                taskService.DeleteTask(id);
+            }
+        }
+
+        private sealed class TelegramCallbackResponder : ITelegramCallbackResponder
+        {
+            public Task AnswerCallback(string callbackId, string? text = null)
+            {
+                return text is null
+                    ? _client.AnswerCallbackQuery(callbackId)
+                    : _client.AnswerCallbackQuery(callbackId, text);
+            }
+
+            public Task DeleteMessage(long chatId, int messageId)
+            {
+                return _client.DeleteMessage(chatId, messageId);
+            }
+
+            public Task SendMessage(long chatId, string text)
+            {
+                return _client.SendMessage(chatId, text);
+            }
+
+            public Task ShowTask(long chatId, string id)
+            {
+                return Bot.ShowTask(chatId, id);
+            }
+
+            public Task ShowTask(long chatId, TaskItemViewModel task)
+            {
+                return Bot.ShowTask(chatId, task);
+            }
+
+            public Task ShowTaskList(IEnumerable<TaskItemViewModel> results, string messageText, long chatId)
+            {
+                return Bot.ShowTaskList(results, messageText, chatId);
+            }
+        }
+
+        private sealed class DictionaryTelegramUserStateStore(Dictionary<long, string> userStates)
+            : ITelegramUserStateStore
+        {
+            public void Set(long userId, string state)
+            {
+                userStates[userId] = state;
             }
         }
     }
