@@ -14,6 +14,10 @@ internal static class FilterToolbarLayout
 {
     private static readonly ConditionalWeakTable<EmojiFilterMultiSelectSearchBox, RegularEmojiSummaryWidths>
         RegularEmojiSummaryWidthsByControl = new();
+    private static readonly ConditionalWeakTable<SearchBarView, RegularSearchMinimumWidth>
+        RegularSearchMinimumWidthByControl = new();
+
+    private const double LayoutComparisonTolerance = 1d;
 
     public static void ApplyAdaptiveEmojiFilterWidths(
         Grid toolbar,
@@ -34,12 +38,7 @@ internal static class FilterToolbarLayout
         ApplyEmojiSummaryWidths(emojiFilters, regularWidths);
 
         primaryActions.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var toolbarWidth = GetPositiveLayoutSize(toolbar.Bounds.Width);
-        if (toolbarWidth <= 0)
-        {
-            toolbar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            toolbarWidth = GetPositiveLayoutSize(toolbar.DesiredSize.Width);
-        }
+        var toolbarWidth = GetAvailableToolbarWidth(toolbar);
 
         if (toolbarWidth <= 0)
         {
@@ -47,12 +46,12 @@ internal static class FilterToolbarLayout
         }
 
         var regularActionsWidth = GetPositiveLayoutSize(primaryActions.DesiredSize.Width);
-        var minimumSearchWidth = MeasureMinimumVisibleSearchWidth(searchBar);
-        var requiredRegularWidth = regularActionsWidth +
-                                   GetPositiveLayoutSize(toolbar.ColumnSpacing) +
-                                   minimumSearchWidth;
+        var regularSearchMinimumWidth = GetRegularSearchMinimumWidth(searchBar);
+        var availableRegularSearchWidth = Math.Max(
+            0,
+            toolbarWidth - regularActionsWidth - GetPositiveLayoutSize(toolbar.ColumnSpacing));
 
-        if (requiredRegularWidth <= toolbarWidth)
+        if (availableRegularSearchWidth + LayoutComparisonTolerance >= regularSearchMinimumWidth)
         {
             return;
         }
@@ -70,6 +69,39 @@ internal static class FilterToolbarLayout
             emojiFilter.SummaryWidth = summaryWidth;
             emojiFilter.SummaryMinWidth = Math.Min(regularWidth.MinWidth, summaryWidth);
         }
+    }
+
+    private static double GetAvailableToolbarWidth(Grid toolbar)
+    {
+        var toolbarWidth = GetPositiveLayoutSize(toolbar.Bounds.Width);
+        if (toolbarWidth <= 0)
+        {
+            toolbar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            toolbarWidth = GetPositiveLayoutSize(toolbar.DesiredSize.Width);
+        }
+
+        var availableWidth = toolbarWidth;
+        foreach (var ancestor in toolbar.GetVisualAncestors().OfType<Control>())
+        {
+            var ancestorWidth = GetPositiveLayoutSize(ancestor.Bounds.Width);
+            if (ancestorWidth <= 0)
+            {
+                continue;
+            }
+
+            var toolbarTopLeft = toolbar.TranslatePoint(new Point(0, 0), ancestor);
+            if (!toolbarTopLeft.HasValue)
+            {
+                continue;
+            }
+
+            var ancestorAvailableWidth = Math.Max(0, ancestorWidth - toolbarTopLeft.Value.X);
+            availableWidth = availableWidth > 0
+                ? Math.Min(availableWidth, ancestorAvailableWidth)
+                : ancestorAvailableWidth;
+        }
+
+        return availableWidth;
     }
 
     private static RegularEmojiSummaryWidths GetRegularEmojiSummaryWidths(
@@ -91,7 +123,7 @@ internal static class FilterToolbarLayout
         }
     }
 
-    private static double MeasureMinimumVisibleSearchWidth(SearchBarView searchBar)
+    private static double GetRegularSearchMinimumWidth(SearchBarView searchBar)
     {
         searchBar.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var searchControl = searchBar.GetVisualDescendants()
@@ -99,14 +131,33 @@ internal static class FilterToolbarLayout
             .FirstOrDefault();
         searchControl?.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
-        var minimumWidth = Math.Max(
+        var measuredMinimumWidth = new[]
+        {
             GetPositiveLayoutSize(searchBar.MinWidth),
-            GetPositiveLayoutSize(searchControl?.MinWidth ?? 0));
-        var visibleHeight = Math.Max(
-            GetPositiveLayoutSize(searchBar.Bounds.Height),
-            GetPositiveLayoutSize(searchBar.DesiredSize.Height));
+            GetPositiveLayoutSize(searchBar.DesiredSize.Width),
+            GetPositiveLayoutSize(searchControl?.MinWidth ?? 0),
+            GetPositiveLayoutSize(searchControl?.DesiredSize.Width ?? 0)
+        }.Max();
 
-        return Math.Max(minimumWidth, visibleHeight);
+        if (RegularSearchMinimumWidthByControl.TryGetValue(searchBar, out var cachedWidth))
+        {
+            if (measuredMinimumWidth > cachedWidth.Width + LayoutComparisonTolerance)
+            {
+                RegularSearchMinimumWidthByControl.Remove(searchBar);
+                RegularSearchMinimumWidthByControl.Add(
+                    searchBar,
+                    new RegularSearchMinimumWidth(measuredMinimumWidth));
+            }
+
+            return Math.Max(cachedWidth.Width, measuredMinimumWidth);
+        }
+
+        if (measuredMinimumWidth > 0)
+        {
+            RegularSearchMinimumWidthByControl.Add(searchBar, new RegularSearchMinimumWidth(measuredMinimumWidth));
+        }
+
+        return measuredMinimumWidth;
     }
 
     private static double MeasureCompactEmojiSummaryWidth(WrapPanel primaryActions, SearchBarView searchBar)
@@ -140,4 +191,6 @@ internal static class FilterToolbarLayout
     }
 
     private sealed record RegularEmojiSummaryWidths(double Width, double MinWidth);
+
+    private sealed record RegularSearchMinimumWidth(double Width);
 }

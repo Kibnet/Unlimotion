@@ -278,6 +278,14 @@ namespace Unlimotion.Views
                 return;
             }
 
+            var primaryActions = toolbar.Children
+                .OfType<WrapPanel>()
+                .FirstOrDefault();
+            if (primaryActions != null)
+            {
+                FilterToolbarLayout.ApplyAdaptiveEmojiFilterWidths(toolbar, primaryActions, searchBar);
+            }
+
             searchBar.MinWidth = 0;
             searchBar.MaxWidth = toolbarWidth;
 
@@ -288,14 +296,6 @@ namespace Unlimotion.Views
             {
                 searchControl.MinWidth = 0;
                 searchControl.MaxWidth = toolbarWidth;
-            }
-
-            var primaryActions = toolbar.Children
-                .OfType<WrapPanel>()
-                .FirstOrDefault();
-            if (primaryActions != null)
-            {
-                FilterToolbarLayout.ApplyAdaptiveEmojiFilterWidths(toolbar, primaryActions, searchBar);
             }
         }
 

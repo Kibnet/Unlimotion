@@ -956,8 +956,8 @@ namespace Unlimotion.Views
                 ApplyFilterToolbarMode(toolbar, filterItems, searchBar, isNarrow);
             }
 
-            ApplyFilterToolbarSearchWidth(searchBar, toolbarWidth, isNarrow);
             FilterToolbarLayout.ApplyAdaptiveEmojiFilterWidths(toolbar, filterItems, searchBar);
+            ApplyFilterToolbarSearchWidth(searchBar, toolbarWidth, isNarrow);
         }
 
         private void ObserveFilterToolbarBounds(Grid toolbar)

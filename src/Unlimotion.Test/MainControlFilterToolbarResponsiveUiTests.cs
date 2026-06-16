@@ -89,6 +89,59 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
+    public async Task MainControlFilterToolbar_NarrowWindow_CompressesEmojiFiltersWhenSearchGetsTooSmall()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 900, 760);
+                window.Show();
+                RunLayoutJobs();
+
+                var wideToolbar = FindVisibleFilterToolbar(view);
+                var (wideIncludeControl, wideExcludeControl) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
+                var wideFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                var regularPrimaryActionsWidth = wideIncludeControl.Bounds.Width +
+                                                 wideExcludeControl.Bounds.Width +
+                                                 wideFiltersButton.Bounds.Width;
+
+                window.Width = 500;
+                RunLayoutJobs();
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                var toolbarBounds = GetBoundsRelativeTo(window, toolbar);
+                var regularSearchBudget = window.Bounds.Width -
+                                          toolbarBounds.Left -
+                                          regularPrimaryActionsWidth -
+                                          toolbar.ColumnSpacing;
+
+                await Assert.That(regularSearchBudget).IsLessThan(AppearanceSettings.DefaultSearchBarMinWidth);
+                await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
+                await AssertControlStaysInsideWindow(window, filtersButton);
+                await AssertControlStaysInsideWindow(window, searchBar);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task RoadmapFilterToolbar_NarrowViewport_UsesCompactPrimaryActions()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -998,6 +1051,13 @@ public class MainControlFilterToolbarResponsiveUiTests
 
         await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
         await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
+    }
+
+    private static async Task AssertControlStaysInsideWindow(Window window, Control control)
+    {
+        var bounds = GetBoundsRelativeTo(window, control);
+        await Assert.That(bounds.Left).IsGreaterThanOrEqualTo(-1);
+        await Assert.That(bounds.Right).IsLessThanOrEqualTo(window.Bounds.Width + 1);
     }
 
     private static async Task AssertPrimaryActionsUseSingleLine(WrapPanel primaryActions)
