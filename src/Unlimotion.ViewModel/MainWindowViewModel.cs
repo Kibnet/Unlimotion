@@ -93,7 +93,7 @@ namespace Unlimotion.ViewModel
             StatusFilters = TaskStatusFilter.GetDefinitions(statusFilterSelections);
             ShowCompleted = IsStatusFilterSelected(DomainTaskStatus.Completed);
             ShowArchived = IsStatusFilterSelected(DomainTaskStatus.Archived);
-            ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>() == true;
+            ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>();
             _defaultShowCompleted = ShowCompleted;
             _defaultShowArchived = ShowArchived;
             _defaultShowWanted = ShowWanted;
@@ -197,6 +197,11 @@ namespace Unlimotion.ViewModel
             }
 
             foreach (var filter in StatusFilters)
+            {
+                filter.RefreshLocalization();
+            }
+
+            foreach (var filter in WantedFilterDefinitions)
             {
                 filter.RefreshLocalization();
             }
@@ -2724,6 +2729,21 @@ namespace Unlimotion.ViewModel
 
         public bool ShowArchived { get; set; }
 
+        public IReadOnlyList<WantedFilterOption> WantedFilterDefinitions { get; } = WantedFilterOption.All;
+
+        public WantedFilterOption CurrentWantedFilter
+        {
+            get => WantedFilterOption.Find(ShowWanted);
+            set
+            {
+                if (value != null && ShowWanted != value.Value)
+                {
+                    ShowWanted = value.Value;
+                }
+            }
+        }
+
+        [AlsoNotifyFor(nameof(CurrentWantedFilter))]
         public bool? ShowWanted { get; set; }
 
         public SettingsViewModel Settings { get; set; }

@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using AppAutomation.Abstractions;
@@ -96,9 +97,17 @@ internal static class Program
                 return 0;
             }
 
+            if (string.Equals(options.UxReview, "wanted-filter", StringComparison.OrdinalIgnoreCase))
+            {
+                Directory.CreateDirectory(outputRoot);
+                CaptureWantedFilterUxReview(outputRoot, options);
+                Console.WriteLine(outputRoot);
+                return 0;
+            }
+
             if (!string.Equals(options.UxReview, "task-card", StringComparison.OrdinalIgnoreCase))
             {
-                throw new ArgumentException($"Unsupported UX review target '{options.UxReview}'. Supported values: task-card, filter-toolbar.");
+                throw new ArgumentException($"Unsupported UX review target '{options.UxReview}'. Supported values: task-card, filter-toolbar, wanted-filter.");
             }
 
             Directory.CreateDirectory(outputRoot);
@@ -278,6 +287,100 @@ internal static class Program
             "task-wide-alltasks");
     }
 
+    private static void CaptureWantedFilterUxReview(string outputRoot, CaptureOptions options)
+    {
+        var languages = options.ResolveLanguages();
+        if (languages.Count != 1)
+        {
+            throw new ArgumentException("--ux-review wanted-filter expects exactly one --language value.");
+        }
+
+        var language = languages[0];
+        var launchOptions = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+            scenario: UnlimotionAutomationScenario.ReadmeDemo,
+            language: language.LanguageMode,
+            buildBeforeLaunch: !options.NoBuildBeforeLaunch,
+            buildOncePerProcess: true);
+        RemoveShowWantedFromLaunchConfig(launchOptions.Arguments);
+
+        using var session = FlaUiDesktopAppSession.Launch(launchOptions);
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        var currentTaskTitle = UnlimotionAppLaunchHost.GetCurrentTaskTitle(
+            UnlimotionAutomationScenario.ReadmeDemo,
+            language.LanguageMode);
+
+        WaitFor(
+            () => string.Equals(page.CurrentTaskTitleTextBox.Text, currentTaskTitle, StringComparison.Ordinal),
+            TimeSpan.FromSeconds(20),
+            $"current task '{currentTaskTitle}'");
+
+        if (!page.DetailsPaneToggleButton.IsToggled)
+        {
+            page.DetailsPaneToggleButton.Toggle();
+            WaitFor(
+                () => page.DetailsPaneToggleButton.IsToggled,
+                TimeSpan.FromSeconds(10),
+                "details pane closed for wanted filter capture");
+        }
+
+        ResizeWindowExact(session.MainWindow, 760, 760);
+        session.MainWindow.Focus();
+        Pause(800);
+
+        page.SelectTabItem(static ui => ui.UnlockedTabItem, timeoutMs: 10_000);
+        Pause(800);
+        OpenFilterPanel(
+            session.MainWindow,
+            session.ConditionFactory,
+            "UnlockedFiltersButton",
+            "UnlockedWantedFilterComboBox");
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "unlocked-filter-all.png"),
+            "unlocked-filter-all",
+            includeDesktopOverlays: true);
+
+        ExpandWantedFilterComboBox(
+            session.MainWindow,
+            session.ConditionFactory,
+            "UnlockedWantedFilterComboBox");
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "unlocked-filter-options.png"),
+            "unlocked-filter-options",
+            includeDesktopOverlays: true);
+
+        SelectWantedFilterOption(
+            session.MainWindow,
+            session.ConditionFactory,
+            "UnlockedWantedFilterComboBox",
+            "WantedFilterWanted");
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "unlocked-filter-wanted.png"),
+            "unlocked-filter-wanted",
+            includeDesktopOverlays: true);
+
+        SelectWantedFilterOption(
+            session.MainWindow,
+            session.ConditionFactory,
+            "UnlockedWantedFilterComboBox",
+            "WantedFilterNotWanted");
+        SaveFilterToolbarCapture(
+            session.MainWindow,
+            Path.Combine(outputRoot, "unlocked-filter-not-wanted.png"),
+            "unlocked-filter-not-wanted",
+            includeDesktopOverlays: true);
+
+        SelectWantedFilterOption(
+            session.MainWindow,
+            session.ConditionFactory,
+            "UnlockedWantedFilterComboBox",
+            "WantedFilterAll");
+
+        DismissDesktopOverlays();
+    }
+
     private static void SaveFilterToolbarCapture(
         FlaUiWindow window,
         string outputPath,
@@ -297,6 +400,17 @@ internal static class Program
         string outputPath,
         string assetKey)
     {
+        OpenFilterPanel(window, conditionFactory, filtersButtonAutomationId, filterPanelAutomationId);
+        Pause(500);
+        SaveFilterToolbarCapture(window, outputPath, assetKey, includeDesktopOverlays: true);
+    }
+
+    private static void OpenFilterPanel(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string filtersButtonAutomationId,
+        string filterPanelAutomationId)
+    {
         var filtersButton = window.FindFirstDescendant(conditionFactory.ByAutomationId(filtersButtonAutomationId))
                             ?? throw new InvalidOperationException(
                                 $"Filter button '{filtersButtonAutomationId}' was not found for UX review capture.");
@@ -315,8 +429,107 @@ internal static class Program
         }
 
         WaitForFilterPanel(window, conditionFactory, filterPanelAutomationId);
+    }
+
+    private static void ExpandWantedFilterComboBox(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string comboBoxAutomationId)
+    {
+        var comboBox = WaitForDesktopElement(window, conditionFactory, comboBoxAutomationId);
+        comboBox.Focus();
+        var expandPattern = comboBox.Patterns.ExpandCollapse.PatternOrDefault;
+        if (expandPattern != null)
+        {
+            expandPattern.Expand();
+        }
+        else
+        {
+            comboBox.Click();
+        }
+
         Pause(500);
-        SaveFilterToolbarCapture(window, outputPath, assetKey, includeDesktopOverlays: true);
+    }
+
+    private static void SelectWantedFilterOption(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string comboBoxAutomationId,
+        string resourceKey)
+    {
+        ExpandWantedFilterComboBox(window, conditionFactory, comboBoxAutomationId);
+        var optionIndex = GetWantedFilterOptionIndex(resourceKey);
+        var comboBox = WaitForDesktopElement(window, conditionFactory, comboBoxAutomationId);
+        var bounds = comboBox.BoundingRectangle;
+        var itemHeight = Math.Max(24, bounds.Height);
+        var itemX = bounds.Left + Math.Min(bounds.Width - 20, 24);
+        var itemY = bounds.Bottom + itemHeight * optionIndex + itemHeight / 2;
+
+        FlaUI.Core.Input.Mouse.LeftClick(new System.Drawing.Point((int)itemX, (int)itemY));
+
+        Pause(500);
+    }
+
+    private static FlaUI.Core.AutomationElements.AutomationElement WaitForDesktopElement(
+        FlaUiWindow window,
+        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
+        string automationId)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var element = window.FindFirstDescendant(conditionFactory.ByAutomationId(automationId));
+            if (element != null)
+            {
+                return element;
+            }
+
+            Pause(150);
+        }
+
+        throw new InvalidOperationException($"Automation element '{automationId}' was not found.");
+    }
+
+    private static int GetWantedFilterOptionIndex(string resourceKey)
+    {
+        return resourceKey switch
+        {
+            "WantedFilterAll" => 0,
+            "WantedFilterWanted" => 1,
+            "WantedFilterNotWanted" => 2,
+            _ => throw new ArgumentOutOfRangeException(nameof(resourceKey), resourceKey, "Unsupported wanted filter resource key.")
+        };
+    }
+
+    private static void RemoveShowWantedFromLaunchConfig(IEnumerable<string> arguments)
+    {
+        const string configPrefix = "--config=";
+        var configPath = arguments
+            .FirstOrDefault(argument => argument.StartsWith(configPrefix, StringComparison.OrdinalIgnoreCase))
+            ?[configPrefix.Length..]
+            .Trim('"');
+        if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
+        {
+            throw new InvalidOperationException("Automation launch config path was not found.");
+        }
+
+        var root = JsonNode.Parse(File.ReadAllText(configPath)) as JsonObject
+                   ?? throw new InvalidOperationException($"Automation launch config '{configPath}' was not a JSON object.");
+        if (root["AllTasks"] is JsonObject allTasks)
+        {
+            allTasks.Remove("ShowWanted");
+        }
+
+        File.WriteAllText(
+            configPath,
+            root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void DismissDesktopOverlays()
+    {
+        System.Windows.Forms.SendKeys.SendWait("{ESC}");
+        Pause(250);
+        System.Windows.Forms.SendKeys.SendWait("{ESC}");
+        Pause(250);
     }
 
     private static void WaitForFilterPanel(

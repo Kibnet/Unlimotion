@@ -222,6 +222,9 @@
   <data name="OneHour" xml:space="preserve"><value>1 hour</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 minute</value></data>
   <data name="OnlyWanted" xml:space="preserve"><value>Only Wanted</value></data>
+  <data name="WantedFilterAll" xml:space="preserve"><value>All</value></data>
+  <data name="WantedFilterWanted" xml:space="preserve"><value>Wanted</value></data>
+  <data name="WantedFilterNotWanted" xml:space="preserve"><value>Not Wanted</value></data>
   <data name="OpenConflictResolutionWindow" xml:space="preserve"><value>Open conflict resolver</value></data>
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Parameters saved. Click "Connect repository".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Parent tasks:</value></data>

@@ -222,6 +222,9 @@
   <data name="OneHour" xml:space="preserve"><value>1 час</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 минута</value></data>
   <data name="OnlyWanted" xml:space="preserve"><value>Только важные</value></data>
+  <data name="WantedFilterAll" xml:space="preserve"><value>Все</value></data>
+  <data name="WantedFilterWanted" xml:space="preserve"><value>Важные</value></data>
+  <data name="WantedFilterNotWanted" xml:space="preserve"><value>Не важные</value></data>
   <data name="OpenConflictResolutionWindow" xml:space="preserve"><value>Открыть исправление конфликтов</value></data>
   <data name="ParamsSavedConnectRepository" xml:space="preserve"><value>Параметры сохранены. Нажмите "Подключить репозиторий".</value></data>
   <data name="ParentsTasks" xml:space="preserve"><value>Родительские задачи:</value></data>

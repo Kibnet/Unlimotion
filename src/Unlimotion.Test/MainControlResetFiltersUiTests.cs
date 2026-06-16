@@ -145,6 +145,69 @@ public class MainControlResetFiltersUiTests
     }
 
     [Test]
+    public async Task WantedFilterComboBox_IsAvailableOnUnlockedAndRoadmapTabs_WithDefaultAllOption()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(vm.ShowWanted).IsNull();
+
+                SelectTab(view, 3);
+                var unlockedWantedFilter = OpenFilterPanelAndFindComboBox(
+                    view,
+                    "UnlockedFiltersButton",
+                    "UnlockedWantedFilterComboBox");
+                await AssertWantedFilterComboBox(unlockedWantedFilter, vm, expectedShowWanted: null);
+                unlockedWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == true);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(vm.ShowWanted).IsTrue();
+                HideFilterPanel(view, "UnlockedFiltersButton");
+
+                SelectTab(view, 8);
+                vm.Graph.OnlyUnlocked = true;
+                Dispatcher.UIThread.RunJobs();
+                var roadmapWantedFilter = OpenFilterPanelAndFindComboBox(
+                    view,
+                    "RoadmapFiltersButton",
+                    "RoadmapWantedFilterComboBox");
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
+                vm.ShowWanted = null;
+                Dispatcher.UIThread.RunJobs();
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: null);
+                vm.ShowWanted = true;
+                Dispatcher.UIThread.RunJobs();
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
+                roadmapWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == false);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(vm.ShowWanted).IsFalse();
+                roadmapWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == null);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(vm.ShowWanted).IsNull();
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task ResetFiltersButton_OnStatusFilteredTabs_ResetsStatusFilters()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -283,7 +346,7 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
                 await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
                 await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
-                await Assert.That(vm.ShowWanted).IsEqualTo(true);
+                await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
                 await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
@@ -341,7 +404,7 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
                 await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
                 await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
-                await Assert.That(vm.ShowWanted).IsEqualTo(true);
+                await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
                 await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
@@ -400,7 +463,7 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
                 await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
                 await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
-                await Assert.That(vm.ShowWanted).IsEqualTo(true);
+                await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
                 await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
@@ -456,7 +519,7 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
                 await Assert.That(vm.ShowCompleted).IsTrue();
                 await Assert.That(vm.ShowArchived).IsTrue();
-                await Assert.That(vm.ShowWanted).IsEqualTo(false);
+                await Assert.That(vm.ShowWanted).IsNull();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
                 await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
@@ -552,7 +615,7 @@ public class MainControlResetFiltersUiTests
         await Assert.That(vm.Search.SearchText).IsEqualTo("Task");
         await Assert.That(vm.ShowCompleted).IsTrue();
         await Assert.That(vm.ShowArchived).IsTrue();
-        await Assert.That(vm.ShowWanted).IsEqualTo(true);
+        await Assert.That(vm.ShowWanted).IsTrue();
         await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
 
         await AssertFirstFilterActive(vm.EmojiFilters);
@@ -597,6 +660,25 @@ public class MainControlResetFiltersUiTests
         }
 
         await Assert.That(filter.ShowTasks).IsFalse();
+    }
+
+    private static async Task AssertWantedFilterComboBox(
+        ComboBox comboBox,
+        MainWindowViewModel vm,
+        bool? expectedShowWanted)
+    {
+        var itemsSource = comboBox.ItemsSource ??
+                          throw new InvalidOperationException("Wanted filter combo box must be bound to an ItemsSource.");
+        var selectedDefinition = vm.WantedFilterDefinitions.Single(option => option.Value == expectedShowWanted);
+        await Assert.That(itemsSource).IsSameReferenceAs(vm.WantedFilterDefinitions);
+        await Assert.That(comboBox.SelectedItem).IsEqualTo(selectedDefinition);
+        await Assert.That(ReadRenderedTextValues(comboBox)).Contains(selectedDefinition.Title);
+        await Assert.That(ReadWantedFilterValues(comboBox)).IsEquivalentTo(new bool?[] { null, true, false });
+        await Assert.That(ReadWantedFilterTitles(comboBox)).IsEquivalentTo([
+            L10n.Get("WantedFilterAll"),
+            L10n.Get("WantedFilterWanted"),
+            L10n.Get("WantedFilterNotWanted")
+        ]);
     }
 
     private static async Task AssertFirstFilterActive(IEnumerable<EmojiFilter> filters)
@@ -695,6 +777,35 @@ public class MainControlResetFiltersUiTests
         return resetButton;
     }
 
+    private static ComboBox OpenFilterPanelAndFindComboBox(
+        MainControl view,
+        string filtersButtonAutomationId,
+        string comboBoxAutomationId)
+    {
+        var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
+        if (filtersButton.Flyout is not Flyout flyout)
+        {
+            throw new InvalidOperationException($"Filter button '{filtersButtonAutomationId}' must use a Flyout.");
+        }
+
+        flyout.ShowAt(filtersButton);
+        Dispatcher.UIThread.RunJobs();
+
+        if (flyout.Content is not Control flyoutContent)
+        {
+            throw new InvalidOperationException($"Filter button '{filtersButtonAutomationId}' flyout content was not found.");
+        }
+
+        var comboBox = FindControlInDetachedContent<ComboBox>(flyoutContent, comboBoxAutomationId);
+        if (comboBox == null)
+        {
+            throw new InvalidOperationException($"ComboBox '{comboBoxAutomationId}' was not found in the filter flyout.");
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        return comboBox;
+    }
+
     private static void HideFilterPanel(MainControl view, string filtersButtonAutomationId)
     {
         var filtersButton = FindControlByAutomationId<DropDownButton>(view, filtersButtonAutomationId);
@@ -730,6 +841,43 @@ public class MainControlResetFiltersUiTests
         return source
             .Cast<TaskStatusFilter>()
             .Select(filter => filter.Status)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> ReadRenderedTextValues(Control control)
+    {
+        return control
+            .GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Select(static textBlock => textBlock.Text)
+            .Where(static text => !string.IsNullOrWhiteSpace(text))
+            .Cast<string>()
+            .ToList();
+    }
+
+    private static IReadOnlyList<bool?> ReadWantedFilterValues(ComboBox comboBox)
+    {
+        if (comboBox.ItemsSource is not IEnumerable source)
+        {
+            throw new InvalidOperationException("Wanted filter combo box must be bound to an ItemsSource.");
+        }
+
+        return source
+            .Cast<WantedFilterOption>()
+            .Select(filter => filter.Value)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> ReadWantedFilterTitles(ComboBox comboBox)
+    {
+        if (comboBox.ItemsSource is not IEnumerable source)
+        {
+            throw new InvalidOperationException("Wanted filter combo box must be bound to an ItemsSource.");
+        }
+
+        return source
+            .Cast<WantedFilterOption>()
+            .Select(filter => filter.Title)
             .ToList();
     }
 

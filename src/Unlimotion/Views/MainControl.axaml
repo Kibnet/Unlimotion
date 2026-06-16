@@ -634,6 +634,9 @@
         <DataTemplate DataType="viewModel:TaskStatusOption">
             <ContentControl Content="{Binding}" ContentTemplate="{StaticResource TaskStatusOptionDropDownTemplate}"/>
         </DataTemplate>
+        <DataTemplate DataType="viewModel:WantedFilterOption">
+            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+        </DataTemplate>
         <DataTemplate DataType="viewModel:TaskStatusFilter">
             <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                 <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
@@ -1192,7 +1195,7 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedStatusFilterComboBox"/>
-                                                                <CheckBox Content="{DynamicResource OnlyWanted}" IsChecked="{Binding ShowWanted}" IsThreeState="True" Margin="0,0,12,6"/>
+                                                                <ComboBox ItemsSource="{Binding WantedFilterDefinitions}" SelectedItem="{Binding CurrentWantedFilter}" MinWidth="160" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedWantedFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
