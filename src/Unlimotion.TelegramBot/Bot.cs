@@ -35,6 +35,7 @@ namespace Unlimotion.TelegramBot
         private static Dictionary<long, string> _userStates = new Dictionary<long, string>();
         private static IConfigurationRoot config;
         private static HashSet<long> AllowedUsers = new HashSet<long>();
+        private static TelegramCommandHandler? _commandHandler;
 
         // Static dependency - set during initialization
         public static ITaskStorage? TaskStorageInstance { get; set; }
@@ -43,7 +44,7 @@ namespace Unlimotion.TelegramBot
         {
             config = configurationRoot;
             string token = config["BotToken"];
-            AllowedUsers = config.GetSection("AllowedUsers").Get<HashSet<long>>();
+            AllowedUsers = config.GetSection("AllowedUsers").Get<HashSet<long>>() ?? new HashSet<long>();
             string repoPath = config.Get<GitSettings>("Git").RepositoryPath;
 
             _client = new TelegramBotClient(token);
@@ -54,6 +55,10 @@ namespace Unlimotion.TelegramBot
             var unifiedStorage = new UnifiedTaskStorage(taskTreeManager);
             _taskService = new TaskService(unifiedStorage);
             _gitService = new GitService(config);
+            _commandHandler = new TelegramCommandHandler(
+                AllowedUsers,
+                new TelegramTaskQueryAdapter(_taskService),
+                new TelegramCommandResponder());
 
             _gitService.CloneOrUpdateRepo();
 
@@ -136,51 +141,8 @@ namespace Unlimotion.TelegramBot
                         return;
                 }
 
-                if (message.Text.StartsWith("/start"))
-                {
-                    await _client.SendMessage(message.Chat.Id, "Добро пожаловать! Введите /help для просмотра доступных команд.");
-                }
-                else if (message.Text.StartsWith("/help"))
-                {
-                    string helpText = "/search [запрос] - поиск задач\n" +
-                                      "/task [ID] - просмотр задачи\n" +
-                                      "/root - корневые задачи";
-                    await _client.SendMessage(message.Chat.Id, helpText);
-                }
-                else if (message.Text.StartsWith("/search"))
-                {
-                    string query = message.Text.SplitOnFirst(' ')[1].Trim();
-                    var results = _taskService.SearchTasks(query);
-                    if (results.Count > 0)
-                    {
-                        await ShowTaskList(results, "Результаты поиска:\n", message.Chat.Id);
-                    }
-                    else
-                    {
-                        await _client.SendMessage(message.Chat.Id, "Задачи не найдены.");
-                    }
-                }
-                else if (message.Text.StartsWith("/task"))
-                {
-                    string id = message.Text.SplitOnFirst(' ')[1].Trim();
-                    await ShowTask(message.Chat.Id, id);
-                }
-                else if (message.Text.StartsWith("/root"))
-                {
-                    var results = _taskService.RootTasks().ToList();
-                    if (results.Any())
-                    {
-                        await ShowTaskList(results, "Корневые задачи:\n", message.Chat.Id);
-                    }
-                    else
-                    {
-                        await _client.SendMessage(message.Chat.Id, "Задачи не найдены.");
-                    }
-                }
-                else
-                {
-                    await _client.SendMessage(message.Chat.Id, "Неизвестная команда. Введите /help для просмотра доступных команд.");
-                }
+                await CurrentCommandHandler().HandleMessageAsync(
+                    new TelegramCommandMessage(userId, message.From.Username, message.Chat.Id, message.Text));
             }
             catch (Exception ex)
             {
@@ -570,14 +532,51 @@ namespace Unlimotion.TelegramBot
 
         private static async ValueTask<bool> CheckAccess(long userId, string? userName)
         {
-            if (!AllowedUsers.Contains(userId))
+            return !CurrentCommandHandler().HasAccess(userId, userName);
+        }
+
+        private static TelegramCommandHandler CurrentCommandHandler()
+        {
+            return _commandHandler ??= new TelegramCommandHandler(
+                AllowedUsers,
+                new TelegramTaskQueryAdapter(_taskService),
+                new TelegramCommandResponder());
+        }
+
+        private sealed class TelegramTaskQueryAdapter(TaskService taskService) : ITelegramCommandTaskQuery
+        {
+            public IEnumerable<TaskItemViewModel> SearchTasks(string query)
             {
-                Log.Warning("Пользователю {User} [id:{UserId}] запрещено обращаться к боту", userName,
-                    userId);
-                return true;
+                return taskService.SearchTasks(query);
             }
 
-            return false;
+            public TaskItemViewModel? GetTask(string id)
+            {
+                return taskService.GetTask(id);
+            }
+
+            public IEnumerable<TaskItemViewModel> RootTasks()
+            {
+                return taskService.RootTasks();
+            }
+        }
+
+        private sealed class TelegramCommandResponder : ITelegramCommandResponder
+        {
+            public Task SendMessage(long chatId, string text)
+            {
+                return _client.SendMessage(chatId, text);
+            }
+
+            public Task ShowTask(long chatId, string id)
+            {
+                return Bot.ShowTask(chatId, id);
+            }
+
+            public Task ShowTaskList(IEnumerable<TaskItemViewModel> results, string messageText, long chatId)
+            {
+                return Bot.ShowTaskList(results, messageText, chatId);
+            }
         }
     }
 }

@@ -4,7 +4,7 @@
   Как пользователь внешнего канала, я могу искать и открывать задачи, создавать связанные задачи и менять статусы через Telegram commands/callbacks, если bot surface считается поддерживаемой.
   Ценность: Telegram может дать быстрый mobile/external access без полного клиента.
 
-  @rule:GR-039 @feature:GF-014 @scenario:SC-0014-001 @story:ST-0014 @need:ND-0006 @coverage:happy_path @draft
+  @rule:GR-039 @feature:GF-014 @scenario:SC-0014-001 @story:ST-0014 @need:ND-0006 @coverage:happy_path @passing @test:TS-0022
   Правило: Бот ограничивает доступ allowed users и поддерживает /start, /help, /search, /task и /root.
     Сценарий: Бот ограничивает доступ allowed users и поддерживает /start, /help, /search, /task и /root.
       Дано у пользователя открыт актуальный набор задач Unlimotion

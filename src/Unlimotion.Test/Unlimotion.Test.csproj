@@ -131,6 +131,7 @@
 		<ProjectReference Include="..\Unlimotion.Desktop\Unlimotion.Desktop.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server\Unlimotion.Server.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceInterface\Unlimotion.Server.ServiceInterface.csproj" />
+		<ProjectReference Include="..\Unlimotion.TelegramBot\Unlimotion.TelegramBot.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />
 	</ItemGroup>
