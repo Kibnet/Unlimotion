@@ -648,6 +648,37 @@ public class MainControlTaskCardLayoutUiTests
     [Arguments(360)]
     [Arguments(390)]
     [Arguments(430)]
+    public async Task CurrentTaskCreateMenu_PhoneWidth_UsesTouchFriendlyMenuItems(double width)
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 844);
+                window = createdWindow;
+
+                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                AssertCreateMenuContainsTaskCommands(createMenuButton);
+                AssertCreateMenuUsesTouchFriendlyItems(createMenuButton);
+                AssertHorizontallyContained(view, createMenuButton);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(360)]
+    [Arguments(390)]
+    [Arguments(430)]
     public async Task CurrentTaskCard_PhoneWidthLayout_DoesNotOverflowAndKeepsRelationEditorUsable(double width)
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1198,6 +1229,42 @@ public class MainControlTaskCardLayoutUiTests
                 throw new InvalidOperationException(
                     $"Create menu is missing expected item '{automationId}'.");
             }
+        }
+    }
+
+    private static void AssertCreateMenuUsesTouchFriendlyItems(DropDownButton createMenuButton)
+    {
+        if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
+        {
+            throw new InvalidOperationException("Create menu button should use a MenuFlyout.");
+        }
+
+        menuFlyout.ShowAt(createMenuButton);
+        RunLayoutJobs();
+
+        try
+        {
+            foreach (var item in menuFlyout.Items.OfType<MenuItem>())
+            {
+                var automationId = AutomationProperties.GetAutomationId(item);
+                if (automationId is null ||
+                    !automationId.StartsWith("GlobalTaskCreate", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (item.Bounds.Height < 44)
+                {
+                    throw new InvalidOperationException(
+                        $"Create menu item '{automationId}' should have at least a 44px touch target: " +
+                        $"height={item.Bounds.Height:F1}; bounds={item.Bounds}.");
+                }
+            }
+        }
+        finally
+        {
+            menuFlyout.Hide();
+            RunLayoutJobs();
         }
     }
 
