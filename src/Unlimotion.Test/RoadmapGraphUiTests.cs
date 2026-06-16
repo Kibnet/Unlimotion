@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ using Unlimotion;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using Unlimotion.Views.Graph;
 
@@ -848,177 +850,209 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ViewportOverlay_ProvidesMinimapAndControls()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        await RunWithRussianLocalizationAsync(async () =>
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await session.DispatchAsync(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
-
-                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
-                await Assert.That(nodesReady).IsTrue();
-
-                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
-                var minimap = WaitForAutomationControl<Control>(view, "RoadmapMinimap");
-                var toolbar = WaitForAutomationControl<Control>(view, "RoadmapViewportToolbar");
-                var zoomInButton = WaitForAutomationControl<Button>(view, "RoadmapZoomInButton");
-                var panRightButton = WaitForAutomationControl<Button>(view, "RoadmapPanRightButton");
-                var resetButton = WaitForAutomationControl<Button>(view, "RoadmapResetViewportButton");
-
-                await Assert.That(editor.GetType().Name).IsEqualTo("NodifyEditor");
-                await Assert.That(minimap.GetType().Name).IsEqualTo("Minimap");
-                await Assert.That(toolbar).IsNotNull();
-
-                var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
-                var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
-                var initialZoom = (double)zoomProperty.GetValue(editor)!;
-
-                zoomInButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var zoomed = WaitFor(() => (double)zoomProperty.GetValue(editor)! > initialZoom);
-                await Assert.That(zoomed).IsTrue();
-
-                var initialLocation = (Avalonia.Point)locationProperty.GetValue(editor)!;
-                panRightButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var panned = WaitFor(() =>
-                    ((Avalonia.Point)locationProperty.GetValue(editor)!).X > initialLocation.X);
-                await Assert.That(panned).IsTrue();
-
-                resetButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var reset = WaitFor(() =>
+                try
                 {
-                    var zoom = (double)zoomProperty.GetValue(editor)!;
-                    var location = (Avalonia.Point)locationProperty.GetValue(editor)!;
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
 
-                    return Math.Abs(zoom - 1) < 0.001 &&
-                           Math.Abs(location.X) < 0.001 &&
-                           Math.Abs(location.Y) < 0.001;
-                });
-                await Assert.That(reset).IsTrue();
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
+
+                    var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
+                    await Assert.That(nodesReady).IsTrue();
+
+                    var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                    var minimap = WaitForAutomationControl<Control>(view, "RoadmapMinimap");
+                    var toolbar = WaitForAutomationControl<Border>(view, "RoadmapViewportToolbar");
+                    var buildIndicator = WaitForAutomationControl<Border>(view, "RoadmapBuildIndicator");
+                    var zoomInButton = WaitForAutomationControl<Button>(view, "RoadmapZoomInButton");
+                    var zoomOutButton = WaitForAutomationControl<Button>(view, "RoadmapZoomOutButton");
+                    var fitButton = WaitForAutomationControl<Button>(view, "RoadmapFitButton");
+                    var panUpButton = WaitForAutomationControl<Button>(view, "RoadmapPanUpButton");
+                    var panLeftButton = WaitForAutomationControl<Button>(view, "RoadmapPanLeftButton");
+                    var panRightButton = WaitForAutomationControl<Button>(view, "RoadmapPanRightButton");
+                    var panDownButton = WaitForAutomationControl<Button>(view, "RoadmapPanDownButton");
+                    var resetButton = WaitForAutomationControl<Button>(view, "RoadmapResetViewportButton");
+
+                    await Assert.That(editor.GetType().Name).IsEqualTo("NodifyEditor");
+                    await Assert.That(minimap.GetType().Name).IsEqualTo("Minimap");
+                    await Assert.That(toolbar).IsNotNull();
+
+                    await AssertRoadmapIconButton(zoomInButton, "Увеличить карту");
+                    await AssertRoadmapIconButton(zoomOutButton, "Уменьшить карту");
+                    await AssertRoadmapIconButton(fitButton, "Вписать карту в область");
+                    await AssertRoadmapIconButton(panUpButton, "Сдвинуть карту вверх");
+                    await AssertRoadmapIconButton(panLeftButton, "Сдвинуть карту влево");
+                    await AssertRoadmapIconButton(panRightButton, "Сдвинуть карту вправо");
+                    await AssertRoadmapIconButton(panDownButton, "Сдвинуть карту вниз");
+                    await AssertRoadmapIconButton(resetButton, "Сбросить вид карты");
+                    await AssertBrushDoesNotUseColor(toolbar.Background, Color.Parse("#CC1E1E1E"));
+                    await AssertBrushDoesNotUseColor(toolbar.BorderBrush, Color.Parse("#666666"));
+                    await AssertBrushDoesNotUseColor(buildIndicator.Background, Color.Parse("#E61E1E1E"));
+                    await AssertBrushDoesNotUseColor(zoomInButton.Background, Color.Parse("#3A3A3A"));
+
+                    var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
+                    var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+                    var initialZoom = (double)zoomProperty.GetValue(editor)!;
+
+                    zoomInButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var zoomed = WaitFor(() => (double)zoomProperty.GetValue(editor)! > initialZoom);
+                    await Assert.That(zoomed).IsTrue();
+
+                    var initialLocation = (Avalonia.Point)locationProperty.GetValue(editor)!;
+                    panRightButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var panned = WaitFor(() =>
+                        ((Avalonia.Point)locationProperty.GetValue(editor)!).X > initialLocation.X);
+                    await Assert.That(panned).IsTrue();
+
+                    resetButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var reset = WaitFor(() =>
+                    {
+                        var zoom = (double)zoomProperty.GetValue(editor)!;
+                        var location = (Avalonia.Point)locationProperty.GetValue(editor)!;
+
+                        return Math.Abs(zoom - 1) < 0.001 &&
+                               Math.Abs(location.X) < 0.001 &&
+                               Math.Abs(location.Y) < 0.001;
+                    });
+                    await Assert.That(reset).IsTrue();
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        });
     }
 
     [Test]
     public async Task RoadmapGraph_ViewportOverlays_CollapseToCompactButtonsAndRestore()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        await RunWithRussianLocalizationAsync(async () =>
         {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
-
-            try
+            await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            await session.DispatchAsync(async () =>
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view, 420, 520);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
-
-                var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
-                await Assert.That(nodesReady).IsTrue();
-
-                var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
-                var toolbar = WaitForAutomationControl<Control>(view, "RoadmapViewportToolbar");
-                var minimapPanel = WaitForAutomationControl<Control>(view, "RoadmapMinimapPanel");
-                var minimap = WaitForAutomationControl<Control>(view, "RoadmapMinimap");
-                var toolbarCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarCollapseButton");
-                var minimapCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapCollapseButton");
-
-                await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
-                await Assert.That(IsVisibleAndArranged(minimapPanel)).IsTrue();
-                await Assert.That(IsVisibleAndArranged(minimap)).IsTrue();
-
-                await ClickControlAsync(window, minimapCollapseButton);
-                var minimapCollapsed = WaitFor(() => !minimapPanel.IsVisible);
-                await Assert.That(minimapCollapsed).IsTrue();
-
-                var minimapExpandButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapExpandButton");
-                await Assert.That(IsVisibleAndArranged(minimapExpandButton)).IsTrue();
-                await Assert.That(minimapExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
-                await Assert.That(minimapExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
-                await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
-
-                var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
-                var panRightButton = WaitForAutomationControl<Button>(view, "RoadmapPanRightButton");
-                var locationBeforePan = (Avalonia.Point)locationProperty.GetValue(editor)!;
-
-                await ClickControlAsync(window, panRightButton);
-                var toolbarClickable = WaitFor(() =>
-                    ((Avalonia.Point)locationProperty.GetValue(editor)!).X > locationBeforePan.X);
-                await Assert.That(toolbarClickable).IsTrue();
-
-                await ClickControlAsync(window, toolbarCollapseButton);
-                var toolbarCollapsed = WaitFor(() => !toolbar.IsVisible);
-                await Assert.That(toolbarCollapsed).IsTrue();
-
-                var toolbarExpandButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarExpandButton");
-                await Assert.That(IsVisibleAndArranged(toolbarExpandButton)).IsTrue();
-                await Assert.That(toolbarExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
-                await Assert.That(toolbarExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
-
-                await ClickControlAsync(window, toolbarExpandButton);
-                var toolbarExpanded = WaitFor(() => IsVisibleAndArranged(toolbar));
-                await Assert.That(toolbarExpanded).IsTrue();
-
-                await ClickControlAsync(window, minimapExpandButton);
-                var minimapExpanded = WaitFor(() =>
-                    IsVisibleAndArranged(minimapPanel) &&
-                    IsVisibleAndArranged(minimap));
-                await Assert.That(minimapExpanded).IsTrue();
-
-                var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
-                var initialZoom = (double)zoomProperty.GetValue(editor)!;
-                var zoomInButton = WaitForAutomationControl<Button>(view, "RoadmapZoomInButton");
-                await ClickControlAsync(window, zoomInButton);
-                var zoomed = WaitFor(() => (double)zoomProperty.GetValue(editor)! > initialZoom);
-                await Assert.That(zoomed).IsTrue();
-
-                var expectedLocation = new Avalonia.Point(123, 45);
-                locationProperty.SetValue(editor, expectedLocation);
-                Dispatcher.UIThread.RunJobs();
-
-                var minimapLocationProperty = minimap.GetType().GetProperty("ViewportLocation")!;
-                var minimapBound = WaitFor(() =>
+                try
                 {
-                    var actual = (Avalonia.Point)minimapLocationProperty.GetValue(minimap)!;
-                    return Math.Abs(actual.X - expectedLocation.X) < 0.001 &&
-                           Math.Abs(actual.Y - expectedLocation.Y) < 0.001;
-                });
-                await Assert.That(minimapBound).IsTrue();
-            }
-            finally
-            {
-                window?.Close();
-                fixture.CleanTasks();
-            }
-        }, CancellationToken.None);
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
+
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view, 420, 520);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
+
+                    var nodesReady = WaitFor(() => graphControl!.RoadmapNodes.Count > 0);
+                    await Assert.That(nodesReady).IsTrue();
+
+                    var editor = WaitForAutomationControl<Control>(view, "RoadmapZoomBorder");
+                    var toolbar = WaitForAutomationControl<Border>(view, "RoadmapViewportToolbar");
+                    var minimapPanel = WaitForAutomationControl<Border>(view, "RoadmapMinimapPanel");
+                    var minimap = WaitForAutomationControl<Control>(view, "RoadmapMinimap");
+                    var toolbarCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarCollapseButton");
+                    var minimapCollapseButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapCollapseButton");
+
+                    await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
+                    await Assert.That(IsVisibleAndArranged(minimapPanel)).IsTrue();
+                    await Assert.That(IsVisibleAndArranged(minimap)).IsTrue();
+                    await AssertRoadmapIconButton(toolbarCollapseButton, "Скрыть элементы управления картой");
+                    await AssertRoadmapIconButton(minimapCollapseButton, "Скрыть миникарту");
+                    await AssertBrushDoesNotUseColor(minimapPanel.Background, Color.Parse("#CC1E1E1E"));
+                    await AssertBrushDoesNotUseColor(minimapPanel.BorderBrush, Color.Parse("#666666"));
+                    await AssertBrushDoesNotUseColor(GetBackgroundBrush(minimap), Color.Parse("#202020"));
+
+                    await ClickControlAsync(window, minimapCollapseButton);
+                    var minimapCollapsed = WaitFor(() => !minimapPanel.IsVisible);
+                    await Assert.That(minimapCollapsed).IsTrue();
+
+                    var minimapExpandButton = WaitForAutomationControl<Button>(view, "RoadmapMinimapExpandButton");
+                    await Assert.That(IsVisibleAndArranged(minimapExpandButton)).IsTrue();
+                    await Assert.That(minimapExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
+                    await Assert.That(minimapExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
+                    await AssertRoadmapIconButton(minimapExpandButton, "Показать миникарту");
+                    await Assert.That(IsVisibleAndArranged(toolbar)).IsTrue();
+
+                    var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+                    var panRightButton = WaitForAutomationControl<Button>(view, "RoadmapPanRightButton");
+                    var locationBeforePan = (Avalonia.Point)locationProperty.GetValue(editor)!;
+
+                    await ClickControlAsync(window, panRightButton);
+                    var toolbarClickable = WaitFor(() =>
+                        ((Avalonia.Point)locationProperty.GetValue(editor)!).X > locationBeforePan.X);
+                    await Assert.That(toolbarClickable).IsTrue();
+
+                    await ClickControlAsync(window, toolbarCollapseButton);
+                    var toolbarCollapsed = WaitFor(() => !toolbar.IsVisible);
+                    await Assert.That(toolbarCollapsed).IsTrue();
+
+                    var toolbarExpandButton = WaitForAutomationControl<Button>(view, "RoadmapViewportToolbarExpandButton");
+                    await Assert.That(IsVisibleAndArranged(toolbarExpandButton)).IsTrue();
+                    await Assert.That(toolbarExpandButton.Bounds.Width).IsLessThanOrEqualTo(40);
+                    await Assert.That(toolbarExpandButton.Bounds.Height).IsLessThanOrEqualTo(40);
+                    await AssertRoadmapIconButton(toolbarExpandButton, "Показать элементы управления картой");
+
+                    await ClickControlAsync(window, toolbarExpandButton);
+                    var toolbarExpanded = WaitFor(() => IsVisibleAndArranged(toolbar));
+                    await Assert.That(toolbarExpanded).IsTrue();
+
+                    await ClickControlAsync(window, minimapExpandButton);
+                    var minimapExpanded = WaitFor(() =>
+                        IsVisibleAndArranged(minimapPanel) &&
+                        IsVisibleAndArranged(minimap));
+                    await Assert.That(minimapExpanded).IsTrue();
+
+                    var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
+                    var initialZoom = (double)zoomProperty.GetValue(editor)!;
+                    var zoomInButton = WaitForAutomationControl<Button>(view, "RoadmapZoomInButton");
+                    await ClickControlAsync(window, zoomInButton);
+                    var zoomed = WaitFor(() => (double)zoomProperty.GetValue(editor)! > initialZoom);
+                    await Assert.That(zoomed).IsTrue();
+
+                    var expectedLocation = new Avalonia.Point(123, 45);
+                    locationProperty.SetValue(editor, expectedLocation);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var minimapLocationProperty = minimap.GetType().GetProperty("ViewportLocation")!;
+                    var minimapBound = WaitFor(() =>
+                    {
+                        var actual = (Avalonia.Point)minimapLocationProperty.GetValue(minimap)!;
+                        return Math.Abs(actual.X - expectedLocation.X) < 0.001 &&
+                               Math.Abs(actual.Y - expectedLocation.Y) < 0.001;
+                    });
+                    await Assert.That(minimapBound).IsTrue();
+                }
+                finally
+                {
+                    window?.Close();
+                    fixture.CleanTasks();
+                }
+            }, CancellationToken.None);
+        });
     }
 
     [Test]
@@ -2909,6 +2943,47 @@ public class RoadmapGraphUiTests
         }
     }
 
+    private static async Task RunWithRussianLocalizationAsync(Func<Task> body)
+    {
+        var previousLocalization = LocalizationService.Current;
+        var culture = CultureSnapshot.Capture();
+
+        try
+        {
+            var localization = new LocalizationService(new FakeSystemCultureProvider("ru-RU"));
+            LocalizationService.Current = localization;
+            localization.SetLanguage(LocalizationService.RussianLanguage);
+
+            await body();
+        }
+        finally
+        {
+            LocalizationService.Current = previousLocalization;
+            culture.Restore();
+        }
+    }
+
+    private static async Task AssertRoadmapIconButton(Button button, string expectedText)
+    {
+        await Assert.That(AutomationProperties.GetName(button)).IsEqualTo(expectedText);
+        await Assert.That(ToolTip.GetTip(button)?.ToString()).IsEqualTo(expectedText);
+        await Assert.That(button.Content).IsAssignableTo<PathIcon>();
+    }
+
+    private static async Task AssertBrushDoesNotUseColor(IBrush? brush, Color unexpectedColor)
+    {
+        await Assert.That(brush).IsNotNull();
+        if (brush is ISolidColorBrush solidColorBrush)
+        {
+            await Assert.That(solidColorBrush.Color == unexpectedColor).IsFalse();
+        }
+    }
+
+    private static IBrush? GetBackgroundBrush(Control control)
+    {
+        return control.GetType().GetProperty("Background")?.GetValue(control) as IBrush;
+    }
+
     private static Window CreateWindow(Control content)
     {
         return new Window
@@ -3786,6 +3861,42 @@ public class RoadmapGraphUiTests
         TaskItemViewModel Root,
         TaskItemViewModel[] Chain,
         TaskItemViewModel[] Fillers);
+
+    private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
+    {
+        public FakeSystemCultureProvider(string cultureName)
+        {
+            SystemUICulture = CultureInfo.GetCultureInfo(cultureName);
+        }
+
+        public CultureInfo SystemUICulture { get; }
+    }
+
+    private sealed class CultureSnapshot
+    {
+        private readonly CultureInfo _currentCulture;
+        private readonly CultureInfo _currentUICulture;
+        private readonly CultureInfo? _defaultThreadCurrentCulture;
+        private readonly CultureInfo? _defaultThreadCurrentUICulture;
+
+        private CultureSnapshot()
+        {
+            _currentCulture = CultureInfo.CurrentCulture;
+            _currentUICulture = CultureInfo.CurrentUICulture;
+            _defaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentCulture;
+            _defaultThreadCurrentUICulture = CultureInfo.DefaultThreadCurrentUICulture;
+        }
+
+        public static CultureSnapshot Capture() => new();
+
+        public void Restore()
+        {
+            CultureInfo.DefaultThreadCurrentCulture = _defaultThreadCurrentCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = _defaultThreadCurrentUICulture;
+            CultureInfo.CurrentCulture = _currentCulture;
+            CultureInfo.CurrentUICulture = _currentUICulture;
+        }
+    }
 
     private sealed class StubTaskStorage : ITaskStorage
     {

@@ -181,7 +181,19 @@
   <data name="FieldConflictResolutionComplete" xml:space="preserve"><value>Selected conflict fields resolved.</value></data>
   <data name="InvalidConflictPath" xml:space="preserve"><value>Invalid conflict path: {0}</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Only Unlocked</value></data>
+  <data name="RoadmapFitViewport" xml:space="preserve"><value>Fit map to view</value></data>
+  <data name="RoadmapHideGraphControls" xml:space="preserve"><value>Hide map controls</value></data>
+  <data name="RoadmapHideMinimap" xml:space="preserve"><value>Hide minimap</value></data>
+  <data name="RoadmapPanDown" xml:space="preserve"><value>Move map down</value></data>
+  <data name="RoadmapPanLeft" xml:space="preserve"><value>Move map left</value></data>
+  <data name="RoadmapPanRight" xml:space="preserve"><value>Move map right</value></data>
+  <data name="RoadmapPanUp" xml:space="preserve"><value>Move map up</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Updating roadmap...</value></data>
+  <data name="RoadmapResetViewport" xml:space="preserve"><value>Reset map view</value></data>
+  <data name="RoadmapShowGraphControls" xml:space="preserve"><value>Show map controls</value></data>
+  <data name="RoadmapShowMinimap" xml:space="preserve"><value>Show minimap</value></data>
+  <data name="RoadmapZoomIn" xml:space="preserve"><value>Zoom in</value></data>
+  <data name="RoadmapZoomOut" xml:space="preserve"><value>Zoom out</value></data>
   <data name="Importance" xml:space="preserve"><value>Importance</value></data>
   <data name="InvalidRelation" xml:space="preserve"><value>The selected relation cannot be added.</value></data>
   <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>

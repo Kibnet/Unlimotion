@@ -17,6 +17,11 @@
              AutomationProperties.AutomationId="RoadmapRoot"
              Focusable="True">
     <UserControl.Resources>
+        <SolidColorBrush x:Key="RoadmapOverlayBackgroundBrush" Color="{DynamicResource SystemChromeLowColor}" />
+        <SolidColorBrush x:Key="RoadmapOverlayBorderBrush" Color="{DynamicResource SystemBaseMediumColor}" />
+        <SolidColorBrush x:Key="RoadmapOverlayForegroundBrush" Color="{DynamicResource SystemBaseHighColor}" />
+        <SolidColorBrush x:Key="RoadmapOverlayAccentBrush" Color="{DynamicResource SystemAccentColor}" />
+        <SolidColorBrush x:Key="RoadmapOverlayMutedBrush" Color="{DynamicResource SystemBaseLowColor}" />
         <DataTemplate x:Key="TaskStatusOptionDropDownTemplate" DataType="viewModel:TaskStatusOption">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" MinHeight="24">
                 <unlimotion:TaskStatusIcon Status="{Binding Status}"
@@ -142,9 +147,14 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Background" Value="#3A3A3A" />
-            <Setter Property="BorderBrush" Value="#707070" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource RoadmapOverlayBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RoadmapOverlayBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource RoadmapOverlayForegroundBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="Button.roadmapViewportButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource RoadmapOverlayMutedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RoadmapOverlayAccentBrush}" />
         </Style>
         <Style Selector="Button.roadmapOverlayButton">
             <Setter Property="Width" Value="28" />
@@ -154,9 +164,18 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Background" Value="#3A3A3A" />
-            <Setter Property="BorderBrush" Value="#707070" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource RoadmapOverlayBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RoadmapOverlayBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource RoadmapOverlayForegroundBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="Button.roadmapOverlayButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource RoadmapOverlayMutedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RoadmapOverlayAccentBrush}" />
+        </Style>
+        <Style Selector="PathIcon.roadmapViewportIcon">
+            <Setter Property="Width" Value="15" />
+            <Setter Property="Height" Value="15" />
         </Style>
         <Style Selector="Grid.RoadmapFilterToolbar">
             <Setter Property="Margin" Value="0,0,0,10" />
@@ -401,8 +420,8 @@
                     Margin="10"
                     Padding="8"
                     CornerRadius="4"
-                    Background="#E61E1E1E"
-                    BorderBrush="#666666"
+                    Background="{DynamicResource RoadmapOverlayBackgroundBrush}"
+                    BorderBrush="{DynamicResource RoadmapOverlayBorderBrush}"
                     BorderThickness="1"
                     IsVisible="{Binding RoadmapGraphBuildInProgress, ElementName=Root}"
                     IsHitTestVisible="False"
@@ -410,13 +429,13 @@
                 <Grid RowDefinitions="Auto,6,Auto"
                       ColumnDefinitions="*,Auto">
                     <TextBlock Text="{DynamicResource RoadmapRebuilding}"
-                               Foreground="White"
+                               Foreground="{DynamicResource RoadmapOverlayForegroundBrush}"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1"
                                Margin="12,0,0,0"
                                Text="{Binding RoadmapGraphBuildProgressText, ElementName=Root}"
-                               Foreground="#E0E0E0"
+                               Foreground="{DynamicResource RoadmapOverlayForegroundBrush}"
                                VerticalAlignment="Center"
                                AutomationProperties.AutomationId="RoadmapBuildProgressText" />
                     <ProgressBar Grid.Row="2"
@@ -425,8 +444,8 @@
                                  Maximum="100"
                                  Height="4"
                                  Value="{Binding RoadmapGraphBuildProgress, ElementName=Root}"
-                                 Foreground="#2F80ED"
-                                 Background="#505050"
+                                 Foreground="{DynamicResource RoadmapOverlayAccentBrush}"
+                                 Background="{DynamicResource RoadmapOverlayBorderBrush}"
                                  AutomationProperties.AutomationId="RoadmapBuildProgressBar" />
                 </Grid>
             </Border>
@@ -436,8 +455,8 @@
                     Margin="0"
                     Padding="0"
                     CornerRadius="4"
-                    Background="#CC1E1E1E"
-                    BorderBrush="#666666"
+                    Background="{DynamicResource RoadmapOverlayBackgroundBrush}"
+                    BorderBrush="{DynamicResource RoadmapOverlayBorderBrush}"
                     BorderThickness="1"
                     IsVisible="{Binding IsRoadmapViewportToolbarExpanded, ElementName=Root}"
                     AutomationProperties.AutomationId="RoadmapViewportToolbar">
@@ -445,25 +464,33 @@
                     <Grid ColumnDefinitions="Auto,8,Auto" RowDefinitions="Auto">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Classes="roadmapViewportButton"
-                                    Content="+"
                                     Click="RoadmapZoomIn_OnClick"
-                                    ToolTip.Tip="Zoom in"
-                                    AutomationProperties.AutomationId="RoadmapZoomInButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapZoomIn}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapZoomIn}"
+                                    AutomationProperties.AutomationId="RoadmapZoomInButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M11,5 L13,5 L13,11 L19,11 L19,13 L13,13 L13,19 L11,19 L11,13 L5,13 L5,11 L11,11 Z" />
+                            </Button>
                             <Button Classes="roadmapViewportButton"
-                                    Content="-"
                                     Click="RoadmapZoomOut_OnClick"
-                                    ToolTip.Tip="Zoom out"
-                                    AutomationProperties.AutomationId="RoadmapZoomOutButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapZoomOut}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapZoomOut}"
+                                    AutomationProperties.AutomationId="RoadmapZoomOutButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M5,11 L19,11 L19,13 L5,13 Z" />
+                            </Button>
                             <Button Classes="roadmapViewportButton"
-                                    Content="[]"
                                     Click="RoadmapFit_OnClick"
-                                    ToolTip.Tip="Fit"
-                                    AutomationProperties.AutomationId="RoadmapFitButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapFitViewport}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapFitViewport}"
+                                    AutomationProperties.AutomationId="RoadmapFitButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M5,5 L11,5 L11,7 L7,7 L7,11 L5,11 Z M13,5 L19,5 L19,11 L17,11 L17,7 L13,7 Z M5,13 L7,13 L7,17 L11,17 L11,19 L5,19 Z M17,13 L19,13 L19,19 L13,19 L13,17 L17,17 Z" />
+                            </Button>
                             <Button Classes="roadmapViewportButton"
-                                    Content="0"
                                     Click="RoadmapResetViewport_OnClick"
-                                    ToolTip.Tip="Reset"
-                                    AutomationProperties.AutomationId="RoadmapResetViewportButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapResetViewport}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapResetViewport}"
+                                    AutomationProperties.AutomationId="RoadmapResetViewportButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z" />
+                            </Button>
                         </StackPanel>
 
                         <Grid Grid.Column="2"
@@ -474,41 +501,51 @@
                             <Button Grid.Row="0"
                                     Grid.Column="1"
                                     Classes="roadmapViewportButton"
-                                    Content="^"
                                     Click="RoadmapPanUp_OnClick"
-                                    ToolTip.Tip="Pan up"
-                                    AutomationProperties.AutomationId="RoadmapPanUpButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapPanUp}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapPanUp}"
+                                    AutomationProperties.AutomationId="RoadmapPanUpButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M12,5 L18,11 L14,11 L14,19 L10,19 L10,11 L6,11 Z" />
+                            </Button>
                             <Button Grid.Row="1"
                                     Grid.Column="0"
                                     Classes="roadmapViewportButton"
-                                    Content="&lt;"
                                     Click="RoadmapPanLeft_OnClick"
-                                    ToolTip.Tip="Pan left"
-                                    AutomationProperties.AutomationId="RoadmapPanLeftButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapPanLeft}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapPanLeft}"
+                                    AutomationProperties.AutomationId="RoadmapPanLeftButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M5,12 L11,6 L11,10 L19,10 L19,14 L11,14 L11,18 Z" />
+                            </Button>
                             <Button Grid.Row="1"
                                     Grid.Column="2"
                                     Classes="roadmapViewportButton"
-                                    Content="&gt;"
                                     Click="RoadmapPanRight_OnClick"
-                                    ToolTip.Tip="Pan right"
-                                    AutomationProperties.AutomationId="RoadmapPanRightButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapPanRight}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapPanRight}"
+                                    AutomationProperties.AutomationId="RoadmapPanRightButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M19,12 L13,18 L13,14 L5,14 L5,10 L13,10 L13,6 Z" />
+                            </Button>
                             <Button Grid.Row="2"
                                     Grid.Column="1"
                                     Classes="roadmapViewportButton"
-                                    Content="v"
                                     Click="RoadmapPanDown_OnClick"
-                                    ToolTip.Tip="Pan down"
-                                    AutomationProperties.AutomationId="RoadmapPanDownButton" />
+                                    ToolTip.Tip="{DynamicResource RoadmapPanDown}"
+                                    AutomationProperties.Name="{DynamicResource RoadmapPanDown}"
+                                    AutomationProperties.AutomationId="RoadmapPanDownButton">
+                                <PathIcon Classes="roadmapViewportIcon" Data="M12,19 L6,13 L10,13 L10,5 L14,5 L14,13 L18,13 Z" />
+                            </Button>
                         </Grid>
                     </Grid>
 
                     <Button Classes="roadmapOverlayButton"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Bottom"
-                            Content="x"
                             Click="RoadmapViewportToolbarCollapse_OnClick"
-                            ToolTip.Tip="Hide graph controls"
-                            AutomationProperties.AutomationId="RoadmapViewportToolbarCollapseButton" />
+                            ToolTip.Tip="{DynamicResource RoadmapHideGraphControls}"
+                            AutomationProperties.Name="{DynamicResource RoadmapHideGraphControls}"
+                            AutomationProperties.AutomationId="RoadmapViewportToolbarCollapseButton">
+                        <PathIcon Classes="roadmapViewportIcon" Data="M6,5 L19,18 L18,19 L5,6 Z M18,5 L19,6 L6,19 L5,18 Z" />
+                    </Button>
                 </Grid>
             </Border>
 
@@ -516,11 +553,13 @@
                     VerticalAlignment="Bottom"
                     Margin="0"
                     Classes="roadmapOverlayButton"
-                    Content="T"
                     Click="RoadmapViewportToolbarExpand_OnClick"
                     IsVisible="{Binding !IsRoadmapViewportToolbarExpanded, ElementName=Root}"
-                    ToolTip.Tip="Show graph controls"
-                    AutomationProperties.AutomationId="RoadmapViewportToolbarExpandButton" />
+                    ToolTip.Tip="{DynamicResource RoadmapShowGraphControls}"
+                    AutomationProperties.Name="{DynamicResource RoadmapShowGraphControls}"
+                    AutomationProperties.AutomationId="RoadmapViewportToolbarExpandButton">
+                <PathIcon Classes="roadmapViewportIcon" Data="M4,6 L20,6 L20,8 L4,8 Z M4,11 L20,11 L20,13 L4,13 Z M4,16 L20,16 L20,18 L4,18 Z" />
+            </Button>
 
             <Border HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
@@ -529,8 +568,8 @@
                     Margin="0"
                     Padding="0"
                     CornerRadius="4"
-                    Background="#CC1E1E1E"
-                    BorderBrush="#666666"
+                    Background="{DynamicResource RoadmapOverlayBackgroundBrush}"
+                    BorderBrush="{DynamicResource RoadmapOverlayBorderBrush}"
                     BorderThickness="1"
                     IsVisible="{Binding IsRoadmapMinimapExpanded, ElementName=Root}"
                     AutomationProperties.AutomationId="RoadmapMinimapPanel">
@@ -542,11 +581,11 @@
                                     ViewportSize="{Binding ViewportSize, ElementName=RoadmapEditor}"
                                     ResizeToViewport="True"
                                     Zoom="RoadmapMinimap_OnZoom"
-                                    Background="#202020">
+                                    Background="{DynamicResource RoadmapOverlayMutedBrush}">
                         <nodify:Minimap.ItemTemplate>
                             <DataTemplate DataType="{x:Type local:RoadmapNode}">
-                                <Border Background="#808080"
-                                        BorderBrush="#B0B0B0"
+                                <Border Background="{DynamicResource RoadmapOverlayBorderBrush}"
+                                        BorderBrush="{DynamicResource RoadmapOverlayForegroundBrush}"
                                         BorderThickness="1"
                                         CornerRadius="1" />
                             </DataTemplate>
@@ -565,21 +604,25 @@
                     <Button Classes="roadmapOverlayButton"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Bottom"
-                            Content="x"
                             Click="RoadmapMinimapCollapse_OnClick"
-                            ToolTip.Tip="Hide minimap"
-                            AutomationProperties.AutomationId="RoadmapMinimapCollapseButton" />
+                            ToolTip.Tip="{DynamicResource RoadmapHideMinimap}"
+                            AutomationProperties.Name="{DynamicResource RoadmapHideMinimap}"
+                            AutomationProperties.AutomationId="RoadmapMinimapCollapseButton">
+                        <PathIcon Classes="roadmapViewportIcon" Data="M6,5 L19,18 L18,19 L5,6 Z M18,5 L19,6 L6,19 L5,18 Z" />
+                    </Button>
                 </Grid>
             </Border>
 
             <Button HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
                     Classes="roadmapOverlayButton"
-                    Content="M"
                     Click="RoadmapMinimapExpand_OnClick"
                     IsVisible="{Binding !IsRoadmapMinimapExpanded, ElementName=Root}"
-                    ToolTip.Tip="Show minimap"
-                    AutomationProperties.AutomationId="RoadmapMinimapExpandButton" />
+                    ToolTip.Tip="{DynamicResource RoadmapShowMinimap}"
+                    AutomationProperties.Name="{DynamicResource RoadmapShowMinimap}"
+                    AutomationProperties.AutomationId="RoadmapMinimapExpandButton">
+                <PathIcon Classes="roadmapViewportIcon" Data="M5,5 L19,5 L19,19 L5,19 Z M7,7 L7,17 L17,17 L17,7 Z M9,9 L11,9 L11,11 L9,11 Z M13,13 L15,13 L15,15 L13,15 Z" />
+            </Button>
         </Grid>
     </Grid>
 </UserControl>
