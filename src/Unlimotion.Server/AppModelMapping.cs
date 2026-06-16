@@ -32,11 +32,15 @@ namespace Unlimotion.Server
             cfg.CreateMap<Attachment, AttachmentMold>();
             cfg.CreateMap<Attachment, AttachmentHubMold>();
             
-            cfg.CreateMap<TaskItem, TaskItemMold>().ReverseMap();
+            cfg.CreateMap<TaskItem, TaskItemMold>()
+                .ForMember(m => m.SortOrder, e => e.Ignore());
+            cfg.CreateMap<TaskItemMold, TaskItem>()
+                .IgnoreComputedStatusMembers();
             cfg.CreateMap<TaskItem, ReceiveTaskItem>();
             cfg.CreateMap<TaskItemHubMold, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())
-                .ForMember(m => m.CreatedDateTime, e => e.Ignore());            
+                .ForMember(m => m.CreatedDateTime, e => e.Ignore())
+                .IgnoreComputedStatusMembers();
 
             cfg.CreateMap<User, UserProfileMold>();
             cfg.CreateMap<User, MyUserProfileMold>()
@@ -46,6 +50,18 @@ namespace Unlimotion.Server
                 .ForMember(m => m.Id, e => e.Ignore())
                 .ForMember(m => m.RegisteredTime, e => e.Ignore())
                 .ForMember(m => m.Login, e => e.Ignore());
+        }
+    }
+
+    internal static class TaskItemMappingExpressionExtensions
+    {
+        public static IMappingExpression<TSource, TaskItem> IgnoreComputedStatusMembers<TSource>(
+            this IMappingExpression<TSource, TaskItem> expression)
+        {
+            return expression
+                .ForMember(task => task.IsCompleted, options => options.Ignore())
+                .ForMember(task => task.CompletedDateTime, options => options.Ignore())
+                .ForMember(task => task.ArchiveDateTime, options => options.Ignore());
         }
     }
 }
