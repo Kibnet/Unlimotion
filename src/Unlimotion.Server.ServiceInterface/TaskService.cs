@@ -37,13 +37,14 @@ namespace Unlimotion.Server.ServiceInterface
         public async Task<TaskItemMold> GetAsync(GetTask request)
         {
             var session = Request.ThrowIfUnauthorized();
+            var uid = session.UserAuthId;
             var decodedId = WebUtility.UrlDecode(request.Id);
             var task = await RavenSession.Query<TaskItem>()
-                .Where(chat => chat.Id == decodedId)
+                .Where(chat => chat.Id == decodedId && chat.UserId == uid)
                 .FirstAsync();
             return Mapper.Map<TaskItemMold>(task);
         }
-        
+
         [Authenticate]
         public async Task Post(BulkInsertTasks request)
         {
