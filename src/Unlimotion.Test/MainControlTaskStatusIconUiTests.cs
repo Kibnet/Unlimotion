@@ -141,6 +141,145 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCardStatusChange_UpdatesAllTasksTreeStatusIcon()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                var task = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id)
+                    ?? throw new InvalidOperationException("Root task was not found.");
+                task.Status = DomainTaskStatus.Prepared;
+                task.IsCanBeCompleted = true;
+                vm.CurrentTaskItem = task;
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                var treeStatusPicker = WaitForTaskStatusPicker(allTasksTree!, task.Id);
+                var treeStatusIcon = treeStatusPicker.GetVisualDescendants()
+                    .OfType<TaskStatusIcon>()
+                    .Single();
+                await Assert.That(treeStatusIcon.Status).IsEqualTo(DomainTaskStatus.Prepared);
+
+                var currentTaskStatusPicker = WaitForAutomationControl<TaskStatusPicker>(
+                    view,
+                    "CurrentTaskStatusButton");
+                PressControl(window, currentTaskStatusPicker);
+                var flyout = currentTaskStatusPicker.Flyout as MenuFlyout;
+                await Assert.That(flyout).IsNotNull();
+                var inProgressItem = flyout!.Items
+                    .OfType<MenuItem>()
+                    .Single(item =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(item),
+                            "TaskStatusOptionInProgress",
+                            StringComparison.Ordinal));
+
+                InvokeMenuItemClick(inProgressItem);
+
+                var iconUpdated = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return task.Status == DomainTaskStatus.InProgress &&
+                           treeStatusIcon.Status == DomainTaskStatus.InProgress;
+                }, TimeSpan.FromSeconds(2));
+
+                await Assert.That(iconUpdated).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCardCompletedStatusChange_RemovesNestedTaskFromAllTasksTreeWhenCompletedIsHidden()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                var parentTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)
+                    ?? throw new InvalidOperationException("Parent task was not found.");
+                var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
+                    ?? throw new InvalidOperationException("Child task was not found.");
+                childTask.Status = DomainTaskStatus.Prepared;
+                childTask.IsCanBeCompleted = true;
+                vm.CurrentTaskItem = childTask;
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+                var parentWrapper = WaitForTaskWrapper(vm, parentTask);
+                parentWrapper.IsExpanded = true;
+                _ = parentWrapper.SubTasks;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksTree = view.FindControl<TreeView>("AllTasksTree");
+                await Assert.That(allTasksTree).IsNotNull();
+                _ = WaitForTaskStatusPicker(allTasksTree!, childTask.Id);
+
+                var currentTaskStatusPicker = WaitForAutomationControl<TaskStatusPicker>(
+                    view,
+                    "CurrentTaskStatusButton");
+                PressControl(window, currentTaskStatusPicker);
+                var flyout = currentTaskStatusPicker.Flyout as MenuFlyout;
+                await Assert.That(flyout).IsNotNull();
+                var completedItem = flyout!.Items
+                    .OfType<MenuItem>()
+                    .Single(item =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(item),
+                            "TaskStatusOptionCompleted",
+                            StringComparison.Ordinal));
+
+                InvokeMenuItemClick(completedItem);
+
+                var childRemoved = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return childTask.Status == DomainTaskStatus.Completed &&
+                           allTasksTree!.GetVisualDescendants()
+                               .OfType<TaskStatusPicker>()
+                               .All(candidate => !string.Equals(candidate.Task?.Id, childTask.Id, StringComparison.Ordinal));
+                }, TimeSpan.FromSeconds(2));
+
+                await Assert.That(childRemoved).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TaskStatusPicker_MatchesStandaloneCheckBoxIndicatorSize()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -1082,6 +1221,56 @@ public class MainControlTaskStatusIconUiTests
         }
 
         return statusPicker;
+    }
+
+    private static TaskStatusPicker WaitForTaskStatusPicker(
+        TreeView tree,
+        string taskId,
+        int timeoutMilliseconds = 3000)
+    {
+        TaskStatusPicker? statusPicker = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            statusPicker = tree.GetVisualDescendants()
+                .OfType<TaskStatusPicker>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(
+                        AutomationProperties.GetAutomationId(candidate),
+                        "TaskStatusButton",
+                        StringComparison.Ordinal) &&
+                    string.Equals(candidate.Task?.Id, taskId, StringComparison.Ordinal));
+
+            return statusPicker != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || statusPicker == null)
+        {
+            throw new InvalidOperationException($"Task status picker for task '{taskId}' was not found.");
+        }
+
+        return statusPicker;
+    }
+
+    private static TaskWrapperViewModel WaitForTaskWrapper(
+        MainWindowViewModel vm,
+        TaskItemViewModel task,
+        int timeoutMilliseconds = 3000)
+    {
+        TaskWrapperViewModel? wrapper = null;
+        var ready = SpinWait.SpinUntil(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            wrapper = vm.FindTaskWrapperViewModel(task, vm.CurrentAllTasksItems);
+            return wrapper != null;
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+        if (!ready || wrapper == null)
+        {
+            throw new InvalidOperationException($"Wrapper for task '{task.Id}' was not found.");
+        }
+
+        return wrapper;
     }
 
     private sealed class RecordingTaskStorage : ITaskStorage

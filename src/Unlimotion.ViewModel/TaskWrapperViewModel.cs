@@ -123,7 +123,8 @@ public class TaskWrapperViewModel : DisposableList
         {
             if (_subTasks == null)
             {
-                var tasks = _actions.ChildSelector.Invoke(TaskItem);
+                var tasks = _actions.ChildSelector.Invoke(TaskItem)
+                    .AutoRefreshOnObservable(task => task.WhenAnyValue(child => child.Status));
                 if (_actions.Filter.Count > 0)
                 {
                     foreach (var filter in _actions.Filter)
