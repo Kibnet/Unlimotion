@@ -181,7 +181,19 @@
   <data name="FieldConflictResolutionComplete" xml:space="preserve"><value>Выбранные поля конфликта исправлены.</value></data>
   <data name="InvalidConflictPath" xml:space="preserve"><value>Некорректный путь конфликтующего файла: {0}</value></data>
   <data name="GraphOnlyUnlocked" xml:space="preserve"><value>Только разблокированные</value></data>
+  <data name="RoadmapFitViewport" xml:space="preserve"><value>Вписать карту в область</value></data>
+  <data name="RoadmapHideGraphControls" xml:space="preserve"><value>Скрыть элементы управления картой</value></data>
+  <data name="RoadmapHideMinimap" xml:space="preserve"><value>Скрыть миникарту</value></data>
+  <data name="RoadmapPanDown" xml:space="preserve"><value>Сдвинуть карту вниз</value></data>
+  <data name="RoadmapPanLeft" xml:space="preserve"><value>Сдвинуть карту влево</value></data>
+  <data name="RoadmapPanRight" xml:space="preserve"><value>Сдвинуть карту вправо</value></data>
+  <data name="RoadmapPanUp" xml:space="preserve"><value>Сдвинуть карту вверх</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Обновление карты...</value></data>
+  <data name="RoadmapResetViewport" xml:space="preserve"><value>Сбросить вид карты</value></data>
+  <data name="RoadmapShowGraphControls" xml:space="preserve"><value>Показать элементы управления картой</value></data>
+  <data name="RoadmapShowMinimap" xml:space="preserve"><value>Показать миникарту</value></data>
+  <data name="RoadmapZoomIn" xml:space="preserve"><value>Увеличить карту</value></data>
+  <data name="RoadmapZoomOut" xml:space="preserve"><value>Уменьшить карту</value></data>
   <data name="Importance" xml:space="preserve"><value>Важность</value></data>
   <data name="InvalidRelation" xml:space="preserve"><value>Нельзя добавить выбранную связь.</value></data>
   <data name="LanguageEnglish" xml:space="preserve"><value>Английский</value></data>
