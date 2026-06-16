@@ -91,6 +91,8 @@ public class MainControlTaskCardLayoutUiTests
                     AssertVisibleAndArranged(control, automationId);
                 }
 
+                var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
+                var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
                 var descriptionTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskDescriptionTextBox");
@@ -98,6 +100,8 @@ public class MainControlTaskCardLayoutUiTests
                 var setDurationButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetDurationButton");
                 var setEndButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetEndButton");
 
+                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertTaskCardIsContentContainer(card);
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
                 AssertIconOnlyDropDownButton(createMenuButton, "➕", 42);
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
@@ -154,6 +158,8 @@ public class MainControlTaskCardLayoutUiTests
                 app.RequestedThemeVariant = ThemeVariant.Dark;
                 ArrangeMainControlForTest(createdWindow, view, createdWindow.Width, createdWindow.Height);
 
+                var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
+                var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
                 Control[] accentOutlineButtons =
                 [
                     FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton"),
@@ -167,6 +173,8 @@ public class MainControlTaskCardLayoutUiTests
                     FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton")
                 ];
 
+                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertTaskCardIsContentContainer(card);
                 foreach (var button in accentOutlineButtons)
                 {
                     AssertDoesNotUseLightThemeAccentBackground(button);
@@ -1014,6 +1022,93 @@ public class MainControlTaskCardLayoutUiTests
                 $"{control.GetType().Name}:{AutomationProperties.GetAutomationId(control)} " +
                 $"does not have expected class '{className}'.");
         }
+    }
+
+    private static void AssertTaskDetailsPanelFrameUsesVisibleBorder(Border detailsPanelFrame)
+    {
+        AssertVisibleAndArranged(detailsPanelFrame, "CurrentTaskDetailsPanelFrame");
+
+        if (detailsPanelFrame.BorderThickness != new Thickness(1))
+        {
+            throw new InvalidOperationException(
+                $"Current task details panel frame should use a 1px border, got {detailsPanelFrame.BorderThickness}.");
+        }
+
+        AssertUsesResourceColor(
+            detailsPanelFrame,
+            detailsPanelFrame.BorderBrush,
+            "SystemBaseMediumColor",
+            "Current task details panel frame border");
+        AssertUsesResourceColor(
+            detailsPanelFrame,
+            detailsPanelFrame.Background,
+            "SystemChromeLowColor",
+            "Current task details panel frame background");
+
+        var borderColor = GetSolidBrushColor(detailsPanelFrame.BorderBrush ?? Brushes.Transparent);
+        var backgroundColor = GetSolidBrushColor(detailsPanelFrame.Background ?? Brushes.Transparent);
+        if (borderColor == backgroundColor)
+        {
+            throw new InvalidOperationException(
+                $"Current task details panel frame border should contrast with its background, both resolved to {borderColor}.");
+        }
+    }
+
+    private static void AssertTaskCardIsContentContainer(Border card)
+    {
+        if (card.BorderThickness != default)
+        {
+            throw new InvalidOperationException(
+                $"Current task card should not draw its own panel border, got {card.BorderThickness}.");
+        }
+
+        if (card.BorderBrush is not null)
+        {
+            throw new InvalidOperationException("Current task card should not draw a separate panel border brush.");
+        }
+
+        if (card.Background is not null)
+        {
+            throw new InvalidOperationException("Current task card should not draw a separate panel background.");
+        }
+    }
+
+    private static void AssertUsesResourceColor(
+        Control resourceHost,
+        IBrush? actualBrush,
+        string resourceKey,
+        string source)
+    {
+        if (actualBrush is null)
+        {
+            throw new InvalidOperationException($"{source} should use {resourceKey}, got null.");
+        }
+
+        var expectedColor = ResolveResourceColor(resourceHost, resourceKey, source);
+        var actualColor = GetSolidBrushColor(actualBrush);
+        if (actualColor != expectedColor)
+        {
+            throw new InvalidOperationException(
+                $"{source} should use {resourceKey}: expected {expectedColor}, got {actualColor}.");
+        }
+    }
+
+    private static Color ResolveResourceColor(Control resourceHost, string resourceKey, string source)
+    {
+        if (!resourceHost.TryGetResource(resourceKey, resourceHost.ActualThemeVariant, out var resource) &&
+            Application.Current?.TryGetResource(resourceKey, resourceHost.ActualThemeVariant, out resource) != true)
+        {
+            throw new InvalidOperationException($"{source} resource '{resourceKey}' was not found.");
+        }
+
+        return resource switch
+        {
+            Color color => color,
+            ISolidColorBrush solidColorBrush => solidColorBrush.Color,
+            IBrush brush => GetSolidBrushColor(brush),
+            _ => throw new InvalidOperationException(
+                $"{source} resource '{resourceKey}' should resolve to a color or brush, got {resource?.GetType().Name ?? "null"}.")
+        };
     }
 
     private static void AssertIconOnlyDropDownButton(DropDownButton button, string expectedContent, double expectedSize)
