@@ -284,13 +284,19 @@ namespace Unlimotion.Views
             var searchControl = searchBar.GetVisualDescendants()
                 .OfType<SearchControlView>()
                 .FirstOrDefault();
-            if (searchControl == null)
+            if (searchControl != null)
             {
-                return;
+                searchControl.MinWidth = 0;
+                searchControl.MaxWidth = toolbarWidth;
             }
 
-            searchControl.MinWidth = 0;
-            searchControl.MaxWidth = toolbarWidth;
+            var primaryActions = toolbar.Children
+                .OfType<WrapPanel>()
+                .FirstOrDefault();
+            if (primaryActions != null)
+            {
+                FilterToolbarLayout.ApplyAdaptiveEmojiFilterWidths(toolbar, primaryActions, searchBar);
+            }
         }
 
         public bool RoadmapLastBuildRanOnUiThread { get; private set; }

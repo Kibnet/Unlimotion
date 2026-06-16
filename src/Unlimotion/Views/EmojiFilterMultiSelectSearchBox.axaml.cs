@@ -39,6 +39,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     public static readonly StyledProperty<string?> NoMatchesTextProperty =
         AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, string?>(nameof(NoMatchesText));
 
+    public static readonly StyledProperty<double> SummaryWidthProperty =
+        AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, double>(nameof(SummaryWidth), 220d);
+
+    public static readonly StyledProperty<double> SummaryMinWidthProperty =
+        AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, double>(nameof(SummaryMinWidth), 180d);
+
     public static readonly StyledProperty<string?> SummaryAutomationIdProperty =
         AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, string?>(nameof(SummaryAutomationId));
 
@@ -108,6 +114,18 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     {
         get => GetValue(NoMatchesTextProperty);
         set => SetValue(NoMatchesTextProperty, value);
+    }
+
+    public double SummaryWidth
+    {
+        get => GetValue(SummaryWidthProperty);
+        set => SetValue(SummaryWidthProperty, value);
+    }
+
+    public double SummaryMinWidth
+    {
+        get => GetValue(SummaryMinWidthProperty);
+        set => SetValue(SummaryMinWidthProperty, value);
     }
 
     public string? SummaryAutomationId
