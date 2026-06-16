@@ -28,6 +28,8 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlTaskCardLayoutUiTests
 {
+    private const string BorderlessTextBoxChromeClass = "BorderlessTextBoxChrome";
+
     private static readonly string[] SectionAutomationIds =
     [
         "CurrentTaskCard",
@@ -95,6 +97,7 @@ public class MainControlTaskCardLayoutUiTests
                 var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
+                var titleTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
                 var descriptionTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskDescriptionTextBox");
                 var setBeginButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetBeginButton");
                 var setDurationButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetDurationButton");
@@ -108,6 +111,9 @@ public class MainControlTaskCardLayoutUiTests
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
                 AssertIconOnlyDropDownButton(actionsMenuButton, "⚙", 36);
                 AssertActionsMenuContainsTaskCommands(actionsMenuButton);
+                AssertHasClass(titleTextBox, "CurrentTaskTitleEditor");
+                AssertHasClass(titleTextBox, BorderlessTextBoxChromeClass);
+                AssertBorderlessTextBoxChrome(titleTextBox, "Current task title");
                 AssertHasClass(descriptionTextBox, "TaskDescriptionEditor");
                 AssertHasClass(setBeginButton, "TaskPlanningQuickAction");
                 AssertHasClass(setDurationButton, "TaskPlanningQuickAction");
@@ -420,16 +426,11 @@ public class MainControlTaskCardLayoutUiTests
                 var checkBox = FindControlByAutomationId<CheckBox>(section, "CompletionCriterionSatisfiedCheckBox");
                 var textBox = FindControlByAutomationId<TextBox>(section, "CompletionCriterionTextBox");
                 var removeButton = FindControlByAutomationId<Button>(section, "CompletionCriterionRemoveButton");
-                var templateBorder = FindTextBoxTemplateBorder(textBox);
                 var gapAfterCheckBox = GetLeftEdge(section, textBox) - GetRightEdge(section, checkBox);
 
                 await Assert.That(textBox.Classes.Contains("CompletionCriterionTextBox")).IsTrue();
-                await Assert.That(textBox.BorderThickness).IsEqualTo(new Thickness(0));
-                AssertTransparentBrush(textBox.BorderBrush, "Completion criterion text box border");
-                AssertTransparentBrush(textBox.Background, "Completion criterion text box background");
-                await Assert.That(templateBorder.BorderThickness).IsEqualTo(new Thickness(0));
-                AssertTransparentBrush(templateBorder.BorderBrush, "Completion criterion template border");
-                AssertTransparentBrush(templateBorder.Background, "Completion criterion template background");
+                AssertHasClass(textBox, BorderlessTextBoxChromeClass);
+                AssertBorderlessTextBoxChrome(textBox, "Completion criterion");
                 await Assert.That(gapAfterCheckBox).IsLessThanOrEqualTo(6);
                 AssertVectorRemoveButton(removeButton, 28);
             }
@@ -1279,6 +1280,29 @@ public class MainControlTaskCardLayoutUiTests
                 string.Equals(border.Name, "PART_BorderElement", StringComparison.Ordinal))
             ?? throw new InvalidOperationException(
                 $"{textBox.GetType().Name}:{AutomationProperties.GetAutomationId(textBox)} template border was not found.");
+    }
+
+    private static void AssertBorderlessTextBoxChrome(TextBox textBox, string source)
+    {
+        var templateBorder = FindTextBoxTemplateBorder(textBox);
+
+        if (textBox.BorderThickness != new Thickness(0))
+        {
+            throw new InvalidOperationException(
+                $"{source} text box border thickness should be 0, got {textBox.BorderThickness}.");
+        }
+
+        AssertTransparentBrush(textBox.BorderBrush, $"{source} text box border");
+        AssertTransparentBrush(textBox.Background, $"{source} text box background");
+
+        if (templateBorder.BorderThickness != new Thickness(0))
+        {
+            throw new InvalidOperationException(
+                $"{source} template border thickness should be 0, got {templateBorder.BorderThickness}.");
+        }
+
+        AssertTransparentBrush(templateBorder.BorderBrush, $"{source} template border");
+        AssertTransparentBrush(templateBorder.Background, $"{source} template background");
     }
 
     private static void AssertTransparentBrush(IBrush? brush, string source)

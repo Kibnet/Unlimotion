@@ -345,6 +345,31 @@
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+        <Style Selector="TextBox.BorderlessTextBoxChrome">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.BorderlessTextBoxChrome /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.BorderlessTextBoxChrome:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.BorderlessTextBoxChrome:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TextBox.BorderlessTextBoxChrome:focus:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact TextBox.CurrentTaskTitleEditor">
             <Setter Property="MinHeight" Value="34"/>
         </Style>
@@ -524,30 +549,7 @@
         <Style Selector="TextBox.CompletionCriterionTextBox">
             <Setter Property="MinHeight" Value="28"/>
             <Setter Property="Padding" Value="4,0"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="TextBox.CompletionCriterionTextBox /template/ Border#PART_BorderElement">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="TextBox.CompletionCriterionTextBox:focus /template/ Border#PART_BorderElement">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="TextBox.CompletionCriterionTextBox:pointerover /template/ Border#PART_BorderElement">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="TextBox.CompletionCriterionTextBox:focus:pointerover /template/ Border#PART_BorderElement">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Background" Value="Transparent"/>
         </Style>
         <Style Selector="Button.TaskRowRemoveButton">
             <Setter Property="MinWidth" Value="28"/>
@@ -654,7 +656,7 @@
                           VerticalAlignment="Center"
                           AutomationProperties.AutomationId="CompletionCriterionSatisfiedCheckBox"/>
                 <TextBox Grid.Column="1"
-                         Classes="CompletionCriterionTextBox"
+                         Classes="CompletionCriterionTextBox BorderlessTextBoxChrome"
                          Text="{Binding Text}"
                          PlaceholderText="{DynamicResource CompletionCriterionWatermark}"
                          AutomationProperties.AutomationId="CompletionCriterionTextBox"/>
@@ -1785,7 +1787,7 @@
                                         <TextBox Grid.Column="1"
                                                  x:Name="CurrentTaskTitleTextBox"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
-                                                 Classes="CurrentTaskTitleEditor"
+                                                 Classes="CurrentTaskTitleEditor BorderlessTextBoxChrome"
                                                  TextWrapping="Wrap"
                                                  Text="{Binding Title}"
                                                  PlaceholderText="{DynamicResource TitleWatermark}"
