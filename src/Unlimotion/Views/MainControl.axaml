@@ -388,6 +388,7 @@
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="10,6,6,5"/>
         </Style>
         <Style Selector="TextBox.TaskPlanningValueControl">
             <Setter Property="MinWidth" Value="0"/>

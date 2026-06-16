@@ -139,6 +139,44 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
+                window = createdWindow;
+
+                var beginPicker = FindControlByAutomationId<CalendarDatePicker>(
+                    view,
+                    "CurrentTaskPlannedBeginPicker");
+                var durationTextBox = FindControlByAutomationId<TextBox>(
+                    view,
+                    "CurrentTaskPlannedDurationTextBox");
+                var endPicker = FindControlByAutomationId<CalendarDatePicker>(
+                    view,
+                    "CurrentTaskPlannedEndPicker");
+
+                await Assert.That(beginPicker.Padding).IsEqualTo(durationTextBox.Padding);
+                await Assert.That(endPicker.Padding).IsEqualTo(durationTextBox.Padding);
+                await Assert.That(beginPicker.Padding.Left).IsGreaterThan(0);
+                await Assert.That(endPicker.Padding.Right).IsGreaterThan(0);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
