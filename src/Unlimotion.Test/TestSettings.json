@@ -23,7 +23,6 @@
   "AllTasks": {
     "ShowCompleted": "False",
     "ShowArchived": "False",
-    "ShowWanted": "False",
     "CurrentSortDefinition": "Comfort",
     "CurrentSortDefinitionForUnlocked": "Comfort"
   }

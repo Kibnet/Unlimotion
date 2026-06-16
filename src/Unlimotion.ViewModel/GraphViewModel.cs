@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using DynamicData.Binding;
@@ -49,6 +50,22 @@ public class GraphViewModel
 
     public bool OnlyUnlocked { get; set; }
 
+    public IReadOnlyList<WantedFilterOption> WantedFilterDefinitions =>
+        _mainWindowViewModel?.WantedFilterDefinitions ?? WantedFilterOption.All;
+
+    public WantedFilterOption CurrentWantedFilter
+    {
+        get => _mainWindowViewModel?.CurrentWantedFilter ?? WantedFilterOption.Find(null);
+        set
+        {
+            if (_mainWindowViewModel != null && value != null)
+            {
+                ShowWanted = value.Value;
+            }
+        }
+    }
+
+    [AlsoNotifyFor(nameof(CurrentWantedFilter))]
     public bool? ShowWanted
     {
         get => _mainWindowViewModel?.ShowWanted;
