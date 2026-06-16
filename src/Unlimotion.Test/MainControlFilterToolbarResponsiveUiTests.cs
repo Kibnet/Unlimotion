@@ -132,6 +132,24 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
                 await AssertControlStaysInsideWindow(window, filtersButton);
                 await AssertControlStaysInsideWindow(window, searchBar);
+
+                foreach (var width in new[] { 508d, 516d, 508d, 500d })
+                {
+                    window.Width = width;
+                    RunLayoutJobs();
+
+                    toolbar = FindVisibleFilterToolbar(view);
+                    filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                    await AssertEmojiFilterInputsFitFilterButtonWidth(toolbar, filtersButton);
+                }
+
+                window.Width = 900;
+                RunLayoutJobs();
+
+                toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                await AssertEmojiFilterInputsUseRegularWidth(includeControl, excludeControl, filtersButton);
             }
             finally
             {
@@ -1051,6 +1069,17 @@ public class MainControlFilterToolbarResponsiveUiTests
 
         await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
         await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(maxInputWidth);
+    }
+
+    private static async Task AssertEmojiFilterInputsUseRegularWidth(
+        EmojiFilterMultiSelectSearchBox includeControl,
+        EmojiFilterMultiSelectSearchBox excludeControl,
+        DropDownButton filtersButton)
+    {
+        var minimumRegularInputWidth = filtersButton.Bounds.Width + 1;
+
+        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsGreaterThan(minimumRegularInputWidth);
+        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsGreaterThan(minimumRegularInputWidth);
     }
 
     private static async Task AssertControlStaysInsideWindow(Window window, Control control)
