@@ -185,6 +185,12 @@ public class MainControlResetFiltersUiTests
                     "RoadmapFiltersButton",
                     "RoadmapWantedFilterComboBox");
                 await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
+                vm.ShowWanted = null;
+                Dispatcher.UIThread.RunJobs();
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: null);
+                vm.ShowWanted = true;
+                Dispatcher.UIThread.RunJobs();
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
                 roadmapWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == false);
                 Dispatcher.UIThread.RunJobs();
                 await Assert.That(vm.ShowWanted).IsFalse();
