@@ -18,6 +18,8 @@
         <viewModel:MainWindowViewModel/>
     </Design.DataContext>
     <UserControl.Resources>
+        <SolidColorBrush x:Key="CurrentTaskDetailsPanelBackgroundBrush" Color="{DynamicResource SystemChromeLowColor}"/>
+        <SolidColorBrush x:Key="CurrentTaskDetailsPanelBorderBrush" Color="{DynamicResource SystemBaseMediumColor}"/>
         <unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
         <unlimotion:EqualConverter x:Key="EqualConverter"/>
         <unlimotion:NotEqualConverter x:Key="NotEqualConverter"/>
@@ -154,6 +156,12 @@
             <Setter Property="Margin" Value="6"/>
             <Setter Property="Spacing" Value="6"/>
         </Style>
+        <Style Selector="Border.CurrentTaskDetailsPanelFrame">
+            <Setter Property="Background" Value="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CurrentTaskDetailsPanelBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+        </Style>
         <Style Selector="WrapPanel.TaskCommandBar">
             <Setter Property="Orientation" Value="Horizontal"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
@@ -278,10 +286,6 @@
         </Style>
         <Style Selector="Border.CurrentTaskCard">
             <Setter Property="Padding" Value="10"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
-            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
         </Style>
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Border.CurrentTaskCard">
             <Setter Property="Padding" Value="8"/>
@@ -1742,14 +1746,20 @@
                 <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ColumnDefinitions="*,Auto">
                     <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding !DetailsAreOpen}"
                                   AutomationProperties.AutomationId="DetailsPaneToggleButton"></ToggleButton>
-                    <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
-                                  AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
-                                  IsVisible="{Binding DetailsAreOpen}"
-                                  HorizontalScrollBarVisibility="Disabled"
-                                  VerticalScrollBarVisibility="Auto"
-                                  VerticalContentAlignment="Top"
-                                  behavior:KeyboardAwareScrollViewer.IsEnabled="True">
-                        <StackPanel x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel">
+                    <Border x:Name="CurrentTaskDetailsPanelFrame"
+                            Grid.Column="0"
+                            Classes="CurrentTaskDetailsPanelFrame"
+                            AutomationProperties.ControlTypeOverride="Group"
+                            AutomationProperties.IsControlElementOverride="True"
+                            AutomationProperties.AutomationId="CurrentTaskDetailsPanelFrame"
+                            IsVisible="{Binding DetailsAreOpen}">
+                        <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
+                                      AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto"
+                                      VerticalContentAlignment="Top"
+                                      behavior:KeyboardAwareScrollViewer.IsEnabled="True">
+                            <StackPanel x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel">
                             <Border Classes="CurrentTaskCard"
                                     AutomationProperties.ControlTypeOverride="Group"
                                     AutomationProperties.IsControlElementOverride="True"
@@ -2307,8 +2317,9 @@
 
                                 </StackPanel>
                             </Border>
-                        </StackPanel>
-                    </ScrollViewer>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
             </SplitView.Pane>
         </SplitView>
