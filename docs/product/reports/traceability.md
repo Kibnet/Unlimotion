@@ -1,12 +1,12 @@
 # STORM Traceability Report
 
 Сгенерировано: 2026-06-16
-Команда: `/storm:cover ST-0011 ServiceStack API smoke blocker` + `/storm:bdd-sync`
+Команда: `/storm:cover ST-0014 CV-0003 Telegram command/auth coverage` + `/storm:bdd-sync`
 
 ## Test Traceability
 
 | Test | Path | Stories | AC | Scenarios |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | TS-0001 | src/Unlimotion.Test/MainWindowViewModelTests.cs | ST-0001<br>ST-0004<br>ST-0005<br>ST-0013 | AC-0001<br>AC-0002<br>AC-0010<br>AC-0011<br>AC-0013<br>AC-0037<br>AC-0038 | SC-0001-001<br>SC-0001-002<br>SC-0004-001<br>SC-0004-002<br>SC-0005-001<br>SC-0013-001<br>SC-0013-002 |
 | TS-0002 | src/Unlimotion.Test/TaskAvailabilityCalculationTests.cs | ST-0003 | AC-0007<br>AC-0008<br>AC-0009 | SC-0003-001<br>SC-0003-002<br>SC-0003-003 |
 | TS-0003 | src/Unlimotion.Test/TaskStatus*Tests.cs; src/Unlimotion.Test/FileStorageTaskStatusTests.cs | ST-0002<br>ST-0003<br>ST-0007<br>ST-0009 | AC-0004<br>AC-0005<br>AC-0006<br>AC-0007<br>AC-0009<br>AC-0021<br>AC-0026 | SC-0002-001<br>SC-0002-002<br>SC-0002-003<br>SC-0003-001<br>SC-0003-003<br>SC-0007-003<br>SC-0009-002 |
@@ -26,23 +26,26 @@
 | TS-0017 | src/Unlimotion.Test/ServerStorageBddContractTests.cs | ST-0011 | AC-0032<br>AC-0033 | SC-0011-001<br>SC-0011-002 |
 | TS-0018 | src/Unlimotion.Test/ServerStorageBddContractTests.cs | ST-0011 | AC-0033 | SC-0011-002 |
 | TS-0019 | src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs | ST-0011 | AC-0033 | SC-0011-002 |
+| TS-0020 | src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs | ST-0011 | AC-0033 | SC-0011-002 |
+| TS-0021 | src/Unlimotion.Test/ToastNotificationUiTests.cs | ST-0016 | AC-0044 | SC-0016-001 |
+| TS-0022 | src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs | ST-0014 | AC-0039 | SC-0014-001 |
 
-## ST-0011 Trace
+## ST-0014 Trace
 
 | Story | AC | Scenario | Test | Code units | Status |
-|---|---|---|---|---|---|
-| ST-0011 | AC-0032 | SC-0011-001 | TS-0017 | CU-0003, CU-0012 | passing contract-level evidence |
-| ST-0011 | AC-0033 | SC-0011-002 | TS-0017, TS-0018, TS-0019 | CU-0003, CU-0012 | passing contract/security/live SignalR evidence; ServiceStack task API live smoke blocked by ServiceStack free-quota operation registration before endpoint assertions |
+| --- | --- | --- | --- | --- | --- |
+| ST-0014 | AC-0039 | SC-0014-001 | TS-0022 | CU-0013 | passing Telegram command/auth evidence |
+| ST-0014 | AC-0040 | SC-0014-002 | нет | CU-0013 | draft; CV-0004 follow-up |
 
 ## BDD Traceability Layer
 
 | Уровень | Количество |
-|---|---:|
-| Gherkin Features | 15 |
-| Gherkin Rules | 43 |
-| Gherkin Scenarios | 43 |
-| Scenarios with linked tests | 41 |
-| Passing scenarios | 2 |
+| --- | --- |
+| Gherkin Features | 16 |
+| Gherkin Rules | 44 |
+| Gherkin Scenarios | 44 |
+| Scenarios with linked tests | 43 |
+| Passing scenarios | 4 |
 | Step definitions | 0 |
 
-Trace chain после синхронизации: Vision -> Product Goal -> Need / Constraint -> Story -> Acceptance Criteria -> Gherkin Rule -> Gherkin Scenario -> Test / Step Definition -> Code Unit. Step definitions пока отсутствуют; `ST-0011` связан с TUnit contract, security regression и live SignalR integration tests напрямую. ServiceStack task API live smoke не добавлен в trace как passing test: attempted minimal AppHost startup blocked by ServiceStack free-quota operation registration.
+Trace chain после синхронизации: Vision -> Product Goal -> Need / Constraint -> Story -> Acceptance Criteria -> Gherkin Rule -> Gherkin Scenario -> Test / Step Definition -> Code Unit. Step definitions пока отсутствуют; `ST-0014/AC-0039` связан с TUnit command/auth tests напрямую.

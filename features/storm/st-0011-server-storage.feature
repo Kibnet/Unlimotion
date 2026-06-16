@@ -12,7 +12,7 @@
       Когда пользователь использует серверное хранилище
       Тогда Клиент поддерживает login/register/refresh-token flow для серверного хранилища.
 
-  @rule:GR-033 @feature:GF-011 @scenario:SC-0011-002 @story:ST-0011 @need:ND-0004 @coverage:happy_path @passing @test:TS-0017 @test:TS-0018 @test:TS-0019
+  @rule:GR-033 @feature:GF-011 @scenario:SC-0011-002 @story:ST-0011 @need:ND-0004 @coverage:happy_path @passing @test:TS-0017 @test:TS-0018 @test:TS-0019 @test:TS-0020
   Правило: CRUD операций задач выполняется через аутентифицированные ServiceStack endpoints, а SignalR-подключение может доставлять обновления между клиентами.
     Сценарий: CRUD операций задач выполняется через аутентифицированные ServiceStack endpoints, а SignalR-подключение может доставлять обновления между клиентами.
       Дано у пользователя открыт актуальный набор задач Unlimotion

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Raven.Client.Documents;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
@@ -22,6 +23,9 @@ using Unlimotion.Domain;
 using Unlimotion.Interface;
 using Unlimotion.Server;
 using Unlimotion.Server.Hubs;
+using Unlimotion.Server.ServiceInterface;
+using Unlimotion.Server.ServiceModel;
+using Unlimotion.Server.ServiceModel.Molds.Tasks;
 
 namespace Unlimotion.Test;
 
@@ -74,6 +78,49 @@ public sealed class ServerStorageLiveIntegrationTests
         await Assert.That(senderReceivedEcho).IsFalse();
     }
 
+    [Test]
+    public async Task ServerStorage_LiveServiceStackTaskApi_BulkInsertGetAllAndGetTask_RoundTripsAuthenticatedUserTasks()
+    {
+        await using var fixture = await ServerStorageLiveIntegrationFixture.StartAsync(
+            LiveIntegrationHostMode.ServiceStackTaskApiNarrow);
+        string ownerToken = await fixture.CreateAuthenticatedUserTokenAsync();
+        string otherUserToken = await fixture.CreateAuthenticatedUserTokenAsync();
+        string localTaskId = $"live-api-{Guid.NewGuid():N}";
+        string storedTaskId = $"TaskItem/{localTaskId}";
+
+        using var ownerClient = fixture.CreateServiceClient(ownerToken);
+        using var otherUserClient = fixture.CreateServiceClient(otherUserToken);
+
+        await ownerClient.PostAsync(new BulkInsertTasks
+        {
+            Tasks =
+            [
+                new TaskItemMold
+                {
+                    Id = localTaskId,
+                    Title = "Live ServiceStack task API",
+                    Description = "Задача отправлена live ServiceStack API test",
+                    Status = Unlimotion.Domain.TaskStatus.NotReady,
+                    ContainsTasks = [],
+                    ParentTasks = [],
+                    BlocksTasks = [],
+                    BlockedByTasks = []
+                }
+            ]
+        });
+
+        TaskItemPage ownerPage = await ownerClient.GetAsync(new GetAllTasks());
+        TaskItemMold loaded = await ownerClient.GetAsync(new GetTask { Id = storedTaskId });
+        TaskItemPage otherUserPage = await otherUserClient.GetAsync(new GetAllTasks());
+        TaskItemMold? otherUserLoaded = await TryGetTaskAsync(otherUserClient, storedTaskId);
+
+        await Assert.That(ownerPage.Tasks.Select(task => task.Id)).Contains(storedTaskId);
+        await Assert.That(loaded.Id).IsEqualTo(storedTaskId);
+        await Assert.That(loaded.Title).IsEqualTo("Live ServiceStack task API");
+        await Assert.That(otherUserPage.Tasks.Select(task => task.Id)).DoesNotContain(storedTaskId);
+        await Assert.That(otherUserLoaded).IsNull();
+    }
+
     private static async Task<T> WaitForAsync<T>(Task<T> task, TimeSpan timeout)
     {
         var timeoutTask = Task.Delay(timeout);
@@ -92,6 +139,22 @@ public sealed class ServerStorageLiveIntegrationTests
         return await Task.WhenAny(task, timeoutTask) == task;
     }
 
+    private static async Task<TaskItemMold?> TryGetTaskAsync(JsonServiceClient client, string taskId)
+    {
+        try
+        {
+            return await client.GetAsync(new GetTask { Id = taskId });
+        }
+        catch (WebServiceException)
+        {
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private sealed class ServerStorageLiveIntegrationFixture : IAsyncDisposable
     {
         private readonly string _tempRoot;
@@ -106,7 +169,8 @@ public sealed class ServerStorageLiveIntegrationTests
 
         public string BaseUrl { get; }
 
-        public static async Task<ServerStorageLiveIntegrationFixture> StartAsync()
+        public static async Task<ServerStorageLiveIntegrationFixture> StartAsync(
+            LiveIntegrationHostMode mode = LiveIntegrationHostMode.SignalR)
         {
             string tempRoot = Path.Combine(Path.GetTempPath(), "Unlimotion.LiveIntegration", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempRoot);
@@ -130,7 +194,8 @@ public sealed class ServerStorageLiveIntegrationTests
                         new KeyValuePair<string, string?>("RavenDb:DatabaseRecord:DatabaseName", $"UnlimotionLiveTest_{Guid.NewGuid():N}"),
                         new KeyValuePair<string, string?>("RavenDb:ServerOptions:ServerUrl", $"http://127.0.0.1:{GetFreeTcpPort()}"),
                         new KeyValuePair<string, string?>("RavenDb:ServerOptions:DataDirectory", Path.Combine(tempRoot, "RavenDB")),
-                        new KeyValuePair<string, string?>("RavenDb:ServerOptions:LogsPath", Path.Combine(tempRoot, "Log", "RavenDB"))
+                        new KeyValuePair<string, string?>("RavenDb:ServerOptions:LogsPath", Path.Combine(tempRoot, "Log", "RavenDB")),
+                        new KeyValuePair<string, string?>("LiveIntegration:Mode", mode.ToString())
                     });
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
@@ -194,6 +259,14 @@ public sealed class ServerStorageLiveIntegrationTests
                 .Build();
         }
 
+        public JsonServiceClient CreateServiceClient(string accessToken)
+        {
+            return new JsonServiceClient(BaseUrl)
+            {
+                BearerToken = accessToken
+            };
+        }
+
         public async ValueTask DisposeAsync()
         {
             await _host.StopAsync(TimeSpan.FromSeconds(5));
@@ -252,6 +325,7 @@ public sealed class ServerStorageLiveIntegrationTests
             services.AddSingleton(Configuration);
             services.AddSingleton<IAppSettings, Unlimotion.Server.AppSettings>();
             services.AddSingleton<LiveSignalRTestAppHost>();
+            services.AddSingleton<LiveServiceStackTaskApiNarrowAppHost>();
             services.AddRavenDbServices();
             services.AddSignalR();
             services.AddSingleton<AutoMapper.IMapper>(Unlimotion.Server.AppModelMapping.ConfigureMapping());
@@ -259,6 +333,15 @@ public sealed class ServerStorageLiveIntegrationTests
 
         public void Configure(IApplicationBuilder app)
         {
+            var mode = Enum.Parse<LiveIntegrationHostMode>(
+                Configuration["LiveIntegration:Mode"] ?? nameof(LiveIntegrationHostMode.SignalR));
+
+            if (mode == LiveIntegrationHostMode.ServiceStackTaskApiNarrow)
+            {
+                app.UseServiceStack(app.ApplicationServices.GetRequiredService<LiveServiceStackTaskApiNarrowAppHost>());
+                return;
+            }
+
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
@@ -267,6 +350,12 @@ public sealed class ServerStorageLiveIntegrationTests
 
             app.UseServiceStack(app.ApplicationServices.GetRequiredService<LiveSignalRTestAppHost>());
         }
+    }
+
+    private enum LiveIntegrationHostMode
+    {
+        SignalR,
+        ServiceStackTaskApiNarrow
     }
 
     private sealed class LiveSignalRTestAppHost : AppHostBase
@@ -281,6 +370,60 @@ public sealed class ServerStorageLiveIntegrationTests
 
         public override void Configure(Container container)
         {
+            var jwtProvider = new JwtAuthProvider(_settings)
+            {
+                RequireSecureConnection = false,
+                HashAlgorithm = "RS512",
+                PrivateKeyXml = _settings.GetString("Security:PrivateKeyXml"),
+                EncryptPayload = true,
+                ExpireTokensInDays = 1,
+                ExpireRefreshTokensIn = TimeSpan.FromDays(30),
+                AllowInQueryString = true,
+                AllowInFormData = true,
+                PopulateSessionFilter = (session, payload, _) =>
+                {
+                    if (payload.TryGetValue("session", out var sessionId) &&
+                        session is AuthUserSession authUserSession)
+                    {
+                        authUserSession.Id = sessionId;
+                    }
+                }
+            };
+            jwtProvider.ServiceRoutes?.Clear();
+
+            var authFeature = new AuthFeature(
+                () => new AuthUserSession(),
+                [jwtProvider])
+            {
+                IncludeAssignRoleServices = false,
+                IncludeAuthMetadataProvider = false,
+                IncludeRegistrationService = false
+            };
+            authFeature.ServiceRoutes.Clear();
+            Plugins.Add(authFeature);
+        }
+    }
+
+    private sealed class LiveServiceStackTaskApiNarrowAppHost : AppHostBase
+    {
+        private readonly IAppSettings _settings;
+        private readonly IServiceProvider _serviceProvider;
+
+        public LiveServiceStackTaskApiNarrowAppHost(IAppSettings settings, IServiceProvider serviceProvider)
+            : base("Unlimotion.LiveServiceStackTaskApiNarrowTest", typeof(LiveSignalRTestAppHost).Assembly)
+        {
+            _settings = settings;
+            _serviceProvider = serviceProvider;
+        }
+
+        public override void Configure(Container container)
+        {
+            container.Register(c => _serviceProvider.GetRequiredService<IDocumentStore>());
+            container.Register(c => _serviceProvider.GetRequiredService<IAsyncDocumentSession>())
+                .ReusedWithin(ReuseScope.Request);
+            container.Register(c => _serviceProvider.GetRequiredService<AutoMapper.IMapper>());
+            RegisterService(typeof(TaskService));
+
             var jwtProvider = new JwtAuthProvider(_settings)
             {
                 RequireSecureConnection = false,
