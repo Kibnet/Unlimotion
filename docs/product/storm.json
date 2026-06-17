@@ -6,7 +6,7 @@
     "created_at": "2026-06-12",
     "updated_at": "2026-06-17",
     "generated_by": "Codex /storm:bootstrap",
-    "route": "guided-artifact-workflow",
+    "route": "delivery-task",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
     "source_inventory": {
       "tracked_files": 682,
@@ -39,11 +39,12 @@
       "Главное найденное расхождение: часть repowiki ещё описывает старую модель из четырёх статусов, а актуальные README, код и тесты используют пять статусов с Prepared.",
       "Записи являются гипотезами о продукте, восстановленными из реализации и спецификаций; перед утверждением целей и потребностей нужна проверка владельцем продукта.",
       "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
-      "CV-0004 callbacks получили automated evidence через TS-0023; Git timer/conflict-safety часть AC-0040 оставлена отдельным implementation gap, потому что текущий TelegramBot StartTimers запускает GitService без conflict-resolution guard."
+      "CV-0004 callbacks получили automated evidence через TS-0023; Git timer/conflict-safety часть AC-0040 оставлена отдельным implementation gap, потому что текущий TelegramBot StartTimers запускает GitService без conflict-resolution guard.",
+      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024, но runtime release maturity не заявляется без отдельного build/runtime evidence."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -2389,9 +2390,9 @@
     {
       "id": "ST-0015",
       "title": "Собирать, обновлять и проверять cross-platform application shells",
-      "status": "partial",
+      "status": "implemented",
       "provenance": "выведено из README, кода, спецификаций и тестов",
-      "confidence": 0.7,
+      "confidence": 0.78,
       "narrative": "Как maintainer, я могу собирать desktop shell, проверять startup/update flows и иметь platform projects для Android, browser и iOS вокруг общей Avalonia task UI.",
       "value": "Платформенные shell-проекты расширяют доступность продукта, но поддержка зрелее всего выглядит для desktop.",
       "acceptance_criteria": [
@@ -2418,10 +2419,11 @@
         },
         {
           "id": "AC-0042",
-          "text": "Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует продуктового подтверждения.",
-          "coverage_level": "partial",
+          "text": "Android, browser и iOS projects существуют, подключают общую UI-модель и считаются project-contract supported surfaces; runtime release maturity требует отдельного build/runtime evidence.",
+          "coverage_level": "critical",
           "linked_tests": [
-            "TS-0015"
+            "TS-0015",
+            "TS-0024"
           ],
           "evidence": [
             {
@@ -2435,6 +2437,10 @@
             {
               "path": "src/Unlimotion.iOS/Unlimotion.iOS.csproj",
               "symbol": "ProjectReference"
+            },
+            {
+              "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+              "symbol": "PlatformShellProjectContractTests"
             }
           ],
           "linked_rules": [
@@ -2442,7 +2448,8 @@
           ],
           "linked_scenarios": [
             "SC-0015-002"
-          ]
+          ],
+          "coverage_note": "TS-0024 подтверждает target frameworks, shared UI references, Avalonia platform packages, startup hooks и Android native libgit2 assets. Android/browser optional build smoke был заблокирован restore/workload state; runtime release support не заявляется."
         },
         {
           "id": "AC-0043",
@@ -2473,7 +2480,8 @@
       "threatens_needs": [],
       "linked_tests": [
         "TS-0011",
-        "TS-0015"
+        "TS-0015",
+        "TS-0024"
       ],
       "linked_code": [
         "CU-0015",
@@ -2492,6 +2500,10 @@
         {
           "path": "src/Directory.Packages.props",
           "symbol": "Avalonia / TUnit / Velopack / LibGit2Sharp"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "PlatformShellProjectContractTests"
         }
       ],
       "assumptions": [],
@@ -2501,8 +2513,8 @@
         "SC-0015-002",
         "SC-0015-003"
       ],
-      "behavior_coverage_level": 3,
-      "behavior_coverage_note": "BDD-сценарии связаны с существующими тестами; tests не запускались в artifact-only BDD sync."
+      "behavior_coverage_level": 4,
+      "behavior_coverage_note": "SC-0015-002 связан с TS-0024 и passing contract tests; non-desktop runtime release maturity остаётся отдельной будущей platform validation задачей."
     },
     {
       "id": "ST-0016",
@@ -3311,6 +3323,57 @@
         "SC-0015-001",
         "SC-0015-002",
         "SC-0015-003"
+      ]
+    },
+    {
+      "id": "TS-0024",
+      "name": "PlatformShellProjectContractTests",
+      "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+      "framework": "TUnit",
+      "type": "static project contract/platform",
+      "status": "active",
+      "provenance": "добавлено во время /storm:cover CV-0005 после утверждения SPEC",
+      "confidence": 0.86,
+      "linked_stories": [
+        "ST-0015"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0042"
+      ],
+      "linked_constraints": [
+        "CN-0004",
+        "CN-0007",
+        "CN-0008"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "AndroidProject_IncludesSharedUiReferenceAndNativeGitAssets"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "BrowserProject_UsesSharedUiAndBrowserAppStartupContract"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "IosProject_UsesSharedUiAndAvaloniaDelegateContract"
+        }
+      ],
+      "assumptions": [
+        "Tests validate project contracts and startup hooks, not runtime install, signing, store readiness or UX parity."
+      ],
+      "open_questions": [],
+      "trace_method_examples": [
+        "AndroidProject_IncludesSharedUiReferenceAndNativeGitAssets",
+        "BrowserProject_UsesSharedUiAndBrowserAppStartupContract",
+        "IosProject_UsesSharedUiAndAvaloniaDelegateContract"
+      ],
+      "trace_confidence": 0.9,
+      "linked_scenarios": [
+        "SC-0015-002"
+      ],
+      "validation_evidence": [
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => passed 3/3"
       ]
     },
     {
@@ -4640,8 +4703,8 @@
       "type": "coverage_backlog",
       "target": "AC-0042",
       "story": "ST-0015",
-      "status": "proposed",
-      "condition": "После решения, какие non-desktop shells release-supported",
+      "status": "covered_by_project_contract_tests",
+      "condition": "Desktop остаётся release-supported; Android/browser/iOS считаются project-contract supported surfaces без runtime release claim.",
       "depends_on": [],
       "dependency_closure": [
         "CV-0005"
@@ -4663,14 +4726,14 @@
         "cost_star": 9,
         "priority_star": 0.4167
       },
-      "rationale": "Platform smoke coverage полезен, но без product policy легко закрепить неподдерживаемую поверхность.",
+      "rationale": "Conservative platform policy принята; project-contract coverage закрыт TS-0024 без claims о runtime release maturity.",
       "minimal_tests": [
-        "PlatformProjects_RestoreAndCompileSharedUiReferences",
-        "AndroidProject_IncludesRequiredLibGit2NativeAssets",
-        "BrowserProject_StartsWithSharedApplicationViewModelSmoke"
+        "AndroidProject_IncludesSharedUiReferenceAndNativeGitAssets",
+        "BrowserProject_UsesSharedUiAndBrowserAppStartupContract",
+        "IosProject_UsesSharedUiAndAvaloniaDelegateContract"
       ],
-      "prerequisite": "Определить, какие non-desktop shells считаются release-supported.",
-      "reason": "Android/browser/iOS shell maturity требует подтверждения и platform smoke coverage."
+      "prerequisite": "Выполнено: conservative platform support policy утверждена через SPEC approval.",
+      "reason": "Policy зафиксирована как project-contract supported для Android/browser/iOS; TS-0024 passed 3/3 и не заявляет runtime release maturity."
     },
     {
       "id": "RK-0007",
@@ -4776,8 +4839,8 @@
       "stories_total": 16,
       "stories_with_tests": 16,
       "acceptance_criteria_total": 44,
-      "acceptance_criteria_with_tests": 43,
-      "tests_total": 22,
+      "acceptance_criteria_with_tests": 44,
+      "tests_total": 24,
       "tests_without_story_or_constraint_links": 0,
       "code_units_total": 19,
       "code_units_without_supports": 0
@@ -5297,7 +5360,8 @@
       "ST-0015": {
         "tests": [
           "TS-0011",
-          "TS-0015"
+          "TS-0015",
+          "TS-0024"
         ],
         "code_units": [
           "CU-0015",
@@ -5316,9 +5380,10 @@
           {
             "id": "AC-0042",
             "tests": [
-              "TS-0015"
+              "TS-0015",
+              "TS-0024"
             ],
-            "coverage_level": "partial"
+            "coverage_level": "critical"
           },
           {
             "id": "AC-0043",
@@ -5818,20 +5883,20 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-06-17",
-    "command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap",
-    "mode": "delivery-task after approved SPEC; production code and tests changed for callback seam/tests, test annotations unchanged; timer behavior not changed",
+    "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage",
+    "mode": "delivery-task after approved SPEC; tests and product artifacts changed, production runtime code and test annotations unchanged",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
     "summary": {
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
-      "acceptance_criteria_full_or_critical": 42,
-      "acceptance_criteria_partial": 2,
+      "acceptance_criteria_full_or_critical": 43,
+      "acceptance_criteria_partial": 1,
       "acceptance_criteria_without_tests": 0,
       "improved_by_existing_evidence": 6,
-      "proposed_coverage_items": 3,
-      "improved_by_delivery_evidence": 4
+      "proposed_coverage_items": 2,
+      "improved_by_delivery_evidence": 5
     },
     "improved_by_existing_evidence": [
       {
@@ -5900,14 +5965,6 @@
           "TS-0023"
         ],
         "reason": "Callback subset covered by TS-0023; Git timer/conflict-safety part remains split implementation gap."
-      },
-      {
-        "id": "AC-0042",
-        "story": "ST-0015",
-        "tests": [
-          "TS-0015"
-        ],
-        "reason": "Нужна product/platform policy confirmation для non-desktop shells."
       }
     ],
     "acceptance_criteria_without_tests": [],
@@ -6087,16 +6144,16 @@
         "id": "CV-0005",
         "target": "AC-0042",
         "story": "ST-0015",
-        "status": "proposed",
+        "status": "covered_by_project_contract_tests",
         "route_required": "delivery-task/QUEST",
-        "priority": "medium_after_platform_policy",
+        "priority": "covered",
         "minimal_tests": [
-          "PlatformProjects_RestoreAndCompileSharedUiReferences",
-          "AndroidProject_IncludesRequiredLibGit2NativeAssets",
-          "BrowserProject_StartsWithSharedApplicationViewModelSmoke"
+          "AndroidProject_IncludesSharedUiReferenceAndNativeGitAssets",
+          "BrowserProject_UsesSharedUiAndBrowserAppStartupContract",
+          "IosProject_UsesSharedUiAndAvaloniaDelegateContract"
         ],
-        "reason": "Android/browser/iOS shell maturity требует подтверждения и platform smoke coverage.",
-        "prerequisite": "Определить, какие non-desktop shells считаются release-supported.",
+        "reason": "Policy зафиксирована как project-contract supported для Android/browser/iOS; TS-0024 passed 3/3 и не заявляет runtime release maturity.",
+        "prerequisite": "Выполнено: conservative platform support policy утверждена через SPEC approval.",
         "rank": 6,
         "depends_on": [],
         "rice": {
@@ -6116,7 +6173,7 @@
           "cost_star": 9,
           "priority_star": 0.4167
         },
-        "condition": "После решения, какие non-desktop shells release-supported"
+        "condition": "Desktop остаётся release-supported; Android/browser/iOS считаются project-contract supported surfaces без runtime release claim."
       },
       {
         "id": "CV-0006",
@@ -6210,12 +6267,12 @@
     ],
     "open_questions": [
       "Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный /storm:bdd-implement task?",
-      "Какие non-desktop shells считаются release-supported для ST-0015/CV-0005?",
-      "Есть ли attachment workflow в актуальном продукте?"
+      "Есть ли attachment workflow в актуальном продукте?",
+      "Нужно ли отдельно запускать /storm:bdd-implement для реального Android/browser/iOS runtime smoke или release pipeline evidence?"
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-17",
-      "command": "/storm:cover ST-0014 CV-0004 Telegram callbacks coverage + timer split gap + /storm:bdd-sync + /storm:bdd-lint",
+      "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
       "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
@@ -6224,43 +6281,48 @@
       "active_stories_with_scenarios": 16,
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
-      "acceptance_criteria_full_or_critical": 42,
-      "acceptance_criteria_partial": 2,
+      "acceptance_criteria_full_or_critical": 43,
+      "acceptance_criteria_partial": 1,
       "acceptance_criteria_without_tests": 0,
       "acceptance_criteria_with_rules": 44,
       "acceptance_criteria_with_scenarios": 44,
-      "automated_scenarios": 39,
+      "automated_scenarios": 38,
       "automated_or_passing_scenarios": 44,
       "draft_scenarios": 1,
       "manual_scenarios": 0,
-      "passing_scenarios": 5,
+      "passing_scenarios": 6,
       "failing_scenarios": 0,
       "scenario_test_links": 44,
       "scenarios_without_test_links": 1,
       "step_definitions_total": 0,
-      "executable_specification_ratio": "5/45",
+      "executable_specification_ratio": "6/45",
       "automation_coverage_ratio": "44/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
       "tests_changed": true,
-      "code_changed": true,
+      "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*\" --output Detailed => passed 7/7",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => passed 7/7"
-      ],
-      "bdd_lint_issues": 0
+        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings only",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => passed 3/3",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/SingleViewStartupUiTests/*\" --output Detailed => passed 4/4",
+        "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug --no-restore => blocked by NETSDK1147/workload restore state",
+        "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release --no-restore => blocked by missing project.assets.json under --no-restore"
+      ]
     },
     "bdd_sync_summary": {
-      "features_total": 16,
-      "rules_total": 44,
-      "scenarios_total": 44,
-      "automated_scenarios": 39,
-      "draft_scenarios": 1,
-      "scenarios_without_test_links": 1,
-      "step_definitions_total": 0
+      "scenario_to_tests": "44/45",
+      "changed_scenarios": [
+        "SC-0015-002"
+      ],
+      "changed_tests": [
+        "TS-0024"
+      ],
+      "known_gaps": [
+        "SC-0014-002 remains draft without test link",
+        "step_definitions_total=0"
+      ]
     },
     "improved_by_delivery_evidence": [
       {
@@ -6292,11 +6354,20 @@
           "TS-0022"
         ],
         "reason": "TS-0022 подтверждает allowed-user gate и базовые Telegram commands через testable handler seam без network/polling/Git side effects."
+      },
+      {
+        "id": "AC-0042",
+        "story": "ST-0015",
+        "new_coverage_level": "critical",
+        "tests": [
+          "TS-0024"
+        ],
+        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts и conservative platform support policy без runtime release claim."
       }
     ],
-    "code_changed": true,
-    "full_suite_result": "Not run in this EXEC; scoped Telegram build/tests are green and previous full-suite runs in this worktree are known to be expensive/timeout-prone.",
-    "targeted_validation_result": "TelegramBotCallbackCoverageTests passed 7/7 and TelegramBotCommandAuthorizationTests passed 7/7 on 2026-06-17."
+    "code_changed": false,
+    "full_suite_result": "Not run in this narrow SPEC; build passed and targeted coverage/regression tests passed. Optional Android/browser builds were attempted and blocked by restore/workload state.",
+    "targeted_validation_result": "PlatformShellProjectContractTests passed 3/3; SingleViewStartupUiTests passed 4/4"
   },
   "ranking_analysis": {
     "updated_at": "2026-06-16",
@@ -6675,12 +6746,16 @@
         "GR-042",
         "GR-043"
       ],
-      "status": "partial",
+      "status": "implemented",
       "linked_story": "ST-0015",
       "evidence": [
         {
           "path": "src/Directory.Packages.props",
           "symbol": "Avalonia / TUnit / Velopack / LibGit2Sharp"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "PlatformShellProjectContractTests"
         }
       ]
     },
@@ -7751,7 +7826,7 @@
     },
     {
       "id": "GR-042",
-      "title": "Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует продуктового подтверждения.",
+      "title": "Android, browser и iOS projects существуют, подключают общую UI-модель и имеют project-contract coverage без runtime release claim.",
       "feature_id": "GF-015",
       "linked_stories": [
         "ST-0015"
@@ -7779,6 +7854,10 @@
         {
           "path": "src/Unlimotion.iOS/Unlimotion.iOS.csproj",
           "symbol": "ProjectReference"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "symbol": "PlatformShellProjectContractTests"
         }
       ]
     },
@@ -10066,7 +10145,7 @@
     },
     {
       "id": "SC-0015-002",
-      "title": "Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует пр…",
+      "title": "Android, browser и iOS shell projects сохраняют общий UI contract без заявления runtime release support.",
       "file": "features/storm/st-0015-platform-shells.feature",
       "line": 17,
       "tags": [
@@ -10081,7 +10160,9 @@
         "@constraint:CN-0008",
         "@coverage:constraint_check",
         "@automated",
-        "@test:TS-0015"
+        "@test:TS-0015",
+        "@test:TS-0024",
+        "@passing"
       ],
       "linked_story": "ST-0015",
       "linked_acceptance_criteria": [
@@ -10097,23 +10178,24 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passed_3_of_3_on_2026-06-17; optional_android_browser_build_smoke_blocked_by_restore_or_workload_state",
       "linked_tests": [
-        "TS-0015"
+        "TS-0015",
+        "TS-0024"
       ],
       "step_definitions": [],
       "coverage_role": "constraint_check",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
-          "у пользователя открыт актуальный набор задач Unlimotion",
-          "поведение относится к истории ST-0015"
+          "desktop остаётся основной release-supported оболочкой Unlimotion",
+          "non-desktop shells должны переиспользовать общую Avalonia task UI модель"
         ],
         "when": [
-          "пользователь выполняет действие, описанное в критерии приёмки"
+          "maintainer проверяет platform project contracts для Android, browser и iOS"
         ],
         "then": [
-          "Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует продуктового подтверждения."
+          "каждый non-desktop shell ссылается на общую UI-модель и нужный Avalonia platform package, а Android содержит native Git assets без заявления runtime release support"
         ]
       },
       "evidence": [
@@ -10138,6 +10220,11 @@
           "path": "src/Unlimotion.Test/MainScreenLoadingUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0015"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
+          "description": "TS-0024 подтверждает Android/browser/iOS project contracts.",
+          "test_id": "TS-0024"
         }
       ]
     },
@@ -11174,48 +11261,48 @@
   ],
   "step_definitions": [],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-16",
-    "command": "/storm:cover ST-0014 CV-0003 Telegram command/auth coverage + /storm:bdd-sync + /storm:bdd-lint",
+    "updated_at": "2026-06-17",
+    "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
     "mode": "delivery-task",
     "features_total": 16,
     "rules_total": 44,
-    "scenarios_total": 44,
+    "scenarios_total": 45,
     "active_stories_total": 16,
     "active_stories_with_scenarios": 16,
     "acceptance_criteria_total": 44,
-    "acceptance_criteria_with_tests": 43,
-    "acceptance_criteria_full_or_critical": 42,
-    "acceptance_criteria_partial": 2,
-    "acceptance_criteria_without_tests": 1,
+    "acceptance_criteria_with_tests": 44,
+    "acceptance_criteria_full_or_critical": 43,
+    "acceptance_criteria_partial": 1,
+    "acceptance_criteria_without_tests": 0,
     "acceptance_criteria_with_rules": 44,
     "acceptance_criteria_with_scenarios": 44,
-    "automated_scenarios": 39,
-    "automated_or_passing_scenarios": 43,
+    "automated_scenarios": 38,
+    "automated_or_passing_scenarios": 44,
     "draft_scenarios": 1,
     "manual_scenarios": 0,
-    "passing_scenarios": 4,
+    "passing_scenarios": 6,
     "failing_scenarios": 0,
-    "scenario_test_links": 43,
+    "scenario_test_links": 44,
     "scenarios_without_test_links": 1,
     "step_definitions_total": 0,
-    "executable_specification_ratio": "4/44",
-    "automation_coverage_ratio": "43/44",
+    "executable_specification_ratio": "6/45",
+    "automation_coverage_ratio": "44/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
     "tests_changed": true,
-    "code_changed": true,
+    "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet restore src/Unlimotion.Test/Unlimotion.Test.csproj => restored new Unlimotion.TelegramBot project reference assets",
-      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => passed 7/7",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK, 0 errors, 0 warnings",
-      "git diff --check => passed, no whitespace errors"
+      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings only",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => passed 3/3",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/SingleViewStartupUiTests/*\" --output Detailed => passed 4/4",
+      "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug --no-restore => blocked by NETSDK1147/workload restore state",
+      "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release --no-restore => blocked by missing project.assets.json under --no-restore"
     ]
   },
   "bdd_sync": {
-    "updated_at": "2026-06-16",
+    "updated_at": "2026-06-17",
     "command": "/storm:bdd-sync",
     "mode": "delivery-task",
     "status": "completed_with_known_gaps",
@@ -11223,32 +11310,35 @@
       "story_to_scenarios": 16,
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
-      "scenario_to_tests": 43,
+      "scenario_to_tests": 44,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
       "test annotations",
       "acceptance criteria replacement",
-      "callbacks/Git timer behavior outside approved CV-0003 scope"
+      "production runtime code",
+      "Android/browser/iOS runtime release behavior"
     ],
     "tests_changed": [
-      "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs"
+      "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
+      "src/Unlimotion.Test/PlatformShellProjectContractTests.cs"
     ],
     "gaps": [
       "Step definitions отсутствуют: отдельный BDD implementation task нужен перед executable Gherkin.",
       "SC-0014-002 остаётся draft без automated test links.",
-      "CV-0004 callbacks/status/relation/Git timer coverage не входит в текущий CV-0003 delivery."
+      "Android/browser/iOS runtime smoke и release pipeline evidence остаются отдельной platform validation задачей."
     ]
   },
   "bdd_lint": {
-    "updated_at": "2026-06-16",
+    "updated_at": "2026-06-17",
     "command": "/storm:bdd-lint",
     "mode": "delivery-task",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
       "step_definitions пока пусты: BDD layer связан с TUnit tests напрямую, но не является executable Cucumber-style specification.",
-      "SC-0014-002 остаётся draft без test links."
+      "SC-0014-002 остаётся draft без test links.",
+      "SC-0015-002 claims ограничены project-contract coverage; runtime release support не заявляется."
     ],
     "checks": {
       "scenario_tags_present": true,
@@ -11256,9 +11346,9 @@
       "need_or_constraint_basis_present": true,
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
-      "production_code_unchanged": false,
+      "production_code_unchanged": true,
       "tests_changed_in_approved_exec_scope": true,
-      "production_code_changes_in_approved_exec_scope": true,
+      "production_code_changes_in_approved_exec_scope": false,
       "test_annotations_changed": false
     }
   }

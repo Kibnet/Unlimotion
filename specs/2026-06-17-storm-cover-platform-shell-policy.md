@@ -334,40 +334,54 @@ Rule for coverage wording:
 - Residual risks / follow-ups: true Android/browser/iOS runtime smoke coverage remains future `/storm:bdd-implement` or platform validation work.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до подтверждения.
-- Decision: Не применимо до EXEC.
+- Статус: PASS
+- Scope reviewed: approved spec, `git status --short`, `git diff --stat`, relevant diff for `PlatformShellProjectContractTests`, `st-0015-platform-shells.feature`, `storm.json`, STORM reports, targeted test output, optional platform build smoke output and STORM validator output.
+- Decision: можно завершать EXEC.
 - Review passes:
-  - Scope/Evidence pass: Не применимо до EXEC.
-  - Contract pass: Не применимо до EXEC.
-  - Adversarial risk pass: Не применимо до EXEC.
-  - Re-review after fixes / Fix and re-review: Не применимо до EXEC.
-  - Stop decision: Не применимо до EXEC.
-- Evidence inspected: Не применимо до EXEC.
+  - Scope/Evidence pass: inspected actual changed files and commands; no production runtime code, platform manifests or test annotations changed.
+  - Contract pass: implementation stayed within SPEC: added project-contract TUnit tests, synced `SC-0015-002`, linked `TS-0024`, kept runtime release claims out of artifacts.
+  - Adversarial risk pass: checked overclaim risk, optional build blockers, unrelated changes, missing test links, stale `CV-0005` ranking/report references and Gherkin status consistency.
+  - Re-review after fixes / Fix and re-review: fixed report/status drift by updating coverage, ranking, stories, BDD sync/lint and traceability reports; STORM validator rerun after artifact sync.
+  - Stop decision: PASS.
+- Evidence inspected:
+  - `src/Unlimotion.Test/PlatformShellProjectContractTests.cs`
+  - `features/storm/st-0015-platform-shells.feature`
+  - `docs/product/storm.json`
+  - `docs/product/reports/coverage.md`
+  - `docs/product/reports/bdd-sync.md`
+  - `docs/product/reports/bdd-lint.md`
+  - `docs/product/reports/traceability.md`
+  - `docs/product/reports/ranking.md`
+  - `docs/product/reports/stories.md`
+  - targeted TUnit output and STORM validator output
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо до EXEC.
-  - Acceptance criteria: Не применимо до EXEC.
-  - Validation evidence: Не применимо до EXEC.
-  - Unsupported claims: Не применимо до EXEC.
-  - Regression / edge case: Не применимо до EXEC.
-  - Comments/docs/changelog: Не применимо до EXEC.
-  - Hidden contract change: Не применимо до EXEC.
-  - Manual-review challenge: Не применимо до EXEC.
-- No-findings justification: Не применимо до EXEC.
+  - Scope drift / unrelated changes: PASS, changed files match SPEC scope; no unrelated source files touched.
+  - Acceptance criteria: PASS, `TS-0024` covers Android/browser/iOS project contracts; `SC-0015-002`, `AC-0042`, `ST-0015` linked.
+  - Validation evidence: PASS, build passed, targeted tests passed, validator passed 0/0.
+  - Unsupported claims: PASS, artifacts explicitly say project-contract coverage only and do not claim Android/browser/iOS runtime release support.
+  - Regression / edge case: PASS, `SingleViewStartupUiTests` passed 4/4; optional build blockers recorded instead of repaired.
+  - Comments/docs/changelog: PASS, no source comments or changelog changes needed.
+  - Hidden contract change: PASS, production runtime behavior, UI behavior, platform manifests and test annotations unchanged.
+  - Manual-review challenge: reviewer should check that `AC-0042` is not over-promoted to runtime release support, that `CV-0005` is no longer proposed in reports, and that optional build failures are accurately described as environment/restore blockers.
+- No-findings justification: the approved SPEC intentionally scoped coverage to deterministic project contracts, and all artifact/test changes line up with that conservative claim.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | pre-exec | EXEC ещё не выполнялся. | Дождаться подтверждения SPEC. | follow-up |
+| LOW | validation | Optional Android build smoke was blocked by `NETSDK1147` requesting workload restore state, and Browser build smoke was blocked by missing `project.assets.json` under `--no-restore`. | Do not repair environment in this task; keep primary evidence as project-contract tests and record optional blocker. | accepted-risk |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: требуется фраза `Спеку подтверждаю`.
-- Residual risks / follow-ups: runtime platform smoke coverage remains separate future work.
+- Fixed before final report: report/status drift after `storm.json` sync was fixed in markdown reports.
+- Checks rerun:
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/PlatformShellProjectContractTests/*" --output Detailed`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/SingleViewStartupUiTests/*" --output Detailed`
+  - `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json`
+- Validation evidence: build passed with existing warnings; `PlatformShellProjectContractTests` passed 3/3; `SingleViewStartupUiTests` passed 4/4; STORM validator returned 0 errors, 0 warnings.
+- Unrelated changes: none observed in `git status --short`; all changed files are within SPEC scope.
+- Needs human: no blocking decision remains for this SPEC.
+- Residual risks / follow-ups: true Android/browser/iOS runtime smoke/release pipeline evidence remains separate platform validation work; `CV-0007` attachment workflow remains next `/storm:cover` candidate.
 
 ## Approval
-Ожидается фраза: "Спеку подтверждаю"
+Подтверждено пользователем фразой "Спеку подтверждаю" 2026-06-17.
 
 ## 20. Журнал действий агента
 Заполняется инкрементально после каждого значимого блока работ. Одна строка = один завершённый значимый блок.
@@ -376,3 +390,7 @@ Rule for coverage wording:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Выбор следующего `/storm:cover` gap | 0.88 | Подтверждение conservative platform policy | Подготовить SPEC и запросить подтверждение | Да | Да, нужно подтверждение пользователя | `CV-0005` является следующим ranked gap без runtime implementation, но требует policy; SPEC фиксирует project-contract supported policy | `docs/product/storm.json`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md` |
 | SPEC | Создание SPEC и quality gate | 0.90 | Подтверждение SPEC | Остановиться до фразы `Спеку подтверждаю` | Да | Да, ожидается решение пользователя | QUEST gate запрещает менять tests/code/artifacts до подтверждения; SPEC задаёт точный scope, tests, BDD sync and stop rules | `specs/2026-06-17-storm-cover-platform-shell-policy.md` |
+| EXEC | Подтверждение SPEC и добавление contract tests | 0.90 | Нет | Запустить build и targeted tests | Нет | Да, пользователь подтвердил SPEC фразой `Спеку подтверждаю` | Добавлен focused TUnit suite для Android/browser/iOS project contracts без runtime behavior changes | `src/Unlimotion.Test/PlatformShellProjectContractTests.cs` |
+| EXEC | Validation | 0.88 | Optional platform runtime/build evidence | Синхронизировать STORM artifacts | Нет | Нет | Build и targeted tests прошли; optional Android/browser build smoke заблокирован restore/workload state и не чинится в этой SPEC | `src/Unlimotion.Test/PlatformShellProjectContractTests.cs` |
+| EXEC | STORM BDD sync | 0.91 | Нет | Запустить STORM validator и финальные checks | Нет | Нет | `TS-0024` связан с `SC-0015-002`, `AC-0042` переведён в critical project-contract coverage, `CV-0005` закрыт без runtime release claim | `docs/product/storm.json`, `features/storm/st-0015-platform-shells.feature`, `docs/product/reports/*` |
+| EXEC | Post-EXEC review | 0.90 | Runtime platform release evidence вне scope | Завершить отчёт | Нет | Нет | Review подтвердил отсутствие test annotation, production runtime and UI changes; residual risks вынесены как follow-ups | `specs/2026-06-17-storm-cover-platform-shell-policy.md` |
