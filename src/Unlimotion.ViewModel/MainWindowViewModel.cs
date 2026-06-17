@@ -48,6 +48,15 @@ namespace Unlimotion.ViewModel
         private readonly bool _defaultShowCompleted;
         private readonly bool _defaultShowArchived;
         private readonly bool? _defaultShowWanted;
+        private const string AllTasksStatusFilterSettingsSection = "AllTasks";
+        private const string LastCreatedStatusFilterSettingsSection = "LastCreated";
+        private const string LastUpdatedStatusFilterSettingsSection = "LastUpdated";
+        private const string UnlockedStatusFilterSettingsSection = "Unlocked";
+        private const string InProgressStatusFilterSettingsSection = "InProgress";
+        private const string CompletedStatusFilterSettingsSection = "Completed";
+        private const string ArchivedStatusFilterSettingsSection = "Archived";
+        private const string LastOpenedStatusFilterSettingsSection = "LastOpened";
+        private const string RoadmapStatusFilterSettingsSection = "Roadmap";
         private static readonly ReadOnlyObservableCollection<TaskWrapperViewModel> EmptyTaskWrappers =
             new(new ObservableCollectionExtended<TaskWrapperViewModel>());
         private static readonly ReadOnlyObservableCollection<EmojiFilter> EmptyEmojiFilters =
@@ -89,8 +98,45 @@ namespace Unlimotion.ViewModel
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
             var configuredShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             var configuredShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
-            var statusFilterSelections = LoadStatusFilterSelections(configuredShowCompleted, configuredShowArchived);
-            StatusFilters = TaskStatusFilter.GetDefinitions(statusFilterSelections);
+            StatusFilters = CreateStatusFilters(
+                AllTasksStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
+            LastCreatedStatusFilters = CreateStatusFilters(
+                LastCreatedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
+            LastUpdatedStatusFilters = CreateStatusFilters(
+                LastUpdatedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
+            UnlockedStatusFilters = CreateStatusFilters(
+                UnlockedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
+            InProgressStatusFilters = CreateStatusFilters(
+                InProgressStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived,
+                DomainTaskStatus.InProgress);
+            CompletedStatusFilters = CreateStatusFilters(
+                CompletedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived,
+                DomainTaskStatus.Completed);
+            ArchivedStatusFilters = CreateStatusFilters(
+                ArchivedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived,
+                DomainTaskStatus.Archived);
+            LastOpenedStatusFilters = CreateStatusFilters(
+                LastOpenedStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
+            RoadmapStatusFilters = CreateStatusFilters(
+                RoadmapStatusFilterSettingsSection,
+                configuredShowCompleted,
+                configuredShowArchived);
             ShowCompleted = IsStatusFilterSelected(DomainTaskStatus.Completed);
             ShowArchived = IsStatusFilterSelected(DomainTaskStatus.Archived);
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>();
@@ -105,6 +151,23 @@ namespace Unlimotion.ViewModel
             StatusFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .Subscribe(_ => SyncLegacyVisibilityFromStatusFilters())
+                .AddToDispose(this);
+
+            SubscribeStatusFilterPersistence(LastCreatedStatusFilterSettingsSection, LastCreatedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(LastUpdatedStatusFilterSettingsSection, LastUpdatedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(UnlockedStatusFilterSettingsSection, UnlockedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(InProgressStatusFilterSettingsSection, InProgressStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(CompletedStatusFilterSettingsSection, CompletedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(ArchivedStatusFilterSettingsSection, ArchivedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(LastOpenedStatusFilterSettingsSection, LastOpenedStatusFilters)
+                .AddToDispose(this);
+            SubscribeStatusFilterPersistence(RoadmapStatusFilterSettingsSection, RoadmapStatusFilters)
                 .AddToDispose(this);
 
             this.WhenAnyValue(m => m.ShowCompleted)
@@ -196,9 +259,12 @@ namespace Unlimotion.ViewModel
                 filter.RefreshLocalization();
             }
 
-            foreach (var filter in StatusFilters)
+            foreach (var statusFilters in GetStatusFilterCollections())
             {
-                filter.RefreshLocalization();
+                foreach (var filter in statusFilters)
+                {
+                    filter.RefreshLocalization();
+                }
             }
 
             foreach (var filter in WantedFilterDefinitions)
@@ -207,23 +273,51 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private Dictionary<DomainTaskStatus, bool> LoadStatusFilterSelections(
-            bool showCompletedFallback,
-            bool showArchivedFallback)
+        private IEnumerable<ReadOnlyObservableCollection<TaskStatusFilter>> GetStatusFilterCollections()
         {
+            yield return StatusFilters;
+            yield return LastCreatedStatusFilters;
+            yield return LastUpdatedStatusFilters;
+            yield return UnlockedStatusFilters;
+            yield return InProgressStatusFilters;
+            yield return CompletedStatusFilters;
+            yield return ArchivedStatusFilters;
+            yield return LastOpenedStatusFilters;
+            yield return RoadmapStatusFilters;
+        }
+
+        private ReadOnlyObservableCollection<TaskStatusFilter> CreateStatusFilters(
+            string settingsSection,
+            bool showCompletedFallback,
+            bool showArchivedFallback,
+            params DomainTaskStatus[] forcedVisibleStatuses) =>
+            TaskStatusFilter.GetDefinitions(LoadStatusFilterSelections(
+                settingsSection,
+                showCompletedFallback,
+                showArchivedFallback,
+                forcedVisibleStatuses));
+
+        private Dictionary<DomainTaskStatus, bool> LoadStatusFilterSelections(
+            string settingsSection,
+            bool showCompletedFallback,
+            bool showArchivedFallback,
+            params DomainTaskStatus[] forcedVisibleStatuses)
+        {
+            bool IsForcedVisible(DomainTaskStatus status) => forcedVisibleStatuses.Contains(status);
+
             var selections = new Dictionary<DomainTaskStatus, bool>
             {
                 [DomainTaskStatus.NotReady] = true,
                 [DomainTaskStatus.Prepared] = true,
                 [DomainTaskStatus.InProgress] = true,
-                [DomainTaskStatus.Completed] = showCompletedFallback,
-                [DomainTaskStatus.Archived] = showArchivedFallback
+                [DomainTaskStatus.Completed] = IsForcedVisible(DomainTaskStatus.Completed) || showCompletedFallback,
+                [DomainTaskStatus.Archived] = IsForcedVisible(DomainTaskStatus.Archived) || showArchivedFallback
             };
 
             foreach (var status in Enum.GetValues<DomainTaskStatus>())
             {
                 var configured = _configuration?
-                    .GetSection($"AllTasks:StatusFilters:{status}")
+                    .GetSection($"{settingsSection}:StatusFilters:{status}")
                     .Get<bool?>();
 
                 if (configured.HasValue)
@@ -234,6 +328,14 @@ namespace Unlimotion.ViewModel
 
             return selections;
         }
+
+        private IDisposable SubscribeStatusFilterPersistence(
+            string settingsSection,
+            ReadOnlyObservableCollection<TaskStatusFilter> statusFilters) =>
+            statusFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .Skip(1)
+                .Subscribe(_ => PersistStatusFilters(settingsSection, statusFilters));
 
         private bool IsStatusFilterSelected(DomainTaskStatus status) =>
             StatusFilters.FirstOrDefault(filter => filter.Status == status)?.ShowTasks == true;
@@ -292,10 +394,17 @@ namespace Unlimotion.ViewModel
 
         private void PersistStatusFilters()
         {
-            foreach (var filter in StatusFilters)
+            PersistStatusFilters(AllTasksStatusFilterSettingsSection, StatusFilters);
+        }
+
+        private void PersistStatusFilters(
+            string settingsSection,
+            IEnumerable<TaskStatusFilter> statusFilters)
+        {
+            foreach (var filter in statusFilters)
             {
                 _configuration?
-                    .GetSection($"AllTasks:StatusFilters:{filter.Status}")
+                    .GetSection($"{settingsSection}:StatusFilters:{filter.Status}")
                     .Set(filter.ShowTasks);
             }
         }
@@ -564,6 +673,24 @@ namespace Unlimotion.ViewModel
             taskItem.IsInitializedProvider = () => IsInitialized;
         }
 
+        private static IObservable<Func<TaskItemViewModel, bool>> CreateStatusFilter(
+            ReadOnlyObservableCollection<TaskStatusFilter> statusFilters) =>
+            statusFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                .ToCollection()
+                .Select(filters =>
+                {
+                    var selectedStatuses = filters
+                        .Where(static filter => filter.ShowTasks)
+                        .Select(static filter => filter.Status)
+                        .ToHashSet();
+
+                    bool Predicate(TaskItemViewModel task) =>
+                        selectedStatuses.Contains(task.Status);
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                });
+
         public async Task Connect()
         {
             IsTasksLoading = true;
@@ -592,22 +719,15 @@ namespace Unlimotion.ViewModel
                         .Where(d => d != null)
                         .Select(d => d.Comparer);
 
-                //Set All Tasks Filter
-                var taskFilter = StatusFilters.ToObservableChangeSet()
-                    .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
-                    .ToCollection()
-                    .Select(filters =>
-                    {
-                        var selectedStatuses = filters
-                            .Where(static filter => filter.ShowTasks)
-                            .Select(static filter => filter.Status)
-                            .ToHashSet();
-
-                        bool Predicate(TaskItemViewModel task) =>
-                            selectedStatuses.Contains(task.Status);
-
-                        return (Func<TaskItemViewModel, bool>)Predicate;
-                    });
+                var allTasksStatusFilter = CreateStatusFilter(StatusFilters);
+                var lastCreatedStatusFilter = CreateStatusFilter(LastCreatedStatusFilters);
+                var lastUpdatedStatusFilter = CreateStatusFilter(LastUpdatedStatusFilters);
+                var unlockedStatusFilter = CreateStatusFilter(UnlockedStatusFilters);
+                var inProgressStatusFilter = CreateStatusFilter(InProgressStatusFilters);
+                var completedStatusFilter = CreateStatusFilter(CompletedStatusFilters);
+                var archivedStatusFilter = CreateStatusFilter(ArchivedStatusFilters);
+                var lastOpenedStatusFilter = CreateStatusFilter(LastOpenedStatusFilters);
+                var roadmapStatusFilter = CreateStatusFilter(RoadmapStatusFilters);
 
                 var taskStorage = _getTaskStorage?.Invoke();
 
@@ -992,7 +1112,7 @@ namespace Unlimotion.ViewModel
                     m => m.IsCanBeCompleted,
                     m => m.Status,
                     m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
-                .Filter(taskFilter)
+                .Filter(allTasksStatusFilter)
                 .Filter(searchTopFilter)
                 .Filter(emojiRootFilter)
                 .Filter(emojiExcludeFilter)
@@ -1004,7 +1124,7 @@ namespace Unlimotion.ViewModel
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
-                        Filter = new() { taskFilter, emojiExcludeFilter },
+                        Filter = new() { allTasksStatusFilter, emojiExcludeFilter },
                     }, "AllTasksTree");
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -1054,7 +1174,7 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
-                    .Filter(taskFilter)
+                    .Filter(unlockedStatusFilter)
                     .Filter(unlockedTimeFilter)
                     .Filter(durationFilter)
                     .Filter(emojiFilter)
@@ -1123,7 +1243,7 @@ namespace Unlimotion.ViewModel
                         x => x.Description,
                         x => x.GetAllEmoji))
                     .Filter(m => m.Status == DomainTaskStatus.InProgress)
-                    .Filter(taskFilter)
+                    .Filter(inProgressStatusFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
                     .Filter(searchTopFilter)
@@ -1213,7 +1333,7 @@ namespace Unlimotion.ViewModel
                         x => x.Description,
                         x => x.GetAllEmoji))
                     .Filter(m => m.Status == DomainTaskStatus.Completed)
-                    .Filter(taskFilter)
+                    .Filter(completedStatusFilter)
                     .Filter(completedDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1253,7 +1373,7 @@ namespace Unlimotion.ViewModel
                         x => x.Description,
                         x => x.GetAllEmoji))
                     .Filter(m => m.Status == DomainTaskStatus.Archived)
-                    .Filter(taskFilter)
+                    .Filter(archivedStatusFilter)
                     .Filter(archiveDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1293,7 +1413,7 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
-                    .Filter(taskFilter)
+                    .Filter(lastCreatedStatusFilter)
                     .Filter(lastCreatedDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1334,7 +1454,7 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
-                    .Filter(taskFilter)
+                    .Filter(lastUpdatedStatusFilter)
                     .Filter(lastUpdatedDateFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1369,7 +1489,7 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status))
-                    .Filter(taskFilter)
+                    .Filter(roadmapStatusFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
                     .Filter(wantedFilter)
@@ -1380,7 +1500,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                            Filter = new() { taskFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1396,7 +1516,7 @@ namespace Unlimotion.ViewModel
                         m => m.IsCanBeCompleted,
                         m => m.Status,
                         m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
-                    .Filter(taskFilter)
+                    .Filter(roadmapStatusFilter)
                     .Filter(roadmapRootFilter)
                     .Filter(emojiExcludeFilter)
                     .Transform(item =>
@@ -1407,7 +1527,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                             SortComparer = sortObservable,
-                            Filter = new() { taskFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1489,7 +1609,7 @@ namespace Unlimotion.ViewModel
                         x => x.Status,
                         x => x.CompletedDateTime,
                         x => x.ArchiveDateTime))
-                    .Filter(taskFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
+                    .Filter(lastOpenedStatusFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
                         wrapper => predicate(wrapper.TaskItem))))
                     .Filter(lastOpenedSearchFilter)
                     .Reverse()
@@ -1784,14 +1904,14 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters();
+            ResetCompletionVisibilityFilters(AllTasksStatusFilterSettingsSection, StatusFilters);
         }
 
         private void ResetLastCreatedTabFilters()
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters();
+            ResetCompletionVisibilityFilters(LastCreatedStatusFilterSettingsSection, LastCreatedStatusFilters);
             ResetDateFilter(LastCreatedDateFilter);
         }
 
@@ -1799,7 +1919,7 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters();
+            ResetCompletionVisibilityFilters(LastUpdatedStatusFilterSettingsSection, LastUpdatedStatusFilters);
             ResetDateFilter(LastUpdatedDateFilter);
         }
 
@@ -1807,7 +1927,7 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters();
+            ResetCompletionVisibilityFilters(UnlockedStatusFilterSettingsSection, UnlockedStatusFilters);
             ShowWanted = _defaultShowWanted;
             ResetToggleFilters(UnlockedTimeFilters);
             ResetToggleFilters(DurationFilters);
@@ -1817,14 +1937,20 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters(DomainTaskStatus.InProgress);
+            ResetCompletionVisibilityFilters(
+                InProgressStatusFilterSettingsSection,
+                InProgressStatusFilters,
+                DomainTaskStatus.InProgress);
         }
 
         private void ResetCompletedTabFilters()
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters(DomainTaskStatus.Completed);
+            ResetCompletionVisibilityFilters(
+                CompletedStatusFilterSettingsSection,
+                CompletedStatusFilters,
+                DomainTaskStatus.Completed);
             ResetDateFilter(CompletedDateFilter);
         }
 
@@ -1832,7 +1958,10 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters(DomainTaskStatus.Archived);
+            ResetCompletionVisibilityFilters(
+                ArchivedStatusFilterSettingsSection,
+                ArchivedStatusFilters,
+                DomainTaskStatus.Archived);
             ResetDateFilter(ArchivedDateFilter);
         }
 
@@ -1840,7 +1969,7 @@ namespace Unlimotion.ViewModel
         {
             ResetSearchFilter();
             ResetEmojiFilters();
-            ResetCompletionVisibilityFilters();
+            ResetCompletionVisibilityFilters(LastOpenedStatusFilterSettingsSection, LastOpenedStatusFilters);
         }
 
         private void ResetRoadmapTabFilters()
@@ -1856,7 +1985,7 @@ namespace Unlimotion.ViewModel
             }
             else
             {
-                ResetCompletionVisibilityFilters();
+                ResetCompletionVisibilityFilters(RoadmapStatusFilterSettingsSection, RoadmapStatusFilters);
             }
 
             Graph.OnlyUnlocked = false;
@@ -1873,25 +2002,41 @@ namespace Unlimotion.ViewModel
             ResetToggleFilters(EmojiExcludeFilters);
         }
 
-        private void ResetCompletionVisibilityFilters(params DomainTaskStatus[] forcedVisibleStatuses)
+        private void ResetCompletionVisibilityFilters(
+            string settingsSection,
+            ReadOnlyObservableCollection<TaskStatusFilter> statusFilters,
+            params DomainTaskStatus[] forcedVisibleStatuses)
         {
             bool IsForcedVisible(DomainTaskStatus status) => forcedVisibleStatuses.Contains(status);
 
-            SetStatusFilterSelection(DomainTaskStatus.NotReady, true);
-            SetStatusFilterSelection(DomainTaskStatus.Prepared, true);
-            SetStatusFilterSelection(DomainTaskStatus.InProgress, true);
+            SetStatusFilterSelection(statusFilters, DomainTaskStatus.NotReady, true);
+            SetStatusFilterSelection(statusFilters, DomainTaskStatus.Prepared, true);
+            SetStatusFilterSelection(statusFilters, DomainTaskStatus.InProgress, true);
             SetStatusFilterSelection(
+                statusFilters,
                 DomainTaskStatus.Completed,
                 IsForcedVisible(DomainTaskStatus.Completed) || _defaultShowCompleted);
             SetStatusFilterSelection(
+                statusFilters,
                 DomainTaskStatus.Archived,
                 IsForcedVisible(DomainTaskStatus.Archived) || _defaultShowArchived);
-            SyncLegacyVisibilityFromStatusFilters();
+
+            if (ReferenceEquals(statusFilters, StatusFilters))
+            {
+                SyncLegacyVisibilityFromStatusFilters();
+            }
+            else
+            {
+                PersistStatusFilters(settingsSection, statusFilters);
+            }
         }
 
-        private void SetStatusFilterSelection(DomainTaskStatus status, bool selected)
+        private static void SetStatusFilterSelection(
+            IEnumerable<TaskStatusFilter> statusFilters,
+            DomainTaskStatus status,
+            bool selected)
         {
-            var filter = StatusFilters.FirstOrDefault(item => item.Status == status);
+            var filter = statusFilters.FirstOrDefault(item => item.Status == status);
             if (filter != null && filter.ShowTasks != selected)
             {
                 filter.ShowTasks = selected;
@@ -2762,6 +2907,14 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<UnlockedTimeFilter> UnlockedTimeFilters { get; set; } = UnlockedTimeFilter.GetDefinitions();
         public ReadOnlyObservableCollection<DurationFilter> DurationFilters { get; set; } = DurationFilter.GetDefinitions();
         public ReadOnlyObservableCollection<TaskStatusFilter> StatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> LastCreatedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> LastUpdatedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> UnlockedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> InProgressStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> CompletedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> ArchivedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> LastOpenedStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
+        public ReadOnlyObservableCollection<TaskStatusFilter> RoadmapStatusFilters { get; set; } = TaskStatusFilter.GetDefinitions();
         public bool DetailsAreOpen { get; set; }
         public long TitleFocusRequestVersion { get; private set; }
 

@@ -961,7 +961,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastCreatedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding LastCreatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastCreatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -1086,7 +1086,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastUpdatedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding LastUpdatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastUpdatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -1196,7 +1196,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding UnlockedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedStatusFilterComboBox"/>
                                                                 <ComboBox ItemsSource="{Binding WantedFilterDefinitions}" SelectedItem="{Binding CurrentWantedFilter}" MinWidth="160" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedWantedFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
@@ -1294,7 +1294,7 @@
                                                             <StackPanel>
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                                 <WrapPanel>
-                                                                    <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="InProgressStatusFilterComboBox"/>
+                                                                    <ComboBox ItemsSource="{Binding InProgressStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="InProgressStatusFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
                                                             <Button Classes="FilterPanelResetButton"
@@ -1407,7 +1407,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="CompletedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding CompletedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="CompletedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1533,7 +1533,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="ArchivedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding ArchivedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="ArchivedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1637,7 +1637,7 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
-                                                                <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastOpenedStatusFilterComboBox"/>
+                                                                <ComboBox ItemsSource="{Binding LastOpenedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastOpenedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"

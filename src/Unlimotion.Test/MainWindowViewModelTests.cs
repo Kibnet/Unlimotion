@@ -2242,6 +2242,55 @@ namespace Unlimotion.Test
         }
 
         [Test]
+        public async Task StatusFilters_AllTasksSelectionDoesNotFilterLastCreatedOrRoadmapProjections()
+        {
+            await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
+            {
+                var preparedTask = await CreateTaskWithStatusAsync(
+                    repository,
+                    DomainTaskStatus.Prepared,
+                    "Status filter prepared task for independent projections");
+
+                viewModel.LastCreatedMode = true;
+                viewModel.GraphMode = true;
+                Dispatcher.UIThread.RunJobs();
+
+                var nonAllTasksProjectionsReady = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return TraverseWrappers(viewModel.LastCreatedItems)
+                                   .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id) &&
+                               TraverseWrappers(viewModel.Graph.UnlockedTasks)
+                                   .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(nonAllTasksProjectionsReady).IsTrue();
+
+                var preparedFilter = viewModel.StatusFilters.Single(filter => filter.Status == DomainTaskStatus.Prepared);
+                preparedFilter.ShowTasks = false;
+
+                var allTasksHidden = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return TraverseWrappers(viewModel.CurrentAllTasksItems)
+                            .All(wrapper => wrapper.TaskItem.Id != preparedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(allTasksHidden).IsTrue();
+
+                var lastCreatedStillVisible = TraverseWrappers(viewModel.LastCreatedItems)
+                    .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id);
+                var roadmapStillVisible = TraverseWrappers(viewModel.Graph.UnlockedTasks)
+                    .Any(wrapper => wrapper.TaskItem.Id == preparedTask.Id);
+
+                await Assert.That(lastCreatedStillVisible).IsTrue();
+                await Assert.That(roadmapStillVisible).IsTrue();
+            });
+        }
+
+        [Test]
         public async Task InProgressProjection_ShowsOnlyInProgressSortsByStartTimeAndReselectsCurrentTask()
         {
             await RunWithTreeProjectionAsync(async (_, viewModel, repository) =>
