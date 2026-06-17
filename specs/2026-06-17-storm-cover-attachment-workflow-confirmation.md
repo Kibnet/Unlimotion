@@ -241,42 +241,44 @@ Outcome contract:
 - Residual risks / follow-ups: если attachment workflow актуален, next task should be `/storm:expand` or `/storm:bdd-implement` with tests.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до approval.
-- Decision: Не применимо до EXEC.
+- Статус: PASS
+- Scope reviewed: approved spec, `git status --short`, `git diff --stat`, `docs/product/storm.json`, reports in `docs/product/reports/*`, validation evidence, unchanged code/test scope.
+- Decision: можно завершать.
 - Review passes:
-  - Scope/Evidence pass: Не применимо.
-  - Contract pass: Не применимо.
-  - Adversarial risk pass: Не применимо.
-  - Re-review after fixes / Fix and re-review: Не применимо.
-  - Stop decision: Не применимо.
-- Evidence inspected: Не применимо.
+  - Scope/Evidence pass: artifact changes are limited to `docs/product/*` reports, `docs/product/storm.json` and this SPEC; no production code, tests, test annotations or feature files changed.
+  - Contract pass: `CV-0007` remains uncovered/blocked pending product decision; no active story/scenario/test links were created for unconfirmed workflow.
+  - Adversarial risk pass: main risk is interpreting SPEC approval as product workflow confirmation; mitigated in artifacts by `blocked_pending_product_decision` and explicit next action.
+  - Re-review after fixes / Fix and re-review: validation evidence placeholders were replaced with actual command results, then affected artifacts were rechecked logically.
+  - Stop decision: PASS; no BLOCKER/HIGH findings.
+- Evidence inspected: STORM validator output, `git diff --check`, trailing whitespace scan, updated coverage/ranking/stories/bdd-sync/bdd-lint/traceability reports, `storm.json` `CV-0007` entries.
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо.
-  - Acceptance criteria: Не применимо.
-  - Validation evidence: Не применимо.
-  - Unsupported claims: Не применимо.
-  - Regression / edge case: Не применимо.
-  - Comments/docs/changelog: Не применимо.
-  - Hidden contract change: Не применимо.
-  - Manual-review challenge: Не применимо.
-- No-findings justification: Не применимо до EXEC.
+  - Scope drift / unrelated changes: no code/test/feature edits; prior committed work is not part of this EXEC diff.
+  - Acceptance criteria: AC 1-5 satisfied; `CV-0007` is not implementable without product decision, code units remain as candidates, validator passes.
+  - Validation evidence: validator OK 0/0, diff check passed, trailing whitespace scan had no matches.
+  - Unsupported claims: no covered/active workflow claim is made for attachments.
+  - Regression / edge case: runtime behavior unchanged.
+  - Comments/docs/changelog: changelog not applicable; product reports updated.
+  - Hidden contract change: none; API/tests/code untouched.
+  - Manual-review challenge: reviewer could ask whether a proposed Gherkin draft should be added; answer is no until workflow confirmation to avoid Gherkin inflation.
+- No-findings justification: artifacts now preserve uncertainty and route future work through product decision or separate delivery-task.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | execution | EXEC еще не выполнялся. | Запустить только после фразы `Спеку подтверждаю`. | pending |
+| LOW | product-decision | `CV-0007` still lacks product owner confirmation. | Keep item blocked/unconfirmed and do not add tests/code until a separate product decision or delivery SPEC. | accepted-risk |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: approval.
-- Residual risks / follow-ups: Не применимо.
+- Fixed before final report: coverage report validation placeholders replaced with actual results; `storm.json` validation evidence updated.
+- Checks rerun: `validate-artifacts.py`, `git diff --check`, trailing whitespace scan.
+- Validation evidence: validator OK 0 errors / 0 warnings; `git diff --check` passed with LF/CRLF warnings only; trailing whitespace scan no matches.
+- Unrelated changes: none in current EXEC diff; previous platform-shell work was committed first as requested.
+- Needs human: product decision on attachment workflow before any `/storm:expand` or `/storm:bdd-implement`.
+- Residual risks / follow-ups: attachment code remains candidate/internal contract evidence, not product coverage.
 
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
 Важно: эта фраза утверждает artifact-only conservative EXEC. Она не подтверждает, что attachment workflow является актуальной продуктовой поверхностью. Если нужно подтвердить workflow как product behavior, это решение должно быть сказано отдельно.
+
+Статус: подтверждено пользователем 2026-06-18 фразой `Закоммить, а потом спеку подтверждаю` после коммита `d4ca6b0f38c33af03cbfa1e42a5a3cedf1c385b6`.
 
 ## 20. Журнал действий агента
 Заполняется инкрементально после каждого значимого блока работ. Одна строка = один завершенный значимый блок.
@@ -286,3 +288,6 @@ Outcome contract:
 | SPEC | Сбор контекста CV-0007 | 0.86 | Product owner decision по актуальности attachment workflow | Создать conservative SPEC | Нет | Нет | Ranking/coverage называют CV-0007 следующим gap, но только после confirmation; attachment code найден без story/AC/UI evidence. | `docs/product/reports/*`, `docs/product/storm.json`, attachment code files |
 | SPEC | Создание SPEC | 0.9 | Подтверждение спеки | Запросить approval | Да | Нет | На SPEC фазе разрешено менять только spec; выбран artifact-only route with stop rules. | `specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md` |
 | SPEC | Post-SPEC review | 0.9 | Подтверждение спеки и отдельный product decision при необходимости | Передать SPEC пользователю | Да | Нет | Review подтвердил, что SPEС не заявляет product workflow без evidence and does not authorize tests/code changes. | `specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md` |
+| EXEC | Подтверждение и старт artifact-only update | 0.9 | Product decision по актуальности attachment workflow отсутствует | Обновить STORM artifacts conservative status | Нет | Да, пользователь подтвердил SPEC после запрошенного коммита | Approval открывает только conservative artifact-only EXEC; product workflow не считается подтвержденным. | `specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md` |
+| EXEC | Artifact sync CV-0007 | 0.9 | Product decision по workflow всё ещё отсутствует | Запустить validator and hygiene checks | Нет | Нет | `CV-0007` переведен в `blocked_pending_product_decision`; reports синхронизированы без story/scenario/test links. | `docs/product/storm.json`, `docs/product/reports/*` |
+| EXEC | Post-EXEC review | 0.91 | Product decision остаётся follow-up | Передать итог пользователю | Да, только для следующего product decision | Нет | Проверки прошли; scope ограничен product artifacts and SPEC, code/tests untouched. | `specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md`, `docs/product/*` |

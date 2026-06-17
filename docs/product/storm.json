@@ -4,9 +4,9 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-17",
+    "updated_at": "2026-06-18",
     "generated_by": "Codex /storm:bootstrap",
-    "route": "delivery-task",
+    "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
     "source_inventory": {
       "tracked_files": 682,
@@ -40,12 +40,13 @@
       "Записи являются гипотезами о продукте, восстановленными из реализации и спецификаций; перед утверждением целей и потребностей нужна проверка владельцем продукта.",
       "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
       "CV-0004 callbacks получили automated evidence через TS-0023; Git timer/conflict-safety часть AC-0040 оставлена отдельным implementation gap, потому что текущий TelegramBot StartTimers запускает GitService без conflict-resolution guard.",
-      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024, но runtime release maturity не заявляется без отдельного build/runtime evidence."
+      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024, но runtime release maturity не заявляется без отдельного build/runtime evidence.",
+      "CV-0007 не закрыт как coverage: attachment backend/API code сохранен как product-entry/internal-contract candidate, но актуальный пользовательский workflow не подтвержден отдельным product decision."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
-    "last_artifact_mode": "delivery-task"
+    "last_artifact_command": "/storm:cover CV-0007 attachment workflow confirmation + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_mode": "guided-artifact-workflow"
   },
   "vision": {
     "id": "VS-0001",
@@ -4742,8 +4743,8 @@
       "type": "coverage_backlog",
       "target": "PRODUCT-ENTRY",
       "story": "proposed_attachment_workflow",
-      "status": "proposed",
-      "condition": "Только после подтверждения attachment workflow как актуального продукта",
+      "status": "blocked_pending_product_decision",
+      "condition": "Attachment workflow не подтвержден как актуальная продуктовая поверхность; SPEC approval разрешил только conservative artifact-only triage.",
       "depends_on": [],
       "dependency_closure": [
         "CV-0007"
@@ -4765,13 +4766,15 @@
         "cost_star": 8.5,
         "priority_star": 0.1588
       },
-      "rationale": "Attachment-код есть, но пользовательский workflow не подтверждён, поэтому value и confidence ниже.",
+      "rationale": "Attachment backend/API code есть, но нет story/AC/UI/docs evidence для пользовательского workflow; code сохраняется как product-entry/internal-contract candidate.",
       "minimal_tests": [
         "AttachmentService_GetUploadDownload_RoundTripsUserAttachment",
         "AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds"
       ],
-      "prerequisite": "Подтвердить, есть ли attachment workflow в актуальном продукте.",
-      "reason": "Attachment domain/API code есть, но product stories не описывают attachment workflow."
+      "prerequisite": "Отдельно подтвердить, является ли attachment workflow актуальным продуктовым поведением; только после этого открывать /storm:expand или /storm:bdd-implement.",
+      "reason": "Без product decision нельзя создавать active story, Gherkin scenario или automated tests под пользовательский workflow.",
+      "priority": "blocked_until_product_decision",
+      "coverage_result": "Artifact-only triage completed on 2026-06-18; no tests/code/test annotations changed; CV-0007 remains uncovered/unconfirmed."
     }
   ],
   "process_audit": {
@@ -4792,29 +4795,29 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "/storm:trace",
+    "recommended_next_step": "Product decision: confirm attachment workflow or leave it internal/orphan contract candidate; engineering delivery only after confirmation.",
     "last_trace_command": "/storm:trace",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-12",
-    "last_cover_command": "/storm:cover ST-0014 CV-0003 Telegram command/auth coverage",
+    "last_cover_command": "/storm:cover CV-0007 attachment workflow confirmation",
     "coverage_report": "docs/product/reports/coverage.md",
-    "coverage_mode": "delivery-task",
-    "coverage_updated_at": "2026-06-16",
+    "coverage_mode": "guided-artifact-workflow",
+    "coverage_updated_at": "2026-06-18",
     "last_rank_command": "/storm:rank",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact-only",
     "ranking_updated_at": "2026-06-12",
     "bdd_sync": {
-      "updated_at": "2026-06-16",
+      "updated_at": "2026-06-18",
       "command": "/storm:bdd-sync",
-      "mode": "delivery-task",
+      "mode": "guided-artifact-workflow",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
-      "updated_at": "2026-06-16",
+      "updated_at": "2026-06-18",
       "command": "/storm:bdd-lint",
-      "mode": "delivery-task",
+      "mode": "guided-artifact-workflow",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
@@ -5882,12 +5885,12 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-17",
-    "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage",
-    "mode": "delivery-task after approved SPEC; tests and product artifacts changed, production runtime code and test annotations unchanged",
+    "updated_at": "2026-06-18",
+    "command": "/storm:cover CV-0007 attachment workflow confirmation",
+    "mode": "guided-artifact-workflow after approved SPEC; product artifacts changed, tests/code/test annotations unchanged",
     "annotations_added": false,
-    "tests_changed": true,
-    "tests_run": true,
+    "tests_changed": false,
+    "tests_run": false,
     "summary": {
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
@@ -5895,8 +5898,10 @@
       "acceptance_criteria_partial": 1,
       "acceptance_criteria_without_tests": 0,
       "improved_by_existing_evidence": 6,
-      "proposed_coverage_items": 2,
-      "improved_by_delivery_evidence": 5
+      "proposed_coverage_items": 1,
+      "improved_by_delivery_evidence": 5,
+      "blocked_product_decision_items": 1,
+      "improved_by_current_artifact_triage": 1
     },
     "improved_by_existing_evidence": [
       {
@@ -6217,15 +6222,15 @@
         "id": "CV-0007",
         "target": "PRODUCT-ENTRY",
         "story": "proposed_attachment_workflow",
-        "status": "proposed",
-        "route_required": "guided-artifact-workflow_then_delivery-task_if_tests_change",
-        "priority": "low_until_confirmed",
+        "status": "blocked_pending_product_decision",
+        "route_required": "guided-artifact-workflow completed; delivery-task only after product workflow confirmation",
+        "priority": "blocked_until_product_decision",
         "minimal_tests": [
           "AttachmentService_GetUploadDownload_RoundTripsUserAttachment",
           "AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds"
         ],
-        "reason": "Attachment domain/API code есть, но product stories не описывают attachment workflow.",
-        "prerequisite": "Подтвердить, есть ли attachment workflow в актуальном продукте.",
+        "reason": "Attachment backend/API code есть, но current product stories, acceptance criteria, UI docs and scenarios do not confirm user-facing attachment workflow.",
+        "prerequisite": "Product owner decision: подтвердить attachment workflow как актуальную продуктовую поверхность или оставить code as internal/orphan contract candidate.",
         "rank": 7,
         "depends_on": [],
         "rice": {
@@ -6245,7 +6250,9 @@
           "cost_star": 8.5,
           "priority_star": 0.1588
         },
-        "condition": "Только после подтверждения attachment workflow как актуального продукта"
+        "condition": "Не закрывать как covered до отдельного product decision; SPEC approval 2026-06-18 не является подтверждением workflow.",
+        "coverage_result": "Artifact-only triage completed; CV-0007 intentionally remains uncovered/blocked, no scenario/test links created.",
+        "remaining_gap": "Нужна отдельная product decision; если workflow подтверждается, next step is /storm:expand or /storm:bdd-implement with tests."
       }
     ],
     "orphan_tests_review": [
@@ -6258,22 +6265,24 @@
     "product_entry_candidates": [
       {
         "path": "src/Unlimotion.Domain/Attachment.cs",
-        "reason": "Attachment domain/API код найден, но текущие product stories не описывают attachment workflow."
+        "reason": "Attachment domain/API код найден, но текущие product stories не описывают attachment workflow. Artifact-only triage 2026-06-18 сохранил candidate, но не создал active story/scenario без product confirmation.",
+        "status": "internal_contract_candidate_pending_product_decision"
       },
       {
         "path": "src/Unlimotion.Server.ServiceInterface/AttachmentService.cs",
-        "reason": "Attachment server service не связан с текущими stories/constraints."
+        "reason": "Attachment server service не связан с текущими stories/constraints. Artifact-only triage 2026-06-18 сохранил candidate, но не создал active story/scenario без product confirmation.",
+        "status": "internal_contract_candidate_pending_product_decision"
       }
     ],
     "open_questions": [
       "Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный /storm:bdd-implement task?",
-      "Есть ли attachment workflow в актуальном продукте?",
+      "Нужно ли подтвердить attachment workflow как актуальную продуктовую поверхность или оставить attachment code internal/orphan contract candidate?",
       "Нужно ли отдельно запускать /storm:bdd-implement для реального Android/browser/iOS runtime smoke или release pipeline evidence?"
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-17",
-      "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
-      "mode": "delivery-task",
+      "updated_at": "2026-06-18",
+      "command": "/storm:cover CV-0007 attachment workflow confirmation + /storm:bdd-sync + /storm:bdd-lint",
+      "mode": "guided-artifact-workflow",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -6299,29 +6308,25 @@
       "automation_coverage_ratio": "44/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
-      "tests_changed": true,
+      "tests_changed": false,
       "code_changed": false,
       "test_annotations_changed": false,
-      "tests_run": true,
+      "tests_run": false,
       "validation_evidence": [
-        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings only",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => passed 3/3",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/SingleViewStartupUiTests/*\" --output Detailed => passed 4/4",
-        "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug --no-restore => blocked by NETSDK1147/workload restore state",
-        "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release --no-restore => blocked by missing project.assets.json under --no-restore"
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 0 warnings",
+        "git diff --check => passed; LF/CRLF warnings only",
+        "rg -n \"[ \\t]+$\" docs/product features/storm specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md => no matches",
+        "Artifact-only CV-0007 triage: no tests/code/test annotations changed"
       ]
     },
     "bdd_sync_summary": {
       "scenario_to_tests": "44/45",
-      "changed_scenarios": [
-        "SC-0015-002"
-      ],
-      "changed_tests": [
-        "TS-0024"
-      ],
+      "changed_scenarios": [],
+      "changed_tests": [],
       "known_gaps": [
         "SC-0014-002 remains draft without test link",
-        "step_definitions_total=0"
+        "step_definitions_total=0",
+        "CV-0007 remains product-entry/internal-contract candidate pending product decision"
       ]
     },
     "improved_by_delivery_evidence": [
@@ -11261,9 +11266,9 @@
   ],
   "step_definitions": [],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-17",
-    "command": "/storm:cover CV-0005 ST-0015 platform shell policy contract coverage + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "delivery-task",
+    "updated_at": "2026-06-18",
+    "command": "/storm:cover CV-0007 attachment workflow confirmation + /storm:bdd-sync + /storm:bdd-lint",
+    "mode": "guided-artifact-workflow",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -11289,22 +11294,21 @@
     "automation_coverage_ratio": "44/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
-    "tests_changed": true,
+    "tests_changed": false,
     "code_changed": false,
     "test_annotations_changed": false,
-    "tests_run": true,
+    "tests_run": false,
     "validation_evidence": [
-      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings only",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => passed 3/3",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/SingleViewStartupUiTests/*\" --output Detailed => passed 4/4",
-      "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug --no-restore => blocked by NETSDK1147/workload restore state",
-      "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release --no-restore => blocked by missing project.assets.json under --no-restore"
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 0 warnings",
+      "git diff --check => passed; LF/CRLF warnings only",
+      "rg -n \"[ \\t]+$\" docs/product features/storm specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md => no matches",
+      "Artifact-only CV-0007 triage: no tests/code/test annotations changed"
     ]
   },
   "bdd_sync": {
-    "updated_at": "2026-06-17",
+    "updated_at": "2026-06-18",
     "command": "/storm:bdd-sync",
-    "mode": "delivery-task",
+    "mode": "guided-artifact-workflow",
     "status": "completed_with_known_gaps",
     "synced_links": {
       "story_to_scenarios": 16,
@@ -11315,29 +11319,29 @@
     },
     "not_changed": [
       "test annotations",
-      "acceptance criteria replacement",
+      "tests",
       "production runtime code",
-      "Android/browser/iOS runtime release behavior"
+      "acceptance criteria replacement",
+      "feature files for CV-0007"
     ],
-    "tests_changed": [
-      "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
-      "src/Unlimotion.Test/PlatformShellProjectContractTests.cs"
-    ],
+    "tests_changed": [],
     "gaps": [
+      "CV-0007 remains blocked_pending_product_decision: no active story/scenario/test link created for unconfirmed attachment workflow.",
       "Step definitions отсутствуют: отдельный BDD implementation task нужен перед executable Gherkin.",
       "SC-0014-002 остаётся draft без automated test links.",
       "Android/browser/iOS runtime smoke и release pipeline evidence остаются отдельной platform validation задачей."
     ]
   },
   "bdd_lint": {
-    "updated_at": "2026-06-17",
+    "updated_at": "2026-06-18",
     "command": "/storm:bdd-lint",
-    "mode": "delivery-task",
+    "mode": "guided-artifact-workflow",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
       "step_definitions пока пусты: BDD layer связан с TUnit tests напрямую, но не является executable Cucumber-style specification.",
       "SC-0014-002 остаётся draft без test links.",
+      "CV-0007 не имеет active scenario/test links, потому что attachment workflow не подтвержден product decision.",
       "SC-0015-002 claims ограничены project-contract coverage; runtime release support не заявляется."
     ],
     "checks": {
@@ -11347,9 +11351,10 @@
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
       "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": true,
+      "tests_changed_in_approved_exec_scope": false,
       "production_code_changes_in_approved_exec_scope": false,
-      "test_annotations_changed": false
+      "test_annotations_changed": false,
+      "cv0007_active_scenario_created_without_confirmation": false
     }
   }
 }

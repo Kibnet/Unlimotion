@@ -1,27 +1,19 @@
 # STORM Stories
 
-Сгенерировано: 2026-06-17
-Команда: `/storm:cover CV-0005 ST-0015 story sync`
+Сгенерировано: 2026-06-18
+Команда: `/storm:cover CV-0007 attachment workflow confirmation`
 
-## Story Update
+## Product-Entry Candidate Update
 
-| Story | Status | Coverage | Notes |
+| Candidate | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| ST-0015: Собирать, обновлять и проверять cross-platform application shells | implemented | TS-0011, TS-0015, TS-0024 | Desktop remains release-supported; Android/browser/iOS are covered as project-contract supported surfaces without runtime release claim. |
+| CV-0007: attachment workflow | blocked_pending_product_decision | `src/Unlimotion.Domain/Attachment.cs`, `src/Unlimotion.Server.ServiceInterface/AttachmentService.cs`, `src/Unlimotion.Server.ServiceModel/Attachment.cs`, `src/Unlimotion.Server/AppModelMapping.cs` | Backend/API code exists, but current product stories, AC, UI docs and Gherkin scenarios do not confirm user-facing attachment workflow. |
 
-## ST-0015 Acceptance Criteria
+## Story Changes
 
-| AC | Coverage | Tests | Scenarios | Notes |
-| --- | --- | --- | --- | --- |
-| AC-0041 | critical | TS-0011, TS-0015 | SC-0015-001 | Desktop shell build/update/startup evidence preserved. |
-| AC-0042 | critical | TS-0015, TS-0024 | SC-0015-002 | Android/browser/iOS project contracts covered 3/3; runtime release maturity remains out of scope. |
-| AC-0043 | critical | TS-0011, TS-0015 | SC-0015-003 | CI and README media automation evidence preserved. |
+No active story was created or changed for `CV-0007`.
 
-## Updated Scenario
-
-| Scenario | Status | Test |
-| --- | --- | --- |
-| SC-0015-002: Android, browser и iOS shell projects сохраняют общий UI contract без заявления runtime release support. | passing | TS-0015, TS-0024 |
+Reason: code-only evidence can justify a product-entry/internal-contract candidate, but not a confirmed user workflow. Creating an active story, acceptance criteria, Gherkin scenario or test links requires a separate product decision.
 
 ## Residual Story Gaps
 
@@ -29,4 +21,4 @@
 | --- | --- | --- |
 | ST-0014 / AC-0040 | Git timer/conflict-safety остаётся draft/gap. | Отдельная `/storm:bdd-implement ST-0014` SPEC, если поведение поддерживается продуктом. |
 | Platform runtime | Android/browser/iOS runtime launch/release pipeline evidence не покрывались. | Отдельная platform validation SPEC при необходимости release support claims. |
-| CV-0007 | Attachment workflow не подтверждён как актуальная продуктовая поверхность. | Следующий `/storm:cover` candidate. |
+| CV-0007 | Attachment workflow не подтверждён как актуальная продуктовая поверхность. | Product decision: подтвердить workflow или оставить attachment code internal/orphan contract candidate. |

@@ -1,12 +1,14 @@
 # STORM Coverage Analysis
 
-Сгенерировано: 2026-06-17
-Команда: `/storm:cover CV-0005 ST-0015 platform shell policy contract coverage`
-Режим: delivery-task после утверждения SPEC; tests и product artifacts изменялись, production runtime code и test annotations не менялись
+Сгенерировано: 2026-06-18
+Команда: `/storm:cover CV-0007 attachment workflow confirmation`
+Режим: `guided-artifact-workflow` после утверждения SPEC; product artifacts изменялись, tests/code/test annotations не менялись
 
 ## Область
 
-Этот отчёт обновляет requirements coverage после добавления `TS-0024` для `ST-0015/AC-0042`. Android, browser и iOS shells закрыты как `project-contract supported` surfaces: проекты существуют, подключают общую Avalonia UI-модель, имеют platform packages/startup hooks, а Android содержит native Git assets. Runtime release maturity, signing, store readiness, install/update success и UX parity не заявляются без отдельного platform validation evidence.
+Этот отчёт фиксирует artifact-only triage для `CV-0007`. В коде есть attachment backend/API surface: domain model, ServiceStack routes `POST /attachments` и `GET /attachments/{id}`, authenticated `AttachmentService`, file storage через `FilesPath` и AutoMapper mapping в API/hub molds.
+
+Текущий product workflow не подтверждён story/AC/UI/docs evidence, поэтому `CV-0007` намеренно не закрывается как covered и не получает Gherkin scenario или test links.
 
 ## Сводка
 
@@ -17,15 +19,16 @@
 | AC с уровнем full/critical | 43 |
 | AC с уровнем partial | 1 |
 | AC без тестовых связей | 0 |
-| AC улучшены текущим delivery evidence | 1 |
+| AC улучшены текущим artifact triage | 0 |
+| Product-entry candidates blocked by decision | 1 |
 | Scenario -> Test links | 44/45 |
 | Passing scenarios | 6 |
 
-## Улучшено Текущим Delivery Evidence
+## Результат CV-0007
 
-| AC | Story | Новый уровень | Tests | Почему |
-| --- | --- | --- | --- | --- |
-| AC-0042 | ST-0015: Собирать, обновлять и проверять cross-platform application shells | critical | TS-0024 | `PlatformShellProjectContractTests` прошли 3/3 и подтверждают Android/browser/iOS project contracts без platform runtime launch. Уровень `full` не выставлен, потому что release/runtime maturity требует отдельного build/runtime evidence. |
+| Item | Было | Стало | Почему |
+| --- | --- | --- | --- |
+| CV-0007 | `proposed` attachment workflow candidate | `blocked_pending_product_decision` | Attachment code есть, но пользовательский workflow не подтверждён. SPEC approval разрешил только conservative artifact-only triage, а не product claim. |
 
 ## Оставшиеся Partial AC
 
@@ -47,7 +50,7 @@
 | CV-0004 | AC-0040 / ST-0014 | partially_covered_callbacks_timer_gap | delivery-task/QUEST partially completed | TS-0023<br>TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress remains implementation gap | TS-0023 passed 7/7; callbacks covered. Timer/conflict-safety part is not current covered behavior and should move to separate `/storm:bdd-implement` if product-supported. |
 | CV-0005 | AC-0042 / ST-0015 | covered_by_project_contract_tests | delivery-task/QUEST completed | TS-0024 | Conservative platform policy accepted by SPEC approval; Android/browser/iOS project contracts covered 3/3 without runtime release claim. |
 | CV-0006 | PRODUCT-ENTRY / ST-0016 | covered_by_product_story_and_existing_ui_test | artifact-only completed | TS-0021 | Error-toast behavior linked to product story. |
-| CV-0007 | PRODUCT-ENTRY / proposed_attachment_workflow | proposed | guided-artifact-workflow_then_delivery-task_if_tests_change | AttachmentService_GetUploadDownload_RoundTripsUserAttachment<br>AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds | Подтвердить, есть ли attachment workflow в актуальном продукте. |
+| CV-0007 | PRODUCT-ENTRY / proposed_attachment_workflow | blocked_pending_product_decision | guided-artifact-workflow completed; delivery-task only after product workflow confirmation | AttachmentService_GetUploadDownload_RoundTripsUserAttachment<br>AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds | Attachment code сохранён как product-entry/internal-contract candidate; active story/scenario/test links не создавались. |
 
 ## BDD Behavior Coverage
 
@@ -71,18 +74,16 @@
 
 | Проверка | Результат |
 | --- | --- |
-| `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore` | passed, только существующие warnings |
-| `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/PlatformShellProjectContractTests/*" --output Detailed` | passed 3/3 |
-| `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/SingleViewStartupUiTests/*" --output Detailed` | passed 4/4 |
-| `dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug --no-restore` | optional smoke blocked by `NETSDK1147` / workload restore state; environment not repaired in this task |
-| `dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release --no-restore` | optional smoke blocked by missing `project.assets.json` under `--no-restore`; restore not performed in this task |
+| `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 0 warnings |
+| `git diff --check` | passed; LF/CRLF warnings only |
+| `rg -n "[ \t]+$" docs/product features/storm specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md` | no matches |
 
 ## Открытые Вопросы
 
 1. Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный `/storm:bdd-implement` task?
 2. Нужен ли отдельный `/storm:bdd-implement` или platform validation task для реального Android/browser/iOS runtime smoke/release pipeline evidence?
-3. Есть ли attachment workflow в актуальном продукте?
+3. Нужно ли подтвердить attachment workflow как актуальную продуктовую поверхность или оставить attachment code internal/orphan contract candidate?
 
 ## Рекомендуемый Следующий Шаг
 
-Для продолжения `/storm:cover` следующий ranked uncovered item - `CV-0007` attachment workflow confirmation. Если вместо coverage-analysis нужен engineering delivery, открыть отдельную SPEC для `ST-0014` Git timer conflict-safety или для platform runtime smoke.
+Для продолжения `/storm:cover` нужен product decision по `CV-0007`: подтвердить attachment workflow как актуальное пользовательское поведение или оставить найденный code/API как internal/orphan contract candidate. Инженерная delivery-task с tests допустима только после такого решения.
