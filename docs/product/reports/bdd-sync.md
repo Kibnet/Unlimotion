@@ -1,17 +1,17 @@
 # STORM BDD Sync
 
 Сгенерировано: 2026-06-17
-Команда: `/storm:bdd-sync` after `/storm:cover ST-0014 CV-0004`
+Команда: `/storm:bdd-sync` after `/storm:cover CV-0005 ST-0015`
 
 ## Итог
 
 | Проверка | Результат |
 | --- | --- |
 | Scenario -> Test links | 44/45 |
-| New links | SC-0014-003 -> TS-0023 |
+| New links | SC-0015-002 -> TS-0024 |
 | Draft scenarios | SC-0014-002 |
 | Test annotations changed | no |
-| Production behavior changed | callback logic extracted into production-used handler; callback contract preserved |
+| Production behavior changed | no runtime behavior changes; project-contract tests and product artifacts updated |
 
 ## Синхронизировано
 
@@ -19,6 +19,7 @@
 | --- | --- | --- | --- |
 | SC-0014-001 | passing | TS-0022 | Telegram command/auth coverage remains green. |
 | SC-0014-003 | passing | TS-0023 | Callback unauthorized/open/status/delete/create prompt/relation behavior covered 7/7. |
+| SC-0015-002 | passing | TS-0015, TS-0024 | Android/browser/iOS project contracts covered 3/3; runtime release support is not claimed. |
 | SC-0014-002 | draft | нет | Git timer/conflict-safety part remains split gap; no test/code implementation added. |
 
 ## Несинхронизированные Области
@@ -27,3 +28,4 @@
 | --- | --- | --- |
 | SC-0014-002 Git timers | Current TelegramBot StartTimers directly invokes GitService pull/push timers and has no conflict-resolution guard to cover as existing behavior. | Separate /storm:bdd-implement if product-supported. |
 | step_definitions | Step definitions intentionally remain empty; current repo uses TUnit handler tests rather than executable Gherkin runner. | Add only if executable Gherkin runner becomes part of workflow. |
+| Android/browser/iOS runtime smoke | `TS-0024` covers project contracts only; optional local builds were blocked by restore/workload state. | Separate platform validation task if release/runtime evidence is needed. |

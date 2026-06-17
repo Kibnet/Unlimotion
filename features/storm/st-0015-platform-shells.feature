@@ -12,13 +12,13 @@
       Когда пользователь выполняет действие, описанное в критерии приёмки
       Тогда Десктопная оболочка собирается как Avalonia WinExe и связана с update/package проверками.
 
-  @rule:GR-042 @feature:GF-015 @scenario:SC-0015-002 @story:ST-0015 @need:ND-0005 @need:ND-0006 @constraint:CN-0004 @constraint:CN-0007 @constraint:CN-0008 @coverage:constraint_check @automated @test:TS-0015
-  Правило: Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует продуктового подтверждения.
-    Сценарий: Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует пр…
-      Дано у пользователя открыт актуальный набор задач Unlimotion
-      И поведение относится к истории ST-0015
-      Когда пользователь выполняет действие, описанное в критерии приёмки
-      Тогда Android, browser и iOS projects существуют и подключают общую UI-модель, но зрелость требует продуктового подтверждения.
+  @rule:GR-042 @feature:GF-015 @scenario:SC-0015-002 @story:ST-0015 @need:ND-0005 @need:ND-0006 @constraint:CN-0004 @constraint:CN-0007 @constraint:CN-0008 @coverage:constraint_check @automated @passing @test:TS-0015 @test:TS-0024
+  Правило: Android, browser и iOS projects существуют, подключают общую UI-модель и имеют project-contract coverage без runtime release claim.
+    Сценарий: Android, browser и iOS shell projects сохраняют общий UI contract без заявления runtime release support.
+      Дано desktop остаётся основной release-supported оболочкой Unlimotion
+      И non-desktop shells должны переиспользовать общую Avalonia task UI модель
+      Когда maintainer проверяет platform project contracts для Android, browser и iOS
+      Тогда каждый non-desktop shell ссылается на общую UI-модель и нужный Avalonia platform package, а Android содержит native Git assets без заявления runtime release support
 
   @rule:GR-043 @feature:GF-015 @scenario:SC-0015-003 @story:ST-0015 @need:ND-0005 @need:ND-0006 @constraint:CN-0004 @constraint:CN-0007 @constraint:CN-0008 @coverage:constraint_check @automated @test:TS-0011 @test:TS-0015
   Правило: CI и README media automation дают smoke/regression-доказательства для UI-потоков.
