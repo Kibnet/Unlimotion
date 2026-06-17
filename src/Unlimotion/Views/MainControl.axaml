@@ -631,6 +631,56 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style Selector="Button.HotkeyHelpButton">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinWidth" Value="36"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.HotkeyHelpButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyPanelTitle">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyPanelSectionTitle">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="Margin" Value="0,8,0,4"/>
+        </Style>
+        <Style Selector="Grid.HotkeyRow">
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyRowLabel">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
+        </Style>
+        <Style Selector="Border.HotkeyChip">
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyChipText">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskStatusOption">
@@ -750,33 +800,129 @@
                                        FontWeight="Bold"
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
-            <DropDownButton Grid.Column="1"
-                            Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                            Content="➕"
-                            ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
-                            AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
-                            AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
-                <DropDownButton.Flyout>
-                    <MenuFlyout>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewTask}"
-                                  Command="{Binding Create}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewSibling}"
-                                  Command="{Binding CreateSibling}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewBlockedSibling}"
-                                  Command="{Binding CreateBlockedSibling}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewInner}"
-                                  Command="{Binding CreateInner}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
-                    </MenuFlyout>
-                </DropDownButton.Flyout>
-            </DropDownButton>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Classes="HotkeyHelpButton"
+                        Content="?"
+                        ToolTip.Tip="{DynamicResource HotkeyPanelTitle}"
+                        AutomationProperties.Name="{DynamicResource HotkeyPanelTitle}"
+                        AutomationProperties.AutomationId="HotkeyHelpButton">
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <Border Padding="16,12" MinWidth="300" MaxWidth="420"
+                                    Background="{DynamicResource ThemeBackgroundBrush}">
+                                <StackPanel Spacing="0">
+                                    <TextBlock Text="{DynamicResource HotkeyPanelTitle}"
+                                               Classes="HotkeyPanelTitle"/>
+                                    <!-- Task Tree section -->
+                                    <TextBlock Text="{DynamicResource HotkeySectionTaskTree}"
+                                               Classes="HotkeyPanelSectionTitle"/>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRenameTask}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RenameTask}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeySelectAll}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.SelectAll}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDeleteSelection}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DeleteSelection}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateSibling}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateSibling}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateBlockedSibling}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateBlockedSibling}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateInner}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateInner}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource ExpandCurrentNested}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.ExpandCurrent}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CollapseCurrentNested}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CollapseCurrent}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource ExpandAllNodes}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.ExpandAll}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CollapseAllNodes}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CollapseAll}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CopyTaskOutline}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CopyOutline}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource PasteTaskOutline}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.PasteOutline}"/></Border>
+                                    </Grid>
+                                    <!-- Roadmap section -->
+                                    <TextBlock Text="{DynamicResource HotkeySectionRoadmap}"
+                                               Classes="HotkeyPanelSectionTitle"/>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRenameTask}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapRenameTask}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateSibling}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapCreateSibling}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateBlockedSibling}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapCreateBlockedSibling}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateInner}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapCreateInner}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapFitToScreen}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapFitToScreen}"/></Border>
+                                    </Grid>
+                                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapResetViewport}"/>
+                                        <Border Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapResetViewport}"/></Border>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                Content="➕"
+                                ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
+                                AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
+                                AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewTask}"
+                                      Command="{Binding Create}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewSibling}"
+                                      Command="{Binding CreateSibling}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewBlockedSibling}"
+                                      Command="{Binding CreateBlockedSibling}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewInner}"
+                                      Command="{Binding CreateInner}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
         </Grid>
 
         <!--Панель навигации-->
