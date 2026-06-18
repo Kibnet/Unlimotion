@@ -1835,6 +1835,9 @@ public class MainControlTreeCommandsUiTests
                     "HotkeyRoadmapResetViewportRow",
                     L10n.Get("HotkeyRoadmapResetViewport"),
                     HotkeyHints.RoadmapResetViewport);
+                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeExpandCurrentRow");
+                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeCollapseCurrentRow");
+                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeCopyOutlineRow");
 
                 scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
                 Dispatcher.UIThread.RunJobs();
@@ -2787,6 +2790,44 @@ public class MainControlTreeCommandsUiTests
         {
             throw new InvalidOperationException(
                 $"Hotkey row '{automationId}' does not contain hotkey '{expectedHotkey}'. Actual: {string.Join(", ", texts)}.");
+        }
+    }
+
+    private static void AssertHotkeyRowLabelDoesNotOverlapChip(Control root, string automationId)
+    {
+        var row = FindControlInDetachedContent<Grid>(root, automationId) ??
+                  throw new InvalidOperationException($"Hotkey row '{automationId}' was not found.");
+        var label = row.Children
+            .OfType<TextBlock>()
+            .FirstOrDefault(textBlock => textBlock.Classes.Contains("HotkeyRowLabel")) ??
+                    throw new InvalidOperationException($"Hotkey row '{automationId}' label was not found.");
+        var chip = row.Children
+            .OfType<Border>()
+            .FirstOrDefault(border => border.Classes.Contains("HotkeyChip")) ??
+                   throw new InvalidOperationException($"Hotkey row '{automationId}' chip was not found.");
+
+        if (label.TextWrapping != TextWrapping.Wrap)
+        {
+            throw new InvalidOperationException($"Hotkey row '{automationId}' label must wrap before reaching the chip.");
+        }
+
+        if (label.Margin.Right < 8)
+        {
+            throw new InvalidOperationException($"Hotkey row '{automationId}' label must keep spacing before the chip.");
+        }
+
+        var labelTopLeft = label.TranslatePoint(new Point(0, 0), row) ??
+                           throw new InvalidOperationException($"Hotkey row '{automationId}' label bounds are unavailable.");
+        var chipTopLeft = chip.TranslatePoint(new Point(0, 0), row) ??
+                          throw new InvalidOperationException($"Hotkey row '{automationId}' chip bounds are unavailable.");
+        var labelBounds = new Rect(labelTopLeft, label.Bounds.Size);
+        var chipBounds = new Rect(chipTopLeft, chip.Bounds.Size);
+
+        if (labelBounds.Intersects(chipBounds))
+        {
+            throw new InvalidOperationException(
+                $"Hotkey row '{automationId}' label bounds overlap the hotkey chip. " +
+                $"Label={labelBounds}; chip={chipBounds}.");
         }
     }
 
