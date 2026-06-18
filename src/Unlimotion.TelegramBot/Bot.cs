@@ -87,22 +87,16 @@ namespace Unlimotion.TelegramBot
         private static void StartTimers(IConfigurationRoot configurationRoot)
         {
             var settings = configurationRoot.Get<GitSettings>("Git");
+            var timerHandler = new TelegramGitTimerHandler(new GitServiceTelegramGitSyncOperations(_gitService));
+
             // Таймер для pull каждые 5 минут
             var pullTimer = new Timer(TimeSpan.FromSeconds(settings.PullIntervalSeconds).TotalMilliseconds);
-            pullTimer.Elapsed += (sender, e) =>
-            {
-                Log.Information("Выполняется автоматический pull изменений из репозитория.");
-                _gitService.PullLatestChanges();
-            };
+            pullTimer.Elapsed += (sender, e) => timerHandler.PullLatestChanges();
             pullTimer.Start();
 
             // Таймер для commit/push каждую минуту
             var pushTimer = new Timer(TimeSpan.FromSeconds(settings.PushIntervalSeconds).TotalMilliseconds);
-            pushTimer.Elapsed += (sender, e) =>
-            {
-                Log.Information("Выполняется автоматический commit/push изменений в репозиторий.");
-                _gitService.CommitAndPushChanges("Автоматический коммит изменений.");
-            };
+            pushTimer.Elapsed += (sender, e) => timerHandler.CommitAndPushChanges();
             pushTimer.Start();
         }
 

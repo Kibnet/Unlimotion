@@ -104,5 +104,24 @@ namespace Unlimotion.TelegramBot
                 Log.Error(ex, "Ошибка при выполнении commit/push в репозиторий");
             }
         }
+
+        internal bool IsConflictResolutionInProgress()
+        {
+            try
+            {
+                if (!Repository.IsValid(settings.RepositoryPath))
+                {
+                    return false;
+                }
+
+                using var repo = new Repository(settings.RepositoryPath);
+                return TelegramGitTimerHandler.HasConflictResolutionInProgress(repo);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Ошибка при проверке состояния разрешения конфликтов");
+                return false;
+            }
+        }
     }
 }

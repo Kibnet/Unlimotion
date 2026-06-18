@@ -332,43 +332,57 @@ Outcome contract:
 - Residual risks / follow-ups: If this behavior is not product-supported, do not approve this SPEC; de-scope `SC-0014-002` artifact-only instead.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до approval.
-- Decision: Не применимо.
+- Статус: PASS
+- Scope reviewed: `ST-0014/AC-0040/SC-0014-002/CV-0004`, TelegramBot Git timer code/tests, STORM artifacts and reports.
+- Decision: EXEC completed; ready for commit.
 - Review passes:
-  - Scope/Evidence pass: Не применимо.
-  - Contract pass: Не применимо.
-  - Adversarial risk pass: Не применимо.
-  - Re-review after fixes / Fix and re-review: Не применимо.
-  - Stop decision: Не применимо.
-- Evidence inspected: Не применимо.
+  - Scope/Evidence pass: `SC-0014-002` now links to `TS-0025`; `AC-0040` has callback evidence `TS-0023` and timer evidence `TS-0025`.
+  - Contract pass: No test annotations, no Telegram API, no real timers, no real Git remote, no Avalonia UI changes.
+  - Adversarial risk pass: implementation stayed at narrow handler/adapter boundary; broad Git backup redesign was not introduced.
+  - Re-review after fixes / Fix and re-review: no blocking fixes after validation.
+  - Stop decision: PASS.
+- Evidence inspected:
+  - `Bot.StartTimers` delegates timer elapsed actions to `TelegramGitTimerHandler`.
+  - `GitService.IsConflictResolutionInProgress` checks repository conflict state using repository conflicts and `CurrentOperation`.
+  - `TelegramBotGitTimerConflictSafetyTests` covers conflict skip and no-conflict run paths.
+  - STORM artifacts mark `SC-0014-002` as passing and `CV-0004` as covered.
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо.
-  - Acceptance criteria: Не применимо.
-  - Validation evidence: Не применимо.
-  - Unsupported claims: Не применимо.
-  - Regression / edge case: Не применимо.
-  - Comments/docs/changelog: Не применимо.
-  - Hidden contract change: Не применимо.
-  - Manual-review challenge: Не применимо.
-- No-findings justification: Не применимо до EXEC.
+  - Scope drift / unrelated changes: PASS, `CV-0007` decision B preserved and no unrelated product behavior changed.
+  - Acceptance criteria: PASS, pull/push skip and no-conflict run criteria covered.
+  - Validation evidence: PASS, build and targeted TUnit runs passed.
+  - Unsupported claims: PASS, reports still flag no executable `step_definitions` and no Android/browser/iOS runtime release claim.
+  - Regression / edge case: PASS, callback/command and main scheduler conflict-safety regressions passed.
+  - Comments/docs/changelog: PASS, no changelog required; product artifacts remain Russian.
+  - Hidden contract change: PASS, callback data and Telegram command contracts unchanged.
+  - Manual-review challenge: PASS, unit-level timer seam does not prove real Telegram polling/network; this limit is documented.
+- No-findings justification: implementation is bounded, tests pass, and artifacts match actual evidence.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | execution | EXEC еще не выполнялся. | Запустить только после фразы `Спеку подтверждаю`. | pending |
+| INFO | residual-process | `step_definitions` remain empty; BDD evidence is linked to TUnit tests, not executable Gherkin runner. | Separate SPEC only if executable Gherkin runner is required. | accepted |
+| INFO | residual-platform | Android/browser/iOS runtime release evidence is still not claimed. | Separate platform validation SPEC if needed. | accepted |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: approval.
-- Residual risks / follow-ups: Не применимо.
+- Fixed before final report: no blocking fixes required.
+- Checks rerun:
+  - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/TelegramBotGitTimerConflictSafetyTests/*" --output Detailed`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/TelegramBotCallbackCoverageTests/*|/*/*/TelegramBotCommandAuthorizationTests/*" --output Detailed`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/GitBackupJobTests/*" --output Detailed`
+  - `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json`
+  - `git diff --check`
+  - `rg -n "[ \t]+$" docs/product features/storm specs/2026-06-18-storm-bdd-implement-telegram-git-timer-conflict-safety.md src/Unlimotion.TelegramBot src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs`
+- Validation evidence: build passed with existing warnings; tests passed 3/3, 7/7 and 3/3; STORM validator OK 0 errors/0 warnings; hygiene checks had no whitespace errors, only LF/CRLF warnings from Git.
+- Unrelated changes: none detected before EXEC; final git hygiene follows after artifact sync.
+- Needs human: no further approval needed for completed SPEC scope.
+- Residual risks / follow-ups: executable Gherkin runner and platform runtime validation remain separate decisions.
 
 ## Approval
-Ожидается фраза: `Спеку подтверждаю`
+Получено: `Спеку подтверждаю`
 
 ## 20. Журнал действий агента
 | Фаза (SPEC/EXEC) | Тип намерения/сценария | Уверенность в решении (0.0-1.0) | Каких данных не хватает | Следующее действие | Нужна ли передача управления/решения человеку | Было ли фактическое обращение к человеку / решение человека | Короткое объяснение выбора | Затронутые артефакты/файлы |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Сбор evidence для timer gap | 0.9 | Approval | Создать SPEC | Нет | Нет | Ranking после Варианта B оставляет `ST-0014/AC-0040` timer conflict-safety единственным active behavior gap. | `docs/product/reports/*`, `features/storm/st-0014-telegram-bot.feature`, Telegram/Git code/tests |
 | SPEC | Post-SPEC review | 0.91 | Approval | Передать SPEC пользователю | Да | Нет | SPEC bounded to timer conflict-safety and blocks code/tests until approval. | `specs/2026-06-18-storm-bdd-implement-telegram-git-timer-conflict-safety.md` |
+| EXEC | Timer conflict-safety implementation | 0.88 | None | Validate and sync artifacts | Нет | Да, approval получен | Added narrow handler and tests; production timer path now checks conflict state before Git sync. | `src/Unlimotion.TelegramBot/*`, `src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs` |
+| EXEC | STORM BDD sync | 0.86 | None | Commit completed scope | Нет | Да, approval получен | `SC-0014-002` linked to `TS-0025`; CV-0004 marked covered; reports updated. | `docs/product/storm.json`, `features/storm/st-0014-telegram-bot.feature`, `docs/product/reports/*` |

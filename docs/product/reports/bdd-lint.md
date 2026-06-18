@@ -1,7 +1,7 @@
 # STORM BDD Lint
 
 Сгенерировано: 2026-06-18
-Команда: `/storm:bdd-lint` after `/storm:product-decision CV-0007 option B`
+Команда: `/storm:bdd-lint` after `/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety`
 
 ## Статус
 
@@ -11,17 +11,17 @@ passed_with_warnings
 
 | Проверка | Результат | Комментарий |
 | --- | --- | --- |
-| Required scenario tags | PASS | No CV-0007 scenario was created; existing scenario tags remain valid. |
-| Scenario status | PASS | `SC-0014-002` remains draft with `@gap:git-timers`; passing scenarios unchanged. |
-| Orphan scenarios | PASS | No orphan scenarios added. |
-| Scenario -> Test links | PASS_WITH_WARNING | 44/45 scenarios linked; only draft `SC-0014-002` has no test link. |
-| Declarative language | PASS | No new Gherkin text was added for attachment workflow. |
-| Step definitions | WARNING | `step_definitions` remains empty by design; TUnit tests carry executable evidence. |
+| Required scenario tags | PASS | `SC-0014-002` содержит story/rule/need/test/status tags. |
+| Scenario status | PASS | Draft scenarios отсутствуют. |
+| Orphan scenarios | PASS | Orphan scenarios не добавлялись. |
+| Scenario -> Test links | PASS | 45/45 scenarios linked. |
+| Declarative language | PASS | `SC-0014-002` описывает поведение без деталей test implementation. |
+| Step definitions | WARNING | `step_definitions` остаются пустыми by design; executable evidence дают TUnit tests. |
+| Test annotations | PASS | Test annotations не менялись. |
 | CV-0007 product claim | PASS | Вариант B prevents promotion of attachment code to active story/scenario without new product decision. |
 
 ## Предупреждения
 
-1. `SC-0014-002` remains draft because Git timer/conflict-safety behavior is not covered and was not implemented under `/storm:cover`.
-2. `step_definitions` are empty; acceptable until repository adopts executable Gherkin runner.
-3. `SC-0015-002` is intentionally limited to project-contract coverage; runtime release support for Android/browser/iOS is not claimed.
-4. `CV-0007` remains without scenario/test links by decision: attachment code is internal/orphan contract candidate.
+1. `step_definitions` пусты; это допустимо, пока repository не принимает executable Gherkin runner.
+2. `SC-0015-002` намеренно ограничен project-contract coverage; runtime release support для Android/browser/iOS не заявляется.
+3. `CV-0007` остается без scenario/test links по решению: attachment code является internal/orphan contract candidate.

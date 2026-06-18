@@ -12,13 +12,13 @@
       Когда пользователь обращается к задачам через Telegram bot
       Тогда Бот ограничивает доступ allowed users и поддерживает /start, /help, /search, /task и /root.
 
-  @rule:GR-040 @feature:GF-014 @scenario:SC-0014-002 @story:ST-0014 @need:ND-0006 @coverage:business_rule @draft @gap:git-timers
-  Правило: Callback-действия позволяют открыть задачу, создать sub/sibling, изменить статус, удалить, смотреть отношения и использовать file storage/Git timers при настройке.
-    Сценарий: Callback-действия позволяют открыть задачу, создать sub/sibling, изменить статус, удалить, смот…
-      Дано у пользователя открыт актуальный набор задач Unlimotion
-      И поведение относится к истории ST-0014
-      Когда пользователь создаёт или добавляет задачу через доступное действие интерфейса
-      Тогда Callback-действия позволяют открыть задачу, создать sub/sibling, изменить статус, удалить, смотреть отношения и использовать file storage/Git timers при настройке.
+  @rule:GR-040 @feature:GF-014 @scenario:SC-0014-002 @story:ST-0014 @need:ND-0006 @coverage:business_rule @passing @test:TS-0025
+  Правило: Git timers не запускают синхронизацию, пока идет разрешение конфликтов.
+    Сценарий: Git timers пропускают pull и push во время разрешения конфликтов.
+      Дано у пользователя включены Telegram Git timers
+      И в Git backup идет разрешение конфликтов
+      Когда срабатывают pull и push timer события Telegram bot
+      Тогда бот не выполняет pull и commit/push до завершения разрешения конфликтов.
 
   @rule:GR-040 @feature:GF-014 @scenario:SC-0014-003 @story:ST-0014 @need:ND-0006 @coverage:business_rule @passing @test:TS-0023
   Правило: Callback-действия открывают задачу, меняют статус, удаляют и показывают отношения.
