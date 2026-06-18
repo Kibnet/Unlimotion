@@ -9,6 +9,8 @@ public static class HotkeyHints
     public static string Alt => "Alt";
     public static string Shift => "Shift";
 
+    public static string OpenHotkeyHelp => "F1";
+
     // Task tree shortcuts
     public static string SelectAll => $"{Ctrl}+A";
     public static string DeleteSelection => $"{Shift}+Del";

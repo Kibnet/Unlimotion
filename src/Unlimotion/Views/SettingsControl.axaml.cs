@@ -1,6 +1,8 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Unlimotion;
 
 namespace Unlimotion.Views
 {
@@ -34,6 +36,12 @@ namespace Unlimotion.Views
             }
 
             SettingsContent.MaxWidth = Math.Max(0, maxWidth);
+        }
+
+        private void ShowHotkeysButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            this.FindParent<MainControl>()?.ShowHotkeyHelp();
+            e.Handled = true;
         }
     }
 }

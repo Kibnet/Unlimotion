@@ -194,13 +194,16 @@
   <data name="HotkeyCreateInner" xml:space="preserve"><value>Создать подзадачу</value></data>
   <data name="HotkeyCreateSibling" xml:space="preserve"><value>Создать соседнюю задачу</value></data>
   <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Удалить выделенные</value></data>
+  <data name="HotkeyOpenHotkeyHelp" xml:space="preserve"><value>Показать горячие клавиши</value></data>
   <data name="HotkeyPanelTitle" xml:space="preserve"><value>Горячие клавиши</value></data>
   <data name="HotkeyRenameTask" xml:space="preserve"><value>Переименовать задачу</value></data>
   <data name="HotkeyRoadmapFitToScreen" xml:space="preserve"><value>Вписать в экран</value></data>
   <data name="HotkeyRoadmapResetViewport" xml:space="preserve"><value>Сбросить вид</value></data>
+  <data name="HotkeySectionGeneral" xml:space="preserve"><value>Общие</value></data>
   <data name="HotkeySectionRoadmap" xml:space="preserve"><value>Дорожная карта</value></data>
   <data name="HotkeySectionTaskTree" xml:space="preserve"><value>Дерево задач</value></data>
   <data name="HotkeySelectAll" xml:space="preserve"><value>Выбрать всё</value></data>
+  <data name="ShowHotkeys" xml:space="preserve"><value>Показать горячие клавиши</value></data>
   <data name="RoadmapResetViewport" xml:space="preserve"><value>Сбросить вид карты</value></data>
   <data name="RoadmapShowGraphControls" xml:space="preserve"><value>Показать элементы управления картой</value></data>
   <data name="RoadmapShowMinimap" xml:space="preserve"><value>Показать миникарту</value></data>

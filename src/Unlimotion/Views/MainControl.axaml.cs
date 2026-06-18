@@ -75,6 +75,7 @@ namespace Unlimotion.Views
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
         private TaskWrapperViewModel? _contextMenuWrapper;
+        private HotkeyHelpWindow? _hotkeyHelpWindow;
         private PendingTreeDragContext? _pendingTreeDrag;
         private TextBox? _activeInlineTitleEditor;
         private TreeView? _lastInlineTitleClickTree;
@@ -189,6 +190,9 @@ namespace Unlimotion.Views
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            _hotkeyHelpWindow?.Close();
+            _hotkeyHelpWindow = null;
+
             foreach (var subscription in _filterToolbarBoundsSubscriptions)
             {
                 subscription.Dispose();
@@ -1052,7 +1056,19 @@ namespace Unlimotion.Views
 
         private void MainControl_OnKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Handled || IsTextInputFocused())
+            if (e.Handled)
+            {
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.F1)
+            {
+                ShowHotkeyHelp();
+                e.Handled = true;
+                return;
+            }
+
+            if (IsTextInputFocused())
             {
                 return;
             }
@@ -1062,6 +1078,35 @@ namespace Unlimotion.Views
                 ExecuteTreeCommand(kind);
                 e.Handled = true;
             }
+        }
+
+        internal HotkeyHelpWindow? CurrentHotkeyHelpWindow => _hotkeyHelpWindow;
+
+        internal void ShowHotkeyHelp()
+        {
+            if (_hotkeyHelpWindow is { IsVisible: true } visibleWindow)
+            {
+                visibleWindow.Activate();
+                return;
+            }
+
+            var window = new HotkeyHelpWindow();
+            _hotkeyHelpWindow = window;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_hotkeyHelpWindow, window))
+                {
+                    _hotkeyHelpWindow = null;
+                }
+            };
+
+            if (TopLevel.GetTopLevel(this) is Window owner)
+            {
+                window.Show(owner);
+                return;
+            }
+
+            window.Show();
         }
 
         private void CompletionCriterionRemoveButton_OnClick(object? sender, RoutedEventArgs e)
