@@ -87,6 +87,17 @@
 
             <Border Classes="SettingsSection">
                 <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource HotkeyPanelTitle}" />
+                    <WrapPanel Classes="ActionButtons">
+                        <Button Content="{DynamicResource ShowHotkeys}"
+                                Click="ShowHotkeysButton_OnClick"
+                                AutomationProperties.AutomationId="SettingsShowHotkeysButton" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
+                <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource AppearanceTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource AppearanceHint}" />
 

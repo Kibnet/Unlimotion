@@ -1777,14 +1777,14 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeCommandUi_HotkeyHelpFlyout_DisplaysScrollableShortcutReference()
+    public async Task TreeCommandUi_HotkeyHelpWindow_DisplaysScrollableShortcutReferenceFromF1()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
-            Flyout? flyout = null;
+            HotkeyHelpWindow? hotkeyWindow = null;
 
             try
             {
@@ -1798,57 +1798,72 @@ public class MainControlTreeCommandsUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var hotkeyHelpButton = FindControlByAutomationId<Button>(view, "HotkeyHelpButton");
-                await Assert.That(hotkeyHelpButton.Flyout).IsAssignableTo<Flyout>();
-                flyout = (Flyout)hotkeyHelpButton.Flyout!;
+                await Assert.That(view.GetVisualDescendants()
+                    .OfType<Button>()
+                    .Where(control => AutomationProperties.GetAutomationId(control) == "HotkeyHelpButton")
+                    .ToArray()).IsEmpty();
 
-                flyout.ShowAt(hotkeyHelpButton);
+                var searchTextBox = view.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .First(textBox => string.Equals(textBox.Name, "SearchEditor", StringComparison.Ordinal));
+                searchTextBox.Focus();
+                PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
 
-                var flyoutContent = GetFlyoutContent(flyout);
-                var panel = FindControlInDetachedContent<Border>(flyoutContent, "HotkeyPanel") ??
-                            throw new InvalidOperationException("Hotkey panel was not found.");
-                var scrollViewer = FindControlInDetachedContent<ScrollViewer>(flyoutContent, "HotkeyPanelScrollViewer") ??
-                                   throw new InvalidOperationException("Hotkey panel scroll viewer was not found.");
-
-                await Assert.That(panel.MaxHeight).IsLessThanOrEqualTo(300);
-                await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
-                await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);
-                await Assert.That(scrollViewer.Bounds.Height).IsLessThan(scrollViewer.Extent.Height);
-
-                AssertText(flyoutContent, "HotkeyPanelTitleText", L10n.Get("HotkeyPanelTitle"));
-                AssertText(flyoutContent, "HotkeyTaskTreeSectionTitle", L10n.Get("HotkeySectionTaskTree"));
-                AssertText(flyoutContent, "HotkeyRoadmapSectionTitle", L10n.Get("HotkeySectionRoadmap"));
-                AssertHotkeyRow(flyoutContent, "HotkeyTaskTreeSelectAllRow", L10n.Get("HotkeySelectAll"), HotkeyHints.SelectAll);
-                AssertHotkeyRow(
-                    flyoutContent,
-                    "HotkeyTaskTreeCompleteCurrentTaskRow",
-                    L10n.Get("HotkeyCompleteCurrentTask"),
-                    HotkeyHints.CompleteCurrentTask);
-                AssertHotkeyRow(
-                    flyoutContent,
-                    "HotkeyRoadmapFitToScreenRow",
-                    L10n.Get("HotkeyRoadmapFitToScreen"),
-                    HotkeyHints.RoadmapFitToScreen);
-                AssertHotkeyRow(
-                    flyoutContent,
-                    "HotkeyRoadmapResetViewportRow",
-                    L10n.Get("HotkeyRoadmapResetViewport"),
-                    HotkeyHints.RoadmapResetViewport);
-                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeExpandCurrentRow");
-                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeCollapseCurrentRow");
-                AssertHotkeyRowLabelDoesNotOverlapChip(flyoutContent, "HotkeyTaskTreeCopyOutlineRow");
-
-                scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
-                Dispatcher.UIThread.RunJobs();
-
-                await Assert.That(scrollViewer.Offset.Y).IsGreaterThan(0);
+                hotkeyWindow = view.CurrentHotkeyHelpWindow ??
+                               throw new InvalidOperationException("Hotkey help window was not opened by F1.");
+                await AssertHotkeyHelpWindowContent(hotkeyWindow);
                 await Assert.That(FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton").Flyout)
                     .IsAssignableTo<MenuFlyout>();
             }
             finally
             {
-                flyout?.Hide();
+                hotkeyWindow?.Close();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensShortcutReferenceWindow()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            HotkeyHelpWindow? hotkeyWindow = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Width = 520;
+                window.Height = 520;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var settingsTab = FindControlByAutomationId<TabItem>(view, "SettingsTabItem");
+                settingsTab.IsSelected = true;
+                Dispatcher.UIThread.RunJobs();
+
+                var showHotkeysButton = FindControlByAutomationId<Button>(view, "SettingsShowHotkeysButton");
+                await Assert.That(showHotkeysButton.Content?.ToString()).IsEqualTo(L10n.Get("ShowHotkeys"));
+
+                InvokeButtonClick(showHotkeysButton);
+                Dispatcher.UIThread.RunJobs();
+
+                hotkeyWindow = view.CurrentHotkeyHelpWindow ??
+                               throw new InvalidOperationException("Hotkey help window was not opened from settings.");
+                await AssertHotkeyHelpWindowContent(hotkeyWindow);
+            }
+            finally
+            {
+                hotkeyWindow?.Close();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -2403,6 +2418,12 @@ public class MainControlTreeCommandsUiTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    private static void InvokeButtonClick(Button button)
+    {
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static MenuItem FindContextMenuItem(ContextMenu contextMenu, string tag)
     {
         return contextMenu.Items
@@ -2734,12 +2755,6 @@ public class MainControlTreeCommandsUiTests
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
-    private static Control GetFlyoutContent(Flyout flyout)
-    {
-        return flyout.Content as Control ??
-               throw new InvalidOperationException("Flyout content was not found.");
-    }
-
     private static T? FindControlInDetachedContent<T>(Control root, string automationId)
         where T : Control
     {
@@ -2754,6 +2769,61 @@ public class MainControlTreeCommandsUiTests
             root.GetLogicalDescendants()
                 .OfType<T>()
                 .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+    }
+
+    private static async Task AssertHotkeyHelpWindowContent(HotkeyHelpWindow hotkeyWindow)
+    {
+        Dispatcher.UIThread.RunJobs();
+
+        await Assert.That(hotkeyWindow.IsVisible).IsTrue();
+
+        var content = hotkeyWindow.Content as Control ??
+                      throw new InvalidOperationException("Hotkey help window content was not found.");
+        var panel = FindControlInDetachedContent<Border>(content, "HotkeyPanel") ??
+                    throw new InvalidOperationException("Hotkey panel was not found.");
+        var scrollViewer = FindControlInDetachedContent<ScrollViewer>(content, "HotkeyPanelScrollViewer") ??
+                           throw new InvalidOperationException("Hotkey panel scroll viewer was not found.");
+
+        await Assert.That(panel.MaxHeight).IsLessThanOrEqualTo(300);
+        await Assert.That(hotkeyWindow.Width).IsGreaterThanOrEqualTo(560);
+        await Assert.That(panel.Bounds.Width).IsGreaterThanOrEqualTo(520);
+        await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
+        await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);
+        await Assert.That(scrollViewer.Bounds.Height).IsLessThan(scrollViewer.Extent.Height);
+
+        AssertText(content, "HotkeyPanelTitleText", L10n.Get("HotkeyPanelTitle"));
+        AssertText(content, "HotkeyGeneralSectionTitle", L10n.Get("HotkeySectionGeneral"));
+        AssertText(content, "HotkeyTaskTreeSectionTitle", L10n.Get("HotkeySectionTaskTree"));
+        AssertText(content, "HotkeyRoadmapSectionTitle", L10n.Get("HotkeySectionRoadmap"));
+        AssertHotkeyRow(
+            content,
+            "HotkeyGeneralOpenHotkeyHelpRow",
+            L10n.Get("HotkeyOpenHotkeyHelp"),
+            HotkeyHints.OpenHotkeyHelp);
+        AssertHotkeyRow(content, "HotkeyTaskTreeSelectAllRow", L10n.Get("HotkeySelectAll"), HotkeyHints.SelectAll);
+        AssertHotkeyRow(
+            content,
+            "HotkeyTaskTreeCompleteCurrentTaskRow",
+            L10n.Get("HotkeyCompleteCurrentTask"),
+            HotkeyHints.CompleteCurrentTask);
+        AssertHotkeyRow(
+            content,
+            "HotkeyRoadmapFitToScreenRow",
+            L10n.Get("HotkeyRoadmapFitToScreen"),
+            HotkeyHints.RoadmapFitToScreen);
+        AssertHotkeyRow(
+            content,
+            "HotkeyRoadmapResetViewportRow",
+            L10n.Get("HotkeyRoadmapResetViewport"),
+            HotkeyHints.RoadmapResetViewport);
+        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeExpandCurrentRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeCollapseCurrentRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeCopyOutlineRow");
+
+        scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
+        Dispatcher.UIThread.RunJobs();
+
+        await Assert.That(scrollViewer.Offset.Y).IsGreaterThan(0);
     }
 
     private static void AssertText(Control root, string automationId, string expectedText)

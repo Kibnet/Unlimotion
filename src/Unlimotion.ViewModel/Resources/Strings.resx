@@ -194,13 +194,16 @@
   <data name="HotkeyCreateInner" xml:space="preserve"><value>Create inner task</value></data>
   <data name="HotkeyCreateSibling" xml:space="preserve"><value>Create sibling</value></data>
   <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Delete selected</value></data>
+  <data name="HotkeyOpenHotkeyHelp" xml:space="preserve"><value>Show keyboard shortcuts</value></data>
   <data name="HotkeyPanelTitle" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
   <data name="HotkeyRenameTask" xml:space="preserve"><value>Rename task</value></data>
   <data name="HotkeyRoadmapFitToScreen" xml:space="preserve"><value>Fit to screen</value></data>
   <data name="HotkeyRoadmapResetViewport" xml:space="preserve"><value>Reset viewport</value></data>
+  <data name="HotkeySectionGeneral" xml:space="preserve"><value>General</value></data>
   <data name="HotkeySectionRoadmap" xml:space="preserve"><value>Roadmap</value></data>
   <data name="HotkeySectionTaskTree" xml:space="preserve"><value>Task Tree</value></data>
   <data name="HotkeySelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="ShowHotkeys" xml:space="preserve"><value>Show keyboard shortcuts</value></data>
   <data name="RoadmapResetViewport" xml:space="preserve"><value>Reset map view</value></data>
   <data name="RoadmapShowGraphControls" xml:space="preserve"><value>Show map controls</value></data>
   <data name="RoadmapShowMinimap" xml:space="preserve"><value>Show minimap</value></data>
