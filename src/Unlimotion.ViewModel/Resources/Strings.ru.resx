@@ -190,6 +190,7 @@
   <data name="RoadmapPanUp" xml:space="preserve"><value>Сдвинуть карту вверх</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Обновление карты...</value></data>
   <data name="HotkeyCreateBlockedSibling" xml:space="preserve"><value>Создать блокируемую соседнюю</value></data>
+  <data name="HotkeyCompleteCurrentTask" xml:space="preserve"><value>Завершить текущую задачу</value></data>
   <data name="HotkeyCreateInner" xml:space="preserve"><value>Создать подзадачу</value></data>
   <data name="HotkeyCreateSibling" xml:space="preserve"><value>Создать соседнюю задачу</value></data>
   <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Удалить выделенные</value></data>

@@ -190,6 +190,7 @@
   <data name="RoadmapPanUp" xml:space="preserve"><value>Move map up</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Updating roadmap...</value></data>
   <data name="HotkeyCreateBlockedSibling" xml:space="preserve"><value>Create blocked sibling</value></data>
+  <data name="HotkeyCompleteCurrentTask" xml:space="preserve"><value>Complete current task</value></data>
   <data name="HotkeyCreateInner" xml:space="preserve"><value>Create inner task</value></data>
   <data name="HotkeyCreateSibling" xml:space="preserve"><value>Create sibling</value></data>
   <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Delete selected</value></data>

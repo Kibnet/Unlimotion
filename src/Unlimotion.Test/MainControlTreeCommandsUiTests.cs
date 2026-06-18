@@ -9,10 +9,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -20,6 +22,7 @@ using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test;
 
@@ -1774,6 +1777,82 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
+    public async Task TreeCommandUi_HotkeyHelpFlyout_DisplaysScrollableShortcutReference()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            Flyout? flyout = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Width = 320;
+                window.Height = 360;
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var hotkeyHelpButton = FindControlByAutomationId<Button>(view, "HotkeyHelpButton");
+                await Assert.That(hotkeyHelpButton.Flyout).IsAssignableTo<Flyout>();
+                flyout = (Flyout)hotkeyHelpButton.Flyout!;
+
+                flyout.ShowAt(hotkeyHelpButton);
+                Dispatcher.UIThread.RunJobs();
+
+                var flyoutContent = GetFlyoutContent(flyout);
+                var panel = FindControlInDetachedContent<Border>(flyoutContent, "HotkeyPanel") ??
+                            throw new InvalidOperationException("Hotkey panel was not found.");
+                var scrollViewer = FindControlInDetachedContent<ScrollViewer>(flyoutContent, "HotkeyPanelScrollViewer") ??
+                                   throw new InvalidOperationException("Hotkey panel scroll viewer was not found.");
+
+                await Assert.That(panel.MaxHeight).IsLessThanOrEqualTo(300);
+                await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
+                await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);
+                await Assert.That(scrollViewer.Bounds.Height).IsLessThan(scrollViewer.Extent.Height);
+
+                AssertText(flyoutContent, "HotkeyPanelTitleText", L10n.Get("HotkeyPanelTitle"));
+                AssertText(flyoutContent, "HotkeyTaskTreeSectionTitle", L10n.Get("HotkeySectionTaskTree"));
+                AssertText(flyoutContent, "HotkeyRoadmapSectionTitle", L10n.Get("HotkeySectionRoadmap"));
+                AssertHotkeyRow(flyoutContent, "HotkeyTaskTreeSelectAllRow", L10n.Get("HotkeySelectAll"), HotkeyHints.SelectAll);
+                AssertHotkeyRow(
+                    flyoutContent,
+                    "HotkeyTaskTreeCompleteCurrentTaskRow",
+                    L10n.Get("HotkeyCompleteCurrentTask"),
+                    HotkeyHints.CompleteCurrentTask);
+                AssertHotkeyRow(
+                    flyoutContent,
+                    "HotkeyRoadmapFitToScreenRow",
+                    L10n.Get("HotkeyRoadmapFitToScreen"),
+                    HotkeyHints.RoadmapFitToScreen);
+                AssertHotkeyRow(
+                    flyoutContent,
+                    "HotkeyRoadmapResetViewportRow",
+                    L10n.Get("HotkeyRoadmapResetViewport"),
+                    HotkeyHints.RoadmapResetViewport);
+
+                scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(scrollViewer.Offset.Y).IsGreaterThan(0);
+                await Assert.That(FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton").Flyout)
+                    .IsAssignableTo<MenuFlyout>();
+            }
+            finally
+            {
+                flyout?.Hide();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TreeCommandUi_ContextMenu_UsesPlacementTargetItemWithoutStoredContextForCurrentCommand()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -2650,6 +2729,65 @@ public class MainControlTreeCommandsUiTests
         return root.GetVisualDescendants()
             .OfType<T>()
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
+    }
+
+    private static Control GetFlyoutContent(Flyout flyout)
+    {
+        return flyout.Content as Control ??
+               throw new InvalidOperationException("Flyout content was not found.");
+    }
+
+    private static T? FindControlInDetachedContent<T>(Control root, string automationId)
+        where T : Control
+    {
+        if (root is T typedRoot && AutomationProperties.GetAutomationId(root) == automationId)
+        {
+            return typedRoot;
+        }
+
+        return root.GetVisualDescendants()
+            .OfType<T>()
+            .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId) ??
+            root.GetLogicalDescendants()
+                .OfType<T>()
+                .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+    }
+
+    private static void AssertText(Control root, string automationId, string expectedText)
+    {
+        var textBlock = FindControlInDetachedContent<TextBlock>(root, automationId) ??
+                        throw new InvalidOperationException($"Text block '{automationId}' was not found.");
+
+        if (!string.Equals(textBlock.Text, expectedText, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Text block '{automationId}' has text '{textBlock.Text}', expected '{expectedText}'.");
+        }
+    }
+
+    private static void AssertHotkeyRow(Control root, string automationId, string expectedLabel, string expectedHotkey)
+    {
+        var row = FindControlInDetachedContent<Grid>(root, automationId) ??
+                  throw new InvalidOperationException($"Hotkey row '{automationId}' was not found.");
+        var texts = row.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Concat(row.GetLogicalDescendants().OfType<TextBlock>())
+            .Select(textBlock => textBlock.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (!texts.Contains(expectedLabel, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Hotkey row '{automationId}' does not contain label '{expectedLabel}'. Actual: {string.Join(", ", texts)}.");
+        }
+
+        if (!texts.Contains(expectedHotkey, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Hotkey row '{automationId}' does not contain hotkey '{expectedHotkey}'. Actual: {string.Join(", ", texts)}.");
+        }
     }
 
     private static Control FindVisibleToolbarFocusTarget(Control root)
