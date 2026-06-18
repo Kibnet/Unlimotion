@@ -27,12 +27,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double MaxPopupWidth = 340d;
     public const double DefaultSummaryWidth = 112d;
     public const double DefaultSummaryMinWidth = 44d;
-    private const double IncludeSummaryTextHorizontalReserve = 30d;
-    private const double ExcludeSummaryTextHorizontalReserve = 40d;
     private const double DropDownNonListHeight = 8d;
     private const double MinListHeight = 60d;
     private const double NoMatchesPanelReservedHeight = 40d;
     private const string EmptySummaryToken = "🙂";
+    private static readonly Thickness EmptySummaryPadding = new(8, 4, 8, 4);
+    private static readonly Thickness TokenSummaryPadding = new(18, 4, 8, 4);
     private static WeakReference<EmojiFilterMultiSelectSearchBox>? openDropDownReference;
 
     public static readonly StyledProperty<IEnumerable?> FiltersProperty =
@@ -621,23 +621,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private Thickness GetSummaryInputPadding(bool isEmptySummary)
     {
-        if (isSearchActive)
-        {
-            return IsExclude
-                ? new Thickness(18, 4, 22, 4)
-                : new Thickness(8, 4, 22, 4);
-        }
-
         if (isEmptySummary)
         {
-            return IsExclude
-                ? new Thickness(16, 4, 16, 4)
-                : new Thickness(8, 4, 16, 4);
+            return EmptySummaryPadding;
         }
 
-        return IsExclude
-            ? new Thickness(18, 4, 22, 4)
-            : new Thickness(8, 4, 22, 4);
+        return TokenSummaryPadding;
     }
 
     private double GetSummaryInputWidth(string inputText, bool isEmptySummary)
@@ -810,7 +799,10 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private double GetSummaryTextHorizontalReserve()
     {
-        return IsExclude ? ExcludeSummaryTextHorizontalReserve : IncludeSummaryTextHorizontalReserve;
+        return PART_Input.Padding.Left +
+               PART_Input.Padding.Right +
+               PART_Input.BorderThickness.Left +
+               PART_Input.BorderThickness.Right;
     }
 
     private static string BuildSummaryCandidate(IReadOnlyList<string> selectedTokens, int visibleCount, int overflowCount)

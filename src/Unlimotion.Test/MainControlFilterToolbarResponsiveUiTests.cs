@@ -233,6 +233,59 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
+    public async Task Toolbar_EmojiFilters_SummaryChromeDoesNotCoverOrShiftTokens()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                var excludeInput = GetEmojiFilterInput(excludeControl);
+                var excludeMarker = GetEmojiFilterExcludeMarker(excludeControl);
+
+                await Assert.That(FindEmojiFilterDropDownGlyph(includeControl)).IsNull();
+                await Assert.That(FindEmojiFilterDropDownGlyph(excludeControl)).IsNull();
+                await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
+                await Assert.That(excludeMarker.IsVisible).IsTrue();
+                await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+
+                vm.EmojiFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
+                vm.EmojiExcludeFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
+                RunLayoutJobs();
+
+                await Assert.That(includeInput.Text).IsNotNull();
+                await Assert.That(excludeInput.Text).IsNotNull();
+                await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
+                await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
+                await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -260,7 +313,6 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var includeInput = GetEmojiFilterInput(includeControl);
                 var excludeInput = GetEmojiFilterInput(excludeControl);
 
-                await Assert.That(GetEmojiFilterDropDownGlyph(includeControl).IsVisible).IsTrue();
                 await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
                 await Assert.That(GetEmojiFilterExcludeMarker(excludeControl).IsVisible).IsTrue();
                 await Assert.That(excludeInput.Classes.Contains("Exclude")).IsTrue();
@@ -697,7 +749,6 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                 var toolbar = FindVisibleRoadmapFilterToolbar(view);
                 var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
-                await Assert.That(GetEmojiFilterDropDownGlyph(includeControl).IsVisible).IsTrue();
                 await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
                 RunLayoutJobs();
 
@@ -1063,6 +1114,21 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(control.SummaryMinWidth + 8);
     }
 
+    private static async Task AssertExcludeMarkerDoesNotShiftInputText(
+        TextBox includeInput,
+        TextBox excludeInput,
+        TextBlock excludeMarker)
+    {
+        await Assert.That(excludeInput.Padding.Left).IsEqualTo(includeInput.Padding.Left);
+        await Assert.That(excludeInput.Padding.Right).IsEqualTo(includeInput.Padding.Right);
+
+        var parent = excludeInput.GetVisualParent() ??
+                     throw new InvalidOperationException("Emoji filter input visual parent was not found.");
+        var inputBounds = GetBoundsRelativeTo(parent, excludeInput);
+        var markerBounds = GetBoundsRelativeTo(parent, excludeMarker);
+        await Assert.That(markerBounds.Left).IsLessThanOrEqualTo(inputBounds.Left + excludeInput.Padding.Left);
+    }
+
     private static async Task AssertControlStaysInsideWindow(Window window, Control control)
     {
         var bounds = GetBoundsRelativeTo(window, control);
@@ -1331,10 +1397,9 @@ public class MainControlFilterToolbarResponsiveUiTests
                throw new InvalidOperationException("Emoji filter input was not found.");
     }
 
-    private static PathIcon GetEmojiFilterDropDownGlyph(EmojiFilterMultiSelectSearchBox control)
+    private static PathIcon? FindEmojiFilterDropDownGlyph(EmojiFilterMultiSelectSearchBox control)
     {
-        return control.FindControl<PathIcon>("PART_DropDownGlyph") ??
-               throw new InvalidOperationException("Emoji filter dropdown glyph was not found.");
+        return control.FindControl<PathIcon>("PART_DropDownGlyph");
     }
 
     private static TextBlock GetEmojiFilterExcludeMarker(EmojiFilterMultiSelectSearchBox control)
