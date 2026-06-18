@@ -1,17 +1,13 @@
-using System;
-
 namespace Unlimotion;
 
 /// <summary>
-/// Platform-aware hotkey combination strings for display in the hotkey help panel.
+/// Hotkey combination strings for display in the hotkey help panel.
 /// </summary>
 public static class HotkeyHints
 {
-    private static bool IsMac => OperatingSystem.IsMacOS();
-
-    public static string Ctrl => IsMac ? "⌘" : "Ctrl";
-    public static string Alt => IsMac ? "⌥" : "Alt";
-    public static string Shift => "⇧";
+    public static string Ctrl => "Ctrl";
+    public static string Alt => "Alt";
+    public static string Shift => "Shift";
 
     // Task tree shortcuts
     public static string SelectAll => $"{Ctrl}+A";
@@ -26,6 +22,7 @@ public static class HotkeyHints
     public static string CollapseAll => $"{Ctrl}+{Alt}+←";
     public static string CopyOutline => $"{Ctrl}+{Shift}+C";
     public static string PasteOutline => $"{Ctrl}+{Shift}+V";
+    public static string CompleteCurrentTask => $"{Ctrl}+D";
 
     // Roadmap shortcuts
     public static string RoadmapFitToScreen => "F / U / T";

@@ -171,6 +171,9 @@ New tasks are always created relative to the selected task. To do this, you can 
 - **➕Sibling (Ctrl+Enter)** - Create a task at the same level as the selected one
 - **➕🔒Sibling (Shift+Enter)** - Create a task at the same level as the selected one and block it with the selected one
 - **➕Inner (Ctrl+Tab)** - Create a nested task inside the selected
+- **Complete current task (Ctrl+D)** - Mark the selected/current task as completed
+
+The keyboard shortcuts button in the task toolbar opens the full in-app shortcut reference.
 
 After creating a task, you need to fill in the name of the current task, because if a task without a name is selected, the creation buttons will be disabled.
 
