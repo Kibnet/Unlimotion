@@ -336,8 +336,6 @@ namespace Unlimotion.Views
 
             dc.WhenAnyValue(
                     m => m.OnlyUnlocked,
-                    m => m.ShowArchived,
-                    m => m.ShowCompleted,
                     m => m.ShowWanted)
                 .Subscribe(_ => ScheduleUpdateGraph())
                 .AddToDispose(disposableList);

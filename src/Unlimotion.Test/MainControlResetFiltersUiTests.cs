@@ -145,6 +145,70 @@ public class MainControlResetFiltersUiTests
     }
 
     [Test]
+    public async Task StatusFilterComboBox_SelectionIsIndependentPerTab()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var allTasksStatusFilters = OpenStatusFilterComboBoxSource(
+                    view,
+                    tabIndex: 0,
+                    filtersButtonAutomationId: "AllTasksFiltersButton",
+                    comboBoxAutomationId: "AllTasksStatusFilterComboBox");
+                HideFilterPanel(view, "AllTasksFiltersButton");
+
+                var lastCreatedStatusFilters = OpenStatusFilterComboBoxSource(
+                    view,
+                    tabIndex: 1,
+                    filtersButtonAutomationId: "LastCreatedFiltersButton",
+                    comboBoxAutomationId: "LastCreatedStatusFilterComboBox");
+                HideFilterPanel(view, "LastCreatedFiltersButton");
+
+                var roadmapStatusFilters = OpenStatusFilterComboBoxSource(
+                    view,
+                    tabIndex: 8,
+                    filtersButtonAutomationId: "RoadmapFiltersButton",
+                    comboBoxAutomationId: "RoadmapStatusFilterComboBox");
+                HideFilterPanel(view, "RoadmapFiltersButton");
+
+                await Assert.That(allTasksStatusFilters.Source).IsNotSameReferenceAs(lastCreatedStatusFilters.Source);
+                await Assert.That(allTasksStatusFilters.Source).IsNotSameReferenceAs(roadmapStatusFilters.Source);
+                await Assert.That(lastCreatedStatusFilters.Source).IsNotSameReferenceAs(roadmapStatusFilters.Source);
+
+                SetStatusFilterSelected(allTasksStatusFilters.Filters, DomainTaskStatus.Prepared, false);
+                await AssertStatusFilterSelected(allTasksStatusFilters.Filters, DomainTaskStatus.Prepared, false);
+                await AssertStatusFilterSelected(lastCreatedStatusFilters.Filters, DomainTaskStatus.Prepared, true);
+                await AssertStatusFilterSelected(roadmapStatusFilters.Filters, DomainTaskStatus.Prepared, true);
+
+                SetStatusFilterSelected(roadmapStatusFilters.Filters, DomainTaskStatus.Completed, true);
+                await AssertStatusFilterSelected(roadmapStatusFilters.Filters, DomainTaskStatus.Completed, true);
+                await AssertStatusFilterSelected(allTasksStatusFilters.Filters, DomainTaskStatus.Completed, false);
+                await AssertStatusFilterSelected(lastCreatedStatusFilters.Filters, DomainTaskStatus.Completed, false);
+            }
+            finally
+            {
+                await DrainUiThrottlesAsync();
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task WantedFilterComboBox_IsAvailableOnUnlockedAndRoadmapTabs_WithDefaultAllOption()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
@@ -234,7 +298,9 @@ public class MainControlResetFiltersUiTests
                 foreach (var (tabIndex, filtersButtonAutomationId, resetButtonAutomationId, forcedVisibleStatus) in StatusResetTabs)
                 {
                     notificationManager.ClearMessages();
-                    SetAllStatusFilters(vm, false);
+                    var tabStatusFilters = GetStatusFiltersForTab(vm, tabIndex);
+                    SetAllStatusFilters(vm.StatusFilters, false);
+                    SetAllStatusFilters(tabStatusFilters, false);
 
                     SelectTab(view, tabIndex);
                     var resetButton = OpenFilterPanelAndFindResetButton(
@@ -248,7 +314,8 @@ public class MainControlResetFiltersUiTests
                         ? (DomainTaskStatus)forcedVisibleStatus
                         : (DomainTaskStatus?)null;
                     await Assert.That(notificationManager.AskCount).IsEqualTo(1);
-                    await AssertStatusFiltersReset(vm, defaultShowCompleted, defaultShowArchived, forcedStatus);
+                    await AssertStatusFiltersReset(tabStatusFilters, defaultShowCompleted, defaultShowArchived, forcedStatus);
+                    await AssertAllStatusFiltersSelected(vm.StatusFilters, false);
 
                     HideFilterPanel(view, filtersButtonAutomationId);
                 }
@@ -324,6 +391,7 @@ public class MainControlResetFiltersUiTests
                 var defaultShowCompleted = vm.ShowCompleted;
                 var defaultShowArchived = vm.ShowArchived;
                 SetActiveFilters(vm);
+                SetAllStatusFilters(vm.LastCreatedStatusFilters, false);
 
                 var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
                 notificationManager.ClearMessages();
@@ -346,6 +414,12 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
                 await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
                 await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
+                await AssertStatusFiltersReset(
+                    vm.StatusFilters,
+                    defaultShowCompleted,
+                    defaultShowArchived,
+                    forcedVisibleStatus: null);
+                await AssertAllStatusFiltersSelected(vm.LastCreatedStatusFilters, false);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
@@ -382,6 +456,7 @@ public class MainControlResetFiltersUiTests
                 var defaultShowCompleted = vm.ShowCompleted;
                 var defaultShowArchived = vm.ShowArchived;
                 SetActiveFilters(vm);
+                SetAllStatusFilters(vm.LastCreatedStatusFilters, false);
 
                 var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
                 notificationManager.ClearMessages();
@@ -402,8 +477,13 @@ public class MainControlResetFiltersUiTests
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
-                await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
-                await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
+                await Assert.That(vm.ShowCompleted).IsTrue();
+                await Assert.That(vm.ShowArchived).IsTrue();
+                await AssertStatusFiltersReset(
+                    vm.LastCreatedStatusFilters,
+                    defaultShowCompleted,
+                    defaultShowArchived,
+                    forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
@@ -441,6 +521,7 @@ public class MainControlResetFiltersUiTests
                 var defaultShowArchived = vm.ShowArchived;
                 SetActiveFilters(vm);
                 vm.Graph.OnlyUnlocked = false;
+                SetAllStatusFilters(vm.RoadmapStatusFilters, false);
 
                 var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
                 notificationManager.ClearMessages();
@@ -461,8 +542,13 @@ public class MainControlResetFiltersUiTests
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
-                await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
-                await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
+                await Assert.That(vm.ShowCompleted).IsTrue();
+                await Assert.That(vm.ShowArchived).IsTrue();
+                await AssertStatusFiltersReset(
+                    vm.RoadmapStatusFilters,
+                    defaultShowCompleted,
+                    defaultShowArchived,
+                    forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
                 await AssertToggleFiltersReset(vm.EmojiFilters);
@@ -581,12 +667,61 @@ public class MainControlResetFiltersUiTests
         filter.To = DateTime.Today.AddDays(-1);
     }
 
-    private static void SetAllStatusFilters(MainWindowViewModel vm, bool selected)
+    private static void SetAllStatusFilters(IEnumerable<TaskStatusFilter> filters, bool selected)
     {
-        foreach (var filter in vm.StatusFilters)
+        foreach (var filter in filters)
         {
             filter.ShowTasks = selected;
         }
+    }
+
+    private static IReadOnlyList<TaskStatusFilter> GetStatusFiltersForTab(MainWindowViewModel vm, int tabIndex) =>
+        tabIndex switch
+        {
+            0 => vm.StatusFilters,
+            1 => vm.LastCreatedStatusFilters,
+            2 => vm.LastUpdatedStatusFilters,
+            3 => vm.UnlockedStatusFilters,
+            4 => vm.InProgressStatusFilters,
+            5 => vm.CompletedStatusFilters,
+            6 => vm.ArchivedStatusFilters,
+            7 => vm.LastOpenedStatusFilters,
+            8 => vm.RoadmapStatusFilters,
+            _ => throw new ArgumentOutOfRangeException(nameof(tabIndex), tabIndex, "Unknown task tab.")
+        };
+
+    private static StatusFilterComboBoxSource OpenStatusFilterComboBoxSource(
+        MainControl view,
+        int tabIndex,
+        string filtersButtonAutomationId,
+        string comboBoxAutomationId)
+    {
+        SelectTab(view, tabIndex);
+        var comboBox = OpenFilterPanelAndFindComboBox(
+            view,
+            filtersButtonAutomationId,
+            comboBoxAutomationId);
+
+        if (comboBox.ItemsSource is not IEnumerable source)
+        {
+            throw new InvalidOperationException("Status filter combo box must be bound to an ItemsSource.");
+        }
+
+        return new StatusFilterComboBoxSource(source, source.Cast<TaskStatusFilter>().ToList());
+    }
+
+    private sealed record StatusFilterComboBoxSource(
+        object Source,
+        IReadOnlyList<TaskStatusFilter> Filters);
+
+    private static void SetStatusFilterSelected(
+        IEnumerable<TaskStatusFilter> filters,
+        DomainTaskStatus status,
+        bool selected)
+    {
+        var filter = filters.Single(item => item.Status == status);
+        filter.ShowTasks = selected;
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static void AssertResetButtonsOnTaskTabs(MainControl view)
@@ -629,22 +764,30 @@ public class MainControlResetFiltersUiTests
     }
 
     private static async Task AssertStatusFiltersReset(
-        MainWindowViewModel vm,
+        IEnumerable<TaskStatusFilter> filters,
         bool defaultShowCompleted,
         bool defaultShowArchived,
         DomainTaskStatus? forcedVisibleStatus)
     {
-        await AssertStatusFilterSelected(vm, DomainTaskStatus.NotReady, true);
-        await AssertStatusFilterSelected(vm, DomainTaskStatus.Prepared, true);
-        await AssertStatusFilterSelected(vm, DomainTaskStatus.InProgress, true);
+        await AssertStatusFilterSelected(filters, DomainTaskStatus.NotReady, true);
+        await AssertStatusFilterSelected(filters, DomainTaskStatus.Prepared, true);
+        await AssertStatusFilterSelected(filters, DomainTaskStatus.InProgress, true);
 
         var expectedShowCompleted = forcedVisibleStatus == DomainTaskStatus.Completed || defaultShowCompleted;
         var expectedShowArchived = forcedVisibleStatus == DomainTaskStatus.Archived || defaultShowArchived;
 
-        await AssertStatusFilterSelected(vm, DomainTaskStatus.Completed, expectedShowCompleted);
-        await AssertStatusFilterSelected(vm, DomainTaskStatus.Archived, expectedShowArchived);
-        await Assert.That(vm.ShowCompleted).IsEqualTo(expectedShowCompleted);
-        await Assert.That(vm.ShowArchived).IsEqualTo(expectedShowArchived);
+        await AssertStatusFilterSelected(filters, DomainTaskStatus.Completed, expectedShowCompleted);
+        await AssertStatusFilterSelected(filters, DomainTaskStatus.Archived, expectedShowArchived);
+    }
+
+    private static async Task AssertAllStatusFiltersSelected(
+        IEnumerable<TaskStatusFilter> filters,
+        bool expected)
+    {
+        foreach (var filter in filters)
+        {
+            await AssertStatusFilterSelected(filter, expected);
+        }
     }
 
     private static async Task AssertStatusFilterSelected(
@@ -653,6 +796,22 @@ public class MainControlResetFiltersUiTests
         bool expected)
     {
         var filter = vm.StatusFilters.Single(item => item.Status == status);
+        await AssertStatusFilterSelected(filter, expected);
+    }
+
+    private static async Task AssertStatusFilterSelected(
+        IEnumerable<TaskStatusFilter> filters,
+        DomainTaskStatus status,
+        bool expected)
+    {
+        var filter = filters.Single(item => item.Status == status);
+        await AssertStatusFilterSelected(filter, expected);
+    }
+
+    private static async Task AssertStatusFilterSelected(
+        TaskStatusFilter filter,
+        bool expected)
+    {
         if (expected)
         {
             await Assert.That(filter.ShowTasks).IsTrue();

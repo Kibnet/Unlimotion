@@ -46,6 +46,7 @@ public class GraphViewModel
         }
 
         NotifyWantedFilterProxyChanged();
+        OnPropertyChanged(nameof(StatusFilters));
     }
 
     public MainWindowViewModel? MainWindowViewModel => _mainWindowViewModel;
@@ -57,7 +58,7 @@ public class GraphViewModel
     public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; }
     public ReadOnlyObservableCollection<TaskStatusFilter> StatusFilters
     {
-        get => _mainWindowViewModel?.StatusFilters ?? EmptyStatusFilters;
+        get => _mainWindowViewModel?.RoadmapStatusFilters ?? EmptyStatusFilters;
         set { }
     }
 
@@ -128,6 +129,12 @@ public class GraphViewModel
                 or nameof(MainWindowViewModel.CurrentWantedFilter))
         {
             NotifyWantedFilterProxyChanged();
+        }
+
+        if (string.IsNullOrEmpty(e.PropertyName) ||
+            e.PropertyName == nameof(MainWindowViewModel.RoadmapStatusFilters))
+        {
+            OnPropertyChanged(nameof(StatusFilters));
         }
     }
 
