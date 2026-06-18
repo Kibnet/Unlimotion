@@ -666,8 +666,12 @@
         <Style Selector="TextBlock.HotkeyRowLabel">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="MinWidth" Value="0"/>
         </Style>
         <Style Selector="Border.HotkeyChip">
+            <Setter Property="Grid.Column" Value="1"/>
             <Setter Property="Padding" Value="6,2"/>
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="BorderThickness" Value="1"/>
