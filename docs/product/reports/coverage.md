@@ -1,14 +1,14 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-06-18
-Команда: `/storm:cover CV-0007 attachment workflow confirmation`
-Режим: `guided-artifact-workflow` после утверждения SPEC; product artifacts изменялись, tests/code/test annotations не менялись
+Команда: `/storm:product-decision CV-0007 option B internal/orphan attachment candidate`
+Режим: `guided-artifact-workflow` после утверждения decision SPEC; product artifacts изменялись, tests/code/test annotations не менялись
 
 ## Область
 
-Этот отчёт фиксирует artifact-only triage для `CV-0007`. В коде есть attachment backend/API surface: domain model, ServiceStack routes `POST /attachments` и `GET /attachments/{id}`, authenticated `AttachmentService`, file storage через `FilesPath` и AutoMapper mapping в API/hub molds.
+Этот отчёт фиксирует product decision по `CV-0007`: выбран Вариант B. Attachment backend/API code остается `internal_orphan_contract_candidate`. Это не product coverage и не подтвержденный пользовательский workflow.
 
-Текущий product workflow не подтверждён story/AC/UI/docs evidence, поэтому `CV-0007` намеренно не закрывается как covered и не получает Gherkin scenario или test links.
+В коде сохранено evidence: domain model, ServiceStack routes `POST /attachments` и `GET /attachments/{id}`, authenticated `AttachmentService`, file storage через `FilesPath` и AutoMapper mapping в API/hub molds.
 
 ## Сводка
 
@@ -19,8 +19,8 @@
 | AC с уровнем full/critical | 43 |
 | AC с уровнем partial | 1 |
 | AC без тестовых связей | 0 |
-| AC улучшены текущим artifact triage | 0 |
-| Product-entry candidates blocked by decision | 1 |
+| Product-entry candidates выведены из active cover queue | 1 |
+| Active cover/behavior gaps | 1 |
 | Scenario -> Test links | 44/45 |
 | Passing scenarios | 6 |
 
@@ -28,7 +28,7 @@
 
 | Item | Было | Стало | Почему |
 | --- | --- | --- | --- |
-| CV-0007 | `proposed` attachment workflow candidate | `blocked_pending_product_decision` | Attachment code есть, но пользовательский workflow не подтверждён. SPEC approval разрешил только conservative artifact-only triage, а не product claim. |
+| CV-0007 | `blocked_pending_product_decision` | `internal_orphan_contract_candidate` | Product owner selected Вариант B: не подтверждать attachment workflow как текущую продуктовую поверхность, но сохранить code evidence для future revisit. |
 
 ## Оставшиеся Partial AC
 
@@ -50,7 +50,7 @@
 | CV-0004 | AC-0040 / ST-0014 | partially_covered_callbacks_timer_gap | delivery-task/QUEST partially completed | TS-0023<br>TelegramBot_GitTimers_DoNotRunWhenConflictResolutionIsInProgress remains implementation gap | TS-0023 passed 7/7; callbacks covered. Timer/conflict-safety part is not current covered behavior and should move to separate `/storm:bdd-implement` if product-supported. |
 | CV-0005 | AC-0042 / ST-0015 | covered_by_project_contract_tests | delivery-task/QUEST completed | TS-0024 | Conservative platform policy accepted by SPEC approval; Android/browser/iOS project contracts covered 3/3 without runtime release claim. |
 | CV-0006 | PRODUCT-ENTRY / ST-0016 | covered_by_product_story_and_existing_ui_test | artifact-only completed | TS-0021 | Error-toast behavior linked to product story. |
-| CV-0007 | PRODUCT-ENTRY / proposed_attachment_workflow | blocked_pending_product_decision | guided-artifact-workflow completed; delivery-task only after product workflow confirmation | AttachmentService_GetUploadDownload_RoundTripsUserAttachment<br>AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds | Attachment code сохранён как product-entry/internal-contract candidate; active story/scenario/test links не создавались. |
+| CV-0007 | PRODUCT-ENTRY / proposed_attachment_workflow | internal_orphan_contract_candidate | none for current cover loop; future delivery only after new product decision | AttachmentService_GetUploadDownload_RoundTripsUserAttachment<br>AttachmentMapping_PreservesAttachmentMetadataAcrossDomainAndApiMolds | Вариант B: attachment code сохранен как internal/orphan candidate, active story/scenario/test links не создавались. |
 
 ## BDD Behavior Coverage
 
@@ -76,14 +76,13 @@
 | --- | --- |
 | `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 0 warnings |
 | `git diff --check` | passed; LF/CRLF warnings only |
-| `rg -n "[ \t]+$" docs/product features/storm specs/2026-06-17-storm-cover-attachment-workflow-confirmation.md` | no matches |
+| `rg -n "[ \t]+$" docs/product features/storm specs/2026-06-18-storm-attachment-workflow-product-decision.md` | no matches |
 
 ## Открытые Вопросы
 
 1. Нужно ли реализовать TelegramBot Git timer conflict-safety как отдельный `/storm:bdd-implement` task?
 2. Нужен ли отдельный `/storm:bdd-implement` или platform validation task для реального Android/browser/iOS runtime smoke/release pipeline evidence?
-3. Нужно ли подтвердить attachment workflow как актуальную продуктовую поверхность или оставить attachment code internal/orphan contract candidate?
 
 ## Рекомендуемый Следующий Шаг
 
-Для продолжения `/storm:cover` нужен product decision по `CV-0007`: подтвердить attachment workflow как актуальное пользовательское поведение или оставить найденный code/API как internal/orphan contract candidate. Инженерная delivery-task с tests допустима только после такого решения.
+`CV-0007` больше не является активным `/storm:cover` gap. Следующий инженерный кандидат — `ST-0014/AC-0040` Git timer conflict-safety, но только через отдельную `/storm:bdd-implement ST-0014` SPEC, если это поведение подтверждается как supported.

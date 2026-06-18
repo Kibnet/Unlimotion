@@ -1,19 +1,19 @@
 # STORM Traceability
 
 Сгенерировано: 2026-06-18
-Команда: `/storm:trace` sync after `/storm:cover CV-0007 attachment workflow confirmation`
+Команда: `/storm:trace` sync after `/storm:product-decision CV-0007 option B`
 
 ## New Trace
 
 No new Story -> AC -> Scenario -> Test trace was created for `CV-0007`.
 
-Reason: attachment code exists, but current product artifacts do not confirm a user-facing attachment workflow. Creating active story/scenario/test links would be a false product claim.
+Reason: product owner selected Вариант B. Attachment code is retained as internal/orphan contract candidate, not promoted to active user-facing workflow.
 
-## Product-Entry Candidate Trace
+## Internal/Orphan Candidate Trace
 
 | Candidate | Code Units | Status | Next Action |
 | --- | --- | --- | --- |
-| CV-0007: proposed_attachment_workflow | `src/Unlimotion.Domain/Attachment.cs`; `src/Unlimotion.Server.ServiceInterface/AttachmentService.cs`; `src/Unlimotion.Server.ServiceModel/Attachment.cs`; `src/Unlimotion.Server/AppModelMapping.cs` | blocked_pending_product_decision | Confirm product workflow or leave as internal/orphan contract candidate. |
+| CV-0007: proposed_attachment_workflow | `src/Unlimotion.Domain/Attachment.cs`; `src/Unlimotion.Server.ServiceInterface/AttachmentService.cs`; `src/Unlimotion.Server.ServiceModel/Attachment.cs`; `src/Unlimotion.Server/AppModelMapping.cs` | internal_orphan_contract_candidate | Future revisit only after new product decision. |
 
 ## Existing Trace Preserved
 
@@ -30,4 +30,4 @@ Reason: attachment code exists, but current product artifacts do not confirm a u
 
 `SC-0014-002` remains intentionally unlinked because it represents the Git timer/conflict-safety part that cannot be covered as current behavior.
 
-`CV-0007` remains intentionally unlinked from active stories/scenarios/tests because attachment workflow has not been confirmed as current product behavior.
+`CV-0007` is intentionally unlinked from active stories/scenarios/tests after Вариант B.
