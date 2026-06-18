@@ -145,12 +145,58 @@ Outcome contract:
   - Residual risk: локальная среда может не поддержать runtime/build smoke; эта SPEC трактует это как validation evidence, а не как implementation failure.
 
 ### Post-EXEC Review
-- Статус: не выполнен до approval.
+- Статус: PASS
+- Approval: получено `Спеку подтверждаю`.
+- Scope reviewed:
+  - `docs/product/storm.json`
+  - `docs/product/reports/coverage.md`
+  - `docs/product/reports/bdd-sync.md`
+  - `docs/product/reports/bdd-lint.md`
+  - `docs/product/reports/traceability.md`
+  - `docs/product/reports/ranking.md`
+  - `docs/product/reports/stories.md`
+  - `features/storm/st-0015-platform-shells.feature`
+- Evidence:
+  - `dotnet workload list` прошел; installed workloads include `android`, `ios`, `maccatalyst`, `maui-windows`, `wasm-tools`.
+  - `dotnet --info` прошел; SDK `10.0.301`, Workload version `10.0.300-manifests.6fc1bb7b`, Host `11.0.0-preview.4.26230.115`.
+  - `dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release` прошел с существующими warnings; output `src/Unlimotion.Browser/bin/Release/net10.0-browser/Unlimotion.Browser.dll`.
+  - `dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug` заблокирован `NETSDK1147`; suggested `dotnet workload restore` for `wasm-tools`.
+  - `dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug` заблокирован `NETSDK1147`; suggested `dotnet workload restore` for `wasm-tools`.
+- Files changed:
+  - `docs/product/storm.json`
+  - `docs/product/reports/coverage.md`
+  - `docs/product/reports/bdd-sync.md`
+  - `docs/product/reports/bdd-lint.md`
+  - `docs/product/reports/traceability.md`
+  - `docs/product/reports/ranking.md`
+  - `docs/product/reports/stories.md`
+  - `specs/2026-06-18-storm-platform-runtime-validation.md`
+- Not changed:
+  - production code
+  - tests
+  - test annotations
+  - platform manifests/workflows
+  - `features/storm/st-0015-platform-shells.feature`
+- Validation:
+  - `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` => OK, 0 errors, 0 warnings.
+  - `git diff --check` => passed.
+  - trailing-space scan over changed artifact files => no matches.
+- Decision:
+  - `ST-0015 / AC-0042 / SC-0015-002` получает Browser Release build smoke evidence.
+  - Android/iOS остаются environment-blocked до отдельной setup task.
+  - Runtime/release support claims не расширялись.
 
 ## Approval
-Ожидается фраза: `Спеку подтверждаю`.
+Получено: `Спеку подтверждаю`.
 
 ## 10. Журнал действий агента
 | Фаза | Действие | Статус | Затронутые файлы |
 | --- | --- | --- | --- |
 | SPEC | Создан validation-only plan для ST-0015 platform runtime evidence | done | `specs/2026-06-18-storm-platform-runtime-validation.md` |
+| EXEC | Reconfirmed worktree and central STORM route | done | no file changes |
+| EXEC | Собран workload/.NET environment evidence | done | no file changes |
+| EXEC | Выполнен Browser Release build smoke | done | no tracked file changes |
+| EXEC | Выполнены Android/iOS build smoke attempts; зафиксирован `NETSDK1147` blocker | done | no tracked file changes |
+| EXEC | Синхронизированы STORM artifacts и reports без code/test changes | done | `docs/product/storm.json`, `docs/product/reports/*`, this SPEC |
+| EXEC | Feature spec reviewed; оставлен без изменений, потому что product wording и no-runtime claim остаются корректными | done | no feature file changes |
+| EXEC | Запущены STORM validator и hygiene checks | done | no file changes |

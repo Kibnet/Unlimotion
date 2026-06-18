@@ -40,12 +40,12 @@
       "Записи являются гипотезами о продукте, восстановленными из реализации и спецификаций; перед утверждением целей и потребностей нужна проверка владельцем продукта.",
       "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
       "CV-0004 закрыт delivery evidence: callbacks покрыты TS-0023, Telegram Git timer conflict-safety покрыт TS-0025; test annotations не менялись.",
-      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024, но runtime release maturity не заявляется без отдельного build/runtime evidence.",
+      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024. Platform validation 2026-06-18 добавила Browser Release build smoke evidence; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, поэтому runtime release maturity не заявляется.",
       "CV-0007 закрыт как active /storm:cover candidate через product decision Вариант B: attachment backend/API code сохранен как internal/orphan contract candidate без active story/scenario/test links."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -2452,6 +2452,22 @@
             {
               "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
               "symbol": "PlatformShellProjectContractTests"
+            },
+            {
+              "command": "dotnet workload list",
+              "result": "2026-06-18: android, ios, maccatalyst, maui-windows and wasm-tools workloads are installed."
+            },
+            {
+              "command": "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release",
+              "result": "passed on 2026-06-18; produced src/Unlimotion.Browser/bin/Release/net10.0-browser/Unlimotion.Browser.dll and wwwroot/_framework output; warnings only."
+            },
+            {
+              "command": "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug",
+              "result": "blocked on 2026-06-18 by NETSDK1147 requesting dotnet workload restore for wasm-tools despite workload list showing wasm-tools installed."
+            },
+            {
+              "command": "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug",
+              "result": "blocked on 2026-06-18 by NETSDK1147 requesting dotnet workload restore for wasm-tools before host/runtime validation stage."
             }
           ],
           "linked_rules": [
@@ -2460,7 +2476,7 @@
           "linked_scenarios": [
             "SC-0015-002"
           ],
-          "coverage_note": "TS-0024 подтверждает target frameworks, shared UI references, Avalonia platform packages, startup hooks и Android native libgit2 assets. Android/browser optional build smoke был заблокирован restore/workload state; runtime release support не заявляется."
+          "coverage_note": "TS-0024 подтверждает target frameworks, shared UI references, Avalonia platform packages, startup hooks и Android native libgit2 assets. Browser Release build smoke прошел 2026-06-18. Android и iOS build smoke заблокированы NETSDK1147 workload restore state; runtime release support для non-desktop shells не заявляется."
         },
         {
           "id": "AC-0043",
@@ -2525,7 +2541,7 @@
         "SC-0015-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0015-002 связан с TS-0024 и passing contract tests; non-desktop runtime release maturity остаётся отдельной будущей platform validation задачей."
+      "behavior_coverage_note": "SC-0015-002 связан с TS-0024 и passing contract tests; platform validation 2026-06-18 добавила Browser Release build smoke evidence. Android/iOS build smoke заблокированы NETSDK1147 workload restore state; non-desktop runtime release maturity всё ещё не заявляется."
     },
     {
       "id": "ST-0016",
@@ -4905,7 +4921,7 @@
   },
   "traceability": {
     "updated_at": "2026-06-18",
-    "command": "/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
     "route": "guided-artifact-workflow",
     "mode": "delivery-task",
     "annotations_added": false,
@@ -5991,21 +6007,21 @@
     "weak_acceptance_criteria": [
       {
         "id": "AC-0042",
-        "reason": "Android/browser/iOS shell maturity требует подтверждения и platform smoke coverage."
+        "reason": "Browser Release build smoke подтвержден; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, runtime release support не заявляется."
       }
     ],
     "open_questions": [
       "Добавлять ли test annotations в TUnit tests отдельным delivery-task через QUEST gate?",
-      "Нужно ли отдельно подтверждать Android/browser/iOS runtime launch/release pipeline evidence?",
+      "Нужна ли отдельная environment/setup task для Android/iOS после NETSDK1147 workload restore blocker?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B."
     ]
   },
   "coverage_analysis": {
     "updated_at": "2026-06-18",
-    "command": "/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "delivery-task",
+    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
+    "mode": "guided-artifact-workflow",
     "annotations_added": false,
-    "tests_changed": true,
+    "tests_changed": false,
     "tests_run": true,
     "summary": {
       "acceptance_criteria_total": 44,
@@ -6020,7 +6036,7 @@
       "improved_by_current_artifact_triage": 1,
       "internal_orphan_contract_candidates": 1,
       "active_cover_candidates_remaining": 0,
-      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; platform runtime validation остаётся отдельным optional claim."
+      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; ST-0015 Browser Release build smoke подтвержден, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
     },
     "improved_by_existing_evidence": [
       {
@@ -6392,13 +6408,13 @@
     ],
     "open_questions": [
       "Решено 2026-06-18: TelegramBot Git timer conflict-safety реализован и покрыт TS-0025.",
-      "Нужно ли отдельно запускать /storm:bdd-implement для реального Android/browser/iOS runtime smoke или release pipeline evidence?",
+      "Частично проверено 2026-06-18: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state. Нужна ли отдельная environment/setup task для Android/iOS?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B."
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-18",
-      "command": "/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety + /storm:bdd-sync + /storm:bdd-lint",
-      "mode": "delivery-task",
+      "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
+      "mode": "guided-artifact-workflow",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -6424,15 +6440,15 @@
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
-      "tests_changed": true,
-      "code_changed": true,
+      "tests_changed": false,
+      "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotGitTimerConflictSafetyTests/*\" --output Detailed => прошло 3/3",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*|/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => прошло 7/7",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/GitBackupJobTests/*\" --output Detailed => прошло 3/3"
+        "dotnet workload list => installed workloads include android, ios, maccatalyst, maui-windows and wasm-tools",
+        "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release => passed with existing warnings",
+        "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug => blocked by NETSDK1147 requesting dotnet workload restore for wasm-tools",
+        "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug => blocked by NETSDK1147 requesting dotnet workload restore for wasm-tools"
       ]
     },
     "bdd_sync_summary": {
@@ -6446,7 +6462,7 @@
       "known_gaps": [
         "step_definitions_total=0; BDD layer remains linked to TUnit tests rather than executable Cucumber-style step definitions",
         "CV-0007 removed from active /storm:cover queue by option B; attachment code remains internal/orphan contract candidate",
-        "Android/browser/iOS runtime smoke and release pipeline evidence remain optional platform validation claims"
+        "Browser Release build smoke passed on 2026-06-18; Android/iOS build smoke remain blocked by NETSDK1147 workload restore state; release pipeline evidence remains optional platform validation claim"
       ],
       "decision": "CV-0004 covered by approved BDD implementation; CV-0007 decision B remains unchanged."
     },
@@ -6488,17 +6504,17 @@
         "tests": [
           "TS-0024"
         ],
-        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts и conservative platform support policy без runtime release claim."
+        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts и conservative platform support policy; Browser Release build smoke прошел 2026-06-18, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
       }
     ],
-    "code_changed": true,
-    "full_suite_result": "Not run in this narrow SPEC; build passed and targeted coverage/regression tests passed. Optional Android/browser builds were attempted and blocked by restore/workload state.",
-    "targeted_validation_result": "PlatformShellProjectContractTests passed 3/3; SingleViewStartupUiTests passed 4/4"
+    "code_changed": false,
+    "full_suite_result": "Full test suite не запускался в этой artifact-only validation SPEC; production code/tests не менялись.",
+    "targeted_validation_result": "dotnet workload list прошел; Browser Release build прошел; Android/iOS Debug build smoke заблокированы NETSDK1147 workload restore state."
   },
   "ranking_analysis": {
     "updated_at": "2026-06-18",
-    "command": "/storm:rank + /storm:bdd-implement ST-0014 CV-0004 delivery sync",
-    "mode": "delivery-task",
+    "command": "/storm:rank + /storm:platform-runtime-validation ST-0015",
+    "mode": "guided-artifact-workflow",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
@@ -10330,7 +10346,7 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "passed_3_of_3_on_2026-06-17; optional_android_browser_build_smoke_blocked_by_restore_or_workload_state",
+      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; android_ios_build_smoke_blocked_by_NETSDK1147_workload_restore_state",
       "linked_tests": [
         "TS-0015",
         "TS-0024"
@@ -10377,6 +10393,18 @@
           "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
           "description": "TS-0024 подтверждает Android/browser/iOS project contracts.",
           "test_id": "TS-0024"
+        },
+        {
+          "command": "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release",
+          "result": "passed on 2026-06-18; Browser build smoke evidence only, not runtime UX parity."
+        },
+        {
+          "command": "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug",
+          "result": "blocked on 2026-06-18 by NETSDK1147 workload restore state."
+        },
+        {
+          "command": "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug",
+          "result": "blocked on 2026-06-18 by NETSDK1147 workload restore state before host/runtime validation."
         }
       ]
     },
@@ -11414,8 +11442,8 @@
   "step_definitions": [],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-18",
-    "command": "/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "delivery-task",
+    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
+    "mode": "guided-artifact-workflow",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -11441,22 +11469,22 @@
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
-    "tests_changed": true,
-    "code_changed": true,
+    "tests_changed": false,
+    "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotGitTimerConflictSafetyTests/*\" --output Detailed => прошло 3/3",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*|/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => прошло 7/7",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/GitBackupJobTests/*\" --output Detailed => прошло 3/3"
+      "dotnet workload list => прошло; installed workloads include android, ios, maccatalyst, maui-windows, wasm-tools",
+      "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release => прошло; output src/Unlimotion.Browser/bin/Release/net10.0-browser/Unlimotion.Browser.dll",
+      "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug => blocked by NETSDK1147; suggested dotnet workload restore for wasm-tools",
+      "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug => blocked by NETSDK1147; suggested dotnet workload restore for wasm-tools"
     ]
   },
   "bdd_sync": {
     "updated_at": "2026-06-18",
     "command": "/storm:bdd-sync",
     "mode": "guided-artifact-workflow",
-    "status": "completed",
+    "status": "completed_with_known_gaps",
     "synced_links": {
       "story_to_scenarios": 16,
       "acceptance_criteria_to_rules": 44,
@@ -11469,20 +11497,14 @@
       "acceptance criteria replacement",
       "CV-0007 product decision links"
     ],
-    "tests_changed": [
-      "src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs"
-    ],
-    "decision": "CV-0004 covered by approved BDD implementation; CV-0007 remains internal/orphan contract candidate by Вариант B.",
+    "tests_changed": [],
+    "decision": "ST-0015 platform validation evidence актуализирован: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state; CV-0007 remains internal/orphan contract candidate by Вариант B.",
     "gaps": [
       "Step definitions отсутствуют: отдельный BDD implementation task нужен перед executable Gherkin runner.",
-      "Android/browser/iOS runtime smoke и release pipeline evidence остаются отдельной platform validation задачей.",
+      "Android/iOS build smoke требует отдельной environment/setup task из-за NETSDK1147 workload restore blocker; runtime smoke и release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
-    "code_changed": [
-      "src/Unlimotion.TelegramBot/Bot.cs",
-      "src/Unlimotion.TelegramBot/GitService.cs",
-      "src/Unlimotion.TelegramBot/TelegramGitTimerHandler.cs"
-    ]
+    "code_changed": []
   },
   "bdd_lint": {
     "updated_at": "2026-06-18",
@@ -11493,7 +11515,7 @@
     "warnings": [
       "step_definitions пока пусты: BDD layer связан с TUnit tests напрямую, но не является executable Cucumber-style specification.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
-      "SC-0015-002 claims ограничены project-contract coverage; runtime release support не заявляется."
+      "SC-0015-002 имеет project-contract coverage и Browser Release build smoke evidence; Android/iOS runtime release support не заявляется."
     ],
     "checks": {
       "scenario_tags_present": true,
@@ -11502,12 +11524,14 @@
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
       "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": true,
-      "production_code_changes_in_approved_exec_scope": true,
+      "tests_changed_in_approved_exec_scope": false,
+      "production_code_changes_in_approved_exec_scope": false,
       "test_annotations_changed": false,
       "cv0007_active_scenario_created_without_confirmation": false,
       "cv0007_removed_from_active_cover_queue_after_decision_b": true,
-      "sc0014002_linked_to_timer_test": true
+      "sc0014002_linked_to_timer_test": true,
+      "st0015_browser_build_smoke_recorded": true,
+      "st0015_android_ios_build_blocker_recorded": true
     }
   }
 }
