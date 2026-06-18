@@ -128,7 +128,7 @@ UI test video evidence: Не применимо.
 4. Если C выбран: подготовить next SPEC for `/storm:cleanup attachment code candidate` without deletion until approved.
 
 ## 14. Открытые вопросы
-- Какой вариант выбирает product owner: A, B или C?
+- Решено 2026-06-18: product owner выбрал Вариант B.
 
 ## 15. Соответствие профилю
 - Профиль: `storm-product-development`.
@@ -225,37 +225,37 @@ UI test video evidence: Не применимо.
 - Residual risks / follow-ups: Future delivery depends on selected route.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до выбора A/B/C.
-- Decision: Не применимо.
+- Статус: PASS
+- Scope reviewed: approved spec with Вариант B, `docs/product/storm.json`, reports in `docs/product/reports/*`, `git status --short`, `git diff --stat`, validation commands.
+- Decision: можно завершать.
 - Review passes:
-  - Scope/Evidence pass: Не применимо.
-  - Contract pass: Не применимо.
-  - Adversarial risk pass: Не применимо.
-  - Re-review after fixes / Fix and re-review: Не применимо.
-  - Stop decision: Не применимо.
-- Evidence inspected: Не применимо.
+  - Scope/Evidence pass: changes are limited to product artifacts and this SPEC; code, tests, test annotations and feature files are unchanged.
+  - Contract pass: Вариант B is reflected as `internal_orphan_contract_candidate`; no active story/scenario/test links were created for `CV-0007`.
+  - Adversarial risk pass: main risk is making `CV-0007` look covered; reports explicitly state it is not coverage and not active product behavior.
+  - Re-review after fixes / Fix and re-review: final validation evidence was inspected after artifact sync.
+  - Stop decision: PASS; no BLOCKER/HIGH findings.
+- Evidence inspected: updated `storm.json`, coverage/ranking/stories/bdd-sync/bdd-lint/traceability reports, validator output, diff hygiene output.
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо.
-  - Acceptance criteria: Не применимо.
-  - Validation evidence: Не применимо.
-  - Unsupported claims: Не применимо.
-  - Regression / edge case: Не применимо.
-  - Comments/docs/changelog: Не применимо.
-  - Hidden contract change: Не применимо.
-  - Manual-review challenge: Не применимо.
-- No-findings justification: Не применимо до EXEC.
+  - Scope drift / unrelated changes: no unrelated files changed.
+  - Acceptance criteria: Вариант B selected, artifacts updated, no code/tests changed, validator planned/recorded.
+  - Validation evidence: validator and hygiene checks executed after updates.
+  - Unsupported claims: no claim that attachment workflow is covered or supported.
+  - Regression / edge case: runtime unchanged.
+  - Comments/docs/changelog: changelog not applicable for product artifact sync.
+  - Hidden contract change: none.
+  - Manual-review challenge: reviewer may ask why `CV-0007` remains in backlog table; answer: retained for traceability as non-active internal/orphan candidate, not active cover item.
+- No-findings justification: artifacts now align with explicit Вариант B and preserve traceability without product inflation.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| HIGH | product-decision | EXEC blocked until option A/B/C is selected. | Wait for product decision. | pending |
+| LOW | follow-up | `SC-0014-002` remains the remaining draft behavior gap. | Open separate `/storm:bdd-implement ST-0014` SPEC only if TelegramBot timer behavior is supported. | follow-up |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: choose A/B/C.
-- Residual risks / follow-ups: Не применимо.
+- Fixed before final report: Product decision state and report wording aligned to `internal_orphan_contract_candidate`.
+- Checks rerun: STORM validator, `git diff --check`, trailing whitespace scan.
+- Validation evidence: STORM validator OK 0 errors / 0 warnings; `git diff --check` passed with LF/CRLF warnings only; trailing whitespace scan had no matches.
+- Unrelated changes: none.
+- Needs human: none for Вариант B execution; future ST-0014 behavior still needs separate approval.
+- Residual risks / follow-ups: future attachment workflow revisit requires new product decision.
 
 ## Approval
 Ожидается одна из фраз:
@@ -265,6 +265,8 @@ UI test video evidence: Не применимо.
 
 `Спеку подтверждаю` без варианта не запускает EXEC, потому что product decision остается невыбранным.
 
+Статус: подтверждено пользователем 2026-06-18 фразой `Спеку подтверждаю. Вариант B`.
+
 ## 20. Журнал действий агента
 Заполняется инкрементально после каждого значимого блока работ.
 
@@ -272,3 +274,5 @@ UI test video evidence: Не применимо.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Product decision routing | 0.88 | Выбор A/B/C | Запросить product decision | Да | Нет | Ranking после `CV-0007` не допускает дальнейший `/storm:cover` без решения владельца продукта. | `specs/2026-06-18-storm-attachment-workflow-product-decision.md` |
 | SPEC | Post-SPEC review | 0.9 | Выбор A/B/C | Передать SPEC пользователю | Да | Нет | Review показал, что агент не должен выбирать product scope самостоятельно. | `specs/2026-06-18-storm-attachment-workflow-product-decision.md` |
+| EXEC | Вариант B artifact sync | 0.92 | Нет | Запустить validator и hygiene checks | Нет | Да, пользователь выбрал Вариант B | `CV-0007` снят с active `/storm:cover` queue and retained as internal/orphan contract candidate. | `docs/product/storm.json`, `docs/product/reports/*` |
+| EXEC | Post-EXEC review | 0.91 | Нет | Передать итог пользователю | Нет | Нет | Scope соблюден: code/tests/test annotations untouched, product artifacts consistent with Вариант B. | `specs/2026-06-18-storm-attachment-workflow-product-decision.md`, `docs/product/*` |
