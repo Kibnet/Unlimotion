@@ -1,13 +1,13 @@
 # STORM Stories
 
 Сгенерировано: 2026-06-18
-Команда: `/storm:bdd-implement ST-0014 Telegram Git timer conflict-safety`
+Команда: `/storm:platform-runtime-validation ST-0015`
 
 ## Story Changes
 
 | Story | Изменение | Evidence |
 | --- | --- | --- |
-| ST-0014 | `AC-0040` повышен с `partial` до `critical`: callbacks покрыты `TS-0023`, Telegram Git timer conflict-safety покрыт `TS-0025`. | `src/Unlimotion.TelegramBot/TelegramGitTimerHandler.cs`, `src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs` |
+| ST-0015 | `AC-0042` сохраняет coverage `critical`: project contracts покрыты `TS-0024`, Browser Release build smoke прошел. Android/iOS build smoke blocked by `NETSDK1147`, поэтому runtime release support не заявляется. | `src/Unlimotion.Browser/Unlimotion.Browser.csproj`, `src/Unlimotion.Android/Unlimotion.Android.csproj`, `src/Unlimotion.iOS/Unlimotion.iOS.csproj`, `TS-0024` |
 
 ## Product-Entry Candidate Update
 
@@ -20,6 +20,6 @@
 | Story / область | Gap | Следующее действие |
 | --- | --- | --- |
 | ST-0014 / AC-0040 | Нет active gap. | Поддерживать `TS-0022`, `TS-0023`, `TS-0025` при изменениях Telegram bot. |
-| Platform runtime | Android/browser/iOS runtime launch/release pipeline evidence не покрывались. | Отдельная platform validation SPEC при необходимости release support claims. |
+| ST-0015 / AC-0042 | Android/iOS build smoke заблокированы `NETSDK1147`; Browser build smoke не равен runtime/release evidence. | Отдельная environment/setup SPEC при необходимости Android/iOS build evidence; отдельная runtime/release SPEC при необходимости release support claims. |
 | BDD execution | `step_definitions` отсутствуют. | Отдельная `/storm:bdd-implement` SPEC, если нужен executable Gherkin runner. |
 | CV-0007 | Нет active story gap после Варианта B. | Future revisit only after new product decision. |
