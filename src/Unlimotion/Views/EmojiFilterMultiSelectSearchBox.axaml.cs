@@ -32,6 +32,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double NoMatchesPanelReservedHeight = 40d;
     private const double SummaryInputPadding = 4d;
     private const string EmptySummaryToken = "🙂";
+    private const string EmptySummaryClass = "EmptySummary";
     private static readonly Thickness SummaryPadding = new(SummaryInputPadding);
     private static WeakReference<EmojiFilterMultiSelectSearchBox>? openDropDownReference;
 
@@ -606,12 +607,13 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
             PART_Input.Text = inputText;
             PART_Input.PlaceholderText = isSearchActive ? Watermark : null;
-            PART_Input.TextAlignment = isSearchActive || !isEmptySummary
-                ? TextAlignment.Left
-                : TextAlignment.Center;
+            PART_Input.TextAlignment = !isSearchActive && (isEmptySummary || selectedTokens.Length == 1)
+                ? TextAlignment.Center
+                : TextAlignment.Left;
             PART_Input.Padding = SummaryPadding;
             PART_Input.MinWidth = GetSummarySquareWidth();
             PART_Input.Width = GetSummaryInputWidth(inputText, isEmptySummary);
+            UpdateInputSummaryClasses(isEmptySummary);
             UpdateInputAutomationId();
         }
         finally
@@ -700,6 +702,21 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         }
 
         return Math.Ceiling(Math.Max(28d, PART_Input.FontSize * 1.35d + 4d));
+    }
+
+    private void UpdateInputSummaryClasses(bool isEmptySummary)
+    {
+        if (isEmptySummary)
+        {
+            if (!PART_Input.Classes.Contains(EmptySummaryClass))
+            {
+                PART_Input.Classes.Add(EmptySummaryClass);
+            }
+
+            return;
+        }
+
+        PART_Input.Classes.Remove(EmptySummaryClass);
     }
 
     private void UpdateExcludeClass()

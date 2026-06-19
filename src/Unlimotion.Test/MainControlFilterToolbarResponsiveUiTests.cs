@@ -265,6 +265,8 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(FindEmojiFilterDropDownGlyph(excludeControl)).IsNull();
                 await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
                 await Assert.That(excludeMarker.IsVisible).IsTrue();
+                await AssertEmojiFilterInputIsMutedEmptySummary(includeInput);
+                await AssertEmojiFilterInputIsMutedEmptySummary(excludeInput);
                 await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
                 await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
 
@@ -276,6 +278,8 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(excludeInput.Text).IsNotNull();
                 await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
                 await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
+                await AssertEmojiFilterInputCentersSingleToken(includeInput);
+                await AssertEmojiFilterInputCentersSingleToken(excludeInput);
                 await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
                 await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
             }
@@ -1114,6 +1118,21 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(input.Text).IsEqualTo("🙂");
         await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
         await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(input.Bounds.Height + 1);
+        await AssertEmojiFilterInputIsMutedEmptySummary(input);
+    }
+
+    private static async Task AssertEmojiFilterInputIsMutedEmptySummary(TextBox input)
+    {
+        await Assert.That(input.Classes.Contains("EmptySummary")).IsTrue();
+        await Assert.That(input.Foreground).IsAssignableTo<ISolidColorBrush>();
+        await Assert.That(((ISolidColorBrush)input.Foreground!).Color.A).IsLessThan(byte.MaxValue);
+    }
+
+    private static async Task AssertEmojiFilterInputCentersSingleToken(TextBox input)
+    {
+        await Assert.That(input.Classes.Contains("EmptySummary")).IsFalse();
+        await Assert.That(input.TextAlignment).IsEqualTo(TextAlignment.Center);
+        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
     }
 
     private static async Task AssertExcludeMarkerDoesNotShiftInputText(
