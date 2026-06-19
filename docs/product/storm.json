@@ -4,7 +4,7 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-18",
+    "updated_at": "2026-06-19",
     "generated_by": "Codex /storm:bootstrap",
     "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
@@ -41,11 +41,12 @@
       "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
       "CV-0004 закрыт delivery evidence: callbacks покрыты TS-0023, Telegram Git timer conflict-safety покрыт TS-0025; test annotations не менялись.",
       "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024. Platform validation 2026-06-18 добавила Browser Release build smoke evidence; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, поэтому runtime release maturity не заявляется.",
+      "BDD executable slice добавлен 2026-06-19: SC-0015-002 исполняется из feature text через repo-local step definitions SD-0001..SD-0004 и TUnit evidence TS-0026.",
       "CV-0007 закрыт как active /storm:cover candidate через product decision Вариант B: attachment backend/API code сохранен как internal/orphan contract candidate без active story/scenario/test links."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -3834,6 +3835,54 @@
         "Timers_RunGitOperationsWhenNoConflictResolutionIsInProgress"
       ],
       "trace_confidence": 0.82
+    },
+    {
+      "id": "TS-0026",
+      "name": "StormPlatformShellExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+      "framework": "TUnit",
+      "type": "bdd-executable-spec/platform-shells",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0015-002_step_definitions",
+      "confidence": 0.82,
+      "linked_stories": [
+        "ST-0015"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0042"
+      ],
+      "linked_constraints": [
+        "CN-0004",
+        "CN-0007",
+        "CN-0008"
+      ],
+      "linked_scenarios": [
+        "SC-0015-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "symbol": "PlatformShellContractScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0015-002 steps from features/storm/st-0015-platform-shells.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+          "symbol": "SD-0001..SD-0004",
+          "description": "Step definitions bind Given/When/Then product wording to platform shell project contract assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 2026-06-19"
+        }
+      ],
+      "assumptions": [
+        "Repo-local runner intentionally covers only the supported STORM feature-file subset used by SC-0015-002; this is not a full Cucumber-style engine."
+      ],
+      "open_questions": [],
+      "trace_method_examples": [
+        "PlatformShellContractScenario_ExecutesFeatureSteps"
+      ],
+      "trace_confidence": 0.82
     }
   ],
   "code_units": [
@@ -4920,18 +4969,18 @@
     }
   },
   "traceability": {
-    "updated_at": "2026-06-18",
-    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
+    "updated_at": "2026-06-19",
+    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "route": "guided-artifact-workflow",
     "mode": "delivery-task",
     "annotations_added": false,
-    "annotations_reason": "Test annotations не менялись; TS-0022/TS-0023/TS-0025 связаны с STORM artifacts через storm.json/feature/report links.",
+    "annotations_reason": "Test annotations не менялись; TS-0022/TS-0023/TS-0025/TS-0026 связаны с STORM artifacts через storm.json/feature/report links.",
     "summary": {
       "stories_total": 16,
       "stories_with_tests": 16,
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
-      "tests_total": 25,
+      "tests_total": 26,
       "tests_without_story_or_constraint_links": 0,
       "code_units_total": 19,
       "code_units_without_supports": 0
@@ -5457,7 +5506,8 @@
         "tests": [
           "TS-0011",
           "TS-0015",
-          "TS-0024"
+          "TS-0024",
+          "TS-0026"
         ],
         "code_units": [
           "CU-0015",
@@ -5477,7 +5527,8 @@
             "id": "AC-0042",
             "tests": [
               "TS-0015",
-              "TS-0024"
+              "TS-0024",
+              "TS-0026"
             ],
             "coverage_level": "critical"
           },
@@ -5980,6 +6031,22 @@
           "PushTimer_SkipsCommitAndPushWhenConflictResolutionIsInProgress",
           "Timers_RunGitOperationsWhenNoConflictResolutionIsInProgress"
         ]
+      },
+      "TS-0026": {
+        "stories": [
+          "ST-0015"
+        ],
+        "acceptance_criteria": [
+          "AC-0042"
+        ],
+        "constraints": [
+          "CN-0004",
+          "CN-0007",
+          "CN-0008"
+        ],
+        "method_examples": [
+          "PlatformShellContractScenario_ExecutesFeatureSteps"
+        ]
       }
     },
     "orphan_tests": [
@@ -6017,11 +6084,11 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-18",
-    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "guided-artifact-workflow",
+    "updated_at": "2026-06-19",
+    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "mode": "delivery-task",
     "annotations_added": false,
-    "tests_changed": false,
+    "tests_changed": true,
     "tests_run": true,
     "summary": {
       "acceptance_criteria_total": 44,
@@ -6036,7 +6103,7 @@
       "improved_by_current_artifact_triage": 1,
       "internal_orphan_contract_candidates": 1,
       "active_cover_candidates_remaining": 0,
-      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; ST-0015 Browser Release build smoke подтвержден, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
+      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; SC-0015-002 получил первый executable step-definition slice через SD-0001..SD-0004 и TS-0026."
     },
     "improved_by_existing_evidence": [
       {
@@ -6284,9 +6351,10 @@
         "minimal_tests": [
           "AndroidProject_IncludesSharedUiReferenceAndNativeGitAssets",
           "BrowserProject_UsesSharedUiAndBrowserAppStartupContract",
-          "IosProject_UsesSharedUiAndAvaloniaDelegateContract"
+          "IosProject_UsesSharedUiAndAvaloniaDelegateContract",
+          "PlatformShellContractScenario_ExecutesFeatureSteps"
         ],
-        "reason": "Policy зафиксирована как project-contract supported для Android/browser/iOS; TS-0024 passed 3/3 и не заявляет runtime release maturity.",
+        "reason": "Policy зафиксирована как project-contract supported для Android/browser/iOS; TS-0024 passed 3/3 и TS-0026 executes SC-0015-002 through repo-local step definitions without runtime release claim.",
         "prerequisite": "Выполнено: conservative platform support policy утверждена через SPEC approval.",
         "rank": 6,
         "depends_on": [],
@@ -6307,7 +6375,12 @@
           "cost_star": 9,
           "priority_star": 0.4167
         },
-        "condition": "Desktop остаётся release-supported; Android/browser/iOS считаются project-contract supported surfaces без runtime release claim."
+        "condition": "Desktop остаётся release-supported; Android/browser/iOS считаются project-contract supported surfaces без runtime release claim.",
+        "covered_by_tests": [
+          "TS-0024",
+          "TS-0026"
+        ],
+        "coverage_result": "TS-0024 прошел 3/3 и подтверждает project contracts; TS-0026 прошел 1/1 2026-06-19 и исполняет SC-0015-002 из feature text через SD-0001..SD-0004."
       },
       {
         "id": "CV-0006",
@@ -6408,13 +6481,14 @@
     ],
     "open_questions": [
       "Решено 2026-06-18: TelegramBot Git timer conflict-safety реализован и покрыт TS-0025.",
+      "Решено 2026-06-19: первый executable BDD slice для SC-0015-002 реализован через SD-0001..SD-0004 и TS-0026.",
       "Частично проверено 2026-06-18: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state. Нужна ли отдельная environment/setup task для Android/iOS?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B."
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-18",
-      "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
-      "mode": "guided-artifact-workflow",
+      "updated_at": "2026-06-19",
+      "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+      "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -6435,36 +6509,37 @@
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 0,
-      "executable_specification_ratio": "7/45",
+      "step_definitions_total": 4,
+      "step_executable_scenarios": 1,
+      "step_definition_coverage_ratio": "1/45",
+      "executable_specification_ratio": "1/45 step-executable; 7/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
-      "tests_changed": false,
+      "tests_changed": true,
       "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet workload list => installed workloads include android, ios, maccatalyst, maui-windows and wasm-tools",
-        "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release => passed with existing warnings",
-        "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug => blocked by NETSDK1147 requesting dotnet workload restore for wasm-tools",
-        "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug => blocked by NETSDK1147 requesting dotnet workload restore for wasm-tools"
+        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => прошло 3/3"
       ]
     },
     "bdd_sync_summary": {
       "scenario_to_tests": "45/45",
       "changed_scenarios": [
-        "SC-0014-002"
+        "SC-0015-002"
       ],
       "changed_tests": [
-        "TS-0025"
+        "TS-0026"
       ],
       "known_gaps": [
-        "step_definitions_total=0; BDD layer remains linked to TUnit tests rather than executable Cucumber-style step definitions",
+        "step_definitions_total=4; SC-0015-002 is step-executable, remaining scenarios still rely on linked TUnit evidence",
         "CV-0007 removed from active /storm:cover queue by option B; attachment code remains internal/orphan contract candidate",
         "Browser Release build smoke passed on 2026-06-18; Android/iOS build smoke remain blocked by NETSDK1147 workload restore state; release pipeline evidence remains optional platform validation claim"
       ],
-      "decision": "CV-0004 covered by approved BDD implementation; CV-0007 decision B remains unchanged."
+      "decision": "SC-0015-002 has the first repo-local executable step-definition slice; CV-0007 decision B remains unchanged."
     },
     "improved_by_delivery_evidence": [
       {
@@ -6502,19 +6577,20 @@
         "story": "ST-0015",
         "new_coverage_level": "critical",
         "tests": [
-          "TS-0024"
+          "TS-0024",
+          "TS-0026"
         ],
-        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts и conservative platform support policy; Browser Release build smoke прошел 2026-06-18, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
+        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts; TS-0026 исполняет SC-0015-002 из feature text через SD-0001..SD-0004; Browser Release build smoke прошел 2026-06-18, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full test suite не запускался в этой artifact-only validation SPEC; production code/tests не менялись.",
-    "targeted_validation_result": "dotnet workload list прошел; Browser Release build прошел; Android/iOS Debug build smoke заблокированы NETSDK1147 workload restore state."
+    "full_suite_result": "Full test suite не запускался в этой узкой BDD implementation SPEC; production code не менялся.",
+    "targeted_validation_result": "Build прошел; StormPlatformShellExecutableSpecTests прошел 1/1; PlatformShellProjectContractTests прошел 3/3."
   },
   "ranking_analysis": {
-    "updated_at": "2026-06-18",
-    "command": "/storm:rank + /storm:platform-runtime-validation ST-0015",
-    "mode": "guided-artifact-workflow",
+    "updated_at": "2026-06-19",
+    "command": "/storm:rank + /storm:bdd-implement SC-0015-002 executable step definitions",
+    "mode": "delivery-task",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
@@ -10346,12 +10422,18 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; android_ios_build_smoke_blocked_by_NETSDK1147_workload_restore_state",
+      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; executable_step_definition_slice_passed_1_of_1_on_2026-06-19; android_ios_build_smoke_blocked_by_NETSDK1147_workload_restore_state",
       "linked_tests": [
         "TS-0015",
-        "TS-0024"
+        "TS-0024",
+        "TS-0026"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0001",
+        "SD-0002",
+        "SD-0003",
+        "SD-0004"
+      ],
       "coverage_role": "constraint_check",
       "status": "passing",
       "gherkin": {
@@ -10393,6 +10475,16 @@
           "path": "src/Unlimotion.Test/PlatformShellProjectContractTests.cs",
           "description": "TS-0024 подтверждает Android/browser/iOS project contracts.",
           "test_id": "TS-0024"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "description": "TS-0026 исполняет SC-0015-002 из feature text через repo-local step definitions.",
+          "test_id": "TS-0026"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+          "symbol": "SD-0001..SD-0004",
+          "description": "Step definitions bind SC-0015-002 Given/When/Then wording to project-contract assertions."
         },
         {
           "command": "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release",
@@ -11439,11 +11531,88 @@
       "open_questions": []
     }
   ],
-  "step_definitions": [],
+  "step_definitions": [
+    {
+      "id": "SD-0001",
+      "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+      "symbol": "PlatformShellStepDefinitions.Create / SD-0001",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано desktop остаётся основной release-supported оболочкой Unlimotion",
+      "supports_scenarios": [
+        "SC-0015-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "symbol": "PlatformShellContractScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0026"
+        }
+      ]
+    },
+    {
+      "id": "SD-0002",
+      "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+      "symbol": "PlatformShellStepDefinitions.Create / SD-0002",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И non-desktop shells должны переиспользовать общую Avalonia task UI модель",
+      "supports_scenarios": [
+        "SC-0015-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "symbol": "PlatformShellContractScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0026"
+        }
+      ]
+    },
+    {
+      "id": "SD-0003",
+      "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+      "symbol": "PlatformShellStepDefinitions.Create / SD-0003",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда maintainer проверяет platform project contracts для Android, browser и iOS",
+      "supports_scenarios": [
+        "SC-0015-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "symbol": "PlatformShellContractScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0026"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContracts.cs",
+          "symbol": "AssertAllPlatformShellProjectContractsAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0004",
+      "path": "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+      "symbol": "PlatformShellStepDefinitions.Create / SD-0004",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда каждый non-desktop shell ссылается на общую UI-модель и нужный Avalonia platform package, а Android содержит native Git assets без заявления runtime release support",
+      "supports_scenarios": [
+        "SC-0015-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+          "symbol": "PlatformShellContractScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0026"
+        },
+        {
+          "path": "src/Unlimotion.Test/PlatformShellProjectContracts.cs",
+          "symbol": "AssertAllPlatformShellProjectContractsAsync"
+        }
+      ]
+    }
+  ],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-18",
-    "command": "/storm:platform-runtime-validation ST-0015 + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "guided-artifact-workflow",
+    "updated_at": "2026-06-19",
+    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "mode": "delivery-task",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -11464,24 +11633,25 @@
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 0,
-    "executable_specification_ratio": "7/45",
+    "step_definitions_total": 4,
+    "step_executable_scenarios": 1,
+    "step_definition_coverage_ratio": "1/45",
+    "executable_specification_ratio": "1/45 step-executable; 7/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
-    "tests_changed": false,
+    "tests_changed": true,
     "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet workload list => прошло; installed workloads include android, ios, maccatalyst, maui-windows, wasm-tools",
-      "dotnet build src/Unlimotion.Browser/Unlimotion.Browser.csproj -c Release => прошло; output src/Unlimotion.Browser/bin/Release/net10.0-browser/Unlimotion.Browser.dll",
-      "dotnet build src/Unlimotion.Android/Unlimotion.Android.csproj -c Debug => blocked by NETSDK1147; suggested dotnet workload restore for wasm-tools",
-      "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug => blocked by NETSDK1147; suggested dotnet workload restore for wasm-tools"
+      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => прошло 3/3"
     ]
   },
   "bdd_sync": {
-    "updated_at": "2026-06-18",
+    "updated_at": "2026-06-19",
     "command": "/storm:bdd-sync",
     "mode": "guided-artifact-workflow",
     "status": "completed_with_known_gaps",
@@ -11490,6 +11660,7 @@
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
       "scenario_to_tests": 45,
+      "scenario_to_step_definitions": 1,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
@@ -11497,23 +11668,31 @@
       "acceptance criteria replacement",
       "CV-0007 product decision links"
     ],
-    "tests_changed": [],
-    "decision": "ST-0015 platform validation evidence актуализирован: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state; CV-0007 remains internal/orphan contract candidate by Вариант B.",
+    "tests_changed": [
+      "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
+      "src/Unlimotion.Test/StormBdd/StormFeatureParser.cs",
+      "src/Unlimotion.Test/StormBdd/StormScenarioRunner.cs",
+      "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs",
+      "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
+      "src/Unlimotion.Test/PlatformShellProjectContracts.cs",
+      "src/Unlimotion.Test/PlatformShellProjectContractTests.cs"
+    ],
+    "decision": "SC-0015-002 получил первый repo-local executable step-definition slice через SD-0001..SD-0004 и TS-0026; CV-0007 remains internal/orphan contract candidate by Вариант B.",
     "gaps": [
-      "Step definitions отсутствуют: отдельный BDD implementation task нужен перед executable Gherkin runner.",
+      "Step definitions покрывают 1/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
       "Android/iOS build smoke требует отдельной environment/setup task из-за NETSDK1147 workload restore blocker; runtime smoke и release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
     "code_changed": []
   },
   "bdd_lint": {
-    "updated_at": "2026-06-18",
+    "updated_at": "2026-06-19",
     "command": "/storm:bdd-lint",
     "mode": "guided-artifact-workflow",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions пока пусты: BDD layer связан с TUnit tests напрямую, но не является executable Cucumber-style specification.",
+      "step_definitions покрывают только SC-0015-002: repo-local runner не является full Cucumber-style engine.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
       "SC-0015-002 имеет project-contract coverage и Browser Release build smoke evidence; Android/iOS runtime release support не заявляется."
     ],
@@ -11524,9 +11703,11 @@
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
       "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": false,
+      "tests_changed_in_approved_exec_scope": true,
       "production_code_changes_in_approved_exec_scope": false,
       "test_annotations_changed": false,
+      "step_definitions_present": true,
+      "step_executable_scenarios_present": true,
       "cv0007_active_scenario_created_without_confirmation": false,
       "cv0007_removed_from_active_cover_queue_after_decision_b": true,
       "sc0014002_linked_to_timer_test": true,
