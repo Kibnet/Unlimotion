@@ -1,13 +1,13 @@
 # STORM Traceability
 
-Сгенерировано: 2026-06-18
-Команда: `/storm:trace` sync after `/storm:platform-runtime-validation ST-0015`
+Сгенерировано: 2026-06-19
+Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0015-002 executable step definitions`
 
 ## New Trace
 
 | Story | AC | Scenario | Test | Status |
 | --- | --- | --- | --- | --- |
-| ST-0015 | AC-0042 | SC-0015-002 | TS-0015, TS-0024 | passing project-contract coverage plus Browser Release build smoke; Android/iOS build smoke blocked by `NETSDK1147` |
+| ST-0015 | AC-0042 | SC-0015-002 | TS-0026 + SD-0001..SD-0004 | passing executable BDD slice from feature text |
 
 ## Existing Trace Preserved
 
@@ -17,6 +17,7 @@
 | ST-0014 | AC-0040 | SC-0014-002 | TS-0025 | passing Git timer conflict-safety |
 | ST-0014 | AC-0040 | SC-0014-003 | TS-0023 | passing callback subset |
 | ST-0015 | AC-0041 | SC-0015-001 | TS-0011, TS-0015 | desktop/update evidence |
+| ST-0015 | AC-0042 | SC-0015-002 | TS-0015, TS-0024 | passing project-contract coverage plus Browser Release build smoke; Android/iOS build smoke blocked by `NETSDK1147` |
 | ST-0015 | AC-0043 | SC-0015-003 | TS-0011, TS-0015 | CI/README media evidence |
 
 ## Internal/Orphan Candidate Trace
@@ -27,6 +28,6 @@
 
 ## Residual Gaps
 
-У `CV-0004` больше нет traceability gap. `ST-0015 / AC-0042` получил Browser build smoke evidence, но Android/iOS build smoke остаются environment-blocked.
+У `CV-0004` больше нет traceability gap. `ST-0015 / AC-0042` получил Browser build smoke evidence и первый executable step-definition trace для `SC-0015-002`, но Android/iOS build smoke остаются environment-blocked.
 
-Оставшиеся non-cover gaps: executable `step_definitions` отсутствуют, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, а runtime/release evidence не заявляется.
+Оставшиеся non-cover gaps: step definitions покрывают только `SC-0015-002`, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, а runtime/release evidence не заявляется.

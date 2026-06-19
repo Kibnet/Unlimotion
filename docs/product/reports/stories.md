@@ -1,13 +1,13 @@
 # STORM Stories
 
-Сгенерировано: 2026-06-18
-Команда: `/storm:platform-runtime-validation ST-0015`
+Сгенерировано: 2026-06-19
+Команда: `/storm:bdd-implement SC-0015-002 executable step definitions`
 
 ## Story Changes
 
 | Story | Изменение | Evidence |
 | --- | --- | --- |
-| ST-0015 | `AC-0042` сохраняет coverage `critical`: project contracts покрыты `TS-0024`, Browser Release build smoke прошел. Android/iOS build smoke blocked by `NETSDK1147`, поэтому runtime release support не заявляется. | `src/Unlimotion.Browser/Unlimotion.Browser.csproj`, `src/Unlimotion.Android/Unlimotion.Android.csproj`, `src/Unlimotion.iOS/Unlimotion.iOS.csproj`, `TS-0024` |
+| ST-0015 | `AC-0042` сохраняет coverage `critical`: project contracts покрыты `TS-0024`, а `SC-0015-002` исполняется через `SD-0001..SD-0004` и `TS-0026`. Android/iOS build smoke blocked by `NETSDK1147`, поэтому runtime release support не заявляется. | `features/storm/st-0015-platform-shells.feature`, `src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs`, `src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs`, `TS-0024`, `TS-0026` |
 
 ## Product-Entry Candidate Update
 
@@ -21,5 +21,5 @@
 | --- | --- | --- |
 | ST-0014 / AC-0040 | Нет active gap. | Поддерживать `TS-0022`, `TS-0023`, `TS-0025` при изменениях Telegram bot. |
 | ST-0015 / AC-0042 | Android/iOS build smoke заблокированы `NETSDK1147`; Browser build smoke не равен runtime/release evidence. | Отдельная environment/setup SPEC при необходимости Android/iOS build evidence; отдельная runtime/release SPEC при необходимости release support claims. |
-| BDD execution | `step_definitions` отсутствуют. | Отдельная `/storm:bdd-implement` SPEC, если нужен executable Gherkin runner. |
+| BDD execution | Step definitions покрывают только `SC-0015-002`. | Расширять executable step definitions отдельными SPEC по high-value scenarios; не создавать placeholder steps массово. |
 | CV-0007 | Нет active story gap после Варианта B. | Future revisit only after new product decision. |
