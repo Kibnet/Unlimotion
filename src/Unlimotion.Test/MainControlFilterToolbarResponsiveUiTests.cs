@@ -266,6 +266,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
                 await Assert.That(excludeMarker.IsVisible).IsTrue();
                 await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+                await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
 
                 vm.EmojiFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
                 vm.EmojiExcludeFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
@@ -276,6 +277,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
                 await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
                 await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+                await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
             }
             finally
             {
@@ -1110,8 +1112,8 @@ public class MainControlFilterToolbarResponsiveUiTests
         var input = GetEmojiFilterInput(control);
 
         await Assert.That(input.Text).IsEqualTo("🙂");
-        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(8);
-        await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(control.SummaryMinWidth + 8);
+        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
+        await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(input.Bounds.Height + 1);
     }
 
     private static async Task AssertExcludeMarkerDoesNotShiftInputText(
@@ -1126,7 +1128,15 @@ public class MainControlFilterToolbarResponsiveUiTests
                      throw new InvalidOperationException("Emoji filter input visual parent was not found.");
         var inputBounds = GetBoundsRelativeTo(parent, excludeInput);
         var markerBounds = GetBoundsRelativeTo(parent, excludeMarker);
-        await Assert.That(markerBounds.Left).IsLessThanOrEqualTo(inputBounds.Left + excludeInput.Padding.Left);
+        await Assert.That(markerBounds.Right).IsLessThanOrEqualTo(inputBounds.Left + 2);
+    }
+
+    private static async Task AssertEmojiFilterSummaryUsesCompactInsets(TextBox includeInput, TextBox excludeInput)
+    {
+        await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
+        await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
+        await Assert.That(includeInput.Padding.Left).IsLessThanOrEqualTo(6);
+        await Assert.That(includeInput.Padding.Right).IsLessThanOrEqualTo(6);
     }
 
     private static async Task AssertControlStaysInsideWindow(Window window, Control control)

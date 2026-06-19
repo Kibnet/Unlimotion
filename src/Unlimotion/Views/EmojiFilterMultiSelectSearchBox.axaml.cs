@@ -26,13 +26,13 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double MinPopupWidth = 280d;
     private const double MaxPopupWidth = 340d;
     public const double DefaultSummaryWidth = 112d;
-    public const double DefaultSummaryMinWidth = 44d;
+    public static double DefaultSummaryMinWidth => AppearanceSettings.DefaultSearchControlHeight;
     private const double DropDownNonListHeight = 8d;
     private const double MinListHeight = 60d;
     private const double NoMatchesPanelReservedHeight = 40d;
+    private const double SummaryInputPadding = 4d;
     private const string EmptySummaryToken = "🙂";
-    private static readonly Thickness EmptySummaryPadding = new(8, 4, 8, 4);
-    private static readonly Thickness TokenSummaryPadding = new(18, 4, 8, 4);
+    private static readonly Thickness SummaryPadding = new(SummaryInputPadding);
     private static WeakReference<EmojiFilterMultiSelectSearchBox>? openDropDownReference;
 
     public static readonly StyledProperty<IEnumerable?> FiltersProperty =
@@ -609,7 +609,8 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
             PART_Input.TextAlignment = isSearchActive || !isEmptySummary
                 ? TextAlignment.Left
                 : TextAlignment.Center;
-            PART_Input.Padding = GetSummaryInputPadding(isEmptySummary);
+            PART_Input.Padding = SummaryPadding;
+            PART_Input.MinWidth = GetSummarySquareWidth();
             PART_Input.Width = GetSummaryInputWidth(inputText, isEmptySummary);
             UpdateInputAutomationId();
         }
@@ -617,16 +618,6 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         {
             isUpdatingInputText = false;
         }
-    }
-
-    private Thickness GetSummaryInputPadding(bool isEmptySummary)
-    {
-        if (isEmptySummary)
-        {
-            return EmptySummaryPadding;
-        }
-
-        return TokenSummaryPadding;
     }
 
     private double GetSummaryInputWidth(string inputText, bool isEmptySummary)
@@ -790,11 +781,30 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private double GetSummarySquareWidth()
     {
-        var minWidth = SummaryMinWidth > 0 && !double.IsNaN(SummaryMinWidth) && !double.IsInfinity(SummaryMinWidth)
+        var currentHeight = GetCurrentInputHeight();
+        return Math.Ceiling(currentHeight > 0 ? currentHeight : GetConfiguredSummaryMinWidth());
+    }
+
+    private double GetCurrentInputHeight()
+    {
+        if (PART_Input.Bounds.Height > 0)
+        {
+            return PART_Input.Bounds.Height;
+        }
+
+        if (!double.IsNaN(PART_Input.Height) && !double.IsInfinity(PART_Input.Height) && PART_Input.Height > 0)
+        {
+            return PART_Input.Height;
+        }
+
+        return PART_Input.DesiredSize.Height;
+    }
+
+    private double GetConfiguredSummaryMinWidth()
+    {
+        return SummaryMinWidth > 0 && !double.IsNaN(SummaryMinWidth) && !double.IsInfinity(SummaryMinWidth)
             ? SummaryMinWidth
             : DefaultSummaryMinWidth;
-        var currentHeight = PART_Input.Bounds.Height > 0 ? PART_Input.Bounds.Height : PART_Input.DesiredSize.Height;
-        return Math.Max(minWidth, currentHeight > 0 ? currentHeight : DefaultSummaryMinWidth);
     }
 
     private double GetSummaryTextHorizontalReserve()
