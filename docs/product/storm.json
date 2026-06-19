@@ -42,11 +42,13 @@
       "CV-0004 закрыт delivery evidence: callbacks покрыты TS-0023, Telegram Git timer conflict-safety покрыт TS-0025; test annotations не менялись.",
       "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024. Platform validation 2026-06-18 добавила Browser Release build smoke evidence; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, поэтому runtime release maturity не заявляется.",
       "BDD executable slice добавлен 2026-06-19: SC-0015-002 исполняется из feature text через repo-local step definitions SD-0001..SD-0004 и TUnit evidence TS-0026.",
+      "BDD executable slice добавлен 2026-06-19: SC-0014-002 исполняется из feature text через repo-local step definitions SD-0005..SD-0008 и TUnit evidence TS-0027.",
+      "BDD executable slice добавлен 2026-06-19: SC-0014-001 исполняется из feature text через repo-local step definitions SD-0009..SD-0012 и TUnit evidence TS-0028.",
       "CV-0007 закрыт как active /storm:cover candidate через product decision Вариант B: attachment backend/API code сохранен как internal/orphan contract candidate без active story/scenario/test links."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:bdd-implement SC-0014-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -2298,7 +2300,8 @@
           "text": "Бот ограничивает доступ allowed users и поддерживает /start, /help, /search, /task и /root.",
           "coverage_level": "full",
           "linked_tests": [
-            "TS-0022"
+            "TS-0022",
+            "TS-0028"
           ],
           "evidence": [
             {
@@ -2312,6 +2315,10 @@
             {
               "path": "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
               "symbol": "TelegramBotCommand_*"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+              "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps"
             }
           ],
           "linked_rules": [
@@ -2320,7 +2327,7 @@
           "linked_scenarios": [
             "SC-0014-001"
           ],
-          "coverage_note": "Покрыто TS-0022: allowed users получают /start, /help, /search, /task, /root behavior; unauthorized user не вызывает task query/storage и не получает task data."
+          "coverage_note": "Покрыто TS-0022 и executable BDD evidence TS-0028: allowed users получают /start, /help, /search, /task, /root behavior; unauthorized user не вызывает task query/storage и не получает task data."
         },
         {
           "id": "AC-0040",
@@ -2328,7 +2335,8 @@
           "coverage_level": "critical",
           "linked_tests": [
             "TS-0023",
-            "TS-0025"
+            "TS-0025",
+            "TS-0027"
           ],
           "evidence": [
             {
@@ -2350,6 +2358,10 @@
             {
               "path": "src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs",
               "symbol": "TelegramBotGitTimerConflictSafetyTests"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+              "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps"
             }
           ],
           "linked_rules": [
@@ -2359,7 +2371,7 @@
             "SC-0014-002",
             "SC-0014-003"
           ],
-          "coverage_note": "Callback subset покрыт TS-0023: unauthorized callback, open, status, delete, create sub/sibling prompts and relation lists. Git timer/conflict-safety subset покрыт TS-0025: pull и commit/push timer handlers проверяют conflict-resolution state и не запускают Git операции, пока конфликт не завершён."
+          "coverage_note": "Callback subset покрыт TS-0023: unauthorized callback, open, status, delete, create sub/sibling prompts and relation lists. Git timer/conflict-safety subset покрыт TS-0025 и executable BDD evidence TS-0027: pull и commit/push timer handlers проверяют conflict-resolution state и не запускают Git операции, пока конфликт не завершён."
         }
       ],
       "supports_needs": [
@@ -2368,10 +2380,12 @@
       "threatens_needs": [],
       "linked_tests": [
         "TS-0022",
+        "TS-0028",
         "TS-0023",
-        "TS-0025"
+        "TS-0025",
+        "TS-0027"
       ],
-      "test_strategy": "TS-0022 покрывает allowed-user gate и базовые команды /start, /help, /search, /task, /root без реального Telegram API; TS-0023 покрывает callback open/status/delete/create prompt/relation paths через pure callback handler seam; TS-0025 покрывает Telegram Git timer conflict-safety через handler seam без реальных Git side effects.",
+      "test_strategy": "TS-0022 покрывает allowed-user gate и базовые команды /start, /help, /search, /task, /root без реального Telegram API; TS-0028 исполняет SC-0014-001 из feature text через repo-local step definitions; TS-0023 покрывает callback open/status/delete/create prompt/relation paths через pure callback handler seam; TS-0025 покрывает Telegram Git timer conflict-safety через handler seam без реальных Git side effects; TS-0027 исполняет SC-0014-002 из feature text через repo-local step definitions.",
       "linked_code": [
         "CU-0013",
         "CU-0003"
@@ -2397,7 +2411,7 @@
         "SC-0014-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0014-001 имеет passing command/auth evidence через TS-0022; SC-0014-003 имеет passing callback evidence через TS-0023; SC-0014-002 имеет passing Git timer conflict-safety evidence через TS-0025. Реальный Telegram polling/network остаётся вне scope этих unit-level tests."
+      "behavior_coverage_note": "SC-0014-001 имеет passing command/auth evidence через TS-0022 и executable BDD evidence через TS-0028; SC-0014-003 имеет passing callback evidence через TS-0023; SC-0014-002 имеет passing Git timer conflict-safety evidence через TS-0025 и executable BDD evidence через TS-0027. Реальный Telegram polling/network остаётся вне scope этих unit-level tests."
     },
     {
       "id": "ST-0015",
@@ -3883,6 +3897,96 @@
         "PlatformShellContractScenario_ExecutesFeatureSteps"
       ],
       "trace_confidence": 0.82
+    },
+    {
+      "id": "TS-0027",
+      "name": "StormTelegramGitTimerExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+      "framework": "TUnit",
+      "type": "bdd-executable-spec/telegram-git-timers",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0014-002_step_definitions",
+      "confidence": 0.82,
+      "linked_stories": [
+        "ST-0014"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0040"
+      ],
+      "linked_constraints": [],
+      "linked_scenarios": [
+        "SC-0014-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0014-002 steps from features/storm/st-0014-telegram-bot.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+          "symbol": "SD-0005..SD-0008",
+          "description": "Step definitions bind Given/When/Then product wording to Telegram Git timer conflict-safety assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramGitTimerExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 2026-06-19"
+        }
+      ],
+      "assumptions": [
+        "Repo-local runner intentionally covers only the supported STORM feature-file subset used by SC-0014-002; this is not a full Cucumber-style engine.",
+        "Executable spec reuses deterministic TelegramGitTimerHandler seam and does not call real Telegram API, network, credentials or remote Git."
+      ],
+      "open_questions": [],
+      "trace_method_examples": [
+        "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps"
+      ],
+      "trace_confidence": 0.82
+    },
+    {
+      "id": "TS-0028",
+      "name": "StormTelegramCommandExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+      "framework": "TUnit",
+      "type": "bdd-executable-spec/telegram-command-auth",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0014-001_step_definitions",
+      "confidence": 0.82,
+      "linked_stories": [
+        "ST-0014"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0039"
+      ],
+      "linked_constraints": [],
+      "linked_scenarios": [
+        "SC-0014-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0014-001 steps from features/storm/st-0014-telegram-bot.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+          "symbol": "SD-0009..SD-0012",
+          "description": "Step definitions bind Given/When/Then product wording to Telegram command/auth assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCommandExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 2026-06-19"
+        }
+      ],
+      "assumptions": [
+        "Repo-local runner intentionally covers only the supported STORM feature-file subset used by SC-0014-001; this is not a full Cucumber-style engine.",
+        "Executable spec reuses deterministic TelegramCommandHandler seam and does not call real Telegram API, polling, credentials or network."
+      ],
+      "open_questions": [],
+      "trace_method_examples": [
+        "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps"
+      ],
+      "trace_confidence": 0.82
     }
   ],
   "code_units": [
@@ -4970,17 +5074,17 @@
   },
   "traceability": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0014-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "route": "guided-artifact-workflow",
     "mode": "delivery-task",
     "annotations_added": false,
-    "annotations_reason": "Test annotations не менялись; TS-0022/TS-0023/TS-0025/TS-0026 связаны с STORM artifacts через storm.json/feature/report links.",
+    "annotations_reason": "Test annotations не менялись; TS-0022/TS-0023/TS-0025/TS-0026/TS-0027/TS-0028 связаны с STORM artifacts через storm.json/feature/report links.",
     "summary": {
       "stories_total": 16,
       "stories_with_tests": 16,
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
-      "tests_total": 26,
+      "tests_total": 28,
       "tests_without_story_or_constraint_links": 0,
       "code_units_total": 19,
       "code_units_without_supports": 0
@@ -5477,8 +5581,10 @@
       "ST-0014": {
         "tests": [
           "TS-0022",
+          "TS-0028",
           "TS-0023",
-          "TS-0025"
+          "TS-0025",
+          "TS-0027"
         ],
         "code_units": [
           "CU-0013",
@@ -5488,7 +5594,8 @@
           {
             "id": "AC-0039",
             "tests": [
-              "TS-0022"
+              "TS-0022",
+              "TS-0028"
             ],
             "coverage_level": "full"
           },
@@ -5496,7 +5603,8 @@
             "id": "AC-0040",
             "tests": [
               "TS-0023",
-              "TS-0025"
+              "TS-0025",
+              "TS-0027"
             ],
             "coverage_level": "critical"
           }
@@ -6047,6 +6155,30 @@
         "method_examples": [
           "PlatformShellContractScenario_ExecutesFeatureSteps"
         ]
+      },
+      "TS-0027": {
+        "stories": [
+          "ST-0014"
+        ],
+        "acceptance_criteria": [
+          "AC-0040"
+        ],
+        "constraints": [],
+        "method_examples": [
+          "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps"
+        ]
+      },
+      "TS-0028": {
+        "stories": [
+          "ST-0014"
+        ],
+        "acceptance_criteria": [
+          "AC-0039"
+        ],
+        "constraints": [],
+        "method_examples": [
+          "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps"
+        ]
       }
     },
     "orphan_tests": [
@@ -6085,7 +6217,7 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0014-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "mode": "delivery-task",
     "annotations_added": false,
     "tests_changed": true,
@@ -6266,9 +6398,10 @@
           "TelegramBotCommand_StartAndHelp_ReturnRussianCommandTextForAllowedUser",
           "TelegramBotCommand_SearchWithResults_ShowsTaskListForAllowedUser",
           "TelegramBotCommand_TaskCommand_RoutesTaskIdToResponderForAllowedUser",
-          "TelegramBotCommand_RootWithResults_ShowsRootTaskListForAllowedUser"
+          "TelegramBotCommand_RootWithResults_ShowsRootTaskListForAllowedUser",
+          "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps"
         ],
-        "reason": "Telegram bot command authorization и базовые команды получили automated evidence через pure handler seam.",
+        "reason": "Telegram bot command authorization и базовые команды получили automated evidence через pure handler seam и executable BDD slice.",
         "prerequisite": "Выполнено: Telegram bot подтверждён как supported surface для CV-0003 command/auth coverage.",
         "rank": 4,
         "depends_on": [],
@@ -6289,11 +6422,12 @@
           "cost_star": 6.5,
           "priority_star": 0.6923
         },
-        "condition": "Covered by TS-0022; CV-0004 callback/timer follow-up is now covered by TS-0023/TS-0025.",
+        "condition": "Covered by TS-0022 and executable BDD evidence TS-0028; CV-0004 callback/timer follow-up is now covered by TS-0023/TS-0025/TS-0027.",
         "covered_by_tests": [
-          "TS-0022"
+          "TS-0022",
+          "TS-0028"
         ],
-        "coverage_result": "TS-0022 passed 7/7 on 2026-06-16; tests do not require Telegram credentials, network polling, timers or Git side effects."
+        "coverage_result": "TS-0022 прошел 7/7 2026-06-19; TS-0028 прошел 1/1 2026-06-19 и исполняет SC-0014-001 через SD-0009..SD-0012; tests do not require Telegram credentials, network polling, timers or Git side effects."
       },
       {
         "id": "CV-0004",
@@ -6308,9 +6442,10 @@
           "TelegramBotCallback_Relations_ShowExistingListsAndEmptyStates",
           "PullTimer_SkipsPullWhenConflictResolutionIsInProgress",
           "PushTimer_SkipsCommitAndPushWhenConflictResolutionIsInProgress",
-          "Timers_RunGitOperationsWhenNoConflictResolutionIsInProgress"
+          "Timers_RunGitOperationsWhenNoConflictResolutionIsInProgress",
+          "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps"
         ],
-        "reason": "AC-0040 покрыт command-adjacent callback behavior через TS-0023 и Git timer conflict-safety через TS-0025.",
+        "reason": "AC-0040 покрыт command-adjacent callback behavior через TS-0023, Git timer conflict-safety через TS-0025 и executable BDD slice через TS-0027.",
         "prerequisite": "Выполнено: callback seam и Telegram Git timer conflict-safety handler реализованы под утвержденными SPEC.",
         "rank": 5,
         "depends_on": [
@@ -6333,13 +6468,14 @@
           "cost_star": 15,
           "priority_star": 0.6208
         },
-        "condition": "Callbacks покрыты TS-0023; Telegram Git timer conflict-safety покрыт TS-0025.",
+        "condition": "Callbacks покрыты TS-0023; Telegram Git timer conflict-safety покрыт TS-0025 и исполняется через TS-0027.",
         "covered_by_tests": [
           "TS-0023",
-          "TS-0025"
+          "TS-0025",
+          "TS-0027"
         ],
-        "coverage_result": "TS-0023 прошел 7/7 в regression run 2026-06-18; TS-0025 прошел 3/3 2026-06-18 и покрывает Telegram Git timer skip/run behavior вокруг conflict resolution.",
-        "rationale": "Callback actions и Git timer conflict-safety теперь имеют deterministic TUnit evidence без реального Telegram API или remote Git side effects."
+        "coverage_result": "TS-0023 прошел 7/7 в regression run 2026-06-18; TS-0025 прошел 3/3 2026-06-19 и покрывает Telegram Git timer skip/run behavior; TS-0027 прошел 1/1 2026-06-19 и исполняет SC-0014-002 через SD-0005..SD-0008.",
+        "rationale": "Callback actions и Git timer conflict-safety теперь имеют deterministic TUnit evidence без реального Telegram API или remote Git side effects; Git timer conflict-safety additionally has executable BDD evidence."
       },
       {
         "id": "CV-0005",
@@ -6482,12 +6618,14 @@
     "open_questions": [
       "Решено 2026-06-18: TelegramBot Git timer conflict-safety реализован и покрыт TS-0025.",
       "Решено 2026-06-19: первый executable BDD slice для SC-0015-002 реализован через SD-0001..SD-0004 и TS-0026.",
+      "Решено 2026-06-19: executable BDD slice для SC-0014-002 реализован через SD-0005..SD-0008 и TS-0027.",
+      "Решено 2026-06-19: executable BDD slice для SC-0014-001 реализован через SD-0009..SD-0012 и TS-0028.",
       "Частично проверено 2026-06-18: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state. Нужна ли отдельная environment/setup task для Android/iOS?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B."
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-19",
-      "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+      "command": "/storm:bdd-implement SC-0014-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
       "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
@@ -6509,10 +6647,10 @@
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 4,
-      "step_executable_scenarios": 1,
-      "step_definition_coverage_ratio": "1/45",
-      "executable_specification_ratio": "1/45 step-executable; 7/45 passing scenarios",
+      "step_definitions_total": 12,
+      "step_executable_scenarios": 3,
+      "step_definition_coverage_ratio": "3/45",
+      "executable_specification_ratio": "3/45 step-executable; 7/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -6522,24 +6660,24 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => прошло 3/3"
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCommandExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => прошло 7/7"
       ]
     },
     "bdd_sync_summary": {
       "scenario_to_tests": "45/45",
       "changed_scenarios": [
-        "SC-0015-002"
+        "SC-0014-001"
       ],
       "changed_tests": [
-        "TS-0026"
+        "TS-0028"
       ],
       "known_gaps": [
-        "step_definitions_total=4; SC-0015-002 is step-executable, remaining scenarios still rely on linked TUnit evidence",
+        "step_definitions_total=12; SC-0015-002, SC-0014-002 and SC-0014-001 are step-executable, remaining scenarios still rely on linked TUnit evidence",
         "CV-0007 removed from active /storm:cover queue by option B; attachment code remains internal/orphan contract candidate",
         "Browser Release build smoke passed on 2026-06-18; Android/iOS build smoke remain blocked by NETSDK1147 workload restore state; release pipeline evidence remains optional platform validation claim"
       ],
-      "decision": "SC-0015-002 has the first repo-local executable step-definition slice; CV-0007 decision B remains unchanged."
+      "decision": "SC-0015-002, SC-0014-002 and SC-0014-001 have repo-local executable step-definition slices; CV-0007 decision B remains unchanged."
     },
     "improved_by_delivery_evidence": [
       {
@@ -6568,9 +6706,21 @@
         "story": "ST-0014",
         "new_coverage_level": "full",
         "tests": [
-          "TS-0022"
+          "TS-0022",
+          "TS-0028"
         ],
-        "reason": "TS-0022 подтверждает allowed-user gate и базовые Telegram commands через testable handler seam без network/polling/Git side effects."
+        "reason": "TS-0022 подтверждает allowed-user gate и базовые Telegram commands через testable handler seam без network/polling/Git side effects; TS-0028 исполняет SC-0014-001 из feature text через SD-0009..SD-0012."
+      },
+      {
+        "id": "AC-0040",
+        "story": "ST-0014",
+        "new_coverage_level": "critical",
+        "tests": [
+          "TS-0023",
+          "TS-0025",
+          "TS-0027"
+        ],
+        "reason": "TS-0023 покрывает callback behavior; TS-0025 покрывает Telegram Git timer conflict-safety через handler seam; TS-0027 исполняет SC-0014-002 из feature text через SD-0005..SD-0008."
       },
       {
         "id": "AC-0042",
@@ -6585,11 +6735,11 @@
     ],
     "code_changed": false,
     "full_suite_result": "Full test suite не запускался в этой узкой BDD implementation SPEC; production code не менялся.",
-    "targeted_validation_result": "Build прошел; StormPlatformShellExecutableSpecTests прошел 1/1; PlatformShellProjectContractTests прошел 3/3."
+    "targeted_validation_result": "Build прошел; StormTelegramCommandExecutableSpecTests прошел 1/1; TelegramBotCommandAuthorizationTests прошел 7/7."
   },
   "ranking_analysis": {
     "updated_at": "2026-06-19",
-    "command": "/storm:rank + /storm:bdd-implement SC-0015-002 executable step definitions",
+    "command": "/storm:rank + /storm:bdd-implement SC-0014-001 executable step definitions",
     "mode": "delivery-task",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
@@ -6619,7 +6769,7 @@
           "CV-0003",
           "CV-0004"
         ],
-        "recommendation": "CV-0003 и CV-0004 покрыты: command/auth, callback behavior и Git timer conflict-safety имеют passing TUnit evidence."
+        "recommendation": "CV-0003 и CV-0004 покрыты: command/auth, callback behavior и Git timer conflict-safety имеют passing TUnit evidence; SC-0014-001 и SC-0014-002 дополнительно исполняются через step definitions."
       },
       {
         "story": "ST-0015",
@@ -6630,7 +6780,7 @@
         "recommendation": "Сначала принять platform support policy, затем добавлять smoke coverage."
       }
     ],
-    "next_recommended_action": "Текущих active /storm:cover behavior gaps после CV-0004 и Варианта B для CV-0007 не осталось. Следующий осмысленный шаг: отдельная SPEC на platform runtime validation для ST-0015 или SPEC на executable BDD step definitions, если это нужно процессу."
+    "next_recommended_action": "Текущих active /storm:cover behavior gaps после CV-0004 и Варианта B для CV-0007 не осталось. Следующий осмысленный шаг: расширять executable BDD на следующий high-value scenario или отдельной SPEC снять Android/iOS NETSDK1147 environment blocker."
   },
   "gherkin_features": [
     {
@@ -9139,11 +9289,17 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "passing_telegram_command_auth_coverage",
+      "automation_status": "passing_telegram_command_auth_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-19",
       "linked_tests": [
-        "TS-0022"
+        "TS-0022",
+        "TS-0028"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0009",
+        "SD-0010",
+        "SD-0011",
+        "SD-0012"
+      ],
       "coverage_role": "happy_path",
       "status": "passing",
       "gherkin": {
@@ -9167,6 +9323,20 @@
           "path": "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
           "test_id": "TS-0022",
           "description": "Targeted TUnit run passed 7/7 on 2026-06-16: unauthorized user, /start, /help, /search, /task, /root and unknown command paths."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "test_id": "TS-0028",
+          "description": "TS-0028 прошел 1/1 2026-06-19 и исполняет SC-0014-001 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+          "symbol": "SD-0009..SD-0012",
+          "description": "Step definitions bind SC-0014-001 Given/When/Then wording to TelegramCommandHandler command/auth assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCommandExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 2026-06-19"
         },
         {
           "path": "src/Unlimotion.TelegramBot/TelegramCommandHandler.cs",
@@ -10345,11 +10515,17 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "passing_telegram_git_timer_conflict_safety_tests",
+      "automation_status": "passing_telegram_git_timer_conflict_safety_tests; executable_step_definition_slice_passed_1_of_1_on_2026-06-19",
       "linked_tests": [
-        "TS-0025"
+        "TS-0025",
+        "TS-0027"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0005",
+        "SD-0006",
+        "SD-0007",
+        "SD-0008"
+      ],
       "coverage_role": "business_rule",
       "status": "passing",
       "gherkin": {
@@ -10383,6 +10559,20 @@
           "path": "src/Unlimotion.Test/TelegramBotGitTimerConflictSafetyTests.cs",
           "test_id": "TS-0025",
           "description": "Targeted TUnit run прошел 3/3 2026-06-18: pull timer skips, push timer skips, оба timer paths выполняются при отсутствии conflict resolution."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "test_id": "TS-0027",
+          "description": "TS-0027 прошел 1/1 2026-06-19 и исполняет SC-0014-002 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+          "symbol": "SD-0005..SD-0008",
+          "description": "Step definitions bind SC-0014-002 Given/When/Then wording to TelegramGitTimerHandler conflict-safety assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramGitTimerExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 2026-06-19"
         }
       ],
       "open_questions": []
@@ -11607,11 +11797,163 @@
           "symbol": "AssertAllPlatformShellProjectContractsAsync"
         }
       ]
+    },
+    {
+      "id": "SD-0005",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+      "symbol": "TelegramGitTimerStepDefinitions.Create / SD-0005",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя включены Telegram Git timers",
+      "supports_scenarios": [
+        "SC-0014-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0027"
+        }
+      ]
+    },
+    {
+      "id": "SD-0006",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+      "symbol": "TelegramGitTimerStepDefinitions.Create / SD-0006",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И в Git backup идет разрешение конфликтов",
+      "supports_scenarios": [
+        "SC-0014-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0027"
+        }
+      ]
+    },
+    {
+      "id": "SD-0007",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+      "symbol": "TelegramGitTimerStepDefinitions.Create / SD-0007",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда срабатывают pull и push timer события Telegram bot",
+      "supports_scenarios": [
+        "SC-0014-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0027"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramGitTimerConflictSafetyContract.cs",
+          "symbol": "TriggerPullAndPushTimers"
+        }
+      ]
+    },
+    {
+      "id": "SD-0008",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramGitTimerStepDefinitions.cs",
+      "symbol": "TelegramGitTimerStepDefinitions.Create / SD-0008",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда бот не выполняет pull и commit/push до завершения разрешения конфликтов.",
+      "supports_scenarios": [
+        "SC-0014-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramGitTimerExecutableSpecTests.cs",
+          "symbol": "TelegramGitTimerConflictSafetyScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0027"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramGitTimerConflictSafetyContract.cs",
+          "symbol": "TelegramGitTimerExecutionResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0009",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+      "symbol": "TelegramCommandStepDefinitions.Create / SD-0009",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0014-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0028"
+        }
+      ]
+    },
+    {
+      "id": "SD-0010",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+      "symbol": "TelegramCommandStepDefinitions.Create / SD-0010",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0014",
+      "supports_scenarios": [
+        "SC-0014-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0028"
+        }
+      ]
+    },
+    {
+      "id": "SD-0011",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+      "symbol": "TelegramCommandStepDefinitions.Create / SD-0011",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь обращается к задачам через Telegram bot",
+      "supports_scenarios": [
+        "SC-0014-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0028"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramCommandAuthorizationContract.cs",
+          "symbol": "ExecuteSupportedCommandsScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0012",
+      "path": "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+      "symbol": "TelegramCommandStepDefinitions.Create / SD-0012",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Бот ограничивает доступ allowed users и поддерживает /start, /help, /search, /task и /root.",
+      "supports_scenarios": [
+        "SC-0014-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs",
+          "symbol": "TelegramCommandAuthorizationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0028"
+        },
+        {
+          "path": "src/Unlimotion.Test/TelegramCommandAuthorizationContract.cs",
+          "symbol": "AssertSupportedCommandsScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0015-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0014-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "mode": "delivery-task",
     "features_total": 16,
     "rules_total": 44,
@@ -11633,10 +11975,10 @@
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 4,
-    "step_executable_scenarios": 1,
-    "step_definition_coverage_ratio": "1/45",
-    "executable_specification_ratio": "1/45 step-executable; 7/45 passing scenarios",
+    "step_definitions_total": 12,
+    "step_executable_scenarios": 3,
+    "step_definition_coverage_ratio": "3/45",
+    "executable_specification_ratio": "3/45 step-executable; 7/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -11646,8 +11988,8 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --output Detailed => прошло 3/3"
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCommandExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCommandAuthorizationTests/*\" --output Detailed => прошло 7/7"
     ]
   },
   "bdd_sync": {
@@ -11660,7 +12002,7 @@
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
       "scenario_to_tests": 45,
-      "scenario_to_step_definitions": 1,
+      "scenario_to_step_definitions": 3,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
@@ -11669,17 +12011,15 @@
       "CV-0007 product decision links"
     ],
     "tests_changed": [
-      "src/Unlimotion.Test/StormPlatformShellExecutableSpecTests.cs",
-      "src/Unlimotion.Test/StormBdd/StormFeatureParser.cs",
-      "src/Unlimotion.Test/StormBdd/StormScenarioRunner.cs",
       "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs",
-      "src/Unlimotion.Test/StormBdd/PlatformShellStepDefinitions.cs",
-      "src/Unlimotion.Test/PlatformShellProjectContracts.cs",
-      "src/Unlimotion.Test/PlatformShellProjectContractTests.cs"
+      "src/Unlimotion.Test/StormBdd/TelegramCommandStepDefinitions.cs",
+      "src/Unlimotion.Test/TelegramCommandAuthorizationContract.cs",
+      "src/Unlimotion.Test/TelegramBotCommandAuthorizationTests.cs",
+      "src/Unlimotion.Test/StormTelegramCommandExecutableSpecTests.cs"
     ],
-    "decision": "SC-0015-002 получил первый repo-local executable step-definition slice через SD-0001..SD-0004 и TS-0026; CV-0007 remains internal/orphan contract candidate by Вариант B.",
+    "decision": "SC-0015-002, SC-0014-002 и SC-0014-001 имеют repo-local executable step-definition slices; CV-0007 remains internal/orphan contract candidate by Вариант B.",
     "gaps": [
-      "Step definitions покрывают 1/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "Step definitions покрывают 3/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
       "Android/iOS build smoke требует отдельной environment/setup task из-за NETSDK1147 workload restore blocker; runtime smoke и release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
@@ -11692,7 +12032,7 @@
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions покрывают только SC-0015-002: repo-local runner не является full Cucumber-style engine.",
+      "step_definitions покрывают SC-0015-002, SC-0014-002 и SC-0014-001: repo-local runner не является full Cucumber-style engine.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
       "SC-0015-002 имеет project-contract coverage и Browser Release build smoke evidence; Android/iOS runtime release support не заявляется."
     ],
@@ -11710,7 +12050,10 @@
       "step_executable_scenarios_present": true,
       "cv0007_active_scenario_created_without_confirmation": false,
       "cv0007_removed_from_active_cover_queue_after_decision_b": true,
+      "sc0014001_linked_to_command_test": true,
+      "sc0014001_linked_to_executable_step_definitions": true,
       "sc0014002_linked_to_timer_test": true,
+      "sc0014002_linked_to_executable_step_definitions": true,
       "st0015_browser_build_smoke_recorded": true,
       "st0015_android_ios_build_blocker_recorded": true
     }

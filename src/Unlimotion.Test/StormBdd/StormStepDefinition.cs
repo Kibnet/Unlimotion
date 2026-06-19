@@ -33,5 +33,17 @@ internal sealed class StormScenarioContext
 
     public bool RuntimeReleaseSupportClaimed { get; set; }
 
+    public bool TelegramGitTimersEnabled { get; set; }
+
+    public bool TelegramGitConflictResolutionInProgress { get; set; }
+
+    public TelegramGitTimerExecutionResult? TelegramGitTimerResult { get; set; }
+
+    public bool TelegramCommandTaskSetAvailable { get; set; }
+
+    public bool TelegramCommandStoryBehaviorConfirmed { get; set; }
+
+    public TelegramCommandAuthorizationScenarioResult? TelegramCommandAuthorizationResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
