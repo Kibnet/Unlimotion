@@ -75,6 +75,7 @@ namespace Unlimotion.Desktop
 
 #if DEBUG
             return builder
+                .WithDeveloperTools()
                 .LogToTrace(LogEventLevel.Debug, LogArea.Binding)
                 .UseReactiveUI(App.ConfigureReactiveUIBuilder);
 #else

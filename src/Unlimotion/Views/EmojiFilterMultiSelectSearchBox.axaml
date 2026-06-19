@@ -7,41 +7,36 @@
              d:DesignWidth="220"
              d:DesignHeight="36"
              x:Class="Unlimotion.Views.EmojiFilterMultiSelectSearchBox"
+             x:Name="Root"
              x:CompileBindings="False">
     <UserControl.Styles>
         <Style Selector="TextBox.EmojiFilterSummaryInput">
-            <Setter Property="Width" Value="220"/>
-            <Setter Property="MinWidth" Value="180"/>
+            <Setter Property="MinWidth" Value="{Binding SummaryMinWidth, ElementName=Root}"/>
+            <Setter Property="MaxWidth" Value="{Binding SummaryWidth, ElementName=Root}"/>
             <Setter Property="Height" Value="{DynamicResource AppSearchControlHeight}"/>
             <Setter Property="MinHeight" Value="{DynamicResource AppSearchControlHeight}"/>
-            <Setter Property="Padding" Value="10,4,30,4"/>
+            <Setter Property="Padding" Value="4"/>
             <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBox.EmojiFilterSummaryInput.Exclude">
-            <Setter Property="Padding" Value="22,4,30,4"/>
             <Setter Property="Background" Value="#11CF222E"/>
             <Setter Property="BorderBrush" Value="#CF222E"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
+        <Style Selector="TextBox.EmojiFilterSummaryInput.EmptySummary">
+            <Setter Property="Foreground" Value="#99FFFFFF"/>
+        </Style>
         <Style Selector="TextBlock.EmojiFilterExcludeMarker">
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="9,0,0,0"/>
+            <Setter Property="Margin" Value="-8,0,0,0"/>
             <Setter Property="Foreground" Value="#CF222E"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
             <Setter Property="IsVisible" Value="False"/>
-        </Style>
-        <Style Selector="PathIcon.EmojiFilterDropDownGlyph">
-            <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Width" Value="12"/>
-            <Setter Property="Height" Value="12"/>
-            <Setter Property="Margin" Value="0,0,18,0"/>
-            <Setter Property="Opacity" Value="0.72"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
         </Style>
         <Style Selector="Border.EmojiFilterDropDown">
             <Setter Property="Background" Value="{DynamicResource ThemeBackgroundBrush}"/>
@@ -92,7 +87,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid Margin="0,0,8,6">
+    <Grid Margin="0,0,4,0" ClipToBounds="False">
         <TextBox x:Name="PART_Input"
                  Classes="EmojiFilterSummaryInput"
                  IsReadOnly="True"
@@ -100,9 +95,6 @@
         <TextBlock x:Name="PART_ExcludeMarker"
                    Classes="EmojiFilterExcludeMarker"
                    Text="-"/>
-        <PathIcon x:Name="PART_DropDownGlyph"
-                  Classes="EmojiFilterDropDownGlyph"
-                  Data="M2,4 L6,8 L10,4 Z"/>
         <Popup x:Name="PART_DropDownPopup"
                PlacementTarget="{Binding #PART_Input}"
                Placement="BottomEdgeAlignedLeft"

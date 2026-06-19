@@ -26,16 +26,16 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlFilterToolbarResponsiveUiTests
 {
-    private static readonly (int TabIndex, string ResetButtonAutomationId, string FiltersButtonAutomationId, string FilterPanelAutomationId, bool ExpectsSortControl)[] TaskTabs =
+    private static readonly (int TabIndex, string ResetButtonAutomationId, string FiltersButtonAutomationId, string FilterPanelAutomationId, bool ExpectsSortControl, bool ExpectsEmojiFilters)[] TaskTabs =
     [
-        (0, "AllTasksResetFiltersButton", "AllTasksFiltersButton", "AllTasksFilterPanel", false),
-        (1, "LastCreatedResetFiltersButton", "LastCreatedFiltersButton", "LastCreatedFilterPanel", false),
-        (2, "LastUpdatedResetFiltersButton", "LastUpdatedFiltersButton", "LastUpdatedFilterPanel", false),
-        (3, "UnlockedResetFiltersButton", "UnlockedFiltersButton", "UnlockedFilterPanel", false),
-        (4, "InProgressResetFiltersButton", "InProgressFiltersButton", "InProgressFilterPanel", false),
-        (5, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false),
-        (6, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false),
-        (7, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false)
+        (0, "AllTasksResetFiltersButton", "AllTasksFiltersButton", "AllTasksFilterPanel", false, true),
+        (1, "LastCreatedResetFiltersButton", "LastCreatedFiltersButton", "LastCreatedFilterPanel", false, true),
+        (2, "LastUpdatedResetFiltersButton", "LastUpdatedFiltersButton", "LastUpdatedFilterPanel", false, true),
+        (3, "UnlockedResetFiltersButton", "UnlockedFiltersButton", "UnlockedFilterPanel", false, true),
+        (4, "InProgressResetFiltersButton", "InProgressFiltersButton", "InProgressFilterPanel", false, true),
+        (5, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false, true),
+        (6, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false, true),
+        (7, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false, false)
     ];
 
     [Test]
@@ -71,12 +71,78 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await AssertCompactPrimaryActions(primaryActions, tab.ExpectsSortControl);
                     await AssertPrimaryActionsUseSingleLine(primaryActions);
                     await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
+                    await AssertEmojiFilterToolbarPlacement(primaryActions, filtersButton, tab.ExpectsEmojiFilters);
                     await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
                     await AssertNestedSearchControlShrinksWithToolbar(toolbar, searchBar);
                     AssertFilterFlyoutPanel(filtersButton, tab.FilterPanelAutomationId, tab.ResetButtonAutomationId);
                     await AssertFilterButtonMatchesSearchHeight(filtersButton, searchBar);
                     await AssertAutomationName(filtersButton, "Filters");
                     await AssertResetButtonIsInsideFlyout(view, filtersButton, tab.ResetButtonAutomationId);
+                }
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task MainControlFilterToolbar_NarrowWindow_KeepsEmojiSummariesInsideWindow()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 500, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                foreach (var filter in vm.EmojiFilters
+                             .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
+                             .Take(6))
+                {
+                    filter.ShowTasks = true;
+                }
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+
+                await Assert.That(GetEmojiFilterInput(includeControl).Text).Contains("+");
+                await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+                await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
+                await AssertControlStaysInsideWindow(window, filtersButton);
+                await AssertControlStaysInsideWindow(window, searchBar);
+
+                foreach (var width in new[] { 508d, 516d, 508d, 500d })
+                {
+                    window.Width = width;
+                    RunLayoutJobs();
+
+                    toolbar = FindVisibleFilterToolbar(view);
+                    searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                    (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                    filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+
+                    await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+                    await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width).IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
+                    await AssertControlStaysInsideWindow(window, filtersButton);
+                    await AssertControlStaysInsideWindow(window, searchBar);
                 }
             }
             finally
@@ -118,6 +184,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await AssertCompactPrimaryActions(primaryActions, expectsSortControl: false);
                 await AssertPrimaryActionsUseSingleLine(primaryActions);
                 await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
+                await AssertEmojiFilterToolbarPlacement(primaryActions, filtersButton, expectsEmojiFilters: true);
                 AssertFilterFlyoutPanel(filtersButton, "RoadmapFilterPanel", "RoadmapResetFiltersButton");
                 await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
                 await AssertNestedSearchControlShrinksWithToolbar(toolbar, searchBar);
@@ -166,7 +233,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing()
+    public async Task Toolbar_EmojiFilters_SummaryChromeDoesNotCoverOrShiftTokens()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -188,93 +255,33 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                var excludeInput = GetEmojiFilterInput(excludeControl);
+                var excludeMarker = GetEmojiFilterExcludeMarker(excludeControl);
+
+                await Assert.That(FindEmojiFilterDropDownGlyph(includeControl)).IsNull();
+                await Assert.That(FindEmojiFilterDropDownGlyph(excludeControl)).IsNull();
+                await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
+                await Assert.That(excludeMarker.IsVisible).IsTrue();
+                await AssertEmojiFilterInputIsMutedEmptySummary(includeInput);
+                await AssertEmojiFilterInputIsMutedEmptySummary(excludeInput);
+                await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+                await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
+
+                vm.EmojiFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
+                vm.EmojiExcludeFilters.First(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).ShowTasks = true;
                 RunLayoutJobs();
 
-                try
-                {
-                    var flyoutContent = GetFlyoutContent(flyout);
-                    var includeControl = FindEmojiFilterControl(flyoutContent, isExclude: false);
-                    var excludeControl = FindEmojiFilterControl(flyoutContent, isExclude: true);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-                    var excludeInput = GetEmojiFilterInput(excludeControl);
-
-                    await Assert.That(GetEmojiFilterDropDownGlyph(includeControl).IsVisible).IsTrue();
-                    await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
-                    await Assert.That(GetEmojiFilterExcludeMarker(excludeControl).IsVisible).IsTrue();
-                    await Assert.That(excludeInput.Classes.Contains("Exclude")).IsTrue();
-                    await Assert.That(includeInput.VerticalContentAlignment).IsEqualTo(VerticalAlignment.Center);
-                    await Assert.That(GetEmojiFilterPopup(includeControl).ShouldUseOverlayLayer).IsFalse();
-
-                    await ClickControlAsync(window, includeInput);
-                    RunLayoutJobs();
-
-                    var includeList = GetEmojiFilterList(includeControl);
-                    var includeListItems = GetEmojiFilterListItems(includeList);
-                    await Assert.That(includeListItems.Count).IsEqualTo(vm.EmojiFilters.Count);
-                    await Assert.That(includeListItems[0].Title).IsEqualTo("All");
-                    await Assert.That(includeListItems[0].Emoji).IsEqualTo(string.Empty);
-                    await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
-
-                    var inputBounds = GetBoundsRelativeTo(window, includeInput);
-                    var dropDown = GetEmojiFilterDropDown(includeControl);
-                    var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
-                    await Assert.That(Math.Abs(dropDownBounds.Left - inputBounds.Left)).IsLessThanOrEqualTo(2);
-                    await Assert.That(Math.Abs(dropDownBounds.Top - inputBounds.Bottom)).IsLessThanOrEqualTo(2);
-                    await Assert.That(dropDown.CornerRadius).IsEqualTo(new CornerRadius(4));
-                    AssertVisibleItemsStayInsideDropDown(dropDown, includeList);
-
-                    await ClickControlAsync(window, includeInput);
-                    RunLayoutJobs();
-
-                    await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSearchBox");
-                    await Assert.That(includeInput.Text).IsEqualTo(string.Empty);
-                    await Assert.That(includeInput.PlaceholderText).IsEqualTo(L10n.Get("EmojiFilterSearchWatermark"));
-
-                    var libraryFilter = vm.EmojiFilters.First(filter =>
-                        filter.SearchText.Contains("library", StringComparison.OrdinalIgnoreCase));
-                    TypeText(window, "library");
-                    RunLayoutJobs();
-
-                    await Assert.That(includeInput.Text).IsEqualTo("library");
-                    var filteredItems = GetEmojiFilterListItems(includeList);
-                    await Assert.That(filteredItems.Count).IsEqualTo(1);
-                    await Assert.That(filteredItems[0].SearchText).IsEqualTo(libraryFilter.SearchText);
-                    await Assert.That(GetVisibleEmojiItemTexts(includeList).Any(text => text == libraryFilter.Emoji)).IsTrue();
-                    await Assert.That(GetVisibleEmojiItemTitleTexts(includeList)).IsEquivalentTo([libraryFilter.DisplayTitle]);
-                    await Assert.That(libraryFilter.ShowTasks).IsFalse();
-
-                    var libraryCheckBox = FindVisibleCheckBox(includeList);
-                    await ClickControlAsync(window, libraryCheckBox);
-                    RunLayoutJobs();
-
-                    await Assert.That(libraryFilter.ShowTasks).IsTrue();
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
-
-                    var sideDismissPoint = new Point(
-                        Math.Min(window.Bounds.Width - 6, inputBounds.Right + 24),
-                        GetCenterY(inputBounds));
-                    window.MouseDown(sideDismissPoint, MouseButton.Left);
-                    RunLayoutJobs();
-                    window.MouseUp(sideDismissPoint, MouseButton.Left);
-                    RunLayoutJobs();
-
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsFalse();
-                    await Assert.That(flyout.IsOpen).IsTrue();
-
-                    await ClickControlAsync(window, excludeInput);
-                    RunLayoutJobs();
-
-                    await Assert.That(IsEmojiDropDownOpen(excludeControl)).IsTrue();
-                    var excludeList = GetEmojiFilterList(excludeControl);
-                    await Assert.That(GetEmojiFilterListItems(excludeList).Count).IsEqualTo(vm.EmojiExcludeFilters.Count);
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                await Assert.That(includeInput.Text).IsNotNull();
+                await Assert.That(excludeInput.Text).IsNotNull();
+                await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
+                await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
+                await AssertEmojiFilterInputCentersSingleToken(includeInput);
+                await AssertEmojiFilterInputCentersSingleToken(excludeInput);
+                await AssertExcludeMarkerDoesNotShiftInputText(includeInput, excludeInput, excludeMarker);
+                await AssertEmojiFilterSummaryUsesCompactInsets(includeInput, excludeInput);
             }
             finally
             {
@@ -285,7 +292,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_AllItemTogglesEveryEmojiFilter()
+    public async Task Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -307,45 +314,79 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                var excludeInput = GetEmojiFilterInput(excludeControl);
+
+                await Assert.That(GetEmojiFilterExcludeMarker(includeControl).IsVisible).IsFalse();
+                await Assert.That(GetEmojiFilterExcludeMarker(excludeControl).IsVisible).IsTrue();
+                await Assert.That(excludeInput.Classes.Contains("Exclude")).IsTrue();
+                await Assert.That(includeInput.VerticalContentAlignment).IsEqualTo(VerticalAlignment.Center);
+                await Assert.That(GetEmojiFilterPopup(includeControl).ShouldUseOverlayLayer).IsFalse();
+
+                await ClickControlAsync(window, includeInput);
                 RunLayoutJobs();
 
-                try
-                {
-                    var includeControl = FindEmojiFilterControl(GetFlyoutContent(flyout), isExclude: false);
-                    await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
-                    RunLayoutJobs();
+                var includeList = GetEmojiFilterList(includeControl);
+                var includeListItems = GetEmojiFilterListItems(includeList);
+                await Assert.That(includeListItems.Count).IsEqualTo(vm.EmojiFilters.Count);
+                await Assert.That(includeListItems[0].Title).IsEqualTo("All");
+                await Assert.That(includeListItems[0].Emoji).IsEqualTo(string.Empty);
+                await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
 
-                    var includeList = GetEmojiFilterList(includeControl);
-                    var allFilter = GetEmojiFilterListItems(includeList)[0];
-                    await Assert.That(allFilter.Title).IsEqualTo("All");
+                var inputBounds = GetBoundsRelativeTo(window, includeInput);
+                var dropDown = GetEmojiFilterDropDown(includeControl);
+                var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
+                await Assert.That(Math.Abs(dropDownBounds.Left - inputBounds.Left)).IsLessThanOrEqualTo(2);
+                await Assert.That(Math.Abs(dropDownBounds.Top - inputBounds.Bottom)).IsLessThanOrEqualTo(2);
+                await Assert.That(dropDown.CornerRadius).IsEqualTo(new CornerRadius(4));
+                AssertVisibleItemsStayInsideDropDown(dropDown, includeList);
 
-                    includeList.SelectedItem = allFilter;
-                    includeList.Focus();
-                    RunLayoutJobs();
-                    await Assert.That(includeList.SelectedItem).IsEqualTo(allFilter);
+                await ClickControlAsync(window, includeInput);
+                RunLayoutJobs();
 
-                    PressKey(window, Key.Space, PhysicalKey.Space);
-                    RunLayoutJobs();
+                await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSearchBox");
+                await Assert.That(includeInput.Text).IsEqualTo(string.Empty);
+                await Assert.That(includeInput.PlaceholderText).IsEqualTo(L10n.Get("EmojiFilterSearchWatermark"));
 
-                    await Assert.That(vm.EmojiFilters.Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).All(static filter => filter.ShowTasks)).IsTrue();
+                var libraryFilter = vm.EmojiFilters.First(filter =>
+                    filter.SearchText.Contains("library", StringComparison.OrdinalIgnoreCase));
+                TypeText(window, "library");
+                RunLayoutJobs();
 
-                    includeList.SelectedItem = allFilter;
-                    includeList.Focus();
-                    RunLayoutJobs();
+                await Assert.That(includeInput.Text).IsEqualTo("library");
+                var filteredItems = GetEmojiFilterListItems(includeList);
+                await Assert.That(filteredItems.Count).IsEqualTo(1);
+                await Assert.That(filteredItems[0].SearchText).IsEqualTo(libraryFilter.SearchText);
+                await Assert.That(GetVisibleEmojiItemTexts(includeList).Any(text => text == libraryFilter.Emoji)).IsTrue();
+                await Assert.That(GetVisibleEmojiItemTitleTexts(includeList)).IsEquivalentTo([libraryFilter.DisplayTitle]);
+                await Assert.That(libraryFilter.ShowTasks).IsFalse();
 
-                    PressKey(window, Key.Space, PhysicalKey.Space);
-                    RunLayoutJobs();
+                var libraryCheckBox = FindVisibleCheckBox(includeList);
+                await ClickControlAsync(window, libraryCheckBox);
+                RunLayoutJobs();
 
-                    await Assert.That(vm.EmojiFilters.All(static filter => !filter.ShowTasks)).IsTrue();
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                await Assert.That(libraryFilter.ShowTasks).IsTrue();
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
+
+                var currentInputBounds = GetBoundsRelativeTo(window, includeInput);
+                var sideDismissPoint = new Point(
+                    Math.Min(window.Bounds.Width - 6, currentInputBounds.Right + 24),
+                    GetCenterY(currentInputBounds));
+                window.MouseDown(sideDismissPoint, MouseButton.Left);
+                RunLayoutJobs();
+                window.MouseUp(sideDismissPoint, MouseButton.Left);
+                RunLayoutJobs();
+
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsFalse();
+
+                await ClickControlAsync(window, excludeInput);
+                RunLayoutJobs();
+
+                await Assert.That(IsEmojiDropDownOpen(excludeControl)).IsTrue();
+                var excludeList = GetEmojiFilterList(excludeControl);
+                await Assert.That(GetEmojiFilterListItems(excludeList).Count).IsEqualTo(vm.EmojiExcludeFilters.Count);
             }
             finally
             {
@@ -356,7 +397,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder()
+    public async Task Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -378,42 +419,34 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
                 RunLayoutJobs();
 
-                try
-                {
-                    var includeControl = FindEmojiFilterControl(GetFlyoutContent(flyout), isExclude: false);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-                    includeInput.MinWidth = 140;
-                    includeInput.Width = 140;
-                    includeControl.Width = 156;
-                    RunLayoutJobs();
+                var includeList = GetEmojiFilterList(includeControl);
+                var allFilter = GetEmojiFilterListItems(includeList)[0];
+                await Assert.That(allFilter.Title).IsEqualTo("All");
 
-                    var selectedFilters = vm.EmojiFilters
-                        .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
-                        .Take(6)
-                        .ToArray();
+                includeList.SelectedItem = allFilter;
+                includeList.Focus();
+                RunLayoutJobs();
+                await Assert.That(includeList.SelectedItem).IsEqualTo(allFilter);
 
-                    foreach (var filter in selectedFilters)
-                    {
-                        filter.ShowTasks = true;
-                    }
+                PressKey(window, Key.Space, PhysicalKey.Space);
+                RunLayoutJobs();
 
-                    RunLayoutJobs();
+                await Assert.That(vm.EmojiFilters.Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)).All(static filter => filter.ShowTasks)).IsTrue();
 
-                    var summaryParts = includeInput.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    await Assert.That(summaryParts[0]).IsEqualTo(selectedFilters.Length.ToString());
-                    await Assert.That(summaryParts[1]).IsEqualTo(selectedFilters[0].Emoji);
-                    await Assert.That(summaryParts[^1]).StartsWith("+");
-                    await Assert.That(summaryParts.Length).IsLessThan(selectedFilters.Length + 1);
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                includeList.SelectedItem = allFilter;
+                includeList.Focus();
+                RunLayoutJobs();
+
+                PressKey(window, Key.Space, PhysicalKey.Space);
+                RunLayoutJobs();
+
+                await Assert.That(vm.EmojiFilters.All(static filter => !filter.ShowTasks)).IsTrue();
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
             }
             finally
             {
@@ -424,7 +457,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList()
+    public async Task Toolbar_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -446,39 +479,27 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+
+                var selectedFilters = vm.EmojiFilters
+                    .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
+                    .Take(6)
+                    .ToArray();
+
+                foreach (var filter in selectedFilters)
+                {
+                    filter.ShowTasks = true;
+                }
+
                 RunLayoutJobs();
 
-                try
-                {
-                    var includeControl = FindEmojiFilterControl(GetFlyoutContent(flyout), isExclude: false);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-                    await ClickControlAsync(window, includeInput);
-                    await ClickControlAsync(window, includeInput);
-                    RunLayoutJobs();
-
-                    includeInput.Text = "zzzz-no-tag";
-                    RunLayoutJobs();
-
-                    var includeList = GetEmojiFilterList(includeControl);
-                    var noMatchesPanel = GetEmojiFilterNoMatchesPanel(includeControl);
-                    var noMatches = GetEmojiFilterNoMatches(includeControl);
-
-                    await Assert.That(noMatchesPanel.IsVisible).IsTrue();
-                    await Assert.That(noMatchesPanel.Background).IsNotNull();
-                    await Assert.That(noMatchesPanel.Background).IsAssignableTo<ISolidColorBrush>();
-                    await Assert.That(((ISolidColorBrush)noMatchesPanel.Background!).Color.A).IsEqualTo(byte.MaxValue);
-                    await Assert.That(noMatches.Text).IsEqualTo(L10n.Get("EmojiFilterNoMatches"));
-                    await Assert.That(includeList.IsVisible).IsTrue();
-                    await Assert.That(GetEmojiFilterListItems(includeList).Count).IsEqualTo(vm.EmojiFilters.Count);
-                    await Assert.That(vm.EmojiFilters.Any(static filter => filter.ShowTasks)).IsFalse();
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                var summaryParts = includeInput.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                await Assert.That(summaryParts[0]).IsEqualTo(selectedFilters[0].Emoji);
+                await Assert.That(summaryParts[^1]).StartsWith("+");
+                await Assert.That(summaryParts.Length).IsLessThan(selectedFilters.Length);
+                await Assert.That(includeInput.Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
             }
             finally
             {
@@ -489,7 +510,61 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_RespondsToLargeFontResources()
+    public async Task Toolbar_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                await ClickControlAsync(window, includeInput);
+                await ClickControlAsync(window, includeInput);
+                RunLayoutJobs();
+
+                includeInput.Text = "zzzz-no-tag";
+                RunLayoutJobs();
+
+                var includeList = GetEmojiFilterList(includeControl);
+                var noMatchesPanel = GetEmojiFilterNoMatchesPanel(includeControl);
+                var noMatches = GetEmojiFilterNoMatches(includeControl);
+
+                await Assert.That(noMatchesPanel.IsVisible).IsTrue();
+                await Assert.That(noMatchesPanel.Background).IsNotNull();
+                await Assert.That(noMatchesPanel.Background).IsAssignableTo<ISolidColorBrush>();
+                await Assert.That(((ISolidColorBrush)noMatchesPanel.Background!).Color.A).IsEqualTo(byte.MaxValue);
+                await Assert.That(noMatches.Text).IsEqualTo(L10n.Get("EmojiFilterNoMatches"));
+                await Assert.That(includeList.IsVisible).IsTrue();
+                await Assert.That(GetEmojiFilterListItems(includeList).Count).IsEqualTo(vm.EmojiFilters.Count);
+                await Assert.That(vm.EmojiFilters.Any(static filter => filter.ShowTasks)).IsFalse();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Toolbar_EmojiFilters_RespondsToLargeFontResources()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -513,36 +588,17 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+
+                await ClickControlAsync(window, includeInput);
                 RunLayoutJobs();
 
-                try
-                {
-                    var flyoutContent = GetFlyoutContent(flyout);
-                    var groupTitle = flyoutContent.GetVisualDescendants()
-                                         .OfType<TextBlock>()
-                                         .FirstOrDefault(static textBlock =>
-                                             textBlock.Classes.Contains("FilterPanelGroupTitle") &&
-                                             IsVisibleAndArranged(textBlock)) ??
-                                     throw new InvalidOperationException("Filter panel title was not found.");
-                    var includeControl = FindEmojiFilterControl(flyoutContent, isExclude: false);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-
-                    await ClickControlAsync(window, includeInput);
-                    RunLayoutJobs();
-
-                    var includeList = GetEmojiFilterList(includeControl);
-                    await Assert.That(groupTitle.FontSize).IsEqualTo(AppearanceSettings.GetFloatingWatermarkFontSize(24d));
-                    await Assert.That(includeInput.FontSize).IsEqualTo(24d);
-                    await Assert.That(includeList.FontSize).IsEqualTo(24d);
-                    await Assert.That(includeInput.Bounds.Height).IsGreaterThan(AppearanceSettings.DefaultSearchControlHeight);
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                var includeList = GetEmojiFilterList(includeControl);
+                await Assert.That(includeInput.FontSize).IsEqualTo(24d);
+                await Assert.That(includeList.FontSize).IsEqualTo(24d);
+                await Assert.That(includeInput.Bounds.Height).IsGreaterThan(AppearanceSettings.DefaultSearchControlHeight);
             }
             finally
             {
@@ -554,7 +610,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup()
+    public async Task Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -576,56 +632,44 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                includeInput.Focus();
+                PressKey(window, Key.Enter, PhysicalKey.Enter);
                 RunLayoutJobs();
 
-                try
-                {
-                    var includeControl = FindEmojiFilterControl(GetFlyoutContent(flyout), isExclude: false);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-                    includeInput.Focus();
-                    PressKey(window, Key.Enter, PhysicalKey.Enter);
-                    RunLayoutJobs();
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
 
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
+                PressKey(window, Key.F2, PhysicalKey.F2);
+                RunLayoutJobs();
 
-                    PressKey(window, Key.F2, PhysicalKey.F2);
-                    RunLayoutJobs();
+                await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSearchBox");
+                includeInput.Text = "launch";
+                RunLayoutJobs();
 
-                    await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSearchBox");
-                    includeInput.Text = "launch";
-                    RunLayoutJobs();
+                var includeList = GetEmojiFilterList(includeControl);
+                includeList.Focus();
+                includeList.SelectedIndex = 0;
+                var launchFilter = GetEmojiFilterListItems(includeList).Single();
+                PressKey(window, Key.Space, PhysicalKey.Space);
+                RunLayoutJobs();
 
-                    var includeList = GetEmojiFilterList(includeControl);
-                    includeList.Focus();
-                    includeList.SelectedIndex = 0;
-                    var launchFilter = GetEmojiFilterListItems(includeList).Single();
-                    PressKey(window, Key.Space, PhysicalKey.Space);
-                    RunLayoutJobs();
+                await Assert.That(launchFilter.ShowTasks).IsTrue();
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
 
-                    await Assert.That(launchFilter.ShowTasks).IsTrue();
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
+                includeInput.Focus();
+                PressKey(window, Key.Escape, PhysicalKey.Escape);
+                RunLayoutJobs();
 
-                    includeInput.Focus();
-                    PressKey(window, Key.Escape, PhysicalKey.Escape);
-                    RunLayoutJobs();
+                await Assert.That(includeInput.Text).IsEqualTo(string.Empty);
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
 
-                    await Assert.That(includeInput.Text).IsEqualTo(string.Empty);
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsTrue();
+                PressKey(window, Key.Escape, PhysicalKey.Escape);
+                RunLayoutJobs();
 
-                    PressKey(window, Key.Escape, PhysicalKey.Escape);
-                    RunLayoutJobs();
-
-                    await Assert.That(IsEmojiDropDownOpen(includeControl)).IsFalse();
-                    await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSummaryBox");
-                    await Assert.That(flyout.IsOpen).IsTrue();
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                await Assert.That(IsEmojiDropDownOpen(includeControl)).IsFalse();
+                await Assert.That(AutomationProperties.GetAutomationId(includeInput)).IsEqualTo("IncludeEmojiFilterSummaryBox");
             }
             finally
             {
@@ -636,7 +680,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task FilterFlyout_EmojiFilters_PopupStaysVisibleInNarrowViewport()
+    public async Task Toolbar_EmojiFilters_PopupStaysVisibleInNarrowViewport()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -658,36 +702,25 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 0);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+                await ClickControlAsync(window, includeInput);
                 RunLayoutJobs();
 
-                try
-                {
-                    var includeControl = FindEmojiFilterControl(GetFlyoutContent(flyout), isExclude: false);
-                    var includeInput = GetEmojiFilterInput(includeControl);
-                    await ClickControlAsync(window, includeInput);
-                    RunLayoutJobs();
+                var dropDown = GetEmojiFilterDropDown(includeControl);
+                var inputBounds = GetBoundsRelativeTo(window, includeInput);
+                var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
 
-                    var dropDown = GetEmojiFilterDropDown(includeControl);
-                    var inputBounds = GetBoundsRelativeTo(window, includeInput);
-                    var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
-
-                    await Assert.That(dropDownBounds.Left).IsGreaterThanOrEqualTo(-1);
-                    await Assert.That(dropDownBounds.Top).IsGreaterThanOrEqualTo(-1);
-                    await Assert.That(dropDownBounds.Right).IsLessThanOrEqualTo(window.Bounds.Width + 1);
-                    await Assert.That(dropDownBounds.Bottom).IsLessThanOrEqualTo(window.Bounds.Height + 1);
-                    await Assert.That(dropDownBounds.Left).IsLessThanOrEqualTo(inputBounds.Right);
-                    await Assert.That(dropDownBounds.Right).IsGreaterThanOrEqualTo(inputBounds.Left);
-                    await Assert.That(dropDown.MaxHeight).IsLessThanOrEqualTo(260);
-                    await Assert.That(GetEmojiFilterList(includeControl).MaxHeight).IsLessThanOrEqualTo(dropDown.MaxHeight);
-                    AssertVisibleItemsStayInsideDropDown(dropDown, GetEmojiFilterList(includeControl));
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                await Assert.That(dropDownBounds.Left).IsGreaterThanOrEqualTo(-1);
+                await Assert.That(dropDownBounds.Top).IsGreaterThanOrEqualTo(-1);
+                await Assert.That(dropDownBounds.Right).IsLessThanOrEqualTo(window.Bounds.Width + 1);
+                await Assert.That(dropDownBounds.Bottom).IsLessThanOrEqualTo(window.Bounds.Height + 1);
+                await Assert.That(dropDownBounds.Left).IsLessThanOrEqualTo(inputBounds.Right);
+                await Assert.That(dropDownBounds.Right).IsGreaterThanOrEqualTo(inputBounds.Left);
+                await Assert.That(dropDown.MaxHeight).IsLessThanOrEqualTo(260);
+                await Assert.That(GetEmojiFilterList(includeControl).MaxHeight).IsLessThanOrEqualTo(dropDown.MaxHeight);
+                AssertVisibleItemsStayInsideDropDown(dropDown, GetEmojiFilterList(includeControl));
             }
             finally
             {
@@ -698,7 +731,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
-    public async Task RoadmapFilterFlyout_EmojiFilters_UsesSearchableMultiSelectDropdown()
+    public async Task RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -720,27 +753,13 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
                 SelectTab(view, 8);
 
-                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "RoadmapFiltersButton");
-                var flyout = ShowFilterFlyout(filtersButton);
+                var toolbar = FindVisibleRoadmapFilterToolbar(view);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
                 RunLayoutJobs();
 
-                try
-                {
-                    var flyoutContent = GetFlyoutContent(flyout);
-                    var includeControl = FindEmojiFilterControl(flyoutContent, isExclude: false);
-                    var excludeControl = FindEmojiFilterControl(flyoutContent, isExclude: true);
-                    await Assert.That(GetEmojiFilterDropDownGlyph(includeControl).IsVisible).IsTrue();
-                    await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
-                    RunLayoutJobs();
-
-                    await Assert.That(GetEmojiFilterListItems(GetEmojiFilterList(includeControl))).IsNotEmpty();
-                    await Assert.That(GetEmojiFilterInput(excludeControl).Classes.Contains("Exclude")).IsTrue();
-                }
-                finally
-                {
-                    flyout.Hide();
-                    RunLayoutJobs();
-                }
+                await Assert.That(GetEmojiFilterListItems(GetEmojiFilterList(includeControl))).IsNotEmpty();
+                await Assert.That(GetEmojiFilterInput(excludeControl).Classes.Contains("Exclude")).IsTrue();
             }
             finally
             {
@@ -831,6 +850,59 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(narrowToolbar.Bounds.Width).IsLessThanOrEqualTo(520);
                 await AssertActionsPrecedeSearchInLogicalOrder(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
                 await AssertSearchAndActionsShareToolbarRow(narrowToolbar, narrowSearchBar, narrowPrimaryActions);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task MainControlFilterToolbar_DetailsPaneMediumNarrow_KeepsEmptyEmojiSummariesSquare()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RootTask2Id);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 810, 760);
+                window.Show();
+                RunLayoutJobs();
+
+                var wideToolbar = FindVisibleFilterToolbar(view);
+                var (wideIncludeControl, wideExcludeControl) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
+                var wideFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+
+                await AssertEmojiFilterInputIsEmptySquare(wideIncludeControl);
+                await AssertEmojiFilterInputIsEmptySquare(wideExcludeControl);
+                await Assert.That(GetEmojiFilterInput(wideIncludeControl).Bounds.Width)
+                    .IsLessThanOrEqualTo(wideFiltersButton.Bounds.Width + 1);
+
+                vm.DetailsAreOpen = true;
+                RunLayoutJobs();
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var searchBar = FindVisibleToolbarChild<SearchBar>(toolbar);
+                var primaryActions = FindVisibleToolbarChild<WrapPanel>(toolbar);
+                var (includeControl, excludeControl) = FindVisibleToolbarEmojiFilterControls(toolbar);
+
+                await AssertEmojiFilterInputIsEmptySquare(includeControl);
+                await AssertEmojiFilterInputIsEmptySquare(excludeControl);
+                await AssertPrimaryActionsUseSingleLine(primaryActions);
+                await AssertActionsPrecedeSearchInLogicalOrder(toolbar, searchBar, primaryActions);
+                await AssertSearchAndActionsShareToolbarRow(toolbar, searchBar, primaryActions);
             }
             finally
             {
@@ -936,9 +1008,41 @@ public class MainControlFilterToolbarResponsiveUiTests
     private static T FindVisibleToolbarChild<T>(Grid toolbar)
         where T : Control
     {
-        return toolbar.GetVisualDescendants()
+        var child = toolbar.GetVisualDescendants()
             .OfType<T>()
-            .First(IsVisibleAndArranged);
+            .FirstOrDefault(IsVisibleAndArranged);
+
+        if (child != null)
+        {
+            return child;
+        }
+
+        var descendants = toolbar.GetVisualDescendants()
+            .OfType<Control>()
+            .Select(control =>
+                $"{control.GetType().Name} visible={control.IsVisible} bounds={control.Bounds.Width:0.##}x{control.Bounds.Height:0.##} classes={string.Join(",", control.Classes)}")
+            .Take(40);
+
+        throw new InvalidOperationException(
+            $"Visible arranged toolbar child '{typeof(T).Name}' was not found. Toolbar bounds={toolbar.Bounds.Width:0.##}x{toolbar.Bounds.Height:0.##}. Descendants: {string.Join(" | ", descendants)}");
+    }
+
+    private static (EmojiFilterMultiSelectSearchBox IncludeControl, EmojiFilterMultiSelectSearchBox ExcludeControl)
+        FindVisibleToolbarEmojiFilterControls(Grid toolbar)
+    {
+        var controls = toolbar.GetVisualDescendants()
+            .OfType<EmojiFilterMultiSelectSearchBox>()
+            .Where(IsVisibleAndArranged)
+            .ToArray();
+
+        if (controls.Length != 2)
+        {
+            throw new InvalidOperationException($"Expected exactly 2 visible toolbar emoji filters, found {controls.Length}.");
+        }
+
+        return (
+            controls.Single(static control => !control.IsExclude),
+            controls.Single(static control => control.IsExclude));
     }
 
     private static void SelectTab(MainControl view, int index)
@@ -969,6 +1073,96 @@ public class MainControlFilterToolbarResponsiveUiTests
 
         await Assert.That(visibleComboBoxCount).IsLessThanOrEqualTo(expectsSortControl ? 1 : 0);
         await Assert.That(hasVisibleCheckBox).IsFalse();
+    }
+
+    private static async Task AssertEmojiFilterToolbarPlacement(
+        WrapPanel primaryActions,
+        DropDownButton filtersButton,
+        bool expectsEmojiFilters)
+    {
+        var visibleChildren = primaryActions.Children
+            .OfType<Control>()
+            .Where(IsVisibleAndArranged)
+            .ToArray();
+        var emojiControls = visibleChildren
+            .OfType<EmojiFilterMultiSelectSearchBox>()
+            .ToArray();
+
+        if (!expectsEmojiFilters)
+        {
+            await Assert.That(emojiControls).IsEmpty();
+            return;
+        }
+
+        await Assert.That(emojiControls.Length).IsEqualTo(2);
+
+        var includeControl = emojiControls.Single(static control => !control.IsExclude);
+        var excludeControl = emojiControls.Single(static control => control.IsExclude);
+        var includeIndex = Array.IndexOf(visibleChildren, includeControl);
+        var excludeIndex = Array.IndexOf(visibleChildren, excludeControl);
+        var filtersButtonIndex = Array.IndexOf(visibleChildren, filtersButton);
+
+        await Assert.That(includeIndex).IsGreaterThanOrEqualTo(0);
+        await Assert.That(excludeIndex).IsEqualTo(includeIndex + 1);
+        await Assert.That(filtersButtonIndex).IsEqualTo(excludeIndex + 1);
+        await Assert.That(GetEmojiFilterInput(includeControl).Bounds.Width)
+            .IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+        await Assert.That(GetEmojiFilterInput(excludeControl).Bounds.Width)
+            .IsLessThanOrEqualTo(excludeControl.SummaryWidth + 1);
+    }
+
+    private static async Task AssertEmojiFilterInputIsEmptySquare(EmojiFilterMultiSelectSearchBox control)
+    {
+        var input = GetEmojiFilterInput(control);
+
+        await Assert.That(input.Text).IsEqualTo("🙂");
+        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
+        await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(input.Bounds.Height + 1);
+        await AssertEmojiFilterInputIsMutedEmptySummary(input);
+    }
+
+    private static async Task AssertEmojiFilterInputIsMutedEmptySummary(TextBox input)
+    {
+        await Assert.That(input.Classes.Contains("EmptySummary")).IsTrue();
+        await Assert.That(input.Foreground).IsAssignableTo<ISolidColorBrush>();
+        await Assert.That(((ISolidColorBrush)input.Foreground!).Color.A).IsLessThan(byte.MaxValue);
+    }
+
+    private static async Task AssertEmojiFilterInputCentersSingleToken(TextBox input)
+    {
+        await Assert.That(input.Classes.Contains("EmptySummary")).IsFalse();
+        await Assert.That(input.TextAlignment).IsEqualTo(TextAlignment.Center);
+        await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
+    }
+
+    private static async Task AssertExcludeMarkerDoesNotShiftInputText(
+        TextBox includeInput,
+        TextBox excludeInput,
+        TextBlock excludeMarker)
+    {
+        await Assert.That(excludeInput.Padding.Left).IsEqualTo(includeInput.Padding.Left);
+        await Assert.That(excludeInput.Padding.Right).IsEqualTo(includeInput.Padding.Right);
+
+        var parent = excludeInput.GetVisualParent() ??
+                     throw new InvalidOperationException("Emoji filter input visual parent was not found.");
+        var inputBounds = GetBoundsRelativeTo(parent, excludeInput);
+        var markerBounds = GetBoundsRelativeTo(parent, excludeMarker);
+        await Assert.That(markerBounds.Right).IsLessThanOrEqualTo(inputBounds.Left + 2);
+    }
+
+    private static async Task AssertEmojiFilterSummaryUsesCompactInsets(TextBox includeInput, TextBox excludeInput)
+    {
+        await Assert.That(includeInput.Padding.Left).IsEqualTo(excludeInput.Padding.Left);
+        await Assert.That(includeInput.Padding.Right).IsEqualTo(excludeInput.Padding.Right);
+        await Assert.That(includeInput.Padding.Left).IsLessThanOrEqualTo(6);
+        await Assert.That(includeInput.Padding.Right).IsLessThanOrEqualTo(6);
+    }
+
+    private static async Task AssertControlStaysInsideWindow(Window window, Control control)
+    {
+        var bounds = GetBoundsRelativeTo(window, control);
+        await Assert.That(bounds.Left).IsGreaterThanOrEqualTo(-1);
+        await Assert.That(bounds.Right).IsLessThanOrEqualTo(window.Bounds.Width + 1);
     }
 
     private static async Task AssertPrimaryActionsUseSingleLine(WrapPanel primaryActions)
@@ -1068,6 +1262,12 @@ public class MainControlFilterToolbarResponsiveUiTests
         if (FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId) == null)
         {
             throw new InvalidOperationException($"Reset button '{resetButtonAutomationId}' was not found in the filter flyout.");
+        }
+
+        if (flyoutContent.GetVisualDescendants().OfType<EmojiFilterMultiSelectSearchBox>().Any() ||
+            flyoutContent.GetLogicalDescendants().OfType<EmojiFilterMultiSelectSearchBox>().Any())
+        {
+            throw new InvalidOperationException("Emoji filter controls must stay outside the filter flyout.");
         }
     }
 
@@ -1220,48 +1420,15 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(filtersReady).IsTrue();
     }
 
-    private static Flyout ShowFilterFlyout(DropDownButton filtersButton)
-    {
-        if (filtersButton.Flyout is not Flyout flyout)
-        {
-            throw new InvalidOperationException("Filter button must use a Flyout.");
-        }
-
-        flyout.ShowAt(filtersButton);
-        RunLayoutJobs();
-        return flyout;
-    }
-
-    private static Control GetFlyoutContent(Flyout flyout)
-    {
-        return flyout.Content as Control ??
-               throw new InvalidOperationException("Filter flyout content was not found.");
-    }
-
-    private static EmojiFilterMultiSelectSearchBox FindEmojiFilterControl(Control flyoutContent, bool isExclude)
-    {
-        return flyoutContent.GetVisualDescendants()
-                   .OfType<EmojiFilterMultiSelectSearchBox>()
-                   .FirstOrDefault(control => control.IsExclude == isExclude) ??
-               flyoutContent.GetLogicalDescendants()
-                   .OfType<EmojiFilterMultiSelectSearchBox>()
-                   .FirstOrDefault(control => control.IsExclude == isExclude) ??
-               throw new InvalidOperationException(
-                   isExclude
-                       ? "Exclude emoji filter control was not found."
-                       : "Include emoji filter control was not found.");
-    }
-
     private static TextBox GetEmojiFilterInput(EmojiFilterMultiSelectSearchBox control)
     {
         return control.FindControl<TextBox>("PART_Input") ??
                throw new InvalidOperationException("Emoji filter input was not found.");
     }
 
-    private static PathIcon GetEmojiFilterDropDownGlyph(EmojiFilterMultiSelectSearchBox control)
+    private static PathIcon? FindEmojiFilterDropDownGlyph(EmojiFilterMultiSelectSearchBox control)
     {
-        return control.FindControl<PathIcon>("PART_DropDownGlyph") ??
-               throw new InvalidOperationException("Emoji filter dropdown glyph was not found.");
+        return control.FindControl<PathIcon>("PART_DropDownGlyph");
     }
 
     private static TextBlock GetEmojiFilterExcludeMarker(EmojiFilterMultiSelectSearchBox control)

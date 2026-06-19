@@ -815,6 +815,27 @@
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -832,28 +853,6 @@
                                                             <StackPanel>
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterSort}"/>
                                                                 <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinition}" MinWidth="220"/>
-                                                            </StackPanel>
-                                                            <StackPanel>
-                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                                <WrapPanel>
-                                                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                           ListAutomationId="IncludeEmojiFilterList"
-                                                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                           IsExclude="True"
-                                                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                           ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                                </WrapPanel>
                                                             </StackPanel>
                                                             <StackPanel>
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
@@ -903,6 +902,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -917,28 +937,6 @@
                                                         AutomationProperties.AutomationId="LastCreatedFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                     <StackPanel Spacing="10">
-                                                        <StackPanel>
-                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                            <WrapPanel>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="IncludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       IsExclude="True"
-                                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                            </WrapPanel>
-                                                        </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
                                                             <WrapPanel>
@@ -1028,6 +1026,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1042,28 +1061,6 @@
                                                         AutomationProperties.AutomationId="LastUpdatedFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                     <StackPanel Spacing="10">
-                                                        <StackPanel>
-                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                            <WrapPanel>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="IncludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       IsExclude="True"
-                                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                            </WrapPanel>
-                                                        </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
                                                             <WrapPanel>
@@ -1153,6 +1150,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1170,28 +1188,6 @@
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterSort}"/>
                                                             <ComboBox ItemsSource="{Binding SortDefinitions}" SelectedItem="{Binding CurrentSortDefinitionForUnlocked}" MinWidth="220"/>
-                                                        </StackPanel>
-                                                        <StackPanel>
-                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                            <WrapPanel>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="IncludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       IsExclude="True"
-                                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                            </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
@@ -1270,6 +1266,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1284,13 +1301,6 @@
                                                         AutomationProperties.AutomationId="InProgressFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                         <StackPanel Spacing="10">
-                                                            <StackPanel>
-                                                                <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                                <WrapPanel>
-                                                                    <ComboBox ItemsSource="{Binding EmojiFilters}" Margin="0,0,8,6"/>
-                                                                    <ComboBox ItemsSource="{Binding EmojiExcludeFilters}" Margin="0,0,8,6" BorderBrush="Red" BorderThickness="2"/>
-                                                                </WrapPanel>
-                                                            </StackPanel>
                                                             <StackPanel>
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                                 <WrapPanel>
@@ -1368,6 +1378,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1382,28 +1413,6 @@
                                                         AutomationProperties.AutomationId="CompletedFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                     <StackPanel Spacing="10">
-                                                        <StackPanel>
-                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                            <WrapPanel>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="IncludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       IsExclude="True"
-                                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                            </WrapPanel>
-                                                        </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
@@ -1494,6 +1503,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1508,28 +1538,6 @@
                                                         AutomationProperties.AutomationId="ArchivedFilterPanel">
                                                     <ScrollViewer Classes="FilterPanelScrollViewer">
                                                     <StackPanel Spacing="10">
-                                                        <StackPanel>
-                                                            <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterTags}"/>
-                                                            <WrapPanel>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       SummaryAutomationId="IncludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="IncludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="IncludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="IncludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                                                <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
-                                                                                                       Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
-                                                                                                       NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
-                                                                                                       IsExclude="True"
-                                                                                                       SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
-                                                                                                       SearchAutomationId="ExcludeEmojiFilterSearchBox"
-                                                                                                       DropDownAutomationId="ExcludeEmojiFilterDropDown"
-                                                                                                       ListAutomationId="ExcludeEmojiFilterList"
-                                                                                                       NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
-                                                            </WrapPanel>
-                                                        </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>

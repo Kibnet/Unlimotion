@@ -16,6 +16,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
+		<PackageReference Include="AvaloniaUI.DiagnosticsSupport" Condition="'$(Configuration)' == 'Debug'" />
 		<PackageReference Include="Tmds.DBus.Protocol" />
 		<PackageReference Include="Velopack" />
 	</ItemGroup>

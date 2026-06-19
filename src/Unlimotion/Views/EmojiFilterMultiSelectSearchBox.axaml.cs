@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
@@ -24,10 +25,15 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double MaxPopupHeight = 260d;
     private const double MinPopupWidth = 280d;
     private const double MaxPopupWidth = 340d;
-    private const double InputTextHorizontalReserve = 36d;
+    public const double DefaultSummaryWidth = 112d;
+    public static double DefaultSummaryMinWidth => AppearanceSettings.DefaultSearchControlHeight;
     private const double DropDownNonListHeight = 8d;
     private const double MinListHeight = 60d;
     private const double NoMatchesPanelReservedHeight = 40d;
+    private const double SummaryInputPadding = 4d;
+    private const string EmptySummaryToken = "🙂";
+    private const string EmptySummaryClass = "EmptySummary";
+    private static readonly Thickness SummaryPadding = new(SummaryInputPadding);
     private static WeakReference<EmojiFilterMultiSelectSearchBox>? openDropDownReference;
 
     public static readonly StyledProperty<IEnumerable?> FiltersProperty =
@@ -38,6 +44,16 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     public static readonly StyledProperty<string?> NoMatchesTextProperty =
         AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, string?>(nameof(NoMatchesText));
+
+    public static readonly StyledProperty<double> SummaryWidthProperty =
+        AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, double>(
+            nameof(SummaryWidth),
+            DefaultSummaryWidth);
+
+    public static readonly StyledProperty<double> SummaryMinWidthProperty =
+        AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, double>(
+            nameof(SummaryMinWidth),
+            DefaultSummaryMinWidth);
 
     public static readonly StyledProperty<string?> SummaryAutomationIdProperty =
         AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, string?>(nameof(SummaryAutomationId));
@@ -110,6 +126,18 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         set => SetValue(NoMatchesTextProperty, value);
     }
 
+    public double SummaryWidth
+    {
+        get => GetValue(SummaryWidthProperty);
+        set => SetValue(SummaryWidthProperty, value);
+    }
+
+    public double SummaryMinWidth
+    {
+        get => GetValue(SummaryMinWidthProperty);
+        set => SetValue(SummaryMinWidthProperty, value);
+    }
+
     public string? SummaryAutomationId
     {
         get => GetValue(SummaryAutomationIdProperty);
@@ -158,6 +186,8 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
         if (change.Property == WatermarkProperty ||
             change.Property == NoMatchesTextProperty ||
+            change.Property == SummaryWidthProperty ||
+            change.Property == SummaryMinWidthProperty ||
             change.Property == SummaryAutomationIdProperty ||
             change.Property == SearchAutomationIdProperty ||
             change.Property == DropDownAutomationIdProperty ||
@@ -567,14 +597,46 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
         try
         {
-            PART_Input.Text = isSearchActive ? searchText : BuildSelectedSummaryText();
-            PART_Input.PlaceholderText = Watermark;
+            var selectedTokens = GetSelectedSummaryTokens();
+            var isEmptySummary = !isSearchActive && selectedTokens.Length == 0;
+            var inputText = isSearchActive
+                ? searchText
+                : isEmptySummary
+                    ? EmptySummaryToken
+                    : BuildFittedSummary(selectedTokens);
+
+            PART_Input.Text = inputText;
+            PART_Input.PlaceholderText = isSearchActive ? Watermark : null;
+            PART_Input.TextAlignment = !isSearchActive && (isEmptySummary || selectedTokens.Length == 1)
+                ? TextAlignment.Center
+                : TextAlignment.Left;
+            PART_Input.Padding = SummaryPadding;
+            PART_Input.MinWidth = GetSummarySquareWidth();
+            PART_Input.Width = GetSummaryInputWidth(inputText, isEmptySummary);
+            UpdateInputSummaryClasses(isEmptySummary);
             UpdateInputAutomationId();
         }
         finally
         {
             isUpdatingInputText = false;
         }
+    }
+
+    private double GetSummaryInputWidth(string inputText, bool isEmptySummary)
+    {
+        var squareWidth = GetSummarySquareWidth();
+        if (isEmptySummary)
+        {
+            return squareWidth;
+        }
+
+        if (isSearchActive)
+        {
+            return GetSummaryMaxWidth();
+        }
+
+        var desiredWidth = MeasureInputTextWidth(inputText) + GetSummaryTextHorizontalReserve();
+        return Math.Clamp(Math.Ceiling(desiredWidth), squareWidth, GetSummaryMaxWidth());
     }
 
     private void UpdateInputAutomationId()
@@ -642,6 +704,21 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         return Math.Ceiling(Math.Max(28d, PART_Input.FontSize * 1.35d + 4d));
     }
 
+    private void UpdateInputSummaryClasses(bool isEmptySummary)
+    {
+        if (isEmptySummary)
+        {
+            if (!PART_Input.Classes.Contains(EmptySummaryClass))
+            {
+                PART_Input.Classes.Add(EmptySummaryClass);
+            }
+
+            return;
+        }
+
+        PART_Input.Classes.Remove(EmptySummaryClass);
+    }
+
     private void UpdateExcludeClass()
     {
         if (IsExclude)
@@ -659,29 +736,18 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         PART_ExcludeMarker.IsVisible = false;
     }
 
-    private string BuildSelectedSummaryText()
+    private string[] GetSelectedSummaryTokens()
     {
-        var selectedTokens = selectableFilters
+        return selectableFilters
             .Where(filter => filter.ShowTasks && IsEmojiFilter(filter))
             .Select(GetSummaryToken)
             .Where(token => !string.IsNullOrWhiteSpace(token))
             .ToArray();
-
-        if (selectedTokens.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        return BuildFittedSummary(selectedTokens);
     }
 
     private string BuildFittedSummary(IReadOnlyList<string> selectedTokens)
     {
-        var availableWidth = PART_Input.Bounds.Width - InputTextHorizontalReserve;
-        if (availableWidth <= 0)
-        {
-            availableWidth = PART_Input.Width > 0 ? PART_Input.Width - InputTextHorizontalReserve : 160;
-        }
+        var availableWidth = GetSummaryMaxWidth() - GetSummaryTextHorizontalReserve();
 
         for (var visibleCount = selectedTokens.Count; visibleCount >= 0; visibleCount--)
         {
@@ -698,10 +764,15 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
             }
         }
 
-        return $"{selectedTokens.Count} +{selectedTokens.Count}";
+        return $"+{selectedTokens.Count}";
     }
 
     private bool FitsInputText(string candidate, double availableWidth)
+    {
+        return MeasureInputTextWidth(candidate) <= availableWidth;
+    }
+
+    private double MeasureInputTextWidth(string candidate)
     {
         var textBlock = new TextBlock
         {
@@ -713,20 +784,65 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         };
 
         textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return textBlock.DesiredSize.Width <= availableWidth;
+        return textBlock.DesiredSize.Width;
+    }
+
+    private double GetSummaryMaxWidth()
+    {
+        return Math.Max(
+            GetSummarySquareWidth(),
+            SummaryWidth > 0 && !double.IsNaN(SummaryWidth) && !double.IsInfinity(SummaryWidth)
+                ? SummaryWidth
+                : DefaultSummaryWidth);
+    }
+
+    private double GetSummarySquareWidth()
+    {
+        var currentHeight = GetCurrentInputHeight();
+        return Math.Ceiling(currentHeight > 0 ? currentHeight : GetConfiguredSummaryMinWidth());
+    }
+
+    private double GetCurrentInputHeight()
+    {
+        if (PART_Input.Bounds.Height > 0)
+        {
+            return PART_Input.Bounds.Height;
+        }
+
+        if (!double.IsNaN(PART_Input.Height) && !double.IsInfinity(PART_Input.Height) && PART_Input.Height > 0)
+        {
+            return PART_Input.Height;
+        }
+
+        return PART_Input.DesiredSize.Height;
+    }
+
+    private double GetConfiguredSummaryMinWidth()
+    {
+        return SummaryMinWidth > 0 && !double.IsNaN(SummaryMinWidth) && !double.IsInfinity(SummaryMinWidth)
+            ? SummaryMinWidth
+            : DefaultSummaryMinWidth;
+    }
+
+    private double GetSummaryTextHorizontalReserve()
+    {
+        return PART_Input.Padding.Left +
+               PART_Input.Padding.Right +
+               PART_Input.BorderThickness.Left +
+               PART_Input.BorderThickness.Right;
     }
 
     private static string BuildSummaryCandidate(IReadOnlyList<string> selectedTokens, int visibleCount, int overflowCount)
     {
         if (visibleCount == 0)
         {
-            return overflowCount > 0 ? $"{selectedTokens.Count} +{overflowCount}" : string.Empty;
+            return overflowCount > 0 ? $"+{overflowCount}" : string.Empty;
         }
 
         var visibleText = string.Join(" ", selectedTokens.Take(visibleCount));
         return overflowCount > 0
-            ? $"{selectedTokens.Count} {visibleText} +{overflowCount}"
-            : $"{selectedTokens.Count} {visibleText}";
+            ? $"{visibleText} +{overflowCount}"
+            : visibleText;
     }
 
     private static string GetSummaryToken(EmojiFilter filter)
