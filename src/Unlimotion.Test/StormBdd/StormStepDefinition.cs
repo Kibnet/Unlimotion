@@ -51,5 +51,11 @@ internal sealed class StormScenarioContext
 
     public TelegramCallbackScenarioResult? TelegramCallbackResult { get; set; }
 
+    public bool NotificationMainScreenAvailable { get; set; }
+
+    public bool NotificationStoryBehaviorConfirmed { get; set; }
+
+    public NotificationToastScenarioResult? NotificationToastResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

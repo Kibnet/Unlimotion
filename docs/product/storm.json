@@ -45,11 +45,12 @@
       "BDD executable slice добавлен 2026-06-19: SC-0014-002 исполняется из feature text через repo-local step definitions SD-0005..SD-0008 и TUnit evidence TS-0027.",
       "BDD executable slice добавлен 2026-06-19: SC-0014-001 исполняется из feature text через repo-local step definitions SD-0009..SD-0012 и TUnit evidence TS-0028.",
       "CV-0007 закрыт как active /storm:cover candidate через product decision Вариант B: attachment backend/API code сохранен как internal/orphan contract candidate без active story/scenario/test links.",
-      "BDD executable slice добавлен 2026-06-19: SC-0014-003 исполняется из feature text через repo-local step definitions SD-0013..SD-0016 и TUnit evidence TS-0029."
+      "BDD executable slice добавлен 2026-06-19: SC-0014-003 исполняется из feature text через repo-local step definitions SD-0013..SD-0016 и TUnit evidence TS-0029.",
+      "BDD executable slice добавлен 2026-06-19: SC-0016-001 исполняется из feature text через repo-local step definitions SD-0017..SD-0021 и TUnit evidence TS-0030."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0014-003 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:bdd-implement SC-0016-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -2583,7 +2584,8 @@
           "text": "Ошибка операции показывается как in-app toast с текстом причины, а пользователь может закрыть уведомление без перезапуска экрана.",
           "coverage_level": "full",
           "linked_tests": [
-            "TS-0021"
+            "TS-0021",
+            "TS-0030"
           ],
           "evidence": [
             {
@@ -2597,6 +2599,14 @@
             {
               "path": "src/Unlimotion/Views/MainScreen.axaml",
               "symbol": "ToastNotificationList"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+              "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+              "symbol": "NotificationToastStepDefinitions.Create / SD-0017..SD-0021"
             }
           ],
           "linked_rules": [
@@ -2605,7 +2615,7 @@
           "linked_scenarios": [
             "SC-0016-001"
           ],
-          "coverage_note": "Artifact-only sync: существующий UI test прошёл 1/1 2026-06-16; test code и annotations не изменялись."
+          "coverage_note": "TS-0021 покрывает error-toast rendering plus dismiss UX; TS-0030 исполняет SC-0016-001 из feature text через SD-0017..SD-0021. Production UI behavior, feature wording and test annotations не менялись."
         }
       ],
       "supports_needs": [
@@ -2613,7 +2623,8 @@
       ],
       "threatens_needs": [],
       "linked_tests": [
-        "TS-0021"
+        "TS-0021",
+        "TS-0030"
       ],
       "linked_code": [
         "CU-0019",
@@ -2648,7 +2659,8 @@
         "SC-0016-001"
       ],
       "behavior_coverage_level": 5,
-      "behavior_coverage_note": "SC-0016-001 связан с существующим UI test TS-0021; targeted UI run passed 1/1 2026-06-16."
+      "behavior_coverage_note": "SC-0016-001 связан с UI test TS-0021 и executable BDD evidence TS-0030; targeted UI runs passed 1/1 + 1/1 2026-06-19.",
+      "test_strategy": "TS-0021 покрывает error-toast rendering and close UX через Avalonia Headless; TS-0030 исполняет SC-0016-001 из feature text через repo-local step definitions SD-0017..SD-0021 без изменения UI behavior."
     }
   ],
   "tests": [
@@ -4040,6 +4052,50 @@
         }
       ],
       "notes": "Test annotations не менялись; executable spec reads existing .feature wording and runs repo-local step definitions for SC-0014-003."
+    },
+    {
+      "id": "TS-0030",
+      "name": "StormNotificationToastExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+      "framework": "TUnit",
+      "type": "bdd-executable-spec/notification-error-toast",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0016-001_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0016"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0044"
+      ],
+      "linked_constraints": [
+        "CN-0004"
+      ],
+      "linked_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0016-001 steps from features/storm/st-0016-notification-error-ux.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+          "symbol": "SD-0017..SD-0021",
+          "description": "Step definitions bind Given/When/Then product wording to notification error toast assertions."
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "ExecuteErrorToastScenarioAsync / AssertNotificationToastScenarioResultAsync",
+          "description": "Shared deterministic Avalonia Headless contract reuses TS-0021 error-toast behavior checks."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormNotificationToastExecutableSpecTests/*\" --output Detailed",
+          "result": "passed 1/1 on 2026-06-19"
+        }
+      ],
+      "notes": "Test annotations не менялись; executable spec reads existing .feature wording and runs repo-local step definitions for SC-0016-001."
     }
   ],
   "code_units": [
@@ -4779,7 +4835,7 @@
       "target": "PRODUCT-ENTRY",
       "story": "ST-0016",
       "status": "covered_by_product_story_and_existing_ui_test",
-      "condition": "Artifact-only product-entry decision accepted; existing UI test linked to ST-0016/SC-0016-001.",
+      "condition": "Existing error-toast behavior covered by TS-0021 and `SC-0016-001` step-executable through TS-0030.",
       "depends_on": [],
       "dependency_closure": [
         "CV-0006"
@@ -4801,17 +4857,19 @@
         "cost_star": 3,
         "priority_star": 3.2
       },
-      "rationale": "Существующий error-toast UI test теперь трассируется до продуктовой story, AC, Gherkin rule и scenario.",
+      "rationale": "Error-toast UI behavior has both existing headless UI evidence and executable BDD traceability.",
       "minimal_tests": [
         "MainScreen_ErrorToast_RendersAndCloseButtonRemovesMessage covered by TS-0021",
-        "Notification_UX_SuccessAndErrorToasts_AreLocalizedAndDismissible remains optional future expansion if product requires success toast localization contract"
+        "Notification_UX_SuccessAndErrorToasts_AreLocalizedAndDismissible remains optional future expansion if product requires success toast localization contract",
+        "NotificationErrorToastScenario_ExecutesFeatureSteps"
       ],
       "prerequisite": "Выполнено: notification/error UX выделен в ST-0016 без изменений test code и annotations.",
-      "reason": "ToastNotificationUiTests связан с AC-0044 и SC-0016-001; orphan/product-entry gap закрыт.",
+      "reason": "ToastNotificationUiTests связан с AC-0044 и SC-0016-001; TS-0030 добавляет executable BDD evidence.",
       "covered_by_tests": [
-        "TS-0021"
+        "TS-0021",
+        "TS-0030"
       ],
-      "coverage_result": "TS-0021 passed 1/1 on 2026-06-16; no test/code/annotation changes were made for CV-0006."
+      "coverage_result": "TS-0021 passed 1/1 on 2026-06-19; TS-0030 passed 1/1 on 2026-06-19 and executes SC-0016-001 through SD-0017..SD-0021."
     },
     {
       "id": "RK-0002",
@@ -5129,17 +5187,17 @@
   },
   "traceability": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0014-003 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0016-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "route": "guided-artifact-workflow",
     "mode": "delivery-task",
     "annotations_added": false,
-    "annotations_reason": "Test annotations не менялись; TS-0022/TS-0023/TS-0025/TS-0026/TS-0027/TS-0028/TS-0029 связаны с STORM artifacts через storm.json/feature/report links.",
+    "annotations_reason": "Test annotations не менялись; TS-0021/TS-0030 and existing TS-0022..TS-0029 связаны с STORM artifacts через storm.json/feature/report links.",
     "summary": {
       "stories_total": 16,
       "stories_with_tests": 16,
       "acceptance_criteria_total": 44,
       "acceptance_criteria_with_tests": 44,
-      "tests_total": 29,
+      "tests_total": 30,
       "tests_without_story_or_constraint_links": 0,
       "code_units_total": 19,
       "code_units_without_supports": 0
@@ -5709,7 +5767,8 @@
       },
       "ST-0016": {
         "tests": [
-          "TS-0021"
+          "TS-0021",
+          "TS-0030"
         ],
         "code_units": [
           "CU-0019",
@@ -5719,7 +5778,8 @@
           {
             "id": "AC-0044",
             "tests": [
-              "TS-0021"
+              "TS-0021",
+              "TS-0030"
             ],
             "coverage_level": "full"
           }
@@ -6248,6 +6308,20 @@
         "method_examples": [
           "TelegramCallbackScenario_ExecutesFeatureSteps"
         ]
+      },
+      "TS-0030": {
+        "stories": [
+          "ST-0016"
+        ],
+        "acceptance_criteria": [
+          "AC-0044"
+        ],
+        "constraints": [
+          "CN-0004"
+        ],
+        "method_examples": [
+          "NotificationErrorToastScenario_ExecutesFeatureSteps"
+        ]
       }
     },
     "orphan_tests": [
@@ -6282,12 +6356,13 @@
       "Добавлять ли test annotations в TUnit tests отдельным delivery-task через QUEST gate?",
       "Нужна ли отдельная environment/setup task для Android/iOS после NETSDK1147 workload restore blocker?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
-      "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029."
+      "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
+      "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030."
     ]
   },
   "coverage_analysis": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0014-003 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0016-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "mode": "delivery-task",
     "annotations_added": false,
     "tests_changed": true,
@@ -6305,7 +6380,7 @@
       "improved_by_current_artifact_triage": 1,
       "internal_orphan_contract_candidates": 1,
       "active_cover_candidates_remaining": 0,
-      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; SC-0015-002, SC-0014-002, SC-0014-001 и SC-0014-003 имеют executable step-definition slices."
+      "active_cover_candidates_note": "CV-0004 закрыт TS-0023/TS-0025; CV-0006 получил executable BDD evidence TS-0030; CV-0007 выведен из active cover queue по Варианту B. Текущих active /storm:cover behavior gaps не осталось; SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003 и SC-0016-001 имеют executable step-definition slices."
     },
     "improved_by_existing_evidence": [
       {
@@ -6361,9 +6436,10 @@
         "story": "ST-0016",
         "new_coverage_level": "full",
         "tests": [
-          "TS-0021"
+          "TS-0021",
+          "TS-0030"
         ],
-        "reason": "Существующий ToastNotificationUiTests прошёл targeted run и закрывает error-toast rendering plus dismiss UX."
+        "reason": "ToastNotificationUiTests прошёл targeted run и закрывает error-toast rendering plus dismiss UX; TS-0030 дополнительно исполняет SC-0016-001 через SD-0017..SD-0021."
       }
     ],
     "remaining_partial_acceptance_criteria": [],
@@ -6595,13 +6671,14 @@
         "target": "PRODUCT-ENTRY",
         "story": "ST-0016",
         "status": "covered_by_product_story_and_existing_ui_test",
-        "route_required": "artifact-only completed; delivery-task only for optional success-toast/localization expansion",
+        "route_required": "delivery-task/QUEST completed for executable BDD slice; optional success-toast/localization expansion remains separate",
         "priority": "covered",
         "minimal_tests": [
           "MainScreen_ErrorToast_RendersAndCloseButtonRemovesMessage covered by TS-0021",
-          "Notification_UX_SuccessAndErrorToasts_AreLocalizedAndDismissible remains optional future expansion if product requires success toast localization contract"
+          "Notification_UX_SuccessAndErrorToasts_AreLocalizedAndDismissible remains optional future expansion if product requires success toast localization contract",
+          "NotificationErrorToastScenario_ExecutesFeatureSteps"
         ],
-        "reason": "ToastNotificationUiTests связан с AC-0044 и SC-0016-001; отдельный product-entry gap закрыт без изменений tests/code.",
+        "reason": "ToastNotificationUiTests связан с AC-0044 и SC-0016-001; TS-0030 добавляет executable BDD evidence без изменений production UI behavior или test annotations.",
         "prerequisite": "Выполнено: уведомления об ошибках выделены как продуктовая story ST-0016.",
         "rank": 1,
         "depends_on": [],
@@ -6622,11 +6699,12 @@
           "cost_star": 3,
           "priority_star": 3.2
         },
-        "condition": "Artifact-only sync completed; no delivery-task required for existing error-toast behavior.",
+        "condition": "Existing error-toast behavior covered by TS-0021 and step-executable through TS-0030.",
         "covered_by_tests": [
-          "TS-0021"
+          "TS-0021",
+          "TS-0030"
         ],
-        "coverage_result": "TS-0021 passed 1/1 on 2026-06-16 and verifies toast text plus close-button removal."
+        "coverage_result": "TS-0021 passed 1/1 on 2026-06-19 and verifies toast text plus close-button removal; TS-0030 passed 1/1 on 2026-06-19 and executes SC-0016-001 through SD-0017..SD-0021."
       },
       {
         "id": "CV-0007",
@@ -6694,11 +6772,12 @@
       "Решено 2026-06-19: executable BDD slice для SC-0014-001 реализован через SD-0009..SD-0012 и TS-0028.",
       "Частично проверено 2026-06-18: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state. Нужна ли отдельная environment/setup task для Android/iOS?",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
-      "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029."
+      "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
+      "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030."
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-19",
-      "command": "/storm:bdd-implement SC-0014-003 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+      "command": "/storm:bdd-implement SC-0016-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
       "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
@@ -6720,10 +6799,10 @@
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 16,
-      "step_executable_scenarios": 4,
-      "step_definition_coverage_ratio": "4/45",
-      "executable_specification_ratio": "4/45 step-executable; 7/45 passing scenarios",
+      "step_definitions_total": 21,
+      "step_executable_scenarios": 5,
+      "step_definition_coverage_ratio": "5/45",
+      "executable_specification_ratio": "5/45 step-executable; 7/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -6733,28 +6812,29 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCallbackExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*\" --output Detailed => прошло 7/7"
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormNotificationToastExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ToastNotificationUiTests/*\" --output Detailed => прошло 1/1"
       ]
     },
     "bdd_sync_summary": {
       "command": "/storm:bdd-sync",
       "status": "completed_with_known_gaps",
       "changed_scenarios": [
-        "SC-0014-003"
+        "SC-0016-001"
       ],
       "changed_tests": [
-        "TS-0029"
+        "TS-0030"
       ],
-      "step_definitions_total": 16,
-      "step_executable_scenarios": 4,
-      "step_definition_coverage_ratio": "4/45",
+      "step_definitions_total": 21,
+      "step_executable_scenarios": 5,
+      "step_definition_coverage_ratio": "5/45",
       "known_gaps": [
-        "step_definitions_total=16; SC-0015-002, SC-0014-002, SC-0014-001 and SC-0014-003 are step-executable, remaining scenarios still rely on linked TUnit evidence",
+        "step_definitions_total=21; SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003 and SC-0016-001 are step-executable, remaining scenarios still rely on linked TUnit evidence",
+        "SC-0011-001 and SC-0011-002 are remaining passing scenarios without step definitions",
         "Android/iOS build smoke remains blocked by NETSDK1147 workload restore state",
         "CV-0007 remains outside active /storm:cover by product decision Вариант B"
       ],
-      "decision": "SC-0015-002, SC-0014-002, SC-0014-001 и SC-0014-003 имеют repo-local executable step-definition slices; CV-0007 remains internal/orphan contract candidate by Вариант B."
+      "decision": "SC-0016-001 получил repo-local executable step-definition slice; existing ST-0014 and ST-0015 slices preserved."
     },
     "improved_by_delivery_evidence": [
       {
@@ -6813,11 +6893,11 @@
     ],
     "code_changed": false,
     "full_suite_result": "Full test suite не запускался в этой узкой BDD implementation SPEC; production code не менялся.",
-    "targeted_validation_result": "passed: build, StormTelegramCallbackExecutableSpecTests 1/1, TelegramBotCallbackCoverageTests 7/7"
+    "targeted_validation_result": "passed: build, StormNotificationToastExecutableSpecTests 1/1, ToastNotificationUiTests 1/1"
   },
   "ranking_analysis": {
     "updated_at": "2026-06-19",
-    "command": "/storm:rank + /storm:bdd-implement SC-0014-003 executable step definitions",
+    "command": "/storm:rank + /storm:bdd-implement SC-0016-001 executable step definitions",
     "mode": "delivery-task",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
@@ -6838,7 +6918,7 @@
         "linked_coverage_items": [
           "CV-0006"
         ],
-        "recommendation": "CV-0006 закрыт artifact-only; optional success-toast/localization coverage оформлять отдельной SPEC только при продуктовой необходимости."
+        "recommendation": "CV-0006 закрыт: error-toast behavior имеет existing UI evidence TS-0021 и executable BDD evidence TS-0030; optional success-toast/localization coverage оформлять отдельной SPEC только при продуктовой необходимости."
       },
       {
         "story": "ST-0014",
@@ -6858,7 +6938,7 @@
         "recommendation": "Сначала принять platform support policy, затем добавлять smoke coverage."
       }
     ],
-    "next_recommended_action": "Текущих active /storm:cover behavior gaps после CV-0004 и Варианта B для CV-0007 не осталось. Следующий осмысленный шаг: расширять executable BDD на следующий high-value scenario вне ST-0014 или отдельной SPEC снять Android/iOS NETSDK1147 environment blocker."
+    "next_recommended_action": "Текущих active /storm:cover behavior gaps не осталось. Следующий осмысленный BDD шаг: рассмотреть SC-0011-001 или SC-0011-002 для server-storage executable slice, либо отдельной SPEC снять Android/iOS NETSDK1147 environment blocker."
   },
   "gherkin_features": [
     {
@@ -9531,11 +9611,18 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "passing_existing_ui_test_evidence",
+      "automation_status": "passing_existing_ui_test_evidence; executable_step_definition_slice_passed_1_of_1_on_2026-06-19",
       "linked_tests": [
-        "TS-0021"
+        "TS-0021",
+        "TS-0030"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0017",
+        "SD-0018",
+        "SD-0019",
+        "SD-0020",
+        "SD-0021"
+      ],
       "coverage_role": "negative_path",
       "status": "passing",
       "gherkin": {
@@ -9564,6 +9651,20 @@
         {
           "path": "src/Unlimotion/Views/MainScreen.axaml",
           "symbol": "ToastNotificationList"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "test_id": "TS-0030",
+          "description": "TS-0030 прошел 1/1 2026-06-19 и исполняет SC-0016-001 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+          "symbol": "SD-0017..SD-0021",
+          "description": "Step definitions bind all five SC-0016-001 Gherkin steps to deterministic notification error toast assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormNotificationToastExecutableSpecTests/*\" --output Detailed",
+          "result": "passed 1/1 on 2026-06-19"
         }
       ]
     },
@@ -12131,11 +12232,116 @@
           "symbol": "TelegramCallbackScenarioResult"
         }
       ]
+    },
+    {
+      "id": "SD-0017",
+      "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "symbol": "NotificationToastStepDefinitions.Create / SD-0017",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт основной экран Unlimotion",
+      "supports_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0030"
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "ExecuteErrorToastScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0018",
+      "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "symbol": "NotificationToastStepDefinitions.Create / SD-0018",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0016",
+      "supports_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0030"
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "ExecuteErrorToastScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0019",
+      "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "symbol": "NotificationToastStepDefinitions.Create / SD-0019",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда операция сообщает ошибку через notification manager",
+      "supports_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0030"
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "ExecuteErrorToastScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0020",
+      "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "symbol": "NotificationToastStepDefinitions.Create / SD-0020",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда пользователь видит toast с текстом ошибки",
+      "supports_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0030"
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "NotificationToastScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0021",
+      "path": "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "symbol": "NotificationToastStepDefinitions.Create / SD-0021",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И пользователь может закрыть toast без перезапуска экрана",
+      "supports_scenarios": [
+        "SC-0016-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs",
+          "symbol": "NotificationErrorToastScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0030"
+        },
+        {
+          "path": "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+          "symbol": "NotificationToastScenarioResult"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-19",
-    "command": "/storm:bdd-implement SC-0014-003 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "command": "/storm:bdd-implement SC-0016-001 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
     "mode": "delivery-task",
     "features_total": 16,
     "rules_total": 44,
@@ -12157,10 +12363,10 @@
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 16,
-    "step_executable_scenarios": 4,
-    "step_definition_coverage_ratio": "4/45",
-    "executable_specification_ratio": "4/45 step-executable; 7/45 passing scenarios",
+    "step_definitions_total": 21,
+    "step_executable_scenarios": 5,
+    "step_definition_coverage_ratio": "5/45",
+    "executable_specification_ratio": "5/45 step-executable; 7/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -12170,8 +12376,8 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTelegramCallbackExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TelegramBotCallbackCoverageTests/*\" --output Detailed => прошло 7/7"
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormNotificationToastExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ToastNotificationUiTests/*\" --output Detailed => прошло 1/1"
     ]
   },
   "bdd_sync": {
@@ -12184,7 +12390,7 @@
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
       "scenario_to_tests": 45,
-      "scenario_to_step_definitions": 4,
+      "scenario_to_step_definitions": 5,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
@@ -12194,14 +12400,15 @@
     ],
     "tests_changed": [
       "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs",
-      "src/Unlimotion.Test/StormBdd/TelegramCallbackStepDefinitions.cs",
-      "src/Unlimotion.Test/TelegramCallbackCoverageContract.cs",
-      "src/Unlimotion.Test/TelegramBotCallbackCoverageTests.cs",
-      "src/Unlimotion.Test/StormTelegramCallbackExecutableSpecTests.cs"
+      "src/Unlimotion.Test/StormBdd/NotificationToastStepDefinitions.cs",
+      "src/Unlimotion.Test/ToastNotificationUiContract.cs",
+      "src/Unlimotion.Test/ToastNotificationUiTests.cs",
+      "src/Unlimotion.Test/StormNotificationToastExecutableSpecTests.cs"
     ],
-    "decision": "SC-0015-002, SC-0014-002, SC-0014-001 и SC-0014-003 имеют repo-local executable step-definition slices; CV-0007 remains internal/orphan contract candidate by Вариант B.",
+    "decision": "SC-0016-001 получил repo-local executable step-definition slice; SC-0015-002, SC-0014-002, SC-0014-001 и SC-0014-003 preserved.",
     "gaps": [
-      "Step definitions покрывают 4/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "Step definitions покрывают 5/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "SC-0011-001 and SC-0011-002 are remaining passing scenarios without step definitions.",
       "Android/iOS build smoke требует отдельной environment/setup task из-за NETSDK1147 workload restore blocker; runtime smoke и release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
@@ -12214,7 +12421,7 @@
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions покрывают SC-0015-002, SC-0014-002, SC-0014-001 и SC-0014-003: repo-local runner не является full Cucumber-style engine.",
+      "step_definitions покрывают SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003 и SC-0016-001: repo-local runner не является full Cucumber-style engine.",
       "SD-0009 и SD-0013 используют один общий Given step text для Telegram scenarios; это intentional reuse of product wording, не placeholder и не orphan step.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
       "SC-0015-002 имеет project-contract coverage и Browser Release build smoke evidence; Android/iOS runtime release support не заявляется."
@@ -12240,7 +12447,9 @@
       "st0015_browser_build_smoke_recorded": true,
       "st0015_android_ios_build_blocker_recorded": true,
       "sc0014003_linked_to_callback_test": true,
-      "sc0014003_linked_to_executable_step_definitions": true
+      "sc0014003_linked_to_executable_step_definitions": true,
+      "sc0016001_linked_to_toast_test": true,
+      "sc0016001_linked_to_executable_step_definitions": true
     }
   }
 }
