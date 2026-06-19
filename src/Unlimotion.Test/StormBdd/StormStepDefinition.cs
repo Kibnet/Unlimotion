@@ -45,5 +45,11 @@ internal sealed class StormScenarioContext
 
     public TelegramCommandAuthorizationScenarioResult? TelegramCommandAuthorizationResult { get; set; }
 
+    public bool TelegramCallbackTaskSetAvailable { get; set; }
+
+    public bool TelegramCallbackAllowedUserConfirmed { get; set; }
+
+    public TelegramCallbackScenarioResult? TelegramCallbackResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
