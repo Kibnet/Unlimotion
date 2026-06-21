@@ -148,12 +148,17 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
-            // Aurora: keep goal progress (direct-children completion) live — recompute
-            // when the children set changes (add/remove) or any child's Status changes.
+            // Aurora: keep goal progress live across the WHOLE subtree. Each node
+            // observes its direct children's Status AND their GoalProgress, so a change
+            // deep in the tree propagates up the chain (leaf -> parent -> ... -> root):
+            // completing a leaf bumps its parent's GoalProgress, which this node observes,
+            // which bumps its own GoalProgress, and so on to the root goal in the sidebar.
             var containsChanges = _containsTasksSource.ToObservableChangeSet();
             Observable.Merge(
                     containsChanges.ToCollection().Select(_ => Unit.Default),
-                    containsChanges.MergeMany(child => child.WhenAnyValue(c => c.Status).Select(_ => Unit.Default)))
+                    containsChanges.MergeMany(child => Observable.Merge(
+                        child.WhenAnyValue(c => c.Status).Select(_ => Unit.Default),
+                        child.WhenAnyValue(c => c.GoalProgress).Select(_ => Unit.Default))))
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ =>
                 {

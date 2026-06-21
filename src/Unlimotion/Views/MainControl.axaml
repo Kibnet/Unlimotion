@@ -143,7 +143,16 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="PathIcon.FilterToolbarFiltersIcon">
-            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+        </Style>
+        <!-- Aurora: drop the dropdown chevron so it reads as a clean filter-icon button -->
+        <Style Selector="DropDownButton.FilterToolbarFiltersButton /template/ PathIcon">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="DropDownButton.FilterToolbarFiltersButton">
+            <Setter Property="Width" Value="{DynamicResource AppSearchControlHeight}"/>
+            <Setter Property="MinWidth" Value="{DynamicResource AppSearchControlHeight}"/>
         </Style>
         <Style Selector="PathIcon.FilterPanelResetIcon">
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -374,9 +383,10 @@
             <Setter Property="MinHeight" Value="34"/>
         </Style>
         <Style Selector="Border.TaskCardSection">
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
-            <Setter Property="Padding" Value="0,5,0,0"/>
+            <Setter Property="Padding" Value="0,10,0,0"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
         </Style>
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Border.TaskCardSection">
             <Setter Property="Padding" Value="0,5,0,0"/>
@@ -399,25 +409,26 @@
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact TextBox.TaskDescriptionEditor">
             <Setter Property="MinHeight" Value="72"/>
         </Style>
-        <Style Selector="WrapPanel.TaskPlanningGroups">
-            <Setter Property="Orientation" Value="Horizontal"/>
+        <Style Selector="StackPanel.TaskPlanningGroups">
+            <Setter Property="Orientation" Value="Vertical"/>
+            <Setter Property="Spacing" Value="6"/>
         </Style>
         <Style Selector="StackPanel.TaskPlanningGroup">
-            <Setter Property="Width" Value="176"/>
-            <Setter Property="Margin" Value="0,0,4,5"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Margin" Value="0"/>
             <Setter Property="Spacing" Value="0"/>
         </Style>
         <Style Selector="Grid.TaskPlanningFieldRow">
             <Setter Property="ColumnSpacing" Value="4"/>
         </Style>
         <Style Selector="CalendarDatePicker.TaskPlanningValueControl">
-            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinWidth" Value="210"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
             <Setter Property="Padding" Value="10,6,6,5"/>
         </Style>
         <Style Selector="TextBox.TaskPlanningValueControl">
-            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinWidth" Value="210"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
         </Style>
@@ -754,7 +765,7 @@
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 MinHeight="{DynamicResource TopbarH}">
-        <Grid Margin="16,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+        <Grid Margin="16,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
             <!-- brand mark -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Border Width="22" Height="22" CornerRadius="{DynamicResource RadiusSm}"
@@ -777,14 +788,8 @@
                                        Margin="14,0,0,0"
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
-            <!-- global search / jump to a task -->
-            <searchControl:SearchBar Grid.Column="2"
-                                     Width="300"
-                                     VerticalAlignment="Center"
-                                     DataContext="{Binding Search}"
-                                     AutomationProperties.AutomationId="GlobalSearchBar"/>
             <!-- theme toggle -->
-            <Button Grid.Column="3"
+            <Button Grid.Column="2"
                     Classes="subtle"
                     Width="34" Padding="0"
                     Click="ThemeToggle_OnClick"
@@ -792,7 +797,7 @@
                     AutomationProperties.AutomationId="ThemeToggleButton">
                 <PathIcon x:Name="ThemeToggleIcon" Width="17" Height="17" Data="{StaticResource IconMoon}"/>
             </Button>
-            <DropDownButton Grid.Column="4"
+            <DropDownButton Grid.Column="3"
                             Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                             Content="➕"
                             ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
@@ -820,7 +825,7 @@
                 </DropDownButton.Flyout>
             </DropDownButton>
             <!-- avatar (teal → blue gradient) -->
-            <Border Grid.Column="5"
+            <Border Grid.Column="4"
                     Width="28" Height="28"
                     CornerRadius="{DynamicResource RadiusPill}"
                     VerticalAlignment="Center"
@@ -2183,7 +2188,7 @@
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskPlanningSection">
                                         <StackPanel Classes="TaskCardSectionContent">
-                                            <WrapPanel Classes="TaskPlanningGroups">
+                                            <StackPanel Classes="TaskPlanningGroups">
                                                 <StackPanel Classes="TaskPlanningGroup">
                                                     <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
                                                         <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
@@ -2281,7 +2286,7 @@
                                                         </DropDownButton>
                                                     </Grid>
                                                 </StackPanel>
-                                            </WrapPanel>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
 
