@@ -54,4 +54,42 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
   </Style>
 
+  <!-- ===== CalendarDatePicker (Aurora chrome) ===== -->
+  <!-- One clean border on the picker itself; the inner editable TextBox is made
+       borderless so the global TextBox style doesn't double-up (the stray bracket). -->
+  <Style Selector="CalendarDatePicker:not(.plain)">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
+  </Style>
+  <Style Selector="CalendarDatePicker:not(.plain) /template/ Border#PART_BackgroundBorder">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
+  </Style>
+  <!-- inner editable TextBox: strip its own border/background -->
+  <Style Selector="CalendarDatePicker:not(.plain) /template/ TextBox#PART_TextBox">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="0"/>
+  </Style>
+  <Style Selector="CalendarDatePicker:not(.plain) /template/ TextBox#PART_TextBox /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+  </Style>
+  <!-- the dropdown calendar button: borderless, muted glyph -->
+  <Style Selector="CalendarDatePicker:not(.plain) /template/ Button#PART_Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="CalendarDatePicker:not(.plain):focus-within /template/ Border#PART_BackgroundBorder">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
 </Styles>
