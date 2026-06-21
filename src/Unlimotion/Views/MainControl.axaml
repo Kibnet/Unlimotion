@@ -318,36 +318,35 @@
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Margin" Value="0"/>
         </Style>
-        <Style Selector="WrapPanel.TaskHeaderStateRow">
+        <!-- tags + Wanted + importance row -->
+        <Style Selector="WrapPanel.TaskHeaderTagsRow">
             <Setter Property="Orientation" Value="Horizontal"/>
+        </Style>
+        <Style Selector="WrapPanel.TaskHeaderTagsRow > Border">
+            <Setter Property="Margin" Value="0,0,6,4"/>
+        </Style>
+        <Style Selector="WrapPanel.TaskHeaderTagsRow > StackPanel">
+            <Setter Property="Margin" Value="2,0,0,4"/>
         </Style>
         <Style Selector="CheckBox.TaskHeaderStateCheckBox">
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Margin" Value="0,0,6,4"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Margin" Value="0,0,12,4"/>
         </Style>
         <Style Selector="NumericUpDown.TaskHeaderImportanceInput">
-            <Setter Property="Width" Value="86"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Margin" Value="0,0,6,4"/>
+            <Setter Property="Width" Value="84"/>
+            <Setter Property="MinHeight" Value="30"/>
         </Style>
-        <Style Selector="WrapPanel.TaskHeaderMetaRow">
+        <!-- compact metadata line (id + timestamps) -->
+        <Style Selector="WrapPanel.TaskHeaderMetaLine">
             <Setter Property="Orientation" Value="Horizontal"/>
-            <Setter Property="Opacity" Value="0.78"/>
+        </Style>
+        <Style Selector="WrapPanel.TaskHeaderMetaLine > TextBlock">
+            <Setter Property="Margin" Value="0,0,12,2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBlock.TaskHeaderIdMeta">
-            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MaxWidth" Value="150"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
-            <Setter Property="Margin" Value="0,0,8,4"/>
-            <Setter Property="MinHeight" Value="22"/>
-        </Style>
-        <Style Selector="WrapPanel.TaskHeaderDateMeta">
-            <Setter Property="Margin" Value="0,0,8,4"/>
-        </Style>
-        <Style Selector="WrapPanel.TaskHeaderDateMeta Label">
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
         </Style>
         <Style Selector="TextBox.CurrentTaskTitleEditor">
             <Setter Property="MinHeight" Value="36"/>
@@ -437,7 +436,15 @@
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinWidth" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
-            <Setter Property="FontSize" Value="17"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
+        </Style>
+        <Style Selector="DropDownButton.TaskPlanningQuickAction:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
         </Style>
         <Style Selector="Grid.RepeaterControls">
             <Setter Property="Margin" Value="0,0,0,2"/>
@@ -2027,7 +2034,7 @@
                                             DataContext="{Binding CurrentTaskItem}">
                                     <Grid Classes="TaskCardHeader"
                                           ColumnDefinitions="Auto,*"
-                                          RowDefinitions="Auto,Auto"
+                                          RowDefinitions="Auto,Auto,Auto"
                                           AutomationProperties.ControlTypeOverride="Group"
                                           AutomationProperties.IsControlElementOverride="True"
                                           AutomationProperties.AutomationId="CurrentTaskHeader">
@@ -2046,104 +2053,102 @@
                                                  VerticalAlignment="Center"
                                                  VerticalContentAlignment="Center"/>
 
-                                        <WrapPanel Grid.Row="1"
-                                                   Grid.ColumnSpan="2"
-                                                   Classes="TaskHeaderStateRow">
-                                            <!-- Aurora status tags -->
-                                            <Border Classes="status-tag ready"
-                                                    Margin="0,0,6,0"
-                                                    VerticalAlignment="Center"
-                                                    IsVisible="{Binding IsCanBeCompleted}"
-                                                    AutomationProperties.AutomationId="CurrentTaskReadyTag">
-                                                <TextBlock Text="{DynamicResource ReadyNow}"/>
-                                            </Border>
-                                            <Border Classes="status-tag blocked"
-                                                    Margin="0,0,6,0"
-                                                    VerticalAlignment="Center"
-                                                    IsVisible="{Binding IsBlocked}"
-                                                    AutomationProperties.AutomationId="CurrentTaskBlockedTag">
-                                                <TextBlock Text="{DynamicResource Blocked}"/>
-                                            </Border>
-                                            <Border Classes="status-tag weekly"
-                                                    Margin="0,0,6,0"
-                                                    VerticalAlignment="Center"
-                                                    IsVisible="{Binding IsHaveRepeater}"
-                                                    AutomationProperties.AutomationId="CurrentTaskWeeklyTag">
-                                                <TextBlock Text="{DynamicResource RepeatsWeekly}"/>
-                                            </Border>
-                                            <CheckBox IsChecked="{Binding WantedFromUi}"
-                                                      Classes="TaskHeaderStateCheckBox"
-                                                      VerticalAlignment="Center"
-                                                      Content="{DynamicResource Wanted}"
-                                                      AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
-                                            <NumericUpDown Value="{Binding Importance}"
-                                                           Classes="TaskHeaderImportanceInput"
-                                                           Minimum="0"
-                                                           Maximum="100"
-                                                           ToolTip.Tip="{DynamicResource Importance}"
-                                                           PlaceholderText="{DynamicResource Importance}"
-                                                           AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
-                                            <TextBlock Classes="TaskHeaderIdMeta"
+                                        <!-- tags + actions -->
+                                        <Grid Grid.Row="1" Grid.ColumnSpan="2"
+                                              ColumnDefinitions="*,Auto"
+                                              Margin="0,8,0,0">
+                                            <WrapPanel Grid.Column="0" Classes="TaskHeaderTagsRow" VerticalAlignment="Center">
+                                                <Border Classes="status-tag ready"
+                                                        IsVisible="{Binding IsCanBeCompleted}"
+                                                        AutomationProperties.AutomationId="CurrentTaskReadyTag">
+                                                    <TextBlock Text="{DynamicResource ReadyNow}"/>
+                                                </Border>
+                                                <Border Classes="status-tag blocked"
+                                                        IsVisible="{Binding IsBlocked}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockedTag">
+                                                    <TextBlock Text="{DynamicResource Blocked}"/>
+                                                </Border>
+                                                <Border Classes="status-tag weekly"
+                                                        IsVisible="{Binding IsHaveRepeater}"
+                                                        AutomationProperties.AutomationId="CurrentTaskWeeklyTag">
+                                                    <TextBlock Text="{DynamicResource RepeatsWeekly}"/>
+                                                </Border>
+                                                <CheckBox IsChecked="{Binding WantedFromUi}"
+                                                          Classes="TaskHeaderStateCheckBox"
+                                                          VerticalAlignment="Center"
+                                                          Content="{DynamicResource Wanted}"
+                                                          AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                                                    <TextBlock Text="{DynamicResource Importance}" Classes="caption" VerticalAlignment="Center"/>
+                                                    <NumericUpDown Value="{Binding Importance}"
+                                                                   Classes="TaskHeaderImportanceInput"
+                                                                   Minimum="0"
+                                                                   Maximum="100"
+                                                                   ToolTip.Tip="{DynamicResource Importance}"
+                                                                   AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                            <DropDownButton Grid.Column="1"
+                                                            Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                                            Content="⚙"
+                                                            VerticalAlignment="Center"
+                                                            ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
+                                                            AutomationProperties.Name="{DynamicResource TaskActionsMenuTip}"
+                                                            AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
+                                                <DropDownButton.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="{DynamicResource MoveToPath}"
+                                                                  Command="{Binding MainWindow.MoveToPath}"
+                                                                  AutomationProperties.AutomationId="CurrentTaskMoveToPathMenuItem">
+                                                            <MenuItem.Icon>
+                                                                <TextBlock Text="📁"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Header="{DynamicResource Archive}"
+                                                                  Command="{Binding ArchiveCommand}"
+                                                                  AutomationProperties.AutomationId="CurrentTaskArchiveMenuItem">
+                                                            <MenuItem.Icon>
+                                                                <TextBlock Text="📦"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Header="{DynamicResource Remove}"
+                                                                  Command="{Binding MainWindow.Remove}"
+                                                                  AutomationProperties.AutomationId="CurrentTaskRemoveMenuItem">
+                                                            <MenuItem.Icon>
+                                                                <TextBlock Text="🗑️"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                    </MenuFlyout>
+                                                </DropDownButton.Flyout>
+                                            </DropDownButton>
+                                        </Grid>
+
+                                        <!-- compact metadata line: id + timestamps (mono, muted) -->
+                                        <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Classes="TaskHeaderMetaLine" Margin="0,8,0,0">
+                                            <TextBlock Classes="meta TaskHeaderIdMeta"
                                                        Text="{Binding Id, Mode=OneWay}"
                                                        ToolTip.Tip="{Binding Id}"
                                                        AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
-                                            <WrapPanel Classes="TaskCommandBar"
-                                                       IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       AutomationProperties.ControlTypeOverride="Group"
-                                                       AutomationProperties.IsControlElementOverride="True"
-                                                       AutomationProperties.AutomationId="CurrentTaskCommandBar">
-                                                <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                                                                Content="⚙"
-                                                                ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
-                                                                AutomationProperties.Name="{DynamicResource TaskActionsMenuTip}"
-                                                                AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
-                                                    <DropDownButton.Flyout>
-                                                        <MenuFlyout>
-                                                            <MenuItem Header="{DynamicResource MoveToPath}"
-                                                                      Command="{Binding MainWindow.MoveToPath}"
-                                                                      AutomationProperties.AutomationId="CurrentTaskMoveToPathMenuItem">
-                                                                <MenuItem.Icon>
-                                                                    <TextBlock Text="📁"/>
-                                                                </MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <MenuItem Header="{DynamicResource Archive}"
-                                                                      Command="{Binding ArchiveCommand}"
-                                                                      AutomationProperties.AutomationId="CurrentTaskArchiveMenuItem">
-                                                                <MenuItem.Icon>
-                                                                    <TextBlock Text="📦"/>
-                                                                </MenuItem.Icon>
-                                                            </MenuItem>
-                                                            <MenuItem Header="{DynamicResource Remove}"
-                                                                      Command="{Binding MainWindow.Remove}"
-                                                                      AutomationProperties.AutomationId="CurrentTaskRemoveMenuItem">
-                                                                <MenuItem.Icon>
-                                                                    <TextBlock Text="🗑️"/>
-                                                                </MenuItem.Icon>
-                                                            </MenuItem>
-                                                        </MenuFlyout>
-                                                    </DropDownButton.Flyout>
-                                                </DropDownButton>
-                                            </WrapPanel>
-                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                <Label Content="{DynamicResource CreatedPrefix}" Margin="0,0,2,0"/>
-                                                <Label Content="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
-                                            </WrapPanel>
-                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                <Label Content="{DynamicResource UpdatedPrefix}" Margin="0,0,2,0"/>
-                                                <Label Content="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
-                                            </WrapPanel>
-                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                <Label Content="{DynamicResource UnlockedPrefix}" Margin="0,0,2,0"/>
-                                                <Label Content="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
-                                            </WrapPanel>
-                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                <Label Content="{DynamicResource CompletedPrefix}" Margin="0,0,2,0"/>
-                                                <Label Content="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
-                                            </WrapPanel>
-                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                                <Label Content="{DynamicResource ArchivedPrefix}" Margin="0,0,2,0"/>
-                                                <Label Content="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
-                                            </WrapPanel>
+                                            <TextBlock Classes="meta TaskHeaderMetaItem"
+                                                       IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       ToolTip.Tip="{DynamicResource CreatedPrefix}"/>
+                                            <TextBlock Classes="meta TaskHeaderMetaItem"
+                                                       IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       ToolTip.Tip="{DynamicResource UpdatedPrefix}"/>
+                                            <TextBlock Classes="meta TaskHeaderMetaItem"
+                                                       IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       ToolTip.Tip="{DynamicResource UnlockedPrefix}"/>
+                                            <TextBlock Classes="meta TaskHeaderMetaItem"
+                                                       IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       ToolTip.Tip="{DynamicResource CompletedPrefix}"/>
+                                            <TextBlock Classes="meta TaskHeaderMetaItem"
+                                                       IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       Text="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
+                                                       ToolTip.Tip="{DynamicResource ArchivedPrefix}"/>
                                         </WrapPanel>
                                     </Grid>
 
@@ -2187,9 +2192,7 @@
                                             AutomationProperties.ControlTypeOverride="Group"
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskPlanningSection">
-                                        <StackPanel Classes="TaskCardSectionContent">
-                                            <StackPanel Classes="TaskPlanningGroups">
-                                                <StackPanel Classes="TaskPlanningGroup">
+                                        <StackPanel Classes="TaskCardSectionContent TaskPlanningGroups">
                                                     <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
                                                         <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
                                                                             Classes="TaskPlanningValueControl"
@@ -2216,9 +2219,6 @@
                                                             </DropDownButton.Flyout>
                                                         </DropDownButton>
                                                     </Grid>
-                                                </StackPanel>
-
-                                                <StackPanel Classes="TaskPlanningGroup">
                                                     <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
                                                         <TextBox ToolTip.Tip="{DynamicResource DurationExample}"
                                                                  Classes="TaskPlanningValueControl"
@@ -2252,9 +2252,6 @@
                                                             </DropDownButton.Flyout>
                                                         </DropDownButton>
                                                     </Grid>
-                                                </StackPanel>
-
-                                                <StackPanel Classes="TaskPlanningGroup">
                                                     <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
                                                         <CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}"
                                                                             Classes="TaskPlanningValueControl"
@@ -2285,8 +2282,6 @@
                                                             </DropDownButton.Flyout>
                                                         </DropDownButton>
                                                     </Grid>
-                                                </StackPanel>
-                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
 
