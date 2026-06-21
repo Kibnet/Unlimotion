@@ -1,0 +1,44 @@
+<!--
+  Unlimotion · "Aurora" — ELEVATION & GLOW
+  ========================================
+  Ported from tokens/elevation.css. Borders carry hierarchy; shadow is
+  reserved for things that truly float; GLOW is colored and meaning-bearing
+  (ready-green pulse + accent selection rail only — never decorative).
+
+  Avalonia BoxShadows format: "offsetX offsetY blur spread #AARRGGBB".
+  Colors are baked per theme (BoxShadows is a string type and cannot hold a
+  DynamicResource), so these live under ThemeDictionaries like the colors.
+  Apply with: BoxShadow="{DynamicResource ShadowRaised}".
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+
+    <!-- ========================= DARK (default) ========================= -->
+    <ResourceDictionary x:Key="Dark">
+      <BoxShadows x:Key="ShadowRaised">0 8 24 -10 #8C000000</BoxShadows>
+      <BoxShadows x:Key="ShadowFlyout">0 16 40 -12 #A6000000</BoxShadows>
+      <BoxShadows x:Key="ShadowDialog">0 28 80 -20 #B3000000</BoxShadows>
+      <BoxShadows x:Key="ShadowWindow">0 40 120 -30 #CC000000</BoxShadows>
+      <!-- glow — colored, meaning-bearing only -->
+      <BoxShadows x:Key="GlowReady">0 0 16 0 #1FE0A0</BoxShadows>
+      <BoxShadows x:Key="GlowReadyDot">0 0 9 0 #571FE0A0</BoxShadows>
+      <BoxShadows x:Key="GlowAccent">0 0 12 0 #8B5CFF</BoxShadows>
+      <BoxShadows x:Key="GlowNewBtn">0 2 10 0 #737C4DF0</BoxShadows>
+    </ResourceDictionary>
+
+    <!-- ============================= LIGHT ============================= -->
+    <ResourceDictionary x:Key="Light">
+      <BoxShadows x:Key="ShadowRaised">0 8 22 -12 #4D281C5A</BoxShadows>
+      <BoxShadows x:Key="ShadowFlyout">0 16 36 -14 #42281C5A</BoxShadows>
+      <BoxShadows x:Key="ShadowDialog">0 28 70 -22 #57281C5A</BoxShadows>
+      <BoxShadows x:Key="ShadowWindow">0 40 100 -34 #5C281C5A</BoxShadows>
+      <!-- glow is gentler in light (less luminous bloom on pale surfaces) -->
+      <BoxShadows x:Key="GlowReady">0 0 10 0 #4D079669</BoxShadows>
+      <BoxShadows x:Key="GlowReadyDot">0 0 9 0 #4D079669</BoxShadows>
+      <BoxShadows x:Key="GlowAccent">0 0 8 0 #426E3DF5</BoxShadows>
+      <BoxShadows x:Key="GlowNewBtn">0 2 10 0 #426E3DF5</BoxShadows>
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

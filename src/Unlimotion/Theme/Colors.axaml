@@ -1,0 +1,199 @@
+<!--
+  Unlimotion · "Aurora" design system — COLOR TOKENS for Avalonia
+  ================================================================
+  Generated from the design handoff (tokens/colors.css). Dark is the
+  default variant; Light overrides the same keys.
+
+  Always use DynamicResource (not StaticResource) at call sites so the
+  brush re-resolves when the user flips the theme.
+
+  Author against SEMANTIC brushes only. Meaning is fixed:
+    Accent  = brand / selection / in-progress
+    Ready   = green, means ONE thing: "unblocked, act now"
+    Blocked = coral, means "waiting / blocked"
+    Teal    = a second goal's accent
+    Rel*    = dependency-edge colors on the roadmap / detail map
+  ================================================================
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+
+    <!-- ========================= DARK (default) ========================= -->
+    <ResourceDictionary x:Key="Dark">
+
+      <!-- surfaces · five tiers, low → high -->
+      <Color x:Key="BgDeepColor">#050509</Color>
+      <Color x:Key="BgColor">#0B0A14</Color>
+      <Color x:Key="SurfaceRailColor">#0F0D18</Color>
+      <Color x:Key="SurfaceColor">#15131F</Color>
+      <Color x:Key="Surface2Color">#1B1928</Color>
+      <Color x:Key="SurfaceRaisedColor">#201D2E</Color>
+      <SolidColorBrush x:Key="BgDeepBrush" Color="{StaticResource BgDeepColor}"/>
+      <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+      <SolidColorBrush x:Key="SurfaceRailBrush" Color="{StaticResource SurfaceRailColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}"/>
+
+      <!-- hairlines · borders carry depth, not shadow -->
+      <Color x:Key="BorderColor">#12FFFFFF</Color>
+      <Color x:Key="BorderStrongColor">#1FFFFFFF</Color>
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}"/>
+
+      <!-- text · three tiers + ink-on-signal -->
+      <Color x:Key="TextColor">#EEECF7</Color>
+      <Color x:Key="Text2Color">#9C97B2</Color>
+      <Color x:Key="Text3Color">#6B6685</Color>
+      <Color x:Key="TextOnAccentColor">#0B0A14</Color>
+      <Color x:Key="TextOnReadyColor">#06120C</Color>
+      <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}"/>
+      <SolidColorBrush x:Key="Text2Brush" Color="{StaticResource Text2Color}"/>
+      <SolidColorBrush x:Key="Text3Brush" Color="{StaticResource Text3Color}"/>
+      <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccentColor}"/>
+      <SolidColorBrush x:Key="TextOnReadyBrush" Color="{StaticResource TextOnReadyColor}"/>
+
+      <!-- accent · Aurora violet (brand / selection / in-progress) -->
+      <Color x:Key="AccentColor">#8B5CFF</Color>
+      <Color x:Key="AccentBrightColor">#A684FF</Color>
+      <Color x:Key="AccentSoftColor">#248B5CFF</Color>
+      <Color x:Key="AccentLineColor">#578B5CFF</Color>
+      <Color x:Key="AccentRingColor">#738B5CFF</Color>
+      <Color x:Key="AccentPressColor">#7C4DF0</Color>
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+      <SolidColorBrush x:Key="AccentBrightBrush" Color="{StaticResource AccentBrightColor}"/>
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoftColor}"/>
+      <SolidColorBrush x:Key="AccentLineBrush" Color="{StaticResource AccentLineColor}"/>
+      <SolidColorBrush x:Key="AccentRingBrush" Color="{StaticResource AccentRingColor}"/>
+      <SolidColorBrush x:Key="AccentPressBrush" Color="{StaticResource AccentPressColor}"/>
+
+      <!-- ready · Aurora green — "unblocked, do it now" -->
+      <Color x:Key="ReadyColor">#1FE0A0</Color>
+      <Color x:Key="ReadySoftColor">#211FE0A0</Color>
+      <Color x:Key="ReadyLineColor">#571FE0A0</Color>
+      <SolidColorBrush x:Key="ReadyBrush" Color="{StaticResource ReadyColor}"/>
+      <SolidColorBrush x:Key="ReadySoftBrush" Color="{StaticResource ReadySoftColor}"/>
+      <SolidColorBrush x:Key="ReadyLineBrush" Color="{StaticResource ReadyLineColor}"/>
+
+      <!-- blocked · Aurora coral — "waiting / blocked" -->
+      <Color x:Key="BlockedColor">#FF6B7D</Color>
+      <Color x:Key="BlockedSoftColor">#1FFF6B7D</Color>
+      <Color x:Key="BlockedLineColor">#4DFF6B7D</Color>
+      <SolidColorBrush x:Key="BlockedBrush" Color="{StaticResource BlockedColor}"/>
+      <SolidColorBrush x:Key="BlockedSoftBrush" Color="{StaticResource BlockedSoftColor}"/>
+      <SolidColorBrush x:Key="BlockedLineBrush" Color="{StaticResource BlockedLineColor}"/>
+
+      <!-- teal · second goal accent -->
+      <Color x:Key="TealColor">#2DD4BF</Color>
+      <Color x:Key="TealSoftColor">#242DD4BF</Color>
+      <SolidColorBrush x:Key="TealBrush" Color="{StaticResource TealColor}"/>
+      <SolidColorBrush x:Key="TealSoftBrush" Color="{StaticResource TealSoftColor}"/>
+
+      <!-- relation edges (roadmap graph + detail map) -->
+      <Color x:Key="RelBlocksColor">#FF6B7D</Color>
+      <Color x:Key="RelContainsColor">#1FE0A0</Color>
+      <SolidColorBrush x:Key="RelBlocksBrush" Color="{StaticResource RelBlocksColor}"/>
+      <SolidColorBrush x:Key="RelContainsBrush" Color="{StaticResource RelContainsColor}"/>
+
+      <!-- FluentTheme accent override → Aurora violet (auto-themes standard controls) -->
+      <Color x:Key="SystemAccentColor">#8B5CFF</Color>
+      <Color x:Key="SystemAccentColorLight1">#9D75FF</Color>
+      <Color x:Key="SystemAccentColorLight2">#AE8DFF</Color>
+      <Color x:Key="SystemAccentColorLight3">#C0A6FF</Color>
+      <Color x:Key="SystemAccentColorDark1">#7C4DF0</Color>
+      <Color x:Key="SystemAccentColorDark2">#6A3FD6</Color>
+      <Color x:Key="SystemAccentColorDark3">#5832B3</Color>
+
+    </ResourceDictionary>
+
+    <!-- ============================= LIGHT ============================= -->
+    <ResourceDictionary x:Key="Light">
+
+      <!-- surfaces -->
+      <Color x:Key="BgDeepColor">#E9E6F4</Color>
+      <Color x:Key="BgColor">#F6F5FB</Color>
+      <Color x:Key="SurfaceRailColor">#FBFAFE</Color>
+      <Color x:Key="SurfaceColor">#FFFFFF</Color>
+      <Color x:Key="Surface2Color">#F1EEF9</Color>
+      <Color x:Key="SurfaceRaisedColor">#FFFFFF</Color>
+      <SolidColorBrush x:Key="BgDeepBrush" Color="{StaticResource BgDeepColor}"/>
+      <SolidColorBrush x:Key="BgBrush" Color="{StaticResource BgColor}"/>
+      <SolidColorBrush x:Key="SurfaceRailBrush" Color="{StaticResource SurfaceRailColor}"/>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
+      <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2Color}"/>
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}"/>
+
+      <!-- hairlines -->
+      <Color x:Key="BorderColor">#171A1430</Color>
+      <Color x:Key="BorderStrongColor">#261A1430</Color>
+      <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}"/>
+
+      <!-- text -->
+      <Color x:Key="TextColor">#1A1726</Color>
+      <Color x:Key="Text2Color">#6B6582</Color>
+      <Color x:Key="Text3Color">#9D97AE</Color>
+      <Color x:Key="TextOnAccentColor">#FFFFFF</Color>
+      <Color x:Key="TextOnReadyColor">#FFFFFF</Color>
+      <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}"/>
+      <SolidColorBrush x:Key="Text2Brush" Color="{StaticResource Text2Color}"/>
+      <SolidColorBrush x:Key="Text3Brush" Color="{StaticResource Text3Color}"/>
+      <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccentColor}"/>
+      <SolidColorBrush x:Key="TextOnReadyBrush" Color="{StaticResource TextOnReadyColor}"/>
+
+      <!-- accent · Aurora violet (deeper in light for contrast) -->
+      <Color x:Key="AccentColor">#6E3DF5</Color>
+      <Color x:Key="AccentBrightColor">#6E3DF5</Color>
+      <Color x:Key="AccentSoftColor">#1A6E3DF5</Color>
+      <Color x:Key="AccentLineColor">#426E3DF5</Color>
+      <Color x:Key="AccentRingColor">#666E3DF5</Color>
+      <Color x:Key="AccentPressColor">#5A2FD0</Color>
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}"/>
+      <SolidColorBrush x:Key="AccentBrightBrush" Color="{StaticResource AccentBrightColor}"/>
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoftColor}"/>
+      <SolidColorBrush x:Key="AccentLineBrush" Color="{StaticResource AccentLineColor}"/>
+      <SolidColorBrush x:Key="AccentRingBrush" Color="{StaticResource AccentRingColor}"/>
+      <SolidColorBrush x:Key="AccentPressBrush" Color="{StaticResource AccentPressColor}"/>
+
+      <!-- ready -->
+      <Color x:Key="ReadyColor">#079669</Color>
+      <Color x:Key="ReadySoftColor">#1C079669</Color>
+      <Color x:Key="ReadyLineColor">#4D079669</Color>
+      <SolidColorBrush x:Key="ReadyBrush" Color="{StaticResource ReadyColor}"/>
+      <SolidColorBrush x:Key="ReadySoftBrush" Color="{StaticResource ReadySoftColor}"/>
+      <SolidColorBrush x:Key="ReadyLineBrush" Color="{StaticResource ReadyLineColor}"/>
+
+      <!-- blocked -->
+      <Color x:Key="BlockedColor">#E23D4E</Color>
+      <Color x:Key="BlockedSoftColor">#17E23D4E</Color>
+      <Color x:Key="BlockedLineColor">#42E23D4E</Color>
+      <SolidColorBrush x:Key="BlockedBrush" Color="{StaticResource BlockedColor}"/>
+      <SolidColorBrush x:Key="BlockedSoftBrush" Color="{StaticResource BlockedSoftColor}"/>
+      <SolidColorBrush x:Key="BlockedLineBrush" Color="{StaticResource BlockedLineColor}"/>
+
+      <!-- teal -->
+      <Color x:Key="TealColor">#0D9488</Color>
+      <Color x:Key="TealSoftColor">#1F0D9488</Color>
+      <SolidColorBrush x:Key="TealBrush" Color="{StaticResource TealColor}"/>
+      <SolidColorBrush x:Key="TealSoftBrush" Color="{StaticResource TealSoftColor}"/>
+
+      <!-- relation edges -->
+      <Color x:Key="RelBlocksColor">#E23D4E</Color>
+      <Color x:Key="RelContainsColor">#079669</Color>
+      <SolidColorBrush x:Key="RelBlocksBrush" Color="{StaticResource RelBlocksColor}"/>
+      <SolidColorBrush x:Key="RelContainsBrush" Color="{StaticResource RelContainsColor}"/>
+
+      <!-- FluentTheme accent override → Aurora violet (deeper in light) -->
+      <Color x:Key="SystemAccentColor">#6E3DF5</Color>
+      <Color x:Key="SystemAccentColorLight1">#8055F7</Color>
+      <Color x:Key="SystemAccentColorLight2">#936EF9</Color>
+      <Color x:Key="SystemAccentColorLight3">#A687FA</Color>
+      <Color x:Key="SystemAccentColorDark1">#5A2FD0</Color>
+      <Color x:Key="SystemAccentColorDark2">#4B27AE</Color>
+      <Color x:Key="SystemAccentColorDark3">#3C1F8C</Color>
+
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

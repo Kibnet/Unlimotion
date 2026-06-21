@@ -1,0 +1,57 @@
+<!--
+  Unlimotion · "Aurora" — INPUT controls (TextBox, ComboBox)
+  ==========================================================
+  Recolors the standard inputs to Aurora tokens over FluentTheme:
+  surface fill, hairline border, 9px radius, 34px tall, accent focus.
+  Applied globally (inputs are a small, consistent surface) — apply
+  Classes="plain" to opt a specific input out of the chrome.
+  Included via StyleInclude in App.Styles.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ===== TextBox ===== -->
+  <Style Selector="TextBox:not(.plain)">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="MinHeight" Value="{DynamicResource ControlH}"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="TextBox:not(.plain) /template/ TextBlock#PART_Watermark">
+    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+  </Style>
+  <Style Selector="TextBox:not(.plain):pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+  </Style>
+  <Style Selector="TextBox:not(.plain):focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+  <!-- ===== ComboBox (Select) ===== -->
+  <Style Selector="ComboBox:not(.plain)">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="MinHeight" Value="{DynamicResource ControlH}"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style Selector="ComboBox:not(.plain):pointerover /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+  </Style>
+  <Style Selector="ComboBox:not(.plain):focus /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
+</Styles>
