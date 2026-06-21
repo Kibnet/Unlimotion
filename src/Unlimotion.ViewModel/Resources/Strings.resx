@@ -437,6 +437,7 @@
   <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to unarchive the {0} contained tasks from "{1}"?</value></data>
   <data name="Unlocked" xml:space="preserve"><value>Unlocked</value></data>
   <data name="ReadyNow" xml:space="preserve"><value>Ready now</value></data>
+  <data name="ImportanceHint" xml:space="preserve"><value>Task priority — affects list sorting</value></data>
   <data name="ViewsGroup" xml:space="preserve"><value>Views</value></data>
   <data name="GoalsGroup" xml:space="preserve"><value>Goals</value></data>
   <data name="Blocked" xml:space="preserve"><value>Blocked</value></data>

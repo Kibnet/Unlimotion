@@ -340,12 +340,16 @@
         <Style Selector="WrapPanel.TaskHeaderMetaLine">
             <Setter Property="Orientation" Value="Horizontal"/>
         </Style>
-        <Style Selector="WrapPanel.TaskHeaderMetaLine > TextBlock">
-            <Setter Property="Margin" Value="0,0,12,2"/>
+        <Style Selector="WrapPanel.TaskHeaderMetaLine > StackPanel">
+            <Setter Property="Margin" Value="0,0,14,3"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <Style Selector="TextBlock.TaskHeaderMetaLabel">
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
         <Style Selector="TextBlock.TaskHeaderIdMeta">
-            <Setter Property="MaxWidth" Value="150"/>
+            <Setter Property="MaxWidth" Value="140"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style Selector="TextBox.CurrentTaskTitleEditor">
@@ -2078,19 +2082,20 @@
                                                           VerticalAlignment="Center"
                                                           Content="{DynamicResource Wanted}"
                                                           AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="6"
+                                                            ToolTip.Tip="{DynamicResource ImportanceHint}">
                                                     <TextBlock Text="{DynamicResource Importance}" Classes="caption" VerticalAlignment="Center"/>
                                                     <NumericUpDown Value="{Binding Importance}"
                                                                    Classes="TaskHeaderImportanceInput"
                                                                    Minimum="0"
                                                                    Maximum="100"
-                                                                   ToolTip.Tip="{DynamicResource Importance}"
+                                                                   ToolTip.Tip="{DynamicResource ImportanceHint}"
                                                                    AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
                                                 </StackPanel>
                                             </WrapPanel>
                                             <DropDownButton Grid.Column="1"
                                                             Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                                                            Content="⚙"
+                                                            Content="⋮"
                                                             VerticalAlignment="Center"
                                                             ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
                                                             AutomationProperties.Name="{DynamicResource TaskActionsMenuTip}"
@@ -2123,32 +2128,40 @@
                                             </DropDownButton>
                                         </Grid>
 
-                                        <!-- compact metadata line: id + timestamps (mono, muted) -->
+                                        <!-- metadata: id + timestamps, each with its own label -->
                                         <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Classes="TaskHeaderMetaLine" Margin="0,8,0,0">
-                                            <TextBlock Classes="meta TaskHeaderIdMeta"
-                                                       Text="{Binding Id, Mode=OneWay}"
-                                                       ToolTip.Tip="{Binding Id}"
-                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
-                                            <TextBlock Classes="meta TaskHeaderMetaItem"
-                                                       IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       Text="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
-                                                       ToolTip.Tip="{DynamicResource CreatedPrefix}"/>
-                                            <TextBlock Classes="meta TaskHeaderMetaItem"
-                                                       IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       Text="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
-                                                       ToolTip.Tip="{DynamicResource UpdatedPrefix}"/>
-                                            <TextBlock Classes="meta TaskHeaderMetaItem"
-                                                       IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       Text="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
-                                                       ToolTip.Tip="{DynamicResource UnlockedPrefix}"/>
-                                            <TextBlock Classes="meta TaskHeaderMetaItem"
-                                                       IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       Text="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
-                                                       ToolTip.Tip="{DynamicResource CompletedPrefix}"/>
-                                            <TextBlock Classes="meta TaskHeaderMetaItem"
-                                                       IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                       Text="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"
-                                                       ToolTip.Tip="{DynamicResource ArchivedPrefix}"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="ID"/>
+                                                <TextBlock Classes="meta TaskHeaderIdMeta"
+                                                           Text="{Binding Id, Mode=OneWay}"
+                                                           ToolTip.Tip="{Binding Id}"
+                                                           AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                        IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="{DynamicResource CreatedPrefix}"/>
+                                                <TextBlock Classes="meta" Text="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                        IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="{DynamicResource UpdatedPrefix}"/>
+                                                <TextBlock Classes="meta" Text="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                        IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="{DynamicResource UnlockedPrefix}"/>
+                                                <TextBlock Classes="meta" Text="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                        IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="{DynamicResource CompletedPrefix}"/>
+                                                <TextBlock Classes="meta" Text="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                                        IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <TextBlock Classes="meta TaskHeaderMetaLabel" Text="{DynamicResource ArchivedPrefix}"/>
+                                                <TextBlock Classes="meta" Text="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </StackPanel>
                                         </WrapPanel>
                                     </Grid>
 
