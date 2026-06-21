@@ -12,21 +12,37 @@
              x:Class="Unlimotion.Views.SettingsControl"
              AutomationProperties.AutomationId="SettingsRoot">
     <UserControl.Styles>
+        <!-- each settings section is an Aurora card -->
         <Style Selector="Border.SettingsSection">
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Padding" Value="16" />
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="BoxShadow" Value="{DynamicResource ShadowRaised}" />
+        </Style>
+        <!-- nested cards (ssh keys / conflicts) sit on a card, so step up a surface tier -->
+        <Style Selector="Border.SettingsSection Border.SettingsSection">
+            <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+        </Style>
+        <Style Selector="TextBlock.PageTitle">
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource FsHeading}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         </Style>
         <Style Selector="TextBlock.SectionTitle">
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource FsSubtitle}" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         </Style>
         <Style Selector="TextBlock.SectionHint">
-            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,4,0,12" />
+            <Setter Property="Margin" Value="0,4,0,14" />
         </Style>
         <Style Selector="TextBlock.StatusText">
             <Setter Property="TextWrapping" Value="Wrap" />
@@ -80,10 +96,12 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                   behavior:KeyboardAwareScrollViewer.IsEnabled="True">
-        <StackPanel x:Name="SettingsContent" Margin="16">
-            <TextBlock Classes="SectionTitle" Text="{DynamicResource SettingsTitle}" />
-            <TextBlock Classes="SectionHint"
-                       Text="{DynamicResource SettingsIntro}" />
+        <StackPanel x:Name="SettingsContent" Margin="20">
+            <StackPanel Margin="2,0,0,16">
+                <TextBlock Classes="PageTitle" Text="{DynamicResource SettingsTitle}" />
+                <TextBlock Classes="SectionHint" Margin="0,4,0,0"
+                           Text="{DynamicResource SettingsIntro}" />
+            </StackPanel>
 
             <Border Classes="SettingsSection">
                 <StackPanel>
