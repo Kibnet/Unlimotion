@@ -436,6 +436,11 @@
   <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Unarchive contained tasks</value></data>
   <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to unarchive the {0} contained tasks from "{1}"?</value></data>
   <data name="Unlocked" xml:space="preserve"><value>Unlocked</value></data>
+  <data name="ReadyNow" xml:space="preserve"><value>Ready now</value></data>
+  <data name="ViewsGroup" xml:space="preserve"><value>Views</value></data>
+  <data name="GoalsGroup" xml:space="preserve"><value>Goals</value></data>
+  <data name="Blocked" xml:space="preserve"><value>Blocked</value></data>
+  <data name="RepeatsWeekly" xml:space="preserve"><value>Weekly</value></data>
   <data name="UnlockedLabelFormat" xml:space="preserve"><value>Unlocked: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="UnlockedPrefix" xml:space="preserve"><value>Unlocked:</value></data>
   <data name="UnlockedTimeFilterFuture" xml:space="preserve"><value>Future</value></data>

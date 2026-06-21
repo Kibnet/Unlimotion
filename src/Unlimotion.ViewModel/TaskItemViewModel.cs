@@ -148,6 +148,21 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
+            // Aurora: keep goal progress (direct-children completion) live — recompute
+            // when the children set changes (add/remove) or any child's Status changes.
+            var containsChanges = _containsTasksSource.ToObservableChangeSet();
+            Observable.Merge(
+                    containsChanges.ToCollection().Select(_ => Unit.Default),
+                    containsChanges.MergeMany(child => child.WhenAnyValue(c => c.Status).Select(_ => Unit.Default)))
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ =>
+                {
+                    OnPropertyChanged(nameof(HasChildren));
+                    OnPropertyChanged(nameof(GoalProgress));
+                    OnPropertyChanged(nameof(GoalProgressPercent));
+                })
+                .AddToDispose(this);
+
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 var notificationManager = NotificationManager ?? NotificationManagerInstance;
@@ -573,9 +588,14 @@ namespace Unlimotion.ViewModel
         [AlsoNotifyFor(nameof(TitleWithoutEmoji), nameof(Emoji), nameof(OnlyTextTitle))]
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
-        [AlsoNotifyFor(nameof(AvailabilityOpacity))]
+        [AlsoNotifyFor(nameof(AvailabilityOpacity), nameof(IsBlocked))]
         public bool IsCanBeCompleted { get; set; }
         public double AvailabilityOpacity => IsCanBeCompleted ? 1d : 0.4;
+
+        // Aurora: "blocked / waiting" signal — not actionable AND held up by an
+        // incomplete blocker (as opposed to merely containing unfinished children).
+        public bool IsBlocked =>
+            !IsCanBeCompleted && BlockedByTasks.Any(static task => task.Status.IsIncompleteForAvailability());
         [AlsoNotifyFor(
             nameof(IsCompleted),
             nameof(StatusOption),
@@ -682,6 +702,48 @@ namespace Unlimotion.ViewModel
         }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
+
+        // Aurora: goal/decomposition progress over DIRECT children (cheap + live).
+        // Recomputed reactively when ContainsTasks changes or a child's Status changes
+        // (see the AutoRefresh subscription in the constructor).
+        public bool HasChildren => ContainsTasks.Count > 0;
+
+        public double GoalProgress
+        {
+            get
+            {
+                var (total, done) = CountDescendants(new HashSet<string>(StringComparer.Ordinal));
+                return total == 0 ? 0d : (double)done / total;
+            }
+        }
+
+        public int GoalProgressPercent => (int)Math.Round(GoalProgress * 100d);
+
+        // Completed / total over the whole subtree (cycle-safe via visited ids).
+        private (int Total, int Done) CountDescendants(ISet<string> visited)
+        {
+            var total = 0;
+            var done = 0;
+            foreach (var child in ContainsTasks)
+            {
+                if (!string.IsNullOrWhiteSpace(child.Id) && !visited.Add(child.Id))
+                {
+                    continue;
+                }
+
+                total++;
+                if (child.Status == DomainTaskStatus.Completed)
+                {
+                    done++;
+                }
+
+                var (childTotal, childDone) = child.CountDescendants(visited);
+                total += childTotal;
+                done += childDone;
+            }
+
+            return (total, done);
+        }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ParentsTasks => _parentsTasks;
 

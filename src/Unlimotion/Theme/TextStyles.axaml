@@ -1,0 +1,92 @@
+<!--
+  Unlimotion · "Aurora" — TEXT ROLE STYLES
+  ========================================
+  Apply as TextBlock classes, e.g. <TextBlock Classes="heading" Text="All tasks"/>.
+  One selector per role from the type scale. All UI text is the UI font;
+  machine values (dates, slugs, counts, %, shortcuts) use the mono font.
+  Included via StyleInclude in App.Styles.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsDisplay}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="LetterSpacing" Value="{DynamicResource LsTight}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsHeading}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="LetterSpacing" Value="{DynamicResource LsTight}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsTitle}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.subtitle">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsSubtitle}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.task">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsTask}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.nav">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsCaption}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsCaption}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsMeta}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+  </Style>
+
+  <Style Selector="TextBlock.eyebrow">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsEyebrow}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="LetterSpacing" Value="{DynamicResource LsEyebrow}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+  </Style>
+
+</Styles>
