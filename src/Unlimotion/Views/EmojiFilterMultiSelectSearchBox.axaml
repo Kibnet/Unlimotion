@@ -21,43 +21,43 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="TextBox.EmojiFilterSummaryInput.Exclude">
-            <Setter Property="Background" Value="#11CF222E"/>
-            <Setter Property="BorderBrush" Value="#CF222E"/>
+            <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BlockedBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
         <Style Selector="TextBox.EmojiFilterSummaryInput.EmptySummary">
-            <Setter Property="Foreground" Value="#99FFFFFF"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
         </Style>
         <Style Selector="TextBlock.EmojiFilterExcludeMarker">
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="-8,0,0,0"/>
-            <Setter Property="Foreground" Value="#CF222E"/>
+            <Setter Property="Foreground" Value="{DynamicResource BlockedBrush}"/>
             <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
             <Setter Property="IsVisible" Value="False"/>
         </Style>
         <Style Selector="Border.EmojiFilterDropDown">
-            <Setter Property="Background" Value="{DynamicResource ThemeBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}"/>
             <Setter Property="Padding" Value="2"/>
             <Setter Property="MaxHeight" Value="260"/>
         </Style>
         <Style Selector="Border.EmojiFilterNoMatchesPanel">
             <Setter Property="Margin" Value="0,0,0,2"/>
             <Setter Property="Padding" Value="8,5"/>
-            <Setter Property="Background" Value="#FF3B3B3B"/>
-            <Setter Property="BorderBrush" Value="#FF5C5C5C"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
         <Style Selector="TextBlock.EmojiFilterNoMatches">
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
-            <Setter Property="Foreground" Value="#F59E0B"/>
+            <Setter Property="Foreground" Value="{DynamicResource BlockedBrush}"/>
         </Style>
         <Style Selector="ListBox.EmojiFilterList">
             <Setter Property="MaxHeight" Value="220"/>

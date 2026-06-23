@@ -150,6 +150,26 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
+            // Aurora: keep goal progress live across the WHOLE subtree. Each node
+            // observes its direct children's Status AND their GoalProgress, so a change
+            // deep in the tree propagates up the chain (leaf -> parent -> ... -> root):
+            // completing a leaf bumps its parent's GoalProgress, which this node observes,
+            // which bumps its own GoalProgress, and so on to the root goal in the sidebar.
+            var containsChanges = _containsTasksSource.ToObservableChangeSet();
+            Observable.Merge(
+                    containsChanges.ToCollection().Select(_ => Unit.Default),
+                    containsChanges.MergeMany(child => Observable.Merge(
+                        child.WhenAnyValue(c => c.Status).Select(_ => Unit.Default),
+                        child.WhenAnyValue(c => c.GoalProgress).Select(_ => Unit.Default))))
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ =>
+                {
+                    OnPropertyChanged(nameof(HasChildren));
+                    OnPropertyChanged(nameof(GoalProgress));
+                    OnPropertyChanged(nameof(GoalProgressPercent));
+                })
+                .AddToDispose(this);
+
             ArchiveCommand = ReactiveCommand.Create(() =>
             {
                 var notificationManager = NotificationManager;
@@ -575,9 +595,14 @@ namespace Unlimotion.ViewModel
         [AlsoNotifyFor(nameof(TitleWithoutEmoji), nameof(Emoji), nameof(OnlyTextTitle))]
         public string Title { get; set; } = "";
         public string Description { get; set; } = "";
-        [AlsoNotifyFor(nameof(AvailabilityOpacity))]
+        [AlsoNotifyFor(nameof(AvailabilityOpacity), nameof(IsBlocked))]
         public bool IsCanBeCompleted { get; set; }
         public double AvailabilityOpacity => IsCanBeCompleted ? 1d : 0.4;
+
+        // Aurora: "blocked / waiting" signal — not actionable AND held up by an
+        // incomplete blocker (as opposed to merely containing unfinished children).
+        public bool IsBlocked =>
+            !IsCanBeCompleted && BlockedByTasks.Any(static task => task.Status.IsIncompleteForAvailability());
         [AlsoNotifyFor(
             nameof(IsCompleted),
             nameof(StatusOption),
@@ -684,6 +709,48 @@ namespace Unlimotion.ViewModel
         }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ContainsTasks => _containsTasks;
+
+        // Aurora: goal/decomposition progress over DIRECT children (cheap + live).
+        // Recomputed reactively when ContainsTasks changes or a child's Status changes
+        // (see the AutoRefresh subscription in the constructor).
+        public bool HasChildren => ContainsTasks.Count > 0;
+
+        public double GoalProgress
+        {
+            get
+            {
+                var (total, done) = CountDescendants(new HashSet<string>(StringComparer.Ordinal));
+                return total == 0 ? 0d : (double)done / total;
+            }
+        }
+
+        public int GoalProgressPercent => (int)Math.Round(GoalProgress * 100d);
+
+        // Completed / total over the whole subtree (cycle-safe via visited ids).
+        private (int Total, int Done) CountDescendants(ISet<string> visited)
+        {
+            var total = 0;
+            var done = 0;
+            foreach (var child in ContainsTasks)
+            {
+                if (!string.IsNullOrWhiteSpace(child.Id) && !visited.Add(child.Id))
+                {
+                    continue;
+                }
+
+                total++;
+                if (child.Status == DomainTaskStatus.Completed)
+                {
+                    done++;
+                }
+
+                var (childTotal, childDone) = child.CountDescendants(visited);
+                total += childTotal;
+                done += childDone;
+            }
+
+            return (total, done);
+        }
 
         public ReadOnlyObservableCollection<TaskItemViewModel> ParentsTasks => _parentsTasks;
 

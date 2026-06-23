@@ -79,7 +79,7 @@
             <Setter Property="Padding" Value="0"/>
         </Style>
         <Style Selector="TextBlock.highlighted">
-            <Setter Property="Foreground" Value="#2F80ED" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
         <Style Selector="TextBox.RoadmapInlineTaskTitleEditor">
@@ -127,17 +127,17 @@
             <Setter Property="CornerRadius" Value="4" />
         </Style>
         <Style Selector="Border.roadmapNode.roadmapSelected">
-            <Setter Property="Background" Value="#182F80ED" />
-            <Setter Property="BorderBrush" Value="#7A2F80ED" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentLineBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         <Style Selector="Border.roadmapNode.roadmapCurrent">
-            <Setter Property="BorderBrush" Value="#E08A3FFC" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         <Style Selector="Border.roadmapNode.roadmapSelected.roadmapCurrent">
-            <Setter Property="Background" Value="#243A9B4F" />
-            <Setter Property="BorderBrush" Value="#E08A3FFC" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         <Style Selector="Button.roadmapViewportButton">
@@ -406,8 +406,8 @@
                     Margin="{Binding RoadmapSelectionRectangleMargin, ElementName=Root}"
                     Width="{Binding RoadmapSelectionRectangleWidth, ElementName=Root}"
                     Height="{Binding RoadmapSelectionRectangleHeight, ElementName=Root}"
-                    Background="#332F80ED"
-                    BorderBrush="#B02F80ED"
+                    Background="{DynamicResource AccentSoftBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
                     BorderThickness="1"
                     IsHitTestVisible="False"
                     IsVisible="{Binding IsRoadmapSelectionRectangleVisible, ElementName=Root}"

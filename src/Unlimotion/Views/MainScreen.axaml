@@ -105,8 +105,11 @@
                     <Border Background="#66000000"/>
                     <Border MaxWidth="260"
                             Padding="20"
-                            CornerRadius="14"
-                            Background="#F2FFFFFF"
+                            CornerRadius="{DynamicResource RadiusWin}"
+                            Background="{DynamicResource SurfaceRaisedBrush}"
+                            BorderBrush="{DynamicResource BorderStrongBrush}"
+                            BorderThickness="1"
+                            BoxShadow="{DynamicResource ShadowDialog}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <StackPanel Spacing="12">
@@ -119,17 +122,17 @@
                                 <Border Width="6"
                                         Height="14"
                                         CornerRadius="3"
-                                        Background="Black"
+                                        Background="{DynamicResource AccentBrush}"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Top"/>
                                 <Ellipse Width="6"
                                          Height="6"
-                                         Fill="#40000000"
+                                         Fill="{DynamicResource AccentSoftBrush}"
                                          HorizontalAlignment="Center"
                                          VerticalAlignment="Bottom"/>
                             </Grid>
                             <TextBlock Text="{DynamicResource LoadingTasks}"
-                                       Foreground="Black"
+                                       Foreground="{DynamicResource TextBrush}"
                                        FontWeight="SemiBold"
                                        HorizontalAlignment="Center"
                                        TextAlignment="Center"/>

@@ -1,0 +1,277 @@
+<!--
+  Unlimotion · "Aurora" — APP COMPONENTS (class-based)
+  ====================================================
+  Reusable Border/TextBlock classes for the app-specific pieces. Apply on a
+  Border that wraps the content; child text inherits via TextElement.Foreground.
+
+  Semantics are FIXED (the color IS the meaning):
+    status-tag.ready     → green "Ready now"
+    status-tag.blocked   → coral "Blocked"
+    status-tag.weekly    → violet "Weekly"
+    status-tag.inprogress→ violet "In progress"
+    status-tag.done      → green "Done"
+
+  Included via StyleInclude in App.Styles.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ===================== StatusTag ===================== -->
+  <Style Selector="Border.status-tag">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+    <Setter Property="Padding" Value="9,3"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+  </Style>
+  <Style Selector="Border.status-tag > TextBlock, Border.status-tag StackPanel > TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style Selector="Border.status-tag.ready">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+  <Style Selector="Border.status-tag.done">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+  <Style Selector="Border.status-tag.blocked">
+    <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource BlockedBrush}"/>
+  </Style>
+  <Style Selector="Border.status-tag.weekly">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+  </Style>
+  <Style Selector="Border.status-tag.inprogress">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+  </Style>
+
+  <!-- ===================== Badge (subtle tone tags) ===================== -->
+  <Style Selector="Border.badge">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="Height" Value="20"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+  </Style>
+  <Style Selector="Border.badge > TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsCaption}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.badge.neutral">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="Border.badge.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+  </Style>
+  <Style Selector="Border.badge.success">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+  <Style Selector="Border.badge.danger">
+    <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource BlockedBrush}"/>
+  </Style>
+  <Style Selector="Border.badge.teal">
+    <Setter Property="Background" Value="{DynamicResource TealSoftBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TealBrush}"/>
+  </Style>
+
+  <!-- ===================== Card / panel ===================== -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}"/>
+    <Setter Property="Padding" Value="16"/>
+  </Style>
+
+  <!-- ===================== ReadyChip ===================== -->
+  <Style Selector="Border.ready-chip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusRow}"/>
+    <Setter Property="Padding" Value="12,10"/>
+  </Style>
+  <Style Selector="Border.ready-chip:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ReadyLineBrush}"/>
+  </Style>
+  <Style Selector="Border.ready-chip.primary">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ReadyLineBrush}"/>
+  </Style>
+  <!-- the glowing ready dot (Border so it can carry the glow BoxShadow) -->
+  <Style Selector="Border.ready-dot">
+    <Setter Property="Width" Value="9"/>
+    <Setter Property="Height" Value="9"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+    <Setter Property="Background" Value="{DynamicResource ReadyBrush}"/>
+    <Setter Property="BoxShadow" Value="{DynamicResource GlowReadyDot}"/>
+  </Style>
+
+  <!-- ===================== NavItem ===================== -->
+  <Style Selector="Border.nav-item">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="Padding" Value="9,7"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="Border.nav-item:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="Border.nav-item.active">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="Border.nav-item.active.now">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+  </Style>
+  <Style Selector="Border.nav-item > Grid > TextBlock, Border.nav-item StackPanel > TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+  </Style>
+  <!-- selection rail -->
+  <Style Selector="Border.nav-rail">
+    <Setter Property="Width" Value="3"/>
+    <Setter Property="CornerRadius" Value="0,3,3,0"/>
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BoxShadow" Value="{DynamicResource GlowAccent}"/>
+  </Style>
+  <Style Selector="Border.nav-rail.now">
+    <Setter Property="Background" Value="{DynamicResource ReadyBrush}"/>
+    <Setter Property="BoxShadow" Value="{DynamicResource GlowReady}"/>
+  </Style>
+  <!-- count pill (green for ready, mono-meta otherwise) -->
+  <Style Selector="Border.count-pill">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+    <Setter Property="Padding" Value="8,1"/>
+    <Setter Property="Background" Value="{DynamicResource ReadyBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.count-pill > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextOnReadyBrush}"/>
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <!-- ===================== Sidebar nav (ListBox) ===================== -->
+  <Style Selector="PathIcon.nav-glyph">
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="Height" Value="16"/>
+    <Setter Property="Margin" Value="0,0,10,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- Ready-now glyph is always green -->
+  <Style Selector="ListBox.sidebar-nav ListBoxItem.now PathIcon.nav-glyph">
+    <Setter Property="Foreground" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem">
+    <Setter Property="Margin" Value="0,0,0,2"/>
+    <Setter Property="Padding" Value="10,7"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+  </Style>
+  <!-- hover -->
+  <Style Selector="ListBox.sidebar-nav ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <!-- selected (violet rail) -->
+  <Style Selector="ListBox.sidebar-nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderThickness" Value="3,0,0,0"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem:selected">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <!-- Ready-now item turns green when selected (the one place the rail isn't violet) -->
+  <Style Selector="ListBox.sidebar-nav ListBoxItem.now:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ReadySoftBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+  <Style Selector="ListBox.sidebar-nav ListBoxItem.now:selected">
+    <Setter Property="Foreground" Value="{DynamicResource ReadyBrush}"/>
+  </Style>
+
+  <!-- ===================== Goal row (sidebar GOALS) ===================== -->
+  <Style Selector="Border.goal-row">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="Padding" Value="6,5"/>
+    <Setter Property="Margin" Value="0,0,0,2"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Text2Brush}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Border.goal-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+  <Style Selector="Border.goal-row > Grid > TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+  </Style>
+  <Style Selector="Border.goal-tile">
+    <Setter Property="Width" Value="22"/>
+    <Setter Property="Height" Value="22"/>
+    <Setter Property="Margin" Value="0,0,9,0"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusXs}"/>
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Border.goal-tile > PathIcon.goal-glyph">
+    <Setter Property="Width" Value="13"/>
+    <Setter Property="Height" Value="13"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <!-- thin goal progress bar -->
+  <Style Selector="ProgressBar.goal-progress">
+    <Setter Property="Height" Value="4"/>
+    <Setter Property="MinHeight" Value="4"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+  <Style Selector="ProgressBar.goal-progress /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+  </Style>
+
+  <!-- ===================== Eyebrow section label ===================== -->
+  <Style Selector="TextBlock.section-eyebrow">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsEyebrow}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="LetterSpacing" Value="{DynamicResource LsEyebrow}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+  </Style>
+
+</Styles>

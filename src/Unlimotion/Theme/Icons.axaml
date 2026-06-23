@@ -1,0 +1,41 @@
+<!--
+  Unlimotion · "Aurora" — ICON GEOMETRIES
+  =======================================
+  Filled glyph geometries (24-grid) used via PathIcon, so they inherit
+  Foreground from their parent (follow nav selection/hover color).
+  A line-style Lucide set can replace these later; keep the keys stable.
+  Included via ResourceInclude in App.Resources.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- All tasks — list -->
+  <StreamGeometry x:Key="IconList">M3 5h18v2.6H3z M3 10.7h18v2.6H3z M3 16.4h18v2.6H3z</StreamGeometry>
+  <!-- Last created — plus -->
+  <StreamGeometry x:Key="IconPlus">M10.7 3h2.6v7.7H21v2.6h-7.7V21h-2.6v-7.7H3v-2.6h7.7z</StreamGeometry>
+  <!-- Last updated — pencil -->
+  <StreamGeometry x:Key="IconPencil">M3 17.2 13.6 6.6l3.8 3.8L6.8 21H3z M15.1 5.1 17.2 3 21 6.8l-2.1 2.1z</StreamGeometry>
+  <!-- Unlocked / Ready now — bolt -->
+  <StreamGeometry x:Key="IconBolt">M13 2 4 13.2h6.1L9 22l11-13.2h-7z</StreamGeometry>
+  <!-- In progress — clock ring (even-odd) with hand -->
+  <StreamGeometry x:Key="IconClock">F0 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z M11 7h2v6h-2z M11 11h5v2h-5z</StreamGeometry>
+  <!-- Completed — check -->
+  <StreamGeometry x:Key="IconCheck">M9.6 16.2 5.4 12l-1.5 1.4 5.7 5.7L21 7.6 19.5 6.2z</StreamGeometry>
+  <!-- Archived — box -->
+  <StreamGeometry x:Key="IconArchive">M3 4h18v4.2H3z M5 9.2h14V20H5z M9.3 12h5.4v2H9.3z</StreamGeometry>
+  <!-- Last opened — eye (even-odd) -->
+  <StreamGeometry x:Key="IconEye">F0 M12 5C6 5 2 12 2 12s4 7 10 7 10-7 10-7-4-7-10-7z M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z</StreamGeometry>
+  <!-- Roadmap — map -->
+  <StreamGeometry x:Key="IconMap">M9 3 3 5.2v15.6l6-2.2 6 2.2 6-2.2V2.8l-6 2.2-6-2z M9 3v15.4 M15 5.2V20</StreamGeometry>
+  <!-- Settings — gear (even-odd) -->
+  <StreamGeometry x:Key="IconGear">F0 M10.6 2h2.8l.5 2.6 2 .9 2.2-1.5 2 2-1.5 2.2.9 2 2.6.5v2.8l-2.6.5-.9 2 1.5 2.2-2 2-2.2-1.5-2 .9-.5 2.6h-2.8l-.5-2.6-2-.9-2.2 1.5-2-2 1.5-2.2-.9-2L2 13.4v-2.8l2.6-.5.9-2L4 5.9l2-2 2.2 1.5 2-.9z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z</StreamGeometry>
+
+  <!-- Goal marker — target (even-odd: ring + inner ring + center dot) -->
+  <StreamGeometry x:Key="IconTarget">F0 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z</StreamGeometry>
+
+  <!-- Command bar / misc -->
+  <StreamGeometry x:Key="IconSun">F0 M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z M11 1.5h2v3h-2z M11 19.5h2v3h-2z M1.5 11h3v2h-3z M19.5 11h3v2h-3z M4 4l2 2-1.4 1.4-2-2z M18 18l2 2-1.4 1.4-2-2z M20 4l-2 2 1.4 1.4 2-2z M6 18l-2 2 1.4 1.4 2-2z</StreamGeometry>
+  <StreamGeometry x:Key="IconMoon">M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z</StreamGeometry>
+  <StreamGeometry x:Key="IconSearch">F0 M10.5 3a7.5 7.5 0 1 0 4.55 13.46l4.74 4.74 1.42-1.42-4.74-4.74A7.5 7.5 0 0 0 10.5 3z m0 2a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11z</StreamGeometry>
+
+</ResourceDictionary>

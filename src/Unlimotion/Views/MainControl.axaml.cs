@@ -15,6 +15,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
@@ -183,6 +185,7 @@ namespace Unlimotion.Views
             QueueMainTabsOverflowUpdate();
             QueueLateMainTabsOverflowUpdate();
             QueueFilterToolbarLayoutUpdate();
+            SyncSidebarSelection();
             ObserveTaskDetailsBounds();
             QueueTaskDetailsLayoutUpdate();
         }
@@ -520,6 +523,56 @@ namespace Unlimotion.Views
             {
                 QueueMainTabsOverflowUpdate();
                 QueueFilterToolbarLayoutUpdate();
+                SyncSidebarSelection();
+            }
+        }
+
+        // Aurora: index of the Settings tab (it lives in the pinned footer, not the
+        // sidebar ListBox). Keep in sync with the TabControl item order.
+        private const int SettingsTabIndex = 9;
+        private bool _syncingSidebar;
+
+        // Mirror the TabControl selection onto the sidebar: views 0..8 highlight in the
+        // ListBox; Settings (9) lights the pinned footer and clears the ListBox.
+        private void SyncSidebarSelection()
+        {
+            if (SidebarNav is null || MainTabs is null)
+            {
+                return;
+            }
+
+            _syncingSidebar = true;
+            try
+            {
+                var index = MainTabs.SelectedIndex;
+                SidebarNav.SelectedIndex = index >= 0 && index < SettingsTabIndex ? index : -1;
+                SettingsNavItem?.Classes.Set("active", index == SettingsTabIndex);
+            }
+            finally
+            {
+                _syncingSidebar = false;
+            }
+        }
+
+        private void SidebarNav_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_syncingSidebar || MainTabs is null)
+            {
+                return;
+            }
+
+            var index = SidebarNav.SelectedIndex;
+            if (index >= 0 && index != MainTabs.SelectedIndex)
+            {
+                MainTabs.SelectedIndex = index;
+            }
+        }
+
+        private void SettingsNav_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (MainTabs is not null)
+            {
+                MainTabs.SelectedIndex = SettingsTabIndex;
             }
         }
 
@@ -551,8 +604,74 @@ namespace Unlimotion.Views
                 DispatcherPriority.Background);
         }
 
+        // Aurora redesign: the views moved to the left sidebar and the horizontal
+        // tab strip is hidden, so the strip-overflow machinery is disabled.
+        private const bool MainTabsStripHidden = true;
+
+        // Aurora redesign: clicking a goal tile in the sidebar GOALS group
+        // selects that goal and opens the detail rail on it.
+        private void GoalItem_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is Control { DataContext: TaskItemViewModel task } && DataContext is MainWindowViewModel vm)
+            {
+                vm.CurrentTaskItem = task;
+                vm.DetailsAreOpen = true;
+            }
+        }
+
+        // Aurora redesign: top-bar sun/moon theme toggle. Routes through the
+        // Settings view-model so the choice persists to config and is applied
+        // by the same reactive path as Settings → Appearance.
+        private void ThemeToggle_OnClick(object? sender, RoutedEventArgs e)
+        {
+            var app = Application.Current;
+            if (app is null)
+            {
+                return;
+            }
+
+            var goingDark = app.ActualThemeVariant != ThemeVariant.Dark;
+
+            if (DataContext is MainWindowViewModel { Settings: { } settings })
+            {
+                settings.ThemeModeIndex = goingDark ? 2 : 1; // 1 = Light, 2 = Dark
+            }
+            else
+            {
+                app.RequestedThemeVariant = goingDark ? ThemeVariant.Dark : ThemeVariant.Light;
+            }
+
+            SetThemeToggleIcon(goingDark);
+        }
+
+        // dark → show moon, light → show sun (icon reflects the active theme)
+        private void SetThemeToggleIcon(bool isDark)
+        {
+            if (ThemeToggleIcon is null)
+            {
+                return;
+            }
+
+            var key = isDark ? "IconMoon" : "IconSun";
+            if (this.TryFindResource(key, out var res) && res is Geometry geo)
+            {
+                ThemeToggleIcon.Data = geo;
+            }
+        }
+
+        private void UpdateThemeToggleIcon()
+        {
+            SetThemeToggleIcon((Application.Current?.ActualThemeVariant ?? ThemeVariant.Dark) == ThemeVariant.Dark);
+        }
+
         private void UpdateMainTabsOverflow()
         {
+            if (MainTabsStripHidden)
+            {
+                MainTabsOverflowButton.IsVisible = false;
+                return;
+            }
+
             var tabs = MainTabs.Items.OfType<TabItem>().ToList();
             if (tabs.Count == 0)
             {

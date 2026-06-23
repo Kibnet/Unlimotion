@@ -436,6 +436,12 @@
   <data name="UnarchiveContainedTasksHeader" xml:space="preserve"><value>Разархивировать вложенные задачи</value></data>
   <data name="UnarchiveContainedTasksMessage" xml:space="preserve"><value>Разархивировать {0} вложенных задач из "{1}"?</value></data>
   <data name="Unlocked" xml:space="preserve"><value>Разблокированные</value></data>
+  <data name="ReadyNow" xml:space="preserve"><value>Можно делать</value></data>
+  <data name="ImportanceHint" xml:space="preserve"><value>Приоритет задачи — влияет на сортировку списков</value></data>
+  <data name="ViewsGroup" xml:space="preserve"><value>Виды</value></data>
+  <data name="GoalsGroup" xml:space="preserve"><value>Цели</value></data>
+  <data name="Blocked" xml:space="preserve"><value>Заблокировано</value></data>
+  <data name="RepeatsWeekly" xml:space="preserve"><value>Еженедельно</value></data>
   <data name="UnlockedLabelFormat" xml:space="preserve"><value>Разблокировано: {0:yyyy.MM.dd HH:mm}</value></data>
   <data name="UnlockedPrefix" xml:space="preserve"><value>Разблокировано:</value></data>
   <data name="UnlockedTimeFilterFuture" xml:space="preserve"><value>Будущее</value></data>

@@ -25,7 +25,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double MaxPopupHeight = 260d;
     private const double MinPopupWidth = 280d;
     private const double MaxPopupWidth = 340d;
-    public const double DefaultSummaryWidth = 112d;
+    public const double DefaultSummaryWidth = 150d;
     public static double DefaultSummaryMinWidth => AppearanceSettings.DefaultSearchControlHeight;
     private const double DropDownNonListHeight = 8d;
     private const double MinListHeight = 60d;
@@ -589,6 +589,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private void UpdateStaticTextAndAutomation()
     {
         PART_Input.PlaceholderText = Watermark;
+        ToolTip.SetTip(PART_Input, Watermark);
         PART_NoMatches.Text = NoMatchesText;
         AutomationProperties.SetAutomationId(PART_DropDown, DropDownAutomationId);
         AutomationProperties.SetAutomationId(PART_List, ListAutomationId);
@@ -604,15 +605,19 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         {
             var selectedTokens = GetSelectedSummaryTokens();
             var isEmptySummary = !isSearchActive && selectedTokens.Length == 0;
+            // Aurora: when nothing is selected, show the descriptive label
+            // ("Emoji filter" / "Exclude emoji") instead of a bare emoji, so new
+            // users understand what each box does at a glance.
+            var emptyLabel = string.IsNullOrEmpty(Watermark) ? EmptySummaryToken : Watermark!;
             var inputText = isSearchActive
                 ? searchText
                 : isEmptySummary
-                    ? EmptySummaryToken
+                    ? emptyLabel
                     : BuildFittedSummary(selectedTokens);
 
             PART_Input.Text = inputText;
             PART_Input.PlaceholderText = isSearchActive ? Watermark : null;
-            PART_Input.TextAlignment = !isSearchActive && (isEmptySummary || selectedTokens.Length == 1)
+            PART_Input.TextAlignment = !isSearchActive && !isEmptySummary && selectedTokens.Length == 1
                 ? TextAlignment.Center
                 : TextAlignment.Left;
             PART_Input.Padding = SummaryPadding;
@@ -632,7 +637,14 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         var squareWidth = GetSummarySquareWidth();
         if (isEmptySummary)
         {
-            return squareWidth;
+            // size to the descriptive label so it reads as text, not a bare circle
+            if (string.IsNullOrEmpty(Watermark))
+            {
+                return squareWidth;
+            }
+
+            var labelWidth = MeasureInputTextWidth(inputText) + GetSummaryTextHorizontalReserve();
+            return Math.Clamp(Math.Ceiling(labelWidth), squareWidth, GetSummaryMaxWidth());
         }
 
         if (isSearchActive)
