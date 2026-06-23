@@ -28,7 +28,7 @@ public class MainScreenLoadingUiTests
     [Test]
     public async Task MainScreen_TogglesTasksLoadingOverlay_WithLoadingState()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -66,7 +66,7 @@ public class MainScreenLoadingUiTests
     [Test]
     public async Task MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var context = TestMainWindowContext.Create(TimeSpan.FromSeconds(2));
@@ -190,7 +190,11 @@ public class MainScreenLoadingUiTests
 
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
             var notificationManager = new NotificationManagerWrapperMock();
-            var storage = new UnifiedTaskStorage(new TaskTreeManager(new BlockingInitialLoadStorage(loadDelay)));
+            var taskContext = new TaskItemViewModelContext
+            {
+                NotificationManager = notificationManager
+            };
+            var storage = new UnifiedTaskStorage(new TaskTreeManager(new BlockingInitialLoadStorage(loadDelay)), taskContext);
             var settings = new SettingsViewModel(configuration);
             var mainWindowViewModel = new MainWindowViewModel(
                 new AppNameDefinitionService(),
@@ -199,8 +203,7 @@ public class MainScreenLoadingUiTests
                 () => storage,
                 settings);
 
-            TaskItemViewModel.NotificationManagerInstance = notificationManager;
-            TaskItemViewModel.MainWindowInstance = mainWindowViewModel;
+            taskContext.MainWindow = mainWindowViewModel;
 
             return new TestMainWindowContext(
                 configPath,

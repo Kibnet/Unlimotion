@@ -33,7 +33,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskTreeStatusControl_UsesCompactVectorIconInsteadOfTextGlyph()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -94,7 +94,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskTreeStatusControl_ClickOpensStatusFlyout()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -116,13 +116,10 @@ public class MainControlTaskStatusIconUiTests
 
                 var statusPicker = WaitForTaskStatusPicker(allTasksTree!);
                 var task = statusPicker.Task ?? statusPicker.DataContext as TaskItemViewModel;
-                PressControl(window, statusPicker);
-                Dispatcher.UIThread.RunJobs();
-
-                var flyout = statusPicker.Flyout as MenuFlyout;
+                var flyout = await OpenStatusFlyoutAsync(window, statusPicker);
 
                 await Assert.That(flyout).IsNotNull();
-                var menuItems = flyout!.Items.OfType<MenuItem>().ToList();
+                var menuItems = flyout.Items.OfType<MenuItem>().ToList();
                 var automationIds = menuItems
                     .Select(AutomationProperties.GetAutomationId)
                     .ToList();
@@ -143,7 +140,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task CurrentTaskCardStatusChange_UpdatesAllTasksTreeStatusIcon()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -178,9 +175,7 @@ public class MainControlTaskStatusIconUiTests
                 var currentTaskStatusPicker = WaitForAutomationControl<TaskStatusPicker>(
                     view,
                     "CurrentTaskStatusButton");
-                PressControl(window, currentTaskStatusPicker);
-                var flyout = currentTaskStatusPicker.Flyout as MenuFlyout;
-                await Assert.That(flyout).IsNotNull();
+                var flyout = await OpenStatusFlyoutAsync(window, currentTaskStatusPicker);
                 var inProgressItem = flyout!.Items
                     .OfType<MenuItem>()
                     .Single(item =>
@@ -211,7 +206,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task CurrentTaskCardCompletedStatusChange_RemovesNestedTaskFromAllTasksTreeWhenCompletedIsHidden()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -247,9 +242,7 @@ public class MainControlTaskStatusIconUiTests
                 var currentTaskStatusPicker = WaitForAutomationControl<TaskStatusPicker>(
                     view,
                     "CurrentTaskStatusButton");
-                PressControl(window, currentTaskStatusPicker);
-                var flyout = currentTaskStatusPicker.Flyout as MenuFlyout;
-                await Assert.That(flyout).IsNotNull();
+                var flyout = await OpenStatusFlyoutAsync(window, currentTaskStatusPicker);
                 var completedItem = flyout!.Items
                     .OfType<MenuItem>()
                     .Single(item =>
@@ -282,7 +275,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPicker_MatchesStandaloneCheckBoxIndicatorSize()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var task = new TaskItemViewModel(
@@ -336,7 +329,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPicker_DimsUnavailableTaskLikeTaskText()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var task = new TaskItemViewModel(
@@ -391,7 +384,7 @@ public class MainControlTaskStatusIconUiTests
     [Arguments("Dark")]
     public async Task TaskStatusIcon_CompletedMatchesCheckedCheckBoxIndicatorForTheme(string themeName)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
@@ -470,7 +463,7 @@ public class MainControlTaskStatusIconUiTests
     [Arguments("Dark")]
     public async Task TaskStatusIcon_UsesCheckBoxUncheckedBorderBrushForTheme(string themeName)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
@@ -525,7 +518,7 @@ public class MainControlTaskStatusIconUiTests
         string statusName,
         string expectedColor)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var status = Enum.Parse<DomainTaskStatus>(statusName);
@@ -572,7 +565,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusIcon_NotReadyBorderBrushTracksThemeChangesOnSameControl()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var app = Application.Current ?? throw new InvalidOperationException("Application is not initialized.");
@@ -683,7 +676,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusIconPreview_RendersOneVectorIconForEachLifecycleStatus()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var statuses = Enum.GetValues<DomainTaskStatus>();
@@ -733,7 +726,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task InProgressTree_DisplaysStartedDateTimeInLocalTime()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -787,7 +780,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var task = new TaskItemViewModel(
@@ -799,12 +792,7 @@ public class MainControlTaskStatusIconUiTests
                 },
                 new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
                 () => false);
-            var buildFlyout = typeof(TaskStatusPicker).GetMethod(
-                "BuildStatusFlyout",
-                BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new InvalidOperationException("TaskStatusPicker.BuildStatusFlyout was not found.");
-
-            var flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+            var flyout = BuildStatusFlyout(task);
             var items = flyout.Items.OfType<MenuItem>().ToList();
             var availableTransitionStatuses = task.StatusOptions
                 .Where(option => option.Status != task.Status && option.IsEnabled)
@@ -838,7 +826,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var storage = new InMemoryStorage();
@@ -874,11 +862,10 @@ public class MainControlTaskStatusIconUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                PressControl(window, statusPicker);
-                var flyout = statusPicker.Flyout as MenuFlyout;
+                var flyout = await OpenStatusFlyoutAsync(window, statusPicker);
 
                 await Assert.That(flyout).IsNotNull();
-                var inProgressItem = flyout!.Items
+                var inProgressItem = flyout.Items
                     .OfType<MenuItem>()
                     .Single(item =>
                         string.Equals(
@@ -921,7 +908,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var task = new TaskItemViewModel(
@@ -942,12 +929,7 @@ public class MainControlTaskStatusIconUiTests
                 },
                 new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
                 () => false);
-            var buildFlyout = typeof(TaskStatusPicker).GetMethod(
-                "BuildStatusFlyout",
-                BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new InvalidOperationException("TaskStatusPicker.BuildStatusFlyout was not found.");
-
-            var flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+            var flyout = BuildStatusFlyout(task);
             var completedItem = flyout.Items
                 .OfType<MenuItem>()
                 .SingleOrDefault(item =>
@@ -963,7 +945,7 @@ public class MainControlTaskStatusIconUiTests
 
             await Assert.That(task.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed).IsEnabled)
                 .IsTrue();
-            flyout = (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+            flyout = BuildStatusFlyout(task);
             completedItem = flyout.Items
                 .OfType<MenuItem>()
                 .Single(item =>
@@ -982,7 +964,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskStatusPicker_DetachedFromVisualTree_UnsubscribesFromTask()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var task = new TaskItemViewModel(
@@ -1033,20 +1015,73 @@ public class MainControlTaskStatusIconUiTests
         };
     }
 
-    private static void PressControl(Window window, Control control)
+    private static MenuFlyout BuildStatusFlyout(TaskStatusPicker statusPicker)
     {
-        var point = control.TranslatePoint(
-            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
-            window);
-
-        if (!point.HasValue)
+        var task = statusPicker.Task ?? statusPicker.DataContext as TaskItemViewModel;
+        if (task == null)
         {
-            throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
+            throw new InvalidOperationException("Task status picker is not bound to a task.");
         }
 
-        window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+        return BuildStatusFlyout(task);
+    }
+
+    private static MenuFlyout BuildStatusFlyout(TaskItemViewModel task)
+    {
+        var buildFlyout = typeof(TaskStatusPicker).GetMethod(
+            "BuildStatusFlyout",
+            BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("TaskStatusPicker.BuildStatusFlyout was not found.");
+
+        return (MenuFlyout)buildFlyout.Invoke(null, [task])!;
+    }
+
+    private static async Task<MenuFlyout> OpenStatusFlyoutAsync(Window window, TaskStatusPicker statusPicker)
+    {
+        PressControl(window, statusPicker);
+
+        var opened = await TestHelpers.WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            return statusPicker.Flyout is MenuFlyout { IsOpen: true };
+        }, TimeSpan.FromSeconds(2));
+
+        if (!opened || statusPicker.Flyout is not MenuFlyout flyout)
+        {
+            throw new InvalidOperationException("Task status flyout was not opened.");
+        }
+
+        return flyout;
+    }
+
+    private static void PressControl(Window window, Control control)
+    {
+        var point = new Point(control.Bounds.Width / 2, control.Bounds.Height / 2);
+        var pointer = new Avalonia.Input.Pointer(1, PointerType.Mouse, true);
+
+        control.RaiseEvent(new PointerPressedEventArgs(
+            control,
+            pointer,
+            control,
+            point,
+            0,
+            new PointerPointProperties(
+                RawInputModifiers.LeftMouseButton,
+                PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None,
+            1));
         Dispatcher.UIThread.RunJobs();
-        window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        control.RaiseEvent(new PointerReleasedEventArgs(
+            control,
+            pointer,
+            control,
+            point,
+            0,
+            new PointerPointProperties(
+                RawInputModifiers.None,
+                PointerUpdateKind.LeftButtonReleased),
+            KeyModifiers.None,
+            MouseButton.Left));
         Dispatcher.UIThread.RunJobs();
     }
 
@@ -1210,7 +1245,10 @@ public class MainControlTaskStatusIconUiTests
                         AutomationProperties.GetAutomationId(candidate),
                         "TaskStatusButton",
                         StringComparison.Ordinal) &&
-                    candidate.Task is TaskItemViewModel);
+                    candidate.Task is TaskItemViewModel &&
+                    candidate.Bounds.Width > 0 &&
+                    candidate.Bounds.Height > 0 &&
+                    candidate.IsEffectivelyVisible);
 
             return statusPicker != null;
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));

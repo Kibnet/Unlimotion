@@ -1721,43 +1721,18 @@ public class SettingsViewModelTests : IDisposable
         IRemoteBackupService backupService,
         ITaskStorageFactory storageFactory)
     {
-        const BindingFlags fieldFlags = BindingFlags.Static | BindingFlags.NonPublic;
         var appType = typeof(App);
-        var fieldValues = new Dictionary<string, object?>
-        {
-            ["_configuration"] = configuration,
-            ["_backupService"] = backupService,
-            ["_storageFactory"] = storageFactory,
-            ["_mainWindowViewModel"] = null,
-            ["_notificationManager"] = null
-        };
-        var previousValues = fieldValues.ToDictionary(
-            pair => pair.Key,
-            pair => GetRequiredAppField(appType, pair.Key, fieldFlags).GetValue(null));
-
-        foreach (var pair in fieldValues)
-        {
-            GetRequiredAppField(appType, pair.Key, fieldFlags).SetValue(null, pair.Value);
-        }
+        var app = new App();
+        app.ConfigureRuntimeForTests(configuration, backupService, storageFactory);
 
         var setupSettingsCommands = appType.GetMethod(
                                         "SetupSettingsCommands",
                                         BindingFlags.Instance | BindingFlags.NonPublic)
                                     ?? throw new MissingMethodException(nameof(App), "SetupSettingsCommands");
-        setupSettingsCommands.Invoke(new App(), [settings]);
+        setupSettingsCommands.Invoke(app, [settings]);
 
-        return new DelegateDisposable(() =>
-        {
-            foreach (var pair in previousValues)
-            {
-                GetRequiredAppField(appType, pair.Key, fieldFlags).SetValue(null, pair.Value);
-            }
-        });
+        return new DelegateDisposable(() => { });
     }
-
-    private static FieldInfo GetRequiredAppField(Type appType, string fieldName, BindingFlags flags) =>
-        appType.GetField(fieldName, flags)
-        ?? throw new MissingFieldException(nameof(App), fieldName);
 
     private static async System.Threading.Tasks.Task WaitForConditionAsync(
         Func<bool> condition,
@@ -1787,26 +1762,36 @@ public class SettingsViewModelTests : IDisposable
         public RecordingTaskStorageFactory(string currentPath, ConcurrentQueue<string> events)
         {
             _events = events;
-            CurrentStorage = CreateFileStorageWithoutRecording(currentPath);
+            ActiveStorage = CreateFileStorageWithoutRecording(currentPath);
         }
 
-        public ITaskStorage? CurrentStorage { get; private set; }
-        public IDatabaseWatcher? CurrentWatcher => null;
-        public string? CurrentFileStoragePath => (CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+        public ITaskStorage? ActiveStorage { get; private set; }
+        public ITaskSourceManager SourceManager => new FakeTaskSourceManager(
+            () => ActiveStorage,
+            switchStorageAsync: SwitchStorageAsync);
+        public string? CurrentFileStoragePath => (ActiveStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+
+        public ITaskStorage CreateConfiguredStorage() => throw new NotSupportedException();
 
         public ITaskStorage CreateFileStorage(string? path)
         {
             _events.Enqueue($"switch-local:{path}");
-            CurrentStorage = CreateFileStorageWithoutRecording(path);
-            return CurrentStorage;
+            ActiveStorage = CreateFileStorageWithoutRecording(path);
+            return ActiveStorage;
+        }
+
+        public ITaskStorage CreateDetachedFileStorage(string? path)
+        {
+            _events.Enqueue($"detached-local:{path}");
+            return CreateFileStorageWithoutRecording(path);
         }
 
         public ITaskStorage CreateServerStorage(string? url)
         {
             _events.Enqueue($"switch-server:{url}");
-            CurrentStorage = CreateFileStorageWithoutRecording(
+            ActiveStorage = CreateFileStorageWithoutRecording(
                 Path.Combine(Environment.CurrentDirectory, $"ServerStoragePlaceholder-{Guid.NewGuid():N}"));
-            return CurrentStorage;
+            return ActiveStorage;
         }
 
         public void SwitchStorage(bool isServerMode, IConfiguration configuration)
@@ -1819,6 +1804,12 @@ public class SettingsViewModelTests : IDisposable
             }
 
             CreateFileStorage(settings?.Path);
+        }
+
+        public System.Threading.Tasks.Task SwitchStorageAsync(bool isServerMode, IConfiguration configuration)
+        {
+            SwitchStorage(isServerMode, configuration);
+            return System.Threading.Tasks.Task.CompletedTask;
         }
 
         public void Dispose()

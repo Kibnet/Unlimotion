@@ -1,16 +1,10 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
-using AutoMapper;
 using Avalonia;
 using Avalonia.Browser;
-using Microsoft.Extensions.Configuration;
 using ReactiveUI.Avalonia;
 using Unlimotion;
-using Unlimotion.Services;
-using Unlimotion.ViewModel;
-using Unlimotion.Views;
-using WritableJsonConfiguration;
 
 internal sealed class Program
 {
@@ -21,7 +15,7 @@ internal sealed class Program
 
     public static AppBuilder BuildAvaloniaApp()
     {
-        TaskStorageFactory.DefaultStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tasks");
+        var defaultTaskStoragePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Tasks");
 
         var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Settings.json");
         if (!File.Exists(settingsPath))
@@ -30,45 +24,13 @@ internal sealed class Program
             stream.Write(@"{}");
             stream.Close();
         }
-        
-        // Create configuration
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(settingsPath);
-        
-        // Create mapper
-        var mapper = AppModelMapping.ConfigureMapping();
 
-        // Create dialogs
-        var dialogs = new Dialogs();
-
-        // Create notification services
-        var notificationMessageManager = new AppToastNotificationManager();
-        var notificationManager = new NotificationManagerWrapper(notificationMessageManager);
-
-        // Create storage factory
-        var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManager);
-
-        // Get storage settings
-        var taskStorageSettings = configuration.Get<TaskStorageSettings>("TaskStorage");
-        if (taskStorageSettings == null)
-        {
-            taskStorageSettings = new TaskStorageSettings();
-            configuration.Set("TaskStorage", taskStorageSettings);
-        }
-        var isServerMode = taskStorageSettings.IsServerMode;
-        
-        // Create storage
-        if (isServerMode)
-        {
-            storageFactory.CreateServerStorage(taskStorageSettings.URL);
-        }
-        else
-        {
-            storageFactory.CreateFileStorage(taskStorageSettings.Path);
-        }
-
-        // Set up static dependencies
-        TaskItemViewModel.NotificationManagerInstance = notificationManager;
-        MainControl.DialogsInstance = dialogs;
+        App.Init(
+            settingsPath,
+            new UnlimotionClientOptions
+            {
+                DefaultTaskStoragePath = defaultTaskStoragePath
+            });
 
         return AppBuilder.Configure<App>();
     }

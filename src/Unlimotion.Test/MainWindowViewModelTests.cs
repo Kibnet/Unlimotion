@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using DynamicData;
 using KellermanSoftware.CompareNetObjects;
 using Unlimotion.Domain;
 using Unlimotion.Services;
@@ -198,7 +199,7 @@ namespace Unlimotion.Test
                 notificationManager);
             storageFactory.CreateFileStorage(sourceFixture.DefaultTasksFolderPath);
 
-            if (storageFactory.CurrentStorage is IDisposable storageDisposable)
+            if (storageFactory.SourceManager.ActiveStorage is IDisposable storageDisposable)
             {
                 disposables.Add(storageDisposable);
             }
@@ -208,7 +209,7 @@ namespace Unlimotion.Test
                 new AppNameDefinitionService(),
                 notificationManager,
                 configuration,
-                () => storageFactory.CurrentStorage,
+                () => storageFactory.SourceManager.ActiveStorage,
                 settings,
                 taskTreeExpansionStatePath: sourceFixture.TaskTreeExpansionStatePath);
             disposables.Add(viewModel);
@@ -301,24 +302,33 @@ namespace Unlimotion.Test
             DomainTaskStatus status,
             DateTimeOffset changedAt)
         {
-            var entry = task.StatusHistory
-                .Where(historyEntry => historyEntry.Status == status)
-                .OrderBy(historyEntry => historyEntry.ChangedAt)
-                .LastOrDefault()
-                ?? throw new InvalidOperationException($"Status history entry for {status} was not found.");
-
-            entry.ChangedAt = changedAt;
-            if (status == DomainTaskStatus.Completed)
+            var isInitializedProvider = task.IsInitializedProvider;
+            task.IsInitializedProvider = () => false;
+            try
             {
-                task.CompletedDateTime = changedAt;
-            }
-            else if (status == DomainTaskStatus.Archived)
-            {
-                task.ArchiveDateTime = changedAt;
-            }
+                var entry = task.StatusHistory
+                    .Where(historyEntry => historyEntry.Status == status)
+                    .OrderBy(historyEntry => historyEntry.ChangedAt)
+                    .LastOrDefault()
+                    ?? throw new InvalidOperationException($"Status history entry for {status} was not found.");
 
-            Dispatcher.UIThread.RunJobs();
-            return task;
+                entry.ChangedAt = changedAt;
+                if (status == DomainTaskStatus.Completed)
+                {
+                    task.CompletedDateTime = changedAt;
+                }
+                else if (status == DomainTaskStatus.Archived)
+                {
+                    task.ArchiveDateTime = changedAt;
+                }
+
+                Dispatcher.UIThread.RunJobs();
+                return task;
+            }
+            finally
+            {
+                task.IsInitializedProvider = isInitializedProvider;
+            }
         }
 
         private static void EnsureStatusFilterSelected(MainWindowViewModel viewModel, DomainTaskStatus status)
@@ -524,18 +534,40 @@ namespace Unlimotion.Test
             var pastedRoot = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste root");
             var pastedChild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste child");
             var pastedGrandchild = taskRepository.Tasks.Items.First(task => task.Title == "Outline VM paste grandchild");
-            await Assert.That(await TestHelpers.WaitUntilAsync(
-                    () => parent!.Contains.Contains(pastedRoot.Id) &&
-                          pastedRoot.Contains.Contains(pastedChild.Id) &&
-                          pastedChild.Contains.Contains(pastedGrandchild.Id),
-                    TimeSpan.FromSeconds(10)))
-                .IsTrue();
+            var pastedRootId = pastedRoot.Id;
+            var pastedChildId = pastedChild.Id;
+            var pastedGrandchildId = pastedGrandchild.Id;
 
-            await Assert.That(parent!.Contains).Contains(pastedRoot.Id);
+            TaskItemViewModel? LookupTask(string taskId)
+            {
+                var result = taskRepository.Tasks.Lookup(taskId);
+                return result.HasValue ? result.Value : null;
+            }
+
+            var relationsUpdated = await TestHelpers.WaitUntilAsync(
+                () =>
+                {
+                    var currentParent = LookupTask(parent!.Id);
+                    var currentRoot = LookupTask(pastedRootId);
+                    var currentChild = LookupTask(pastedChildId);
+
+                    return currentParent?.Contains.Contains(pastedRootId) == true &&
+                           currentRoot?.Contains.Contains(pastedChildId) == true &&
+                           currentChild?.Contains.Contains(pastedGrandchildId) == true;
+                },
+                TimeSpan.FromSeconds(10));
+            await Assert.That(relationsUpdated).IsTrue();
+
+            parent = LookupTask(parent!.Id);
+            pastedRoot = LookupTask(pastedRootId)!;
+            pastedChild = LookupTask(pastedChildId)!;
+            pastedGrandchild = LookupTask(pastedGrandchildId)!;
+
+            await Assert.That(parent!.Contains).Contains(pastedRootId);
             await Assert.That(pastedRoot.Parents).Contains(parent.Id);
-            await Assert.That(pastedRoot.Contains).Contains(pastedChild.Id);
-            await Assert.That(pastedChild.Contains).Contains(pastedGrandchild.Id);
-            await Assert.That(pastedGrandchild.Parents).Contains(pastedChild.Id);
+            await Assert.That(pastedRoot.Contains).Contains(pastedChildId);
+            await Assert.That(pastedChild.Contains).Contains(pastedGrandchildId);
+            await Assert.That(pastedGrandchild.Parents).Contains(pastedChildId);
         }
 
         [Test]
@@ -2374,19 +2406,6 @@ namespace Unlimotion.Test
                     DomainTaskStatus.Archived,
                     "Archived task today");
 
-                oldCompletedTask = MoveLatestStatusHistoryEntry(
-                    oldCompletedTask,
-                    DomainTaskStatus.Completed,
-                    oldTimestamp);
-                oldArchivedTask = MoveLatestStatusHistoryEntry(
-                    oldArchivedTask,
-                    DomainTaskStatus.Archived,
-                    oldTimestamp);
-                await Assert.That(oldCompletedTask.CompletedDateTime?.UtcDateTime.Date)
-                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
-                await Assert.That(oldArchivedTask.ArchiveDateTime?.UtcDateTime.Date)
-                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
-
                 EnsureStatusFilterSelected(viewModel, DomainTaskStatus.Completed);
                 viewModel.AllTasksMode = false;
                 viewModel.CompletedMode = true;
@@ -2395,6 +2414,14 @@ namespace Unlimotion.Test
                 await Assert.That(viewModel.CompletedDateFilter.From).IsEqualTo(DateTime.Today);
                 await Assert.That(viewModel.CompletedDateFilter.To).IsEqualTo(DateTime.Today);
 
+                var oldCompletedInitiallyVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.CompletedItems.Any(wrapper => wrapper.TaskItem.Id == oldCompletedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldCompletedInitiallyVisible).IsTrue();
                 var completedTodayVisible = await TestHelpers.WaitUntilAsync(
                     () =>
                     {
@@ -2403,6 +2430,15 @@ namespace Unlimotion.Test
                     },
                     TimeSpan.FromSeconds(2));
                 await Assert.That(completedTodayVisible).IsTrue();
+
+                oldCompletedTask = MoveLatestStatusHistoryEntry(
+                    oldCompletedTask,
+                    DomainTaskStatus.Completed,
+                    oldTimestamp);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(oldCompletedTask.CompletedDateTime?.UtcDateTime.Date)
+                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
+
                 var oldCompletedHidden = await TestHelpers.WaitUntilAsync(
                     () =>
                     {
@@ -2430,6 +2466,14 @@ namespace Unlimotion.Test
                 await Assert.That(viewModel.ArchivedDateFilter.From).IsEqualTo(DateTime.Today);
                 await Assert.That(viewModel.ArchivedDateFilter.To).IsEqualTo(DateTime.Today);
 
+                var oldArchivedInitiallyVisible = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return viewModel.ArchivedItems.Any(wrapper => wrapper.TaskItem.Id == oldArchivedTask.Id);
+                    },
+                    TimeSpan.FromSeconds(2));
+                await Assert.That(oldArchivedInitiallyVisible).IsTrue();
                 var archivedTodayVisible = await TestHelpers.WaitUntilAsync(
                     () =>
                     {
@@ -2438,6 +2482,15 @@ namespace Unlimotion.Test
                     },
                     TimeSpan.FromSeconds(2));
                 await Assert.That(archivedTodayVisible).IsTrue();
+
+                oldArchivedTask = MoveLatestStatusHistoryEntry(
+                    oldArchivedTask,
+                    DomainTaskStatus.Archived,
+                    oldTimestamp);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(oldArchivedTask.ArchiveDateTime?.UtcDateTime.Date)
+                    .IsEqualTo(oldTimestamp.UtcDateTime.Date);
+
                 var oldArchivedHidden = await TestHelpers.WaitUntilAsync(
                     () =>
                     {

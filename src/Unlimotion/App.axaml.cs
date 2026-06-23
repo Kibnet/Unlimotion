@@ -53,22 +53,27 @@ public class App : Application
     private const string AppSearchBarMinWidthResourceKey = "AppSearchBarMinWidth";
     private const string AppFloatingControlMinHeightResourceKey = "AppFloatingControlMinHeight";
 
-    // Static service instances for the application
-    private static IConfiguration? _configuration;
-    private static IMapper? _mapper;
-    private static IDialogs? _dialogs;
-    private static AppToastNotificationManager? _toastNotificationManager;
-    private static INotificationManagerWrapper? _notificationManager;
-    private static IRemoteBackupService? _backupService;
-    private static IApplicationUpdateService? _applicationUpdateService;
-    private static IAppNameDefinitionService? _appNameService;
-    private static ITaskStorageFactory? _storageFactory;
-    private static string? _configPath;
-    private static IScheduler? _scheduler;
-    private static MainWindowViewModel? _mainWindowViewModel;
-    private static EventHandler? _cultureChangedHandler;
-    private static SettingsViewModel? _startupUpdateSettings;
-    private static bool _startupUpdateCheckPending;
+    private static string? _pendingConfigPath;
+    private static UnlimotionClientOptions _pendingClientOptions = new();
+    private static IApplicationUpdateService? _pendingUpdateService;
+
+    private IConfiguration? _configuration;
+    private IMapper? _mapper;
+    private IDialogs? _dialogs;
+    private AppToastNotificationManager? _toastNotificationManager;
+    private INotificationManagerWrapper? _notificationManager;
+    private IRemoteBackupService? _backupService;
+    private IApplicationUpdateService? _applicationUpdateService;
+    private IAppNameDefinitionService? _appNameService;
+    private ITaskStorageFactory? _storageFactory;
+    private TaskMoveService? _taskMoveService;
+    private UnlimotionClientOptions _clientOptions = new();
+    private string? _configPath;
+    private IScheduler? _scheduler;
+    private MainWindowViewModel? _mainWindowViewModel;
+    private EventHandler? _cultureChangedHandler;
+    private SettingsViewModel? _startupUpdateSettings;
+    private bool _startupUpdateCheckPending;
     private ServerStorage? _wiredServerStorage;
     private Action? _serverConnectedHandler;
     private Action<Exception?>? _serverConnectionErrorHandler;
@@ -81,11 +86,6 @@ public class App : Application
     private IDisposable? _updateStateSubscription;
     private bool _isAutomaticUpdateCheckRunning;
     
-    /// <summary>
-    /// Default storage path for tasks (used as fallback when config doesn't specify one)
-    /// </summary>
-    public static string? DefaultStoragePath { get; set; }
-
     public override void Initialize()
     {
         RxSchedulers.MainThreadScheduler = AvaloniaScheduler.Instance;
@@ -145,7 +145,7 @@ public class App : Application
             _configuration!,
             _backupService,
             GetCurrentThemeIsDark(),
-            () => TaskStorageFactory.DefaultStoragePath);
+            ResolveDefaultTaskStoragePath);
         settingsViewModel.ConfigureUpdateService(_applicationUpdateService);
 
         // Create GraphViewModel
@@ -156,31 +156,29 @@ public class App : Application
             _appNameService,
             _notificationManager,
             _configuration!,
-            () => _storageFactory?.CurrentStorage,
+            () => _storageFactory?.SourceManager.ActiveStorage,
             settingsViewModel,
             graphViewModel,
             TaskTreeExpansionStateStore.GetDefaultPath(_configPath)
         )
         {
-            ToastNotificationManager = _toastNotificationManager
+            ToastNotificationManager = _toastNotificationManager,
+            Dialogs = _dialogs,
+            MoveTaskTreeToFileStorageAsync = MoveTaskTreeViaServiceAsync
         };
 
         // Set up commands on SettingsViewModel
         SetupSettingsCommands(settingsViewModel);
-        WireSettingsToCurrentStorage(settingsViewModel);
+        WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
-
-        // Set up static instances for TaskItemViewModel and MainControl
-        TaskItemViewModel.NotificationManagerInstance = _notificationManager;
-        TaskItemViewModel.MainWindowInstance = _mainWindowViewModel;
-        MainControl.DialogsInstance = _dialogs;
+        WireActiveTaskContext();
 
         return _mainWindowViewModel;
     }
 
     public static bool TryHandleTaskCardBackGesture()
     {
-        var viewModel = _mainWindowViewModel;
+        var viewModel = (Current as App)?._mainWindowViewModel;
         if (viewModel == null)
         {
             return false;
@@ -218,8 +216,15 @@ public class App : Application
                     }
                 }
 
-                _storageFactory?.SwitchStorage(settings.IsServerMode, _configuration!);
-                WireSettingsToCurrentStorage(settings);
+                if (_storageFactory != null)
+                {
+                    await _storageFactory.SourceManager
+                        .SwitchStorageAsync(settings.IsServerMode, _configuration!)
+                        .ConfigureAwait(true);
+                }
+
+                WireActiveTaskContext();
+                WireSettingsToActiveStorage(settings);
                 if (_mainWindowViewModel != null)
                 {
                     await _mainWindowViewModel.Connect();
@@ -245,7 +250,7 @@ public class App : Application
 
         settings.SignOutCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var storage = _storageFactory?.CurrentStorage?.TaskTreeManager.Storage as ServerStorage;
+            var storage = _storageFactory?.SourceManager.ActiveStorage?.TaskTreeManager.Storage as ServerStorage;
             if (storage == null)
             {
                 return;
@@ -348,14 +353,13 @@ public class App : Application
                 L10n.Get("MigrateConfirmMessage"),
                 async () =>
                 {
-                    var serverTaskStorage = _storageFactory?.CurrentStorage;
+                    var serverTaskStorage = _storageFactory?.SourceManager.ActiveStorage;
                     if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
                     {
                         return;
                     }
 
-                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    var fileStorage = new FileStorage(ResolveDefaultLocalFileStoragePath(), watcher: false);
                     var tasks = new System.Collections.Generic.List<Unlimotion.Domain.TaskItem>();
                     await foreach (var task in fileStorage.GetAll())
                     {
@@ -377,14 +381,13 @@ public class App : Application
                 L10n.Get("BackupConfirmMessage"),
                 async () =>
                 {
-                    var serverTaskStorage = _storageFactory?.CurrentStorage;
+                    var serverTaskStorage = _storageFactory?.SourceManager.ActiveStorage;
                     if (serverTaskStorage == null || serverTaskStorage.TaskTreeManager.Storage is FileStorage)
                     {
                         return;
                     }
 
-                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    var fileStorage = new FileStorage(ResolveDefaultLocalFileStoragePath(), watcher: false);
                     await foreach (var task in serverTaskStorage.TaskTreeManager.Storage.GetAll())
                     {
                         task.Id = task.Id.Replace("TaskItem/", "");
@@ -415,8 +418,7 @@ public class App : Application
                 L10n.Get("ResaveConfirmMessage"),
                 async () =>
                 {
-                    var storagePath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
-                    var fileStorage = new FileStorage(storagePath ?? TaskStorageFactory.DefaultStoragePath, watcher: false);
+                    var fileStorage = new FileStorage(ResolveDefaultLocalFileStoragePath(), watcher: false);
                     var taskTreeManager = new Unlimotion.TaskTree.TaskTreeManager(fileStorage);
                     var fileTaskStorage = new UnifiedTaskStorage(taskTreeManager);
                     foreach (var task in fileTaskStorage.Tasks.Items)
@@ -895,8 +897,9 @@ public class App : Application
         }
 
         await PrepareFileStoragePathAsync(settings.TaskStoragePath);
-        _storageFactory.SwitchStorage(isServerMode: false, _configuration);
-        WireSettingsToCurrentStorage(settings);
+        await _storageFactory.SourceManager.SwitchStorageAsync(isServerMode: false, _configuration);
+        WireActiveTaskContext();
+        WireSettingsToActiveStorage(settings);
         await _mainWindowViewModel.Connect();
         settings.SetStorageConnectionState(SettingsConnectionState.Connected);
     }
@@ -946,28 +949,37 @@ public class App : Application
         }
 
         return !string.Equals(
-            NormalizeLocalStoragePathForComparison(selectedLocalStoragePath),
-            NormalizeLocalStoragePathForComparison(currentLocalStoragePath),
+            NormalizeLocalStoragePathForComparison(selectedLocalStoragePath, null),
+            NormalizeLocalStoragePathForComparison(currentLocalStoragePath, null),
             GetPathComparison());
     }
 
     private string? GetCurrentLocalStoragePath()
     {
-        return (_storageFactory?.CurrentStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
+        return (_storageFactory?.SourceManager.ActiveStorage?.TaskTreeManager.Storage as FileStorage)?.Path;
     }
 
-    private static Task PrepareFileStoragePathAsync(string? path)
+    private Task PrepareFileStoragePathAsync(string? path)
     {
-        var prepareFileStoragePathAsync = TaskStorageFactory.PrepareFileStoragePathAsync;
+        var prepareFileStoragePathAsync = _clientOptions.PrepareFileStoragePathAsync;
         return prepareFileStoragePathAsync == null
             ? Task.CompletedTask
             : prepareFileStoragePathAsync(path);
     }
 
-    private static string NormalizeLocalStoragePathForComparison(string? path)
+    public static void ConfigureFileStoragePathPreparation(Func<string?, Task>? prepareFileStoragePathAsync)
+    {
+        _pendingClientOptions.PrepareFileStoragePathAsync = prepareFileStoragePathAsync;
+        if (Current is App app)
+        {
+            app._clientOptions.PrepareFileStoragePathAsync = prepareFileStoragePathAsync;
+        }
+    }
+
+    private static string NormalizeLocalStoragePathForComparison(string? path, string? defaultStoragePath)
     {
         var effectivePath = string.IsNullOrWhiteSpace(path)
-            ? TaskStorageFactory.DefaultStoragePath
+            ? defaultStoragePath
             : path.Trim();
 
         if (string.IsNullOrWhiteSpace(effectivePath))
@@ -1034,7 +1046,7 @@ public class App : Application
         }
     }
 
-    private void WireSettingsToCurrentStorage(SettingsViewModel settings)
+    private void WireSettingsToActiveStorage(SettingsViewModel settings)
     {
         if (_wiredServerStorage != null)
         {
@@ -1059,7 +1071,7 @@ public class App : Application
         _serverConnectionErrorHandler = null;
         _serverSignOutHandler = null;
 
-        var storage = _storageFactory?.CurrentStorage?.TaskTreeManager.Storage;
+        var storage = _storageFactory?.SourceManager.ActiveStorage?.TaskTreeManager.Storage;
         if (storage is ServerStorage serverStorage)
         {
             settings.SetStorageConnectionState(
@@ -1092,6 +1104,24 @@ public class App : Application
         {
             settings.SetStorageConnectionState(SettingsConnectionState.Connected);
         }
+    }
+
+    private void WireActiveTaskContext()
+    {
+        var activeSource = _storageFactory?.SourceManager.ActiveSource;
+        if (activeSource != null)
+        {
+            activeSource.TaskContext.MainWindow = _mainWindowViewModel;
+        }
+    }
+
+    private Task MoveTaskTreeViaServiceAsync(
+        TaskItemViewModel rootTask,
+        ITaskStorage? sourceStorage,
+        string destinationPath)
+    {
+        return _taskMoveService?.MoveTaskTreeToFileStorageAsync(rootTask, sourceStorage, destinationPath)
+               ?? Task.CompletedTask;
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -1333,9 +1363,36 @@ public class App : Application
     public App()
     {
         DataContext = new ApplicationViewModel();
+        if (!string.IsNullOrWhiteSpace(_pendingConfigPath))
+        {
+            InitializeRuntime(_pendingConfigPath, _pendingClientOptions);
+        }
+    }
+
+    internal void ConfigureRuntimeForTests(
+        IConfiguration configuration,
+        IRemoteBackupService? backupService,
+        ITaskStorageFactory storageFactory,
+        INotificationManagerWrapper? notificationManager = null)
+    {
+        _configuration = configuration;
+        _backupService = backupService;
+        _storageFactory = storageFactory;
+        _taskMoveService = new TaskMoveService(storageFactory);
+        _notificationManager = notificationManager;
+        _clientOptions = new UnlimotionClientOptions();
     }
 
     public static void ConfigureUpdateService(IApplicationUpdateService? updateService)
+    {
+        _pendingUpdateService = updateService;
+        if (Current is App app)
+        {
+            app.ConfigureUpdateServiceInstance(updateService);
+        }
+    }
+
+    private void ConfigureUpdateServiceInstance(IApplicationUpdateService? updateService)
     {
         _applicationUpdateService = updateService;
         var mainSettings = _mainWindowViewModel?.Settings;
@@ -1353,12 +1410,12 @@ public class App : Application
         }
 
         var settings = mainSettings ?? startupSettings;
-        if (Current is App app && settings != null)
+        if (settings != null)
         {
-            app.RescheduleAutomaticUpdateTimer(settings);
+            RescheduleAutomaticUpdateTimer(settings);
             if (_startupUpdateCheckPending && updateService?.IsSupported == true)
             {
-                app.RequestStartupUpdateCheck(settings);
+                RequestStartupUpdateCheck(settings);
             }
         }
     }
@@ -1585,7 +1642,7 @@ public class App : Application
         Debug.WriteLine($"[App.Init] {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}");
     }
 
-    private static void EnsureScheduler()
+    private void EnsureScheduler()
     {
         if (_scheduler != null)
         {
@@ -1604,10 +1661,23 @@ public class App : Application
         Log("[App.Init] Scheduler job factory set");
     }
 
-    public static void Init(string configPath)
+    public static void Init(string configPath, UnlimotionClientOptions? clientOptions = null)
+    {
+        var effectiveOptions = clientOptions ?? new UnlimotionClientOptions();
+        _pendingConfigPath = configPath;
+        _pendingClientOptions = effectiveOptions;
+        if (Current is App app)
+        {
+            app.InitializeRuntime(configPath, effectiveOptions);
+        }
+    }
+
+    private void InitializeRuntime(string configPath, UnlimotionClientOptions clientOptions)
     {
         try
         {
+            _clientOptions = clientOptions;
+            _applicationUpdateService = _pendingUpdateService;
             Log($"[App.Init] Starting with configPath: {configPath}");
             _configPath = configPath;
 
@@ -1653,31 +1723,29 @@ public class App : Application
             taskStorageSettings = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? taskStorageSettings;
 
             // Create storage factory
-            Log($"[App.Init] Creating storage factory with DefaultStoragePath={TaskStorageFactory.DefaultStoragePath}");
-            _storageFactory = new TaskStorageFactory(_configuration, _mapper, _notificationManager);
-            TaskStorageFactory.DefaultStoragePath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
+            _clientOptions.DefaultTaskStoragePath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
                 ? ResolveDefaultTaskStoragePath()
                 : taskStorageSettings.Path;
+            Log($"[App.Init] Creating storage factory with DefaultStoragePath={ResolveDefaultTaskStoragePath()}");
+            _storageFactory = new TaskStorageFactory(
+                _configuration,
+                _mapper,
+                _notificationManager,
+                ResolveDefaultTaskStoragePath);
+            _taskMoveService = new TaskMoveService(_storageFactory);
             Log("[App.Init] Storage factory created");
 
             // Create backup service
-            _backupService = new BackupViaGitService(_configuration, _notificationManager, _storageFactory);
-            BackupViaGitService.GetAbsolutePath = path => System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Unlimotion",
-                path);
+            _backupService = new BackupViaGitService(
+                _configuration,
+                _notificationManager,
+                _storageFactory,
+                _clientOptions.GetAbsolutePath ?? GetDefaultAbsolutePath);
             Log("[App.Init] Backup service created");
 
             // Create initial storage
             Log($"[App.Init] Creating initial storage, isServerMode={isServerMode}");
-            if (isServerMode)
-            {
-                _storageFactory.CreateServerStorage(taskStorageSettings.URL);
-            }
-            else
-            {
-                _storageFactory.CreateFileStorage(taskStorageSettings.Path);
-            }
+            _storageFactory.CreateConfiguredStorage();
             Log("[App.Init] Initial storage created");
 
             // Initialize git settings
@@ -1709,46 +1777,43 @@ public class App : Application
             Log("[App.Init] Git settings initialized");
 
             // Initialize scheduler for file mode
-            if (!isServerMode)
+            var taskRepository = _storageFactory.SourceManager.ActiveStorage;
+            if (taskRepository?.TaskTreeManager.Storage is FileStorage)
             {
-                var taskRepository = _storageFactory.CurrentStorage;
-                if (taskRepository != null)
+                taskRepository.Initiated += (sender, eventArgs) =>
                 {
-                    taskRepository.Initiated += (sender, eventArgs) =>
+                    EnsureScheduler();
+                    if (_scheduler == null)
                     {
-                        EnsureScheduler();
-                        if (_scheduler == null)
-                        {
-                            return;
-                        }
+                        return;
+                    }
 
-                        var currentGitSettings = _configuration?.Get<GitSettings>("Git");
-                        if (currentGitSettings?.BackupEnabled != true)
-                        {
-                            return;
-                        }
+                    var currentGitSettings = _configuration?.Get<GitSettings>("Git");
+                    if (currentGitSettings?.BackupEnabled != true)
+                    {
+                        return;
+                    }
 
-                        var pullJob = JobBuilder.Create<GitPullJob>()
-                            .WithIdentity("GitPullJob", "Git")
-                            .Build();
-                        var pushJob = JobBuilder.Create<GitPushJob>()
-                            .WithIdentity("GitPushJob", "Git")
-                            .Build();
+                    var pullJob = JobBuilder.Create<GitPullJob>()
+                        .WithIdentity("GitPullJob", "Git")
+                        .Build();
+                    var pushJob = JobBuilder.Create<GitPushJob>()
+                        .WithIdentity("GitPushJob", "Git")
+                        .Build();
 
-                        var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                            currentGitSettings.PullIntervalSeconds);
-                        var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                            currentGitSettings.PushIntervalSeconds);
+                    var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
+                        currentGitSettings.PullIntervalSeconds);
+                    var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
+                        currentGitSettings.PushIntervalSeconds);
 
-                        _scheduler.ScheduleJob(pullJob, pullTrigger);
-                        _scheduler.ScheduleJob(pushJob, pushTrigger);
+                    _scheduler.ScheduleJob(pullJob, pullTrigger);
+                    _scheduler.ScheduleJob(pushJob, pushTrigger);
 
-                        if (currentGitSettings.BackupEnabled)
-                        {
-                            _scheduler.Start();
-                        }
-                    };
-                }
+                    if (currentGitSettings.BackupEnabled)
+                    {
+                        _scheduler.Start();
+                    }
+                };
             }
             Log("[App.Init] Completed successfully");
         }
@@ -1795,11 +1860,11 @@ public class App : Application
         taskStorageSection.GetSection(nameof(TaskStorageSettings.Path)).Set(defaultPath);
     }
 
-    private static string ResolveDefaultTaskStoragePath()
+    private string ResolveDefaultTaskStoragePath()
     {
-        if (!string.IsNullOrWhiteSpace(DefaultStoragePath))
+        if (!string.IsNullOrWhiteSpace(_clientOptions.DefaultTaskStoragePath))
         {
-            return DefaultStoragePath;
+            return _clientOptions.DefaultTaskStoragePath;
         }
 
         return Path.Combine(
@@ -1808,11 +1873,36 @@ public class App : Application
             "Tasks");
     }
 
+    private string ResolveLocalFileStoragePath(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? ResolveDefaultTaskStoragePath() : path;
+
+    private string ResolveDefaultLocalFileStoragePath()
+    {
+        var defaultSourcePath = _storageFactory?.SourceManager.ConfiguredSources
+            .FirstOrDefault(source =>
+                string.Equals(source.Id, TaskSourceDescriptor.DefaultSourceId, StringComparison.Ordinal))
+            ?.Path;
+        if (!string.IsNullOrWhiteSpace(defaultSourcePath))
+        {
+            return ResolveLocalFileStoragePath(defaultSourcePath);
+        }
+
+        var legacyPath = _configuration?.Get<TaskStorageSettings>("TaskStorage")?.Path;
+        return ResolveLocalFileStoragePath(legacyPath);
+    }
+
+    private static string GetDefaultAbsolutePath(string path) =>
+        System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Unlimotion",
+            path);
+
     private static void HandleReactiveException(Exception ex)
     {
-        if (_notificationManager != null)
+        var notificationManager = (Current as App)?._notificationManager;
+        if (notificationManager != null)
         {
-            _notificationManager.ErrorToast(L10n.Format("ReactiveUnhandledError", ex.Message));
+            notificationManager.ErrorToast(L10n.Format("ReactiveUnhandledError", ex.Message));
         }
         else
         {

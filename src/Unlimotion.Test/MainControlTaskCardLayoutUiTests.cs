@@ -75,7 +75,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -147,7 +147,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -185,7 +185,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -278,7 +278,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_IntermediateDesktopWidthRepeaterLayout_DoesNotOverlap()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -313,7 +313,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_IntermediateDesktopWidthRepeaterLayout_WithLargeFontDoesNotOverlap()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -352,7 +352,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_CompletedTask_DisablesCompletionCriteriaEditing()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -397,7 +397,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_CompletionCriterionRow_UsesBorderlessCompactEditing()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -445,7 +445,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_AddCompletionCriterion_FocusesNewCriterionTextBox()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -503,7 +503,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_RemoveButtonsUseCenteredVectorIcons()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -554,7 +554,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_BackGestureFallback_OpensPaneForSingleVisibleTask()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -604,7 +604,7 @@ public class MainControlTaskCardLayoutUiTests
     [Arguments(390)]
     public async Task CurrentTaskCard_PhoneWeeklyRepeaterLayout_FillsWeekdayRow(double width)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -697,7 +697,7 @@ public class MainControlTaskCardLayoutUiTests
     [Arguments(430)]
     public async Task CurrentTaskCreateMenu_PhoneWidth_UsesTouchFriendlyMenuItems(double width)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
@@ -728,7 +728,7 @@ public class MainControlTaskCardLayoutUiTests
     [Arguments(430)]
     public async Task CurrentTaskCard_PhoneWidthLayout_DoesNotOverflowAndKeepsRelationEditorUsable(double width)
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();

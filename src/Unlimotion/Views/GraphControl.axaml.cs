@@ -2291,8 +2291,7 @@ namespace Unlimotion.Views
             return context?.FindParentDataContext<MainWindowViewModel>() ??
                    this.FindParentDataContext<MainWindowViewModel>() ??
                    (DataContext as GraphViewModel)?.MainWindowViewModel ??
-                   dc?.MainWindowViewModel ??
-                   TaskItemViewModel.MainWindowInstance;
+                   dc?.MainWindowViewModel;
         }
 
         private static bool TryGetRoadmapTaskItem(Control? control, out TaskItemViewModel taskItem)

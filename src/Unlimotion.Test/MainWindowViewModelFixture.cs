@@ -101,10 +101,15 @@ namespace Unlimotion.Test
                 new AppNameDefinitionService(),
                 notificationManagerMock,
                 configuration,
-                () => storageFactory.CurrentStorage,
+                () => storageFactory.SourceManager.ActiveStorage,
                 settingsViewModel,
                 taskTreeExpansionStatePath: TaskTreeExpansionStatePath
             );
+            var activeSource = storageFactory.SourceManager.ActiveSource;
+            if (activeSource != null)
+            {
+                activeSource.TaskContext.MainWindow = MainWindowViewModelTest;
+            }
         }
 
         private void CopyTaskFromSnapshotsFolder()

@@ -187,8 +187,11 @@ public static class UnlimotionAppLaunchHost
         IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false);
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = new AutomationNotificationManager();
-        var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManager);
-        TaskStorageFactory.DefaultStoragePath = launchData.TasksPath;
+        var storageFactory = new TaskStorageFactory(
+            configuration,
+            mapper,
+            notificationManager,
+            () => launchData.TasksPath);
         storageFactory.CreateFileStorage(launchData.TasksPath);
 
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
@@ -199,13 +202,16 @@ public static class UnlimotionAppLaunchHost
             new AppNameDefinitionService(),
             notificationManager,
             configuration,
-            () => storageFactory.CurrentStorage,
+            () => storageFactory.SourceManager.ActiveStorage,
             settingsViewModel,
             new GraphViewModel(),
             TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath));
 
-        TaskItemViewModel.NotificationManagerInstance = notificationManager;
-        TaskItemViewModel.MainWindowInstance = vm;
+        var activeSource = storageFactory.SourceManager.ActiveSource;
+        if (activeSource != null)
+        {
+            activeSource.TaskContext.MainWindow = vm;
+        }
 
         return vm;
     }

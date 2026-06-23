@@ -26,11 +26,10 @@ namespace Unlimotion.Desktop
             VelopackApp.Build().Run();
             App.ConfigureUpdateService(new VelopackApplicationUpdateService());
 
-            //Задание дефолтного пути для хранения задач
 #if DEBUG
-            TaskStorageFactory.DefaultStoragePath = TasksFolderName;
+            var defaultTaskStoragePath = TasksFolderName;
 #else
-            TaskStorageFactory.DefaultStoragePath = Path.GetDirectoryName(DefaultConfigName).CombineWith(TasksFolderName);
+            var defaultTaskStoragePath = Path.GetDirectoryName(DefaultConfigName).CombineWith(TasksFolderName);
 #endif
 
             //Получение адреса конфига
@@ -60,9 +59,13 @@ namespace Unlimotion.Desktop
 #endif
             }
 
-            BackupViaGitService.GetAbsolutePath = path => new DirectoryInfo(path).FullName;
-
-            App.Init(configPath);
+            App.Init(
+                configPath,
+                new UnlimotionClientOptions
+                {
+                    DefaultTaskStoragePath = defaultTaskStoragePath,
+                    GetAbsolutePath = path => new DirectoryInfo(path).FullName
+                });
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
 

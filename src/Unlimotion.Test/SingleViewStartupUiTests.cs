@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
@@ -21,12 +22,12 @@ public class SingleViewStartupUiTests
     [Test]
     public async Task SingleViewStartup_ConnectsExistingTaskStorage()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var context = SingleViewStartupContext.Create();
 
-            var app = new App();
+            var app = GetCurrentApp();
             var vm = context.MainWindowViewModel;
 
             var mainScreen = app.CreateSingleViewMainView(vm);
@@ -54,39 +55,46 @@ public class SingleViewStartupUiTests
     [Test]
     public async Task SingleViewStartup_DoesNotReloadInitializedTaskStorage()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
+        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        try
         {
-            using var context = SingleViewStartupContext.Create();
-
-            var app = new App();
-            var vm = context.MainWindowViewModel;
-            await app.InitializeStartupViewModelAsync(vm);
-
-            var connectCallCount = context.Storage.ConnectCallCount;
-            var getAllCallCount = context.Storage.GetAllCallCount;
-
-            await app.InitializeStartupViewModelAsync(vm);
-
-            using (Assert.Multiple())
+            await session.DispatchAsync(async () =>
             {
-                await Assert.That(vm.IsInitialized).IsTrue();
-                await Assert.That(vm.taskRepository!.Tasks.Count).IsEqualTo(1);
-                await Assert.That(context.Storage.ConnectCallCount).IsEqualTo(connectCallCount);
-                await Assert.That(context.Storage.GetAllCallCount).IsEqualTo(getAllCallCount);
-            }
-        }, CancellationToken.None);
+                using var context = SingleViewStartupContext.Create();
+
+                var app = GetCurrentApp();
+                var vm = context.MainWindowViewModel;
+                await app.InitializeStartupViewModelAsync(vm);
+
+                var connectCallCount = context.Storage.ConnectCallCount;
+                var getAllCallCount = context.Storage.GetAllCallCount;
+
+                await app.InitializeStartupViewModelAsync(vm);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(vm.IsInitialized).IsTrue();
+                    await Assert.That(vm.taskRepository!.Tasks.Count).IsEqualTo(1);
+                    await Assert.That(context.Storage.ConnectCallCount).IsEqualTo(connectCallCount);
+                    await Assert.That(context.Storage.GetAllCallCount).IsEqualTo(getAllCallCount);
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            await session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        }
     }
 
     [Test]
     public async Task SingleViewStartup_ConnectsMigratedLocalFolderOutsideGitAndAllowsCreate()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit();
 
-            var app = new App();
+            var app = GetCurrentApp();
             var vm = context.MainWindowViewModel;
 
             var startupTask = app.InitializeStartupViewModelAsync(vm);
@@ -120,11 +128,11 @@ public class SingleViewStartupUiTests
     [Test]
     public async Task SingleViewStartup_ReplaysStartupUpdateCheck_WhenUpdateServiceAttachesAfterStartup()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var context = SingleViewStartupContext.Create();
-            var app = new App();
+            var app = GetCurrentApp();
             var updateService = new CountingApplicationUpdateService();
 
             try
@@ -162,6 +170,12 @@ public class SingleViewStartupUiTests
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
     }
 
+    private static App GetCurrentApp()
+    {
+        return Application.Current as App
+               ?? throw new InvalidOperationException("Current Avalonia application is not an Unlimotion App.");
+    }
+
     private sealed class SingleViewStartupContext : IDisposable
     {
         private readonly string _configPath;
@@ -193,7 +207,11 @@ public class SingleViewStartupUiTests
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
             var notificationManager = new NotificationManagerWrapperMock();
             var storage = new CountingStorage();
-            var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var taskContext = new TaskItemViewModelContext
+            {
+                NotificationManager = notificationManager
+            };
+            var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(storage), taskContext);
             var settings = new SettingsViewModel(configuration);
             var mainWindowViewModel = new MainWindowViewModel(
                 new AppNameDefinitionService(),
@@ -202,8 +220,7 @@ public class SingleViewStartupUiTests
                 () => taskStorage,
                 settings);
 
-            TaskItemViewModel.NotificationManagerInstance = notificationManager;
-            TaskItemViewModel.MainWindowInstance = mainWindowViewModel;
+            taskContext.MainWindow = mainWindowViewModel;
 
             return new SingleViewStartupContext(
                 configPath,
@@ -270,7 +287,11 @@ public class SingleViewStartupUiTests
 
             var notificationManager = new NotificationManagerWrapperMock();
             var fileStorage = new FileStorage(tasksPath, watcher: false, notificationManager);
-            var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+            var taskContext = new TaskItemViewModelContext
+            {
+                NotificationManager = notificationManager
+            };
+            var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage), taskContext);
             var settings = new SettingsViewModel(configuration)
             {
                 TaskStoragePath = tasksPath
@@ -282,8 +303,7 @@ public class SingleViewStartupUiTests
                 () => taskStorage,
                 settings);
 
-            TaskItemViewModel.NotificationManagerInstance = notificationManager;
-            TaskItemViewModel.MainWindowInstance = mainWindowViewModel;
+            taskContext.MainWindow = mainWindowViewModel;
 
             return new FileStorageStartupContext(
                 configPath,

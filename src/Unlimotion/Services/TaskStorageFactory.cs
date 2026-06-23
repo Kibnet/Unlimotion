@@ -1,8 +1,6 @@
 using System;
-using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.Extensions.Configuration;
-using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Services;
@@ -10,68 +8,86 @@ namespace Unlimotion.Services;
 public class TaskStorageFactory : ITaskStorageFactory
 {
     private readonly IConfiguration _configuration;
-    private readonly IMapper _mapper;
-    private readonly INotificationManagerWrapper? _notificationManager;
-    
-    public static string DefaultStoragePath { get; set; } = string.Empty;
-    public static Func<string?, Task>? PrepareFileStoragePathAsync { get; set; }
-    
-    public ITaskStorage? CurrentStorage { get; private set; }
-    public IDatabaseWatcher? CurrentWatcher { get; private set; }
+    private readonly Func<string?> _defaultStoragePathProvider;
+    private readonly ITaskStorageBuilder _storageBuilder;
 
-    public TaskStorageFactory(IConfiguration configuration, IMapper mapper, INotificationManagerWrapper? notificationManager = null)
+    public TaskStorageFactory(
+        IConfiguration configuration,
+        IMapper mapper,
+        INotificationManagerWrapper? notificationManager = null,
+        Func<string?>? defaultStoragePathProvider = null)
     {
         _configuration = configuration;
-        _mapper = mapper;
-        _notificationManager = notificationManager;
+        _defaultStoragePathProvider = defaultStoragePathProvider ?? (() => string.Empty);
+        _storageBuilder = new TaskStorageBuilder(
+            configuration,
+            mapper,
+            notificationManager,
+            _defaultStoragePathProvider);
+        SourceManager = new TaskSourceManager(
+            configuration,
+            _storageBuilder,
+            notificationManager,
+            _defaultStoragePathProvider);
     }
+
+    public ITaskSourceManager SourceManager { get; }
+
+    public ITaskStorage CreateConfiguredStorage() =>
+        SourceManager.ActivateConfiguredSource().Storage;
 
     public ITaskStorage CreateFileStorage(string? path)
     {
-        var storagePath = GetStoragePath(path);
-        var fileStorage = new FileStorage(storagePath, watcher: true, _notificationManager);
-        fileStorage.Watcher?.SetEnable(false);
-        CurrentWatcher = fileStorage.Watcher;
-        var taskTreeManager = new TaskTreeManager(fileStorage);
-        var taskStorage = new UnifiedTaskStorage(taskTreeManager);
-        CurrentStorage = taskStorage;
-        return taskStorage;
+        var descriptor = TaskSourceSettingsAdapter.CreateLegacyDescriptor(
+            new TaskStorageSettings
+            {
+                Path = string.IsNullOrWhiteSpace(path) ? _defaultStoragePathProvider() ?? string.Empty : path,
+                IsServerMode = false
+            },
+            _defaultStoragePathProvider());
+        return SourceManager.ActivateSource(descriptor).Storage;
+    }
+
+    public ITaskStorage CreateDetachedFileStorage(string? path)
+    {
+        var storagePath = string.IsNullOrWhiteSpace(path) ? _defaultStoragePathProvider() ?? string.Empty : path;
+        var buildResult = _storageBuilder.Build(new TaskStorageBuildRequest
+        {
+            Descriptor = new TaskSourceDescriptor
+            {
+                Id = $"detached-file-{Guid.NewGuid():N}",
+                DisplayName = "Detached file storage",
+                Kind = TaskSourceKind.File,
+                Path = storagePath,
+                IsEnabled = true
+            },
+            TaskContext = new TaskItemViewModelContext
+            {
+                SourceId = "detached-file"
+            },
+            EnableWatcher = false
+        });
+
+        return buildResult.Storage;
     }
 
     public ITaskStorage CreateServerStorage(string? url)
     {
-        CurrentWatcher = null; // Server storage doesn't have a file watcher
-        var serverStorage = new ServerStorage(url ?? string.Empty, _configuration);
-        var taskTreeManager = new TaskTreeManager(serverStorage);
-        var taskStorage = new UnifiedTaskStorage(taskTreeManager);
-        CurrentStorage = taskStorage;
-        return taskStorage;
+        var legacySettings = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? new TaskStorageSettings();
+        legacySettings.IsServerMode = true;
+        legacySettings.URL = url ?? string.Empty;
+
+        var descriptor = TaskSourceSettingsAdapter.CreateLegacyDescriptor(legacySettings, _defaultStoragePathProvider());
+        var serverSettings = TaskSourceSettingsAdapter.EnsureServerSettings(
+            TaskSourceSettingsAdapter.LoadOrCreate(_configuration, _defaultStoragePathProvider()),
+            descriptor.Id,
+            legacySettings,
+            _configuration);
+        return SourceManager.ActivateSource(descriptor, serverSettings).Storage;
     }
 
     public void SwitchStorage(bool isServerMode, IConfiguration configuration)
     {
-        var settings = configuration.Get<TaskStorageSettings>("TaskStorage");
-        
-        // Disconnect previous storage if exists
-        if (CurrentStorage != null)
-        {
-            CurrentStorage.TaskTreeManager.Storage.Disconnect();
-        }
-
-        if (isServerMode)
-        {
-            CreateServerStorage(settings?.URL);
-        }
-        else
-        {
-            CreateFileStorage(settings?.Path);
-        }
-    }
-
-    private static string GetStoragePath(string? path)
-    {
-        if (string.IsNullOrEmpty(path))
-            return DefaultStoragePath;
-        return path;
+        SourceManager.SwitchStorage(isServerMode, configuration);
     }
 }

@@ -41,7 +41,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_NarrowViewport_UsesCompactPrimaryActions()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -156,7 +156,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task RoadmapFilterToolbar_NarrowViewport_UsesCompactPrimaryActions()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -203,7 +203,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task RoadmapFilterToolbar_StandaloneNarrowViewport_ShrinksNestedSearchControl()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             Window? window = null;
@@ -235,7 +235,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_SummaryChromeDoesNotCoverOrShiftTokens()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -294,7 +294,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -399,7 +399,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -459,7 +459,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -566,7 +566,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_RespondsToLargeFontResources()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -612,7 +612,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -682,7 +682,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task Toolbar_EmojiFilters_PopupStaysVisibleInNarrowViewport()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -733,7 +733,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -772,7 +772,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_WideViewport_KeepsSearchBesideFilters()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -810,7 +810,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task MainControlFilterToolbar_DetailsPaneShrink_ReflowsToNarrowLayout()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -915,7 +915,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     public async Task FilterFlyouts_CompactViewport_ConstrainPopupSizeAndScrollVertically()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

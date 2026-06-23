@@ -524,13 +524,18 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private void Filter_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (string.IsNullOrEmpty(e.PropertyName) ||
-            e.PropertyName == nameof(EmojiFilter.ShowTasks) ||
             e.PropertyName == nameof(EmojiFilter.Title) ||
             e.PropertyName == nameof(EmojiFilter.Emoji) ||
             e.PropertyName == nameof(EmojiFilter.SortText) ||
             e.PropertyName == nameof(EmojiFilter.SearchText))
         {
             ApplySearchFilter();
+            UpdateInputTextFromState();
+            return;
+        }
+
+        if (e.PropertyName == nameof(EmojiFilter.ShowTasks))
+        {
             UpdateInputTextFromState();
         }
     }

@@ -55,6 +55,25 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task PreviewConnectRepository_UsesActiveFileSourceBeforeLegacyTaskStoragePath()
+    {
+        var activePath = CreateLocalTaskFolder();
+        var legacyPath = Path.Combine(_rootPath, "LegacyTasks");
+        Directory.CreateDirectory(legacyPath);
+        var remotePath = CreateBareRemote();
+        var service = CreateService(
+            legacyPath,
+            remotePath,
+            storageFactory: new CurrentFileStorageFactory(activePath));
+
+        var preview = service.PreviewConnectRepository();
+
+        await Assert.That(preview.RepositoryPath).IsEqualTo(activePath);
+        await Assert.That(preview.LocalFolderHasContent).IsTrue();
+        await Assert.That(preview.Action).IsEqualTo(BackupRepositoryConnectAction.InitializeLocalAndPush);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task PreviewConnectRepository_RequiresConfirmationForNonEmptyRemoteAndNonEmptyLocalFolder()
     {
         var localPath = CreateLocalTaskFolder();
@@ -417,7 +436,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
-    public async System.Threading.Tasks.Task PullExistingRepository_DoesNotNotifyCurrentStorageWatcher_WhenRepositoryChanges()
+    public async System.Threading.Tasks.Task PullExistingRepository_DoesNotNotifyActiveStorageWatcher_WhenRepositoryChanges()
     {
         var remotePath = CreateBareRemoteWithCommit("task", "base content");
         var localPath = CloneRemoteToLocalMain(remotePath);
@@ -433,7 +452,7 @@ public sealed class BackupViaGitServiceTests : IDisposable
     }
 
     [Test]
-    public async System.Threading.Tasks.Task Pull_NotifiesCurrentStorageWatcher_WhenRepositoryChanges()
+    public async System.Threading.Tasks.Task Pull_NotifiesActiveStorageWatcher_WhenRepositoryChanges()
     {
         var remotePath = CreateBareRemoteWithCommit("task", "base content");
         var localPath = CloneRemoteToLocalMain(remotePath);
@@ -1414,9 +1433,10 @@ public sealed class BackupViaGitServiceTests : IDisposable
 
     private sealed class FakeTaskStorageFactory(IDatabaseWatcher? currentWatcher) : ITaskStorageFactory
     {
-        public ITaskStorage? CurrentStorage => null;
-        public IDatabaseWatcher? CurrentWatcher { get; } = currentWatcher;
+        public ITaskSourceManager SourceManager { get; } = new FakeTaskSourceManager(() => null, () => currentWatcher);
+        public ITaskStorage CreateConfiguredStorage() => throw new NotSupportedException();
         public ITaskStorage CreateFileStorage(string? path) => throw new NotSupportedException();
+        public ITaskStorage CreateDetachedFileStorage(string? path) => throw new NotSupportedException();
         public ITaskStorage CreateServerStorage(string? url) => throw new NotSupportedException();
         public void SwitchStorage(bool isServerMode, IConfiguration configuration) => throw new NotSupportedException();
     }
@@ -1429,11 +1449,13 @@ public sealed class BackupViaGitServiceTests : IDisposable
         {
             var fileStorage = new FileStorage(currentPath, watcher: false);
             _storage = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+            SourceManager = new FakeTaskSourceManager(() => _storage);
         }
 
-        public ITaskStorage? CurrentStorage => _storage;
-        public IDatabaseWatcher? CurrentWatcher => null;
+        public ITaskSourceManager SourceManager { get; }
+        public ITaskStorage CreateConfiguredStorage() => throw new NotSupportedException();
         public ITaskStorage CreateFileStorage(string? path) => throw new NotSupportedException();
+        public ITaskStorage CreateDetachedFileStorage(string? path) => throw new NotSupportedException();
         public ITaskStorage CreateServerStorage(string? url) => throw new NotSupportedException();
         public void SwitchStorage(bool isServerMode, IConfiguration configuration) => throw new NotSupportedException();
         public void Dispose() => (_storage as IDisposable)?.Dispose();
