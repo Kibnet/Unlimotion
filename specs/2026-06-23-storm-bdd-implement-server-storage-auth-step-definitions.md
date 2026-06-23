@@ -288,37 +288,44 @@ Stop rules для validation loops:
 - Residual risks / follow-ups: `SC-0011-002` remains passing without step definitions and should be separate after auth slice.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до утверждения спеки.
-- Decision: Не применимо до EXEC.
+- Статус: PASS_WITH_RISK
+- Scope reviewed: approved spec, `git status --short`, code diff, artifact diff, targeted test output, full-suite attempt, storm validator, reports.
+- Decision: можно завершать EXEC; full-suite risk вынести в отдельную stabilization SPEC, потому что failing test unrelated to server-storage auth slice and passes in isolation.
 - Review passes:
-  - Scope/Evidence pass: Не выполнен до EXEC.
-  - Contract pass: Не выполнен до EXEC.
-  - Adversarial risk pass: Не выполнен до EXEC.
-  - Re-review after fixes / Fix and re-review: Не выполнен до EXEC.
-  - Stop decision: Ждать фразу `Спеку подтверждаю`.
-- Evidence inspected: Не применимо до EXEC.
+  - Scope/Evidence pass: changed files match section 16; production code, `.feature` wording, acceptance criteria and existing test annotations were not changed.
+  - Contract pass: `TS-0017` remains active and passes 7/7; `TS-0031` adds executable BDD trace for `SC-0011-001`.
+  - Adversarial risk pass: checked scope creep into `SC-0011-002`, live server/RavenDB/SignalR setup, production auth fixes and false runtime claims.
+  - Re-review after fixes / Fix and re-review: fixed C# compile error by adding `System.IO`; reran build and targeted tests.
+  - Stop decision: PASS_WITH_RISK; unrelated full-suite issue documented, not fixed in this SPEC.
+- Evidence inspected:
+  - `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/StormServerStorageAuthExecutableSpecTests/*" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageBddContractTests/*" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --maximum-parallel-tests 1 --output Detailed`
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо до EXEC.
-  - Acceptance criteria: Не применимо до EXEC.
-  - Validation evidence: Не применимо до EXEC.
-  - Unsupported claims: Не применимо до EXEC.
-  - Regression / edge case: Не применимо до EXEC.
-  - Comments/docs/changelog: Не применимо до EXEC.
-  - Hidden contract change: Не применимо до EXEC.
-  - Manual-review challenge: Не применимо до EXEC.
-- No-findings justification: EXEC еще не начинался.
+  - Scope drift / unrelated changes: no production or feature wording changes; full-suite failure is in unrelated UI test.
+  - Acceptance criteria: `AC-0032` keeps critical coverage and gains executable BDD evidence; `AC-0033/SC-0011-002` unchanged.
+  - Validation evidence: build, new executable spec and existing contract suite passed; full suite did not fully pass.
+  - Unsupported claims: no live HTTP/server auth claim added; evidence remains contract-level plus executable BDD path.
+  - Regression / edge case: existing `TS-0017` rerun passed; failing full-suite UI test passed in isolation.
+  - Comments/docs/changelog: reports and `storm.json` updated; no changelog needed for test-only local slice.
+  - Hidden contract change: none; helper extraction preserves existing assertions.
+  - Manual-review challenge: reviewer may ask why full suite is not green; answer is unrelated UI full-suite state/order failure, isolated pass, sequential full timeout, and separate stabilization follow-up.
+- No-findings justification: server-storage auth slice itself is additive, targeted tests pass, artifacts validate; residual risk is outside approved scope.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| BLOCKER/HIGH/MEDIUM/LOW | spec compliance / regression / tests / docs / comments / unrelated changes / evidence / follow-up | Нет находок до EXEC | Ждать approval | ask-human |
+| LOW | validation | Full `Unlimotion.Test` run failed 561/562 on unrelated `MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask`; same test passed in isolation, sequential full rerun timed out after 15 minutes. | Report as residual full-suite risk; do not change unrelated UI tests in this SPEC. | follow-up |
+| LOW | bdd-lint | `SD-0022` intentionally reuses the shared task-set Given text already used by `SD-0009` and `SD-0013`; validator reports duplicate step text. | Keep as intentional product wording reuse and record in bdd-lint report. | accepted-risk |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: approval phrase.
-- Residual risks / follow-ups: После `SC-0011-001` отдельно рассмотреть `SC-0011-002`.
+- Fixed before final report: added missing `System.IO`; updated `storm.json`, reports and SPEC journal to actual validation evidence.
+- Checks rerun: build, targeted executable spec, existing server-storage contract suite, full-suite attempt, isolated failing UI test, sequential full-suite attempt.
+- Validation evidence: build passed; targeted `TS-0031` passed 1/1; existing `TS-0017` passed 7/7; full suite failed 561/562 in unrelated UI test; same UI test passed 1/1 in isolation; sequential full rerun timed out and stale process was stopped.
+- Unrelated changes: none intentionally made; full-suite failure is unrelated to changed files.
+- Needs human: no blocker for this EXEC; next SPEC selection needed for further scope.
+- Residual risks / follow-ups: `SC-0011-002` remains passing without step definitions; full-suite UI state/order failure needs separate stabilization SPEC if required; duplicate Given wording is intentional shared context reuse.
 
 ## Approval
 
@@ -331,3 +338,7 @@ Stop rules для validation loops:
 | SPEC | Проверка состояния перед продолжением | 0.95 | Нет | Подготовить следующий SPEC | Нет | Нет | Working tree clean; предыдущий slice уже закоммичен как `15e2a25`. | `git status`, `git log` |
 | SPEC | Выбор следующего BDD slice | 0.9 | Нет | Создать SPEC для `SC-0011-001` | Нет | Нет | `SC-0011-001` является smallest remaining passing scenario без step definitions and has existing contract evidence `TS-0017`. | `features/storm/st-0011-server-storage.feature`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`, `src/Unlimotion.Test/ServerStorageBddContractTests.cs` |
 | SPEC | Подготовка SPEC и review | 0.92 | Нет | Запросить подтверждение пользователя | Да | Нет | `/storm:bdd-implement` меняет tests/artifacts, поэтому нужен QUEST gate. | `specs/2026-06-23-storm-bdd-implement-server-storage-auth-step-definitions.md` |
+| EXEC | Подтверждение SPEC | 1.0 | Нет | Реализовать approved slice | Нет | Да: пользователь написал `Спеку подтверждаю` | QUEST gate открыт, можно менять planned files в рамках спеки. | `specs/2026-06-23-storm-bdd-implement-server-storage-auth-step-definitions.md` |
+| EXEC | Реализация BDD slice | 0.9 | Нет | Запустить targeted validation | Нет | Нет | `SC-0011-001` получил reusable auth contract, `SD-0022..SD-0025` и executable spec `TS-0031`; production code and feature wording untouched. | `src/Unlimotion.Test/ServerStorageAuthContract.cs`, `src/Unlimotion.Test/ServerStorageBddContractTests.cs`, `src/Unlimotion.Test/StormBdd/StormStepDefinition.cs`, `src/Unlimotion.Test/StormBdd/ServerStorageAuthStepDefinitions.cs`, `src/Unlimotion.Test/StormServerStorageAuthExecutableSpecTests.cs` |
+| EXEC | Artifact sync | 0.88 | Нет | Запустить validator and hygiene | Нет | Нет | `storm.json` and reports now link `SC-0011-001 -> TS-0031 -> SD-0022..SD-0025`; behavior metrics updated to 6/45. | `docs/product/storm.json`, `docs/product/reports/*.md` |
+| EXEC | Validation and review | 0.82 | Full suite has unrelated UI risk | Завершить с documented residual risk | Нет | Нет | Targeted slice checks passed; full suite failed on unrelated UI test which passes in isolation, sequential full rerun timed out. | validation output, `specs/2026-06-23-storm-bdd-implement-server-storage-auth-step-definitions.md` |

@@ -14,38 +14,19 @@ public class ServerStorageBddContractTests
     [Test]
     public async Task ServerStorage_LoginRegisterRefreshFlow_ExposesExpectedAuthContracts()
     {
-        await Assert.That(FindRoute<AuthViaPassword>("/password/login", "POST")).IsNotNull();
-        await Assert.That(FindRoute<RegisterNewUser>("/register", "POST")).IsNotNull();
-        await Assert.That(FindRoute<PostRefreshToken>("/token/refresh", "POST")).IsNotNull();
-
-        var login = new AuthViaPassword();
-        await Assert.That(login.Login).IsEqualTo(string.Empty);
-        await Assert.That(login.Password).IsEqualTo(string.Empty);
-
-        var register = new RegisterNewUser();
-        await Assert.That(register.Login).IsEqualTo(string.Empty);
-        await Assert.That(register.Password).IsEqualTo(string.Empty);
-        await Assert.That(register.UserName).IsEqualTo(string.Empty);
+        await ServerStorageAuthContract.AssertLoginRegisterRefreshFlowExposesExpectedAuthContractsAsync();
     }
 
     [Test]
     public async Task ServerStorage_RefreshToken_RequiresAuthenticatedRefreshRequest()
     {
-        MethodInfo refresh = GetServiceMethod<AuthService, PostRefreshToken>("Post");
-
-        await Assert.That(refresh.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
+        await ServerStorageAuthContract.AssertRefreshTokenRequiresAuthenticatedRefreshRequestAsync();
     }
 
     [Test]
     public async Task ServerStorage_Connect_UsesLoginRegisterAndRefreshTokenFlow()
     {
-        string source = await ReadRepoFileAsync("src", "Unlimotion", "ServerStorage.cs");
-
-        await Assert.That(source).Contains("serviceClient.PostAsync(new AuthViaPassword");
-        await Assert.That(source).Contains("await RefreshToken(settings, configuration!)");
-        await Assert.That(source).Contains("await RegisterUser().ConfigureAwait(false)");
-        await Assert.That(source).Contains("settings.RefreshToken = tokens.RefreshToken");
-        await Assert.That(source).Contains("settings.RefreshToken = tokenResult.RefreshToken");
+        await ServerStorageAuthContract.AssertConnectUsesLoginRegisterAndRefreshTokenFlowAsync();
     }
 
     [Test]
@@ -94,15 +75,6 @@ public class ServerStorageBddContractTests
         await Assert.That(source).Contains("Type = UpdateType.Saved");
         await Assert.That(source).Contains("_connection.Subscribe<DeleteTaskItem>");
         await Assert.That(source).Contains("Type = UpdateType.Removed");
-    }
-
-    private static RouteAttribute? FindRoute<TRequest>(string expectedPath, string expectedVerb)
-    {
-        return typeof(TRequest)
-            .GetCustomAttributes<RouteAttribute>()
-            .SingleOrDefault(attribute =>
-                string.Equals(attribute.Path, expectedPath, StringComparison.Ordinal) &&
-                string.Equals(attribute.Verbs, expectedVerb, StringComparison.OrdinalIgnoreCase));
     }
 
     private static MethodInfo GetServiceMethod<TService, TRequest>(string name)

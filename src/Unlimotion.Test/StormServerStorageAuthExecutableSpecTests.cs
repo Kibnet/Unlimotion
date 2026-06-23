@@ -1,0 +1,35 @@
+using System.Linq;
+using System.Threading.Tasks;
+using Unlimotion.Test.StormBdd;
+
+namespace Unlimotion.Test;
+
+public class StormServerStorageAuthExecutableSpecTests
+{
+    [Test]
+    public async Task ServerStorageAuthFlowScenario_ExecutesFeatureSteps()
+    {
+        var scenario = StormFeatureParser.ParseScenario(
+            "features/storm/st-0011-server-storage.feature",
+            "SC-0011-001");
+
+        await Assert.That(scenario.Title).IsEqualTo(
+            "Клиент поддерживает login/register/refresh-token flow для серверного хранилища.");
+        await Assert.That(scenario.Tags).Contains("@scenario:SC-0011-001");
+        await Assert.That(scenario.Tags).Contains("@test:TS-0017");
+        await Assert.That(scenario.Steps.Count).IsEqualTo(4);
+
+        var runner = new StormScenarioRunner(ServerStorageAuthStepDefinitions.Create());
+        var context = await runner.ExecuteAsync(scenario);
+
+        var expectedStepDefinitionIds = new[] { "SD-0022", "SD-0023", "SD-0024", "SD-0025" };
+        await Assert.That(context.ExecutedStepDefinitionIds.Count).IsEqualTo(expectedStepDefinitionIds.Length);
+        foreach (var id in expectedStepDefinitionIds)
+        {
+            await Assert.That(context.ExecutedStepDefinitionIds).Contains(id);
+        }
+
+        await Assert.That(scenario.Steps.Select(step => step.Keyword).ToArray())
+            .IsEquivalentTo(["Дано", "И", "Когда", "Тогда"]);
+    }
+}

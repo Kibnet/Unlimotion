@@ -57,5 +57,11 @@ internal sealed class StormScenarioContext
 
     public NotificationToastScenarioResult? NotificationToastResult { get; set; }
 
+    public bool ServerStorageTaskSetAvailable { get; set; }
+
+    public bool ServerStorageStoryBehaviorConfirmed { get; set; }
+
+    public ServerStorageAuthScenarioResult? ServerStorageAuthResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
