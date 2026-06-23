@@ -72,10 +72,10 @@ namespace Unlimotion.Views
         private IDisposable? _taskDetailsBoundsSubscription;
         private readonly List<IDisposable> _mainTabsLayoutSubscriptions = [];
         private MainWindowViewModel? _treeCommandViewModel;
+        private TopLevel? _hotkeyHelpTopLevel;
         private TreeView? _activeTaskTree;
         private TreeView? _contextMenuTree;
         private TaskWrapperViewModel? _contextMenuWrapper;
-        private HotkeyHelpWindow? _hotkeyHelpWindow;
         private PendingTreeDragContext? _pendingTreeDrag;
         private TextBox? _activeInlineTitleEditor;
         private TreeView? _lastInlineTitleClickTree;
@@ -144,6 +144,7 @@ namespace Unlimotion.Views
         public MainControl()
         {
             InitializeComponent();
+            EmbeddedHotkeyHelpPanel.CloseRequested += (_, _) => HideHotkeyHelp();
             AddHandler(KeyDownEvent, MainControl_OnKeyDown, RoutingStrategies.Tunnel);
             AddHandler(GotFocusEvent, MainControl_OnGotFocus, RoutingStrategies.Tunnel);
             AddHandler(DragDrop.DropEvent, Drop);
@@ -179,6 +180,8 @@ namespace Unlimotion.Views
 
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            AttachHotkeyHelpTopLevelHandler();
+            Dispatcher.UIThread.Post(AttachHotkeyHelpTopLevelHandler, DispatcherPriority.Loaded);
             ObserveMainTabsLayout();
             ObserveMainTabsLocalization();
             QueueMainTabsOverflowUpdate();
@@ -190,8 +193,8 @@ namespace Unlimotion.Views
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
-            _hotkeyHelpWindow?.Close();
-            _hotkeyHelpWindow = null;
+            DetachHotkeyHelpTopLevelHandler();
+            HideHotkeyHelp();
 
             foreach (var subscription in _filterToolbarBoundsSubscriptions)
             {
@@ -1061,10 +1064,8 @@ namespace Unlimotion.Views
                 return;
             }
 
-            if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.F1)
+            if (TryHandleHotkeyHelpKey(e))
             {
-                ShowHotkeyHelp();
-                e.Handled = true;
                 return;
             }
 
@@ -1080,33 +1081,88 @@ namespace Unlimotion.Views
             }
         }
 
-        internal HotkeyHelpWindow? CurrentHotkeyHelpWindow => _hotkeyHelpWindow;
+        internal bool IsHotkeyHelpVisible => HotkeyHelpOverlayHost.IsVisible;
 
         internal void ShowHotkeyHelp()
         {
-            if (_hotkeyHelpWindow is { IsVisible: true } visibleWindow)
+            SetHotkeyHelpVisibility(true);
+        }
+
+        internal void HideHotkeyHelp()
+        {
+            SetHotkeyHelpVisibility(false);
+        }
+
+        private void AttachHotkeyHelpTopLevelHandler()
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null || ReferenceEquals(_hotkeyHelpTopLevel, topLevel))
             {
-                visibleWindow.Activate();
                 return;
             }
 
-            var window = new HotkeyHelpWindow();
-            _hotkeyHelpWindow = window;
-            window.Closed += (_, _) =>
-            {
-                if (ReferenceEquals(_hotkeyHelpWindow, window))
-                {
-                    _hotkeyHelpWindow = null;
-                }
-            };
+            DetachHotkeyHelpTopLevelHandler();
+            _hotkeyHelpTopLevel = topLevel;
+            topLevel.AddHandler(KeyDownEvent, TopLevel_OnKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
 
-            if (TopLevel.GetTopLevel(this) is Window owner)
+        private void DetachHotkeyHelpTopLevelHandler()
+        {
+            if (_hotkeyHelpTopLevel == null)
             {
-                window.Show(owner);
                 return;
             }
 
-            window.Show();
+            _hotkeyHelpTopLevel.RemoveHandler(KeyDownEvent, TopLevel_OnKeyDown);
+            _hotkeyHelpTopLevel = null;
+        }
+
+        private void TopLevel_OnKeyDown(object? sender, KeyEventArgs e)
+        {
+            TryHandleHotkeyHelpKey(e);
+        }
+
+        internal bool TryHandleHotkeyHelpKey(KeyEventArgs e)
+        {
+            if (e.Handled)
+            {
+                return false;
+            }
+
+            if (e.KeyModifiers != KeyModifiers.None)
+            {
+                return false;
+            }
+
+            if (e.Key == Key.F1)
+            {
+                SetHotkeyHelpVisibility(!IsHotkeyHelpVisible);
+                e.Handled = true;
+                return true;
+            }
+
+            if (e.Key == Key.Escape && IsHotkeyHelpVisible)
+            {
+                HideHotkeyHelp();
+                e.Handled = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void SetHotkeyHelpVisibility(bool isVisible)
+        {
+            if (HotkeyHelpOverlayHost.IsVisible == isVisible)
+            {
+                return;
+            }
+
+            HotkeyHelpOverlayHost.IsVisible = isVisible;
+            if (isVisible)
+            {
+                HotkeyHelpOverlayHost.Focus();
+            }
         }
 
         private void CompletionCriterionRemoveButton_OnClick(object? sender, RoutedEventArgs e)

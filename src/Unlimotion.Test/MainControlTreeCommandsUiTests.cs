@@ -1852,14 +1852,13 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeCommandUi_HotkeyHelpWindow_DisplaysScrollableShortcutReferenceFromF1()
+    public async Task TreeCommandUi_HotkeyHelpPanel_DisplaysEmbeddedShortcutReferenceFromF1()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
-            HotkeyHelpWindow? hotkeyWindow = null;
 
             try
             {
@@ -1868,11 +1867,13 @@ public class MainControlTreeCommandsUiTests
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
-                window.Width = 320;
-                window.Height = 360;
+                window.Width = 680;
+                window.Height = 520;
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
+                var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
+                await Assert.That(overlayHost.IsVisible).IsFalse();
                 await Assert.That(view.GetVisualDescendants()
                     .OfType<Button>()
                     .Where(control => AutomationProperties.GetAutomationId(control) == "HotkeyHelpButton")
@@ -1885,15 +1886,27 @@ public class MainControlTreeCommandsUiTests
                 PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
 
-                hotkeyWindow = view.CurrentHotkeyHelpWindow ??
-                               throw new InvalidOperationException("Hotkey help window was not opened by F1.");
-                await AssertHotkeyHelpWindowContent(hotkeyWindow);
+                await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+                await Assert.That(overlayHost.IsVisible).IsTrue();
+                await AssertHotkeyHelpPanelContent(view);
                 await Assert.That(FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton").Flyout)
                     .IsAssignableTo<MenuFlyout>();
+
+                PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
+                await Assert.That(overlayHost.IsVisible).IsFalse();
+
+                PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+
+                PressHotkey(window, Key.Escape, PhysicalKey.Escape, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
             }
             finally
             {
-                hotkeyWindow?.Close();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -1901,14 +1914,67 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensShortcutReferenceWindow()
+    public async Task MainWindowUi_HotkeyHelpPanel_HandlesF1AtWindowLevel()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            MainWindow? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+
+                window = new MainWindow
+                {
+                    DataContext = vm,
+                    Width = 720,
+                    Height = 560
+                };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var view = window.GetVisualDescendants()
+                    .OfType<MainControl>()
+                    .Single();
+                var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
+                await Assert.That(overlayHost.IsVisible).IsFalse();
+
+                var searchTextBox = view.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .First(textBox => string.Equals(textBox.Name, "SearchEditor", StringComparison.Ordinal));
+                searchTextBox.Focus();
+
+                PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+                await Assert.That(overlayHost.IsVisible).IsTrue();
+
+                PressHotkey(window, Key.Escape, PhysicalKey.Escape, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
+                await Assert.That(overlayHost.IsVisible).IsFalse();
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensEmbeddedShortcutReference()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
-            HotkeyHelpWindow? hotkeyWindow = null;
 
             try
             {
@@ -1917,10 +1983,13 @@ public class MainControlTreeCommandsUiTests
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
-                window.Width = 520;
-                window.Height = 520;
+                window.Width = 720;
+                window.Height = 560;
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
+
+                var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
+                await Assert.That(overlayHost.IsVisible).IsFalse();
 
                 var settingsTab = FindControlByAutomationId<TabItem>(view, "SettingsTabItem");
                 settingsTab.IsSelected = true;
@@ -1932,13 +2001,19 @@ public class MainControlTreeCommandsUiTests
                 InvokeButtonClick(showHotkeysButton);
                 Dispatcher.UIThread.RunJobs();
 
-                hotkeyWindow = view.CurrentHotkeyHelpWindow ??
-                               throw new InvalidOperationException("Hotkey help window was not opened from settings.");
-                await AssertHotkeyHelpWindowContent(hotkeyWindow);
+                await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+                await Assert.That(overlayHost.IsVisible).IsTrue();
+                await AssertHotkeyHelpPanelContent(view);
+
+                var closeButton = FindControlByAutomationId<Button>(view, "HotkeyHelpCloseButton");
+                InvokeButtonClick(closeButton);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
+                await Assert.That(overlayHost.IsVisible).IsFalse();
             }
             finally
             {
-                hotkeyWindow?.Close();
                 window?.Close();
                 fixture.CleanTasks();
             }
@@ -2897,59 +2972,202 @@ public class MainControlTreeCommandsUiTests
                 .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
     }
 
-    private static async Task AssertHotkeyHelpWindowContent(HotkeyHelpWindow hotkeyWindow)
+    private static async Task AssertHotkeyHelpPanelContent(MainControl view)
     {
         Dispatcher.UIThread.RunJobs();
 
-        await Assert.That(hotkeyWindow.IsVisible).IsTrue();
-
-        var content = hotkeyWindow.Content as Control ??
-                      throw new InvalidOperationException("Hotkey help window content was not found.");
-        var panel = FindControlInDetachedContent<Border>(content, "HotkeyPanel") ??
+        await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+        var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
+        var panelFrame = FindControlByAutomationId<Border>(view, "HotkeyHelpOverlayPanelFrame");
+        var panel = FindControlInDetachedContent<Border>(view, "HotkeyPanel") ??
                     throw new InvalidOperationException("Hotkey panel was not found.");
-        var scrollViewer = FindControlInDetachedContent<ScrollViewer>(content, "HotkeyPanelScrollViewer") ??
+        var scrollViewer = FindControlInDetachedContent<ScrollViewer>(view, "HotkeyPanelScrollViewer") ??
                            throw new InvalidOperationException("Hotkey panel scroll viewer was not found.");
 
-        await Assert.That(panel.MaxHeight).IsLessThanOrEqualTo(300);
-        await Assert.That(hotkeyWindow.Width).IsGreaterThanOrEqualTo(560);
-        await Assert.That(panel.Bounds.Width).IsGreaterThanOrEqualTo(520);
+        await Assert.That(overlayHost.IsVisible).IsTrue();
+        await Assert.That(panelFrame.MaxWidth).IsEqualTo(560);
+        await Assert.That(panel.MaxWidth).IsEqualTo(560);
         await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
         await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);
         await Assert.That(scrollViewer.Bounds.Height).IsLessThan(scrollViewer.Extent.Height);
 
-        AssertText(content, "HotkeyPanelTitleText", L10n.Get("HotkeyPanelTitle"));
-        AssertText(content, "HotkeyGeneralSectionTitle", L10n.Get("HotkeySectionGeneral"));
-        AssertText(content, "HotkeyTaskTreeSectionTitle", L10n.Get("HotkeySectionTaskTree"));
-        AssertText(content, "HotkeyRoadmapSectionTitle", L10n.Get("HotkeySectionRoadmap"));
+        AssertText(view, "HotkeyPanelTitleText", L10n.Get("HotkeyPanelTitle"));
+        AssertText(view, "HotkeyGeneralSectionTitle", L10n.Get("HotkeySectionGeneral"));
+        AssertText(view, "HotkeyCurrentTaskSectionTitle", L10n.Get("HotkeySectionCurrentTask"));
+        AssertText(view, "HotkeySelectionOutlineSectionTitle", L10n.Get("HotkeySectionSelectionOutline"));
+        AssertText(view, "HotkeyTaskTreeSectionTitle", L10n.Get("HotkeySectionTaskTree"));
+        AssertText(view, "HotkeyRelationsSectionTitle", L10n.Get("HotkeySectionRelations"));
+        AssertText(view, "HotkeyDragDropSectionTitle", L10n.Get("HotkeySectionDragDrop"));
+        AssertText(view, "HotkeyRoadmapSectionTitle", L10n.Get("HotkeySectionRoadmap"));
         AssertHotkeyRow(
-            content,
+            view,
             "HotkeyGeneralOpenHotkeyHelpRow",
             L10n.Get("HotkeyOpenHotkeyHelp"),
             HotkeyHints.OpenHotkeyHelp);
-        AssertHotkeyRow(content, "HotkeyTaskTreeSelectAllRow", L10n.Get("HotkeySelectAll"), HotkeyHints.SelectAll);
         AssertHotkeyRow(
-            content,
-            "HotkeyTaskTreeCompleteCurrentTaskRow",
+            view,
+            "HotkeyGeneralCloseHotkeyHelpRow",
+            L10n.Get("HotkeyCloseHotkeyHelp"),
+            HotkeyHints.CloseHotkeyHelp);
+        AssertHotkeyRow(
+            view,
+            "HotkeyCurrentTaskRenameTaskRow",
+            L10n.Get("HotkeyRenameTask"),
+            HotkeyHints.RenameTask);
+        AssertHotkeyRow(
+            view,
+            "HotkeyCurrentTaskCreateSiblingRow",
+            L10n.Get("HotkeyCreateSibling"),
+            HotkeyHints.CreateSibling);
+        AssertHotkeyRow(
+            view,
+            "HotkeyCurrentTaskCreateBlockedSiblingRow",
+            L10n.Get("HotkeyCreateBlockedSibling"),
+            HotkeyHints.CreateBlockedSibling);
+        AssertHotkeyRow(
+            view,
+            "HotkeyCurrentTaskCreateInnerRow",
+            L10n.Get("HotkeyCreateInner"),
+            HotkeyHints.CreateInner);
+        AssertHotkeyRow(
+            view,
+            "HotkeyCurrentTaskCompleteCurrentTaskRow",
             L10n.Get("HotkeyCompleteCurrentTask"),
             HotkeyHints.CompleteCurrentTask);
         AssertHotkeyRow(
-            content,
+            view,
+            "HotkeySelectionOutlineSelectAllRow",
+            L10n.Get("HotkeySelectAll"),
+            HotkeyHints.SelectAll);
+        AssertHotkeyRow(
+            view,
+            "HotkeySelectionOutlineDeleteSelectionRow",
+            L10n.Get("HotkeyDeleteSelection"),
+            HotkeyHints.DeleteSelection);
+        AssertHotkeyRow(
+            view,
+            "HotkeySelectionOutlineCopyOutlineRow",
+            L10n.Get("CopyTaskOutline"),
+            HotkeyHints.CopyOutline);
+        AssertHotkeyRow(
+            view,
+            "HotkeySelectionOutlinePasteOutlineRow",
+            L10n.Get("PasteTaskOutline"),
+            HotkeyHints.PasteOutline);
+        AssertHotkeyRow(
+            view,
+            "HotkeyTaskTreeExpandCurrentRow",
+            L10n.Get("ExpandCurrentNested"),
+            HotkeyHints.ExpandCurrent);
+        AssertHotkeyRow(
+            view,
+            "HotkeyTaskTreeCollapseCurrentRow",
+            L10n.Get("CollapseCurrentNested"),
+            HotkeyHints.CollapseCurrent);
+        AssertHotkeyRow(
+            view,
+            "HotkeyTaskTreeExpandAllRow",
+            L10n.Get("ExpandAllNodes"),
+            HotkeyHints.ExpandAll);
+        AssertHotkeyRow(
+            view,
+            "HotkeyTaskTreeCollapseAllRow",
+            L10n.Get("CollapseAllNodes"),
+            HotkeyHints.CollapseAll);
+        AssertHotkeyRow(
+            view,
+            "HotkeyRelationsConfirmRow",
+            L10n.Get("HotkeyConfirmRelation"),
+            HotkeyHints.ConfirmRelation);
+        AssertHotkeyRow(
+            view,
+            "HotkeyRelationsCancelRow",
+            L10n.Get("HotkeyCancelRelation"),
+            HotkeyHints.CancelRelation);
+        AssertHotkeyRow(
+            view,
+            "HotkeyDragCopyIntoRow",
+            L10n.Get("HotkeyDragCopyInto"),
+            HotkeyHints.DragCopyInto);
+        AssertHotkeyRow(
+            view,
+            "HotkeyDragMoveIntoRow",
+            L10n.Get("HotkeyDragMoveInto"),
+            HotkeyHints.DragMoveInto);
+        AssertHotkeyRow(
+            view,
+            "HotkeyDragCloneIntoRow",
+            L10n.Get("HotkeyDragCloneInto"),
+            HotkeyHints.DragCloneInto);
+        AssertHotkeyRow(
+            view,
+            "HotkeyDragSourcesBlockTargetRow",
+            L10n.Get("HotkeyDragSourcesBlockTarget"),
+            HotkeyHints.DragSourcesBlockTarget);
+        AssertHotkeyRow(
+            view,
+            "HotkeyDragTargetBlocksSourcesRow",
+            L10n.Get("HotkeyDragTargetBlocksSources"),
+            HotkeyHints.DragTargetBlocksSources);
+        AssertHotkeyRow(
+            view,
             "HotkeyRoadmapFitToScreenRow",
             L10n.Get("HotkeyRoadmapFitToScreen"),
             HotkeyHints.RoadmapFitToScreen);
         AssertHotkeyRow(
-            content,
+            view,
             "HotkeyRoadmapResetViewportRow",
             L10n.Get("HotkeyRoadmapResetViewport"),
             HotkeyHints.RoadmapResetViewport);
-        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeExpandCurrentRow");
-        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeCollapseCurrentRow");
-        AssertHotkeyRowLabelDoesNotOverlapChip(content, "HotkeyTaskTreeCopyOutlineRow");
+        AssertHotkeyRow(
+            view,
+            "HotkeyRoadmapToggleSelectionRow",
+            L10n.Get("HotkeyRoadmapToggleSelection"),
+            HotkeyHints.RoadmapToggleSelection);
+        AssertHotkeyRow(
+            view,
+            "HotkeyRoadmapAddSelectionRow",
+            L10n.Get("HotkeyRoadmapAddSelection"),
+            HotkeyHints.RoadmapAddSelection);
+        AssertHotkeyRow(
+            view,
+            "HotkeyRoadmapRemoveSelectionRow",
+            L10n.Get("HotkeyRoadmapRemoveSelection"),
+            HotkeyHints.RoadmapRemoveSelection);
+        AssertHotkeyRow(
+            view,
+            "HotkeyRoadmapPanRow",
+            L10n.Get("HotkeyRoadmapPan"),
+            HotkeyHints.RoadmapPan);
+
+        AssertHotkeyTextOccurrence(view, HotkeyHints.RenameTask, 1);
+        AssertHotkeyTextOccurrence(view, HotkeyHints.CreateSibling, 1);
+        AssertHotkeyTextOccurrence(view, HotkeyHints.CreateBlockedSibling, 1);
+        AssertHotkeyTextOccurrence(view, HotkeyHints.CreateInner, 1);
+
+        AssertHotkeyRowLabelDoesNotOverlapChip(view, "HotkeyTaskTreeExpandCurrentRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(view, "HotkeyTaskTreeCollapseCurrentRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(view, "HotkeySelectionOutlineCopyOutlineRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(view, "HotkeyDragSourcesBlockTargetRow");
+        AssertHotkeyRowLabelDoesNotOverlapChip(view, "HotkeyRoadmapToggleSelectionRow");
 
         scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height);
         Dispatcher.UIThread.RunJobs();
 
         await Assert.That(scrollViewer.Offset.Y).IsGreaterThan(0);
+    }
+
+    private static void AssertHotkeyTextOccurrence(Control root, string expectedText, int expectedCount)
+    {
+        var actualCount = root.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Count(textBlock => string.Equals(textBlock.Text, expectedText, StringComparison.Ordinal));
+
+        if (actualCount != expectedCount)
+        {
+            throw new InvalidOperationException(
+                $"Hotkey text '{expectedText}' appears {actualCount} times, expected {expectedCount}.");
+        }
     }
 
     private static void AssertText(Control root, string automationId, string expectedText)

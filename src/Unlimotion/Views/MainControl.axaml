@@ -2339,6 +2339,26 @@
             </SplitView.Pane>
         </SplitView>
         <!--Редактор задачи-->
+        <Grid x:Name="HotkeyHelpOverlayHost"
+              Grid.RowSpan="2"
+              Panel.ZIndex="100"
+              IsVisible="False"
+              Focusable="True"
+              Background="#66000000"
+              AutomationProperties.AutomationId="HotkeyHelpOverlayHost">
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    MaxWidth="560"
+                    MaxHeight="520"
+                    Margin="16"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ThemeControlMidBrush}"
+                    CornerRadius="6"
+                    Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                    AutomationProperties.AutomationId="HotkeyHelpOverlayPanelFrame">
+                <views:HotkeyHelpPanel x:Name="EmbeddedHotkeyHelpPanel"/>
+            </Border>
+        </Grid>
     </Grid>
 
 </UserControl>

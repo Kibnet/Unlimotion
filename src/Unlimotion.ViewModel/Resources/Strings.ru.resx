@@ -193,15 +193,38 @@
   <data name="HotkeyCompleteCurrentTask" xml:space="preserve"><value>Завершить текущую задачу</value></data>
   <data name="HotkeyCreateInner" xml:space="preserve"><value>Создать подзадачу</value></data>
   <data name="HotkeyCreateSibling" xml:space="preserve"><value>Создать соседнюю задачу</value></data>
+  <data name="HotkeyCancelRelation" xml:space="preserve"><value>Отменить редактор связей</value></data>
+  <data name="HotkeyCloseHotkeyHelp" xml:space="preserve"><value>Закрыть справочник</value></data>
+  <data name="HotkeyConfirmRelation" xml:space="preserve"><value>Подтвердить редактор связей</value></data>
   <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Удалить выделенные</value></data>
-  <data name="HotkeyOpenHotkeyHelp" xml:space="preserve"><value>Показать горячие клавиши</value></data>
+  <data name="HotkeyDragCloneInto" xml:space="preserve"><value>Клонировать задачи внутрь цели</value></data>
+  <data name="HotkeyDragCopyInto" xml:space="preserve"><value>Копировать задачи внутрь цели</value></data>
+  <data name="HotkeyDragMoveInto" xml:space="preserve"><value>Переместить задачи внутрь цели</value></data>
+  <data name="HotkeyDragSourcesBlockTarget" xml:space="preserve"><value>Перетаскиваемые задачи блокируют цель</value></data>
+  <data name="HotkeyDragTargetBlocksSources" xml:space="preserve"><value>Цель блокирует перетаскиваемые задачи</value></data>
+  <data name="HotkeyOpenHotkeyHelp" xml:space="preserve"><value>Показать или скрыть справочник</value></data>
   <data name="HotkeyPanelTitle" xml:space="preserve"><value>Горячие клавиши</value></data>
   <data name="HotkeyRenameTask" xml:space="preserve"><value>Переименовать задачу</value></data>
+  <data name="HotkeyRoadmapAddSelection" xml:space="preserve"><value>Добавить задачи к выделению на карте</value></data>
   <data name="HotkeyRoadmapFitToScreen" xml:space="preserve"><value>Вписать в экран</value></data>
+  <data name="HotkeyRoadmapPan" xml:space="preserve"><value>Панорамировать карту</value></data>
+  <data name="HotkeyRoadmapRemoveSelection" xml:space="preserve"><value>Убрать задачи из выделения на карте</value></data>
   <data name="HotkeyRoadmapResetViewport" xml:space="preserve"><value>Сбросить вид</value></data>
-  <data name="HotkeySectionGeneral" xml:space="preserve"><value>Общие</value></data>
+  <data name="HotkeyRoadmapToggleSelection" xml:space="preserve"><value>Переключить выделение на карте</value></data>
+  <data name="HotkeySectionCurrentTask" xml:space="preserve"><value>Текущая задача</value></data>
+  <data name="HotkeySectionCurrentTaskDescription" xml:space="preserve"><value>Команды применяются к активной или выбранной задаче.</value></data>
+  <data name="HotkeySectionDragDrop" xml:space="preserve"><value>Перетаскивание</value></data>
+  <data name="HotkeySectionDragDropDescription" xml:space="preserve"><value>Удерживайте модификатор во время перетаскивания задач.</value></data>
+  <data name="HotkeySectionGeneral" xml:space="preserve"><value>Справочник</value></data>
+  <data name="HotkeySectionGeneralDescription" xml:space="preserve"><value>Открывает и закрывает эту встроенную панель.</value></data>
   <data name="HotkeySectionRoadmap" xml:space="preserve"><value>Дорожная карта</value></data>
+  <data name="HotkeySectionRoadmapDescription" xml:space="preserve"><value>Управление видом карты и выделением на карте.</value></data>
+  <data name="HotkeySectionRelations" xml:space="preserve"><value>Связи</value></data>
+  <data name="HotkeySectionRelationsDescription" xml:space="preserve"><value>Клавиши внутри редактора связей.</value></data>
+  <data name="HotkeySectionSelectionOutline" xml:space="preserve"><value>Выделение и аутлайн</value></data>
+  <data name="HotkeySectionSelectionOutlineDescription" xml:space="preserve"><value>Операции с выделенными задачами и outline-clipboard.</value></data>
   <data name="HotkeySectionTaskTree" xml:space="preserve"><value>Дерево задач</value></data>
+  <data name="HotkeySectionTaskTreeDescription" xml:space="preserve"><value>Раскрытие и сворачивание узлов дерева.</value></data>
   <data name="HotkeySelectAll" xml:space="preserve"><value>Выбрать всё</value></data>
   <data name="ShowHotkeys" xml:space="preserve"><value>Показать горячие клавиши</value></data>
   <data name="RoadmapResetViewport" xml:space="preserve"><value>Сбросить вид карты</value></data>
