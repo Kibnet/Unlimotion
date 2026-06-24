@@ -1,11 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
-using ServiceStack;
-using Unlimotion.Server.ServiceInterface;
-using Unlimotion.Server.ServiceModel;
 
 namespace Unlimotion.Test;
 
@@ -32,89 +25,24 @@ public class ServerStorageBddContractTests
     [Test]
     public async Task TaskService_TaskEndpoints_RequireAuthenticatedRequests()
     {
-        MethodInfo getAll = GetServiceMethod<TaskService, GetAllTasks>("Get");
-        MethodInfo getOne = GetServiceMethod<TaskService, GetTask>("GetAsync");
-        MethodInfo bulkInsert = GetServiceMethod<TaskService, BulkInsertTasks>("Post");
-
-        await Assert.That(getAll.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
-        await Assert.That(getOne.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
-        await Assert.That(bulkInsert.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
+        await ServerStorageCrudRealtimeContract.AssertTaskEndpointsRequireAuthenticatedRequestsAsync();
     }
 
     [Test]
     public async Task TaskService_GetAllAndBulkInsert_PreserveAuthenticatedUserScope()
     {
-        string source = await ReadRepoFileAsync("src", "Unlimotion.Server.ServiceInterface", "TaskService.cs");
-
-        await Assert.That(source).Contains("var uid = session.UserAuthId");
-        await Assert.That(source).Contains(".Where(chat => chat.UserId == uid)");
-        await Assert.That(source).Contains("task.UserId = uid");
-        await Assert.That(source).Contains("private const string TaskPrefix = \"TaskItem/\"");
-        await Assert.That(source).Contains("task.Id = $\"{TaskPrefix}{task.Id}\"");
+        await ServerStorageCrudRealtimeContract.AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync();
     }
 
     [Test]
     public async Task TaskService_GetTask_PreservesAuthenticatedUserScope()
     {
-        string source = await ReadRepoFileAsync("src", "Unlimotion.Server.ServiceInterface", "TaskService.cs");
-        string methodSource = ExtractMethodSource(
-            source,
-            "public async Task<TaskItemMold> GetAsync(GetTask request)",
-            "public async Task Post(BulkInsertTasks request)");
-
-        await Assert.That(methodSource).Contains("var uid = session.UserAuthId");
-        await Assert.That(methodSource).Contains(".Where(chat => chat.Id == decodedId && chat.UserId == uid)");
+        await ServerStorageCrudRealtimeContract.AssertGetTaskPreservesAuthenticatedUserScopeAsync();
     }
 
     [Test]
     public async Task ServerStorage_SignalRHandlers_MapRemoteTaskUpdatesToStorageEvents()
     {
-        string source = await ReadRepoFileAsync("src", "Unlimotion", "ServerStorage.cs");
-
-        await Assert.That(source).Contains("_connection.Subscribe<ReceiveTaskItem>");
-        await Assert.That(source).Contains("Type = UpdateType.Saved");
-        await Assert.That(source).Contains("_connection.Subscribe<DeleteTaskItem>");
-        await Assert.That(source).Contains("Type = UpdateType.Removed");
-    }
-
-    private static MethodInfo GetServiceMethod<TService, TRequest>(string name)
-    {
-        return typeof(TService)
-            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .Single(method =>
-                method.Name == name &&
-                method.GetParameters() is [{ ParameterType: var parameterType }] &&
-                parameterType == typeof(TRequest));
-    }
-
-    private static string ExtractMethodSource(string source, string startMarker, string endMarker)
-    {
-        int start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        int end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
-
-        if (start < 0 || end < 0 || end <= start)
-        {
-            throw new InvalidOperationException($"Could not find method source between '{startMarker}' and '{endMarker}'.");
-        }
-
-        return source[start..end];
-    }
-
-    private static async Task<string> ReadRepoFileAsync(params string[] segments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory != null)
-        {
-            string candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
-            if (File.Exists(candidate))
-            {
-                return await File.ReadAllTextAsync(candidate);
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(segments)}");
+        await ServerStorageCrudRealtimeContract.AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync();
     }
 }

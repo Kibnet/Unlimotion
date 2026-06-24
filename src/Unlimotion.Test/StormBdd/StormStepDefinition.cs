@@ -63,5 +63,7 @@ internal sealed class StormScenarioContext
 
     public ServerStorageAuthScenarioResult? ServerStorageAuthResult { get; set; }
 
+    public ServerStorageCrudRealtimeScenarioResult? ServerStorageCrudRealtimeResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

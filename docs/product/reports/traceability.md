@@ -1,19 +1,20 @@
 # STORM Traceability
 
-Сгенерировано: 2026-06-23
-Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0011-001 executable step definitions`
+Сгенерировано: 2026-06-24
+Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0011-002 executable step definitions`
 
 ## New Trace
 
 | Story | AC | Scenario | Test | Status |
 | --- | --- | --- | --- | --- |
-| ST-0011 | AC-0032 | SC-0011-001 | TS-0031 + SD-0022..SD-0025 | passing executable BDD slice from feature text |
+| ST-0011 | AC-0033 | SC-0011-002 | TS-0032 + SD-0022..SD-0024 + SD-0026 | passing executable BDD slice from feature text |
 
 ## Existing Trace Preserved
 
 | Story | AC | Scenario | Test | Status |
-| --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 | ST-0011 | AC-0032 | SC-0011-001 | TS-0017 | passing auth-flow contract |
+| ST-0011 | AC-0032 | SC-0011-001 | TS-0031 + SD-0022..SD-0025 | passing executable BDD slice from feature text |
 | ST-0011 | AC-0033 | SC-0011-002 | TS-0017, TS-0018, TS-0019, TS-0020 | passing contract/security/live API and SignalR evidence |
 | ST-0014 | AC-0039 | SC-0014-001 | TS-0022 | passing command/auth |
 | ST-0014 | AC-0039 | SC-0014-001 | TS-0028 + SD-0009..SD-0012 | passing executable BDD slice from feature text |
@@ -35,6 +36,6 @@
 
 ## Residual Gaps
 
-`SC-0011-001` больше не имеет BDD-execution gap: сценарий связан с `TS-0017`, `TS-0031` и `SD-0022..SD-0025`. `CV-0003`, `CV-0004`, `CV-0005` и `CV-0006` сохраняют ранее созданный executable BDD trace.
+`SC-0011-001` и `SC-0011-002` больше не имеют BDD-execution gap: server-storage auth и CRUD/SignalR scenarios связаны с `TS-0031`, `TS-0032` и step definitions `SD-0022..SD-0026`. `CV-0003`, `CV-0004`, `CV-0005` и `CV-0006` сохраняют ранее созданный executable BDD trace.
 
-Оставшиеся non-cover gaps: step definitions покрывают 6/45 scenarios, `SC-0011-002` остается passing server-storage scenario без step definitions, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, runtime/release evidence не заявляется, а full-suite validation имеет отдельный UI state/order risk.
+Оставшиеся non-cover gaps: step definitions покрывают 7/45 scenarios, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, runtime/release evidence не заявляется, а full-suite validation имеет отдельный UI state/order risk.

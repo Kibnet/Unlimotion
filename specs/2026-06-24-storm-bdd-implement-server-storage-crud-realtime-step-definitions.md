@@ -312,41 +312,69 @@ Stop rules для validation loops:
 - Residual risks / follow-ups: unrelated full-suite UI state/order failure remains separate; Android/iOS `NETSDK1147` remains separate.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до утверждения спеки.
-- Decision: Не применимо до EXEC.
+- Статус: PASS
+- Scope reviewed: approved `/storm:bdd-implement SC-0011-002` delivery-task; changed only test code/helpers, STORM artifacts and reports.
+- Decision: завершить EXEC и запросить следующий процессный шаг без перехода к новым code/test изменениям.
 - Review passes:
-  - Scope/Evidence pass: Не выполнен до EXEC.
-  - Contract pass: Не выполнен до EXEC.
-  - Adversarial risk pass: Не выполнен до EXEC.
-  - Re-review after fixes / Fix and re-review: Не выполнен до EXEC.
-  - Stop decision: Ждать фразу `Спеку подтверждаю`.
-- Evidence inspected: Не применимо до EXEC.
+  - Scope/Evidence pass: `SC-0011-002` теперь исполняется из feature text через `TS-0032`; existing `TS-0017..TS-0020` evidence сохранено and rerun.
+  - Contract pass: production code, `.feature` wording, acceptance criteria and existing test annotations не менялись.
+  - Adversarial risk pass: live SignalR/ServiceStack evidence rerun targeted; production AppHost/license setup не менялся; unrelated full-suite UI risk not fixed in this scope.
+  - Re-review after fixes / Fix and re-review: build initially blocked by stale `Unlimotion.Test (33028)` output lock; stale test host stopped, build rerun passed.
+  - Stop decision: PASS; no stop-rule violation.
+- Evidence inspected:
+  - `src/Unlimotion.Test/ServerStorageCrudRealtimeContract.cs`
+  - `src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs`
+  - `src/Unlimotion.Test/StormBdd/ServerStorageAuthStepDefinitions.cs`
+  - `src/Unlimotion.Test/ServerStorageBddContractTests.cs`
+  - `src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs`
+  - `docs/product/storm.json`
+  - `docs/product/reports/bdd-sync.md`
+  - `docs/product/reports/bdd-lint.md`
+  - `docs/product/reports/coverage.md`
 - Depth checklist:
-  - Scope drift / unrelated changes: Не применимо до EXEC.
-  - Acceptance criteria: Не применимо до EXEC.
-  - Validation evidence: Не применимо до EXEC.
-  - Unsupported claims: Не применимо до EXEC.
-  - Regression / edge case: Не применимо до EXEC.
-  - Comments/docs/changelog: Не применимо до EXEC.
-  - Hidden contract change: Не применимо до EXEC.
-  - Manual-review challenge: Не применимо до EXEC.
-- No-findings justification: EXEC еще не начинался.
+  - Scope drift / unrelated changes: no production changes; no `.feature` changes; no test annotation changes.
+  - Acceptance criteria: `AC-0033` preserved and linked to `TS-0032`.
+  - Validation evidence: build, new executable spec, auth regression spec, contract suite and live integration suite passed.
+  - Unsupported claims: reports state targeted live integration evidence; no runtime/release production maturity claim.
+  - Regression / edge case: `TS-0031` auth executable spec passed after shared-step refactor.
+  - Comments/docs/changelog: no changelog needed for test-only/product-artifact BDD sync.
+  - Hidden contract change: existing `ServerStorageBddContractTests` and `ServerStorageLiveIntegrationTests` method names/annotations preserved while delegating to reusable contract.
+  - Manual-review challenge: live evidence is intentionally inside `TS-0032` because `SC-0011-002` observable outcome includes both authenticated ServiceStack task API and SignalR delivery.
+- No-findings justification: targeted evidence covers the agreed BDD slice; residual risks are separate known tracks.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| BLOCKER/HIGH/MEDIUM/LOW | spec compliance / regression / tests / docs / comments / unrelated changes / evidence / follow-up | Нет находок до EXEC | Ждать approval | ask-human |
+| LOW | validation environment | First build attempt failed because stale `Unlimotion.Test (33028)` locked output DLLs. | Stop stale test host and rerun build. | resolved |
+| LOW | full-suite risk | Previous unrelated full-suite UI state/order risk remains out of scope. | Handle through separate stabilization SPEC if needed. | accepted-risk |
 
-- Fixed before final report: Не применимо.
-- Checks rerun: Не применимо.
-- Validation evidence: Не применимо.
-- Unrelated changes: Не применимо.
-- Needs human: approval phrase.
-- Residual risks / follow-ups: После `SC-0011-002` отдельно рассмотреть full-suite stabilization или Android/iOS environment setup.
+- Fixed before final report: build output lock resolved by stopping stale `Unlimotion.Test (33028)`.
+- Checks rerun:
+  - `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/StormServerStorageAuthExecutableSpecTests/*" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageBddContractTests/*" --output Detailed`
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageLiveIntegrationTests/*" --output Detailed`
+  - `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json`
+  - `git diff --check`
+  - `rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md`
+- Validation evidence:
+  - build passed after stale test host cleanup.
+  - build rerun passed after adding `NotInParallel("ServerStorageLiveIntegration")` to the new executable spec.
+  - `StormServerStorageCrudRealtimeExecutableSpecTests` passed 1/1.
+  - `StormServerStorageCrudRealtimeExecutableSpecTests` rerun passed 1/1 after `NotInParallel` annotation.
+  - `StormServerStorageAuthExecutableSpecTests` passed 1/1.
+  - `ServerStorageBddContractTests` passed 7/7.
+  - `ServerStorageLiveIntegrationTests` passed 2/2.
+  - `validate-artifacts.py` returned 0 errors and 1 known warning for intentional shared Given step text across `SD-0009`, `SD-0013` and `SD-0022`.
+  - `git diff --check` passed with only LF-to-CRLF working-copy warnings.
+  - trailing whitespace search returned no matches.
+- Unrelated changes: no unrelated worktree changes were modified.
+- Needs human: no for current EXEC; new tests/code require a new approved SPEC.
+- Residual risks / follow-ups: separately consider full-suite stabilization or Android/iOS environment setup.
 
 ## Approval
 
-Ожидается фраза: `Спеку подтверждаю`
+Получено: `Спеку подтверждаю`
 
 ## 20. Журнал действий агента
 
@@ -355,3 +383,9 @@ Stop rules для validation loops:
 | SPEC | Проверка состояния после коммита | 0.98 | Нет | Выбрать следующий SPEC-кандидат | Нет | Нет | Working tree clean after `6696bd9`; reports recommend `SC-0011-002`. | `git status`, `git log`, `docs/product/reports/*.md` |
 | SPEC | Выбор следующего BDD slice | 0.88 | Нет | Создать SPEC для `SC-0011-002` | Нет | Нет | `SC-0011-002` is the remaining passing server-storage scenario without step definitions and has TS-0017..TS-0020 evidence. | `features/storm/st-0011-server-storage.feature`, `src/Unlimotion.Test/ServerStorageBddContractTests.cs`, `src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs` |
 | SPEC | Подготовка SPEC и review | 0.9 | Нет | Запросить подтверждение пользователя | Да | Нет | `/storm:bdd-implement` changes tests/artifacts, so QUEST gate is required. | `specs/2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md` |
+| EXEC | Реализация reusable CRUD/SignalR contract | 0.86 | Нет | Подключить step definitions | Нет | Да: пользователь подтвердил SPEC | Existing TS-0017..TS-0020 evidence reused without changing annotations or production code. | `src/Unlimotion.Test/ServerStorageCrudRealtimeContract.cs`, `src/Unlimotion.Test/ServerStorageBddContractTests.cs`, `src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs` |
+| EXEC | Добавление `TS-0032` и `SD-0026` | 0.9 | Нет | Запустить targeted validation | Нет | Да: пользователь подтвердил SPEC | `SC-0011-002` now executes existing feature text through shared context steps plus CRUD/realtime Then step. | `src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs`, `src/Unlimotion.Test/StormBdd/ServerStorageAuthStepDefinitions.cs`, `src/Unlimotion.Test/StormBdd/StormStepDefinition.cs` |
+| EXEC | Validation | 0.9 | Нет | Sync artifacts | Нет | Да: пользователь подтвердил SPEC | Build and targeted TUnit suites passed after resolving stale test-host output lock. | build, `StormServerStorageCrudRealtimeExecutableSpecTests`, `StormServerStorageAuthExecutableSpecTests`, `ServerStorageBddContractTests`, `ServerStorageLiveIntegrationTests` |
+| EXEC | `/storm:bdd-sync` и `/storm:bdd-lint` artifact sync | 0.88 | Нет | Финальный hygiene/review | Нет | Да: пользователь подтвердил SPEC | `storm.json` and reports now record `TS-0032`, `SD-0026`, 7/45 step-executable scenarios and remaining gaps. | `docs/product/storm.json`, `docs/product/reports/*.md` |
+| EXEC | Artifact validation и hygiene | 0.92 | Нет | Завершить EXEC | Нет | Да: пользователь подтвердил SPEC | STORM validator passed with 0 errors and the known duplicate Given warning; diff and trailing whitespace hygiene passed. | `docs/product/storm.json`, `docs/product/reports/*.md`, `specs/2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md` |
+| EXEC | Self-review concurrency guard | 0.86 | Нет | Повторить build и `TS-0032` | Нет | Да: пользователь подтвердил SPEC | New executable spec runs live evidence, so it now joins the existing `ServerStorageLiveIntegration` non-parallel group. | `src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs` |
