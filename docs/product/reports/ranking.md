@@ -12,7 +12,7 @@
 4. `CV-0007` выведен из active `/storm:cover` очереди по Варианту B: attachment code остается internal/orphan contract candidate.
 5. Текущих active `/storm:cover` behavior gaps не осталось.
 6. Step-executable scenarios: `SC-0011-001`, `SC-0011-002`, `SC-0014-001`, `SC-0014-002`, `SC-0014-003`, `SC-0015-002`, `SC-0016-001`.
-7. Full-suite validation требует отдельной stabilization track: UI state/order failure закрыт targeted/class evidence, live ServiceStack cleanup process crash закрыт targeted/full-suite evidence, текущий blocker — Windows ACL hardening assertion в `BackupViaGitServiceTests`; также нужно мониторить order-dependent Avalonia Headless dispose risk.
+7. Full-suite validation gate восстановлен: UI state/order failure закрыт targeted/class evidence, live ServiceStack cleanup process crash закрыт targeted/full-suite evidence, Windows ACL hardening blocker закрыт production fix, full `Unlimotion.Test` проходит 563/563 вне sandbox.
 
 ## Ранжированный Backlog
 
@@ -28,4 +28,4 @@
 
 ## Рекомендуемый Следующий Шаг
 
-Подготовить отдельную SPEC на Windows ACL hardening full-suite blocker в `BackupViaGitServiceTests`, чтобы вернуть full-suite как зеленый gate. После этого можно вернуться к Android/iOS `NETSDK1147` blocker или выбрать следующий high-value scenario для executable BDD coverage после product decision.
+Full-suite gate восстановлен. Следующий осмысленный шаг: либо отдельная environment/setup SPEC для Android/iOS build smoke по `NETSDK1147`, либо выбор следующего high-value scenario для executable BDD coverage после product decision. `CV-0007` остается internal/orphan candidate до нового решения.

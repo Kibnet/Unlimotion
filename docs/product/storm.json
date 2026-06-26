@@ -50,11 +50,12 @@
       "BDD executable slice добавлен 2026-06-23: SC-0011-001 исполняется из feature text через repo-local step definitions SD-0022..SD-0025 и TUnit evidence TS-0031.",
       "BDD executable slice добавлен 2026-06-24: SC-0011-002 исполняется из feature text через repo-local step definitions SD-0022..SD-0024 и SD-0026, TUnit evidence TS-0032 и existing TS-0017..TS-0020.",
       "Validation stabilization 2026-06-25: MainControlTreeCommandsUiTests paste hotkey UI failure закрыт test-only focus setup; full-suite validation теперь блокируется отдельным live ServiceStack host cleanup/file watcher issue after 193 passing tests.",
-      "Validation stabilization 2026-06-26: live ServiceStack host cleanup/file watcher process failure закрыт test-only отключением reload-on-change и EventLog provider в live fixture; targeted ServerStorageLiveIntegrationTests и StormServerStorageCrudRealtimeExecutableSpecTests проходят, full-suite теперь завершается обычными test failures по Windows ACL hardening и одному order-dependent Avalonia Headless dispose событию."
+      "Validation stabilization 2026-06-26: live ServiceStack host cleanup/file watcher process failure закрыт test-only отключением reload-on-change и EventLog provider в live fixture; targeted ServerStorageLiveIntegrationTests и StormServerStorageCrudRealtimeExecutableSpecTests проходят, full-suite теперь завершается обычными test failures по Windows ACL hardening и одному order-dependent Avalonia Headless dispose событию.",
+      "Validation stabilization 2026-06-26: Windows ACL hardening full-suite blocker закрыт production fix в BackupViaGitService; targeted ACL tests проходят, MainControlResetFilters targeted risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover validation stabilization / live ServiceStack host cleanup",
+    "last_artifact_command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -3122,6 +3123,11 @@
         {
           "path": "src/Unlimotion.Test/GitBackupJobTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение."
+        },
+        {
+          "path": "src/Unlimotion.Test/BackupViaGitServiceTests.cs",
+          "symbol": "GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows / GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows",
+          "description": "2026-06-26: Windows ACL hardening для configured/generated SSH private key подтвержден targeted evidence и full-suite 563/563."
         }
       ],
       "assumptions": [],
@@ -3129,9 +3135,11 @@
       "trace_method_examples": [
         "PreviewConnectRepository_ChoosesInitialPushForEmptyRemoteAndNonEmptyLocalFolder",
         "Pull_WithDivergedJsonTask_ExposesFieldResolutionOptions",
-        "BuildGitSshCommand_UsesExplicitKeyAndConfiguredKnownHostsFile"
+        "BuildGitSshCommand_UsesExplicitKeyAndConfiguredKnownHostsFile",
+        "GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows",
+        "GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows"
       ],
-      "trace_confidence": 0.78,
+      "trace_confidence": 0.82,
       "linked_scenarios": [
         "SC-0010-001",
         "SC-0010-002",
@@ -4480,6 +4488,11 @@
           "path": "src/Unlimotion/Services/BackupViaGitService.cs",
           "symbol": "Push / Pull / ConnectRepository / ResolveConflictFields",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение."
+        },
+        {
+          "path": "src/Unlimotion/Services/BackupViaGitService.cs",
+          "symbol": "TrySetWindowsPrivateKeyPermissions / GetConfiguredSshPrivateKeyPath",
+          "description": "Configured SSH private key hardening теперь очищает non-whitelisted explicit ACL entries на существующем file security descriptor и сохраняет security constraint для backup credentials."
         }
       ],
       "assumptions": [],
@@ -5305,16 +5318,16 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Подготовить отдельную SPEC на Windows ACL hardening full-suite blocker; отдельно мониторить order-dependent Avalonia Headless dispose risk. После восстановления full-suite gate вернуться к Android/iOS NETSDK1147 или следующему executable BDD scenario после product decision.",
+    "recommended_next_step": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения.",
     "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0011-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-24",
-    "last_cover_command": "/storm:cover validation stabilization / live ServiceStack host cleanup",
+    "last_cover_command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task",
     "coverage_updated_at": "2026-06-26",
-    "last_rank_command": "/storm:rank + /storm:cover validation stabilization",
+    "last_rank_command": "/storm:rank + /storm:cover validation stabilization / Windows ACL hardening full-suite",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact-only",
     "ranking_updated_at": "2026-06-26",
@@ -5332,20 +5345,27 @@
     },
     "last_exec": {
       "updated_at": "2026-06-26",
-      "command": "/storm:cover validation stabilization / live ServiceStack host cleanup",
+      "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
       "mode": "delivery-task",
-      "approved_spec": "specs/2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md",
+      "approved_spec": "specs/2026-06-26-storm-stabilize-backup-acl-full-suite.md",
+      "classification": "регрессия production hardening: configured SSH private key сохранял explicit non-whitelisted ACL entries, потому что RemoveAccessRuleAll не снимал все ACE для SID",
+      "changed_code": [
+        "src/Unlimotion/Services/BackupViaGitService.cs"
+      ],
+      "tests_changed": [],
+      "test_annotations_changed": false,
       "validation": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => passed 2/2",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => passed 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => completed normally with 563 tests discovered, 561 passed, 2 failed; previous ServerContentRoot/EventLogInternal process crash not reproduced; blockers: BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows deterministic ACL assertion, MainControlResetFiltersUiTests.ResetFiltersButton_IsAvailableOnTaskTabs Headless dispose observed in full run but targeted rerun passed 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => failed 1/1 on explicit/inherited BUILTIN\\Users access assertion",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => targeted rerun passed 1/1",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
         "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-        "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
-      ]
+        "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      ],
+      "result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token.",
+      "next_recommended_action": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения."
     }
   },
   "traceability": {
@@ -6530,11 +6550,11 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-24",
-    "command": "/storm:bdd-implement SC-0011-002 executable step definitions",
-    "mode": "delivery-task after approved SPEC",
+    "updated_at": "2026-06-26",
+    "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
+    "mode": "delivery-task после подтвержденной SPEC; изменено production security hardening, tests и test annotations не менялись",
     "annotations_added": false,
-    "tests_changed": true,
+    "tests_changed": false,
     "tests_run": true,
     "summary": {
       "acceptance_criteria_total": 44,
@@ -6958,12 +6978,12 @@
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
       "Решено 2026-06-24: executable BDD slice для SC-0011-002 реализован через SD-0022..SD-0024, SD-0026 и TS-0032.",
       "Решено 2026-06-26: live ServiceStack host cleanup/file watcher process failure закрыт test-only live fixture stabilization; targeted ServerStorageLiveIntegrationTests и StormServerStorageCrudRealtimeExecutableSpecTests проходят.",
-      "Открыто 2026-06-26: full-suite validation теперь блокируется BackupViaGitService Windows ACL hardening assertion; также в full run наблюдался один order-dependent Avalonia Headless dispose failure, который не воспроизводится targeted."
+      "Решено 2026-06-26: full-suite validation gate восстановлен; BackupViaGitService Windows ACL hardening blocker закрыт production fix, targeted Headless reset risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox."
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-26",
-      "command": "/storm:cover validation stabilization / live ServiceStack host cleanup",
-      "mode": "delivery-task",
+      "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
+      "mode": "delivery-task validation stabilization; behavior coverage metrics не изменились",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -6991,21 +7011,21 @@
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
-      "tests_changed": true,
-      "code_changed": false,
+      "tests_changed": false,
+      "code_changed": true,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => passed 2/2",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => passed 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => completed normally with 563 tests discovered, 561 passed, 2 failed; previous ServerContentRoot/EventLogInternal process crash not reproduced",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => failed 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => targeted rerun passed 1/1",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
         "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-        "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
-      ]
+        "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      ],
+      "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token."
     },
     "bdd_sync_summary": {
       "command": "/storm:bdd-sync",
@@ -7022,9 +7042,10 @@
       "known_gaps": [
         "step_definitions_total=26; SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 and SC-0011-002 are step-executable; remaining scenarios still rely on linked TUnit evidence",
         "Android/iOS build smoke remains blocked by NETSDK1147 workload restore state",
-        "CV-0007 remains outside active /storm:cover by product decision Вариант B"
+        "CV-0007 remains outside active /storm:cover by product decision Вариант B",
+        "Full-suite validation gate восстановлен 2026-06-26: Unlimotion.Test прошел 563/563 вне sandbox после Windows ACL hardening fix"
       ],
-      "decision": "SC-0011-002 получил repo-local executable step-definition slice; existing SC-0011-001, ST-0014, ST-0015 and ST-0016 slices preserved."
+      "decision": "SC-0011-002 получил repo-local executable step-definition slice; existing SC-0011-001, ST-0014, ST-0015 and ST-0016 slices preserved. Windows ACL hardening validation blocker закрыт без изменения BDD links."
     },
     "improved_by_delivery_evidence": [
       {
@@ -7082,25 +7103,24 @@
         "reason": "TS-0024 подтверждает Android/browser/iOS project contracts; TS-0026 исполняет SC-0015-002 из feature text через SD-0001..SD-0004; Browser Release build smoke прошел 2026-06-18, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
       }
     ],
-    "code_changed": false,
-    "full_suite_result": "2026-06-26: previous live ServiceStack ServerContentRoot/EventLogInternal process crash is no longer reproduced; full suite completes normally but fails 2 tests: BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows and one order-dependent Avalonia Headless dispose failure in MainControlResetFiltersUiTests.",
-    "targeted_validation_result": "build passed with existing warnings; targeted ServerStorageLiveIntegrationTests passed 2/2; targeted StormServerStorageCrudRealtimeExecutableSpecTests passed 1/1; targeted BackupViaGitService ACL test failed 1/1; targeted MainControlResetFiltersUiTests.ResetFiltersButton_IsAvailableOnTaskTabs passed 1/1.",
-      "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => passed 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => passed 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => completed normally with 563 tests discovered, 561 passed, 2 failed; previous ServerContentRoot/EventLogInternal process crash not reproduced",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => failed 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => targeted rerun passed 1/1",
+    "code_changed": true,
+    "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token.",
+    "targeted_validation_result": "Targeted Windows ACL configured-key test прошел 1/1 вне sandbox; generated-key ACL test прошел 1/1; MainControlResetFilters targeted Headless risk прошел 1/1.",
+    "validation_evidence": [
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
       "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-      "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
     ]
   },
   "ranking_analysis": {
     "updated_at": "2026-06-26",
-    "command": "/storm:rank + /storm:cover validation stabilization",
-    "mode": "delivery sync; ranking не пересчитан полностью, validation blocker актуализирован",
+    "command": "/storm:rank + /storm:cover validation stabilization / Windows ACL hardening full-suite",
+    "mode": "delivery sync; ranking не пересчитан полностью, full-suite blocker закрыт",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
@@ -7140,7 +7160,7 @@
         "recommendation": "Сначала принять platform support policy, затем добавлять smoke coverage."
       }
     ],
-    "next_recommended_action": "Следующий осмысленный шаг: отдельная SPEC на Windows ACL hardening full-suite blocker в BackupViaGitServiceTests; order-dependent Avalonia Headless dispose risk мониторить в этой же stabilization track или выделить отдельной SPEC, если он воспроизведется targeted."
+    "next_recommended_action": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения."
   },
   "gherkin_features": [
     {
@@ -10593,7 +10613,7 @@
         "CN-0005"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "linked_existing_tests; Windows ACL private-key hardening targeted evidence прошло 1/1 и full Unlimotion.Test прошел 563/563 2026-06-26 вне sandbox",
       "linked_tests": [
         "TS-0008",
         "TS-0009"
@@ -10641,6 +10661,11 @@
           "path": "src/Unlimotion.Test/GitBackupJobTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0009"
+        },
+        {
+          "path": "src/Unlimotion.Test/BackupViaGitServiceTests.cs",
+          "symbol": "GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows",
+          "description": "Scenario evidence обновлено: SSH private key credential flow hardens configured private-key ACLs перед возвратом credentials."
         }
       ]
     },
@@ -12722,9 +12747,9 @@
     }
   ],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-24",
-    "command": "/storm:bdd-implement SC-0011-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
-    "mode": "delivery-task",
+    "updated_at": "2026-06-26",
+    "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
+    "mode": "delivery-task validation stabilization; behavior coverage metrics не изменились",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -12752,22 +12777,21 @@
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
-    "tests_changed": true,
-    "code_changed": false,
+    "tests_changed": false,
+    "code_changed": true,
     "test_annotations_changed": false,
     "tests_run": true,
-      "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => passed 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => passed 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => completed normally with 563 tests discovered, 561 passed, 2 failed; previous ServerContentRoot/EventLogInternal process crash not reproduced",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => failed 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => targeted rerun passed 1/1",
+    "validation_evidence": [
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
       "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-      "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
     ],
-    "full_suite_result": "2026-06-26: previous live ServiceStack ServerContentRoot/EventLogInternal process crash is no longer reproduced; full suite completes normally but fails 2 tests: BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows and one order-dependent Avalonia Headless dispose failure in MainControlResetFiltersUiTests."
+    "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token."
   },
   "bdd_sync": {
     "updated_at": "2026-06-24",

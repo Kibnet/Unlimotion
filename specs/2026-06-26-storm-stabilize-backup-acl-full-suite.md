@@ -228,3 +228,46 @@ rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-26-storm-stabiliz
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Выбор следующего blocker | 0.9 | Нет | Создать SPEC | Нет | Нет | ServiceStack cleanup process crash закрыт; full-suite теперь блокируется Windows ACL hardening test. | `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`, full-suite log |
 | SPEC | Подготовка SPEC и review | 0.88 | Нет | Запросить подтверждение пользователя | Да | Нет | Fix may touch test/security validation behavior, so QUEST approval is required. | `specs/2026-06-26-storm-stabilize-backup-acl-full-suite.md` |
+| EXEC | Диагностика ACL blocker | 0.9 | Нет | Исправить production hardening | Нет | Да, SPEC подтверждена пользователем | Evidence показал регрессию production hardening: configured SSH private key сохранял explicit `BUILTIN\Users` ACE; попытка fresh `FileSecurity` падала `UnauthorizedAccessException` и проглатывалась. | `src/Unlimotion/Services/BackupViaGitService.cs`, `src/Unlimotion.Test/BackupViaGitServiceTests.cs` |
+| EXEC | Валидация и artifact sync | 0.92 | Нет | Post-EXEC review | Нет | Нет | Targeted ACL, Headless risk и full-suite прошли; STORM reports синхронизированы без изменения tests/test annotations. | `docs/product/storm.json`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`, `docs/product/reports/traceability.md`, `docs/product/reports/bdd-sync.md`, `docs/product/reports/stories.md` |
+
+## 21. Post-EXEC Result
+
+Статус: PASS.
+
+Причина:
+- `BackupViaGitService` корректно hardened generated SSH private keys, но configured SSH private key path мог сохранить explicit ACE для non-whitelisted SID.
+- `RemoveAccessRuleAll(rule)` не гарантировал удаление всех ACE для этого SID в текущем descriptor.
+- Подход с новым `FileSecurity()` был отвергнут после диагностики: применение fresh descriptor на существующий файл падало `UnauthorizedAccessException`, а внешний `TrySetPrivateKeyPermissions` по контракту проглатывал исключение и оставлял старый ACL.
+- Отдельно зафиксировано: targeted ACL test внутри sandbox может давать false-negative из-за ограниченного Windows ACL token; валидный сигнал для этого security check получен вне sandbox.
+
+Изменение:
+- `TrySetWindowsPrivateKeyPermissions` снова работает с существующим file security descriptor.
+- Non-whitelisted explicit ACL entries удаляются через `PurgeAccessRules(identity)`.
+- После очистки выставляются explicit full-control rules для current user, `LOCAL_SYSTEM` и `BUILTIN\Administrators`.
+- Добавлены `[SupportedOSPlatform("windows")]` annotations для Windows-only ACL helper methods, чтобы не раздувать CA1416 warnings.
+- Tests и test annotations не менялись.
+
+Валидация:
+
+| Проверка | Результат |
+| --- | --- |
+| `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore` | PASS, только существующие warnings |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows" --output Detailed` | PASS 1/1 вне sandbox |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows" --output Detailed` | PASS 1/1 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs" --output Detailed` | PASS 1/1 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed` | PASS 563/563 вне sandbox |
+
+Синхронизация артефактов:
+- `docs/product/storm.json`: обновлены validation evidence, `last_exec`, `TS-0009`, `CU-0009`, `SC-0010-002`, full-suite status и recommended next step.
+- `docs/product/reports/coverage.md`: full-suite blocker закрыт, metrics оставлены без пересчета, потому что scenarios/AC/test links не менялись.
+- `docs/product/reports/ranking.md`: следующий шаг обновлен с ACL stabilization на следующий `/storm:cover` gap.
+- `docs/product/reports/traceability.md`, `bdd-sync.md`, `stories.md`: stale full-suite risk wording заменен текущим green gate evidence.
+
+Оставшиеся риски:
+- Android/iOS build smoke остается environment/setup gap из-за `NETSDK1147`.
+- Step definitions покрывают 7/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.
+- `CV-0007` остается internal/orphan candidate до нового product decision.
+
+Рекомендуемый следующий шаг:
+- Для продолжения `/storm:cover`: подготовить отдельную environment/setup SPEC для Android/iOS build smoke по `NETSDK1147` или выбрать следующий high-value scenario для executable BDD coverage после product decision.

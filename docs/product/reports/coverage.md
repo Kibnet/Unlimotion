@@ -1,8 +1,8 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-06-26
-Команда: `/storm:cover validation stabilization / live ServiceStack host cleanup`
-Режим: `delivery-task` после подтвержденной SPEC; production code, `.feature` wording и test annotations не менялись
+Команда: `/storm:cover validation stabilization / Windows ACL hardening full-suite`
+Режим: `delivery-task` после подтвержденной SPEC; production security hardening изменен, tests, `.feature` wording и test annotations не менялись
 
 ## Область
 
@@ -12,7 +12,7 @@
 
 Acceptance criteria не заменялись на Gherkin. Существующие stories, tests, conflicts, dependencies и решение по `CV-0007` сохранены.
 
-Эта validation-итерация не меняла behavior coverage metrics: live ServiceStack host fixture получил test-only stabilization против cleanup-time `ServerContentRoot` file watcher / Windows EventLog provider process failure. Targeted live evidence осталось зеленым, а full-suite теперь завершается обычными test failures: deterministic Windows ACL hardening assertion и один order-dependent Avalonia Headless dispose failure, который targeted не воспроизводится.
+Эта validation-итерация не меняла behavior coverage metrics: сценарии, Gherkin rules, step definitions и Scenario -> Test links не добавлялись. Закрыт full-suite blocker в Windows ACL hardening для configured SSH private key: production hardening теперь очищает non-whitelisted explicit ACL entries через `PurgeAccessRules` на существующем security descriptor и отключает наследование. Targeted ACL tests проходят, targeted Headless reset risk проходит, full `Unlimotion.Test` проходит 563/563 вне sandbox.
 
 ## Сводка
 
@@ -96,9 +96,14 @@ Acceptance criteria не заменялись на Gherkin. Существующ
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed` | 2026-06-26 full-suite completed normally: 563 total, 561 passed, 2 failed; previous `ServerContentRoot`/`EventLogInternal` process crash not reproduced |
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows" --output Detailed` | 2026-06-26 failed 1/1: `BUILTIN\Users` ACL assertion remains true when inherited rules are included |
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs" --output Detailed` | 2026-06-26 targeted rerun passed 1/1; full-suite Headless dispose failure is order-dependent |
+| `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore` | 2026-06-26 прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows" --output Detailed` | 2026-06-26 прошло 1/1 вне sandbox с реальным Windows ACL token |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows" --output Detailed` | 2026-06-26 прошло 1/1 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs" --output Detailed` | 2026-06-26 прошло 1/1 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed` | 2026-06-26 full-suite прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены |
 | `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | 2026-06-26 OK: 0 errors, 1 warning по intentional shared Given step text |
 | `git diff --check` | 2026-06-26 passed; only LF-to-CRLF working-copy warnings |
-| `rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md specs\2026-06-26-storm-stabilize-backup-acl-full-suite.md` | 2026-06-26 no matches (`rg` exit 1) |
+| `rg -n "[ \t]+$" src\Unlimotion src\Unlimotion.Test docs\product specs\2026-06-26-storm-stabilize-backup-acl-full-suite.md` | 2026-06-26 no matches (`rg` exit 1) |
 | `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 1 warning по intentional shared Given step text |
 | `git diff --check` | passed; only LF-to-CRLF working-copy warnings |
 | `rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md` | no matches (`rg` exit 1) |
@@ -107,9 +112,9 @@ Acceptance criteria не заменялись на Gherkin. Существующ
 
 1. Step definitions покрывают `SC-0011-001`, `SC-0011-002`, `SC-0015-002`, `SC-0014-002`, `SC-0014-001`, `SC-0014-003` и `SC-0016-001`: остальные scenarios пока rely on linked TUnit evidence.
 2. Android/iOS build smoke требует отдельной environment/setup task из-за `NETSDK1147`; runtime smoke и release pipeline evidence не заявлены.
-3. Full-suite validation остается risk, но причина сменилась: live ServiceStack cleanup process crash закрыт targeted/full-suite evidence, а текущий full-suite run блокируется `BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows`; дополнительно в одном full run наблюдался order-dependent Avalonia Headless dispose failure, который targeted не воспроизводится.
+3. Full-suite validation gate восстановлен: текущий full `Unlimotion.Test` проходит 563/563 вне sandbox; ACL false-negative внутри sandbox не используется как product validation signal.
 4. `CV-0007` не является active cover gap после Варианта B.
 
 ## Рекомендуемый Следующий Шаг
 
-Следующий осмысленный шаг для продолжения `/storm:cover`: отдельная SPEC на Windows ACL hardening full-suite blocker в `BackupViaGitServiceTests`, с мониторингом order-dependent Avalonia Headless dispose risk. После восстановления full-suite gate можно вернуться к Android/iOS `NETSDK1147` или выбрать следующий ranked scenario для executable BDD coverage после product decision.
+Следующий осмысленный шаг для продолжения `/storm:cover`: либо отдельная environment/setup SPEC для Android/iOS build smoke по `NETSDK1147`, либо выбор следующего high-value scenario для executable BDD coverage после product decision. `CV-0007` остается internal/orphan candidate до нового решения.

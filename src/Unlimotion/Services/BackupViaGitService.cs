@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -2272,6 +2273,7 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
+    [SupportedOSPlatform("windows")]
     private static void TrySetWindowsPrivateKeyPermissions(string privateKeyPath)
     {
         var currentUserSid = WindowsIdentity.GetCurrent().User;
@@ -2301,7 +2303,7 @@ public class BackupViaGitService : IRemoteBackupService
             if (rule.IdentityReference is SecurityIdentifier identity &&
                 !allowedSidValues.Contains(identity.Value))
             {
-                security.RemoveAccessRuleAll(rule);
+                security.PurgeAccessRules(identity);
             }
         }
 
@@ -2320,6 +2322,7 @@ public class BackupViaGitService : IRemoteBackupService
         fileInfo.SetAccessControl(security);
     }
 
+    [SupportedOSPlatform("windows")]
     private static FileSystemAccessRule CreatePrivateKeyAccessRule(IdentityReference identity) =>
         new(
             identity,

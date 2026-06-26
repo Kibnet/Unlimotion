@@ -27,5 +27,5 @@
 | ST-0011 / AC-0033 | Нет BDD-execution gap; `SC-0011-002` step-executable. | Поддерживать `TS-0017..TS-0020` и `TS-0032` при изменениях server-storage CRUD/SignalR flow. |
 | ST-0015 / AC-0042 | Android/iOS build smoke заблокированы `NETSDK1147`; Browser build smoke не равен runtime/release evidence. | Отдельная environment/setup SPEC при необходимости Android/iOS build evidence; отдельная runtime/release SPEC при необходимости release support claims. |
 | BDD execution | Step definitions покрывают 7/45 scenarios. | Расширять executable step definitions отдельными SPEC по high-value scenarios; не создавать placeholder steps массово. |
-| Full-suite validation | Previous full-suite validation had unrelated UI test risk; targeted server-storage checks passed. | Отдельная stabilization SPEC, если нужно закрыть full-suite risk. |
+| Full-suite validation | Full-suite gate восстановлен: `Unlimotion.Test` проходит 563/563 вне sandbox после Windows ACL hardening fix. | Использовать как validation gate для следующих `/storm:cover` delivery tasks; sandbox ACL false-negative не считать product signal. |
 | CV-0007 | Нет active story gap после Варианта B. | Future revisit only after new product decision. |

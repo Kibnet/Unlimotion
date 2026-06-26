@@ -35,7 +35,7 @@
 | step_definitions | Step definitions есть для seven selected slices; repo-local runner intentionally covers selected scenarios only. | Расширять по отдельным high-value scenarios, не генерировать placeholders. |
 | Android/iOS build smoke | Локальная среда останавливает Debug build на `NETSDK1147` и предлагает `dotnet workload restore` для `wasm-tools`. | Отдельная environment/setup task; не менять tests/code в текущем BDD slice. |
 | Runtime/release smoke | Browser build smoke не равен runtime launch/release pipeline evidence. | Отдельная platform runtime/release SPEC, если нужны release support claims. |
-| Full-suite validation | Предыдущая full-suite проверка имела unrelated UI state/order risk; targeted server-storage checks прошли. | Отдельная stabilization SPEC, если нужно закрыть full-suite risk. |
+| Full-suite validation | Full-suite gate восстановлен 2026-06-26: Windows ACL hardening blocker закрыт production fix, targeted reset risk проходит, full `Unlimotion.Test` проходит 563/563 вне sandbox. | Продолжать `/storm:cover` по следующему product/environment gap, не по full-suite stabilization. |
 | CV-0007 | Вариант B сохраняет attachment code как internal/orphan contract candidate. | Future revisit only after new product decision. |
 
 ## Decision Sync

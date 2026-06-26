@@ -38,4 +38,4 @@
 
 `SC-0011-001` и `SC-0011-002` больше не имеют BDD-execution gap: server-storage auth и CRUD/SignalR scenarios связаны с `TS-0031`, `TS-0032` и step definitions `SD-0022..SD-0026`. `CV-0003`, `CV-0004`, `CV-0005` и `CV-0006` сохраняют ранее созданный executable BDD trace.
 
-Оставшиеся non-cover gaps: step definitions покрывают 7/45 scenarios, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, runtime/release evidence не заявляется, а full-suite validation имеет отдельный UI state/order risk.
+Оставшиеся non-cover gaps: step definitions покрывают 7/45 scenarios, Android/iOS требуют отдельной environment/setup task из-за `NETSDK1147`, runtime/release evidence не заявляется. Full-suite validation gate восстановлен 2026-06-26: `Unlimotion.Test` проходит 563/563 вне sandbox.
