@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Session;
 using ServiceStack;
@@ -310,11 +311,15 @@ internal static class ServerStorageCrudRealtimeContract
                 Path.Combine(tempRoot, "RavenDBLicense.json"));
             string url = $"http://127.0.0.1:{GetFreeTcpPort()}";
 
-            var host = Host.CreateDefaultBuilder([])
+            var host = Host.CreateDefaultBuilder(["--hostBuilder:reloadConfigOnChange=false"])
                 .UseEnvironment("Development")
+                .ConfigureLogging(logging => logging.ClearProviders())
                 .ConfigureAppConfiguration((_, builder) =>
                 {
-                    builder.AddJsonFile(Path.Combine(contentRoot, "appsettings.json"), optional: false);
+                    builder.AddJsonFile(
+                        Path.Combine(contentRoot, "appsettings.json"),
+                        optional: false,
+                        reloadOnChange: false);
                     builder.AddInMemoryCollection(new[]
                     {
                         new KeyValuePair<string, string?>("RavenDb:DatabaseRecord:DatabaseName", $"UnlimotionLiveTest_{Guid.NewGuid():N}"),

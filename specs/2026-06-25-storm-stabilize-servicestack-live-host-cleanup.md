@@ -231,11 +231,25 @@ rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-25-storm-stabiliz
 
 ## Approval
 
-Ожидается фраза: `Спеку подтверждаю`
+Получено подтверждение: `Спеку подтверждаю`.
 
-## 20. Журнал действий агента
+## 20. Post-EXEC Review
+
+- Статус: PASS для scope ServiceStack cleanup.
+- Реализовано: `ServerStorageLiveIntegrationFixture` отключает reload-on-change для test host и очищает default logging providers, чтобы cleanup-time file watcher/EventLog provider не ломал process exit после успешных live assertions.
+- Product behavior: не менялось.
+- `.feature` wording, acceptance criteria и test annotations: не менялись.
+- Targeted live evidence:
+  - `ServerStorageLiveIntegrationTests` прошло 2/2.
+  - `StormServerStorageCrudRealtimeExecutableSpecTests` прошло 1/1.
+- Full-suite evidence: `Unlimotion.Test` теперь завершается штатным test summary, прежний `ServerContentRoot` / `EventLogInternal` process crash не воспроизводится.
+- Residual blocker: full-suite падает 2 тестами: deterministic `BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows` и один order-dependent `MainControlResetFiltersUiTests.ResetFiltersButton_IsAvailableOnTaskTabs` Headless dispose failure, который targeted проходит 1/1.
+- Decision: отдельная SPEC подготовлена для Windows ACL hardening blocker: `specs/2026-06-26-storm-stabilize-backup-acl-full-suite.md`.
+
+## 21. Журнал действий агента
 
 | Фаза (SPEC/EXEC) | Тип намерения/сценария | Уверенность в решении (0.0-1.0) | Каких данных не хватает | Следующее действие | Нужна ли передача управления/решения человеку | Было ли фактическое обращение к человеку / решение человека | Короткое объяснение выбора | Затронутые артефакты/файлы |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Выбор следующего blocker | 0.9 | Нет | Создать SPEC | Нет | Нет | UI state/order failure закрыт targeted/class evidence; full-suite blocker теперь live ServiceStack cleanup. | `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`, full-suite log |
 | SPEC | Подготовка SPEC и review | 0.88 | Нет | Запросить подтверждение пользователя | Да | Нет | Fix may touch test infrastructure and full-suite behavior, so QUEST approval is required. | `specs/2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md` |
+| EXEC | ServiceStack cleanup fix | 0.86 | Нет | Sync artifacts and prepare next SPEC | Нет | Да | Targeted live tests pass; full-suite no longer crashes on cleanup and now exposes a different ACL blocker. | `src/Unlimotion.Test/ServerStorageCrudRealtimeContract.cs`, `docs/product/storm.json`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md` |

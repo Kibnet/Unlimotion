@@ -1,6 +1,6 @@
 # STORM Ранжирование С Учётом Зависимостей
 
-Сгенерировано: 2026-06-25
+Сгенерировано: 2026-06-26
 Команда: `/storm:rank` + `/storm:cover validation stabilization`
 Режим: delivery sync; ranking не пересчитан полностью, validation blocker актуализирован
 
@@ -12,7 +12,7 @@
 4. `CV-0007` выведен из active `/storm:cover` очереди по Варианту B: attachment code остается internal/orphan contract candidate.
 5. Текущих active `/storm:cover` behavior gaps не осталось.
 6. Step-executable scenarios: `SC-0011-001`, `SC-0011-002`, `SC-0014-001`, `SC-0014-002`, `SC-0014-003`, `SC-0015-002`, `SC-0016-001`.
-7. Full-suite validation требует отдельной stabilization track: UI state/order failure закрыт targeted/class evidence, текущий blocker — live ServiceStack host cleanup/file watcher failure after 193 passing tests.
+7. Full-suite validation требует отдельной stabilization track: UI state/order failure закрыт targeted/class evidence, live ServiceStack cleanup process crash закрыт targeted/full-suite evidence, текущий blocker — Windows ACL hardening assertion в `BackupViaGitServiceTests`; также нужно мониторить order-dependent Avalonia Headless dispose risk.
 
 ## Ранжированный Backlog
 
@@ -28,4 +28,4 @@
 
 ## Рекомендуемый Следующий Шаг
 
-Подготовить отдельную SPEC на live ServiceStack host cleanup/file watcher stabilization, чтобы вернуть full-suite как зеленый gate. После этого можно вернуться к Android/iOS `NETSDK1147` blocker или выбрать следующий high-value scenario для executable BDD coverage после product decision.
+Подготовить отдельную SPEC на Windows ACL hardening full-suite blocker в `BackupViaGitServiceTests`, чтобы вернуть full-suite как зеленый gate. После этого можно вернуться к Android/iOS `NETSDK1147` blocker или выбрать следующий high-value scenario для executable BDD coverage после product decision.
