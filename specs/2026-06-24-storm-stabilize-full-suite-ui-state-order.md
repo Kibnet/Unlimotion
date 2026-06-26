@@ -245,9 +245,19 @@ Full-suite command may be stopped and converted to a separate infrastructure SPE
   - Stop decision: wait for `Спеку подтверждаю`.
 - Residual risks: failure may not reproduce; full-suite run may be slow or expose a different unrelated failure.
 
+### Post-EXEC Review
+- Статус: PASS WITH SEPARATE BLOCKER
+- Scope reviewed: `MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask`, `MainControlTreeCommandsUiTests` class-level run, full `Unlimotion.Test` run, targeted server-storage live runs, `docs/product/storm.json`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`.
+- Изменение: test-only focus setup перед `Ctrl+Shift+V` после подтверждённого выбора parent в `AllTasksTree`; production code, `.feature` wording and test annotations не менялись.
+- Root-cause classification: исходный UI test failure оказался test isolation/headless focus setup issue. После явного фокуса активного дерева isolated target прошёл 1/1, containing class прошёл 43/43.
+- Full-suite status: прежний UI assertion не воспроизвёлся; full suite остановился отдельным process failure после 193 passing tests, 0 failed assertions, exit `-532462766`. Evidence указывает на live ServiceStack host cleanup/file watcher issue: `ServerContentRoot` уже удалён, unobserved exception логируется через disposed `EventLogInternal`.
+- Targeted server-storage evidence после blocker: `ServerStorageLiveIntegrationTests` прошёл 2/2; `StormServerStorageCrudRealtimeExecutableSpecTests` прошёл 1/1.
+- Stop decision: не исправлять live ServiceStack cleanup в этой SPEC; оформить отдельную QUEST SPEC.
+- Residual risk: full `Unlimotion.Test` пока не является зелёным gate из-за отдельного live host cleanup blocker.
+
 ## Approval
 
-Ожидается фраза: `Спеку подтверждаю`
+Подтверждено пользователем фразой: `Спеку подтверждаю`
 
 ## 20. Журнал действий агента
 
@@ -256,3 +266,6 @@ Full-suite command may be stopped and converted to a separate infrastructure SPE
 | SPEC | Проверка состояния после коммита | 0.98 | Нет | Выбрать следующий SPEC-кандидат | Нет | Нет | Worktree clean after `6d56945`; reports show no active cover gaps and one validation stabilization risk. | `git status`, `git log`, `docs/product/reports/*.md` |
 | SPEC | Выбор stabilization follow-up | 0.84 | Exact full-suite failure log not retained beyond report summary | Создать SPEC | Нет | Нет | Full-suite reliability is a cross-cutting prerequisite for future STORM delivery confidence. | `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md`, `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` |
 | SPEC | Подготовка SPEC и review | 0.9 | Нет | Запросить подтверждение пользователя | Да | Нет | Changes may touch UI tests or product behavior, so QUEST approval is required. | `specs/2026-06-24-storm-stabilize-full-suite-ui-state-order.md` |
+| EXEC | Baseline и targeted reproduction | 0.86 | Нет | Внести минимальный test-only fix | Нет | Да: пользователь подтвердил SPEC | Isolated target initially reproduced `pasted=false`, so full-suite-only assumption was stale; business-level ViewModel paste separately passed. | `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs`, TUnit output |
+| EXEC | Test-only focus stabilization | 0.9 | Нет | Запустить class-level validation | Нет | Да: пользователь подтвердил SPEC | Explicit `AllTasksTree.Focus()` removes headless focus ambiguity after text input focus while preserving selected-parent paste contract. | `src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs` |
+| EXEC | Validation и blocker classification | 0.88 | Full-suite live cleanup root cause needs separate scope | Обновить STORM artifacts and propose next SPEC | Да для следующего blocker | Нет, next SPEC pending | UI target and class pass; full suite fails with separate ServiceStack/EventLogInternal cleanup process failure after 193 passing tests. | `docs/product/storm.json`, `docs/product/reports/coverage.md`, `docs/product/reports/ranking.md` |

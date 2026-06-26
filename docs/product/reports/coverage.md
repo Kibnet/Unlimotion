@@ -1,7 +1,7 @@
 # STORM Coverage Analysis
 
-Сгенерировано: 2026-06-24
-Команда: `/storm:bdd-implement SC-0011-002 executable step definitions`
+Сгенерировано: 2026-06-25
+Команда: `/storm:cover validation stabilization / full-suite UI state-order`
 Режим: `delivery-task` после подтвержденной SPEC; production code, `.feature` wording и test annotations не менялись
 
 ## Область
@@ -11,6 +11,8 @@
 Ранее реализованные slices `SC-0011-001 -> SD-0022..SD-0025 -> TS-0031`, `SC-0015-002 -> SD-0001..SD-0004 -> TS-0026`, `SC-0014-002 -> SD-0005..SD-0008 -> TS-0027`, `SC-0014-001 -> SD-0009..SD-0012 -> TS-0028`, `SC-0014-003 -> SD-0013..SD-0016 -> TS-0029` и `SC-0016-001 -> SD-0017..SD-0021 -> TS-0030` сохранены.
 
 Acceptance criteria не заменялись на Gherkin. Существующие stories, tests, conflicts, dependencies и решение по `CV-0007` сохранены.
+
+Эта validation-итерация не меняла behavior coverage metrics: исправлен test-only focus setup в `TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask`, чтобы headless hotkey проверял paste under selected task после явного фокуса активного дерева. Предыдущий UI full-suite failure больше не воспроизводится в targeted/class scope; full-suite gate теперь блокируется отдельным live ServiceStack cleanup issue.
 
 ## Сводка
 
@@ -82,17 +84,23 @@ Acceptance criteria не заменялись на Gherkin. Существующ
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/StormServerStorageAuthExecutableSpecTests/*" --output Detailed` | прошло 1/1 |
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageBddContractTests/*" --output Detailed` | прошло 7/7 |
 | `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageLiveIntegrationTests/*" --output Detailed` | прошло 2/2 |
+| `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore` | прошло с существующими warnings |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask" --output Detailed` | initial isolated run failed on `pasted=false`; after test-only focus setup and rebuild passed 1/1 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/MainControlTreeCommandsUiTests/*" --output Detailed` | прошло 43/43 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed` | process failed after 193 passing tests, 0 failed assertions, exit `-532462766`; blocker: unobserved ServiceStack/FileSystemWatcher cleanup exception logs through disposed `EventLogInternal` after `LiveServiceStackTaskApiNarrowTest` |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/ServerStorageLiveIntegrationTests/*" --output Detailed` | targeted rerun after full-suite blocker passed 2/2 |
+| `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter "/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*" --output Detailed` | targeted rerun after full-suite blocker passed 1/1 |
 | `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 1 warning по intentional shared Given step text |
 | `git diff --check` | passed; only LF-to-CRLF working-copy warnings |
-| `rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md` | no matches |
+| `rg -n "[ \t]+$" src\Unlimotion.Test docs\product specs\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md` | no matches (`rg` exit 1) |
 
 ## Оставшиеся Gaps
 
 1. Step definitions покрывают `SC-0011-001`, `SC-0011-002`, `SC-0015-002`, `SC-0014-002`, `SC-0014-001`, `SC-0014-003` и `SC-0016-001`: остальные scenarios пока rely on linked TUnit evidence.
 2. Android/iOS build smoke требует отдельной environment/setup task из-за `NETSDK1147`; runtime smoke и release pipeline evidence не заявлены.
-3. Full-suite validation остается risk из предыдущей итерации: один unrelated UI test failed in full-suite context, but passed in isolation; sequential full rerun timed out.
+3. Full-suite validation остается risk, но причина сменилась: UI state/order failure стабилизирован targeted/class evidence, а текущий full-suite run заблокирован live ServiceStack host cleanup issue после 193 passing tests (`ServerContentRoot` file watcher + disposed `EventLogInternal`). Targeted `ServerStorageLiveIntegrationTests` и `StormServerStorageCrudRealtimeExecutableSpecTests` проходят отдельно.
 4. `CV-0007` не является active cover gap после Варианта B.
 
 ## Рекомендуемый Следующий Шаг
 
-Следующий осмысленный шаг для продолжения `/storm:cover`: отдельная SPEC на environment/setup для Android/iOS `NETSDK1147` blocker, stabilization SPEC для full-suite UI state/order failure, либо выбор следующего ranked scenario для executable BDD coverage после product decision.
+Следующий осмысленный шаг для продолжения `/storm:cover`: отдельная SPEC на стабилизацию live ServiceStack host cleanup/file watcher blocker, чтобы full-suite снова мог быть зеленым gate. После этого можно вернуться к Android/iOS `NETSDK1147` или выбрать следующий ranked scenario для executable BDD coverage после product decision.

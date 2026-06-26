@@ -4,7 +4,7 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-24",
+    "updated_at": "2026-06-25",
     "generated_by": "Codex /storm:bootstrap",
     "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
@@ -48,11 +48,12 @@
       "BDD executable slice добавлен 2026-06-19: SC-0014-003 исполняется из feature text через repo-local step definitions SD-0013..SD-0016 и TUnit evidence TS-0029.",
       "BDD executable slice добавлен 2026-06-19: SC-0016-001 исполняется из feature text через repo-local step definitions SD-0017..SD-0021 и TUnit evidence TS-0030.",
       "BDD executable slice добавлен 2026-06-23: SC-0011-001 исполняется из feature text через repo-local step definitions SD-0022..SD-0025 и TUnit evidence TS-0031.",
-      "BDD executable slice добавлен 2026-06-24: SC-0011-002 исполняется из feature text через repo-local step definitions SD-0022..SD-0024 и SD-0026, TUnit evidence TS-0032 и existing TS-0017..TS-0020."
+      "BDD executable slice добавлен 2026-06-24: SC-0011-002 исполняется из feature text через repo-local step definitions SD-0022..SD-0024 и SD-0026, TUnit evidence TS-0032 и existing TS-0017..TS-0020.",
+      "Validation stabilization 2026-06-25: MainControlTreeCommandsUiTests paste hotkey UI failure закрыт test-only focus setup; full-suite validation теперь блокируется отдельным live ServiceStack host cleanup/file watcher issue after 193 passing tests."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0011-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+    "last_artifact_command": "/storm:cover validation stabilization / full-suite UI state-order",
     "last_artifact_mode": "delivery-task"
   },
   "vision": {
@@ -5286,19 +5287,19 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Подготовить отдельную SPEC на Android/iOS NETSDK1147 environment/setup, full-suite UI state/order stabilization, либо следующий high-value executable BDD scenario после product decision.",
+    "recommended_next_step": "Подготовить отдельную SPEC на live ServiceStack host cleanup/file watcher stabilization, чтобы full-suite снова мог быть зеленым gate; после этого вернуться к Android/iOS NETSDK1147 или следующему executable BDD scenario после product decision.",
     "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0011-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-24",
-    "last_cover_command": "/storm:bdd-implement SC-0011-002 executable step definitions",
+    "last_cover_command": "/storm:cover validation stabilization / full-suite UI state-order",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task",
-    "coverage_updated_at": "2026-06-24",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0011-002 executable step definitions",
+    "coverage_updated_at": "2026-06-25",
+    "last_rank_command": "/storm:rank + /storm:cover validation stabilization",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact-only",
-    "ranking_updated_at": "2026-06-24",
+    "ranking_updated_at": "2026-06-25",
     "bdd_sync": {
       "updated_at": "2026-06-24",
       "command": "/storm:bdd-sync",
@@ -5312,21 +5313,20 @@
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
-      "updated_at": "2026-06-24",
-      "command": "/storm:bdd-implement SC-0011-002 executable step definitions",
+      "updated_at": "2026-06-25",
+      "command": "/storm:cover validation stabilization / full-suite UI state-order",
       "mode": "delivery-task",
-      "approved_spec": "specs/2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md",
+      "approved_spec": "specs/2026-06-24-storm-stabilize-full-suite-ui-state-order.md",
       "validation": [
-        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => passed after stopping stale Unlimotion.Test host",
-        "StormServerStorageCrudRealtimeExecutableSpecTests => passed 1/1",
-        "StormServerStorageAuthExecutableSpecTests => passed 1/1",
-        "ServerStorageBddContractTests => passed 7/7",
-        "ServerStorageLiveIntegrationTests => passed 2/2",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => initial isolated run failed on pasted=false; after test-only focus setup and rebuild passed 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/*\" --output Detailed => passed 43/43",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => process failed after 193 passing tests, 0 failed assertions, exit -532462766; blocker: live ServiceStack host cleanup/file watcher unobserved exception logs through disposed EventLogInternal",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => targeted rerun passed 2/2",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => targeted rerun passed 1/1",
         "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
         "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md => no matches",
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => rerun after TS-0032 NotInParallel annotation passed with existing warnings",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => rerun after TS-0032 NotInParallel annotation passed 1/1"
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md => no matches (rg exit 1)"
       ]
     }
   },
@@ -6938,11 +6938,12 @@
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
-      "Решено 2026-06-24: executable BDD slice для SC-0011-002 реализован через SD-0022..SD-0024, SD-0026 и TS-0032."
+      "Решено 2026-06-24: executable BDD slice для SC-0011-002 реализован через SD-0022..SD-0024, SD-0026 и TS-0032.",
+      "Открыто 2026-06-25: full-suite validation блокируется live ServiceStack host cleanup/file watcher issue после 193 passing tests; targeted ServerStorageLiveIntegrationTests и StormServerStorageCrudRealtimeExecutableSpecTests проходят отдельно."
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-24",
-      "command": "/storm:bdd-implement SC-0011-002 executable step definitions + /storm:bdd-sync + /storm:bdd-lint",
+      "updated_at": "2026-06-25",
+      "command": "/storm:cover validation stabilization / full-suite UI state-order",
       "mode": "delivery-task",
       "features_total": 16,
       "rules_total": 44,
@@ -6976,16 +6977,15 @@
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => first attempt failed because stale Unlimotion.Test (33028) locked output DLLs; stale test host stopped; rerun passed with existing warnings",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageBddContractTests/*\" --output Detailed => прошло 7/7",
-        "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => прошло 2/2",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => initial isolated run failed on pasted=false; after test-only focus setup and rebuild passed 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/*\" --output Detailed => passed 43/43",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => process failed after 193 passing tests, 0 failed assertions, exit -532462766; blocker: live ServiceStack host cleanup/file watcher unobserved exception logs through disposed EventLogInternal",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => targeted rerun passed 2/2",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => targeted rerun passed 1/1",
         "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
         "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md => no matches",
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => rerun after TS-0032 NotInParallel annotation passed with existing warnings",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => rerun after TS-0032 NotInParallel annotation passed 1/1"
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md => no matches (rg exit 1)"
       ]
     },
     "bdd_sync_summary": {
@@ -7064,25 +7064,24 @@
       }
     ],
     "code_changed": false,
-    "full_suite_result": "not rerun in this EXEC; previous full-suite risk remains unrelated MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask full-suite-order failure while targeted server-storage checks passed.",
-    "targeted_validation_result": "build passed after stopping stale Unlimotion.Test host; StormServerStorageCrudRealtimeExecutableSpecTests passed 1/1; StormServerStorageAuthExecutableSpecTests passed 1/1; ServerStorageBddContractTests passed 7/7; ServerStorageLiveIntegrationTests passed 2/2",
+    "full_suite_result": "2026-06-25: previous MainControlTreeCommandsUiTests paste hotkey UI failure stabilized in isolated and class-level runs; full suite no longer reports that UI assertion but process fails after 193 passing tests with live ServiceStack host cleanup/file watcher unobserved exception and disposed EventLogInternal logger.",
+    "targeted_validation_result": "build passed with existing warnings; MainControlTreeCommandsUiTests paste hotkey test passed 1/1 after test-only focus setup; MainControlTreeCommandsUiTests passed 43/43; targeted ServerStorageLiveIntegrationTests passed 2/2; targeted StormServerStorageCrudRealtimeExecutableSpecTests passed 1/1",
     "validation_evidence": [
-      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => first attempt failed because stale Unlimotion.Test (33028) locked output DLLs; stale test host stopped; rerun passed with existing warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageBddContractTests/*\" --output Detailed => прошло 7/7",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => прошло 2/2",
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => initial isolated run failed on pasted=false; after test-only focus setup and rebuild passed 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/*\" --output Detailed => passed 43/43",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => process failed after 193 passing tests, 0 failed assertions, exit -532462766; blocker: live ServiceStack host cleanup/file watcher unobserved exception logs through disposed EventLogInternal",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => targeted rerun passed 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => targeted rerun passed 1/1",
       "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
       "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md => no matches",
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => rerun after TS-0032 NotInParallel annotation passed with existing warnings",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => rerun after TS-0032 NotInParallel annotation passed 1/1"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md => no matches (rg exit 1)"
     ]
   },
   "ranking_analysis": {
-    "updated_at": "2026-06-24",
-    "command": "/storm:rank + /storm:bdd-implement SC-0011-002 executable step definitions",
-    "mode": "delivery sync; ranking не пересчитан полностью, executable BDD evidence для CV-0002 актуализирован",
+    "updated_at": "2026-06-25",
+    "command": "/storm:rank + /storm:cover validation stabilization",
+    "mode": "delivery sync; ranking не пересчитан полностью, validation blocker актуализирован",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
@@ -12739,18 +12738,17 @@
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore => first attempt failed because stale Unlimotion.Test (33028) locked output DLLs; stale test host stopped; rerun passed with existing warnings",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageBddContractTests/*\" --output Detailed => прошло 7/7",
-      "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => прошло 2/2",
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => passed with existing warnings",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => initial isolated run failed on pasted=false; after test-only focus setup and rebuild passed 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/*\" --output Detailed => passed 43/43",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => process failed after 193 passing tests, 0 failed assertions, exit -532462766; blocker: live ServiceStack host cleanup/file watcher unobserved exception logs through disposed EventLogInternal",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed => targeted rerun passed 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => targeted rerun passed 1/1",
       "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
       "git diff --check => passed; only LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-bdd-implement-server-storage-crud-realtime-step-definitions.md => no matches",
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => rerun after TS-0032 NotInParallel annotation passed with existing warnings",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed => rerun after TS-0032 NotInParallel annotation passed 1/1"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-24-storm-stabilize-full-suite-ui-state-order.md specs\\2026-06-25-storm-stabilize-servicestack-live-host-cleanup.md => no matches (rg exit 1)"
     ],
-    "full_suite_result": "not rerun in this EXEC; previous full-suite risk remains unrelated MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask full-suite-order failure while targeted server-storage checks passed."
+    "full_suite_result": "2026-06-25: previous MainControlTreeCommandsUiTests paste hotkey UI failure stabilized in isolated and class-level runs; full suite process fails after 193 passing tests with live ServiceStack host cleanup/file watcher unobserved exception and disposed EventLogInternal logger."
   },
   "bdd_sync": {
     "updated_at": "2026-06-24",
