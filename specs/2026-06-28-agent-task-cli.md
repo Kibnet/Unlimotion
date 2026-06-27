@@ -206,7 +206,44 @@ Outcome contract:
 - Residual risks / follow-ups: write-mode CLI может быть следующей отдельной итерацией.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
+- Статус: PASS с окруженческим ограничением для full solution build
+- Scope reviewed: approved spec, `git status --short`, relevant diff, targeted tests, CLI smoke output.
+- Decision: можно завершать текущую CLI-итерацию; full `src/Unlimotion.sln` build не является валидным локальным gate без Android workload.
+- Review passes:
+  - Scope/Evidence pass: PASS, изменены только SPEC, CLI project, analyzer, tests и solution entry.
+  - Contract pass: PASS, task JSON schema и UI не менялись.
+  - Adversarial risk pass: PASS, спорные правила `ContainsTasks`, inherited blockers и criteria покрыты tests.
+  - Re-review after fixes / Fix and re-review: не требовалось после успешного focused run.
+  - Stop decision: закоммитить CLI MVP.
+- Evidence inspected:
+  - `dotnet build src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release` -> PASS, 0 warnings, 0 errors.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/TaskAvailabilityAnalyzerTests/*"` -> PASS, 4/4.
+  - `dotnet run --project src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -- status --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> PASS, 264 tasks.
+  - `dotnet run --project src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -- unlocked --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> PASS, 0 unlocked tasks in current graph state.
+  - `dotnet run --project src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -- task --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --id <sample> --explain --format json` -> PASS, explanation returned.
+  - `dotnet run --project src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -- validate --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> command works, exit 1 because graph has 6 stored/computed availability mismatches.
+  - `dotnet build src\Unlimotion.sln -c Release` -> BLOCKED by existing environment issue `NETSDK1147` missing Android workload before product compile.
+- Depth checklist:
+  - Scope drift / unrelated changes: нет.
+  - Acceptance criteria: выполнены, кроме full solution build, который заблокирован окружением.
+  - Validation evidence: зафиксирована.
+  - Unsupported claims: нет.
+  - Regression / edge case: cycles protected by visited set; missing references are validation issues, not runtime blockers.
+  - Comments/docs/changelog: отдельный changelog не нужен для internal CLI MVP.
+  - Hidden contract change: нет.
+  - Manual-review challenge: главный риск - analyzer может разойтись с private `TaskTreeManager`; mitigated by прямое копирование правил и focused tests.
+- No-findings justification: изменения additive/read-only и не затрагивают persisted schema или UI.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| LOW | validation | Full solution build локально блокируется `NETSDK1147` из-за отсутствующего Android workload | Зафиксировать как environment blocker; использовать CLI build + targeted tests как evidence | accepted-risk |
+
+- Fixed before final report: конфликт `TaskStatus` и `StartsWith(char, StringComparison)` в CLI исправлены до passing build.
+- Checks rerun: CLI build, focused TUnit, CLI smoke.
+- Validation evidence: перечислена выше.
+- Unrelated changes: не обнаружены.
+- Needs human: нет.
+- Residual risks / follow-ups: write-mode CLI и прямое переиспользование analyzer внутри `TaskTreeManager` можно вынести в отдельные итерации.
 
 ## Approval
 Пользовательская команда `выполняй план` и последующее `продолжай` считаются подтверждением выполнения этой спеки в текущем контексте.
@@ -215,3 +252,4 @@ Outcome contract:
 | Фаза (SPEC/EXEC) | Тип намерения/сценария | Уверенность в решении (0.0-1.0) | Каких данных не хватает | Следующее действие | Нужна ли передача управления/решения человеку | Было ли фактическое обращение к человеку / решение человека | Короткое объяснение выбора | Затронутые артефакты/файлы |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Зафиксировать CLI MVP | 0.9 | Нет | Реализовать analyzer и CLI | Нет | Да, пользователь сказал `выполняй план` / `продолжай` | Без CLI агенты продолжают ошибаться в правилах разблокировки | `specs/2026-06-28-agent-task-cli.md` |
+| EXEC | Реализовать CLI MVP | 0.85 | Нет данных о write-mode требованиях | Закоммитить read-only CLI | Нет | Нет | Read-only инструмент уже достаточен для диагностики ошибок графа | `src/Unlimotion.Cli`, `TaskAvailabilityAnalyzer.cs`, `TaskAvailabilityAnalyzerTests.cs`, `src/Unlimotion.sln` |

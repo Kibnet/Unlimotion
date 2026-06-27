@@ -61,6 +61,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.ReadmeMedia", ".
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.Performance", "..\tests\Unlimotion.Performance\Unlimotion.Performance.csproj", "{1814CF39-0129-4C6A-856C-07B2F179C82D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.Cli", "Unlimotion.Cli\Unlimotion.Cli.csproj", "{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -345,6 +347,18 @@ Global
 		{1814CF39-0129-4C6A-856C-07B2F179C82D}.Release|x64.Build.0 = Release|Any CPU
 		{1814CF39-0129-4C6A-856C-07B2F179C82D}.Release|x86.ActiveCfg = Release|Any CPU
 		{1814CF39-0129-4C6A-856C-07B2F179C82D}.Release|x86.Build.0 = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|x64.Build.0 = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Debug|x86.Build.0 = Debug|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|x64.ActiveCfg = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|x64.Build.0 = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|x86.ActiveCfg = Release|Any CPU
+		{7351CD89-6FCC-4934-BCCE-3103EA03FA6D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
