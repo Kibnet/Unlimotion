@@ -1,31 +1,32 @@
 # STORM Ранжирование С Учётом Зависимостей
 
 Сгенерировано: 2026-06-28
-Команда: `/storm:rank` + `/storm:cover Android workload install build smoke`
-Режим: artifact-only delivery sync; Android build smoke добавлен, ranking не пересчитан полностью
+Команда: `/storm:rank` + `/storm:bdd-implement SC-0005-002`
+Режим: artifact sync after test-only executable BDD slice
 
 ## Практический Вывод
 
-1. `CV-0001`, `CV-0002`, `CV-0003`, `CV-0004`, `CV-0005` и `CV-0006` покрыты.
-2. `CV-0001` имеет existing auth-flow contract evidence `TS-0017` и executable BDD evidence `TS-0031`.
-3. `CV-0002` имеет contract/security/live API/SignalR evidence `TS-0017..TS-0020` и executable BDD evidence `TS-0032`.
-4. `CV-0007` выведен из active `/storm:cover` очереди по Варианту B: attachment code остается internal/orphan contract candidate.
-5. Текущих active `/storm:cover` behavior gaps не осталось.
-6. Step-executable scenarios: `SC-0011-001`, `SC-0011-002`, `SC-0014-001`, `SC-0014-002`, `SC-0014-003`, `SC-0015-002`, `SC-0016-001`.
-7. Full-suite validation gate восстановлен предыдущей итерацией; Browser, iOS and Android build smoke evidence теперь зафиксированы для `SC-0015-002`; runtime/release support не заявляется.
+1. `SC-0005-002` теперь step-executable через `TS-0033` и `SD-0027..SD-0030`.
+2. `CV-0001`, `CV-0002`, `CV-0003`, `CV-0004`, `CV-0005` и `CV-0006` остаются покрыты.
+3. `CV-0007` выведен из active `/storm:cover` очереди по Варианту B: attachment code остается internal/orphan contract candidate.
+4. Текущих active cover/behavior gaps по AC нет, но до full executable BDD coverage остаётся 37 scenarios without step definitions.
+5. Step-executable scenarios: `SC-0005-002`, `SC-0011-001`, `SC-0011-002`, `SC-0014-001`, `SC-0014-002`, `SC-0014-003`, `SC-0015-002`, `SC-0016-001`.
+6. Targeted BDD/reset/filter suites прошли; final full `Unlimotion.Test` вне sandbox прошёл 564/564.
 
 ## Ранжированный Backlog
 
 | Ранг | Item | Цель | Story / область | Status | Условие |
 | --- | --- | --- | --- | --- | --- |
-| 1 | CV-0006 | PRODUCT-ENTRY | ST-0016 | covered_by_product_story_existing_ui_test_and_executable_bdd | Error-toast behavior покрыт TS-0021 и `SC-0016-001` step-executable через TS-0030. |
-| 2 | CV-0001 | AC-0032 | ST-0011 | covered_by_contract_tests_and_executable_bdd | Auth contract покрыт TS-0017; `SC-0011-001` step-executable через TS-0031. |
-| 3 | CV-0002 | AC-0033 | ST-0011 | covered_by_live_task_api_signalr_tests_and_executable_bdd | Live API и SignalR покрыты; `SC-0011-002` step-executable через TS-0032. |
-| 4 | CV-0003 | AC-0039 | ST-0014 | covered_by_telegram_command_auth_tests | Command/auth покрыты TS-0022 и `SC-0014-001` step-executable через TS-0028. |
-| 5 | CV-0004 | AC-0040 | ST-0014 | covered_by_telegram_callback_and_timer_tests | Callbacks покрыты TS-0023 и `SC-0014-003` step-executable через TS-0029; Git timer conflict-safety покрыт TS-0025 и `SC-0014-002` step-executable через TS-0027. |
-| 6 | CV-0005 | AC-0042 | ST-0015 | covered_by_project_contract_tests | Conservative policy принят; Browser Release build smoke прошёл; iOS Debug build smoke прошёл; Android Debug build smoke прошёл; `SC-0015-002` step-executable; runtime/release support не заявляется. |
-| 7 | CV-0007 | PRODUCT-ENTRY | proposed_attachment_workflow | internal_orphan_contract_candidate | Вариант B: не active cover candidate; future revisit требует нового product decision. |
+| 1 | SC-0005-003 | AC-0015 | ST-0005 | next_executable_bdd_candidate | Emoji include/exclude filter уже имеет linked TS-0006 evidence и может дальше закрывать ST-0005 executable coverage. |
+| 2 | SC-0005-001 | AC-0013 | ST-0005 | next_executable_bdd_candidate | Search/fuzzy behavior уже имеет linked TS-0001/TS-0004/TS-0006 evidence. |
+| 3 | CV-0006 | PRODUCT-ENTRY | ST-0016 | covered_by_product_story_existing_ui_test_and_executable_bdd | Error-toast behavior covered by TS-0021 and `SC-0016-001` step-executable through TS-0030. |
+| 4 | CV-0001 | AC-0032 | ST-0011 | covered_by_contract_tests_and_executable_bdd | Auth contract covered by TS-0017; `SC-0011-001` step-executable through TS-0031. |
+| 5 | CV-0002 | AC-0033 | ST-0011 | covered_by_live_task_api_signalr_tests_and_executable_bdd | Live API и SignalR covered; `SC-0011-002` step-executable through TS-0032. |
+| 6 | CV-0003 | AC-0039 | ST-0014 | covered_by_telegram_command_auth_tests | Command/auth covered by TS-0022 and `SC-0014-001` step-executable through TS-0028. |
+| 7 | CV-0004 | AC-0040 | ST-0014 | covered_by_telegram_callback_and_timer_tests | Callback and timer safety covered; `SC-0014-002`/`SC-0014-003` step-executable. |
+| 8 | CV-0005 | AC-0042 | ST-0015 | covered_by_project_contract_tests | Browser/iOS/Android build smoke passed; runtime/release support не заявляется. |
+| 9 | CV-0007 | PRODUCT-ENTRY | proposed_attachment_workflow | internal_orphan_contract_candidate | Вариант B: not active cover candidate; future revisit requires new product decision. |
 
 ## Рекомендуемый Следующий Шаг
 
-Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002. Следующий шаг: либо отдельная runtime/release SPEC для platform launch/package evidence, либо выбор следующего high-value scenario для executable BDD coverage; repo config/tests/code не менять без отдельной delivery SPEC. `CV-0007` остается internal/orphan candidate до нового решения.
+Продолжить `/storm:cover` через SPEC на `SC-0005-003` или `SC-0005-001`, не меняя production code без отдельного evidence-driven stop/review.

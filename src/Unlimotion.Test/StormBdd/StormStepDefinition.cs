@@ -65,5 +65,11 @@ internal sealed class StormScenarioContext
 
     public ServerStorageCrudRealtimeScenarioResult? ServerStorageCrudRealtimeResult { get; set; }
 
+    public bool FilterResetTaskSetAvailable { get; set; }
+
+    public bool FilterResetStoryBehaviorConfirmed { get; set; }
+
+    public FilterResetScenarioResult? FilterResetResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

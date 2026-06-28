@@ -54,12 +54,13 @@
       "Validation stabilization 2026-06-26: Windows ACL hardening full-suite blocker закрыт production fix в BackupViaGitService; targeted ACL tests проходят, MainControlResetFilters targeted risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox.",
       "Environment setup 2026-06-26: Android/iOS build smoke повторно проверены после approved SPEC; dotnet workload restore для Android попытался установить workload set 10.0.301.1 через microsoft.net.workloads.10.0.300.msi.x64 и был отменён/заблокирован, Android/iOS Debug build по-прежнему останавливаются на NETSDK1147 до compile stage; repo source/tests/test annotations не менялись.",
       "Environment admin 2026-06-28: narrow Android workload restore timed out after 184 seconds but workload list updated to workload set 10.0.301.1; iOS Debug build smoke passed with existing warnings, Android Debug build still fails NETSDK1147 before compile and now requires android workload despite workload list showing android installed; repo source/tests/test annotations/project files/workflows не менялись.",
-      "Environment admin 2026-06-28: targeted dotnet workload install android completed with no changes because Android was already installed; Android Debug build smoke then passed, producing Unlimotion.Android.dll; iOS Debug build smoke evidence from earlier 2026-06-28 remains preserved; repo source/tests/test annotations/project files/workflows не менялись."
+      "Environment admin 2026-06-28: targeted dotnet workload install android completed with no changes because Android was already installed; Android Debug build smoke then passed, producing Unlimotion.Android.dll; iOS Debug build smoke evidence from earlier 2026-06-28 remains preserved; repo source/tests/test annotations/project files/workflows не менялись.",
+      "BDD executable slice добавлен 2026-06-28: SC-0005-002 исполняется из feature text через repo-local step definitions SD-0027..SD-0030 и TUnit/Avalonia.Headless evidence TS-0033."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover Android workload install build smoke",
-    "last_artifact_mode": "delivery-task environment-admin artifact-only sync"
+    "last_artifact_command": "/storm:bdd-implement SC-0005-002 filter reset executable slice",
+    "last_artifact_mode": "delivery-task test-only BDD implementation + artifact sync"
   },
   "vision": {
     "id": "VS-0001",
@@ -1328,12 +1329,19 @@
           "coverage_level": "critical",
           "linked_tests": [
             "TS-0006",
-            "TS-0013"
+            "TS-0013",
+            "TS-0033"
           ],
           "evidence": [
             {
               "path": "src/Unlimotion.Test/MainControlResetFiltersUiTests.cs",
               "symbol": "ResetFiltersButton_*"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+              "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+              "test_id": "TS-0033",
+              "description": "Executable BDD evidence for SC-0005-002 reset filters scenario."
             }
           ],
           "linked_rules": [
@@ -1376,7 +1384,8 @@
         "TS-0001",
         "TS-0004",
         "TS-0006",
-        "TS-0013"
+        "TS-0013",
+        "TS-0033"
       ],
       "linked_code": [
         "CU-0004",
@@ -1405,7 +1414,7 @@
         "SC-0005-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "BDD-сценарии связаны с существующими тестами; tests не запускались в artifact-only BDD sync."
+      "behavior_coverage_note": "SC-0005-002 теперь связан с existing TS-0006/TS-0013 и исполняется из feature text через SD-0027..SD-0030 / TS-0033; остальные ST-0005 scenarios пока rely on linked TUnit evidence."
     },
     {
       "id": "ST-0006",
@@ -4258,6 +4267,50 @@
         }
       ],
       "notes": "Existing test annotations не менялись; executable spec reads existing .feature wording and runs repo-local step definitions for SC-0011-002. Новый class помечен NotInParallel(\"ServerStorageLiveIntegration\"), потому что запускает live SignalR/ServiceStack evidence."
+    },
+    {
+      "id": "TS-0033",
+      "name": "StormFilterResetExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+      "framework": "TUnit + Avalonia.Headless + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/filter-reset-ui",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0005-002_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0005"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0014"
+      ],
+      "linked_constraints": [
+        "CN-0004"
+      ],
+      "linked_scenarios": [
+        "SC-0005-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0005-002 steps from features/storm/st-0005-search-and-filters.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+          "symbol": "SD-0027..SD-0030",
+          "description": "Step definitions bind Given/When/Then product wording to reset-filter UI contract assertions."
+        },
+        {
+          "path": "src/Unlimotion.Test/FilterResetUiContract.cs",
+          "symbol": "ExecuteFilterResetScenarioAsync / AssertFilterResetScenarioResultAsync",
+          "description": "Reusable headless UI contract checks filter flyout open, confirmation, status/date/duration/wanted/search/emoji reset behavior."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed",
+          "result": "passed 1/1 on 2026-06-28"
+        }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording и запускает repo-local step definitions for SC-0005-002."
     }
   ],
   "code_units": [
@@ -5326,64 +5379,67 @@
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-24",
-    "last_cover_command": "/storm:cover Android workload install build smoke",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
     "coverage_report": "docs/product/reports/coverage.md",
-    "coverage_mode": "delivery-task environment-admin artifact-only sync",
+    "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-06-28",
-    "last_rank_command": "/storm:rank + /storm:cover Android workload install build smoke",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0005-002",
     "ranking_report": "docs/product/reports/ranking.md",
-    "ranking_mode": "artifact-only",
+    "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-06-28",
     "bdd_sync": {
       "updated_at": "2026-06-28",
       "command": "/storm:bdd-sync",
-      "mode": "artifact-only evidence sync after approved targeted Android workload install SPEC",
+      "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-06-28",
       "command": "/storm:bdd-lint",
-      "mode": "artifact-only evidence lint after approved targeted Android workload install SPEC",
+      "mode": "test-only executable BDD lint for SC-0005-002 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-06-28",
-      "command": "/storm:cover Android workload install build smoke",
-      "mode": "delivery-task environment-admin",
-      "approved_spec": "specs/2026-06-28-storm-android-workload-install-build-smoke.md",
-      "classification": "targeted android workload install completed as no-op; Android Debug build smoke passed after restore/build state settled",
+      "command": "/storm:bdd-implement SC-0005-002",
+      "mode": "delivery-task test-only executable BDD implementation",
+      "approved_spec": "specs/2026-06-28-storm-sc0005-filter-reset-bdd.md",
+      "classification": "SC-0005-002 filter-reset scenario now executes from feature text through repo-local step definitions and Avalonia.Headless UI contract evidence",
       "changed_code": [],
-      "tests_changed": [],
+      "tests_changed": [
+        "src/Unlimotion.Test/FilterResetUiContract.cs",
+        "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+        "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+        "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
+      ],
       "test_annotations_changed": false,
       "validation": [
-        "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
-        "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
-        "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
-        "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
-        "dotnet build-server shutdown => MSBuild and compiler servers shut down",
-        "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
-        "git diff --check => passed with no whitespace errors",
-        "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
-        "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
+        "git diff --check => passed with LF-to-CRLF working-copy warnings only",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
+        "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
+        "targeted ACL rerun вне sandbox => прошёл 1/1",
+        "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+        "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "Android Debug build smoke passed. Browser/iOS build smoke evidence preserved. Runtime/release support not claimed; repo source/tests unchanged.",
-      "next_recommended_action": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC.",
+      "result": "SC-0005-002 прошёл как executable BDD slice; existing reset/filter UI regression suites прошли; full Unlimotion.Test прошёл 564/564 вне managed sandbox; production behavior не менялось.",
+      "next_recommended_action": "Продолжать /storm:cover через следующий high-value scenario без step definitions, например SC-0005-003 или SC-0005-001, отдельной SPEC с test-only BDD binding.",
       "validation_status": "passed_with_known_bdd_lint_warning",
-      "known_warning": "Duplicate shared Given step text across SD-0009, SD-0013, SD-0022 remains intentional reuse, not a blocker."
+      "known_warning": "Duplicate shared Given step text warning will include SD-0027 and remains intentional reuse, not a blocker."
     }
   },
   "traceability": {
-    "updated_at": "2026-06-23",
-    "command": "/storm:trace sync after /storm:bdd-implement SC-0011-001 executable step definitions",
+    "updated_at": "2026-06-28",
+    "command": "/storm:trace sync after /storm:bdd-implement SC-0005-002 executable step definitions",
     "route": "delivery-task",
     "mode": "test-only executable BDD sync",
     "annotations_added": false,
-    "annotations_reason": "Test annotations не менялись; TS-0031 and existing TS-0017..TS-0030 связаны с STORM artifacts через storm.json/feature/report links.",
-    "summary": "ST-0011/AC-0032 now has contract evidence TS-0017 and executable BDD evidence TS-0031; ST-0011/AC-0033 remains covered by TS-0017..TS-0020 without step definitions.",
+    "annotations_reason": "Test annotations не менялись; TS-0031 и existing TS-0017..TS-0030 связаны с STORM artifacts через storm.json/feature/report links.",
+    "summary": "ST-0005/AC-0014 now preserves existing TS-0006/TS-0013 evidence and adds executable BDD evidence TS-0033 through SD-0027..SD-0030.",
     "story_to_tests": {
       "ST-0001": {
         "tests": [
@@ -5551,7 +5607,8 @@
           "TS-0001",
           "TS-0004",
           "TS-0006",
-          "TS-0013"
+          "TS-0013",
+          "TS-0033"
         ],
         "code_units": [
           "CU-0004",
@@ -5573,7 +5630,8 @@
             "id": "AC-0014",
             "tests": [
               "TS-0006",
-              "TS-0013"
+              "TS-0013",
+              "TS-0033"
             ],
             "coverage_level": "critical"
           },
@@ -5777,7 +5835,8 @@
           "TS-0018",
           "TS-0019",
           "TS-0020",
-          "TS-0031"
+          "TS-0031",
+          "TS-0032"
         ],
         "code_units": [
           "CU-0003",
@@ -5798,7 +5857,8 @@
               "TS-0017",
               "TS-0018",
               "TS-0019",
-              "TS-0020"
+              "TS-0020",
+              "TS-0032"
             ],
             "coverage_level": "full"
           }
@@ -6518,6 +6578,32 @@
         "method_examples": [
           "ServerStorageAuthFlowScenario_ExecutesFeatureSteps"
         ]
+      },
+      "TS-0032": {
+        "stories": [
+          "ST-0011"
+        ],
+        "acceptance_criteria": [
+          "AC-0033"
+        ],
+        "constraints": [],
+        "method_examples": [
+          "ServerStorageCrudRealtimeScenario_ExecutesFeatureSteps"
+        ]
+      },
+      "TS-0033": {
+        "stories": [
+          "ST-0005"
+        ],
+        "acceptance_criteria": [
+          "AC-0014"
+        ],
+        "constraints": [
+          "CN-0004"
+        ],
+        "method_examples": [
+          "FilterResetScenario_ExecutesFeatureSteps"
+        ]
       }
     },
     "orphan_tests": [
@@ -6554,31 +6640,18 @@
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
-      "Решено 2026-06-24: SC-0011-002 получил executable BDD slice через TS-0032 и SD-0022..SD-0024 + SD-0026."
+      "Решено 2026-06-24: SC-0011-002 получил executable BDD slice через TS-0032 и SD-0022..SD-0024 + SD-0026.",
+      "Решено 2026-06-28: SC-0005-002 получил executable BDD slice через TS-0033 и SD-0027..SD-0030."
     ]
   },
   "coverage_analysis": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover Android workload install build smoke",
-    "mode": "delivery-task environment-admin после подтвержденной SPEC; artifact-only sync, code/tests/test annotations не менялись",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
-    "tests_changed": false,
+    "tests_changed": true,
     "tests_run": true,
-    "summary": {
-      "acceptance_criteria_total": 44,
-      "acceptance_criteria_with_tests": 44,
-      "acceptance_criteria_full_or_critical": 44,
-      "acceptance_criteria_partial": 0,
-      "acceptance_criteria_without_tests": 0,
-      "improved_by_existing_evidence": 6,
-      "proposed_coverage_items": 0,
-      "improved_by_delivery_evidence": 6,
-      "blocked_product_decision_items": 0,
-      "improved_by_current_artifact_triage": 1,
-      "internal_orphan_contract_candidates": 1,
-      "active_cover_candidates_remaining": 0,
-      "active_cover_candidates_note": "CV-0001 и CV-0002 имеют executable BDD evidence. CV-0005 теперь имеет Browser, iOS and Android build-smoke evidence while runtime/release support remains unclaimed. CV-0007 остается вне active cover queue по Варианту B."
-    },
+    "summary": "SC-0005-002 получил executable BDD coverage через TS-0033 и SD-0027..SD-0030; existing reset/filter test links preserved; production behavior unchanged.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -6991,8 +7064,8 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-28",
-      "command": "/storm:cover Android workload install build smoke",
-      "mode": "delivery-task environment-admin; behavior coverage metrics не изменились",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+      "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -7009,53 +7082,71 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 7,
+      "passing_scenarios": 8,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 26,
-      "step_executable_scenarios": 7,
-      "step_definition_coverage_ratio": "7/45",
-      "executable_specification_ratio": "7/45 step-executable; 7/45 passing scenarios",
+      "step_definitions_total": 30,
+      "step_executable_scenarios": 8,
+      "step_definition_coverage_ratio": "8/45",
+      "executable_specification_ratio": "8/45 step-executable; 8/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
-      "tests_changed": false,
+      "tests_changed": true,
       "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
-        "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
-        "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
-        "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
-        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
-        "dotnet build-server shutdown => MSBuild and compiler servers shut down",
-        "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC"
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
+        "git diff --check => passed with LF-to-CRLF working-copy warnings only",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
+        "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
+        "targeted ACL rerun вне sandbox => прошёл 1/1",
+        "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+        "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий full Unlimotion.Test gate остается green 563/563 вне sandbox по commit 5fcb1a2."
+      "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
+      "production_code_changed": false
     },
     "bdd_sync_summary": {
+      "updated_at": "2026-06-28",
       "command": "/storm:bdd-sync",
+      "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
       "status": "completed_with_known_gaps",
-      "changed_scenarios": [
-        "SC-0011-002"
+      "synced_links": {
+        "story_to_scenarios": 16,
+        "acceptance_criteria_to_rules": 44,
+        "acceptance_criteria_to_scenarios": 44,
+        "scenario_to_tests": 45,
+        "scenario_to_step_definitions": 8,
+        "constraint_to_scenarios": 8
+      },
+      "not_changed": [
+        "acceptance criteria replacement",
+        "production code",
+        ".feature wording",
+        "existing test annotations",
+        "CV-0007 product decision links"
       ],
-      "changed_tests": [
-        "TS-0032"
+      "tests_changed": [
+        "src/Unlimotion.Test/FilterResetUiContract.cs",
+        "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+        "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+        "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
-      "step_definitions_total": 26,
-      "step_executable_scenarios": 7,
-      "step_definition_coverage_ratio": "7/45",
-      "known_gaps": [
-        "step_definitions_total=26; SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 and SC-0011-002 are step-executable; remaining scenarios still rely on linked TUnit evidence",
-        "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime launch, emulator/device validation and release pipeline evidence are not claimed",
-        "CV-0007 remains outside active /storm:cover by product decision Вариант B",
-        "Full-suite validation gate восстановлен 2026-06-26: Unlimotion.Test прошел 563/563 вне sandbox после Windows ACL hardening fix"
+      "decision": "SC-0005-002 получил executable Scenario -> Step Definition -> Test link через TS-0033 и SD-0027..SD-0030; existing TS-0006/TS-0013 links сохранены.",
+      "gaps": [
+        "Step definitions покрывают 8/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+        "SC-0005-001 и SC-0005-003 имеют linked tests, но пока не имеют executable step-definition slices.",
+        "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime smoke, emulator/device validation and release pipeline evidence не заявляются.",
+        "CV-0007 remains outside active /storm:cover by product decision Вариант B."
       ],
-      "decision": "Existing BDD links preserved. SC-0015-002 now has Browser, iOS and Android build-smoke evidence; no BDD link/code/test changes."
+      "code_changed": []
     },
     "improved_by_delivery_evidence": [
       {
@@ -7114,32 +7205,38 @@
       }
     ],
     "code_changed": false,
-    "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий gate остается восстановленным: full Unlimotion.Test прошел 563/563 вне sandbox в commit 5fcb1a2.",
-    "targeted_validation_result": "Android Debug build smoke прошел после targeted workload install/no-op and settled restore state; iOS Debug build smoke already passed; runtime/release support не заявляется.",
+    "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
+    "targeted_validation_result": "прошло: TS-0033 1/1, MainControlResetFiltersUiTests 8/8, MainControlFilterToolbarResponsiveUiTests 14/14, full Unlimotion.Test 564/564 вне managed sandbox",
     "validation_evidence": [
-      "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
-      "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
-      "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
-      "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
-      "dotnet build-server shutdown => MSBuild and compiler servers shut down",
-      "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
-      "git diff --check => passed with no whitespace errors",
-      "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
-      "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
+      "git diff --check => passed with LF-to-CRLF working-copy warnings only",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
+      "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
+      "targeted ACL rerun вне sandbox => прошёл 1/1",
+      "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
   "ranking_analysis": {
     "updated_at": "2026-06-28",
-    "command": "/storm:rank + /storm:cover Android workload install build smoke",
-    "mode": "artifact-only delivery sync; Android build smoke added, ranking не пересчитан полностью",
+    "command": "/storm:rank + /storm:bdd-implement SC-0005-002",
+    "mode": "artifact sync after test-only executable BDD slice",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
     "story_level_candidates": [
+      {
+        "story": "ST-0005",
+        "title": "Искать и фильтровать задачи по тексту, статусу, датам, длительности, wanted и emoji",
+        "linked_coverage_items": [
+          "SC-0005-002"
+        ],
+        "recommendation": "SC-0005-002 покрыт executable BDD evidence TS-0033; SC-0005-001 и SC-0005-003 остаются следующими ST-0005 candidates для full executable coverage."
+      },
       {
         "story": "ST-0011",
         "title": "Использовать optional серверного хранилища с authentication и real-time updates",
@@ -7175,7 +7272,7 @@
         "recommendation": "CV-0005 покрыт на уровне project-contract + Browser/iOS/Android build smoke. Runtime launch, emulator/device validation and release pipeline evidence остаются отдельным scope."
       }
     ],
-    "next_recommended_action": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC."
+    "next_recommended_action": "Следующий high-value /storm:cover step: выбрать очередной active scenario без step definitions и оформить отдельную SPEC; ближайшие кандидаты по ST-0005: SC-0005-003 или SC-0005-001."
   },
   "gherkin_features": [
     {
@@ -7910,6 +8007,12 @@
         {
           "path": "src/Unlimotion.Test/MainControlResetFiltersUiTests.cs",
           "symbol": "ResetFiltersButton_*"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+          "symbol": "SD-0027..SD-0030",
+          "test_id": "TS-0033",
+          "description": "Step definitions bind SC-0005-002 Given/When/Then wording to reset-filter UI contract assertions."
         }
       ]
     },
@@ -10273,14 +10376,20 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_filter_reset_headless_ui_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-28",
       "linked_tests": [
         "TS-0006",
-        "TS-0013"
+        "TS-0013",
+        "TS-0033"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0027",
+        "SD-0028",
+        "SD-0029",
+        "SD-0030"
+      ],
       "coverage_role": "business_rule",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -10317,6 +10426,21 @@
           "path": "src/Unlimotion.Test/TaskItemRepeaterListMarkerTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0013"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0033",
+          "description": "TS-0033 passed 1/1 2026-06-28 and executes SC-0005-002 from feature text through repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+          "symbol": "SD-0027..SD-0030",
+          "description": "Step definitions bind all four SC-0005-002 Gherkin steps to deterministic reset-filter UI assertions."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed",
+          "result": "passed 1/1 on 2026-06-28"
         }
       ]
     },
@@ -12803,12 +12927,96 @@
           "symbol": "AssertCrudRealtimeScenarioResultAsync"
         }
       ]
+    },
+    {
+      "id": "SD-0027",
+      "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+      "symbol": "FilterResetStepDefinitions.Create / SD-0027",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0005-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0033"
+        },
+        {
+          "path": "src/Unlimotion.Test/FilterResetUiContract.cs",
+          "symbol": "ExecuteFilterResetScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0028",
+      "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+      "symbol": "FilterResetStepDefinitions.Create / SD-0028",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0005",
+      "supports_scenarios": [
+        "SC-0005-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0033"
+        },
+        {
+          "path": "src/Unlimotion.Test/FilterResetUiContract.cs",
+          "symbol": "ExecuteFilterResetScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0029",
+      "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+      "symbol": "FilterResetStepDefinitions.Create / SD-0029",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь меняет статус задачи или проверяет доступные переходы",
+      "supports_scenarios": [
+        "SC-0005-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0033"
+        },
+        {
+          "path": "src/Unlimotion.Test/FilterResetUiContract.cs",
+          "symbol": "ExecuteFilterResetScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0030",
+      "path": "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+      "symbol": "FilterResetStepDefinitions.Create / SD-0030",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Фильтры статуса, дат, длительности и wanted применяются вместе и могут быть сброшены.",
+      "supports_scenarios": [
+        "SC-0005-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+          "symbol": "FilterResetScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0033"
+        },
+        {
+          "path": "src/Unlimotion.Test/FilterResetUiContract.cs",
+          "symbol": "AssertFilterResetScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover Android workload install build smoke",
-    "mode": "delivery-task environment-admin; behavior coverage metrics не изменились",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -12825,60 +13033,67 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 7,
+    "passing_scenarios": 8,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 26,
-    "step_executable_scenarios": 7,
-    "step_definition_coverage_ratio": "7/45",
-    "executable_specification_ratio": "7/45 step-executable; 7/45 passing scenarios",
+    "step_definitions_total": 30,
+    "step_executable_scenarios": 8,
+    "step_definition_coverage_ratio": "8/45",
+    "executable_specification_ratio": "8/45 step-executable; 8/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
-    "tests_changed": false,
+    "tests_changed": true,
     "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
-      "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
-      "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
-      "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
-      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
-      "dotnet build-server shutdown => MSBuild and compiler servers shut down",
-      "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
-      "git diff --check => passed with no whitespace errors",
-      "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
-      "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
+      "git diff --check => passed with LF-to-CRLF working-copy warnings only",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
+      "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
+      "targeted ACL rerun вне sandbox => прошёл 1/1",
+      "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
-    "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий full Unlimotion.Test gate остается green 563/563 вне sandbox по commit 5fcb1a2."
+    "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
+    "production_code_changed": false
   },
   "bdd_sync": {
     "updated_at": "2026-06-28",
     "command": "/storm:bdd-sync",
-    "mode": "artifact-only evidence sync after approved targeted Android workload install SPEC",
+    "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
     "status": "completed_with_known_gaps",
     "synced_links": {
       "story_to_scenarios": 16,
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
       "scenario_to_tests": 45,
-      "scenario_to_step_definitions": 7,
+      "scenario_to_step_definitions": 8,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
-      "test annotations",
       "acceptance criteria replacement",
+      "production code",
+      ".feature wording",
+      "existing test annotations",
       "CV-0007 product decision links"
     ],
-    "tests_changed": [],
-    "decision": "BDD links preserved; SC-0015-002 evidence refreshed with Android Debug build smoke passed; code/test/test-annotation changes not made.",
+    "tests_changed": [
+      "src/Unlimotion.Test/FilterResetUiContract.cs",
+      "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
+      "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+      "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
+    ],
+    "decision": "SC-0005-002 получил executable Scenario -> Step Definition -> Test link через TS-0033 и SD-0027..SD-0030; existing TS-0006/TS-0013 links сохранены.",
     "gaps": [
-      "Step definitions покрывают 7/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "Step definitions покрывают 8/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "SC-0005-001 и SC-0005-003 имеют linked tests, но пока не имеют executable step-definition slices.",
       "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime smoke, emulator/device validation and release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
@@ -12887,12 +13102,13 @@
   "bdd_lint": {
     "updated_at": "2026-06-28",
     "command": "/storm:bdd-lint",
-    "mode": "artifact-only evidence lint after approved targeted Android workload install SPEC",
+    "mode": "test-only executable BDD lint for SC-0005-002 after approved SPEC",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions покрывают SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 и SC-0011-002: repo-local runner не является full Cucumber-style engine.",
-      "SD-0009, SD-0013 и SD-0022 используют один общий Given step text для shared task-set context; это intentional reuse of product wording, не placeholder и не orphan step.",
+      "step_definitions покрывают SC-0005-002, SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 и SC-0011-002: repo-local runner не является full Cucumber-style engine.",
+      "SD-0009, SD-0013, SD-0022 и SD-0027 используют один общий Given step text для shared task-set context; это intentional reuse of product wording, не placeholder и не orphan step.",
+      "SC-0005-002 step definitions exercise real Avalonia.Headless reset-filter behavior; feature wording/test annotations не менялись.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
       "SC-0015-002 имеет project-contract coverage, Browser Release build smoke, iOS Debug build smoke and Android Debug build smoke; runtime release support не заявляется."
     ],
@@ -12903,7 +13119,7 @@
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
       "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": false,
+      "tests_changed_in_approved_exec_scope": true,
       "production_code_changes_in_approved_exec_scope": false,
       "test_annotations_changed": false,
       "step_definitions_present": true,
@@ -12928,7 +13144,10 @@
       "current_artifact_only_code_tests_unchanged": true,
       "st0015_ios_build_smoke_recorded": true,
       "st0015_android_build_blocker_recorded": false,
-      "st0015_android_build_smoke_recorded": true
+      "st0015_android_build_smoke_recorded": true,
+      "sc0005002_linked_to_existing_reset_filter_tests": true,
+      "sc0005002_linked_to_executable_step_definitions": true,
+      "sc0005002_executable_test_passed": true
     }
   }
 }
