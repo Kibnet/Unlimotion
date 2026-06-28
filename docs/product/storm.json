@@ -4,7 +4,7 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-28",
+    "updated_at": "2026-06-29",
     "generated_by": "Codex /storm:bootstrap",
     "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
@@ -57,11 +57,12 @@
       "Environment admin 2026-06-28: targeted dotnet workload install android completed with no changes because Android was already installed; Android Debug build smoke then passed, producing Unlimotion.Android.dll; iOS Debug build smoke evidence from earlier 2026-06-28 remains preserved; repo source/tests/test annotations/project files/workflows не менялись.",
       "BDD executable slice добавлен 2026-06-28: SC-0005-002 исполняется из feature text через repo-local step definitions SD-0027..SD-0030 и TUnit/Avalonia.Headless evidence TS-0033.",
       "BDD executable slice добавлен 2026-06-28: SC-0005-003 исполняется из feature text через repo-local step definitions SD-0031..SD-0034 и TUnit/Avalonia.Headless evidence TS-0034.",
-      "BDD executable slice добавлен 2026-06-28: SC-0005-001 исполняется из feature text через repo-local step definitions SD-0035..SD-0038 и TUnit/Avalonia.Headless evidence TS-0035."
+      "BDD executable slice добавлен 2026-06-28: SC-0005-001 исполняется из feature text через repo-local step definitions SD-0035..SD-0038 и TUnit/Avalonia.Headless evidence TS-0035.",
+      "BDD executable slice добавлен 2026-06-29: SC-0001-002 исполняется из feature text через repo-local step definitions SD-0043..SD-0046 и TUnit/Avalonia.Headless evidence TS-0037."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0005-001 search behavior executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0001-002 multiple parents executable slice",
     "last_artifact_mode": "delivery-task test-only BDD implementation + artifact sync"
   },
   "vision": {
@@ -858,15 +859,21 @@
         {
           "id": "AC-0002",
           "text": "Задача может иметь несколько родителей, а обратные связи parent-child остаются синхронизированными.",
-          "coverage_level": "critical",
+          "coverage_level": "full",
           "linked_tests": [
             "TS-0001",
-            "TS-0014"
+            "TS-0014",
+            "TS-0037"
           ],
           "evidence": [
             {
               "path": "src/Unlimotion.Domain/TaskItem.cs",
               "symbol": "ParentTasks / ContainsTasks"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+              "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+              "test_id": "TS-0037"
             }
           ],
           "linked_rules": [
@@ -909,7 +916,8 @@
         "TS-0001",
         "TS-0004",
         "TS-0014",
-        "TS-0036"
+        "TS-0036",
+        "TS-0037"
       ],
       "linked_code": [
         "CU-0001",
@@ -941,7 +949,7 @@
         "SC-0001-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0001-001 теперь passing и step-executable через TS-0036/SD-0039..SD-0042; остальные ST-0001 scenarios rely on linked existing tests until separate BDD slices."
+      "behavior_coverage_note": "SC-0001-001 и SC-0001-002 теперь passing и step-executable через TS-0036/SD-0039..SD-0042 и TS-0037/SD-0043..SD-0046; SC-0001-003 remains linked-existing-tests only until separate BDD slice."
     },
     {
       "id": "ST-0002",
@@ -4499,6 +4507,79 @@
         }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0001-001."
+    },
+    {
+      "id": "TS-0037",
+      "name": "StormMultipleParentsRelationExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+      "framework": "TUnit + Avalonia.Headless + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/multiple-parents-relation-ui",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0001-002_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0001"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0002"
+      ],
+      "linked_constraints": [
+        "CN-0002",
+        "CN-0001"
+      ],
+      "linked_scenarios": [
+        "SC-0001-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0001-002 steps from features/storm/st-0001-task-graph.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+          "symbol": "SD-0043..SD-0046",
+          "description": "Step definitions bind Given/When/Then product wording to multiple-parent relation contract assertions."
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "ExecuteMultipleParentsRelationScenarioAsync / AssertMultipleParentsRelationScenarioResultAsync",
+          "description": "Reusable test-only contract executes existing ViewModel, storage migration, projection and headless UI relation-editor evidence for multiple parents and reverse links."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormMultipleParentsRelationExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemParentsAdd_Success\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemContainsAdd_Success\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/MovingTaskWithTwoParentsToRootTask_Success\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/TaskCardRelationEditor_AddParentFromCard_UpdatesStorage\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MigrateTests/Migrate_BuildsParentsAndNormalizesChildren\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StartupProjectionAndRelationsTests/TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0001-002."
     }
   ],
   "code_units": [
@@ -6867,13 +6948,13 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
+    "updated_at": "2026-06-29",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0001-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "ST-0001/AC-0001 now preserves existing TS-0001/TS-0004 evidence and adds executable BDD evidence TS-0036 through SD-0039..SD-0042.",
+    "summary": "ST-0001/AC-0002 now preserves existing TS-0001/TS-0014 evidence and adds executable BDD evidence TS-0037 through SD-0043..SD-0046.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -7285,8 +7366,8 @@
       "Решено 2026-06-26: full-suite validation gate восстановлен; BackupViaGitService Windows ACL hardening blocker закрыт production fix, targeted Headless reset risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox."
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-28",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
+      "updated_at": "2026-06-29",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0001-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -7304,14 +7385,14 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 11,
+      "passing_scenarios": 12,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 42,
-      "step_executable_scenarios": 11,
-      "step_definition_coverage_ratio": "11/45",
-      "executable_specification_ratio": "11/45 step-executable; 11/45 passing scenarios",
+      "step_definitions_total": 46,
+      "step_executable_scenarios": 12,
+      "step_definition_coverage_ratio": "12/45",
+      "executable_specification_ratio": "12/45 step-executable; 12/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -7321,26 +7402,34 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-        "final artifact validator/full suite gates pending after sync",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormMultipleParentsRelationExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemParentsAdd_Success\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemContainsAdd_Success\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/MovingTaskWithTwoParentsToRootTask_Success\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/TaskCardRelationEditor_AddParentFromCard_UpdatesStorage\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MigrateTests/Migrate_BuildsParentsAndNormalizesChildren\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StartupProjectionAndRelationsTests/TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds\" --output Detailed => прошло 1/1",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 4 warnings по intentional shared steps",
+        "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-29-storm-sc0001-multiple-parents-bdd.md => no matches (rg exit 1)",
+        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002.log => failed 566/568; unrelated failures: FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask",
+        "targeted retry FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder => прошло 1/1",
+        "targeted retry PasteTaskOutline_CreatesNestedTasksUnderCurrentTask => first retry failed 1/1, second retry passed 1/1; signal is flaky/order-sensitive and outside SC-0001-002 scope",
+        "full-suite retry outside managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002-retry.log => timed out after 604s before progress beyond test-run start; leftover dotnet runner process was stopped",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "pending final full Unlimotion.Test gate for SC-0001-001 sync",
+      "full_suite_result": "Full Unlimotion.Test gate is blocked after SC-0001-002 sync: first outside-sandbox run failed 566/568 on unrelated FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask; isolated retries show order/flaky behavior; second full retry timed out before test progress. Targeted SC-0001-002 gates passed.",
       "production_code_changed": false
     },
     "bdd_sync_summary": {
-      "updated_at": "2026-06-28",
-      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-001",
+      "updated_at": "2026-06-29",
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "status": "synced",
       "synced_links": [
-        "SC-0001-001 -> TS-0036 -> SD-0039..SD-0042",
-        "existing TS-0001 and TS-0004 preserved"
+        "SC-0001-002 -> TS-0037 -> SD-0043..SD-0046",
+        "existing TS-0001 and TS-0014 preserved"
       ],
       "not_changed": [
         "production code",
@@ -7350,10 +7439,11 @@
         "workflows"
       ],
       "tests_changed": true,
-      "decision": "BDD links обновлены для SC-0001-001: новый TS-0036 связывает scenario text с real ViewModel/headless UI task creation evidence через SD-0039..SD-0042. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
+      "decision": "BDD links обновлены для SC-0001-002: новый TS-0037 связывает scenario text с real ViewModel/storage/projection/headless UI relation evidence через SD-0043..SD-0046. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
       "gaps": [
-        "Step definitions покрывают 11/45 scenarios.",
-        "ST-0001 partially step-executable: SC-0001-001 закрыт, SC-0001-002 и SC-0001-003 остаются linked-existing-tests only."
+        "Step definitions покрывают 12/45 scenarios.",
+        "ST-0001 partially step-executable: SC-0001-001 и SC-0001-002 закрыты, SC-0001-003 остается linked-existing-tests only.",
+        "Full-suite validation currently blocked by unrelated flaky/order-sensitive tests: FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask."
       ],
       "code_changed": false
     },
@@ -7424,24 +7514,42 @@
           "SD-0042"
         ],
         "result": "passing targeted gates and full suite 567/567 outside managed sandbox"
+      },
+      {
+        "story": "ST-0001",
+        "acceptance_criteria": "AC-0002",
+        "scenario": "SC-0001-002",
+        "added_test": "TS-0037",
+        "added_step_definitions": [
+          "SD-0043",
+          "SD-0044",
+          "SD-0045",
+          "SD-0046"
+        ],
+        "result": "passing targeted gates; full suite blocked by unrelated flaky/order-sensitive tests, proposed next stabilization SPEC before further /storm:cover expansion"
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full Unlimotion.Test прошёл 567/567 вне managed sandbox 2026-06-28; sandboxed run has known ACL-only failure in BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows.",
-    "targeted_validation_result": "SC-0001-001 executable BDD and linked ViewModel/headless UI evidence passed on 2026-06-28.",
+    "full_suite_result": "Full Unlimotion.Test gate is blocked after SC-0001-002 sync: first outside-sandbox run failed 566/568 on unrelated FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask; isolated retries show order/flaky behavior; second full retry timed out before test progress. Targeted SC-0001-002 gates passed.",
+    "targeted_validation_result": "SC-0001-002 executable BDD and linked ViewModel/storage/projection/headless UI evidence passed on 2026-06-29; full suite is blocked by unrelated flaky/order-sensitive tests.",
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared task-set Given warning now includes SD-0039)",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormMultipleParentsRelationExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemParentsAdd_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemContainsAdd_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/MovingTaskWithTwoParentsToRootTask_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/TaskCardRelationEditor_AddParentFromCard_UpdatesStorage\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MigrateTests/Migrate_BuildsParentsAndNormalizesChildren\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StartupProjectionAndRelationsTests/TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds\" --output Detailed => прошло 1/1",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 4 warnings по intentional shared steps",
       "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0001-task-creation-bdd.md => no matches (rg exit 1)",
-      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001.log capture => прошло 567/567"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-29-storm-sc0001-multiple-parents-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002.log => failed 566/568; unrelated failures: FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask",
+      "targeted retry FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder => прошло 1/1",
+      "targeted retry PasteTaskOutline_CreatesNestedTasksUnderCurrentTask => first retry failed 1/1, second retry passed 1/1; signal is flaky/order-sensitive and outside SC-0001-002 scope",
+      "full-suite retry outside managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002-retry.log => timed out after 604s before progress beyond test-run start; leftover dotnet runner process was stopped",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
   "ranking_analysis": {
@@ -10342,14 +10450,20 @@
         "CN-0001"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_multiple_parent_relation_viewmodel_storage_headless_ui_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-29",
       "linked_tests": [
         "TS-0001",
-        "TS-0014"
+        "TS-0014",
+        "TS-0037"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0043",
+        "SD-0044",
+        "SD-0045",
+        "SD-0046"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -10381,6 +10495,26 @@
           "path": "src/Unlimotion.Test/JsonRepairingReaderTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0014"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0037",
+          "description": "TS-0037 прошёл 1/1 2026-06-29 и исполняет SC-0001-002 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+          "symbol": "SD-0043..SD-0046",
+          "description": "Step definitions bind all four SC-0001-002 Gherkin steps to real relation synchronization evidence."
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "ExecuteMultipleParentsRelationScenarioAsync / AssertMultipleParentsRelationScenarioResultAsync",
+          "description": "Reusable test-only contract executes existing multiple-parent, reverse-link migration/repair/projection and relation-editor UI evidence."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormMultipleParentsRelationExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
         }
       ]
     },
@@ -13568,11 +13702,95 @@
           "symbol": "AssertTaskCreationGraphScenarioResultAsync"
         }
       ]
+    },
+    {
+      "id": "SD-0043",
+      "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+      "symbol": "MultipleParentsRelationStepDefinitions.Create / SD-0043",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0001-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0037"
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "ExecuteMultipleParentsRelationScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0044",
+      "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+      "symbol": "MultipleParentsRelationStepDefinitions.Create / SD-0044",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0001",
+      "supports_scenarios": [
+        "SC-0001-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0037"
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "ExecuteMultipleParentsRelationScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0045",
+      "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+      "symbol": "MultipleParentsRelationStepDefinitions.Create / SD-0045",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": [
+        "SC-0001-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0037"
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "ExecuteMultipleParentsRelationScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0046",
+      "path": "src/Unlimotion.Test/StormBdd/MultipleParentsRelationStepDefinitions.cs",
+      "symbol": "MultipleParentsRelationStepDefinitions.Create / SD-0046",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Задача может иметь несколько родителей, а обратные связи parent-child остаются синхронизированными.",
+      "supports_scenarios": [
+        "SC-0001-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormMultipleParentsRelationExecutableSpecTests.cs",
+          "symbol": "MultipleParentsRelationScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0037"
+        },
+        {
+          "path": "src/Unlimotion.Test/MultipleParentsRelationContract.cs",
+          "symbol": "AssertMultipleParentsRelationScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
+    "updated_at": "2026-06-29",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0001-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -13590,14 +13808,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 11,
+    "passing_scenarios": 12,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 42,
-    "step_executable_scenarios": 11,
-    "step_definition_coverage_ratio": "11/45",
-    "executable_specification_ratio": "11/45 step-executable; 11/45 passing scenarios",
+    "step_definitions_total": 46,
+    "step_executable_scenarios": 12,
+    "step_definition_coverage_ratio": "12/45",
+    "executable_specification_ratio": "12/45 step-executable; 12/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -13607,29 +13825,34 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared task-set Given warning now includes SD-0039)",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormMultipleParentsRelationExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemParentsAdd_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CurrentItemContainsAdd_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/MovingTaskWithTwoParentsToRootTask_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/TaskCardRelationEditor_AddParentFromCard_UpdatesStorage\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MigrateTests/Migrate_BuildsParentsAndNormalizesChildren\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StartupProjectionAndRelationsTests/TaskRelationsIndex_ShouldSynchronizeRelationCollectionsWithIds\" --output Detailed => прошло 1/1",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 4 warnings по intentional shared steps",
       "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0001-task-creation-bdd.md => no matches (rg exit 1)",
-      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001.log capture => прошло 567/567"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-29-storm-sc0001-multiple-parents-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002.log => failed 566/568; unrelated failures: FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask",
+      "targeted retry FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder => прошло 1/1",
+      "targeted retry PasteTaskOutline_CreatesNestedTasksUnderCurrentTask => first retry failed 1/1, second retry passed 1/1; signal is flaky/order-sensitive and outside SC-0001-002 scope",
+      "full-suite retry outside managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001-002-retry.log => timed out after 604s before progress beyond test-run start; leftover dotnet runner process was stopped",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
-    "full_suite_result": "Full Unlimotion.Test прошёл 567/567 вне managed sandbox 2026-06-28; sandboxed run has known ACL-only failure in BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows.",
+    "full_suite_result": "Full Unlimotion.Test gate is blocked after SC-0001-002 sync: first outside-sandbox run failed 566/568 on unrelated FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask; isolated retries show order/flaky behavior; second full retry timed out before test progress. Targeted SC-0001-002 gates passed.",
     "production_code_changed": false
   },
   "bdd_sync": {
-    "updated_at": "2026-06-28",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-001",
+    "updated_at": "2026-06-29",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0001-001 -> TS-0036 -> SD-0039..SD-0042",
-      "existing TS-0001 and TS-0004 preserved"
+      "SC-0001-002 -> TS-0037 -> SD-0043..SD-0046",
+      "existing TS-0001 and TS-0014 preserved"
     ],
     "not_changed": [
       "production code",
@@ -13639,27 +13862,30 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0001-001: новый TS-0036 связывает scenario text с real ViewModel/headless UI task creation evidence через SD-0039..SD-0042. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0001-002: новый TS-0037 связывает scenario text с real ViewModel/storage/projection/headless UI relation evidence через SD-0043..SD-0046. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 11/45 scenarios.",
-      "ST-0001 partially step-executable: SC-0001-001 закрыт, SC-0001-002 и SC-0001-003 остаются linked-existing-tests only."
+      "Step definitions покрывают 12/45 scenarios.",
+      "ST-0001 partially step-executable: SC-0001-001 и SC-0001-002 закрыты, SC-0001-003 остается linked-existing-tests only.",
+      "Full-suite validation currently blocked by unrelated flaky/order-sensitive tests: FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder and PasteTaskOutline_CreatesNestedTasksUnderCurrentTask."
     ],
     "code_changed": false
   },
   "bdd_lint": {
-    "updated_at": "2026-06-28",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0001-001",
+    "updated_at": "2026-06-29",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0001-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Step definitions покрывают только 11/45 scenarios; repo-local runner не является full Cucumber-style engine.",
-      "Shared Given step text intentionally reused across multiple scenario-specific step definitions, now including SD-0039.",
+      "Step definitions покрывают только 12/45 scenarios; repo-local runner не является full Cucumber-style engine.",
+      "Shared Given step text intentionally reused across multiple scenario-specific step definitions, now including SD-0043.",
+      "Shared And step text for ST-0001 intentionally reused by SD-0040 and SD-0044.",
       "CV-0007 remains without scenario/test links by prior decision: attachment code is internal/orphan contract candidate."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked before this slice; SC-0001-001 now additionally linked to TS-0036.",
-      "scenario_step_definition_links": "WARNING: 11/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0001-002 additionally linked to TS-0037.",
+      "scenario_step_definition_links": "WARNING: 12/45 scenarios step-executable.",
+      "st_0001": "WARNING: SC-0001-001 and SC-0001-002 step-executable; SC-0001-003 remains linked-existing-tests only.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся."
