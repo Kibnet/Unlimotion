@@ -57,7 +57,7 @@ Outcome contract:
 - Команда `unlocked` выводит незавершенные задачи, которые можно начать сейчас.
 - Команда `task --id <id> --explain` выводит статус, `canStart`, `canComplete`, `isCanBeCompleted` и причины.
 - Команда `validate` выводит структурные дефекты: missing references, missing reverse links, stored/computed availability mismatch.
-- Output contract: `--format json` дает стабильный camelCase JSON для агентов; text format предназначен для человека.
+- Output contract: `--format json` дает стабильный camelCase JSON для агентов; text format предназначен для человека; CLI project упаковывается как local/installable `dotnet tool` с command name `unlimotion-cli`.
 - Visual planning artifact для UI-facing изменений: Не применимо, UI не меняется.
 - UI test video evidence: Не применимо, автоматизация UI не меняется.
 - Обработка ошибок: bad args и missing task id возвращают exit code `2`; validation issues возвращают `1`; успешные команды возвращают `0`.
@@ -100,6 +100,8 @@ Outcome contract:
   - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/TaskAvailabilityAnalyzerTests/*"`
   - `dotnet build src/Unlimotion.sln -c Release`
   - `dotnet run --project src/Unlimotion.Cli -c Release -- status --tasks <task-dir> --format json`
+  - `dotnet pack src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release -o <pack-dir>`
+  - `dotnet tool install --tool-path <tool-path> --add-source <pack-dir> Unlimotion.Cli --version 0.1.0`
 - Stop rules: если тестовый фильтр не находит тесты, сначала получить список TUnit tests; не запускать тяжелые параллельные UI suites без необходимости.
 
 ## 12. Риски и edge cases
@@ -128,7 +130,7 @@ Outcome contract:
 | --- | --- | --- |
 | `specs/2026-06-28-agent-task-cli.md` | Новый SPEC | Зафиксировать контракт и границы |
 | `src/Unlimotion.TaskTreeManager/TaskAvailabilityAnalyzer.cs` | Новый analyzer | Дать CLI переиспользуемые правила |
-| `src/Unlimotion.Cli/*` | Новый CLI project | Машинный доступ агентов к графу |
+| `src/Unlimotion.Cli/*` | CLI project, dotnet tool metadata, usage README | Машинный доступ агентов к графу |
 | `src/Unlimotion.Test/TaskAvailabilityAnalyzerTests.cs` | Новые tests | Regression coverage спорных правил |
 | `src/Unlimotion.sln` | Добавить project | Сборка CLI вместе с решением |
 
@@ -244,7 +246,11 @@ Outcome contract:
 - Unrelated changes: не обнаружены.
 - Needs human: нет.
 - Residual risks / follow-ups: write-mode CLI и прямое переиспользование analyzer внутри `TaskTreeManager` можно вынести в отдельные итерации.
-
+#### Dotnet tool packaging follow-up
+- `dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -o C:\tmp\unlimotion-cli-pack-20260628` -> PASS, package `Unlimotion.Cli.0.1.0.nupkg` created.
+- `dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool-20260628 --add-source C:\tmp\unlimotion-cli-pack-20260628 Unlimotion.Cli --version 0.1.0` -> PASS, command `unlimotion-cli` installed.
+- `C:\tmp\unlimotion-cli-tool-20260628\unlimotion-cli.exe status --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> PASS, 264 tasks.
+- `C:\tmp\unlimotion-cli-tool-20260628\unlimotion-cli.exe validate --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> command works, exit 1 because the graph has 6 stored/computed availability mismatches.
 ## Approval
 Пользовательская команда `выполняй план` и последующее `продолжай` считаются подтверждением выполнения этой спеки в текущем контексте.
 
@@ -253,3 +259,4 @@ Outcome contract:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | Зафиксировать CLI MVP | 0.9 | Нет | Реализовать analyzer и CLI | Нет | Да, пользователь сказал `выполняй план` / `продолжай` | Без CLI агенты продолжают ошибаться в правилах разблокировки | `specs/2026-06-28-agent-task-cli.md` |
 | EXEC | Реализовать CLI MVP | 0.85 | Нет данных о write-mode требованиях | Закоммитить read-only CLI | Нет | Нет | Read-only инструмент уже достаточен для диагностики ошибок графа | `src/Unlimotion.Cli`, `TaskAvailabilityAnalyzer.cs`, `TaskAvailabilityAnalyzerTests.cs`, `src/Unlimotion.sln` |
+| EXEC | Упаковать CLI как dotnet tool | 0.9 | Нет | Проверить pack/install/smoke и закоммитить | Нет | Нет | Агентам нужен стабильный installed command вместо `dotnet run --project` | `src/Unlimotion.Cli/Unlimotion.Cli.csproj`, `src/Unlimotion.Cli/README.md`, `specs/2026-06-28-agent-task-cli.md` |
