@@ -189,6 +189,44 @@
   <data name="RoadmapPanRight" xml:space="preserve"><value>Move map right</value></data>
   <data name="RoadmapPanUp" xml:space="preserve"><value>Move map up</value></data>
   <data name="RoadmapRebuilding" xml:space="preserve"><value>Updating roadmap...</value></data>
+  <data name="HotkeyCreateBlockedSibling" xml:space="preserve"><value>Create blocked sibling</value></data>
+  <data name="HotkeyCompleteCurrentTask" xml:space="preserve"><value>Complete current task</value></data>
+  <data name="HotkeyCreateInner" xml:space="preserve"><value>Create inner task</value></data>
+  <data name="HotkeyCreateSibling" xml:space="preserve"><value>Create sibling</value></data>
+  <data name="HotkeyCancelRelation" xml:space="preserve"><value>Cancel relation editor</value></data>
+  <data name="HotkeyCloseHotkeyHelp" xml:space="preserve"><value>Close shortcut reference</value></data>
+  <data name="HotkeyConfirmRelation" xml:space="preserve"><value>Confirm relation editor</value></data>
+  <data name="HotkeyDeleteSelection" xml:space="preserve"><value>Delete selected</value></data>
+  <data name="HotkeyDragCloneInto" xml:space="preserve"><value>Clone tasks inside target</value></data>
+  <data name="HotkeyDragCopyInto" xml:space="preserve"><value>Copy tasks inside target</value></data>
+  <data name="HotkeyDragMoveInto" xml:space="preserve"><value>Move tasks inside target</value></data>
+  <data name="HotkeyDragSourcesBlockTarget" xml:space="preserve"><value>Dragged tasks block target</value></data>
+  <data name="HotkeyDragTargetBlocksSources" xml:space="preserve"><value>Target blocks dragged tasks</value></data>
+  <data name="HotkeyOpenHotkeyHelp" xml:space="preserve"><value>Show or hide shortcut reference</value></data>
+  <data name="HotkeyPanelTitle" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
+  <data name="HotkeyRenameTask" xml:space="preserve"><value>Rename task</value></data>
+  <data name="HotkeyRoadmapAddSelection" xml:space="preserve"><value>Add tasks to map selection</value></data>
+  <data name="HotkeyRoadmapFitToScreen" xml:space="preserve"><value>Fit to screen</value></data>
+  <data name="HotkeyRoadmapPan" xml:space="preserve"><value>Pan map</value></data>
+  <data name="HotkeyRoadmapRemoveSelection" xml:space="preserve"><value>Remove tasks from map selection</value></data>
+  <data name="HotkeyRoadmapResetViewport" xml:space="preserve"><value>Reset viewport</value></data>
+  <data name="HotkeyRoadmapToggleSelection" xml:space="preserve"><value>Toggle map selection</value></data>
+  <data name="HotkeySectionCurrentTask" xml:space="preserve"><value>Current task</value></data>
+  <data name="HotkeySectionCurrentTaskDescription" xml:space="preserve"><value>Commands apply to the active or selected task.</value></data>
+  <data name="HotkeySectionDragDrop" xml:space="preserve"><value>Drag and drop</value></data>
+  <data name="HotkeySectionDragDropDescription" xml:space="preserve"><value>Hold the modifier while dragging tasks.</value></data>
+  <data name="HotkeySectionGeneral" xml:space="preserve"><value>Shortcut reference</value></data>
+  <data name="HotkeySectionGeneralDescription" xml:space="preserve"><value>Opens and closes this embedded panel.</value></data>
+  <data name="HotkeySectionRoadmap" xml:space="preserve"><value>Roadmap</value></data>
+  <data name="HotkeySectionRoadmapDescription" xml:space="preserve"><value>Map viewport and map selection controls.</value></data>
+  <data name="HotkeySectionRelations" xml:space="preserve"><value>Relations</value></data>
+  <data name="HotkeySectionRelationsDescription" xml:space="preserve"><value>Shortcuts inside the relation editor.</value></data>
+  <data name="HotkeySectionSelectionOutline" xml:space="preserve"><value>Selection and outline</value></data>
+  <data name="HotkeySectionSelectionOutlineDescription" xml:space="preserve"><value>Operations for selected tasks and outline clipboard.</value></data>
+  <data name="HotkeySectionTaskTree" xml:space="preserve"><value>Task tree</value></data>
+  <data name="HotkeySectionTaskTreeDescription" xml:space="preserve"><value>Expand and collapse tree nodes.</value></data>
+  <data name="HotkeySelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="ShowHotkeys" xml:space="preserve"><value>Show keyboard shortcuts</value></data>
   <data name="RoadmapResetViewport" xml:space="preserve"><value>Reset map view</value></data>
   <data name="RoadmapShowGraphControls" xml:space="preserve"><value>Show map controls</value></data>
   <data name="RoadmapShowMinimap" xml:space="preserve"><value>Show minimap</value></data>

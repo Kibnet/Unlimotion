@@ -1117,8 +1117,6 @@ namespace Unlimotion.Views
             switch (e.Key)
             {
                 case Key.F:
-                case Key.U:
-                case Key.T:
                     FitRoadmapToScreen();
                     e.Handled = true;
                     break;

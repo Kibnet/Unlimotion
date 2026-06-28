@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 
@@ -42,6 +43,11 @@ namespace Unlimotion.Views
             }
 
             _tasksLoadingSpinnerTransform.Angle = (_tasksLoadingSpinnerTransform.Angle + 18d) % 360d;
+        }
+
+        internal bool TryHandleHotkeyHelpKey(KeyEventArgs e)
+        {
+            return MainControl.TryHandleHotkeyHelpKey(e);
         }
     }
 }

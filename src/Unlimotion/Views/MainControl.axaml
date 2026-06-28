@@ -750,33 +750,34 @@
                                        FontWeight="Bold"
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
-            <DropDownButton Grid.Column="1"
-                            Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                            Content="➕"
-                            ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
-                            AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
-                            AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
-                <DropDownButton.Flyout>
-                    <MenuFlyout>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewTask}"
-                                  Command="{Binding Create}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewSibling}"
-                                  Command="{Binding CreateSibling}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewBlockedSibling}"
-                                  Command="{Binding CreateBlockedSibling}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
-                        <MenuItem Classes="TaskCreateMenuItem"
-                                  Header="{DynamicResource NewInner}"
-                                  Command="{Binding CreateInner}"
-                                  AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
-                    </MenuFlyout>
-                </DropDownButton.Flyout>
-            </DropDownButton>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                Content="➕"
+                                ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
+                                AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
+                                AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewTask}"
+                                      Command="{Binding Create}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewSibling}"
+                                      Command="{Binding CreateSibling}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewBlockedSibling}"
+                                      Command="{Binding CreateBlockedSibling}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
+                            <MenuItem Classes="TaskCreateMenuItem"
+                                      Header="{DynamicResource NewInner}"
+                                      Command="{Binding CreateInner}"
+                                      AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
         </Grid>
 
         <!--Панель навигации-->
@@ -2338,6 +2339,26 @@
             </SplitView.Pane>
         </SplitView>
         <!--Редактор задачи-->
+        <Grid x:Name="HotkeyHelpOverlayHost"
+              Grid.RowSpan="2"
+              Panel.ZIndex="100"
+              IsVisible="False"
+              Focusable="True"
+              Background="#66000000"
+              AutomationProperties.AutomationId="HotkeyHelpOverlayHost">
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    MaxWidth="560"
+                    MaxHeight="520"
+                    Margin="16"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ThemeControlMidBrush}"
+                    CornerRadius="6"
+                    Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                    AutomationProperties.AutomationId="HotkeyHelpOverlayPanelFrame">
+                <views:HotkeyHelpPanel x:Name="EmbeddedHotkeyHelpPanel"/>
+            </Border>
+        </Grid>
     </Grid>
 
 </UserControl>

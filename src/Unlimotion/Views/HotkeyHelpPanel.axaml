@@ -1,0 +1,279 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:unlimotion="clr-namespace:Unlimotion"
+             mc:Ignorable="d"
+             d:DesignWidth="560"
+             d:DesignHeight="480"
+             x:Class="Unlimotion.Views.HotkeyHelpPanel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.HotkeyPanelTitle">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyPanelSectionTitle">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Opacity" Value="0.8"/>
+            <Setter Property="Margin" Value="0,12,0,2"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyPanelSectionDescription">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Opacity" Value="0.65"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="Grid.HotkeyRow">
+            <Setter Property="Margin" Value="0,2,0,0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyRowLabel">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+        </Style>
+        <Style Selector="Border.HotkeyChip">
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeControlMidBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.HotkeyChipText">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Padding="16,12"
+            MaxWidth="560"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.AutomationId="HotkeyPanel">
+        <Grid RowDefinitions="Auto,*" MaxHeight="480">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+                <TextBlock Text="{DynamicResource HotkeyPanelTitle}"
+                           Classes="HotkeyPanelTitle"
+                           AutomationProperties.AutomationId="HotkeyPanelTitleText"/>
+                <Button Grid.Column="1"
+                        Width="28"
+                        Height="28"
+                        MinWidth="28"
+                        Padding="0"
+                        Content="X"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="CloseButton_OnClick"
+                        ToolTip.Tip="{DynamicResource HotkeyCloseHotkeyHelp}"
+                        AutomationProperties.Name="{DynamicResource HotkeyCloseHotkeyHelp}"
+                        AutomationProperties.AutomationId="HotkeyHelpCloseButton"/>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          AutomationProperties.AutomationId="HotkeyPanelScrollViewer">
+                <StackPanel Spacing="0">
+                    <TextBlock Text="{DynamicResource HotkeySectionGeneral}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyGeneralSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionGeneralDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyGeneralSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyGeneralOpenHotkeyHelpRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyOpenHotkeyHelp}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeyGeneralOpenHotkeyHelpChip">
+                            <TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.OpenHotkeyHelp}"/>
+                        </Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyGeneralCloseHotkeyHelpRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCloseHotkeyHelp}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeyGeneralCloseHotkeyHelpChip">
+                            <TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CloseHotkeyHelp}"/>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionCurrentTask}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyCurrentTaskSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionCurrentTaskDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyCurrentTaskSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyCurrentTaskRenameTaskRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRenameTask}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RenameTask}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyCurrentTaskCreateSiblingRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateSibling}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateSibling}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyCurrentTaskCreateBlockedSiblingRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateBlockedSibling}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateBlockedSibling}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyCurrentTaskCreateInnerRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCreateInner}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CreateInner}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyCurrentTaskCompleteCurrentTaskRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCompleteCurrentTask}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeyCurrentTaskCompleteCurrentTaskChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CompleteCurrentTask}"/></Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionSelectionOutline}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeySelectionOutlineSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionSelectionOutlineDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeySelectionOutlineSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeySelectionOutlineSelectAllRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeySelectAll}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeySelectionOutlineSelectAllChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.SelectAll}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeySelectionOutlineDeleteSelectionRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDeleteSelection}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DeleteSelection}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeySelectionOutlineCopyOutlineRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CopyTaskOutline}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CopyOutline}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeySelectionOutlinePasteOutlineRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource PasteTaskOutline}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.PasteOutline}"/></Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionTaskTree}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyTaskTreeSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionTaskTreeDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyTaskTreeSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyTaskTreeExpandCurrentRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource ExpandCurrentNested}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.ExpandCurrent}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyTaskTreeCollapseCurrentRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CollapseCurrentNested}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CollapseCurrent}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyTaskTreeExpandAllRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource ExpandAllNodes}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.ExpandAll}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyTaskTreeCollapseAllRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource CollapseAllNodes}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CollapseAll}"/></Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionRelations}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyRelationsSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionRelationsDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyRelationsSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRelationsConfirmRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyConfirmRelation}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.ConfirmRelation}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRelationsCancelRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyCancelRelation}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.CancelRelation}"/></Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionDragDrop}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyDragDropSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionDragDropDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyDragDropSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyDragCopyIntoRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDragCopyInto}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DragCopyInto}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyDragMoveIntoRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDragMoveInto}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DragMoveInto}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyDragCloneIntoRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDragCloneInto}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DragCloneInto}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyDragSourcesBlockTargetRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDragSourcesBlockTarget}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DragSourcesBlockTarget}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyDragTargetBlocksSourcesRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyDragTargetBlocksSources}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.DragTargetBlocksSources}"/></Border>
+                    </Grid>
+
+                    <TextBlock Text="{DynamicResource HotkeySectionRoadmap}"
+                               Classes="HotkeyPanelSectionTitle"
+                               AutomationProperties.AutomationId="HotkeyRoadmapSectionTitle"/>
+                    <TextBlock Text="{DynamicResource HotkeySectionRoadmapDescription}"
+                               Classes="HotkeyPanelSectionDescription"
+                               AutomationProperties.AutomationId="HotkeyRoadmapSectionDescription"/>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapFitToScreenRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapFitToScreen}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeyRoadmapFitToScreenChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapFitToScreen}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapResetViewportRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapResetViewport}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip" AutomationProperties.AutomationId="HotkeyRoadmapResetViewportChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapResetViewport}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapToggleSelectionRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapToggleSelection}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapToggleSelection}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapAddSelectionRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapAddSelection}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapAddSelection}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapRemoveSelectionRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapRemoveSelection}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapRemoveSelection}"/></Border>
+                    </Grid>
+                    <Grid Classes="HotkeyRow" ColumnDefinitions="*,Auto"
+                          AutomationProperties.AutomationId="HotkeyRoadmapPanRow">
+                        <TextBlock Classes="HotkeyRowLabel" Text="{DynamicResource HotkeyRoadmapPan}"/>
+                        <Border Grid.Column="1" Classes="HotkeyChip"><TextBlock Classes="HotkeyChipText" Text="{x:Static unlimotion:HotkeyHints.RoadmapPan}"/></Border>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>
