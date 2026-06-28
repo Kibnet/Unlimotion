@@ -51,7 +51,8 @@ namespace Unlimotion
             return expression
                 .ForMember(task => task.IsCompleted, options => options.Ignore())
                 .ForMember(task => task.CompletedDateTime, options => options.Ignore())
-                .ForMember(task => task.ArchiveDateTime, options => options.Ignore());
+                .ForMember(task => task.ArchiveDateTime, options => options.Ignore())
+                .ForMember(task => task.ExtensionData, options => options.Ignore());
         }
     }
 }

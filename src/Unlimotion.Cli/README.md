@@ -17,7 +17,7 @@ Use a dedicated `--tool-path` for automation so agent runs do not mutate the use
 ```powershell
 unlimotion-cli status --tasks <task-dir> [--format text|json]
 unlimotion-cli unlocked --tasks <task-dir> [--format text|json]
-unlimotion-cli task --tasks <task-dir> --id <task-id> --explain [--format text|json]
+unlimotion-cli task --tasks <task-dir> --id <task-id> [--format text|json]
 unlimotion-cli validate --tasks <task-dir> [--format text|json]
 unlimotion-cli set-status --tasks <task-dir> --id <task-id> --status <status> [--author <name>] [--format text|json]
 unlimotion-cli complete --tasks <task-dir> --id <task-id> [--author <name>] [--format text|json]
@@ -27,7 +27,7 @@ unlimotion-cli satisfy-criterion --tasks <task-dir> --id <task-id> --criterion <
 
 ## Availability semantics
 
-The CLI uses `TaskAvailabilityAnalyzer`, which mirrors the current Unlimotion rules:
+Read commands use the shared file storage and `TaskAvailabilityAnalyzer` to explain the current graph:
 
 - incomplete `ContainsTasks` block the containing task;
 - incomplete direct `BlockedByTasks` block the task;
@@ -38,10 +38,24 @@ The CLI uses `TaskAvailabilityAnalyzer`, which mirrors the current Unlimotion ru
 
 ## Write behavior
 
-Write commands update task JSON files in place and then recompute `IsCanBeCompleted` for every loaded task, saving only changed task files. Status transitions are guarded by Unlimotion availability rules: `InProgress` requires `canStart`, and `Completed` requires `canComplete`.
+Write commands are a thin wrapper over the shared Unlimotion engine. The CLI loads tasks through `Unlimotion.Storage.FileTaskStorage`, applies the requested change to a detached task model, and calls `TaskTreeManager.UpdateTask(...)`. Status transitions, affected-task recalculation, repeating-task cloning, reverse-link updates, status history, and `--author` handling are owned by `TaskTreeManager`.
+
+Before any write command, the CLI validates the loaded graph and fails fast on load errors, duplicate task ids, or relation/reference issues. Availability mismatches remain diagnostic validation output; normal write commands do not silently repair them. Writes use a directory-level lock and atomic file replacement in the task directory.
+
+In JSON mode, command errors use a stable envelope:
+
+```json
+{
+  "success": false,
+  "error": {
+    "kind": "validationFailed",
+    "message": "Task graph is not safe for write commands: ..."
+  }
+}
+```
 
 ## Exit codes
 
 - `0`: command completed successfully;
-- `1`: validation/load issues were found;
-- `2`: invalid arguments or unknown task id.
+- `1`: validation/load issues, business-rule denied, unknown task id, or operation failure;
+- `2`: invalid arguments.

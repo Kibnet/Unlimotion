@@ -21,6 +21,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
+    <ProjectReference Include="..\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />
     <ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
   </ItemGroup>
 

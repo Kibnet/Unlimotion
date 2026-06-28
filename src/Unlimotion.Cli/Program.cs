@@ -1,20 +1,17 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
 using Unlimotion.TaskTree;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
-using NewtonsoftJsonException = Newtonsoft.Json.JsonException;
 
 namespace Unlimotion.Cli;
 
-internal static class Program
+public static class Program
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
-    public static int Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         try
         {
@@ -35,32 +32,49 @@ internal static class Program
                 throw new CliException($"Task directory '{options.TasksPath}' does not exist.");
             }
 
-            var loadResult = TaskDirectoryReader.Read(options.TasksPath);
-            var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+            var storage = new FileTaskStorage(new FileTaskStorageOptions
+            {
+                Path = options.TasksPath,
+                UseDirectoryLock = true,
+                PreserveUnknownJson = true
+            });
 
             return options.Command switch
             {
-                "status" => RunStatus(options, loadResult, analyzer),
-                "unlocked" => RunUnlocked(options, loadResult, analyzer),
-                "task" => RunTask(options, loadResult, analyzer),
-                "validate" => RunValidate(options, loadResult, analyzer),
-                "set-status" => RunSetStatus(options, loadResult, analyzer),
-                "complete" => RunComplete(options, loadResult, analyzer),
-                "set-criterion" => RunSetCriterion(options, loadResult),
-                "satisfy-criterion" => RunSatisfyCriterion(options, loadResult),
+                "status" => await RunReadCommand(options, storage, RunStatus),
+                "unlocked" => await RunReadCommand(options, storage, RunUnlocked),
+                "task" => await RunReadCommand(options, storage, RunTask),
+                "validate" => await RunReadCommand(options, storage, RunValidate),
+                "set-status" => await RunSetStatus(options, storage),
+                "complete" => await RunComplete(options, storage),
+                "set-criterion" => await RunSetCriterion(options, storage),
+                "satisfy-criterion" => await RunSatisfyCriterion(options, storage),
                 _ => throw new CliException($"Unknown command '{options.Command}'.")
             };
         }
         catch (CliException ex)
         {
-            Console.Error.WriteLine(ex.Message);
-            Console.Error.WriteLine();
-            PrintUsage(Console.Error);
-            return 2;
+            WriteError(args, ex.Kind, ex.Message, ex.ExitCode);
+            return ex.ExitCode;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            WriteError(args, "operationFailed", ex.Message, exitCode: 1);
+            return 1;
         }
     }
 
-    private static int RunStatus(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static async Task<int> RunReadCommand(
+        CliOptions options,
+        FileTaskStorage storage,
+        Func<CliOptions, FileTaskStorageDirectoryReadResult, TaskAvailabilityAnalyzer, int> command)
+    {
+        var loadResult = await storage.ReadDirectoryAsync();
+        var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+        return command(options, loadResult, analyzer);
+    }
+
+    private static int RunStatus(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         if (loadResult.LoadErrors.Count > 0)
         {
@@ -101,7 +115,7 @@ internal static class Program
         return 0;
     }
 
-    private static int RunUnlocked(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static int RunUnlocked(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         if (loadResult.LoadErrors.Count > 0)
         {
@@ -134,7 +148,7 @@ internal static class Program
         return 0;
     }
 
-    private static int RunTask(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static int RunTask(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         if (loadResult.LoadErrors.Count > 0)
         {
@@ -145,7 +159,7 @@ internal static class Program
         var taskId = RequireTaskId(options, "task");
         if (!analyzer.TryGetTask(taskId, out _))
         {
-            throw new CliException($"Task '{taskId}' was not found.");
+            throw new CliException($"Task '{taskId}' was not found.", exitCode: 1, kind: "notFound");
         }
 
         var analysis = analyzer.Analyze(taskId);
@@ -159,18 +173,10 @@ internal static class Program
         return 0;
     }
 
-    private static int RunValidate(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static int RunValidate(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         var validation = analyzer.Validate();
-        var output = new ValidationOutput
-        {
-            TaskCount = validation.TaskCount,
-            IsValid = loadResult.LoadErrors.Count == 0 && validation.IsValid,
-            LoadErrors = loadResult.LoadErrors,
-            ReferenceIssues = validation.ReferenceIssues,
-            AvailabilityMismatches = validation.AvailabilityMismatches,
-            DuplicateIdIssues = validation.DuplicateIdIssues
-        };
+        var output = ValidationOutput.From(loadResult, validation);
 
         if (options.Format == OutputFormat.Json)
         {
@@ -199,200 +205,232 @@ internal static class Program
 
         foreach (var duplicate in output.DuplicateIdIssues)
         {
-            Console.WriteLine($"- duplicate id: {duplicate.TaskId} count={duplicate.Count}");
+            Console.WriteLine($"- duplicate id: {duplicate.TaskId} files={string.Join(", ", duplicate.Files)}");
         }
 
         return output.IsValid ? 0 : 1;
     }
 
-    private static int RunSetStatus(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static Task<int> RunSetStatus(CliOptions options, FileTaskStorage storage)
     {
-        if (loadResult.LoadErrors.Count > 0)
-        {
-            WriteLoadErrors(options, loadResult.LoadErrors);
-            return 1;
-        }
-
-        var task = RequireTask(loadResult, RequireTaskId(options, "set-status"));
+        var taskId = RequireTaskId(options, "set-status");
         var status = options.Status ?? throw new CliException("Command 'set-status' requires --status <status>.");
-        return ChangeStatus(options, loadResult, analyzer, task, status);
+        return ChangeStatus(options, storage, taskId, status);
     }
 
-    private static int RunComplete(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    private static Task<int> RunComplete(CliOptions options, FileTaskStorage storage) =>
+        ChangeStatus(options, storage, RequireTaskId(options, "complete"), DomainTaskStatus.Completed);
+
+    private static Task<int> RunSetCriterion(CliOptions options, FileTaskStorage storage)
     {
-        if (loadResult.LoadErrors.Count > 0)
-        {
-            WriteLoadErrors(options, loadResult.LoadErrors);
-            return 1;
-        }
-
-        var task = RequireTask(loadResult, RequireTaskId(options, "complete"));
-        return ChangeStatus(options, loadResult, analyzer, task, DomainTaskStatus.Completed);
-    }
-
-    private static int RunSetCriterion(CliOptions options, TaskDirectoryReadResult loadResult)
-    {
-        if (loadResult.LoadErrors.Count > 0)
-        {
-            WriteLoadErrors(options, loadResult.LoadErrors);
-            return 1;
-        }
-
-        var task = RequireTask(loadResult, RequireTaskId(options, "set-criterion"));
+        var taskId = RequireTaskId(options, "set-criterion");
         var criterionId = RequireCriterionId(options, "set-criterion");
         if (!options.Satisfied.HasValue)
         {
             throw new CliException("Command 'set-criterion' requires --satisfied true|false.");
         }
 
-        return ChangeCriterion(options, loadResult, task, criterionId, options.Satisfied.Value);
+        return ChangeCriterion(options, storage, taskId, criterionId, options.Satisfied.Value);
     }
 
-    private static int RunSatisfyCriterion(CliOptions options, TaskDirectoryReadResult loadResult)
-    {
-        if (loadResult.LoadErrors.Count > 0)
-        {
-            WriteLoadErrors(options, loadResult.LoadErrors);
-            return 1;
-        }
+    private static Task<int> RunSatisfyCriterion(CliOptions options, FileTaskStorage storage) =>
+        ChangeCriterion(options, storage, RequireTaskId(options, "satisfy-criterion"), RequireCriterionId(options, "satisfy-criterion"), satisfied: true);
 
-        var task = RequireTask(loadResult, RequireTaskId(options, "satisfy-criterion"));
-        return ChangeCriterion(options, loadResult, task, RequireCriterionId(options, "satisfy-criterion"), satisfied: true);
-    }
-
-    private static int ChangeStatus(
+    private static async Task<int> ChangeStatus(
         CliOptions options,
-        TaskDirectoryReadResult loadResult,
-        TaskAvailabilityAnalyzer analyzer,
-        TaskItem task,
+        FileTaskStorage storage,
+        string taskId,
         DomainTaskStatus requestedStatus)
     {
-        var before = analyzer.Analyze(task.Id);
-        if (!CanChangeStatus(task, requestedStatus, before, out var denialReason))
+        return await storage.WithDirectoryLockAsync(async () =>
         {
-            var deniedOutput = WriteCommandOutput.Denied(task.Id, task.Title, requestedStatus.ToString(), denialReason, before);
-            if (options.Format == OutputFormat.Json)
+            var (loadResult, analyzer, validation) = await LoadForWrite(storage);
+            EnsureWritePreconditions(loadResult, validation);
+
+            var task = RequireTask(loadResult, taskId);
+            var before = analyzer.Analyze(task.Id);
+            var change = CloneForUpdate(task);
+            change.Status = requestedStatus;
+
+            var manager = CreateManager(storage, options);
+            var changedTasks = await manager.UpdateTask(change);
+            var afterLoadResult = await storage.ReadDirectoryAsync();
+            var afterAnalyzer = new TaskAvailabilityAnalyzer(afterLoadResult.Tasks);
+            var afterTask = RequireTask(afterLoadResult, taskId);
+            var after = afterAnalyzer.Analyze(taskId);
+
+            if (afterTask.Status != requestedStatus)
             {
-                WriteJson(deniedOutput);
-            }
-            else
-            {
-                Console.Error.WriteLine(denialReason);
-                WriteAnalysisText(before);
+                var denied = WriteCommandOutput.Denied(task.Id, task.Title, requestedStatus.ToString(), BuildStatusDeniedReason(task.Id, requestedStatus), before);
+                WriteCommandResult(options, denied);
+                return 1;
             }
 
-            return 1;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        task.SetStatus(requestedStatus, now, options.Author ?? "unlimotion-cli");
-        task.UpdatedDateTime = now;
-
-        var changedTaskIds = RecalculateAvailability(loadResult, [task.Id]);
-        TaskDirectoryWriter.Write(loadResult, changedTaskIds);
-
-        var afterAnalyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
-        var after = afterAnalyzer.Analyze(task.Id);
-        WriteCommandResult(options, WriteCommandOutput.Succeeded(task.Id, task.Title, $"status={requestedStatus}", changedTaskIds, after));
-        return 0;
+            WriteCommandResult(
+                options,
+                WriteCommandOutput.Succeeded(task.Id, task.Title, $"status={requestedStatus}", ChangedIds(changedTasks), after));
+            return 0;
+        });
     }
 
-    private static int ChangeCriterion(
+    private static async Task<int> ChangeCriterion(
         CliOptions options,
-        TaskDirectoryReadResult loadResult,
-        TaskItem task,
+        FileTaskStorage storage,
+        string taskId,
         string criterionId,
         bool satisfied)
     {
-        var criterion = task.CompletionCriteria?.FirstOrDefault(criterion => string.Equals(criterion.Id, criterionId, StringComparison.Ordinal));
-        if (criterion == null)
+        return await storage.WithDirectoryLockAsync(async () =>
         {
-            throw new CliException($"Criterion '{criterionId}' was not found in task '{task.Id}'.");
-        }
+            var (loadResult, analyzer, validation) = await LoadForWrite(storage);
+            EnsureWritePreconditions(loadResult, validation);
 
-        criterion.IsSatisfied = satisfied;
-        task.UpdatedDateTime = DateTimeOffset.UtcNow;
-
-        var changedTaskIds = RecalculateAvailability(loadResult, [task.Id]);
-        TaskDirectoryWriter.Write(loadResult, changedTaskIds);
-
-        var afterAnalyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
-        var after = afterAnalyzer.Analyze(task.Id);
-        WriteCommandResult(options, WriteCommandOutput.Succeeded(task.Id, task.Title, $"criterion={criterionId};satisfied={satisfied}", changedTaskIds, after));
-        return 0;
-    }
-
-    private static bool CanChangeStatus(
-        TaskItem task,
-        DomainTaskStatus requestedStatus,
-        TaskAvailabilityAnalysis analysis,
-        out string denialReason)
-    {
-        denialReason = string.Empty;
-        switch (requestedStatus)
-        {
-            case DomainTaskStatus.NotReady:
-            case DomainTaskStatus.Prepared:
-                return true;
-            case DomainTaskStatus.InProgress:
-                if (analysis.CanStart)
-                {
-                    return true;
-                }
-
-                denialReason = $"Task '{task.Id}' cannot move to InProgress because it is not startable.";
-                return false;
-            case DomainTaskStatus.Completed:
-                if (analysis.CanComplete)
-                {
-                    return true;
-                }
-
-                denialReason = $"Task '{task.Id}' cannot move to Completed because it is not completable.";
-                return false;
-            case DomainTaskStatus.Archived:
-                if (task.Status != DomainTaskStatus.Completed)
-                {
-                    return true;
-                }
-
-                denialReason = $"Task '{task.Id}' cannot move from Completed to Archived.";
-                return false;
-            default:
-                denialReason = $"Unsupported status '{requestedStatus}'.";
-                return false;
-        }
-    }
-
-    private static IReadOnlyList<string> RecalculateAvailability(TaskDirectoryReadResult loadResult, IEnumerable<string> changedTaskIds)
-    {
-        var changed = new HashSet<string>(changedTaskIds, StringComparer.Ordinal);
-        var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
-        foreach (var task in loadResult.Tasks)
-        {
-            var computed = analyzer.Analyze(task).IsCanBeCompleted;
-            if (task.IsCanBeCompleted == computed)
+            var task = RequireTask(loadResult, taskId);
+            var before = analyzer.Analyze(task.Id);
+            if (task.Status == DomainTaskStatus.Completed)
             {
-                continue;
+                var denied = WriteCommandOutput.Denied(
+                    task.Id,
+                    task.Title,
+                    $"criterion={criterionId};satisfied={satisfied}",
+                    $"Task '{task.Id}' is completed, so its completion criteria cannot be changed.",
+                    before);
+                WriteCommandResult(options, denied);
+                return 1;
             }
 
-            task.IsCanBeCompleted = computed;
-            changed.Add(task.Id);
+            var change = CloneForUpdate(task);
+            var criterion = change.CompletionCriteria.FirstOrDefault(criterion => string.Equals(criterion.Id, criterionId, StringComparison.Ordinal));
+            if (criterion == null)
+            {
+                throw new CliException($"Criterion '{criterionId}' was not found in task '{task.Id}'.", exitCode: 1, kind: "notFound");
+            }
+
+            criterion.IsSatisfied = satisfied;
+
+            var manager = CreateManager(storage, options);
+            var changedTasks = await manager.UpdateTask(change);
+            var afterLoadResult = await storage.ReadDirectoryAsync();
+            var afterAnalyzer = new TaskAvailabilityAnalyzer(afterLoadResult.Tasks);
+            var after = afterAnalyzer.Analyze(taskId);
+
+            WriteCommandResult(
+                options,
+                WriteCommandOutput.Succeeded(task.Id, task.Title, $"criterion={criterionId};satisfied={satisfied}", ChangedIds(changedTasks), after));
+            return 0;
+        });
+    }
+
+    private static async Task<(FileTaskStorageDirectoryReadResult LoadResult, TaskAvailabilityAnalyzer Analyzer, TaskGraphValidationResult Validation)> LoadForWrite(FileTaskStorage storage)
+    {
+        var loadResult = await storage.ReadDirectoryAsync();
+        var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+        var validation = analyzer.Validate();
+        return (loadResult, analyzer, validation);
+    }
+
+    private static void EnsureWritePreconditions(FileTaskStorageDirectoryReadResult loadResult, TaskGraphValidationResult validation)
+    {
+        var messages = new List<string>();
+        messages.AddRange(loadResult.LoadErrors.Select(error => $"load error: {error.File}: {error.Message}"));
+        messages.AddRange(loadResult.DuplicateIdIssues.Select(issue => $"duplicate id: {issue.TaskId} files={string.Join(", ", issue.Files)}"));
+        messages.AddRange(validation.ReferenceIssues.Select(issue => $"{issue.Kind}: {issue.Details}"));
+
+        if (messages.Count == 0)
+        {
+            return;
         }
 
-        return changed.OrderBy(static taskId => taskId, StringComparer.Ordinal).ToArray();
+        throw new CliException(
+            "Task graph is not safe for write commands: " + string.Join("; ", messages),
+            exitCode: 1,
+            kind: "validationFailed");
     }
+
+    private static TaskTreeManager CreateManager(FileTaskStorage storage, CliOptions options) => new(storage)
+    {
+        StatusAuthorProvider = _ => options.Author ?? "unlimotion-cli"
+    };
+
+    private static TaskItem RequireTask(FileTaskStorageDirectoryReadResult loadResult, string taskId)
+    {
+        if (!loadResult.TasksById.TryGetValue(taskId, out var task))
+        {
+            throw new CliException($"Task '{taskId}' was not found.", exitCode: 1, kind: "notFound");
+        }
+
+        return task;
+    }
+
+    private static TaskItem CloneForUpdate(TaskItem task) => task with
+    {
+        StatusHistory = task.StatusHistory?.ToList() ?? new List<TaskStatusHistoryEntry>(),
+        CompletionCriteria = task.CompletionCriteria?.Select(CloneCriterion).ToList() ?? new List<TaskCompletionCriterion>(),
+        ContainsTasks = task.ContainsTasks?.ToList() ?? new List<string>(),
+        ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
+        BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
+        BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>()
+    };
+
+    private static TaskCompletionCriterion CloneCriterion(TaskCompletionCriterion criterion) => new()
+    {
+        Id = criterion.Id,
+        Text = criterion.Text,
+        IsSatisfied = criterion.IsSatisfied,
+        ExtensionData = criterion.ExtensionData
+    };
+
+    private static IReadOnlyList<string> ChangedIds(IEnumerable<TaskItem> changedTasks) =>
+        changedTasks
+            .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+            .Select(static task => task.Id)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static taskId => taskId, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string BuildStatusDeniedReason(string taskId, DomainTaskStatus requestedStatus) =>
+        requestedStatus switch
+        {
+            DomainTaskStatus.InProgress => $"Task '{taskId}' cannot move to InProgress because it is not startable.",
+            DomainTaskStatus.Completed => $"Task '{taskId}' cannot move to Completed because it is not completable.",
+            DomainTaskStatus.Archived => $"Task '{taskId}' cannot move to Archived from its current status.",
+            _ => $"Task '{taskId}' cannot move to {requestedStatus}."
+        };
+
+    private static string RequireTaskId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.TaskId)
+            ? throw new CliException($"Command '{command}' requires --id <task-id>.")
+            : options.TaskId;
+
+    private static string RequireCriterionId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.CriterionId)
+            ? throw new CliException($"Command '{command}' requires --criterion <criterion-id>.")
+            : options.CriterionId;
 
     private static void WriteCommandResult(CliOptions options, WriteCommandOutput output)
     {
         if (options.Format == OutputFormat.Json)
         {
+            if (!output.Success)
+            {
+                WriteJson(ErrorOutput.Create("businessRuleDenied", output.Error ?? "Command was denied."));
+                return;
+            }
+
             WriteJson(output);
             return;
         }
 
-        Console.WriteLine($"OK: {output.Action} for {output.TaskId} {output.Title}");
-        Console.WriteLine($"Changed tasks: {string.Join(", ", output.ChangedTaskIds)}");
+        if (!output.Success)
+        {
+            Console.Error.WriteLine(output.Error);
+        }
+        else
+        {
+            Console.WriteLine($"OK: {output.Action} for {output.TaskId} {output.Title}");
+            Console.WriteLine($"Changed tasks: {string.Join(", ", output.ChangedTaskIds)}");
+        }
+
         if (output.Analysis != null)
         {
             WriteAnalysisText(output.Analysis);
@@ -420,31 +458,14 @@ internal static class Program
         }
     }
 
-    private static TaskItem RequireTask(TaskDirectoryReadResult loadResult, string taskId)
-    {
-        if (!loadResult.TasksById.TryGetValue(taskId, out var task))
-        {
-            throw new CliException($"Task '{taskId}' was not found.");
-        }
-
-        return task;
-    }
-
-    private static string RequireTaskId(CliOptions options, string command) =>
-        string.IsNullOrWhiteSpace(options.TaskId)
-            ? throw new CliException($"Command '{command}' requires --id <task-id>.")
-            : options.TaskId;
-
-    private static string RequireCriterionId(CliOptions options, string command) =>
-        string.IsNullOrWhiteSpace(options.CriterionId)
-            ? throw new CliException($"Command '{command}' requires --criterion <criterion-id>.")
-            : options.CriterionId;
-
-    private static void WriteLoadErrors(CliOptions options, IReadOnlyList<TaskLoadError> errors)
+    private static void WriteLoadErrors(CliOptions options, IReadOnlyList<FileTaskStorageLoadError> errors)
     {
         if (options.Format == OutputFormat.Json)
         {
-            WriteJson(new { loadErrors = errors });
+            WriteJson(ErrorOutput.Create(
+                "loadFailed",
+                "Task directory contains load errors: " +
+                string.Join("; ", errors.Select(error => $"{error.File}: {error.Message}"))));
             return;
         }
 
@@ -455,7 +476,37 @@ internal static class Program
     }
 
     private static void WriteJson(object output) =>
-        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(output, JsonOptions));
+        Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
+
+    private static void WriteError(string[] args, string kind, string message, int exitCode)
+    {
+        if (WantsJson(args))
+        {
+            WriteJson(ErrorOutput.Create(kind, message));
+            return;
+        }
+
+        Console.Error.WriteLine(message);
+        if (exitCode == 2)
+        {
+            Console.Error.WriteLine();
+            PrintUsage(Console.Error);
+        }
+    }
+
+    private static bool WantsJson(string[] args)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], "--format", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(args[i + 1], "json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
@@ -476,7 +527,7 @@ internal static class Program
         writer.WriteLine("Usage:");
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--explain] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
         writer.WriteLine("  unlimotion-cli complete --tasks <path> --id <task-id> [--author <name>] [--format text|json]");
@@ -485,7 +536,7 @@ internal static class Program
     }
 }
 
-internal sealed record CliOptions
+public sealed record CliOptions
 {
     public string Command { get; init; } = string.Empty;
     public string? TasksPath { get; init; }
@@ -495,7 +546,6 @@ internal sealed record CliOptions
     public bool? Satisfied { get; init; }
     public string? Author { get; init; }
     public OutputFormat Format { get; init; } = OutputFormat.Text;
-    public bool Explain { get; init; }
     public bool ShowHelp { get; init; }
 
     public static CliOptions Parse(string[] args)
@@ -513,7 +563,6 @@ internal sealed record CliOptions
         bool? satisfied = null;
         string? author = null;
         var format = OutputFormat.Text;
-        var explain = false;
 
         for (var i = 1; i < args.Length; i++)
         {
@@ -543,7 +592,6 @@ internal sealed record CliOptions
                     format = ParseFormat(RequireValue(args, ref i, arg));
                     break;
                 case "--explain":
-                    explain = true;
                     break;
                 default:
                     throw new CliException($"Unknown option '{arg}'.");
@@ -559,8 +607,7 @@ internal sealed record CliOptions
             Status = status,
             Satisfied = satisfied,
             Author = author,
-            Format = format,
-            Explain = explain
+            Format = format
         };
     }
 
@@ -595,112 +642,48 @@ internal sealed record CliOptions
     };
 }
 
-internal enum OutputFormat
+public enum OutputFormat
 {
     Text,
     Json
 }
 
-internal sealed class CliException : Exception
+public sealed class CliException : Exception
 {
-    public CliException(string message)
+    public CliException(string message, int exitCode = 2, string kind = "invalidArguments")
         : base(message)
     {
+        ExitCode = exitCode;
+        Kind = kind;
     }
+
+    public int ExitCode { get; }
+    public string Kind { get; }
 }
 
-internal static class TaskDirectoryReader
+public sealed record ErrorOutput
 {
-    public static TaskDirectoryReadResult Read(string directory)
+    public bool Success { get; init; }
+    public ErrorDetails Error { get; init; } = new();
+
+    public static ErrorOutput Create(string kind, string message) => new()
     {
-        var tasks = new List<TaskItem>();
-        var filesByTaskId = new Dictionary<string, string>(StringComparer.Ordinal);
-        var errors = new List<TaskLoadError>();
-
-        foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly).OrderBy(static file => file, StringComparer.OrdinalIgnoreCase))
+        Success = false,
+        Error = new ErrorDetails
         {
-            if (ShouldSkip(file))
-            {
-                continue;
-            }
-
-            try
-            {
-                var json = File.ReadAllText(file);
-                var task = JsonConvert.DeserializeObject<TaskItem>(json, TaskDirectoryJson.CreateConverters());
-                if (task == null || string.IsNullOrWhiteSpace(task.Id))
-                {
-                    errors.Add(new TaskLoadError(file, "File does not contain a task with non-empty Id."));
-                    continue;
-                }
-
-                tasks.Add(task);
-                filesByTaskId[task.Id] = file;
-            }
-            catch (Exception ex) when (ex is NewtonsoftJsonException or IOException or UnauthorizedAccessException)
-            {
-                errors.Add(new TaskLoadError(file, ex.Message));
-            }
+            Kind = kind,
+            Message = message
         }
-
-        return new TaskDirectoryReadResult(tasks, filesByTaskId, errors);
-    }
-
-    private static bool ShouldSkip(string file)
-    {
-        var fileName = Path.GetFileName(file);
-        return fileName.StartsWith(".", StringComparison.Ordinal) ||
-               fileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase) ||
-               fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
-    }
+    };
 }
 
-internal static class TaskDirectoryWriter
+public sealed record ErrorDetails
 {
-    public static void Write(TaskDirectoryReadResult loadResult, IEnumerable<string> taskIds)
-    {
-        foreach (var taskId in taskIds.Distinct(StringComparer.Ordinal))
-        {
-            if (!loadResult.TasksById.TryGetValue(taskId, out var task) || !loadResult.FilesByTaskId.TryGetValue(taskId, out var file))
-            {
-                throw new CliException($"Cannot save task '{taskId}' because its source file was not found.");
-            }
-
-            var json = JsonConvert.SerializeObject(task, Formatting.Indented, TaskDirectoryJson.CreateConverters());
-            File.WriteAllText(file, json + Environment.NewLine);
-        }
-    }
+    public string Kind { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
 }
 
-
-internal static class TaskDirectoryJson
-{
-    public static Newtonsoft.Json.JsonConverter[] CreateConverters() =>
-    [
-        new IsoDateTimeConverter
-        {
-            DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
-            Culture = CultureInfo.InvariantCulture,
-            DateTimeStyles = DateTimeStyles.None
-        },
-        new StringEnumConverter()
-    ];
-}
-
-internal sealed record TaskDirectoryReadResult(
-    IReadOnlyList<TaskItem> Tasks,
-    IReadOnlyDictionary<string, string> FilesByTaskId,
-    IReadOnlyList<TaskLoadError> LoadErrors)
-{
-    public IReadOnlyDictionary<string, TaskItem> TasksById { get; } = Tasks
-        .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
-        .GroupBy(static task => task.Id, StringComparer.Ordinal)
-        .ToDictionary(static group => group.Key, static group => group.Last(), StringComparer.Ordinal);
-}
-
-internal sealed record TaskLoadError(string File, string Message);
-
-internal sealed record StatusOutput
+public sealed record StatusOutput
 {
     public int TaskCount { get; init; }
     public IReadOnlyDictionary<string, int> CountsByStatus { get; init; } = new Dictionary<string, int>();
@@ -710,7 +693,7 @@ internal sealed record StatusOutput
     public int ArchivedCount { get; init; }
 }
 
-internal sealed record TaskSummary
+public sealed record TaskSummary
 {
     public string Id { get; init; } = string.Empty;
     public string? Title { get; init; }
@@ -732,17 +715,31 @@ internal sealed record TaskSummary
     };
 }
 
-internal sealed record ValidationOutput
+public sealed record ValidationOutput
 {
     public int TaskCount { get; init; }
     public bool IsValid { get; init; }
-    public IReadOnlyList<TaskLoadError> LoadErrors { get; init; } = Array.Empty<TaskLoadError>();
+    public IReadOnlyList<FileTaskStorageLoadError> LoadErrors { get; init; } = Array.Empty<FileTaskStorageLoadError>();
     public IReadOnlyList<TaskGraphReferenceIssue> ReferenceIssues { get; init; } = Array.Empty<TaskGraphReferenceIssue>();
     public IReadOnlyList<TaskAvailabilityMismatch> AvailabilityMismatches { get; init; } = Array.Empty<TaskAvailabilityMismatch>();
-    public IReadOnlyList<TaskDuplicateIdIssue> DuplicateIdIssues { get; init; } = Array.Empty<TaskDuplicateIdIssue>();
+    public IReadOnlyList<FileTaskStorageDuplicateIdIssue> DuplicateIdIssues { get; init; } = Array.Empty<FileTaskStorageDuplicateIdIssue>();
+
+    public static ValidationOutput From(FileTaskStorageDirectoryReadResult loadResult, TaskGraphValidationResult validation) => new()
+    {
+        TaskCount = validation.TaskCount,
+        IsValid = loadResult.LoadErrors.Count == 0 &&
+                  loadResult.DuplicateIdIssues.Count == 0 &&
+                  validation.ReferenceIssues.Count == 0 &&
+                  validation.DuplicateIdIssues.Count == 0 &&
+                  validation.AvailabilityMismatches.Count == 0,
+        LoadErrors = loadResult.LoadErrors,
+        ReferenceIssues = validation.ReferenceIssues,
+        AvailabilityMismatches = validation.AvailabilityMismatches,
+        DuplicateIdIssues = loadResult.DuplicateIdIssues
+    };
 }
 
-internal sealed record WriteCommandOutput
+public sealed record WriteCommandOutput
 {
     public bool Success { get; init; }
     public string TaskId { get; init; } = string.Empty;
