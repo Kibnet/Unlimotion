@@ -83,5 +83,11 @@ internal sealed class StormScenarioContext
 
     public SearchBehaviorScenarioResult? SearchBehaviorResult { get; set; }
 
+    public bool TaskCreationGraphTaskSetAvailable { get; set; }
+
+    public bool TaskCreationGraphStoryBehaviorConfirmed { get; set; }
+
+    public TaskCreationGraphScenarioResult? TaskCreationGraphResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

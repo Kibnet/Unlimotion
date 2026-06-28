@@ -839,7 +839,8 @@
           "coverage_level": "full",
           "linked_tests": [
             "TS-0001",
-            "TS-0004"
+            "TS-0004",
+            "TS-0036"
           ],
           "evidence": [
             {
@@ -907,7 +908,8 @@
       "linked_tests": [
         "TS-0001",
         "TS-0004",
-        "TS-0014"
+        "TS-0014",
+        "TS-0036"
       ],
       "linked_code": [
         "CU-0001",
@@ -939,7 +941,7 @@
         "SC-0001-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "BDD-сценарии связаны с существующими тестами; tests не запускались в artifact-only BDD sync."
+      "behavior_coverage_note": "SC-0001-001 теперь passing и step-executable через TS-0036/SD-0039..SD-0042; остальные ST-0001 scenarios rely on linked existing tests until separate BDD slices."
     },
     {
       "id": "ST-0002",
@@ -4431,6 +4433,72 @@
         }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0005-001."
+    },
+    {
+      "id": "TS-0036",
+      "name": "StormTaskCreationGraphExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+      "framework": "TUnit + Avalonia.Headless + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/task-creation-graph-ui",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0001-001_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0001"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0001"
+      ],
+      "linked_constraints": [
+        "CN-0002",
+        "CN-0004",
+        "CN-0007"
+      ],
+      "linked_scenarios": [
+        "SC-0001-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0001-001 steps from features/storm/st-0001-task-graph.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+          "symbol": "SD-0039..SD-0042",
+          "description": "Step definitions bind Given/When/Then product wording to task creation graph UI contract assertions."
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "ExecuteTaskCreationGraphScenarioAsync / AssertTaskCreationGraphScenarioResultAsync",
+          "description": "Reusable test-only contract executes existing viewmodel and headless UI flows for root, sibling, blocked sibling, inner and selected-task creation behavior."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed",
+          "result": "прошло 2/2 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed",
+          "result": "прошло 2/2 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed",
+          "result": "прошло 2/2 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
+        }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0001-001."
     }
   ],
   "code_units": [
@@ -6800,12 +6868,12 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0005-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "SC-0005-001 получил executable BDD coverage через TS-0035 и SD-0035..SD-0038; ST-0005 fully step-executable; production behavior unchanged.",
+    "summary": "ST-0001/AC-0001 now preserves existing TS-0001/TS-0004 evidence and adds executable BDD evidence TS-0036 through SD-0039..SD-0042.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -7218,7 +7286,7 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-28",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0005-001",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -7236,14 +7304,14 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 10,
+      "passing_scenarios": 11,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 38,
-      "step_executable_scenarios": 10,
-      "step_definition_coverage_ratio": "10/45",
-      "executable_specification_ratio": "10/45 step-executable; 10/45 passing scenarios",
+      "step_definitions_total": 42,
+      "step_executable_scenarios": 11,
+      "step_definition_coverage_ratio": "11/45",
+      "executable_specification_ratio": "11/45 step-executable; 11/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -7253,51 +7321,41 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormSearchBehaviorExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode\" --output Detailed => прошло 1/1",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared ST-0005 Given/And/When step text reuse)",
-        "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-search-behavior-bdd.md => no matches (rg exit 1)",
-        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 566/566",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
+        "final artifact validator/full suite gates pending after sync",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "Full Unlimotion.Test прошёл 566/566 вне managed sandbox 2026-06-28.",
+      "full_suite_result": "pending final full Unlimotion.Test gate for SC-0001-001 sync",
       "production_code_changed": false
     },
     "bdd_sync_summary": {
       "updated_at": "2026-06-28",
-      "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0005-001 after approved SPEC",
-      "status": "completed_with_known_gaps",
-      "synced_links": {
-        "story_to_scenarios": 16,
-        "acceptance_criteria_to_rules": 44,
-        "acceptance_criteria_to_scenarios": 44,
-        "scenario_to_tests": 45,
-        "scenario_to_step_definitions": 10,
-        "constraint_to_scenarios": 8
-      },
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-001",
+      "mode": "delivery-task test-only executable BDD implementation + artifact sync",
+      "status": "synced",
+      "synced_links": [
+        "SC-0001-001 -> TS-0036 -> SD-0039..SD-0042",
+        "existing TS-0001 and TS-0004 preserved"
+      ],
       "not_changed": [
-        "acceptance criteria replacement",
         "production code",
-        ".feature wording",
+        "feature wording",
         "existing test annotations",
-        "CV-0007 product decision links"
+        "project files",
+        "workflows"
       ],
-      "tests_changed": [
-        "src/Unlimotion.Test/SearchBehaviorUiContract.cs",
-        "src/Unlimotion.Test/StormBdd/SearchBehaviorStepDefinitions.cs",
-        "src/Unlimotion.Test/StormSearchBehaviorExecutableSpecTests.cs",
-        "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
-      ],
-      "decision": "SC-0005-001 получил executable Scenario -> Step Definition -> Test link через TS-0035 и SD-0035..SD-0038; existing TS-0001/TS-0004/TS-0006 links сохранены. ST-0005 now has all three scenarios step-executable.",
+      "tests_changed": true,
+      "decision": "BDD links обновлены для SC-0001-001: новый TS-0036 связывает scenario text с real ViewModel/headless UI task creation evidence через SD-0039..SD-0042. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
       "gaps": [
-        "Step definitions покрывают 10/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
-        "ST-0005 полностью step-executable; следующий high-value scenario выбирать вне ST-0005.",
-        "CV-0007 remains outside active /storm:cover by product decision Вариант B."
+        "Step definitions покрывают 11/45 scenarios.",
+        "ST-0001 partially step-executable: SC-0001-001 закрыт, SC-0001-002 и SC-0001-003 остаются linked-existing-tests only."
       ],
-      "code_changed": []
+      "code_changed": false
     },
     "improved_by_delivery_evidence": [
       {
@@ -7353,21 +7411,37 @@
           "TS-0026"
         ],
         "reason": "TS-0024 подтверждает Android/browser/iOS project contracts; TS-0026 исполняет SC-0015-002 из feature text через SD-0001..SD-0004; Browser Release build smoke прошел 2026-06-18; iOS Debug build smoke прошел 2026-06-28; Android Debug build smoke прошел 2026-06-28. Runtime/release support не заявляется."
+      },
+      {
+        "story": "ST-0001",
+        "acceptance_criteria": "AC-0001",
+        "scenario": "SC-0001-001",
+        "added_test": "TS-0036",
+        "added_step_definitions": [
+          "SD-0039",
+          "SD-0040",
+          "SD-0041",
+          "SD-0042"
+        ],
+        "result": "passing targeted gates and full suite 567/567 outside managed sandbox"
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full Unlimotion.Test прошёл 566/566 вне managed sandbox 2026-06-28.",
-    "targeted_validation_result": "прошло: TS-0035 1/1, tree search editor 1/1, roadmap search/fuzzy 1/1, full Unlimotion.Test 566/566 вне managed sandbox",
+    "full_suite_result": "Full Unlimotion.Test прошёл 567/567 вне managed sandbox 2026-06-28; sandboxed run has known ACL-only failure in BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows.",
+    "targeted_validation_result": "SC-0001-001 executable BDD and linked ViewModel/headless UI evidence passed on 2026-06-28.",
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormSearchBehaviorExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode\" --output Detailed => прошло 1/1",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared ST-0005 Given/And/When step text reuse)",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared task-set Given warning now includes SD-0039)",
       "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-search-behavior-bdd.md => no matches (rg exit 1)",
-      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 566/566",
-      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0001-task-creation-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001.log capture => прошло 567/567"
     ]
   },
   "ranking_analysis": {
@@ -8996,14 +9070,20 @@
         "CN-0007"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_task_creation_graph_headless_and_viewmodel_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-28",
       "linked_tests": [
         "TS-0001",
-        "TS-0004"
+        "TS-0004",
+        "TS-0036"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0039",
+        "SD-0040",
+        "SD-0041",
+        "SD-0042"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -9030,6 +9110,26 @@
           "path": "src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0004"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0036",
+          "description": "TS-0036 прошёл 1/1 2026-06-28 и исполняет SC-0001-001 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+          "symbol": "SD-0039..SD-0042",
+          "description": "Step definitions bind all four SC-0001-001 Gherkin steps to real task creation viewmodel/headless UI evidence."
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "ExecuteTaskCreationGraphScenarioAsync / AssertTaskCreationGraphScenarioResultAsync",
+          "description": "Reusable test-only contract executes existing root, sibling, blocked sibling, inner creation and selected-task UI creation evidence."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
         }
       ]
     },
@@ -13384,11 +13484,95 @@
           "symbol": "AssertSearchBehaviorScenarioResultAsync"
         }
       ]
+    },
+    {
+      "id": "SD-0039",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+      "symbol": "TaskCreationGraphStepDefinitions.Create / SD-0039",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0001-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0036"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "ExecuteTaskCreationGraphScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0040",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+      "symbol": "TaskCreationGraphStepDefinitions.Create / SD-0040",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0001",
+      "supports_scenarios": [
+        "SC-0001-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0036"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "ExecuteTaskCreationGraphScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0041",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+      "symbol": "TaskCreationGraphStepDefinitions.Create / SD-0041",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь создаёт или добавляет задачу через доступное действие интерфейса",
+      "supports_scenarios": [
+        "SC-0001-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0036"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "ExecuteTaskCreationGraphScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0042",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCreationGraphStepDefinitions.cs",
+      "symbol": "TaskCreationGraphStepDefinitions.Create / SD-0042",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда задачу можно создать в корне, рядом с выбранной задачей, как заблокированного соседа или внутри выбранной задачи.",
+      "supports_scenarios": [
+        "SC-0001-001"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCreationGraphExecutableSpecTests.cs",
+          "symbol": "TaskCreationGraphScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0036"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCreationGraphUiContract.cs",
+          "symbol": "AssertTaskCreationGraphScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0005-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0001-001",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -13406,14 +13590,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 10,
+    "passing_scenarios": 11,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 38,
-    "step_executable_scenarios": 10,
-    "step_definition_coverage_ratio": "10/45",
-    "executable_specification_ratio": "10/45 step-executable; 10/45 passing scenarios",
+    "step_definitions_total": 42,
+    "step_executable_scenarios": 11,
+    "step_definition_coverage_ratio": "11/45",
+    "executable_specification_ratio": "11/45 step-executable; 11/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -13423,108 +13607,62 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormSearchBehaviorExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode\" --output Detailed => прошло 1/1",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared ST-0005 Given/And/When step text reuse)",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCreationGraphExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateRootTask_Success\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateSiblingTask_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateBlockedSibling_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/CreateInnerTask_Success\" --output Detailed => прошло 2/2",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared task-set Given warning now includes SD-0039)",
       "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-search-behavior-bdd.md => no matches (rg exit 1)",
-      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 566/566",
-      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0001-task-creation-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0001.log capture => прошло 567/567"
     ],
-    "full_suite_result": "Full Unlimotion.Test прошёл 566/566 вне managed sandbox 2026-06-28.",
+    "full_suite_result": "Full Unlimotion.Test прошёл 567/567 вне managed sandbox 2026-06-28; sandboxed run has known ACL-only failure in BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows.",
     "production_code_changed": false
   },
   "bdd_sync": {
     "updated_at": "2026-06-28",
-    "command": "/storm:bdd-sync",
-    "mode": "test-only executable BDD sync for SC-0005-001 after approved SPEC",
-    "status": "completed_with_known_gaps",
-    "synced_links": {
-      "story_to_scenarios": 16,
-      "acceptance_criteria_to_rules": 44,
-      "acceptance_criteria_to_scenarios": 44,
-      "scenario_to_tests": 45,
-      "scenario_to_step_definitions": 10,
-      "constraint_to_scenarios": 8
-    },
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0001-001",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
+    "status": "synced",
+    "synced_links": [
+      "SC-0001-001 -> TS-0036 -> SD-0039..SD-0042",
+      "existing TS-0001 and TS-0004 preserved"
+    ],
     "not_changed": [
-      "acceptance criteria replacement",
       "production code",
-      ".feature wording",
+      "feature wording",
       "existing test annotations",
-      "CV-0007 product decision links"
+      "project files",
+      "workflows"
     ],
-    "tests_changed": [
-      "src/Unlimotion.Test/SearchBehaviorUiContract.cs",
-      "src/Unlimotion.Test/StormBdd/SearchBehaviorStepDefinitions.cs",
-      "src/Unlimotion.Test/StormSearchBehaviorExecutableSpecTests.cs",
-      "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
-    ],
-    "decision": "SC-0005-001 получил executable Scenario -> Step Definition -> Test link через TS-0035 и SD-0035..SD-0038; existing TS-0001/TS-0004/TS-0006 links сохранены. ST-0005 now has all three scenarios step-executable.",
+    "tests_changed": true,
+    "decision": "BDD links обновлены для SC-0001-001: новый TS-0036 связывает scenario text с real ViewModel/headless UI task creation evidence через SD-0039..SD-0042. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 10/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
-      "ST-0005 полностью step-executable; следующий high-value scenario выбирать вне ST-0005.",
-      "CV-0007 remains outside active /storm:cover by product decision Вариант B."
+      "Step definitions покрывают 11/45 scenarios.",
+      "ST-0001 partially step-executable: SC-0001-001 закрыт, SC-0001-002 и SC-0001-003 остаются linked-existing-tests only."
     ],
-    "code_changed": []
+    "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-06-28",
-    "command": "/storm:bdd-lint",
-    "mode": "test-only executable BDD lint for SC-0005-001 after approved SPEC",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0001-001",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions покрывают 10/45 scenarios: repo-local runner не является full Cucumber-style engine.",
-      "Validator warning: duplicate Given step text across SD-0009, SD-0013, SD-0022, SD-0027, SD-0031, SD-0035; это intentional reuse of shared task-set context.",
-      "Validator warning: duplicate And step text across SD-0028, SD-0032, SD-0036; это intentional reuse of ST-0005 story context.",
-      "Validator warning: duplicate When step text across SD-0033, SD-0037; это intentional reuse of ST-0005 search/filter action wording.",
-      "SC-0005-001 step definitions execute real Avalonia.Headless search/fuzzy behavior through existing UI flows; feature wording/test annotations не менялись.",
-      "CV-0007 intentionally has no active scenario/test links after product decision Вариант B."
+      "Step definitions покрывают только 11/45 scenarios; repo-local runner не является full Cucumber-style engine.",
+      "Shared Given step text intentionally reused across multiple scenario-specific step definitions, now including SD-0039.",
+      "CV-0007 remains without scenario/test links by prior decision: attachment code is internal/orphan contract candidate."
     ],
     "checks": {
-      "scenario_tags_present": true,
-      "story_tags_present": true,
-      "need_or_constraint_basis_present": true,
-      "automated_scenarios_have_test_links": true,
-      "acceptance_criteria_preserved": true,
-      "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": true,
-      "production_code_changes_in_approved_exec_scope": false,
-      "test_annotations_changed": false,
-      "step_definitions_present": true,
-      "step_executable_scenarios_present": true,
-      "cv0007_active_scenario_created_without_confirmation": false,
-      "cv0007_removed_from_active_cover_queue_after_decision_b": true,
-      "sc0014001_linked_to_command_test": true,
-      "sc0014001_linked_to_executable_step_definitions": true,
-      "sc0014002_linked_to_timer_test": true,
-      "sc0014002_linked_to_executable_step_definitions": true,
-      "st0015_browser_build_smoke_recorded": true,
-      "st0015_android_ios_build_blocker_recorded": true,
-      "sc0014003_linked_to_callback_test": true,
-      "sc0014003_linked_to_executable_step_definitions": true,
-      "sc0016001_linked_to_toast_test": true,
-      "sc0016001_linked_to_executable_step_definitions": true,
-      "sc0011001_linked_to_auth_contract_test": true,
-      "sc0011001_linked_to_executable_step_definitions": true,
-      "sc0011002_without_step_definitions_recorded": false,
-      "sc0011002_linked_to_crud_realtime_contract_and_live_tests": true,
-      "sc0011002_linked_to_executable_step_definitions": true,
-      "current_artifact_only_code_tests_unchanged": true,
-      "st0015_ios_build_smoke_recorded": true,
-      "st0015_android_build_blocker_recorded": false,
-      "st0015_android_build_smoke_recorded": true,
-      "sc0005002_linked_to_existing_reset_filter_tests": true,
-      "sc0005002_linked_to_executable_step_definitions": true,
-      "sc0005002_executable_test_passed": true,
-      "sc0005003_linked_to_existing_emoji_filter_tests": true,
-      "sc0005003_linked_to_executable_step_definitions": true,
-      "sc0005003_executable_test_passed": true,
-      "sc0005001_linked_to_existing_search_tests": true,
-      "sc0005001_linked_to_executable_step_definitions": true,
-      "sc0005001_executable_test_passed": true
+      "scenario_test_links": "PASS: 45/45 scenarios linked before this slice; SC-0001-001 now additionally linked to TS-0036.",
+      "scenario_step_definition_links": "WARNING: 11/45 scenarios step-executable.",
+      "test_annotations": "PASS: existing test annotations не менялись.",
+      "production_code": "PASS: production code, project files and workflows не менялись.",
+      "feature_wording": "PASS: .feature wording не менялся."
     }
   }
 }
