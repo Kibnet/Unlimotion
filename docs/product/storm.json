@@ -55,11 +55,12 @@
       "Environment setup 2026-06-26: Android/iOS build smoke повторно проверены после approved SPEC; dotnet workload restore для Android попытался установить workload set 10.0.301.1 через microsoft.net.workloads.10.0.300.msi.x64 и был отменён/заблокирован, Android/iOS Debug build по-прежнему останавливаются на NETSDK1147 до compile stage; repo source/tests/test annotations не менялись.",
       "Environment admin 2026-06-28: narrow Android workload restore timed out after 184 seconds but workload list updated to workload set 10.0.301.1; iOS Debug build smoke passed with existing warnings, Android Debug build still fails NETSDK1147 before compile and now requires android workload despite workload list showing android installed; repo source/tests/test annotations/project files/workflows не менялись.",
       "Environment admin 2026-06-28: targeted dotnet workload install android completed with no changes because Android was already installed; Android Debug build smoke then passed, producing Unlimotion.Android.dll; iOS Debug build smoke evidence from earlier 2026-06-28 remains preserved; repo source/tests/test annotations/project files/workflows не менялись.",
-      "BDD executable slice добавлен 2026-06-28: SC-0005-002 исполняется из feature text через repo-local step definitions SD-0027..SD-0030 и TUnit/Avalonia.Headless evidence TS-0033."
+      "BDD executable slice добавлен 2026-06-28: SC-0005-002 исполняется из feature text через repo-local step definitions SD-0027..SD-0030 и TUnit/Avalonia.Headless evidence TS-0033.",
+      "BDD executable slice добавлен 2026-06-28: SC-0005-003 исполняется из feature text через repo-local step definitions SD-0031..SD-0034 и TUnit/Avalonia.Headless evidence TS-0034."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0005-002 filter reset executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0005-003 emoji filter executable slice",
     "last_artifact_mode": "delivery-task test-only BDD implementation + artifact sync"
   },
   "vision": {
@@ -1356,7 +1357,8 @@
           "text": "Фильтр включения и исключения emoji поддерживает поиск по emoji/text и сохраняет семантику flyout.",
           "coverage_level": "critical",
           "linked_tests": [
-            "TS-0006"
+            "TS-0006",
+            "TS-0034"
           ],
           "evidence": [
             {
@@ -1366,6 +1368,12 @@
             {
               "path": "specs/2026-06-08-emoji-filter-text-search.md",
               "symbol": "emoji filter search"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+              "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+              "test_id": "TS-0034",
+              "description": "Executable BDD evidence for SC-0005-003 emoji include/exclude filter scenario."
             }
           ],
           "linked_rules": [
@@ -1385,7 +1393,8 @@
         "TS-0004",
         "TS-0006",
         "TS-0013",
-        "TS-0033"
+        "TS-0033",
+        "TS-0034"
       ],
       "linked_code": [
         "CU-0004",
@@ -1414,7 +1423,7 @@
         "SC-0005-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0005-002 теперь связан с existing TS-0006/TS-0013 и исполняется из feature text через SD-0027..SD-0030 / TS-0033; остальные ST-0005 scenarios пока rely on linked TUnit evidence."
+      "behavior_coverage_note": "SC-0005-002 и SC-0005-003 теперь исполняются из feature text через SD-0027..SD-0034 / TS-0033..TS-0034; SC-0005-001 пока relies on linked TUnit evidence without step definitions."
     },
     {
       "id": "ST-0006",
@@ -4311,6 +4320,54 @@
         }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording и запускает repo-local step definitions for SC-0005-002."
+    },
+    {
+      "id": "TS-0034",
+      "name": "StormEmojiFilterExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+      "framework": "TUnit + Avalonia.Headless + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/emoji-filter-ui",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0005-003_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0005"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0015"
+      ],
+      "linked_constraints": [
+        "CN-0004"
+      ],
+      "linked_scenarios": [
+        "SC-0005-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0005-003 steps from features/storm/st-0005-search-and-filters.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+          "symbol": "SD-0031..SD-0034",
+          "description": "Step definitions bind Given/When/Then product wording to emoji filter UI evidence."
+        },
+        {
+          "path": "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+          "symbol": "ExecuteEmojiFilterScenarioAsync / AssertEmojiFilterScenarioResultAsync",
+          "description": "Reusable test-only contract executes existing TS-0006 UI flows for include/exclude emoji filter search, toggle, no-matches, keyboard and roadmap flyout behavior."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed",
+          "result": "прошло 14/14 on 2026-06-28"
+        }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0005-003."
     }
   ],
   "code_units": [
@@ -5379,67 +5436,64 @@
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-24",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0005-003",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-06-28",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0005-002",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0005-003",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-06-28",
     "bdd_sync": {
       "updated_at": "2026-06-28",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0005-003 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-06-28",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0005-002 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0005-003 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-06-28",
-      "command": "/storm:bdd-implement SC-0005-002",
+      "command": "/storm:bdd-implement SC-0005-003",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-06-28-storm-sc0005-filter-reset-bdd.md",
-      "classification": "SC-0005-002 filter-reset scenario now executes from feature text through repo-local step definitions and Avalonia.Headless UI contract evidence",
+      "approved_spec": "specs/2026-06-28-storm-sc0005-emoji-filter-bdd.md",
+      "classification": "SC-0005-003 emoji filter scenario now executes from feature text through repo-local step definitions and existing TS-0006 Avalonia.Headless UI evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/FilterResetUiContract.cs",
-        "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
-        "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+        "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+        "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+        "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
-        "git diff --check => passed with LF-to-CRLF working-copy warnings only",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
-        "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
-        "targeted ACL rerun вне sandbox => прошёл 1/1",
-        "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошло 14/14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 2 warnings (shared ST-0005 Given/And context step text reuse)",
+        "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-emoji-filter-bdd.md => no matches (rg exit 1)",
+        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 565/565",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0005-002 прошёл как executable BDD slice; existing reset/filter UI regression suites прошли; full Unlimotion.Test прошёл 564/564 вне managed sandbox; production behavior не менялось.",
-      "next_recommended_action": "Продолжать /storm:cover через следующий high-value scenario без step definitions, например SC-0005-003 или SC-0005-001, отдельной SPEC с test-only BDD binding.",
-      "validation_status": "passed_with_known_bdd_lint_warning",
-      "known_warning": "Duplicate shared Given step text warning will include SD-0027 and remains intentional reuse, not a blocker."
+      "result": "SC-0005-003 прошёл как executable BDD slice; existing emoji filter UI regression suite прошёл; full Unlimotion.Test прошёл 565/565 вне managed sandbox; production behavior не менялось.",
+      "next_recommended_action": "Продолжать /storm:cover через следующий high-value scenario без step definitions, например SC-0005-001, отдельной SPEC с test-only BDD binding.",
+      "validation_status": "passed_with_known_bdd_lint_warnings",
+      "known_warning": "Validator reports two shared ST-0005 context step text warnings; both are intentional reuse, not blockers."
     }
   },
   "traceability": {
     "updated_at": "2026-06-28",
-    "command": "/storm:trace sync after /storm:bdd-implement SC-0005-002 executable step definitions",
+    "command": "/storm:trace sync after /storm:bdd-implement SC-0005-003 executable step definitions",
     "route": "delivery-task",
     "mode": "test-only executable BDD sync",
     "annotations_added": false,
     "annotations_reason": "Test annotations не менялись; TS-0031 и existing TS-0017..TS-0030 связаны с STORM artifacts через storm.json/feature/report links.",
-    "summary": "ST-0005/AC-0014 now preserves existing TS-0006/TS-0013 evidence and adds executable BDD evidence TS-0033 through SD-0027..SD-0030.",
+    "summary": "ST-0005/AC-0015 now preserves existing TS-0006 evidence and adds executable BDD evidence TS-0034 through SD-0031..SD-0034.",
     "story_to_tests": {
       "ST-0001": {
         "tests": [
@@ -5608,7 +5662,8 @@
           "TS-0004",
           "TS-0006",
           "TS-0013",
-          "TS-0033"
+          "TS-0033",
+          "TS-0034"
         ],
         "code_units": [
           "CU-0004",
@@ -5638,7 +5693,8 @@
           {
             "id": "AC-0015",
             "tests": [
-              "TS-0006"
+              "TS-0006",
+              "TS-0034"
             ],
             "coverage_level": "critical"
           }
@@ -6604,6 +6660,20 @@
         "method_examples": [
           "FilterResetScenario_ExecutesFeatureSteps"
         ]
+      },
+      "TS-0034": {
+        "stories": [
+          "ST-0005"
+        ],
+        "acceptance_criteria": [
+          "AC-0015"
+        ],
+        "constraints": [
+          "CN-0004"
+        ],
+        "method_examples": [
+          "EmojiFilterScenario_ExecutesFeatureSteps"
+        ]
       }
     },
     "orphan_tests": [
@@ -6641,17 +6711,18 @@
       "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
       "Решено 2026-06-24: SC-0011-002 получил executable BDD slice через TS-0032 и SD-0022..SD-0024 + SD-0026.",
-      "Решено 2026-06-28: SC-0005-002 получил executable BDD slice через TS-0033 и SD-0027..SD-0030."
+      "Решено 2026-06-28: SC-0005-002 получил executable BDD slice через TS-0033 и SD-0027..SD-0030.",
+      "Решено 2026-06-28: SC-0005-003 получил executable BDD slice через TS-0034 и SD-0031..SD-0034."
     ]
   },
   "coverage_analysis": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0005-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "SC-0005-002 получил executable BDD coverage через TS-0033 и SD-0027..SD-0030; existing reset/filter test links preserved; production behavior unchanged.",
+    "summary": "SC-0005-003 получил executable BDD coverage через TS-0034 и SD-0031..SD-0034; existing emoji filter test link preserved; production behavior unchanged.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -7064,7 +7135,7 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-28",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0005-003",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -7082,14 +7153,14 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 8,
+      "passing_scenarios": 9,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 30,
-      "step_executable_scenarios": 8,
-      "step_definition_coverage_ratio": "8/45",
-      "executable_specification_ratio": "8/45 step-executable; 8/45 passing scenarios",
+      "step_definitions_total": 34,
+      "step_executable_scenarios": 9,
+      "step_definition_coverage_ratio": "9/45",
+      "executable_specification_ratio": "9/45 step-executable; 9/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -7098,32 +7169,29 @@
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
-        "git diff --check => passed with LF-to-CRLF working-copy warnings only",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
-        "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
-        "targeted ACL rerun вне sandbox => прошёл 1/1",
-        "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошло 14/14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 2 warnings (shared ST-0005 Given/And context step text reuse)",
+        "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
+        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-emoji-filter-bdd.md => no matches (rg exit 1)",
+        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 565/565",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
+      "full_suite_result": "Full Unlimotion.Test прошёл 565/565 вне managed sandbox 2026-06-28.",
       "production_code_changed": false
     },
     "bdd_sync_summary": {
       "updated_at": "2026-06-28",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0005-003 after approved SPEC",
       "status": "completed_with_known_gaps",
       "synced_links": {
         "story_to_scenarios": 16,
         "acceptance_criteria_to_rules": 44,
         "acceptance_criteria_to_scenarios": 44,
         "scenario_to_tests": 45,
-        "scenario_to_step_definitions": 8,
+        "scenario_to_step_definitions": 9,
         "constraint_to_scenarios": 8
       },
       "not_changed": [
@@ -7134,15 +7202,15 @@
         "CV-0007 product decision links"
       ],
       "tests_changed": [
-        "src/Unlimotion.Test/FilterResetUiContract.cs",
-        "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
-        "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+        "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+        "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+        "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
-      "decision": "SC-0005-002 получил executable Scenario -> Step Definition -> Test link через TS-0033 и SD-0027..SD-0030; existing TS-0006/TS-0013 links сохранены.",
+      "decision": "SC-0005-003 получил executable Scenario -> Step Definition -> Test link через TS-0034 и SD-0031..SD-0034; existing TS-0006 link сохранён.",
       "gaps": [
-        "Step definitions покрывают 8/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
-        "SC-0005-001 и SC-0005-003 имеют linked tests, но пока не имеют executable step-definition slices.",
+        "Step definitions покрывают 9/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+        "SC-0005-001 имеет linked tests, но пока не имеет executable step-definition slice.",
         "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime smoke, emulator/device validation and release pipeline evidence не заявляются.",
         "CV-0007 remains outside active /storm:cover by product decision Вариант B."
       ],
@@ -7205,25 +7273,22 @@
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
-    "targeted_validation_result": "прошло: TS-0033 1/1, MainControlResetFiltersUiTests 8/8, MainControlFilterToolbarResponsiveUiTests 14/14, full Unlimotion.Test 564/564 вне managed sandbox",
+    "full_suite_result": "Full Unlimotion.Test прошёл 565/565 вне managed sandbox 2026-06-28.",
+    "targeted_validation_result": "прошло: TS-0034 1/1, MainControlFilterToolbarResponsiveUiTests 14/14, full Unlimotion.Test 565/565 вне managed sandbox",
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
-      "git diff --check => passed with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
-      "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
-      "targeted ACL rerun вне sandbox => прошёл 1/1",
-      "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошло 14/14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 2 warnings (shared ST-0005 Given/And context step text reuse)",
+      "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-emoji-filter-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 565/565",
       "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
   "ranking_analysis": {
     "updated_at": "2026-06-28",
-    "command": "/storm:rank + /storm:bdd-implement SC-0005-002",
+    "command": "/storm:rank + /storm:bdd-implement SC-0005-003",
     "mode": "artifact sync after test-only executable BDD slice",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
@@ -7233,9 +7298,10 @@
         "story": "ST-0005",
         "title": "Искать и фильтровать задачи по тексту, статусу, датам, длительности, wanted и emoji",
         "linked_coverage_items": [
-          "SC-0005-002"
+          "SC-0005-002",
+          "SC-0005-003"
         ],
-        "recommendation": "SC-0005-002 покрыт executable BDD evidence TS-0033; SC-0005-001 и SC-0005-003 остаются следующими ST-0005 candidates для full executable coverage."
+        "recommendation": "SC-0005-002 и SC-0005-003 покрыты executable BDD evidence TS-0033/TS-0034; SC-0005-001 остается следующим ST-0005 candidate для full executable coverage."
       },
       {
         "story": "ST-0011",
@@ -7272,7 +7338,7 @@
         "recommendation": "CV-0005 покрыт на уровне project-contract + Browser/iOS/Android build smoke. Runtime launch, emulator/device validation and release pipeline evidence остаются отдельным scope."
       }
     ],
-    "next_recommended_action": "Следующий high-value /storm:cover step: выбрать очередной active scenario без step definitions и оформить отдельную SPEC; ближайшие кандидаты по ST-0005: SC-0005-003 или SC-0005-001."
+    "next_recommended_action": "Следующий high-value /storm:cover step: выбрать очередной active scenario без step definitions и оформить отдельную SPEC; ближайший ST-0005 candidate: SC-0005-001."
   },
   "gherkin_features": [
     {
@@ -8040,6 +8106,12 @@
         {
           "path": "specs/2026-06-08-emoji-filter-text-search.md",
           "symbol": "emoji filter search"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+          "symbol": "SD-0031..SD-0034",
+          "test_id": "TS-0034",
+          "description": "Step definitions bind SC-0005-003 Given/When/Then wording to emoji filter UI evidence."
         }
       ]
     },
@@ -11646,13 +11718,19 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_emoji_filter_headless_ui_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-28",
       "linked_tests": [
-        "TS-0006"
+        "TS-0006",
+        "TS-0034"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0031",
+        "SD-0032",
+        "SD-0033",
+        "SD-0034"
+      ],
       "coverage_role": "business_rule",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -11683,6 +11761,21 @@
           "path": "src/Unlimotion.Test/MainControlResetFiltersUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0006"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0034",
+          "description": "TS-0034 прошёл 1/1 2026-06-28 и исполняет SC-0005-003 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+          "symbol": "SD-0031..SD-0034",
+          "description": "Step definitions bind all four SC-0005-003 Gherkin steps to real emoji filter UI evidence."
+        },
+        {
+          "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-28"
         }
       ]
     },
@@ -13011,11 +13104,95 @@
           "symbol": "AssertFilterResetScenarioResultAsync"
         }
       ]
+    },
+    {
+      "id": "SD-0031",
+      "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+      "symbol": "EmojiFilterStepDefinitions.Create / SD-0031",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0005-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0034"
+        },
+        {
+          "path": "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+          "symbol": "ExecuteEmojiFilterScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0032",
+      "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+      "symbol": "EmojiFilterStepDefinitions.Create / SD-0032",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0005",
+      "supports_scenarios": [
+        "SC-0005-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0034"
+        },
+        {
+          "path": "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+          "symbol": "ExecuteEmojiFilterScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0033",
+      "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+      "symbol": "EmojiFilterStepDefinitions.Create / SD-0033",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь ищет или фильтрует задачи в текущем представлении",
+      "supports_scenarios": [
+        "SC-0005-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0034"
+        },
+        {
+          "path": "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+          "symbol": "ExecuteEmojiFilterScenarioAsync"
+        }
+      ]
+    },
+    {
+      "id": "SD-0034",
+      "path": "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+      "symbol": "EmojiFilterStepDefinitions.Create / SD-0034",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Фильтр включения и исключения emoji поддерживает поиск по emoji/text и сохраняет семантику flyout.",
+      "supports_scenarios": [
+        "SC-0005-003"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
+          "symbol": "EmojiFilterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0034"
+        },
+        {
+          "path": "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+          "symbol": "AssertEmojiFilterScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-28",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0005-002",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0005-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -13033,14 +13210,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 8,
+    "passing_scenarios": 9,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 30,
-    "step_executable_scenarios": 8,
-    "step_definition_coverage_ratio": "8/45",
-    "executable_specification_ratio": "8/45 step-executable; 8/45 passing scenarios",
+    "step_definitions_total": 34,
+    "step_executable_scenarios": 9,
+    "step_definition_coverage_ratio": "9/45",
+    "executable_specification_ratio": "9/45 step-executable; 9/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -13049,32 +13226,29 @@
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => passed; warnings 1 LF-to-CRLF working-copy warning, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed => прошёл 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/*\" --output Detailed => прошёл 8/8",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошёл 14/14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022, SD-0027)",
-      "git diff --check => passed with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-filter-reset-bdd.md => no matches (rg exit 1)",
-      "sandbox full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => упал 563/564 on BackupViaGitServiceTests.GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows из-за Windows ACL inheritance в managed sandbox",
-      "targeted ACL rerun вне sandbox => прошёл 1/1",
-      "full вне sandbox dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошёл 564/564",
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormEmojiFilterExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlFilterToolbarResponsiveUiTests/*\" --output Detailed => прошло 14/14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 2 warnings (shared ST-0005 Given/And context step text reuse)",
+      "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
+      "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-emoji-filter-bdd.md => no matches (rg exit 1)",
+      "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 565/565",
       "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
-    "full_suite_result": "Full Unlimotion.Test прошёл 564/564 вне managed sandbox 2026-06-28. Sandbox run упал 563/564 на Windows ACL inheritance, но targeted ACL rerun вне sandbox прошёл 1/1.",
+    "full_suite_result": "Full Unlimotion.Test прошёл 565/565 вне managed sandbox 2026-06-28.",
     "production_code_changed": false
   },
   "bdd_sync": {
     "updated_at": "2026-06-28",
     "command": "/storm:bdd-sync",
-    "mode": "test-only executable BDD sync for SC-0005-002 after approved SPEC",
+    "mode": "test-only executable BDD sync for SC-0005-003 after approved SPEC",
     "status": "completed_with_known_gaps",
     "synced_links": {
       "story_to_scenarios": 16,
       "acceptance_criteria_to_rules": 44,
       "acceptance_criteria_to_scenarios": 44,
       "scenario_to_tests": 45,
-      "scenario_to_step_definitions": 8,
+      "scenario_to_step_definitions": 9,
       "constraint_to_scenarios": 8
     },
     "not_changed": [
@@ -13085,15 +13259,15 @@
       "CV-0007 product decision links"
     ],
     "tests_changed": [
-      "src/Unlimotion.Test/FilterResetUiContract.cs",
-      "src/Unlimotion.Test/StormBdd/FilterResetStepDefinitions.cs",
-      "src/Unlimotion.Test/StormFilterResetExecutableSpecTests.cs",
+      "src/Unlimotion.Test/EmojiFilterUiContract.cs",
+      "src/Unlimotion.Test/StormBdd/EmojiFilterStepDefinitions.cs",
+      "src/Unlimotion.Test/StormEmojiFilterExecutableSpecTests.cs",
       "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
     ],
-    "decision": "SC-0005-002 получил executable Scenario -> Step Definition -> Test link через TS-0033 и SD-0027..SD-0030; existing TS-0006/TS-0013 links сохранены.",
+    "decision": "SC-0005-003 получил executable Scenario -> Step Definition -> Test link через TS-0034 и SD-0031..SD-0034; existing TS-0006 link сохранён.",
     "gaps": [
-      "Step definitions покрывают 8/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
-      "SC-0005-001 и SC-0005-003 имеют linked tests, но пока не имеют executable step-definition slices.",
+      "Step definitions покрывают 9/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
+      "SC-0005-001 имеет linked tests, но пока не имеет executable step-definition slice.",
       "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime smoke, emulator/device validation and release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
@@ -13102,13 +13276,14 @@
   "bdd_lint": {
     "updated_at": "2026-06-28",
     "command": "/storm:bdd-lint",
-    "mode": "test-only executable BDD lint for SC-0005-002 after approved SPEC",
+    "mode": "test-only executable BDD lint for SC-0005-003 after approved SPEC",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "step_definitions покрывают SC-0005-002, SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 и SC-0011-002: repo-local runner не является full Cucumber-style engine.",
-      "SD-0009, SD-0013, SD-0022 и SD-0027 используют один общий Given step text для shared task-set context; это intentional reuse of product wording, не placeholder и не orphan step.",
-      "SC-0005-002 step definitions exercise real Avalonia.Headless reset-filter behavior; feature wording/test annotations не менялись.",
+      "step_definitions покрывают SC-0005-002, SC-0005-003, SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 и SC-0011-002: repo-local runner не является full Cucumber-style engine.",
+      "Validator warning: duplicate Given step text across SD-0009, SD-0013, SD-0022, SD-0027, SD-0031; это intentional reuse of shared task-set context.",
+      "Validator warning: duplicate And step text across SD-0028, SD-0032; это intentional reuse of ST-0005 story context.",
+      "SC-0005-003 step definitions execute real Avalonia.Headless emoji filter behavior through existing TS-0006 UI flows; feature wording/test annotations не менялись.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
       "SC-0015-002 имеет project-contract coverage, Browser Release build smoke, iOS Debug build smoke and Android Debug build smoke; runtime release support не заявляется."
     ],
@@ -13147,7 +13322,10 @@
       "st0015_android_build_smoke_recorded": true,
       "sc0005002_linked_to_existing_reset_filter_tests": true,
       "sc0005002_linked_to_executable_step_definitions": true,
-      "sc0005002_executable_test_passed": true
+      "sc0005002_executable_test_passed": true,
+      "sc0005003_linked_to_existing_emoji_filter_tests": true,
+      "sc0005003_linked_to_executable_step_definitions": true,
+      "sc0005003_executable_test_passed": true
     }
   }
 }

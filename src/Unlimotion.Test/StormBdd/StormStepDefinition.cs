@@ -71,5 +71,11 @@ internal sealed class StormScenarioContext
 
     public FilterResetScenarioResult? FilterResetResult { get; set; }
 
+    public bool EmojiFilterTaskSetAvailable { get; set; }
+
+    public bool EmojiFilterStoryBehaviorConfirmed { get; set; }
+
+    public EmojiFilterScenarioResult? EmojiFilterResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
