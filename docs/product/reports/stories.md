@@ -1,7 +1,7 @@
 # STORM Stories
 
-Сгенерировано: 2026-06-24
-Команда: `/storm:bdd-implement SC-0011-002 executable step definitions`
+Сгенерировано: 2026-06-28
+Команда: `/storm:cover Android workload install build smoke`
 
 ## Story Changes
 
@@ -11,7 +11,7 @@
 | ST-0011 | `AC-0032` сохраняет coverage `critical`: login/register/refresh-token contract покрыт `TS-0017`, а `SC-0011-001` исполняется через `SD-0022..SD-0025` и `TS-0031`. | `TS-0017`, `TS-0031` |
 | ST-0016 | `AC-0044` сохраняет coverage `full`: error-toast rendering and close UX покрыт `TS-0021`, а `SC-0016-001` исполняется через `SD-0017..SD-0021` и `TS-0030`. | `TS-0021`, `TS-0030` |
 | ST-0014 | `AC-0039` сохраняет coverage `full`, `AC-0040` сохраняет coverage `critical`; все три `ST-0014` scenarios step-executable. | `TS-0022`, `TS-0028`, `TS-0023`, `TS-0029`, `TS-0025`, `TS-0027` |
-| ST-0015 | `AC-0042` сохраняет coverage `critical`: project contracts покрыты `TS-0024`, а `SC-0015-002` исполняется через `SD-0001..SD-0004` и `TS-0026`. Android/iOS build smoke blocked by `NETSDK1147`, поэтому runtime release support не заявляется. | `TS-0024`, `TS-0026` |
+| ST-0015 | `AC-0042` сохраняет coverage `critical`: project contracts покрыты `TS-0024`, а `SC-0015-002` исполняется через `SD-0001..SD-0004` и `TS-0026`. Browser Release build smoke есть; iOS Debug build smoke прошёл 2026-06-28; Android Debug build smoke прошёл 2026-06-28 после targeted install no-op; runtime release support не заявляется. | `TS-0024`, `TS-0026` |
 
 ## Product-Entry Candidate Update
 
@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | ST-0011 / AC-0032 | Нет BDD-execution gap; `SC-0011-001` step-executable. | Поддерживать `TS-0017` и `TS-0031` при изменениях server-storage auth flow. |
 | ST-0011 / AC-0033 | Нет BDD-execution gap; `SC-0011-002` step-executable. | Поддерживать `TS-0017..TS-0020` и `TS-0032` при изменениях server-storage CRUD/SignalR flow. |
-| ST-0015 / AC-0042 | Android/iOS build smoke заблокированы `NETSDK1147`; Browser build smoke не равен runtime/release evidence. | Отдельная environment/setup SPEC при необходимости Android/iOS build evidence; отдельная runtime/release SPEC при необходимости release support claims. |
+| ST-0015 / AC-0042 | Browser Release, iOS Debug и Android Debug build smoke прошли; это не равно runtime/release evidence. | Отдельная runtime/release SPEC нужна только для launch/package/release support claims; для `/storm:cover` можно выбирать следующий high-value scenario для executable BDD coverage. |
 | BDD execution | Step definitions покрывают 7/45 scenarios. | Расширять executable step definitions отдельными SPEC по high-value scenarios; не создавать placeholder steps массово. |
-| Full-suite validation | Full-suite gate восстановлен: `Unlimotion.Test` проходит 563/563 вне sandbox после Windows ACL hardening fix. | Использовать как validation gate для следующих `/storm:cover` delivery tasks; sandbox ACL false-negative не считать product signal. |
+| Full-suite validation | Full-suite gate восстановлен предыдущей итерацией: `Unlimotion.Test` проходил 563/563 вне sandbox после Windows ACL hardening fix; эта environment-admin SPEC full-suite не запускала. | Использовать как validation baseline для следующих `/storm:cover` delivery tasks; текущая SPEC закрыла Android build-smoke gap без code/test changes. |
 | CV-0007 | Нет active story gap после Варианта B. | Future revisit only after new product decision. |

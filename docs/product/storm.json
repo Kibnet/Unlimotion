@@ -4,7 +4,7 @@
     "process": "storm-cloud-product-development",
     "repository": "Kibnet/Unlimotion",
     "created_at": "2026-06-12",
-    "updated_at": "2026-06-26",
+    "updated_at": "2026-06-28",
     "generated_by": "Codex /storm:bootstrap",
     "route": "guided-artifact-workflow",
     "scope": "Бутстрап текущей продуктовой спецификации по отслеживаемым файлам репозитория без изменений функционального кода и тестов.",
@@ -40,7 +40,7 @@
       "Записи являются гипотезами о продукте, восстановленными из реализации и спецификаций; перед утверждением целей и потребностей нужна проверка владельцем продукта.",
       "Code units — это значимые группы для трассировки, а не полный индекс всех классов проекта.",
       "CV-0004 закрыт delivery evidence: callbacks покрыты TS-0023, Telegram Git timer conflict-safety покрыт TS-0025; test annotations не менялись.",
-      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024. Platform validation 2026-06-18 добавила Browser Release build smoke evidence; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, поэтому runtime release maturity не заявляется.",
+      "CV-0005 закрыт как conservative platform policy: Android/browser/iOS имеют project-contract coverage через TS-0024. Platform validation теперь включает Browser Release, iOS Debug и Android Debug build smoke evidence; runtime release maturity не заявляется.",
       "BDD executable slice добавлен 2026-06-19: SC-0015-002 исполняется из feature text через repo-local step definitions SD-0001..SD-0004 и TUnit evidence TS-0026.",
       "BDD executable slice добавлен 2026-06-19: SC-0014-002 исполняется из feature text через repo-local step definitions SD-0005..SD-0008 и TUnit evidence TS-0027.",
       "BDD executable slice добавлен 2026-06-19: SC-0014-001 исполняется из feature text через repo-local step definitions SD-0009..SD-0012 и TUnit evidence TS-0028.",
@@ -51,12 +51,15 @@
       "BDD executable slice добавлен 2026-06-24: SC-0011-002 исполняется из feature text через repo-local step definitions SD-0022..SD-0024 и SD-0026, TUnit evidence TS-0032 и existing TS-0017..TS-0020.",
       "Validation stabilization 2026-06-25: MainControlTreeCommandsUiTests paste hotkey UI failure закрыт test-only focus setup; full-suite validation теперь блокируется отдельным live ServiceStack host cleanup/file watcher issue after 193 passing tests.",
       "Validation stabilization 2026-06-26: live ServiceStack host cleanup/file watcher process failure закрыт test-only отключением reload-on-change и EventLog provider в live fixture; targeted ServerStorageLiveIntegrationTests и StormServerStorageCrudRealtimeExecutableSpecTests проходят, full-suite теперь завершается обычными test failures по Windows ACL hardening и одному order-dependent Avalonia Headless dispose событию.",
-      "Validation stabilization 2026-06-26: Windows ACL hardening full-suite blocker закрыт production fix в BackupViaGitService; targeted ACL tests проходят, MainControlResetFilters targeted risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox."
+      "Validation stabilization 2026-06-26: Windows ACL hardening full-suite blocker закрыт production fix в BackupViaGitService; targeted ACL tests проходят, MainControlResetFilters targeted risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox.",
+      "Environment setup 2026-06-26: Android/iOS build smoke повторно проверены после approved SPEC; dotnet workload restore для Android попытался установить workload set 10.0.301.1 через microsoft.net.workloads.10.0.300.msi.x64 и был отменён/заблокирован, Android/iOS Debug build по-прежнему останавливаются на NETSDK1147 до compile stage; repo source/tests/test annotations не менялись.",
+      "Environment admin 2026-06-28: narrow Android workload restore timed out after 184 seconds but workload list updated to workload set 10.0.301.1; iOS Debug build smoke passed with existing warnings, Android Debug build still fails NETSDK1147 before compile and now requires android workload despite workload list showing android installed; repo source/tests/test annotations/project files/workflows не менялись.",
+      "Environment admin 2026-06-28: targeted dotnet workload install android completed with no changes because Android was already installed; Android Debug build smoke then passed, producing Unlimotion.Android.dll; iOS Debug build smoke evidence from earlier 2026-06-28 remains preserved; repo source/tests/test annotations/project files/workflows не менялись."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
-    "last_artifact_mode": "delivery-task"
+    "last_artifact_command": "/storm:cover Android workload install build smoke",
+    "last_artifact_mode": "delivery-task environment-admin artifact-only sync"
   },
   "vision": {
     "id": "VS-0001",
@@ -2528,7 +2531,7 @@
           "linked_scenarios": [
             "SC-0015-002"
           ],
-          "coverage_note": "TS-0024 подтверждает target frameworks, shared UI references, Avalonia platform packages, startup hooks и Android native libgit2 assets. Browser Release build smoke прошел 2026-06-18. Android и iOS build smoke заблокированы NETSDK1147 workload restore state; runtime release support для non-desktop shells не заявляется."
+          "coverage_note": "TS-0024 подтверждает target frameworks, shared UI references, Avalonia platform packages, startup hooks и Android native libgit2 assets. Browser Release build smoke прошел 2026-06-18; iOS Debug build smoke прошел 2026-06-28; Android Debug build smoke прошел 2026-06-28. Runtime release support для non-desktop shells не заявляется."
         },
         {
           "id": "AC-0043",
@@ -2593,7 +2596,7 @@
         "SC-0015-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0015-002 связан с TS-0024 и passing contract tests; platform validation 2026-06-18 добавила Browser Release build smoke evidence. Android/iOS build smoke заблокированы NETSDK1147 workload restore state; non-desktop runtime release maturity всё ещё не заявляется."
+      "behavior_coverage_note": "SC-0015-002 связан с TS-0024 и passing contract tests; platform validation добавила Browser Release, iOS Debug и Android Debug build smoke evidence. Non-desktop runtime release maturity всё ещё не заявляется."
     },
     {
       "id": "ST-0016",
@@ -5318,54 +5321,59 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения.",
+    "recommended_next_step": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC.",
     "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0011-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-06-24",
-    "last_cover_command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
+    "last_cover_command": "/storm:cover Android workload install build smoke",
     "coverage_report": "docs/product/reports/coverage.md",
-    "coverage_mode": "delivery-task",
-    "coverage_updated_at": "2026-06-26",
-    "last_rank_command": "/storm:rank + /storm:cover validation stabilization / Windows ACL hardening full-suite",
+    "coverage_mode": "delivery-task environment-admin artifact-only sync",
+    "coverage_updated_at": "2026-06-28",
+    "last_rank_command": "/storm:rank + /storm:cover Android workload install build smoke",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact-only",
-    "ranking_updated_at": "2026-06-26",
+    "ranking_updated_at": "2026-06-28",
     "bdd_sync": {
-      "updated_at": "2026-06-24",
+      "updated_at": "2026-06-28",
       "command": "/storm:bdd-sync",
-      "mode": "delivery-task artifact sync after approved EXEC",
+      "mode": "artifact-only evidence sync after approved targeted Android workload install SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
-      "updated_at": "2026-06-24",
+      "updated_at": "2026-06-28",
       "command": "/storm:bdd-lint",
-      "mode": "delivery-task artifact lint after approved EXEC",
+      "mode": "artifact-only evidence lint after approved targeted Android workload install SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
-      "updated_at": "2026-06-26",
-      "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
-      "mode": "delivery-task",
-      "approved_spec": "specs/2026-06-26-storm-stabilize-backup-acl-full-suite.md",
-      "classification": "регрессия production hardening: configured SSH private key сохранял explicit non-whitelisted ACL entries, потому что RemoveAccessRuleAll не снимал все ACE для SID",
-      "changed_code": [
-        "src/Unlimotion/Services/BackupViaGitService.cs"
-      ],
+      "updated_at": "2026-06-28",
+      "command": "/storm:cover Android workload install build smoke",
+      "mode": "delivery-task environment-admin",
+      "approved_spec": "specs/2026-06-28-storm-android-workload-install-build-smoke.md",
+      "classification": "targeted android workload install completed as no-op; Android Debug build smoke passed after restore/build state settled",
+      "changed_code": [],
       "tests_changed": [],
       "test_annotations_changed": false,
       "validation": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-        "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+        "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
+        "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
+        "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
+        "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
+        "dotnet build-server shutdown => MSBuild and compiler servers shut down",
+        "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
+        "git diff --check => passed with no whitespace errors",
+        "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
+        "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
       ],
-      "result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token.",
-      "next_recommended_action": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения."
+      "result": "Android Debug build smoke passed. Browser/iOS build smoke evidence preserved. Runtime/release support not claimed; repo source/tests unchanged.",
+      "next_recommended_action": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC.",
+      "validation_status": "passed_with_known_bdd_lint_warning",
+      "known_warning": "Duplicate shared Given step text across SD-0009, SD-0013, SD-0022 remains intentional reuse, not a blocker."
     }
   },
   "traceability": {
@@ -6537,12 +6545,12 @@
     "weak_acceptance_criteria": [
       {
         "id": "AC-0042",
-        "reason": "Browser Release build smoke подтвержден; Android/iOS build smoke заблокированы NETSDK1147 workload restore state, runtime release support не заявляется."
+        "reason": "Browser Release, iOS Debug и Android Debug build smoke подтверждены; runtime release support не заявляется."
       }
     ],
     "open_questions": [
       "Добавлять ли test annotations в TUnit tests отдельным delivery-task через QUEST gate?",
-      "Нужна ли отдельная environment/setup task для Android/iOS после NETSDK1147 workload restore blocker?",
+      "Решено 2026-06-28: отдельная environment/setup task для Android/iOS build smoke не требуется; Browser/iOS/Android build-smoke evidence зафиксированы, runtime/release claims требуют отдельной SPEC при необходимости.",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
@@ -6550,9 +6558,9 @@
     ]
   },
   "coverage_analysis": {
-    "updated_at": "2026-06-26",
-    "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
-    "mode": "delivery-task после подтвержденной SPEC; изменено production security hardening, tests и test annotations не менялись",
+    "updated_at": "2026-06-28",
+    "command": "/storm:cover Android workload install build smoke",
+    "mode": "delivery-task environment-admin после подтвержденной SPEC; artifact-only sync, code/tests/test annotations не менялись",
     "annotations_added": false,
     "tests_changed": false,
     "tests_run": true,
@@ -6569,7 +6577,7 @@
       "improved_by_current_artifact_triage": 1,
       "internal_orphan_contract_candidates": 1,
       "active_cover_candidates_remaining": 0,
-      "active_cover_candidates_note": "CV-0001 и CV-0002 имеют executable BDD evidence: SC-0011-001 через TS-0031, SC-0011-002 через TS-0032. CV-0007 остается вне active cover queue по Варианту B."
+      "active_cover_candidates_note": "CV-0001 и CV-0002 имеют executable BDD evidence. CV-0005 теперь имеет Browser, iOS and Android build-smoke evidence while runtime/release support remains unclaimed. CV-0007 остается вне active cover queue по Варианту B."
     },
     "improved_by_existing_evidence": [
       {
@@ -6866,7 +6874,8 @@
           "TS-0024",
           "TS-0026"
         ],
-        "coverage_result": "TS-0024 прошел 3/3 и подтверждает project contracts; TS-0026 прошел 1/1 2026-06-19 и исполняет SC-0015-002 из feature text через SD-0001..SD-0004."
+        "coverage_result": "TS-0024 прошел 3/3 и подтверждает project contracts; TS-0026 прошел 1/1 2026-06-19 и исполняет SC-0015-002 из feature text через SD-0001..SD-0004. Browser Release build smoke прошел 2026-06-18. iOS Debug build smoke прошел 2026-06-28. Android Debug build smoke прошел 2026-06-28 after targeted Android workload install/no-op and settled restore state. Runtime/release claim не заявляется.",
+        "remaining_gap": "Android/iOS/browser build smoke есть; runtime launch, emulator/device validation and release pipeline evidence не заявлены и требуют отдельной SPEC при необходимости."
       },
       {
         "id": "CV-0006",
@@ -6972,7 +6981,7 @@
       "Решено 2026-06-19: первый executable BDD slice для SC-0015-002 реализован через SD-0001..SD-0004 и TS-0026.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-002 реализован через SD-0005..SD-0008 и TS-0027.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-001 реализован через SD-0009..SD-0012 и TS-0028.",
-      "Частично проверено 2026-06-18: Browser Release build smoke прошел; Android/iOS build smoke заблокированы NETSDK1147 workload restore state. Нужна ли отдельная environment/setup task для Android/iOS?",
+      "Решено 2026-06-28: Android Debug build smoke прошел после targeted Android workload install/no-op and settled restore state; iOS Debug build smoke также прошел. Runtime/release support не заявляется.",
       "Решено 2026-06-18: attachment workflow остается internal/orphan contract candidate по Варианту B.",
       "Решено 2026-06-19: executable BDD slice для SC-0014-003 реализован через SD-0013..SD-0016 и TS-0029.",
       "Решено 2026-06-19: executable BDD slice для SC-0016-001 реализован через SD-0017..SD-0021 и TS-0030.",
@@ -6981,9 +6990,9 @@
       "Решено 2026-06-26: full-suite validation gate восстановлен; BackupViaGitService Windows ACL hardening blocker закрыт production fix, targeted Headless reset risk проходит, full Unlimotion.Test проходит 563/563 вне sandbox."
     ],
     "behavior_coverage_metrics": {
-      "updated_at": "2026-06-26",
-      "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
-      "mode": "delivery-task validation stabilization; behavior coverage metrics не изменились",
+      "updated_at": "2026-06-28",
+      "command": "/storm:cover Android workload install build smoke",
+      "mode": "delivery-task environment-admin; behavior coverage metrics не изменились",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -7012,20 +7021,21 @@
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
       "tests_changed": false,
-      "code_changed": true,
+      "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-        "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+        "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
+        "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
+        "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
+        "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
+        "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
+        "dotnet build-server shutdown => MSBuild and compiler servers shut down",
+        "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC"
       ],
-      "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token."
+      "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий full Unlimotion.Test gate остается green 563/563 вне sandbox по commit 5fcb1a2."
     },
     "bdd_sync_summary": {
       "command": "/storm:bdd-sync",
@@ -7041,11 +7051,11 @@
       "step_definition_coverage_ratio": "7/45",
       "known_gaps": [
         "step_definitions_total=26; SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 and SC-0011-002 are step-executable; remaining scenarios still rely on linked TUnit evidence",
-        "Android/iOS build smoke remains blocked by NETSDK1147 workload restore state",
+        "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime launch, emulator/device validation and release pipeline evidence are not claimed",
         "CV-0007 remains outside active /storm:cover by product decision Вариант B",
         "Full-suite validation gate восстановлен 2026-06-26: Unlimotion.Test прошел 563/563 вне sandbox после Windows ACL hardening fix"
       ],
-      "decision": "SC-0011-002 получил repo-local executable step-definition slice; existing SC-0011-001, ST-0014, ST-0015 and ST-0016 slices preserved. Windows ACL hardening validation blocker закрыт без изменения BDD links."
+      "decision": "Existing BDD links preserved. SC-0015-002 now has Browser, iOS and Android build-smoke evidence; no BDD link/code/test changes."
     },
     "improved_by_delivery_evidence": [
       {
@@ -7100,27 +7110,32 @@
           "TS-0024",
           "TS-0026"
         ],
-        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts; TS-0026 исполняет SC-0015-002 из feature text через SD-0001..SD-0004; Browser Release build smoke прошел 2026-06-18, Android/iOS build smoke заблокированы NETSDK1147 workload restore state."
+        "reason": "TS-0024 подтверждает Android/browser/iOS project contracts; TS-0026 исполняет SC-0015-002 из feature text через SD-0001..SD-0004; Browser Release build smoke прошел 2026-06-18; iOS Debug build smoke прошел 2026-06-28; Android Debug build smoke прошел 2026-06-28. Runtime/release support не заявляется."
       }
     ],
-    "code_changed": true,
-    "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token.",
-    "targeted_validation_result": "Targeted Windows ACL configured-key test прошел 1/1 вне sandbox; generated-key ACL test прошел 1/1; MainControlResetFilters targeted Headless risk прошел 1/1.",
+    "code_changed": false,
+    "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий gate остается восстановленным: full Unlimotion.Test прошел 563/563 вне sandbox в commit 5fcb1a2.",
+    "targeted_validation_result": "Android Debug build smoke прошел после targeted workload install/no-op and settled restore state; iOS Debug build smoke already passed; runtime/release support не заявляется.",
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-      "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
+      "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
+      "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
+      "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
+      "dotnet build-server shutdown => MSBuild and compiler servers shut down",
+      "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
+      "git diff --check => passed with no whitespace errors",
+      "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
+      "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
     ]
   },
   "ranking_analysis": {
-    "updated_at": "2026-06-26",
-    "command": "/storm:rank + /storm:cover validation stabilization / Windows ACL hardening full-suite",
-    "mode": "delivery sync; ranking не пересчитан полностью, full-suite blocker закрыт",
+    "updated_at": "2026-06-28",
+    "command": "/storm:rank + /storm:cover Android workload install build smoke",
+    "mode": "artifact-only delivery sync; Android build smoke added, ranking не пересчитан полностью",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
     "method": "RICE value = reach * impact * confidence; effort = architecture_blast_radius + verification_complexity + dependency_overhead + migration_or_rollout_risk; priority* = value* / cost* по dependency closure.",
@@ -7157,10 +7172,10 @@
         "linked_coverage_items": [
           "CV-0005"
         ],
-        "recommendation": "Сначала принять platform support policy, затем добавлять smoke coverage."
+        "recommendation": "CV-0005 покрыт на уровне project-contract + Browser/iOS/Android build smoke. Runtime launch, emulator/device validation and release pipeline evidence остаются отдельным scope."
       }
     ],
-    "next_recommended_action": "Full-suite gate восстановлен. Следующий осмысленный шаг для продолжения /storm:cover: либо отдельная environment/setup SPEC для Android/iOS build smoke по NETSDK1147, либо выбор следующего high-value scenario для executable BDD coverage после product decision; CV-0007 остается internal/orphan candidate до нового решения."
+    "next_recommended_action": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC."
   },
   "gherkin_features": [
     {
@@ -11063,7 +11078,7 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; executable_step_definition_slice_passed_1_of_1_on_2026-06-19; android_ios_build_smoke_blocked_by_NETSDK1147_workload_restore_state",
+      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; executable_step_definition_slice_passed_1_of_1_on_2026-06-19; ios_debug_build_smoke_passed_on_2026-06-28; android_debug_build_smoke_passed_on_2026-06-28; runtime_release_support_not_claimed",
       "linked_tests": [
         "TS-0015",
         "TS-0024",
@@ -11138,6 +11153,50 @@
         {
           "command": "dotnet build src/Unlimotion.iOS/Unlimotion.iOS.csproj -c Debug",
           "result": "blocked on 2026-06-18 by NETSDK1147 workload restore state before host/runtime validation."
+        },
+        {
+          "command": "dotnet --info",
+          "result": "2026-06-26: SDK 10.0.301, workload version 10.0.300-manifests.6fc1bb7b; installed workloads include android/ios/maccatalyst/maui-windows/wasm-tools; workload sets not installed."
+        },
+        {
+          "command": "dotnet workload restore src\\Unlimotion.Android\\Unlimotion.Android.csproj",
+          "result": "2026-06-26: failed while installing workload set 10.0.301.1 / microsoft.net.workloads.10.0.300.msi.x64; operation canceled; rollback; stop rule triggered for admin/interactive/system install."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug",
+          "result": "2026-06-26: failed with NETSDK1147 before project compile; suggested workload restore for wasm-tools; classified as environment blocker, not product failure."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.iOS\\Unlimotion.iOS.csproj -c Debug",
+          "result": "2026-06-26: failed with NETSDK1147 before project compile; suggested workload restore for wasm-tools; classified as environment blocker before host/runtime validation."
+        },
+        {
+          "command": "dotnet workload restore src\\Unlimotion.Android\\Unlimotion.Android.csproj --verbosity normal",
+          "result": "2026-06-28: timed out after 184 seconds with no captured stdout; subsequent workload list changed to workload set 10.0.301.1; lingering dotnet/msiexec processes observed, not forcibly killed."
+        },
+        {
+          "command": "dotnet workload list",
+          "result": "2026-06-28 after repair attempt: workload version 10.0.301.1; android 36.1.69/10.0.100 and ios 26.5.10284/10.0.100 listed with source SDK 10.0.300 + VS."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug",
+          "result": "2026-06-28 checkpoint: failed NETSDK1147 before compile; required workload android despite workload list showing android installed; resolved later by targeted install/no-op plus settled restore state."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.iOS\\Unlimotion.iOS.csproj -c Debug",
+          "result": "2026-06-28: passed in 00:00:29.82 with existing warnings; build smoke evidence only, not runtime UX parity."
+        },
+        {
+          "command": "dotnet workload install android",
+          "result": "2026-06-28: completed exit 0; no workload changes found; Android workload already installed."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal",
+          "result": "2026-06-28: passed; produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301."
+        },
+        {
+          "command": "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal",
+          "result": "2026-06-28: passed in 00:00:08.66 after restore state settled; warnings 4, errors 0; build smoke evidence only, not runtime release support."
         }
       ]
     },
@@ -12747,9 +12806,9 @@
     }
   ],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-06-26",
-    "command": "/storm:cover validation stabilization / Windows ACL hardening full-suite",
-    "mode": "delivery-task validation stabilization; behavior coverage metrics не изменились",
+    "updated_at": "2026-06-28",
+    "command": "/storm:cover Android workload install build smoke",
+    "mode": "delivery-task environment-admin; behavior coverage metrics не изменились",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -12778,25 +12837,30 @@
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
     "tests_changed": false,
-    "code_changed": true,
+    "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore => прошло с существующими warnings; Windows-only ACL helper annotations убрали новый CA1416-шум из измененного кода",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1 вне sandbox с реальным Windows ACL token",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BackupViaGitServiceTests/GenerateManagedRsaSshKey_HardensPrivateKeyPermissionsOnWindows\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlResetFiltersUiTests/ResetFiltersButton_IsAvailableOnTaskTabs\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 563/563 вне sandbox; предыдущие ACL и Headless dispose blockers не воспроизведены",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning duplicate shared Given step text across SD-0009/SD-0013/SD-0022",
-      "git diff --check => прошло; только LF-to-CRLF working-copy warnings",
-      "rg -n \"[ \\t]+$\" src\\Unlimotion src\\Unlimotion.Test docs\\product specs\\2026-06-26-storm-stabilize-backup-acl-full-suite.md => no matches (rg exit 1)"
+      "git status --short --untracked-files=all => existing artifact-only sync preserved; code/tests/workflows unchanged",
+      "dotnet workload list before targeted install => workload version 10.0.301.1; android 36.1.69/10.0.100 listed with sources SDK 10.0.300 + VS",
+      "dotnet workload install android => Проверка обновленной версии рабочей нагрузки; Изменений рабочей нагрузки не найдено; Рабочие нагрузки \"android\" уже установлены; exit 0",
+      "dotnet workload list after targeted install => unchanged: android 36.1.69/10.0.100, ios 26.5.10284/10.0.100, wasm-tools 10.0.109/10.0.100, workload version 10.0.301.1",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug => first post-install restore/build returned exit 1 after restore with no final error captured; subsequent --no-restore build passed and canonical rerun passed",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug --no-restore -v minimal => passed, produced src\\Unlimotion.Android\\bin\\Debug\\net10.0-android\\Unlimotion.Android.dll; warnings NU1608, CA1416, XA0141, XA4301",
+      "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal => passed in 00:00:08.66; warnings 4, errors 0; output includes Unlimotion.Android.dll",
+      "dotnet build-server shutdown => MSBuild and compiler servers shut down",
+      "production code, tests, test annotations, .feature wording, platform manifests, package metadata, NuGet/SDK config and workflows were not changed in this SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 1 warning (duplicate shared Given step text across SD-0009, SD-0013, SD-0022)",
+      "git diff --check => passed with no whitespace errors",
+      "rg trailing whitespace scan over docs\\product and current STORM specs => no trailing whitespace matches",
+      "Get-Process dotnet,msiexec => no dotnet/msiexec processes found after build-server shutdown"
     ],
-    "full_suite_result": "2026-06-26: Windows ACL hardening blocker закрыт production fix: configured SSH private key теперь очищает explicit ACE для non-whitelisted SID через PurgeAccessRules и отключает наследование на существующем security descriptor. Full Unlimotion.Test прошел 563/563 вне sandbox; sandbox no-build ACL failure классифицирован как false-negative из-за ограниченного ACL token."
+    "full_suite_result": "В этой environment-admin SPEC full-suite не запускался; предыдущий full Unlimotion.Test gate остается green 563/563 вне sandbox по commit 5fcb1a2."
   },
   "bdd_sync": {
-    "updated_at": "2026-06-24",
+    "updated_at": "2026-06-28",
     "command": "/storm:bdd-sync",
-    "mode": "delivery-task artifact sync after approved EXEC",
+    "mode": "artifact-only evidence sync after approved targeted Android workload install SPEC",
     "status": "completed_with_known_gaps",
     "synced_links": {
       "story_to_scenarios": 16,
@@ -12811,33 +12875,26 @@
       "acceptance criteria replacement",
       "CV-0007 product decision links"
     ],
-    "tests_changed": [
-      "src/Unlimotion.Test/ServerStorageCrudRealtimeContract.cs",
-      "src/Unlimotion.Test/ServerStorageBddContractTests.cs",
-      "src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs",
-      "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs",
-      "src/Unlimotion.Test/StormBdd/ServerStorageAuthStepDefinitions.cs",
-      "src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs"
-    ],
-    "decision": "SC-0011-002 получил repo-local executable step-definition slice; SC-0011-001 and previous SC-0014/SC-0015/SC-0016 executable slices preserved.",
+    "tests_changed": [],
+    "decision": "BDD links preserved; SC-0015-002 evidence refreshed with Android Debug build smoke passed; code/test/test-annotation changes not made.",
     "gaps": [
       "Step definitions покрывают 7/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.",
-      "Android/iOS build smoke требует отдельной environment/setup task из-за NETSDK1147 workload restore blocker; runtime smoke и release pipeline evidence не заявляются.",
+      "Android, iOS and Browser build-smoke evidence recorded for SC-0015-002; runtime smoke, emulator/device validation and release pipeline evidence не заявляются.",
       "CV-0007 remains outside active /storm:cover by product decision Вариант B."
     ],
     "code_changed": []
   },
   "bdd_lint": {
-    "updated_at": "2026-06-24",
+    "updated_at": "2026-06-28",
     "command": "/storm:bdd-lint",
-    "mode": "delivery-task artifact lint after approved EXEC",
+    "mode": "artifact-only evidence lint after approved targeted Android workload install SPEC",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
       "step_definitions покрывают SC-0015-002, SC-0014-002, SC-0014-001, SC-0014-003, SC-0016-001, SC-0011-001 и SC-0011-002: repo-local runner не является full Cucumber-style engine.",
       "SD-0009, SD-0013 и SD-0022 используют один общий Given step text для shared task-set context; это intentional reuse of product wording, не placeholder и не orphan step.",
       "CV-0007 intentionally has no active scenario/test links after product decision Вариант B.",
-      "SC-0015-002 имеет project-contract coverage и Browser Release build smoke evidence; Android/iOS runtime release support не заявляется."
+      "SC-0015-002 имеет project-contract coverage, Browser Release build smoke, iOS Debug build smoke and Android Debug build smoke; runtime release support не заявляется."
     ],
     "checks": {
       "scenario_tags_present": true,
@@ -12846,7 +12903,7 @@
       "automated_scenarios_have_test_links": true,
       "acceptance_criteria_preserved": true,
       "production_code_unchanged": true,
-      "tests_changed_in_approved_exec_scope": true,
+      "tests_changed_in_approved_exec_scope": false,
       "production_code_changes_in_approved_exec_scope": false,
       "test_annotations_changed": false,
       "step_definitions_present": true,
@@ -12867,7 +12924,11 @@
       "sc0011001_linked_to_executable_step_definitions": true,
       "sc0011002_without_step_definitions_recorded": false,
       "sc0011002_linked_to_crud_realtime_contract_and_live_tests": true,
-      "sc0011002_linked_to_executable_step_definitions": true
+      "sc0011002_linked_to_executable_step_definitions": true,
+      "current_artifact_only_code_tests_unchanged": true,
+      "st0015_ios_build_smoke_recorded": true,
+      "st0015_android_build_blocker_recorded": false,
+      "st0015_android_build_smoke_recorded": true
     }
   }
 }

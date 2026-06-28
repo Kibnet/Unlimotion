@@ -1,8 +1,8 @@
 # STORM Ранжирование С Учётом Зависимостей
 
-Сгенерировано: 2026-06-26
-Команда: `/storm:rank` + `/storm:cover validation stabilization`
-Режим: delivery sync; ranking не пересчитан полностью, validation blocker актуализирован
+Сгенерировано: 2026-06-28
+Команда: `/storm:rank` + `/storm:cover Android workload install build smoke`
+Режим: artifact-only delivery sync; Android build smoke добавлен, ranking не пересчитан полностью
 
 ## Практический Вывод
 
@@ -12,7 +12,7 @@
 4. `CV-0007` выведен из active `/storm:cover` очереди по Варианту B: attachment code остается internal/orphan contract candidate.
 5. Текущих active `/storm:cover` behavior gaps не осталось.
 6. Step-executable scenarios: `SC-0011-001`, `SC-0011-002`, `SC-0014-001`, `SC-0014-002`, `SC-0014-003`, `SC-0015-002`, `SC-0016-001`.
-7. Full-suite validation gate восстановлен: UI state/order failure закрыт targeted/class evidence, live ServiceStack cleanup process crash закрыт targeted/full-suite evidence, Windows ACL hardening blocker закрыт production fix, full `Unlimotion.Test` проходит 563/563 вне sandbox.
+7. Full-suite validation gate восстановлен предыдущей итерацией; Browser, iOS and Android build smoke evidence теперь зафиксированы для `SC-0015-002`; runtime/release support не заявляется.
 
 ## Ранжированный Backlog
 
@@ -23,9 +23,9 @@
 | 3 | CV-0002 | AC-0033 | ST-0011 | covered_by_live_task_api_signalr_tests_and_executable_bdd | Live API и SignalR покрыты; `SC-0011-002` step-executable через TS-0032. |
 | 4 | CV-0003 | AC-0039 | ST-0014 | covered_by_telegram_command_auth_tests | Command/auth покрыты TS-0022 и `SC-0014-001` step-executable через TS-0028. |
 | 5 | CV-0004 | AC-0040 | ST-0014 | covered_by_telegram_callback_and_timer_tests | Callbacks покрыты TS-0023 и `SC-0014-003` step-executable через TS-0029; Git timer conflict-safety покрыт TS-0025 и `SC-0014-002` step-executable через TS-0027. |
-| 6 | CV-0005 | AC-0042 | ST-0015 | covered_by_project_contract_tests | Conservative policy принят; Browser Release build smoke прошел; `SC-0015-002` step-executable; Android/iOS build smoke blocked by `NETSDK1147`. |
+| 6 | CV-0005 | AC-0042 | ST-0015 | covered_by_project_contract_tests | Conservative policy принят; Browser Release build smoke прошёл; iOS Debug build smoke прошёл; Android Debug build smoke прошёл; `SC-0015-002` step-executable; runtime/release support не заявляется. |
 | 7 | CV-0007 | PRODUCT-ENTRY | proposed_attachment_workflow | internal_orphan_contract_candidate | Вариант B: не active cover candidate; future revisit требует нового product decision. |
 
 ## Рекомендуемый Следующий Шаг
 
-Full-suite gate восстановлен. Следующий осмысленный шаг: либо отдельная environment/setup SPEC для Android/iOS build smoke по `NETSDK1147`, либо выбор следующего high-value scenario для executable BDD coverage после product decision. `CV-0007` остается internal/orphan candidate до нового решения.
+Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002. Следующий шаг: либо отдельная runtime/release SPEC для platform launch/package evidence, либо выбор следующего high-value scenario для executable BDD coverage; repo config/tests/code не менять без отдельной delivery SPEC. `CV-0007` остается internal/orphan candidate до нового решения.
