@@ -95,5 +95,11 @@ internal sealed class StormScenarioContext
 
     public MultipleParentsRelationScenarioResult? MultipleParentsRelationResult { get; set; }
 
+    public bool TaskGraphWorkspaceCommandTaskSetAvailable { get; set; }
+
+    public bool TaskGraphWorkspaceCommandStoryBehaviorConfirmed { get; set; }
+
+    public TaskGraphWorkspaceCommandScenarioResult? TaskGraphWorkspaceCommandResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
