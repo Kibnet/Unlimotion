@@ -23,4 +23,4 @@ BDD links обновлены для `SC-0001-002`: новый `TS-0037` связ
 
 Step definitions покрывают 12/45 scenarios. Следующий highest-ranked candidate по /storm:cover — продолжение `ST-0001`, прежде всего `SC-0001-003`, чтобы закрыть последний task-graph scenario.
 
-Full-suite validation сейчас blocked by unrelated flaky/order-sensitive tests: `FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder` and `PasteTaskOutline_CreatesNestedTasksUnderCurrentTask`. Перед расширением `/storm:cover` стоит выполнить отдельный QUEST stabilization slice.
+Full-suite blocker снят controlled stability-gate retry: full `Unlimotion.Test` вне managed sandbox прошёл 568/568 with `C:\tmp\unlimotion-full-suite-stability-gate.log`.

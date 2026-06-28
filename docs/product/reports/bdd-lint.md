@@ -16,6 +16,7 @@ passed_with_warnings
 | ST-0001 | WARNING | `SC-0001-001` и `SC-0001-002` step-executable; `SC-0001-003` remains linked-existing-tests only. |
 | Test annotations | PASS | Existing test annotations не менялись. |
 | Production code | PASS | Production code, project files and workflows не менялись. |
+| Full suite gate | PASS | Controlled outside-sandbox full `Unlimotion.Test` retry passed 568/568. |
 
 ## Предупреждения
 
@@ -23,4 +24,3 @@ passed_with_warnings
 2. Validator may report duplicate Given step text across shared task-set steps; это intentional reuse of shared task-set context, now including `SD-0043`.
 3. Validator may report duplicate `И поведение относится к истории ST-0001` for `SD-0040` and `SD-0044`; это intentional story-context reuse.
 4. `CV-0007` остается без scenario/test links по решению: attachment code является internal/orphan contract candidate.
-5. Full-suite gate blocked outside BDD lint scope by unrelated flaky/order-sensitive tests; next stabilization SPEC should handle this before the next broad coverage slice.

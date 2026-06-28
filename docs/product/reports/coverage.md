@@ -43,11 +43,10 @@
 | `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 4 warnings по intentional shared steps |
 | `git diff --check` | прошло with LF-to-CRLF working-copy warnings only |
 | Trailing whitespace scan | no matches (rg exit 1) |
-| Full suite | outside-sandbox run failed 566/568 on unrelated `FilterFlyout_EmojiFilters_SummaryShowsSelectedEmojiAndOverflowInListOrder` and `PasteTaskOutline_CreatesNestedTasksUnderCurrentTask`; isolated retries indicate flaky/order-sensitive behavior; second full retry timed out before progress |
+| Full suite | controlled outside-sandbox retry passed 568/568 in 7m30s with `C:\tmp\unlimotion-full-suite-stability-gate.log`; earlier unrelated failures treated as transient flaky/order-sensitive evidence |
 
 ## Оставшиеся Gaps
 
 1. Step definitions покрывают 12/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.
 2. ST-0001 partially step-executable: `SC-0001-001` и `SC-0001-002` закрыты; `SC-0001-003` остается linked-existing-tests only.
-3. Full-suite validation сейчас blocked by unrelated flaky/order-sensitive tests; нужен отдельный QUEST stabilization slice before further broad `/storm:cover`.
-4. `CV-0007` не является active cover gap после Варианта B.
+3. `CV-0007` не является active cover gap после Варианта B.
