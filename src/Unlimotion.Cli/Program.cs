@@ -1,8 +1,12 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Unlimotion.Domain;
-using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using Unlimotion.TaskTree;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
+using NewtonsoftJsonException = Newtonsoft.Json.JsonException;
 
 namespace Unlimotion.Cli;
 
@@ -40,6 +44,10 @@ internal static class Program
                 "unlocked" => RunUnlocked(options, loadResult, analyzer),
                 "task" => RunTask(options, loadResult, analyzer),
                 "validate" => RunValidate(options, loadResult, analyzer),
+                "set-status" => RunSetStatus(options, loadResult, analyzer),
+                "complete" => RunComplete(options, loadResult, analyzer),
+                "set-criterion" => RunSetCriterion(options, loadResult),
+                "satisfy-criterion" => RunSatisfyCriterion(options, loadResult),
                 _ => throw new CliException($"Unknown command '{options.Command}'.")
             };
         }
@@ -134,41 +142,20 @@ internal static class Program
             return 1;
         }
 
-        if (string.IsNullOrWhiteSpace(options.TaskId))
+        var taskId = RequireTaskId(options, "task");
+        if (!analyzer.TryGetTask(taskId, out _))
         {
-            throw new CliException("Command 'task' requires --id <task-id>.");
+            throw new CliException($"Task '{taskId}' was not found.");
         }
 
-        if (!analyzer.TryGetTask(options.TaskId, out _))
-        {
-            throw new CliException($"Task '{options.TaskId}' was not found.");
-        }
-
-        var analysis = analyzer.Analyze(options.TaskId);
+        var analysis = analyzer.Analyze(taskId);
         if (options.Format == OutputFormat.Json)
         {
             WriteJson(analysis);
             return 0;
         }
 
-        Console.WriteLine($"{analysis.TaskId} {analysis.Status} {analysis.Title}");
-        Console.WriteLine($"isCanBeCompleted: {analysis.IsCanBeCompleted} (stored: {analysis.StoredIsCanBeCompleted})");
-        Console.WriteLine($"canStart: {analysis.CanStart}");
-        Console.WriteLine($"canComplete: {analysis.CanComplete}");
-        Console.WriteLine($"completionCriteriaSatisfied: {analysis.CompletionCriteriaSatisfied}");
-        Console.WriteLine($"plannedBeginIsFuture: {analysis.PlannedBeginIsFuture}");
-        if (analysis.Reasons.Count == 0)
-        {
-            Console.WriteLine("Reasons: none");
-            return 0;
-        }
-
-        Console.WriteLine("Reasons:");
-        foreach (var reason in analysis.Reasons)
-        {
-            Console.WriteLine($"- {reason.Kind}: {reason.Details} ({reason.SubjectId} {reason.SubjectTitle})");
-        }
-
+        WriteAnalysisText(analysis);
         return 0;
     }
 
@@ -218,6 +205,241 @@ internal static class Program
         return output.IsValid ? 0 : 1;
     }
 
+    private static int RunSetStatus(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+
+        var task = RequireTask(loadResult, RequireTaskId(options, "set-status"));
+        var status = options.Status ?? throw new CliException("Command 'set-status' requires --status <status>.");
+        return ChangeStatus(options, loadResult, analyzer, task, status);
+    }
+
+    private static int RunComplete(CliOptions options, TaskDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+
+        var task = RequireTask(loadResult, RequireTaskId(options, "complete"));
+        return ChangeStatus(options, loadResult, analyzer, task, DomainTaskStatus.Completed);
+    }
+
+    private static int RunSetCriterion(CliOptions options, TaskDirectoryReadResult loadResult)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+
+        var task = RequireTask(loadResult, RequireTaskId(options, "set-criterion"));
+        var criterionId = RequireCriterionId(options, "set-criterion");
+        if (!options.Satisfied.HasValue)
+        {
+            throw new CliException("Command 'set-criterion' requires --satisfied true|false.");
+        }
+
+        return ChangeCriterion(options, loadResult, task, criterionId, options.Satisfied.Value);
+    }
+
+    private static int RunSatisfyCriterion(CliOptions options, TaskDirectoryReadResult loadResult)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+
+        var task = RequireTask(loadResult, RequireTaskId(options, "satisfy-criterion"));
+        return ChangeCriterion(options, loadResult, task, RequireCriterionId(options, "satisfy-criterion"), satisfied: true);
+    }
+
+    private static int ChangeStatus(
+        CliOptions options,
+        TaskDirectoryReadResult loadResult,
+        TaskAvailabilityAnalyzer analyzer,
+        TaskItem task,
+        DomainTaskStatus requestedStatus)
+    {
+        var before = analyzer.Analyze(task.Id);
+        if (!CanChangeStatus(task, requestedStatus, before, out var denialReason))
+        {
+            var deniedOutput = WriteCommandOutput.Denied(task.Id, task.Title, requestedStatus.ToString(), denialReason, before);
+            if (options.Format == OutputFormat.Json)
+            {
+                WriteJson(deniedOutput);
+            }
+            else
+            {
+                Console.Error.WriteLine(denialReason);
+                WriteAnalysisText(before);
+            }
+
+            return 1;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        task.SetStatus(requestedStatus, now, options.Author ?? "unlimotion-cli");
+        task.UpdatedDateTime = now;
+
+        var changedTaskIds = RecalculateAvailability(loadResult, [task.Id]);
+        TaskDirectoryWriter.Write(loadResult, changedTaskIds);
+
+        var afterAnalyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+        var after = afterAnalyzer.Analyze(task.Id);
+        WriteCommandResult(options, WriteCommandOutput.Succeeded(task.Id, task.Title, $"status={requestedStatus}", changedTaskIds, after));
+        return 0;
+    }
+
+    private static int ChangeCriterion(
+        CliOptions options,
+        TaskDirectoryReadResult loadResult,
+        TaskItem task,
+        string criterionId,
+        bool satisfied)
+    {
+        var criterion = task.CompletionCriteria?.FirstOrDefault(criterion => string.Equals(criterion.Id, criterionId, StringComparison.Ordinal));
+        if (criterion == null)
+        {
+            throw new CliException($"Criterion '{criterionId}' was not found in task '{task.Id}'.");
+        }
+
+        criterion.IsSatisfied = satisfied;
+        task.UpdatedDateTime = DateTimeOffset.UtcNow;
+
+        var changedTaskIds = RecalculateAvailability(loadResult, [task.Id]);
+        TaskDirectoryWriter.Write(loadResult, changedTaskIds);
+
+        var afterAnalyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+        var after = afterAnalyzer.Analyze(task.Id);
+        WriteCommandResult(options, WriteCommandOutput.Succeeded(task.Id, task.Title, $"criterion={criterionId};satisfied={satisfied}", changedTaskIds, after));
+        return 0;
+    }
+
+    private static bool CanChangeStatus(
+        TaskItem task,
+        DomainTaskStatus requestedStatus,
+        TaskAvailabilityAnalysis analysis,
+        out string denialReason)
+    {
+        denialReason = string.Empty;
+        switch (requestedStatus)
+        {
+            case DomainTaskStatus.NotReady:
+            case DomainTaskStatus.Prepared:
+                return true;
+            case DomainTaskStatus.InProgress:
+                if (analysis.CanStart)
+                {
+                    return true;
+                }
+
+                denialReason = $"Task '{task.Id}' cannot move to InProgress because it is not startable.";
+                return false;
+            case DomainTaskStatus.Completed:
+                if (analysis.CanComplete)
+                {
+                    return true;
+                }
+
+                denialReason = $"Task '{task.Id}' cannot move to Completed because it is not completable.";
+                return false;
+            case DomainTaskStatus.Archived:
+                if (task.Status != DomainTaskStatus.Completed)
+                {
+                    return true;
+                }
+
+                denialReason = $"Task '{task.Id}' cannot move from Completed to Archived.";
+                return false;
+            default:
+                denialReason = $"Unsupported status '{requestedStatus}'.";
+                return false;
+        }
+    }
+
+    private static IReadOnlyList<string> RecalculateAvailability(TaskDirectoryReadResult loadResult, IEnumerable<string> changedTaskIds)
+    {
+        var changed = new HashSet<string>(changedTaskIds, StringComparer.Ordinal);
+        var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
+        foreach (var task in loadResult.Tasks)
+        {
+            var computed = analyzer.Analyze(task).IsCanBeCompleted;
+            if (task.IsCanBeCompleted == computed)
+            {
+                continue;
+            }
+
+            task.IsCanBeCompleted = computed;
+            changed.Add(task.Id);
+        }
+
+        return changed.OrderBy(static taskId => taskId, StringComparer.Ordinal).ToArray();
+    }
+
+    private static void WriteCommandResult(CliOptions options, WriteCommandOutput output)
+    {
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(output);
+            return;
+        }
+
+        Console.WriteLine($"OK: {output.Action} for {output.TaskId} {output.Title}");
+        Console.WriteLine($"Changed tasks: {string.Join(", ", output.ChangedTaskIds)}");
+        if (output.Analysis != null)
+        {
+            WriteAnalysisText(output.Analysis);
+        }
+    }
+
+    private static void WriteAnalysisText(TaskAvailabilityAnalysis analysis)
+    {
+        Console.WriteLine($"{analysis.TaskId} {analysis.Status} {analysis.Title}");
+        Console.WriteLine($"isCanBeCompleted: {analysis.IsCanBeCompleted} (stored: {analysis.StoredIsCanBeCompleted})");
+        Console.WriteLine($"canStart: {analysis.CanStart}");
+        Console.WriteLine($"canComplete: {analysis.CanComplete}");
+        Console.WriteLine($"completionCriteriaSatisfied: {analysis.CompletionCriteriaSatisfied}");
+        Console.WriteLine($"plannedBeginIsFuture: {analysis.PlannedBeginIsFuture}");
+        if (analysis.Reasons.Count == 0)
+        {
+            Console.WriteLine("Reasons: none");
+            return;
+        }
+
+        Console.WriteLine("Reasons:");
+        foreach (var reason in analysis.Reasons)
+        {
+            Console.WriteLine($"- {reason.Kind}: {reason.Details} ({reason.SubjectId} {reason.SubjectTitle})");
+        }
+    }
+
+    private static TaskItem RequireTask(TaskDirectoryReadResult loadResult, string taskId)
+    {
+        if (!loadResult.TasksById.TryGetValue(taskId, out var task))
+        {
+            throw new CliException($"Task '{taskId}' was not found.");
+        }
+
+        return task;
+    }
+
+    private static string RequireTaskId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.TaskId)
+            ? throw new CliException($"Command '{command}' requires --id <task-id>.")
+            : options.TaskId;
+
+    private static string RequireCriterionId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.CriterionId)
+            ? throw new CliException($"Command '{command}' requires --criterion <criterion-id>.")
+            : options.CriterionId;
+
     private static void WriteLoadErrors(CliOptions options, IReadOnlyList<TaskLoadError> errors)
     {
         if (options.Format == OutputFormat.Json)
@@ -233,7 +455,7 @@ internal static class Program
     }
 
     private static void WriteJson(object output) =>
-        Console.WriteLine(JsonSerializer.Serialize(output, JsonOptions));
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(output, JsonOptions));
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
@@ -256,6 +478,10 @@ internal static class Program
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--explain] [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli complete --tasks <path> --id <task-id> [--author <name>] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli set-criterion --tasks <path> --id <task-id> --criterion <criterion-id> --satisfied true|false [--format text|json]");
+        writer.WriteLine("  unlimotion-cli satisfy-criterion --tasks <path> --id <task-id> --criterion <criterion-id> [--format text|json]");
     }
 }
 
@@ -264,6 +490,10 @@ internal sealed record CliOptions
     public string Command { get; init; } = string.Empty;
     public string? TasksPath { get; init; }
     public string? TaskId { get; init; }
+    public string? CriterionId { get; init; }
+    public DomainTaskStatus? Status { get; init; }
+    public bool? Satisfied { get; init; }
+    public string? Author { get; init; }
     public OutputFormat Format { get; init; } = OutputFormat.Text;
     public bool Explain { get; init; }
     public bool ShowHelp { get; init; }
@@ -278,6 +508,10 @@ internal sealed record CliOptions
         var command = args[0].ToLowerInvariant();
         string? tasksPath = null;
         string? taskId = null;
+        string? criterionId = null;
+        DomainTaskStatus? status = null;
+        bool? satisfied = null;
+        string? author = null;
         var format = OutputFormat.Text;
         var explain = false;
 
@@ -292,6 +526,18 @@ internal sealed record CliOptions
                     break;
                 case "--id":
                     taskId = RequireValue(args, ref i, arg);
+                    break;
+                case "--criterion":
+                    criterionId = RequireValue(args, ref i, arg);
+                    break;
+                case "--status":
+                    status = ParseStatus(RequireValue(args, ref i, arg));
+                    break;
+                case "--satisfied":
+                    satisfied = ParseBoolean(RequireValue(args, ref i, arg), arg);
+                    break;
+                case "--author":
+                    author = RequireValue(args, ref i, arg);
                     break;
                 case "--format":
                     format = ParseFormat(RequireValue(args, ref i, arg));
@@ -309,6 +555,10 @@ internal sealed record CliOptions
             Command = command,
             TasksPath = tasksPath,
             TaskId = taskId,
+            CriterionId = criterionId,
+            Status = status,
+            Satisfied = satisfied,
+            Author = author,
             Format = format,
             Explain = explain
         };
@@ -331,6 +581,18 @@ internal sealed record CliOptions
         "json" => OutputFormat.Json,
         _ => throw new CliException("--format must be 'text' or 'json'.")
     };
+
+    private static DomainTaskStatus ParseStatus(string value) =>
+        Enum.TryParse<DomainTaskStatus>(value, ignoreCase: true, out var status)
+            ? status
+            : throw new CliException("--status must be one of NotReady, Prepared, InProgress, Completed, Archived.");
+
+    private static bool ParseBoolean(string value, string optionName) => value.ToLowerInvariant() switch
+    {
+        "true" => true,
+        "false" => false,
+        _ => throw new CliException($"{optionName} must be true or false.")
+    };
 }
 
 internal enum OutputFormat
@@ -352,6 +614,7 @@ internal static class TaskDirectoryReader
     public static TaskDirectoryReadResult Read(string directory)
     {
         var tasks = new List<TaskItem>();
+        var filesByTaskId = new Dictionary<string, string>(StringComparer.Ordinal);
         var errors = new List<TaskLoadError>();
 
         foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly).OrderBy(static file => file, StringComparer.OrdinalIgnoreCase))
@@ -364,7 +627,7 @@ internal static class TaskDirectoryReader
             try
             {
                 var json = File.ReadAllText(file);
-                var task = JsonSerializer.Deserialize<TaskItem>(json, ProgramJsonOptions.Value);
+                var task = JsonConvert.DeserializeObject<TaskItem>(json, TaskDirectoryJson.CreateConverters());
                 if (task == null || string.IsNullOrWhiteSpace(task.Id))
                 {
                     errors.Add(new TaskLoadError(file, "File does not contain a task with non-empty Id."));
@@ -372,43 +635,68 @@ internal static class TaskDirectoryReader
                 }
 
                 tasks.Add(task);
+                filesByTaskId[task.Id] = file;
             }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is NewtonsoftJsonException or IOException or UnauthorizedAccessException)
             {
                 errors.Add(new TaskLoadError(file, ex.Message));
             }
         }
 
-        return new TaskDirectoryReadResult(tasks, errors);
+        return new TaskDirectoryReadResult(tasks, filesByTaskId, errors);
     }
 
     private static bool ShouldSkip(string file)
     {
         var fileName = Path.GetFileName(file);
-        return fileName.StartsWith("." , StringComparison.Ordinal) ||
+        return fileName.StartsWith(".", StringComparison.Ordinal) ||
                fileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase) ||
                fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
     }
 }
 
-internal static class ProgramJsonOptions
+internal static class TaskDirectoryWriter
 {
-    public static JsonSerializerOptions Value { get; } = Create();
-
-    private static JsonSerializerOptions Create()
+    public static void Write(TaskDirectoryReadResult loadResult, IEnumerable<string> taskIds)
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        foreach (var taskId in taskIds.Distinct(StringComparer.Ordinal))
         {
-            PropertyNameCaseInsensitive = true,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true
-        };
-        options.Converters.Add(new JsonStringEnumConverter());
-        return options;
+            if (!loadResult.TasksById.TryGetValue(taskId, out var task) || !loadResult.FilesByTaskId.TryGetValue(taskId, out var file))
+            {
+                throw new CliException($"Cannot save task '{taskId}' because its source file was not found.");
+            }
+
+            var json = JsonConvert.SerializeObject(task, Formatting.Indented, TaskDirectoryJson.CreateConverters());
+            File.WriteAllText(file, json + Environment.NewLine);
+        }
     }
 }
 
-internal sealed record TaskDirectoryReadResult(IReadOnlyList<TaskItem> Tasks, IReadOnlyList<TaskLoadError> LoadErrors);
+
+internal static class TaskDirectoryJson
+{
+    public static Newtonsoft.Json.JsonConverter[] CreateConverters() =>
+    [
+        new IsoDateTimeConverter
+        {
+            DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
+            Culture = CultureInfo.InvariantCulture,
+            DateTimeStyles = DateTimeStyles.None
+        },
+        new StringEnumConverter()
+    ];
+}
+
+internal sealed record TaskDirectoryReadResult(
+    IReadOnlyList<TaskItem> Tasks,
+    IReadOnlyDictionary<string, string> FilesByTaskId,
+    IReadOnlyList<TaskLoadError> LoadErrors)
+{
+    public IReadOnlyDictionary<string, TaskItem> TasksById { get; } = Tasks
+        .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+        .GroupBy(static task => task.Id, StringComparer.Ordinal)
+        .ToDictionary(static group => group.Key, static group => group.Last(), StringComparer.Ordinal);
+}
 
 internal sealed record TaskLoadError(string File, string Message);
 
@@ -452,4 +740,45 @@ internal sealed record ValidationOutput
     public IReadOnlyList<TaskGraphReferenceIssue> ReferenceIssues { get; init; } = Array.Empty<TaskGraphReferenceIssue>();
     public IReadOnlyList<TaskAvailabilityMismatch> AvailabilityMismatches { get; init; } = Array.Empty<TaskAvailabilityMismatch>();
     public IReadOnlyList<TaskDuplicateIdIssue> DuplicateIdIssues { get; init; } = Array.Empty<TaskDuplicateIdIssue>();
+}
+
+internal sealed record WriteCommandOutput
+{
+    public bool Success { get; init; }
+    public string TaskId { get; init; } = string.Empty;
+    public string? Title { get; init; }
+    public string Action { get; init; } = string.Empty;
+    public string? Error { get; init; }
+    public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
+    public TaskAvailabilityAnalysis? Analysis { get; init; }
+
+    public static WriteCommandOutput Succeeded(
+        string taskId,
+        string? title,
+        string action,
+        IReadOnlyList<string> changedTaskIds,
+        TaskAvailabilityAnalysis analysis) => new()
+        {
+            Success = true,
+            TaskId = taskId,
+            Title = title,
+            Action = action,
+            ChangedTaskIds = changedTaskIds,
+            Analysis = analysis
+        };
+
+    public static WriteCommandOutput Denied(
+        string taskId,
+        string? title,
+        string action,
+        string error,
+        TaskAvailabilityAnalysis analysis) => new()
+        {
+            Success = false,
+            TaskId = taskId,
+            Title = title,
+            Action = action,
+            Error = error,
+            Analysis = analysis
+        };
 }
