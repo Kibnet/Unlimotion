@@ -8,9 +8,9 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>unlimotion-cli</ToolCommandName>
     <PackageId>Unlimotion.Cli</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Unlimotion</Authors>
-    <Description>Read-only CLI for inspecting Unlimotion task graphs and availability rules.</Description>
+    <Description>CLI for inspecting and updating Unlimotion task graphs with availability rules.</Description>
     <PackageTags>unlimotion;cli;tasks;agents</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>License.txt</PackageLicenseFile>
@@ -19,6 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
     <ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
     <ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
   </ItemGroup>

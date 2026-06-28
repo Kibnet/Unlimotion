@@ -1,4 +1,4 @@
-# Agent CLI для чтения графа задач
+# Agent CLI для чтения и изменения графа задач
 
 ## 0. Метаданные
 - Тип (профиль): delivery-task / CLI tooling
@@ -12,10 +12,10 @@
 Если секция не применима, это указано явно в соответствующем разделе.
 
 ## 1. Overview / Цель
-Добавить read-only CLI, которым агент может напрямую читать каталог задач Unlimotion, получать список доступных задач, объяснение блокировок и диагностику структуры графа.
+Добавить CLI, которым агент может напрямую читать и безопасно изменять каталог задач Unlimotion: получать список доступных задач, объяснение блокировок, диагностику структуры графа, менять статус задач и отмечать критерии выполнения.
 
 Outcome contract:
-- Success means: CLI собирается вместе с решением; команды `status`, `unlocked`, `task --explain`, `validate` работают на task directory без запуска UI.
+- Success means: CLI собирается вместе с решением; read-команды `status`, `unlocked`, `task --explain`, `validate` и write-команды `set-status`, `complete`, `set-criterion`, `satisfy-criterion` работают на task directory без запуска UI.
 - Итоговый артефакт / output: новый консольный проект и тестируемая библиотечная логика анализа доступности задач.
 - Stop rules: остановиться, если потребуется изменить файловую схему задач, UI-контракт или правила статусов без отдельного подтверждения.
 
@@ -28,7 +28,7 @@ Outcome contract:
 - Сейчас агентам приходится эмулировать правила вне Unlimotion, из-за чего легко ошибиться в логике `ContainsTasks` и наследуемых blocker-связей.
 
 ## 3. Проблема
-Нет машинного read-only интерфейса, который возвращает статус задач и причины блокировки по тем же правилам, что использует Unlimotion.
+Нет машинного read/write интерфейса, который возвращает статус задач, причины блокировки и безопасно фиксирует прогресс по тем же правилам, что использует Unlimotion.
 
 ## 4. Цели дизайна
 - Разделение ответственности: CLI отвечает за аргументы/output, библиотечный analyzer отвечает за правила графа.
@@ -38,7 +38,7 @@ Outcome contract:
 - Обратная совместимость: persisted JSON tasks не меняются.
 
 ## 5. Non-Goals (чего НЕ делаем)
-- Не добавляем write-команды `complete` / `set-status` в первой итерации.
+- Write-команды исключались только из первой безопасной итерации; текущий follow-up добавляет guarded write-mode.
 - Не меняем поведение UI и существующие правила `TaskTreeManager`.
 - Не мигрируем существующие задачи.
 - Не вводим сетевой/API режим.
@@ -47,16 +47,20 @@ Outcome contract:
 ## 6. Предлагаемое решение (TO-BE)
 ### 6.1 Распределение ответственности
 - `src/Unlimotion.TaskTreeManager/TaskAvailabilityAnalyzer.cs` -> чистый анализ доступности и причин блокировок по коллекции `TaskItem`.
-- `src/Unlimotion.Cli/` -> консольный проект с командами и JSON/text output.
+- `src/Unlimotion.Cli/` -> консольный проект с read/write командами и JSON/text output.
 - `src/Unlimotion.Test/TaskAvailabilityAnalyzerTests.cs` -> regression tests для спорных правил.
 - `src/Unlimotion.sln` -> включает CLI project.
 
 ### 6.2 Детальный дизайн
-- CLI загружает task files из `--tasks <path>` через `System.Text.Json` с enum-string converter.
+- CLI загружает и сохраняет task files из `--tasks <path>` через `Newtonsoft.Json`, чтобы соблюдать существующие `JsonIgnore`-контракты доменной модели; output JSON формируется через `System.Text.Json`.
 - Команда `status` выводит агрегаты: total, counts by status, startable, completable, completed, archived.
 - Команда `unlocked` выводит незавершенные задачи, которые можно начать сейчас.
 - Команда `task --id <id> --explain` выводит статус, `canStart`, `canComplete`, `isCanBeCompleted` и причины.
 - Команда `validate` выводит структурные дефекты: missing references, missing reverse links, stored/computed availability mismatch.
+- Команда `set-status` меняет статус задачи с guard-правилами Unlimotion.
+- Команда `complete` является shorthand для `set-status --status Completed` и требует `canComplete=true`.
+- Команды `set-criterion` / `satisfy-criterion` меняют `CompletionCriteria[].IsSatisfied`.
+- После каждой write-команды CLI пересчитывает `IsCanBeCompleted` для всех загруженных задач и сохраняет только изменившиеся task files.
 - Output contract: `--format json` дает стабильный camelCase JSON для агентов; text format предназначен для человека; CLI project упаковывается как local/installable `dotnet tool` с command name `unlimotion-cli`.
 - Visual planning artifact для UI-facing изменений: Не применимо, UI не меняется.
 - UI test video evidence: Не применимо, автоматизация UI не меняется.
@@ -101,14 +105,14 @@ Outcome contract:
   - `dotnet build src/Unlimotion.sln -c Release`
   - `dotnet run --project src/Unlimotion.Cli -c Release -- status --tasks <task-dir> --format json`
   - `dotnet pack src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release -o <pack-dir>`
-  - `dotnet tool install --tool-path <tool-path> --add-source <pack-dir> Unlimotion.Cli --version 0.1.0`
+  - `dotnet tool install --tool-path <tool-path> --add-source <pack-dir> Unlimotion.Cli --version 0.3.0`
 - Stop rules: если тестовый фильтр не находит тесты, сначала получить список TUnit tests; не запускать тяжелые параллельные UI suites без необходимости.
 
 ## 12. Риски и edge cases
 - Risk: analyzer расходится с приватной логикой `TaskTreeManager`. Mitigation: правила перенесены из inspected source и покрыты regression tests.
 - Risk: циклы `ParentTasks` могут вызвать рекурсию. Mitigation: visited set.
-- Risk: task files имеют дополнительные поля. Mitigation: `System.Text.Json` игнорирует unknown fields.
-- Risk: CLI может восприниматься как полноценный клиент записи. Mitigation: первая итерация read-only.
+- Risk: task files имеют дополнительные поля. Mitigation: `Newtonsoft.Json` соблюдает текущие атрибуты доменной модели; CLI validation/smoke проверяет сохранение на копии графа.
+- Risk: CLI может повредить task files при записи. Mitigation: write-команды guard-ятся правилами availability, пишут через Newtonsoft.Json, пересчитывают `IsCanBeCompleted` и валидируются smoke-тестом на копии графа.
 
 ## 13. План выполнения
 1. Добавить SPEC и зафиксировать scope.
@@ -117,9 +121,10 @@ Outcome contract:
 4. Добавить focused tests на правила доступности.
 5. Прогнать targeted tests, build и smoke CLI.
 6. Закоммитить результат.
+7. Follow-up: добавить guarded write-команды и проверить их на копии графа.
 
 ## 14. Открытые вопросы
-Нет блокирующих вопросов. Write-команды намеренно вынесены за пределы текущей итерации.
+Нет блокирующих вопросов. Write-команды добавлены как follow-up после подтверждения read-mode semantics.
 
 ## 15. Соответствие профилю
 - Профиль: delivery-task / CLI tooling.
@@ -130,7 +135,7 @@ Outcome contract:
 | --- | --- | --- |
 | `specs/2026-06-28-agent-task-cli.md` | Новый SPEC | Зафиксировать контракт и границы |
 | `src/Unlimotion.TaskTreeManager/TaskAvailabilityAnalyzer.cs` | Новый analyzer | Дать CLI переиспользуемые правила |
-| `src/Unlimotion.Cli/*` | CLI project, dotnet tool metadata, usage README | Машинный доступ агентов к графу |
+| `src/Unlimotion.Cli/*` | CLI project, dotnet tool metadata, read/write commands, usage README | Машинный доступ агентов к графу |
 | `src/Unlimotion.Test/TaskAvailabilityAnalyzerTests.cs` | Новые tests | Regression coverage спорных правил |
 | `src/Unlimotion.sln` | Добавить project | Сборка CLI вместе с решением |
 
@@ -140,7 +145,7 @@ Outcome contract:
 | Агентский доступ | Только внешняя эмуляция JSON | CLI с объяснениями по правилам Unlimotion |
 | Диагностика блокировок | Ручной анализ | `task --explain` |
 | Проверка графа | Ручные скрипты | `validate` |
-| Правила доступности | Приватные методы UI/runtime manager | Pure analyzer для read-only tooling |
+| Правила доступности | Приватные методы UI/runtime manager | Pure analyzer для read/write tooling |
 
 ## 18. Альтернативы и компромиссы
 - Вариант: писать отдельный скрипт в Knowledge.TOC.
@@ -166,7 +171,7 @@ Outcome contract:
 
 | Критерий | Балл (0/2/5) | Обоснование |
 |---|---:|---|
-| 1. Ясность цели и границ | 5 | Read-only CLI, write-команды исключены. |
+| 1. Ясность цели и границ | 5 | Read/write CLI, write-команды guard-ятся правилами availability. |
 | 2. Понимание текущего состояния | 5 | Указаны реальные правила TaskTreeManager. |
 | 3. Конкретность целевого дизайна | 5 | Названы компоненты, команды, output и exit codes. |
 | 4. Безопасность (миграция, откат) | 5 | Нет schema/UI migration; rollback простой. |
@@ -195,7 +200,7 @@ Outcome contract:
   - Regression / edge case: cycles/missing references учтены.
   - Comments/docs/changelog: changelog не требуется для internal CLI.
   - Hidden contract change: не ожидается.
-  - Manual-review challenge: вероятный вопрос - почему нет write-команд; ответ: исключены как non-goal для безопасного MVP.
+  - Manual-review challenge: вероятный вопрос - почему нет write-команд; ответ: в первой итерации исключались как non-goal для безопасного MVP, затем добавлены отдельным guarded follow-up.
 - No-findings justification: spec не меняет продуктовый UI/runtime и фиксирует проверяемые правила.
 
 | Severity | Area | Finding | Required action | Status |
@@ -205,7 +210,7 @@ Outcome contract:
 - Fixed before continuing: не требуется.
 - Checks rerun: не применимо до EXEC.
 - Needs human: нет.
-- Residual risks / follow-ups: write-mode CLI может быть следующей отдельной итерацией.
+- Residual risks / follow-ups: write-mode CLI выполнен отдельной guarded итерацией; остается риск расхождения analyzer с будущими изменениями `TaskTreeManager`.
 
 ### Post-EXEC Review
 - Статус: PASS с окруженческим ограничением для full solution build
@@ -216,7 +221,7 @@ Outcome contract:
   - Contract pass: PASS, task JSON schema и UI не менялись.
   - Adversarial risk pass: PASS, спорные правила `ContainsTasks`, inherited blockers и criteria покрыты tests.
   - Re-review after fixes / Fix and re-review: не требовалось после успешного focused run.
-  - Stop decision: закоммитить CLI MVP.
+  - Stop decision: закоммитить CLI MVP; write-mode выполнить отдельным follow-up.
 - Evidence inspected:
   - `dotnet build src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release` -> PASS, 0 warnings, 0 errors.
   - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/TaskAvailabilityAnalyzerTests/*"` -> PASS, 4/4.
@@ -231,10 +236,10 @@ Outcome contract:
   - Validation evidence: зафиксирована.
   - Unsupported claims: нет.
   - Regression / edge case: cycles protected by visited set; missing references are validation issues, not runtime blockers.
-  - Comments/docs/changelog: отдельный changelog не нужен для internal CLI MVP.
+  - Comments/docs/changelog: отдельный changelog не нужен для internal CLI.
   - Hidden contract change: нет.
   - Manual-review challenge: главный риск - analyzer может разойтись с private `TaskTreeManager`; mitigated by прямое копирование правил и focused tests.
-- No-findings justification: изменения additive/read-only и не затрагивают persisted schema или UI.
+- No-findings justification: изменения additive, write-операции guard-ятся правилами availability и не меняют persisted schema или UI.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -245,12 +250,21 @@ Outcome contract:
 - Validation evidence: перечислена выше.
 - Unrelated changes: не обнаружены.
 - Needs human: нет.
-- Residual risks / follow-ups: write-mode CLI и прямое переиспользование analyzer внутри `TaskTreeManager` можно вынести в отдельные итерации.
+- Residual risks / follow-ups: прямое переиспользование analyzer внутри `TaskTreeManager` можно вынести в отдельную итерацию.
 #### Dotnet tool packaging follow-up
 - `dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -o C:\tmp\unlimotion-cli-pack-20260628` -> PASS, package `Unlimotion.Cli.0.1.0.nupkg` created.
 - `dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool-20260628 --add-source C:\tmp\unlimotion-cli-pack-20260628 Unlimotion.Cli --version 0.1.0` -> PASS, command `unlimotion-cli` installed.
 - `C:\tmp\unlimotion-cli-tool-20260628\unlimotion-cli.exe status --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> PASS, 264 tasks.
 - `C:\tmp\unlimotion-cli-tool-20260628\unlimotion-cli.exe validate --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json` -> command works, exit 1 because the graph has 6 stored/computed availability mismatches.
+
+#### Guarded write-mode follow-up
+- `dotnet restore src\Unlimotion.Cli\Unlimotion.Cli.csproj` -> PASS.
+- `dotnet build src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release --no-restore` -> PASS, 0 warnings, 0 errors.
+- `dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release --no-restore -o C:\tmp\unlimotion-cli-pack-20260628-write-current` -> PASS, package `Unlimotion.Cli.0.3.0.nupkg` created.
+- `dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool-20260628-write-current --add-source C:\tmp\unlimotion-cli-pack-20260628-write-current Unlimotion.Cli --version 0.3.0` -> PASS, command `unlimotion-cli` installed.
+- Smoke on copied `Knowledge.TOC\Tasks`: completing before criteria is denied; satisfying all criteria then `complete` succeeds; saved `Status` remains string enum; copied graph validates with 0 mismatches and unlocks the next task.
+- `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/TaskAvailabilityAnalyzerTests/*"` -> PASS, 4/4.
+
 ## Approval
 Пользовательская команда `выполняй план` и последующее `продолжай` считаются подтверждением выполнения этой спеки в текущем контексте.
 
@@ -260,3 +274,4 @@ Outcome contract:
 | SPEC | Зафиксировать CLI MVP | 0.9 | Нет | Реализовать analyzer и CLI | Нет | Да, пользователь сказал `выполняй план` / `продолжай` | Без CLI агенты продолжают ошибаться в правилах разблокировки | `specs/2026-06-28-agent-task-cli.md` |
 | EXEC | Реализовать CLI MVP | 0.85 | Нет данных о write-mode требованиях | Закоммитить read-only CLI | Нет | Нет | Read-only инструмент уже достаточен для диагностики ошибок графа | `src/Unlimotion.Cli`, `TaskAvailabilityAnalyzer.cs`, `TaskAvailabilityAnalyzerTests.cs`, `src/Unlimotion.sln` |
 | EXEC | Упаковать CLI как dotnet tool | 0.9 | Нет | Проверить pack/install/smoke и закоммитить | Нет | Нет | Агентам нужен стабильный installed command вместо `dotnet run --project` | `src/Unlimotion.Cli/Unlimotion.Cli.csproj`, `src/Unlimotion.Cli/README.md`, `specs/2026-06-28-agent-task-cli.md` |
+| EXEC | Добавить guarded write-команды CLI | 0.9 | Нет | Закоммитить write-mode | Нет | Нет | Агентам нужно менять статусы и критерии тем же инструментом, которым они читают availability | `src/Unlimotion.Cli/Program.cs`, `src/Unlimotion.Cli/README.md`, `src/Unlimotion.Cli/Unlimotion.Cli.csproj`, `specs/2026-06-28-agent-task-cli.md` |
