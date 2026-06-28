@@ -39,7 +39,7 @@ public static class HotkeyHints
     public static string DragTargetBlocksSources => $"{Alt}+drag";
 
     // Roadmap shortcuts
-    public static string RoadmapFitToScreen => "F / U / T";
+    public static string RoadmapFitToScreen => "F";
     public static string RoadmapResetViewport => "R";
     public static string RoadmapRenameTask => "F2";
     public static string RoadmapCreateSibling => $"{Ctrl}+Enter";

@@ -931,6 +931,33 @@ public class RoadmapGraphUiTests
                                Math.Abs(location.Y) < 0.001;
                     });
                     await Assert.That(reset).IsTrue();
+
+                    var customZoom = 1.75;
+                    var customLocation = new Avalonia.Point(123, 45);
+                    zoomProperty.SetValue(editor, customZoom);
+                    locationProperty.SetValue(editor, customLocation);
+                    editor.Focus();
+                    Dispatcher.UIThread.RunJobs();
+
+                    PressHotkey(window!, Key.T, PhysicalKey.T, RawInputModifiers.None);
+                    Dispatcher.UIThread.RunJobs();
+                    await AssertRoadmapViewportState(editor, customZoom, customLocation);
+
+                    PressHotkey(window!, Key.U, PhysicalKey.U, RawInputModifiers.None);
+                    Dispatcher.UIThread.RunJobs();
+                    await AssertRoadmapViewportState(editor, customZoom, customLocation);
+
+                    PressHotkey(window!, Key.F, PhysicalKey.F, RawInputModifiers.None);
+                    var fitted = WaitFor(() =>
+                    {
+                        var zoom = (double)zoomProperty.GetValue(editor)!;
+                        var location = (Avalonia.Point)locationProperty.GetValue(editor)!;
+
+                        return Math.Abs(zoom - customZoom) > 0.001 ||
+                               Math.Abs(location.X - customLocation.X) > 0.001 ||
+                               Math.Abs(location.Y - customLocation.Y) > 0.001;
+                    });
+                    await Assert.That(fitted).IsTrue();
                 }
                 finally
                 {
@@ -939,6 +966,21 @@ public class RoadmapGraphUiTests
                 }
             }, CancellationToken.None);
         });
+    }
+
+    private static async Task AssertRoadmapViewportState(
+        Control editor,
+        double expectedZoom,
+        Avalonia.Point expectedLocation)
+    {
+        var zoomProperty = editor.GetType().GetProperty("ViewportZoom")!;
+        var locationProperty = editor.GetType().GetProperty("ViewportLocation")!;
+        var actualZoom = (double)zoomProperty.GetValue(editor)!;
+        var actualLocation = (Avalonia.Point)locationProperty.GetValue(editor)!;
+
+        await Assert.That(Math.Abs(actualZoom - expectedZoom)).IsLessThan(0.001);
+        await Assert.That(Math.Abs(actualLocation.X - expectedLocation.X)).IsLessThan(0.001);
+        await Assert.That(Math.Abs(actualLocation.Y - expectedLocation.Y)).IsLessThan(0.001);
     }
 
     [Test]

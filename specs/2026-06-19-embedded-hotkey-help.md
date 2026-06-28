@@ -38,7 +38,7 @@ Outcome contract:
 - Обратная совместимость: сохранить automation ids для существующих строк справочника, где возможно; не менять сами команды дерева/roadmap.
 
 ## 5. Non-Goals (чего НЕ делаем)
-- Не меняем набор исполняемых команд и сами сочетания клавиш, кроме поведения открытия/закрытия справочника.
+- Не меняем набор исполняемых команд и сами сочетания клавиш, кроме поведения открытия/закрытия справочника и удаления лишних aliases `U`/`T` для команды вписывания дорожной карты.
 - Не добавляем новый persisted setting.
 - Не меняем архитектуру горячих клавиш приложения целиком.
 - Не коммитим screenshot/video artifacts.
@@ -80,7 +80,7 @@ Outcome contract:
         ├─ section: Перетаскивание
         │  └─ Без модификатора/Shift/Ctrl/Ctrl+Shift/Alt при drag задач
         └─ section: Дорожная карта
-           └─ F/U/T, R, Ctrl/Shift/Alt + click/selection rectangle, right-drag
+           └─ F, R, Ctrl/Shift/Alt + click/selection rectangle, right-drag
   ```
 - Visual planning artifact для UI-facing изменений: wireframe выше; final evidence: screenshot в `chat-artifacts/...` или fallback, если capture технически мешает.
 - UI test video evidence: Не применимо как обязательный artifact, потому что текущий headless/TUnit path не сохраняет видео; fallback evidence: targeted Avalonia.Headless UI tests, build, screenshot при возможности.
@@ -98,6 +98,7 @@ Outcome contract:
 - Секция `Связи` содержит shortcuts редактора связей: `Enter` подтверждает выбор, `Escape` отменяет редактор.
 - Секция `Перетаскивание` содержит модификаторы drag-and-drop задач: без модификатора — копировать внутрь; `Shift` — переместить внутрь; `Ctrl+Shift` — клонировать внутрь; `Ctrl` — перетаскиваемые задачи блокируют цель; `Alt` — цель блокирует перетаскиваемые задачи.
 - Секция `Дорожная карта` содержит только управление видом карты; задачные команды, которые также работают на roadmap, остаются в `Текущая задача`.
+- Вписывание дорожной карты в экран запускается только клавишей `F`; `U` и `T` не являются product-level shortcuts и не должны обрабатываться как aliases.
 - В секции `Дорожная карта` также показываются модификаторы выбора: `Ctrl+click` / `Ctrl+рамка` переключает выбор, `Shift+click` / `Shift+рамка` добавляет к выбору, `Alt+click` / `Alt+рамка` удаляет из выбора; right-drag панорамирует карту.
 - Control-level навигация внутри отдельных dropdown/search controls (`Up/Down`, `Space`, `Enter`, `F2` внутри `EmojiFilterMultiSelectSearchBox`) не входит в справочник горячих клавиш, если она не запускает product-level команду приложения.
 
@@ -125,6 +126,7 @@ Outcome contract:
   - Кнопка `Показать горячие клавиши` в настройках открывает тот же встроенный справочник.
   - В visual tree нет отдельного `HotkeyHelpWindow`; есть `HotkeyHelpOverlayHost`/`HotkeyPanel`.
   - Справочник показывает все product-level shortcuts и modifiers из этой спеки: справочник, текущая задача, выделение/аутлайн, дерево задач, связи, перетаскивание, дорожная карта.
+  - В дорожной карте команда `Вписать в экран` показывается и выполняется только по `F`; `U`/`T` не запускают fit-to-screen.
   - Справочник не дублирует одинаковые задачные команды между деревом и дорожной картой.
   - Справочник явно не включает control-level навигацию отдельных dropdown/search controls, если она не запускает product-level команду.
 - Какие тесты добавить/изменить:
@@ -132,6 +134,7 @@ Outcome contract:
   - Обновить `TreeCommandUi_SettingsShowHotkeysButton_OpensShortcutReferenceWindow` под embedded panel и переименовать.
   - Добавить assertion для повторного `F1`/`Escape`.
   - Добавить assertions на наличие всех новых секций и ключевых пропущенных строк: `Enter/Esc` для связей, drag modifiers, roadmap selection modifiers, right-drag pan.
+  - Добавить assertion в roadmap viewport UI test: `U`/`T` не меняют viewport, а `F` запускает fit-to-screen.
   - Добавить assertion, что задачные команды (`F2`, `Ctrl+Enter`, `Shift+Enter`, `Ctrl+Tab`) представлены один раз как команды текущей задачи, а не продублированы в roadmap/tree секциях.
 - Characterization tests / contract checks: сначала обновить/добавить тест на новый embedded contract и убедиться, что он падает на текущей реализации; затем исправить код так, чтобы тест фиксировал embedded behavior.
 - Visual acceptance: wireframe из секции 6.2; финальная панель должна иметь заголовок, close button, все семь секций (`Справочник`, `Текущая задача`, `Выделение и аутлайн`, `Дерево задач`, `Связи`, `Перетаскивание`, `Дорожная карта`) и не должна создавать отдельное OS window.
@@ -140,6 +143,7 @@ Outcome contract:
   - `dotnet build src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore`
   - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore --no-build -- --treenode-filter "/*/*/*/TreeCommandUi_HotkeyHelpPanel_DisplaysEmbeddedShortcutReferenceFromF1"`
   - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore --no-build -- --treenode-filter "/*/*/*/TreeCommandUi_SettingsShowHotkeysButton_OpensEmbeddedShortcutReference"`
+  - `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore --no-build -- --treenode-filter "/*/*/*/RoadmapGraph_ViewportOverlay_ProvidesMinimapAndControls"`
   - Full test run: `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-restore`. Если full run технически заблокирован, EXEC-отчёт обязан привести точный error/output, выполненные next-best checks и residual risk.
 - Stop rules для test/retrieval/tool/validation loops: stop after targeted tests, build, full test run and screenshot/fallback evidence; continue on failures, ambiguity, missing acceptance coverage, or objective full-run blocker that needs diagnosis.
 
@@ -318,3 +322,4 @@ SPEC confirmed by user: `спеку полтверждаю` on 2026-06-19.
 | SPEC | section model fix | 0.94 | Подтверждение пользователя | Запросить `Спеку подтверждаю` | Да | Да, пользователь указал на неверное деление секций | Секции перестроены по смыслу: справочник, текущая задача, выделение/аутлайн, дерево, связи, перетаскивание, дорожная карта; одинаковые задачные команды больше не дублируются. | `specs/2026-06-19-embedded-hotkey-help.md`, `HotkeyHints.cs`, `MainControl.axaml(.cs)`, `GraphControl.axaml.cs` |
 | SPEC | shortcut audit fix | 0.9 | Подтверждение пользователя | Запросить `Спеку подтверждаю` | Да | Да, пользователь указал на пропущенные сочетания | В SPEC добавлены product-level пропуски: `Enter/Esc` редактора связей, модификаторы drag-and-drop задач, roadmap selection modifiers и right-drag pan; control-level dropdown navigation явно исключена из справочника. | `specs/2026-06-19-embedded-hotkey-help.md`, `MainControl.axaml.cs`, `GraphControl.axaml.cs`, `EmojiFilterMultiSelectSearchBox.axaml.cs` |
 | SPEC | consistency update | 0.93 | Подтверждение пользователя | Запросить `Спеку подтверждаю` | Да | Да, пользователь попросил обновить спеку | Acceptance criteria, план, таблица файлов и post-SPEC review синхронизированы с полным набором product-level shortcuts/modifiers. | `specs/2026-06-19-embedded-hotkey-help.md` |
+| EXEC | roadmap fit shortcut simplification | 0.97 | Нет | Завершить отчёт | Нет | Да, пользователь попросил `оставь только F` | Удалены лишние aliases `U`/`T`: справочник показывает только `F`, handler выполняет fit-to-screen только на `F`, UI test проверяет что `U`/`T` не меняют viewport. | `specs/2026-06-19-embedded-hotkey-help.md`, `HotkeyHints.cs`, `GraphControl.axaml.cs`, `RoadmapGraphUiTests.cs` |
