@@ -160,6 +160,18 @@ namespace Unlimotion.Test
                 .Replace('\r', '\n');
         }
 
+        private static async Task<TaskItemViewModel> UpdateTaskModelAsync(
+            ITaskStorage repository,
+            TaskItemViewModel task,
+            Action<TaskItem> update)
+        {
+            var model = task.Model;
+            update(model);
+
+            var updated = await repository.Update(model);
+            return updated?.Id == task.Id ? updated : task;
+        }
+
         private static IReadOnlyList<string> ReadExpandedTaskIds(string statePath, string treeName)
         {
             if (!File.Exists(statePath))
@@ -595,13 +607,23 @@ namespace Unlimotion.Test
             mainWindowVM.ResetCurrentTabFilters();
 
             var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
-            parent!.Description = "Parent description";
-            parent.IsCompleted = true;
-            await taskRepository.Update(parent);
+            parent = await UpdateTaskModelAsync(
+                taskRepository,
+                parent!,
+                model =>
+                {
+                    model.Description = "Parent description";
+                    model.IsCompleted = true;
+                });
             var child = await taskRepository.AddChild(parent);
-            child.Title = "Outline markdown child";
-            child.Description = "Child description";
-            await taskRepository.Update(child);
+            child = await UpdateTaskModelAsync(
+                taskRepository,
+                child,
+                model =>
+                {
+                    model.Title = "Outline markdown child";
+                    model.Description = "Child description";
+                });
             await Assert.That(await TestHelpers.WaitUntilAsync(
                     () => parent.Contains.Contains(child.Id) &&
                           child.Parents.Contains(parent.Id) &&

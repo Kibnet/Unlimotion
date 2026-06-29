@@ -83,6 +83,7 @@ namespace Unlimotion.ViewModel
         public static IScheduler? InProgressElapsedRefreshScheduler { get; set; }
         public TimeSpan PropertyChangedThrottleTimeSpanDefault { get; set; } = DefaultThrottleTime;
         private bool IsInitialized => IsInitializedProvider?.Invoke() ?? true;
+        private bool CanAutosave => IsInitialized && !_isUpdatingFromModel;
 
         private void Init(ITaskStorage taskStorage)
         {
@@ -132,7 +133,7 @@ namespace Unlimotion.ViewModel
 
             this.WhenAnyValue(m => m.Status)
                 .Skip(1)
-                .Where(_ => IsInitialized && !_isUpdatingFromModel)
+                .Where(_ => CanAutosave)
                 .Subscribe(_ => ExecuteSaveCommand())
                 .AddToDispose(this);
 
@@ -217,7 +218,7 @@ namespace Unlimotion.ViewModel
                                 return false;
                         }
                     })
-                    .Where(_ => IsInitialized && !_isUpdatingFromModel)
+                    .Where(_ => CanAutosave)
                     .Throttle(PropertyChangedThrottleTimeSpanDefault);
 
                 propertyChanged
@@ -311,7 +312,7 @@ namespace Unlimotion.ViewModel
 
             var saveSubscription = repeaterChanges
                 .Where(changed => IsRepeaterPatternPersistenceProperty(changed.EventArgs.PropertyName))
-                .Where(_ => IsInitialized && !_isUpdatingFromModel)
+                .Where(_ => CanAutosave)
                 .Throttle(TimeSpan.FromSeconds(2))
                 .Subscribe(_ => ExecuteSaveCommand());
 
@@ -1157,7 +1158,7 @@ namespace Unlimotion.ViewModel
 
         private void SaveCompletionCriteriaIfNeeded()
         {
-            if (!IsInitialized || _isUpdatingFromModel)
+            if (!CanAutosave)
             {
                 return;
             }
