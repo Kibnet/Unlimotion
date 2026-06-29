@@ -101,5 +101,11 @@ internal sealed class StormScenarioContext
 
     public TaskGraphWorkspaceCommandScenarioResult? TaskGraphWorkspaceCommandResult { get; set; }
 
+    public bool TaskStatusSupportTaskSetAvailable { get; set; }
+
+    public bool TaskStatusSupportStoryBehaviorConfirmed { get; set; }
+
+    public TaskStatusSupportScenarioResult? TaskStatusSupportResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

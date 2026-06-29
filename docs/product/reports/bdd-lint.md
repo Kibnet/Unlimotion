@@ -1,7 +1,7 @@
 # STORM BDD Lint
 
 Сгенерировано: 2026-06-29
-Команда: `/storm:bdd-lint` after `/storm:bdd-implement SC-0001-003`
+Команда: `/storm:bdd-lint` after `/storm:bdd-implement SC-0002-001 + stability gate`
 
 ## Статус
 
@@ -11,17 +11,19 @@ passed_with_warnings
 
 | Проверка | Результат | Комментарий |
 | --- | --- | --- |
-| Scenario -> Test links | PASS | 45/45 scenarios linked; `SC-0001-003` additionally has `TS-0038`. |
-| Scenario -> Step Definition links | WARNING | 13/45 scenarios step-executable. |
-| ST-0001 | PASS | All three ST-0001 scenarios are step-executable. |
+| Scenario -> Test links | PASS | 45/45 scenarios linked; `SC-0002-001` additionally has `TS-0039`. |
+| Scenario -> Step Definition links | WARNING | 14/45 scenarios step-executable. |
+| ST-0002 | PARTIAL | `SC-0002-001` is step-executable; `SC-0002-002` and `SC-0002-003` remain linked automated tests without step definitions. |
 | Test annotations | PASS | Existing test annotations не менялись. |
-| Production code | PASS | Production code, project files and workflows не менялись. |
-| Full suite gate | BLOCKED | Outside-sandbox full suite failed 568/569 on unrelated filter-flyout UI test cleanup/order issue. |
+| Feature wording | PASS | `.feature` wording не менялся. |
+| Production behavior | PASS | Scoped stability fix only suppresses autosave during `TaskItemViewModel.Update(TaskItem)` model-sync. |
+| Targeted gate | PASS | BDD, TaskStatusPicker UI, paste/copy outline and package compatibility checks passed. |
+| Full suite gate | PASS | Outside-sandbox full suite passed 570/570 with `C:\tmp\unlimotion-full-suite-sc0002-status-support-bdd-final2.log`. |
 
 ## Предупреждения
 
-1. Step definitions покрывают только 13/45 scenarios; repo-local runner не является full Cucumber-style engine.
-2. Validator may report duplicate Given step text across shared task-set steps; это intentional reuse of shared task-set context, now including `SD-0047`.
-3. Validator may report duplicate `И поведение относится к истории ST-0001` for `SD-0040`, `SD-0044` and `SD-0048`; это intentional story-context reuse.
+1. Step definitions покрывают только 14/45 scenarios; repo-local runner не является full Cucumber-style engine.
+2. Validator may report duplicate Given step text across shared task-set steps; это intentional reuse of shared task-set context, now including `SD-0051`.
+3. Validator may report duplicate shared story/action step text across scenario-specific step definitions; это intentional context reuse.
 4. `CV-0007` остается без scenario/test links по решению: attachment code является internal/orphan contract candidate.
-5. Full-suite gate blocked outside `SC-0001-003` scope by unrelated filter-flyout UI test cleanup/order issue.
+5. `SC-0002-002` и `SC-0002-003` остаются следующими `/storm:cover` candidates для `ST-0002`.
