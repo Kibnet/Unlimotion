@@ -8,7 +8,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Storage;
 
-public class FileTaskStorage : IStorage
+public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock
 {
     private static readonly AsyncLocal<HashSet<string>?> HeldDirectoryLocks = new();
     private readonly ConcurrentDictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
@@ -164,6 +164,23 @@ public class FileTaskStorage : IStorage
 
         return new FileTaskStorageDirectoryReadResult(tasks, filesByTaskId, loadErrors, duplicates);
     }
+
+    public async Task<TaskGraphReadResult> ReadGraphAsync()
+    {
+        var result = await ReadDirectoryAsync();
+        return new TaskGraphReadResult(
+            result.Tasks,
+            result.FilesByTaskId,
+            result.LoadErrors
+                .Select(static error => new TaskGraphLoadError(error.File, error.Message))
+                .ToArray(),
+            result.DuplicateIdIssues
+                .Select(static issue => new TaskGraphDuplicateIdIssue(issue.TaskId, issue.Files))
+                .ToArray());
+    }
+
+    public Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation) =>
+        WithDirectoryLockAsync(operation);
 
     public async Task<T> WithDirectoryLockAsync<T>(Func<Task<T>> operation)
     {
