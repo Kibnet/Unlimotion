@@ -2596,6 +2596,25 @@ public class MainControlTreeCommandsUiTests
             .Replace('\r', '\n');
     }
 
+    private static async Task<TaskItemViewModel> UpdateTaskViewModelAsync(
+        ITaskStorage repository,
+        TaskItemViewModel task,
+        Action<TaskItemViewModel> update)
+    {
+        var isInitializedProvider = task.IsInitializedProvider;
+        task.IsInitializedProvider = () => false;
+        try
+        {
+            update(task);
+            var updated = await repository.Update(task);
+            return updated?.Id == task.Id ? updated : task;
+        }
+        finally
+        {
+            task.IsInitializedProvider = isInitializedProvider;
+        }
+    }
+
     private static TaskItemViewModel FindTaskByTitle(MainWindowViewModel vm, string title)
     {
         return vm.taskRepository!.Tasks.Items
