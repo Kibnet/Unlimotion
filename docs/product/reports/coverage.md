@@ -1,14 +1,12 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-06-29
-Команда: `/storm:cover -> /storm:bdd-implement SC-0002-001 + stability gate`
-Режим: `delivery-task executable BDD implementation + artifact sync + full-suite stability gate`; `.feature` wording, project files, workflows и existing test annotations не менялись
+Команда: `/storm:cover -> /storm:bdd-implement SC-0002-002`
+Режим: `delivery-task test-only executable BDD implementation + artifact sync`; production code, `.feature` wording, project files, workflows и existing test annotations не менялись
 
 ## Область
 
-Эта итерация выполняет approved SPEC для `ST-0002 / AC-0004 / SC-0002-001`: сценарий поддержки статусов теперь исполняется через repo-local step definitions `SD-0051..SD-0054` и новый TUnit evidence `TS-0039`. Existing evidence `TS-0003` и `TS-0005` сохранено.
-
-Во время full-suite gate был найден отдельный stability blocker: model-sync в `TaskItemViewModel.Update(TaskItem)` мог запускать autosave как пользовательское изменение. Блокер закрыт отдельной approved SPEC без изменения product behavior, Gherkin wording и test annotations.
+Эта итерация выполняет approved SPEC для `ST-0002 / AC-0005 / SC-0002-002`: negative-path сценарий блокировки перехода в `Completed` теперь исполняется через repo-local step definitions `SD-0055..SD-0058` и новый TUnit evidence `TS-0040`. Existing evidence `TS-0003` и `TS-0005` сохранено.
 
 ## Сводка
 
@@ -17,47 +15,35 @@
 | Acceptance criteria всего | 44 |
 | AC с тестовыми связями | 44 |
 | Scenario -> Test links | 45/45 |
-| Passing scenarios | 14 |
-| Step definitions | 54 |
-| Step-executable scenarios | 14/45 |
-| ST-0002 executable coverage | 1/3 scenarios |
-| Full suite gate | 570/570 |
+| Passing scenarios | 15 |
+| Step definitions | 58 |
+| Step-executable scenarios | 15/45 |
+| ST-0002 executable coverage | 2/3 scenarios |
+| Full suite gate | 571/571 |
 
-## Результат SC-0002-001 Executable Slice
+## Результат SC-0002-002 Executable Slice
 
 | Item | Было | Стало | Evidence |
 | --- | --- | --- | --- |
-| `SC-0002-001.step_definitions` | `[]` | `SD-0051`, `SD-0052`, `SD-0053`, `SD-0054` | `StormTaskStatusSupportExecutableSpecTests` исполняет шаги feature. |
-| `SC-0002-001.linked_tests` | `TS-0003`, `TS-0005` | `TS-0003`, `TS-0005`, `TS-0039` | `TS-0039` связывает scenario с domain/ViewModel/filter evidence для пяти статусов. |
-| `SC-0002-001.status` | `automated` | `passing` | Targeted BDD и linked UI evidence проходят. |
-
-## Stability Gate
-
-| Область | Изменение | Причина |
-| --- | --- | --- |
-| `TaskItemViewModel.Update(TaskItem)` | `_isUpdatingFromModel` покрывает весь model-sync | Storage/cache sync не должен запускать autosave. |
-| `MainControlTreeCommandsUiTests` | Setup titles обновляются без autosave side effect | Убрать order-dependent outline copy/paste гонку в full suite. |
-| `PackageUpdateCompatibilityUiTests` | Relation assertion читает актуальные VM из repository | Убрать проверку по устаревшим object references после async drop update. |
+| `SC-0002-002.step_definitions` | `[]` | `SD-0055`, `SD-0056`, `SD-0057`, `SD-0058` | `StormTaskStatusCompletionBlockExecutableSpecTests` исполняет шаги feature. |
+| `SC-0002-002.linked_tests` | `TS-0003`, `TS-0005` | `TS-0003`, `TS-0005`, `TS-0040` | `TS-0040` связывает scenario с domain/ViewModel/UI evidence. |
+| `SC-0002-002.status` | `automated` | `passing` | Targeted BDD, domain and UI evidence проходят. |
+| `AC-0005.coverage_level` | `critical` | `full` | Negative path имеет executable BDD bridge. |
 
 ## Validation Evidence
 
 | Проверка | Результат |
 | --- | --- |
 | `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -v minimal /nr:false` | прошло с existing warnings, errors 0 |
-| `StormTaskStatusSupportExecutableSpecTests` | прошло 1/1 |
-| `MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions` | прошло 1/1 |
-| `MainControlTaskStatusIconUiTests/TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory` | прошло 1/1 |
-| `MainWindowViewModelTests/PasteTaskOutline_CreatesNestedTasksUnderCurrentTask` | прошло 1/1 |
-| `MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask` | прошло 1/1 |
-| `MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort` | прошло 1/1 |
-| `PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work` | прошло 1/1 |
-| Full suite `Unlimotion.Test` | прошло 570/570 вне managed sandbox, лог `C:\tmp\unlimotion-full-suite-sc0002-status-support-bdd-final2.log` |
-| `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 5 warnings по intentional shared steps |
-| `git diff --check` | прошло with LF-to-CRLF working-copy warnings only |
-| Trailing whitespace scan | no matches (rg exit 1) |
+| `StormTaskStatusCompletionBlockExecutableSpecTests` | прошло 1/1 |
+| `TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithUnsatisfiedCriteria_IsRejected` | прошло 1/1 |
+| `TaskStatusTransitionTests/TaskItemViewModel_StatusOptions_DisablesCompletedWhenCriteriaUnsatisfied` | прошло 1/1 |
+| `MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied` | прошло 1/1 |
+| `python C:\Users\Kibnet\.codex\agents\scripts\storm\validate-artifacts.py docs\product\storm.json` | OK: 0 errors, 6 warnings по intentional shared steps |
+| Full suite `Unlimotion.Test` | прошло 571/571 вне managed sandbox, лог `C:\tmp\unlimotion-full-suite-sc0002-completed-block-bdd.log` |
 
 ## Оставшиеся Gaps
 
-1. Step definitions покрывают 14/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.
-2. `ST-0002` имеет 1/3 step-executable scenarios: `SC-0002-001` закрыт, `SC-0002-002` и `SC-0002-003` остаются следующими кандидатами.
+1. Step definitions покрывают 15/45 scenarios; остальные scenarios пока rely on linked TUnit evidence.
+2. `ST-0002` имеет 2/3 step-executable scenarios: `SC-0002-001` и `SC-0002-002` закрыты, `SC-0002-003` остаётся следующим кандидатом.
 3. `CV-0007` не является active cover gap после решения Вариант B.

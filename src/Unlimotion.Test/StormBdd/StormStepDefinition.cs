@@ -107,5 +107,11 @@ internal sealed class StormScenarioContext
 
     public TaskStatusSupportScenarioResult? TaskStatusSupportResult { get; set; }
 
+    public bool TaskStatusCompletionBlockTaskSetAvailable { get; set; }
+
+    public bool TaskStatusCompletionBlockStoryBehaviorConfirmed { get; set; }
+
+    public TaskStatusCompletionBlockScenarioResult? TaskStatusCompletionBlockResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

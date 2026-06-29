@@ -61,12 +61,13 @@
       "BDD executable slice добавлен 2026-06-29: SC-0001-002 исполняется из feature text через repo-local step definitions SD-0043..SD-0046 и TUnit/Avalonia.Headless evidence TS-0037.",
       "BDD executable slice добавлен 2026-06-29: SC-0001-003 исполняется из feature text через repo-local step definitions SD-0047..SD-0050 и TUnit/Avalonia.Headless evidence TS-0038; ST-0001 now 3/3 step-executable.",
       "BDD executable slice добавлен 2026-06-29: SC-0002-001 исполняется из feature text через repo-local step definitions SD-0051..SD-0054 и TUnit evidence TS-0039; linked TS-0003/TS-0005 preserved.",
-      "Validation stabilization 2026-06-29: SC-0002-001 full-suite gate restored after TaskItemViewModel model-sync autosave guard, outline setup autosave suppression in UI tests and package compatibility relation refresh; full Unlimotion.Test passed 570/570 outside sandbox."
+      "Validation stabilization 2026-06-29: SC-0002-001 full-suite gate restored after TaskItemViewModel model-sync autosave guard, outline setup autosave suppression in UI tests and package compatibility relation refresh; full Unlimotion.Test passed 570/570 outside sandbox.",
+      "BDD executable slice добавлен 2026-06-29: SC-0002-002 исполняется из feature text через repo-local step definitions SD-0055..SD-0058 и TUnit evidence TS-0040; linked TS-0003/TS-0005 preserved."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0002-001 task status support executable slice",
-    "last_artifact_mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate"
+    "last_artifact_command": "/storm:bdd-implement SC-0002-002 completed transition block executable slice",
+    "last_artifact_mode": "delivery-task test-only BDD implementation + artifact sync"
   },
   "vision": {
     "id": "VS-0001",
@@ -1000,15 +1001,25 @@
         {
           "id": "AC-0005",
           "text": "Переход в Completed блокируется, если задача недоступна или критерии завершения не выполнены.",
-          "coverage_level": "critical",
+          "coverage_level": "full",
           "linked_tests": [
             "TS-0003",
-            "TS-0005"
+            "TS-0005",
+            "TS-0040"
           ],
           "evidence": [
             {
               "path": "src/Unlimotion.Domain/TaskItem.cs",
               "symbol": "EnsureStatusHistory / SetStatus"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+              "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+              "test_id": "TS-0040"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+              "symbol": "TaskStatusCompletionBlockScenarioResult"
             }
           ],
           "linked_rules": [
@@ -1052,7 +1063,8 @@
         "TS-0003",
         "TS-0005",
         "TS-0014",
-        "TS-0039"
+        "TS-0039",
+        "TS-0040"
       ],
       "linked_code": [
         "CU-0001",
@@ -1085,7 +1097,7 @@
         "SC-0002-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0002-001 получил executable BDD evidence TS-0039; SC-0002-002 и SC-0002-003 остаются linked automated tests без step definitions."
+      "behavior_coverage_note": "SC-0002-001 и SC-0002-002 получили executable BDD evidence TS-0039/TS-0040; SC-0002-003 остаётся linked automated test без step definitions."
     },
     {
       "id": "ST-0003",
@@ -4688,6 +4700,52 @@
         }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0002-001. Existing TS-0003/TS-0005 links preserved."
+    },
+    {
+      "id": "TS-0040",
+      "name": "StormTaskStatusCompletionBlockExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/task-status-completion-block",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0002-002_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0002"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0005"
+      ],
+      "linked_constraints": [
+        "CN-0001",
+        "CN-0003",
+        "CN-0004"
+      ],
+      "linked_scenarios": [
+        "SC-0002-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0002-002 steps from features/storm/st-0002-task-lifecycle.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "SD-0055..SD-0058",
+          "description": "Step definitions bind Given/When/Then product wording to domain and ViewModel checks that Completed remains unavailable for incomplete child tasks and unsatisfied completion criteria."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult",
+          "description": "Reusable test-only result verifies rejected status, empty CompletedDateTime and unavailable Completed transition evidence."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusCompletionBlockExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-06-29"
+        }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0002-002. Existing TS-0003/TS-0005 links preserved."
     }
   ],
   "code_units": [
@@ -7057,12 +7115,12 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-06-29",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0002-001",
-    "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0002-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "ST-0002/AC-0004 now preserves existing TS-0003/TS-0005 evidence and adds executable BDD evidence TS-0039 through SD-0051..SD-0054; ST-0002 step-executable coverage is now 1/3.",
+    "summary": "ST-0002/AC-0005 now preserves existing TS-0003/TS-0005 evidence and adds executable BDD evidence TS-0040 through SD-0055..SD-0058; ST-0002 step-executable coverage is now 2/3.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -7475,8 +7533,8 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-06-29",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0002-001",
-      "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0002-002",
+      "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
       "scenarios_total": 45,
@@ -7489,66 +7547,62 @@
       "acceptance_criteria_without_tests": 0,
       "acceptance_criteria_with_rules": 44,
       "acceptance_criteria_with_scenarios": 44,
-      "automated_scenarios": 39,
+      "automated_scenarios": 30,
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 14,
+      "passing_scenarios": 15,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 54,
-      "step_executable_scenarios": 14,
-      "step_definition_coverage_ratio": "14/45",
-      "executable_specification_ratio": "14/45 step-executable; 14/45 passing scenarios",
+      "step_definitions_total": 58,
+      "step_executable_scenarios": 15,
+      "step_definition_coverage_ratio": "15/45",
+      "executable_specification_ratio": "15/45 step-executable; 15/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
       "tests_changed": true,
-      "code_changed": true,
+      "code_changed": false,
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal /nr:false => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusSupportExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/PasteTaskOutline_CreatesNestedTasksUnderCurrentTask\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log => прошло 570/570",
-        "Production behavior, .feature wording, .csproj, workflows и existing test annotations не менялись; production stability fix ограничен подавлением autosave во время TaskItemViewModel.Update model-sync.",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 5 warnings по intentional shared steps",
-        "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-        "rg -n \"[ \\\\t]+$\" docs\\product specs src\\Unlimotion.Test src\\Unlimotion.ViewModel => no matches (rg exit 1)"
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusCompletionBlockExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithUnsatisfiedCriteria_IsRejected\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/TaskItemViewModel_StatusOptions_DisablesCompletedWhenCriteriaUnsatisfied\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied\" --output Detailed => прошло 1/1",
+        "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 6 warnings по intentional shared steps",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log => прошло 571/571"
       ],
-      "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 570/570 with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log after SC-0002-001 BDD slice and model-sync autosave stability fix.",
-      "production_code_changed": true
+      "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 571/571 with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log after SC-0002-002 BDD slice.",
+      "production_code_changed": false
     },
     "bdd_sync_summary": {
       "updated_at": "2026-06-29",
-      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0002-001",
-      "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0002-002",
+      "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "status": "synced",
       "synced_links": [
-        "SC-0002-001 -> TS-0039 -> SD-0051..SD-0054",
+        "SC-0002-002 -> TS-0040 -> SD-0055..SD-0058",
         "existing TS-0003 and TS-0005 preserved"
       ],
       "not_changed": [
+        "production code",
         "feature wording",
         "existing test annotations",
         "project files",
         "workflows"
       ],
       "tests_changed": true,
-      "decision": "BDD links обновлены для SC-0002-001: новый TS-0039 связывает scenario text с existing TaskStatus domain/ViewModel/filter evidence через SD-0051..SD-0054. Acceptance criteria не заменялись на Gherkin; feature wording и existing test annotations не менялись. Для закрытия full-suite gate выполнен отдельный scoped stability fix: TaskItemViewModel.Update больше не запускает autosave во время model-sync.",
+      "decision": "BDD links обновлены для SC-0002-002: новый TS-0040 связывает scenario text с existing TaskStatus domain/ViewModel/UI evidence через SD-0055..SD-0058. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
       "gaps": [
-        "Step definitions покрывают 14/45 scenarios.",
-        "ST-0002 now has 1/3 step-executable scenarios: SC-0002-001 closed; SC-0002-002 and SC-0002-003 remain linked automated tests without step definitions.",
-        "Full-suite validation for this slice passed 570/570 outside managed sandbox."
+        "Step definitions покрывают 15/45 scenarios.",
+        "ST-0002 now has 2/3 step-executable scenarios: SC-0002-001 and SC-0002-002 closed; SC-0002-003 remains linked automated tests without step definitions.",
+        "Full-suite validation for this slice remains pending until post-artifact sync full run."
       ],
-      "code_changed": true
+      "code_changed": false
     },
     "improved_by_delivery_evidence": [
       {
@@ -7656,25 +7710,33 @@
           "SD-0054"
         ],
         "result": "passing targeted BDD and linked TaskStatusPicker UI gates; full suite 570/570 after model-sync autosave stability fix"
+      },
+      {
+        "story": "ST-0002",
+        "acceptance_criteria": "AC-0005",
+        "scenario": "SC-0002-002",
+        "added_test": "TS-0040",
+        "added_step_definitions": [
+          "SD-0055",
+          "SD-0056",
+          "SD-0057",
+          "SD-0058"
+        ],
+        "result": "passing targeted BDD, domain and status picker UI gates on 2026-06-29"
       }
     ],
-    "code_changed": true,
-    "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 570/570 with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log after SC-0002-001 BDD slice and model-sync autosave stability fix.",
-    "targeted_validation_result": "SC-0002-001 executable BDD passed 1/1; linked TaskStatusPicker UI evidence passed 2/2; paste/copy outline and package compatibility stability checks passed targeted gates.",
+    "code_changed": false,
+    "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 571/571 with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log after SC-0002-002 BDD slice.",
+    "targeted_validation_result": "SC-0002-002 executable BDD passed 1/1; linked TaskStatusTransition domain/ViewModel evidence passed 2/2; linked TaskStatusPicker UI evidence passed 1/1.",
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusSupportExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/PasteTaskOutline_CreatesNestedTasksUnderCurrentTask\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log => прошло 570/570",
-      "Production behavior, .feature wording, .csproj, workflows и existing test annotations не менялись; production stability fix ограничен подавлением autosave во время TaskItemViewModel.Update model-sync.",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 5 warnings по intentional shared steps",
-      "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\\\t]+$\" docs\\product specs src\\Unlimotion.Test src\\Unlimotion.ViewModel => no matches (rg exit 1)"
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusCompletionBlockExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithUnsatisfiedCriteria_IsRejected\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/TaskItemViewModel_StatusOptions_DisablesCompletedWhenCriteriaUnsatisfied\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied\" --output Detailed => прошло 1/1",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 6 warnings по intentional shared steps",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log => прошло 571/571"
     ]
   },
   "ranking_analysis": {
@@ -8234,6 +8296,15 @@
         {
           "path": "src/Unlimotion.Domain/TaskItem.cs",
           "symbol": "EnsureStatusHistory / SetStatus"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult"
         }
       ]
     },
@@ -10701,14 +10772,20 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_task_status_completed_block_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-29",
       "linked_tests": [
         "TS-0003",
-        "TS-0005"
+        "TS-0005",
+        "TS-0040"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0055",
+        "SD-0056",
+        "SD-0057",
+        "SD-0058"
+      ],
       "coverage_role": "negative_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -10745,6 +10822,17 @@
           "path": "src/Unlimotion.Test/MainControlTaskStatusIconUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0005"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040",
+          "description": "TS-0040 прошёл 1/1 2026-06-29 и исполняет SC-0002-002 из feature text через repo-local step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "SD-0055..SD-0058",
+          "description": "Step definitions bind SC-0002-002 steps to domain and ViewModel evidence for blocked Completed transition."
         }
       ]
     },
@@ -14131,12 +14219,96 @@
           "symbol": "TaskStatusSupportScenarioResult"
         }
       ]
+    },
+    {
+      "id": "SD-0055",
+      "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+      "symbol": "TaskStatusCompletionBlockStepDefinitions.Create / SD-0055",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0002-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0056",
+      "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+      "symbol": "TaskStatusCompletionBlockStepDefinitions.Create / SD-0056",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0002",
+      "supports_scenarios": [
+        "SC-0002-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0057",
+      "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+      "symbol": "TaskStatusCompletionBlockStepDefinitions.Create / SD-0057",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь меняет статус задачи или проверяет доступные переходы",
+      "supports_scenarios": [
+        "SC-0002-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0058",
+      "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+      "symbol": "TaskStatusCompletionBlockStepDefinitions.Create / SD-0058",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Переход в Completed блокируется, если задача недоступна или критерии завершения не выполнены.",
+      "supports_scenarios": [
+        "SC-0002-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskStatusCompletionBlockExecutableSpecTests.cs",
+          "symbol": "TaskStatusCompletionBlockScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0040"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskStatusCompletionBlockStepDefinitions.cs",
+          "symbol": "TaskStatusCompletionBlockScenarioResult"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-06-29",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0002-001",
-    "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0002-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -14149,88 +14321,85 @@
     "acceptance_criteria_without_tests": 0,
     "acceptance_criteria_with_rules": 44,
     "acceptance_criteria_with_scenarios": 44,
-    "automated_scenarios": 39,
+    "automated_scenarios": 30,
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 14,
+    "passing_scenarios": 15,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 54,
-    "step_executable_scenarios": 14,
-    "step_definition_coverage_ratio": "14/45",
-    "executable_specification_ratio": "14/45 step-executable; 14/45 passing scenarios",
+    "step_definitions_total": 58,
+    "step_executable_scenarios": 15,
+    "step_definition_coverage_ratio": "15/45",
+    "executable_specification_ratio": "15/45 step-executable; 15/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
     "tests_changed": true,
-    "code_changed": true,
+    "code_changed": false,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusSupportExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPicker_SelectingStatusOption_UpdatesTaskStatusHistory\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/PasteTaskOutline_CreatesNestedTasksUnderCurrentTask\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_UsesCurrentFiltersAndSort\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log => прошло 570/570",
-      "Production behavior, .feature wording, .csproj, workflows и existing test annotations не менялись; production stability fix ограничен подавлением autosave во время TaskItemViewModel.Update model-sync.",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 5 warnings по intentional shared steps",
-      "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-      "rg -n \"[ \\\\t]+$\" docs\\product specs src\\Unlimotion.Test src\\Unlimotion.ViewModel => no matches (rg exit 1)"
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskStatusCompletionBlockExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithUnsatisfiedCriteria_IsRejected\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskStatusTransitionTests/TaskItemViewModel_StatusOptions_DisablesCompletedWhenCriteriaUnsatisfied\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied\" --output Detailed => прошло 1/1",
+      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 6 warnings по intentional shared steps",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log => прошло 571/571"
     ],
-    "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 570/570 with C:\\tmp\\unlimotion-full-suite-sc0002-status-support-bdd-final2.log after SC-0002-001 BDD slice and model-sync autosave stability fix.",
-    "production_code_changed": true
+    "full_suite_result": "Full Unlimotion.Test gate passed: outside-sandbox run passed 571/571 with C:\\tmp\\unlimotion-full-suite-sc0002-completed-block-bdd.log after SC-0002-002 BDD slice.",
+    "production_code_changed": false
   },
   "bdd_sync": {
     "updated_at": "2026-06-29",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0002-001",
-    "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0002-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0002-001 -> TS-0039 -> SD-0051..SD-0054",
+      "SC-0002-002 -> TS-0040 -> SD-0055..SD-0058",
       "existing TS-0003 and TS-0005 preserved"
     ],
     "not_changed": [
+      "production code",
       "feature wording",
       "existing test annotations",
       "project files",
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0002-001: новый TS-0039 связывает scenario text с existing TaskStatus domain/ViewModel/filter evidence через SD-0051..SD-0054. Acceptance criteria не заменялись на Gherkin; feature wording и existing test annotations не менялись. Для закрытия full-suite gate выполнен отдельный scoped stability fix: TaskItemViewModel.Update больше не запускает autosave во время model-sync.",
+    "decision": "BDD links обновлены для SC-0002-002: новый TS-0040 связывает scenario text с existing TaskStatus domain/ViewModel/UI evidence через SD-0055..SD-0058. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 14/45 scenarios.",
-      "ST-0002 now has 1/3 step-executable scenarios: SC-0002-001 closed; SC-0002-002 and SC-0002-003 remain linked automated tests without step definitions.",
-      "Full-suite validation for this slice passed 570/570 outside managed sandbox."
+      "Step definitions покрывают 15/45 scenarios.",
+      "ST-0002 now has 2/3 step-executable scenarios: SC-0002-001 and SC-0002-002 closed; SC-0002-003 remains linked automated tests without step definitions.",
+      "Full-suite validation for this slice passed 571/571 outside managed sandbox."
     ],
-    "code_changed": true
+    "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-06-29",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0002-001",
-    "mode": "delivery-task executable BDD implementation + artifact sync + full-suite stability gate",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0002-002",
+    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Step definitions покрывают только 14/45 scenarios; repo-local runner не является full Cucumber-style engine.",
-      "Shared Given step text intentionally reused across multiple scenario-specific step definitions, now including SD-0051.",
+      "Step definitions покрывают только 15/45 scenarios; repo-local runner не является full Cucumber-style engine.",
+      "Shared Given step text intentionally reused across multiple scenario-specific step definitions, now including SD-0055.",
+      "Shared When step text intentionally reused for status-change scenarios, now including SD-0057.",
       "CV-0007 remains without scenario/test links by prior decision: attachment code is internal/orphan contract candidate.",
-      "SC-0002-002 and SC-0002-003 remain linked automated tests without step definitions."
+      "SC-0002-003 remains linked automated tests without step definitions."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0002-001 additionally linked to TS-0039.",
-      "scenario_step_definition_links": "WARNING: 14/45 scenarios step-executable.",
-      "st_0002": "PARTIAL: SC-0002-001 is step-executable; SC-0002-002 and SC-0002-003 remain linked automated tests without step definitions.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0002-002 additionally linked to TS-0040.",
+      "scenario_step_definition_links": "WARNING: 15/45 scenarios step-executable.",
+      "st_0002": "PARTIAL: SC-0002-001 and SC-0002-002 are step-executable; SC-0002-003 remains linked automated tests without step definitions.",
       "test_annotations": "PASS: existing test annotations не менялись.",
-      "production_code": "PASS: production behavior не менялся; scoped stability fix only suppresses autosave during TaskItemViewModel.Update model-sync.",
+      "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "targeted_gate": "PASS: SC-0002-001 executable BDD, linked TaskStatusPicker UI, paste/copy outline and package compatibility targeted checks passed.",
-      "full_suite_gate": "PASS: Full Unlimotion.Test passed 570/570 outside managed sandbox."
+      "targeted_gate": "PASS: SC-0002-002 executable BDD, linked domain and status picker UI targeted tests passed.",
+      "full_suite_gate": "PASS: Full Unlimotion.Test passed 571/571 outside managed sandbox."
     }
   }
 }
