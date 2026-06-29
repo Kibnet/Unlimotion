@@ -242,35 +242,10 @@ public static class Program
         string taskId,
         DomainTaskStatus requestedStatus)
     {
-        return await storage.WithDirectoryLockAsync(async () =>
-        {
-            var (loadResult, analyzer, validation) = await LoadForWrite(storage);
-            EnsureWritePreconditions(loadResult, validation);
-
-            var task = RequireTask(loadResult, taskId);
-            var before = analyzer.Analyze(task.Id);
-            var change = CloneForUpdate(task);
-            change.Status = requestedStatus;
-
-            var manager = CreateManager(storage, options);
-            var changedTasks = await manager.UpdateTask(change);
-            var afterLoadResult = await storage.ReadDirectoryAsync();
-            var afterAnalyzer = new TaskAvailabilityAnalyzer(afterLoadResult.Tasks);
-            var afterTask = RequireTask(afterLoadResult, taskId);
-            var after = afterAnalyzer.Analyze(taskId);
-
-            if (afterTask.Status != requestedStatus)
-            {
-                var denied = WriteCommandOutput.Denied(task.Id, task.Title, requestedStatus.ToString(), BuildStatusDeniedReason(task.Id, requestedStatus), before);
-                WriteCommandResult(options, denied);
-                return 1;
-            }
-
-            WriteCommandResult(
-                options,
-                WriteCommandOutput.Succeeded(task.Id, task.Title, $"status={requestedStatus}", ChangedIds(changedTasks), after));
-            return 0;
-        });
+        var commandService = CreateCommandService(storage, options);
+        var result = await commandService.TrySetStatusAsync(taskId, requestedStatus, options.Author);
+        WriteCommandResult(options, result, taskId, $"status={requestedStatus}");
+        return result.Success ? 0 : 1;
     }
 
     private static async Task<int> ChangeCriterion(
@@ -280,104 +255,15 @@ public static class Program
         string criterionId,
         bool satisfied)
     {
-        return await storage.WithDirectoryLockAsync(async () =>
-        {
-            var (loadResult, analyzer, validation) = await LoadForWrite(storage);
-            EnsureWritePreconditions(loadResult, validation);
-
-            var task = RequireTask(loadResult, taskId);
-            var before = analyzer.Analyze(task.Id);
-            if (task.Status == DomainTaskStatus.Completed)
-            {
-                var denied = WriteCommandOutput.Denied(
-                    task.Id,
-                    task.Title,
-                    $"criterion={criterionId};satisfied={satisfied}",
-                    $"Task '{task.Id}' is completed, so its completion criteria cannot be changed.",
-                    before);
-                WriteCommandResult(options, denied);
-                return 1;
-            }
-
-            var change = CloneForUpdate(task);
-            var criterion = change.CompletionCriteria.FirstOrDefault(criterion => string.Equals(criterion.Id, criterionId, StringComparison.Ordinal));
-            if (criterion == null)
-            {
-                throw new CliException($"Criterion '{criterionId}' was not found in task '{task.Id}'.", exitCode: 1, kind: "notFound");
-            }
-
-            criterion.IsSatisfied = satisfied;
-
-            var manager = CreateManager(storage, options);
-            var changedTasks = await manager.UpdateTask(change);
-            var afterLoadResult = await storage.ReadDirectoryAsync();
-            var afterAnalyzer = new TaskAvailabilityAnalyzer(afterLoadResult.Tasks);
-            var after = afterAnalyzer.Analyze(taskId);
-
-            WriteCommandResult(
-                options,
-                WriteCommandOutput.Succeeded(task.Id, task.Title, $"criterion={criterionId};satisfied={satisfied}", ChangedIds(changedTasks), after));
-            return 0;
-        });
+        var commandService = CreateCommandService(storage, options);
+        var result = await commandService.TrySetCriterionAsync(taskId, criterionId, satisfied, options.Author);
+        WriteCommandResult(options, result, taskId, $"criterion={criterionId};satisfied={satisfied}");
+        return result.Success ? 0 : 1;
     }
 
-    private static async Task<(FileTaskStorageDirectoryReadResult LoadResult, TaskAvailabilityAnalyzer Analyzer, TaskGraphValidationResult Validation)> LoadForWrite(FileTaskStorage storage)
-    {
-        var loadResult = await storage.ReadDirectoryAsync();
-        var analyzer = new TaskAvailabilityAnalyzer(loadResult.Tasks);
-        var validation = analyzer.Validate();
-        return (loadResult, analyzer, validation);
-    }
-
-    private static void EnsureWritePreconditions(FileTaskStorageDirectoryReadResult loadResult, TaskGraphValidationResult validation)
-    {
-        var messages = new List<string>();
-        messages.AddRange(loadResult.LoadErrors.Select(error => $"load error: {error.File}: {error.Message}"));
-        messages.AddRange(loadResult.DuplicateIdIssues.Select(issue => $"duplicate id: {issue.TaskId} files={string.Join(", ", issue.Files)}"));
-        messages.AddRange(validation.ReferenceIssues.Select(issue => $"{issue.Kind}: {issue.Details}"));
-
-        if (messages.Count == 0)
-        {
-            return;
-        }
-
-        throw new CliException(
-            "Task graph is not safe for write commands: " + string.Join("; ", messages),
-            exitCode: 1,
-            kind: "validationFailed");
-    }
-
-    private static TaskTreeManager CreateManager(FileTaskStorage storage, CliOptions options) => new(storage)
+    private static TaskGraphCommandService CreateCommandService(FileTaskStorage storage, CliOptions options) => new(storage)
     {
         StatusAuthorProvider = _ => options.Author ?? "unlimotion-cli"
-    };
-
-    private static TaskItem RequireTask(FileTaskStorageDirectoryReadResult loadResult, string taskId)
-    {
-        if (!loadResult.TasksById.TryGetValue(taskId, out var task))
-        {
-            throw new CliException($"Task '{taskId}' was not found.", exitCode: 1, kind: "notFound");
-        }
-
-        return task;
-    }
-
-    private static TaskItem CloneForUpdate(TaskItem task) => task with
-    {
-        StatusHistory = task.StatusHistory?.ToList() ?? new List<TaskStatusHistoryEntry>(),
-        CompletionCriteria = task.CompletionCriteria?.Select(CloneCriterion).ToList() ?? new List<TaskCompletionCriterion>(),
-        ContainsTasks = task.ContainsTasks?.ToList() ?? new List<string>(),
-        ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
-        BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
-        BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>()
-    };
-
-    private static TaskCompletionCriterion CloneCriterion(TaskCompletionCriterion criterion) => new()
-    {
-        Id = criterion.Id,
-        Text = criterion.Text,
-        IsSatisfied = criterion.IsSatisfied,
-        ExtensionData = criterion.ExtensionData
     };
 
     private static IReadOnlyList<string> ChangedIds(IEnumerable<TaskItem> changedTasks) =>
@@ -387,15 +273,6 @@ public static class Program
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static taskId => taskId, StringComparer.Ordinal)
             .ToArray();
-
-    private static string BuildStatusDeniedReason(string taskId, DomainTaskStatus requestedStatus) =>
-        requestedStatus switch
-        {
-            DomainTaskStatus.InProgress => $"Task '{taskId}' cannot move to InProgress because it is not startable.",
-            DomainTaskStatus.Completed => $"Task '{taskId}' cannot move to Completed because it is not completable.",
-            DomainTaskStatus.Archived => $"Task '{taskId}' cannot move to Archived from its current status.",
-            _ => $"Task '{taskId}' cannot move to {requestedStatus}."
-        };
 
     private static string RequireTaskId(CliOptions options, string command) =>
         string.IsNullOrWhiteSpace(options.TaskId)
@@ -407,13 +284,39 @@ public static class Program
             ? throw new CliException($"Command '{command}' requires --criterion <criterion-id>.")
             : options.CriterionId;
 
-    private static void WriteCommandResult(CliOptions options, WriteCommandOutput output)
+    private static void WriteCommandResult(
+        CliOptions options,
+        TaskOperationResult result,
+        string taskId,
+        string action)
+    {
+        var analysis = result.After ?? result.Before;
+        var title = analysis?.Title;
+        var output = result.Success
+            ? WriteCommandOutput.Succeeded(
+                analysis?.TaskId ?? taskId,
+                title,
+                action,
+                ChangedIds(result.ChangedTasks),
+                analysis)
+            : WriteCommandOutput.Denied(
+                result.DeniedReason?.TaskId ?? analysis?.TaskId ?? taskId,
+                title,
+                action,
+                result.DeniedReason?.Message ?? "Command was denied.",
+                analysis,
+                result.DeniedReason?.Kind ?? TaskOperationDeniedKind.StorageFailed);
+
+        RenderWriteCommandOutput(options, output);
+    }
+
+    private static void RenderWriteCommandOutput(CliOptions options, WriteCommandOutput output)
     {
         if (options.Format == OutputFormat.Json)
         {
             if (!output.Success)
             {
-                WriteJson(ErrorOutput.Create("businessRuleDenied", output.Error ?? "Command was denied."));
+                WriteJson(ErrorOutput.Create(MapDeniedKind(output.DeniedKind), output.Error ?? "Command was denied."));
                 return;
             }
 
@@ -436,6 +339,17 @@ public static class Program
             WriteAnalysisText(output.Analysis);
         }
     }
+
+    private static string MapDeniedKind(TaskOperationDeniedKind deniedKind) => deniedKind switch
+    {
+        TaskOperationDeniedKind.ValidationFailed => "validationFailed",
+        TaskOperationDeniedKind.TaskNotFound => "notFound",
+        TaskOperationDeniedKind.CriterionNotFound => "notFound",
+        TaskOperationDeniedKind.StatusTransitionDenied => "businessRuleDenied",
+        TaskOperationDeniedKind.CompletedCriteriaImmutable => "businessRuleDenied",
+        TaskOperationDeniedKind.StorageFailed => "operationFailed",
+        _ => "operationFailed"
+    };
 
     private static void WriteAnalysisText(TaskAvailabilityAnalysis analysis)
     {
@@ -746,6 +660,7 @@ public sealed record WriteCommandOutput
     public string? Title { get; init; }
     public string Action { get; init; } = string.Empty;
     public string? Error { get; init; }
+    public TaskOperationDeniedKind DeniedKind { get; init; } = TaskOperationDeniedKind.StorageFailed;
     public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
     public TaskAvailabilityAnalysis? Analysis { get; init; }
 
@@ -754,7 +669,7 @@ public sealed record WriteCommandOutput
         string? title,
         string action,
         IReadOnlyList<string> changedTaskIds,
-        TaskAvailabilityAnalysis analysis) => new()
+        TaskAvailabilityAnalysis? analysis) => new()
         {
             Success = true,
             TaskId = taskId,
@@ -769,13 +684,15 @@ public sealed record WriteCommandOutput
         string? title,
         string action,
         string error,
-        TaskAvailabilityAnalysis analysis) => new()
+        TaskAvailabilityAnalysis? analysis,
+        TaskOperationDeniedKind deniedKind) => new()
         {
             Success = false,
             TaskId = taskId,
             Title = title,
             Action = action,
             Error = error,
-            Analysis = analysis
+            Analysis = analysis,
+            DeniedKind = deniedKind
         };
 }
