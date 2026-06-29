@@ -81,6 +81,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion.Domain\Unlimotion.Domain.csproj" />
+		<ProjectReference Include="..\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />
 		<ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
