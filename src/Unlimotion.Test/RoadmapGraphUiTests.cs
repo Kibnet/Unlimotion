@@ -2914,7 +2914,13 @@ public class RoadmapGraphUiTests
                     graphControl,
                     MainWindowViewModelFixture.RootTask2Id))).IsTrue();
                 await Assert.That(graphText.FontWeight).IsEqualTo(FontWeight.Bold);
-                await Assert.That(graphText.Foreground is ISolidColorBrush brush && brush.Color == Color.Parse("#2F80ED"))
+                var accentVariant = Application.Current!.ActualThemeVariant;
+                if (!Application.Current.TryGetResource("AccentColor", accentVariant, out var accentResource))
+                {
+                    throw new InvalidOperationException("AccentColor resource was not found.");
+                }
+                await Assert.That(accentResource).IsAssignableTo<Color>();
+                await Assert.That(graphText.Foreground is ISolidColorBrush brush && brush.Color == (Color)accentResource!)
                     .IsTrue();
 
                 var updateCountBeforeFuzzy = graphControl.RoadmapGraphUpdateCount;

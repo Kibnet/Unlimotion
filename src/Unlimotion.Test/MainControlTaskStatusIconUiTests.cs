@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -17,10 +18,12 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DynamicData;
+using TUnit.Core;
 using Unlimotion;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -30,6 +33,29 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlTaskStatusIconUiTests
 {
+    // Cross-test isolation: sibling UI-test classes (e.g. MainControlTaskCardLayoutUiTests)
+    // swap the global LocalizationService.Current for their own instance and never restore it.
+    // These tests share the sequential "AvaloniaHeadless" group, so that stale instance leaks
+    // in and breaks the status flyout (GetEffectiveTask() -> null). Reset to a clean default
+    // before every test so ordering can't poison us.
+    [Before(HookType.Test)]
+    public void ResetLocalizationBeforeTest()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        LocalizationService.Current = localization;
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+    }
+
+    private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
+    {
+        public FakeSystemCultureProvider(string cultureName)
+        {
+            SystemUICulture = CultureInfo.GetCultureInfo(cultureName);
+        }
+
+        public CultureInfo SystemUICulture { get; }
+    }
+
     [Test]
     public async Task TaskTreeStatusControl_UsesCompactVectorIconInsteadOfTextGlyph()
     {

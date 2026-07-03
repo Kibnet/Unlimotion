@@ -190,8 +190,48 @@ namespace Unlimotion.Views
             QueueLateMainTabsOverflowUpdate();
             QueueFilterToolbarLayoutUpdate();
             SyncSidebarSelection();
+            UpdateSidebarResponsive();
+            UpdateContentPadding();
             ObserveTaskDetailsBounds();
             QueueTaskDetailsLayoutUpdate();
+        }
+
+        // Aurora: the desktop nav sidebar consumes a fixed width; collapse it on narrow
+        // viewports so the main column (and the detail rail) keep usable width.
+        private const double SidebarCollapseWidth = 900d;
+
+        private void UpdateSidebarResponsive()
+        {
+            if (SidebarPanel is null)
+            {
+                return;
+            }
+
+            SidebarPanel.IsVisible = Bounds.Width >= SidebarCollapseWidth;
+        }
+
+        // Aurora: the filter toolbar / tree get a left+top gutter, but the horizontal inset is
+        // dropped once the content column gets too narrow (e.g. a wide details pane squeezing the
+        // toolbar) so the search field keeps room to stay on the row.
+        private const double ContentPaddingMinWidth = 240d;
+        private static readonly Thickness WideContentPadding = new(16, 14, 12, 0);
+        private static readonly Thickness NarrowContentPadding = new(0, 14, 0, 0);
+
+        private void UpdateContentPadding()
+        {
+            if (MainTabsHost is null)
+            {
+                return;
+            }
+
+            // Measure the layout slot (bounds + current margin) rather than the post-margin bounds,
+            // so toggling the margin can't oscillate the decision.
+            var slotWidth = MainTabsHost.Bounds.Width + MainTabsHost.Margin.Left + MainTabsHost.Margin.Right;
+            var target = slotWidth >= ContentPaddingMinWidth ? WideContentPadding : NarrowContentPadding;
+            if (MainTabsHost.Margin != target)
+            {
+                MainTabsHost.Margin = target;
+            }
         }
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -227,9 +267,20 @@ namespace Unlimotion.Views
                 return;
             }
 
+            _mainTabsLayoutSubscriptions.Add(this.GetObservable(BoundsProperty)
+                .Subscribe(_ =>
+                {
+                    UpdateSidebarResponsive();
+                    UpdateContentPadding();
+                }));
+
             _mainTabsLayoutSubscriptions.Add(MainTabsHost.GetObservable(BoundsProperty)
                 .Skip(1)
-                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+                .Subscribe(_ =>
+                {
+                    QueueMainTabsOverflowUpdate();
+                    UpdateContentPadding();
+                }));
             _mainTabsLayoutSubscriptions.Add(MainTabs.GetObservable(BoundsProperty)
                 .Skip(1)
                 .Subscribe(_ => QueueMainTabsOverflowUpdate()));
@@ -492,7 +543,17 @@ namespace Unlimotion.Views
                          .OfType<TextBlock>()
                          .Where(static textBlock => textBlock.Classes.Contains("TaskHeaderIdMeta")))
             {
-                idText.MaxWidth = isCompact ? compactCardContentWidth : RegularTaskIdMaxWidth;
+                // The id sits inline after an "ID" label in a wrapping meta row, so leave
+                // room for the label + spacing instead of taking the full content width.
+                idText.MaxWidth = isCompact
+                    ? Math.Max(80d, Math.Min(RegularTaskIdMaxWidth, compactCardContentWidth - 60d))
+                    : RegularTaskIdMaxWidth;
+            }
+
+            // Planning fields: one compact row on desktop, stacked full-width when narrow.
+            if (PlanningFieldsGrid is not null)
+            {
+                PlanningFieldsGrid.Columns = isCompact ? 1 : 3;
             }
 
             foreach (var suggestions in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -624,6 +685,37 @@ namespace Unlimotion.Views
                 vm.CurrentTaskItem = task;
                 vm.DetailsAreOpen = true;
             }
+        }
+
+        // Aurora redesign: the sidebar GOALS header doubles as a collapse toggle —
+        // click hides/shows the goals list and rotates the chevron.
+        private void GoalsHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (SidebarGoalsList is null || SidebarGoalsHeader is null)
+            {
+                return;
+            }
+
+            var expanded = SidebarGoalsList.IsVisible;
+            SidebarGoalsList.IsVisible = !expanded;
+
+            // Swap the caret glyph (down when expanded, right when collapsed) instead of
+            // rotating a single glyph — rotation left the non-square chevron looking crooked.
+            var chevronKey = expanded ? "IconChevronRight" : "IconChevronDown";
+            if (GoalsChevron is not null
+                && this.TryFindResource(chevronKey, out var chevronResource)
+                && chevronResource is Geometry chevronGeometry)
+            {
+                GoalsChevron.Data = chevronGeometry;
+            }
+        }
+
+        // Aurora redesign: the footer "?" button opens the centered hotkey-help overlay
+        // (hotkeys moved out of Settings and off the old side panel).
+        private void HotkeyHelpButton_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            ShowHotkeyHelp();
+            e.Handled = true;
         }
 
         // Aurora redesign: top-bar sun/moon theme toggle. Routes through the
@@ -2335,17 +2427,16 @@ namespace Unlimotion.Views
             _treeDragInProgress = false;
         }
 
-        private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        // Click a breadcrumb crumb to navigate to that ancestor task and open its detail rail.
+        private void BreadcrumbCrumb_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var dc = (DataContext as MainWindowViewModel)?.CurrentTaskItem;
-            if (dc == null)
+            if (sender is Control { DataContext: BreadcrumbSegment segment }
+                && DataContext is MainWindowViewModel vm)
             {
-                return;
+                vm.CurrentTaskItem = segment.Task;
+                vm.DetailsAreOpen = true;
+                e.Handled = true;
             }
-
-            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, dc);
-
-            await DragDrop.DoDragDropAsync(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
         private void Task_OnDoubleTapped(object sender, TappedEventArgs e)

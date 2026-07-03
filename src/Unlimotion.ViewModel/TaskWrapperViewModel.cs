@@ -45,17 +45,43 @@ public static class BredScrumbsAlgorithms
 
     public static string FirstTaskParent(TaskItemViewModel? current)
     {
-        var nodes = new List<string>();
+        return String.Join(" / ", FirstTaskParentItems(current).Select(task => task.Title));
+    }
+
+    // Segmented variants: the same ancestor chains, but returning each task so the UI can render
+    // a clickable breadcrumb (root first) instead of one joined string.
+    public static IReadOnlyList<TaskItemViewModel> WrapperParentItems(TaskWrapperViewModel? current)
+    {
+        var nodes = new List<TaskItemViewModel>();
+        var node = current;
+        while (node != null)
+        {
+            nodes.Insert(0, node.TaskItem);
+            node = node.Parent;
+        }
+
+        return nodes;
+    }
+
+    public static IReadOnlyList<TaskItemViewModel> FirstTaskParentItems(TaskItemViewModel? current)
+    {
+        var nodes = new List<TaskItemViewModel>();
         var visited = new HashSet<TaskItemViewModel>();
         var task = current;
         while (task != null && visited.Add(task))
         {
-            nodes.Insert(0, task.Title);
+            nodes.Insert(0, task);
             task = task.ParentsTasks.FirstOrDefault();
         }
 
-        return String.Join(" / ", nodes);
+        return nodes;
     }
+}
+
+// One clickable breadcrumb crumb; IsLast hides the trailing separator on the current task.
+public sealed record BreadcrumbSegment(TaskItemViewModel Task, bool IsLast)
+{
+    public string Title => Task.Title;
 }
 
 public static class Comparers

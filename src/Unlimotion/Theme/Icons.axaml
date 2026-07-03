@@ -33,6 +33,10 @@
   <!-- Goal marker — target (even-odd: ring + inner ring + center dot) -->
   <StreamGeometry x:Key="IconTarget">F0 M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z</StreamGeometry>
 
+  <!-- collapse/expand carets — dedicated glyphs (no rotation, so they render crisp) -->
+  <StreamGeometry x:Key="IconChevronDown">M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z</StreamGeometry>
+  <StreamGeometry x:Key="IconChevronRight">M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6z</StreamGeometry>
+
   <!-- Command bar / misc -->
   <StreamGeometry x:Key="IconSun">F0 M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z M11 1.5h2v3h-2z M11 19.5h2v3h-2z M1.5 11h3v2h-3z M19.5 11h3v2h-3z M4 4l2 2-1.4 1.4-2-2z M18 18l2 2-1.4 1.4-2-2z M20 4l-2 2 1.4 1.4 2-2z M6 18l-2 2 1.4 1.4 2-2z</StreamGeometry>
   <StreamGeometry x:Key="IconMoon">M20 14.5A8.5 8.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5z</StreamGeometry>

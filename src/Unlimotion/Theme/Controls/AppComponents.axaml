@@ -164,6 +164,13 @@
     <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
+  <!-- Neutral count pill for non-"ready" views (green is reserved for ready-now) -->
+  <Style Selector="Border.count-pill.neutral">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+  <Style Selector="Border.count-pill.neutral > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
 
   <!-- ===================== Sidebar nav (ListBox) ===================== -->
   <Style Selector="PathIcon.nav-glyph">
@@ -257,6 +264,8 @@
   <Style Selector="ProgressBar.goal-progress">
     <Setter Property="Height" Value="4"/>
     <Setter Property="MinHeight" Value="4"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
     <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
@@ -272,6 +281,57 @@
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="LetterSpacing" Value="{DynamicResource LsEyebrow}"/>
     <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+  </Style>
+
+  <!-- ============ Goals section header (collapsible) ============ -->
+  <Style Selector="Border.goals-header">
+    <Setter Property="Margin" Value="0,16,0,6"/>
+    <Setter Property="Padding" Value="8,4,6,4"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Border.goals-header:pointerover PathIcon.goals-chevron">
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="Border.goals-header PathIcon.goals-chevron">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <!-- ============ Pinned footer icon buttons (settings / help) ============ -->
+  <Style Selector="Border.footer-icon-item">
+    <Setter Property="Width" Value="32"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Cursor" Value="Hand"/>
+  </Style>
+  <Style Selector="Border.footer-icon-item:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+  <Style Selector="Border.footer-icon-item.active">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+  </Style>
+  <Style Selector="Border.footer-icon-item > PathIcon">
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="Height" Value="16"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+  </Style>
+  <Style Selector="Border.footer-icon-item.active > PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Border.footer-icon-item > TextBlock.footer-help-glyph">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
   </Style>
 
 </Styles>

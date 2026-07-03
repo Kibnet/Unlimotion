@@ -26,7 +26,7 @@
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
         <Style Selector="TextBox.EmojiFilterSummaryInput.EmptySummary">
-            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+            <Setter Property="Foreground" Value="#993B3550"/>
         </Style>
         <Style Selector="TextBlock.EmojiFilterExcludeMarker">
             <Setter Property="HorizontalAlignment" Value="Left"/>

@@ -1968,7 +1968,7 @@ public class MainControlTreeCommandsUiTests
     }
 
     [Test]
-    public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensEmbeddedShortcutReference()
+    public async Task TreeCommandUi_HotkeyHelpButton_OpensEmbeddedShortcutReference()
     {
         await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -1983,22 +1983,18 @@ public class MainControlTreeCommandsUiTests
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
-                window.Width = 720;
-                window.Height = 560;
+                // Wide enough that the sidebar (with the footer "?" button) stays expanded.
+                window.Width = 1000;
+                window.Height = 640;
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
                 var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
                 await Assert.That(overlayHost.IsVisible).IsFalse();
 
-                var settingsTab = FindControlByAutomationId<TabItem>(view, "SettingsTabItem");
-                settingsTab.IsSelected = true;
-                Dispatcher.UIThread.RunJobs();
-
-                var showHotkeysButton = FindControlByAutomationId<Button>(view, "SettingsShowHotkeysButton");
-                await Assert.That(showHotkeysButton.Content?.ToString()).IsEqualTo(L10n.Get("ShowHotkeys"));
-
-                InvokeButtonClick(showHotkeysButton);
+                // Hotkeys now open from the pinned footer "?" button (moved out of Settings).
+                var hotkeyHelpButton = FindControlByAutomationId<Border>(view, "HotkeyHelpButton");
+                await ClickControlAsync(window, hotkeyHelpButton);
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
@@ -2985,7 +2981,7 @@ public class MainControlTreeCommandsUiTests
                            throw new InvalidOperationException("Hotkey panel scroll viewer was not found.");
 
         await Assert.That(overlayHost.IsVisible).IsTrue();
-        await Assert.That(panelFrame.MaxWidth).IsEqualTo(560);
+        await Assert.That(panelFrame.MaxWidth).IsEqualTo(640);
         await Assert.That(panel.MaxWidth).IsEqualTo(560);
         await Assert.That(scrollViewer.VerticalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Auto);
         await Assert.That(scrollViewer.HorizontalScrollBarVisibility).IsEqualTo(ScrollBarVisibility.Disabled);

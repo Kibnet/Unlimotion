@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Unlimotion;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
@@ -43,16 +44,23 @@ public class BreadcrumbEmojiUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var breadcrumbs = view.FindControl<EmojiTextBlock>("BreadcrumbsTextBlock");
+                var breadcrumbs = view.FindControl<ItemsControl>("BreadcrumbsTextBlock");
 
                 await Assert.That(breadcrumbs).IsNotNull();
-                await Assert.That(WaitFor(() => breadcrumbs!.Inlines.Count > 0)).IsTrue();
+                // The breadcrumb is now a list of clickable crumbs — one EmojiTextBlock per ancestor.
+                await Assert.That(WaitFor(() => breadcrumbs!.GetVisualDescendants()
+                    .OfType<EmojiTextBlock>()
+                    .SelectMany(crumb => crumb.Inlines ?? new InlineCollection())
+                    .OfType<Run>()
+                    .Any())).IsTrue();
 
-                var runs = breadcrumbs!.Inlines.OfType<Run>().ToList();
-                var text = string.Concat(runs.Select(run => run.Text));
+                var crumbs = breadcrumbs!.GetVisualDescendants().OfType<EmojiTextBlock>().ToList();
+                var titles = crumbs.Select(crumb =>
+                    string.Concat(crumb.Inlines!.OfType<Run>().Select(run => run.Text)));
+                var runs = crumbs.SelectMany(crumb => crumb.Inlines!.OfType<Run>()).ToList();
                 var emojiRuns = runs.Where(run => run.Text is "📚" or "🧪").ToList();
 
-                await Assert.That(text).IsEqualTo("📚 Root Task 2 / 🧪 Sub Task 22");
+                await Assert.That(string.Join(" / ", titles)).IsEqualTo("📚 Root Task 2 / 🧪 Sub Task 22");
                 await Assert.That(emojiRuns.Count).IsEqualTo(2);
                 await Assert.That(emojiRuns.All(run => run.FontWeight == Avalonia.Media.FontWeight.Normal)).IsTrue();
                 await Assert.That(emojiRuns.All(run =>

@@ -100,6 +100,40 @@
             <Setter Property="ColumnSpacing" Value="8"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
+        <!-- Clickable breadcrumb crumbs + separators -->
+        <Style Selector="unlimotion|EmojiTextBlock.breadcrumb-crumb">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MaxWidth" Value="220"/>
+        </Style>
+        <Style Selector="unlimotion|EmojiTextBlock.breadcrumb-crumb:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.breadcrumb-sep">
+            <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="6,0"/>
+        </Style>
+        <!-- Slim, docked, coloured sidebar scrollbar: thin but clearly a scrollbar, and it
+             reserves its own gutter so it never overlaps the nav items. -->
+        <Style Selector="ScrollViewer.sidebar-scroll ScrollBar:vertical">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="MinWidth" Value="8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Margin" Value="2,0,0,0"/>
+        </Style>
+        <Style Selector="ScrollViewer.sidebar-scroll ScrollBar:vertical Thumb">
+            <Setter Property="MinWidth" Value="6"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}"/>
+        </Style>
+        <Style Selector="ScrollViewer.sidebar-scroll ScrollBar:vertical Thumb:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
         <Style Selector="WrapPanel.FilterToolbarItems">
             <Setter Property="Orientation" Value="Horizontal"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
@@ -143,16 +177,12 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="PathIcon.FilterToolbarFiltersIcon">
-            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Margin" Value="2,0"/>
             <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
         </Style>
         <!-- Aurora: drop the dropdown chevron so it reads as a clean filter-icon button -->
         <Style Selector="DropDownButton.FilterToolbarFiltersButton /template/ PathIcon">
             <Setter Property="IsVisible" Value="False"/>
-        </Style>
-        <Style Selector="DropDownButton.FilterToolbarFiltersButton">
-            <Setter Property="Width" Value="{DynamicResource AppSearchControlHeight}"/>
-            <Setter Property="MinWidth" Value="{DynamicResource AppSearchControlHeight}"/>
         </Style>
         <Style Selector="PathIcon.FilterPanelResetIcon">
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -412,26 +442,18 @@
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact TextBox.TaskDescriptionEditor">
             <Setter Property="MinHeight" Value="72"/>
         </Style>
-        <Style Selector="StackPanel.TaskPlanningGroups">
-            <Setter Property="Orientation" Value="Vertical"/>
-            <Setter Property="Spacing" Value="6"/>
-        </Style>
-        <Style Selector="StackPanel.TaskPlanningGroup">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Margin" Value="0"/>
-            <Setter Property="Spacing" Value="0"/>
-        </Style>
         <Style Selector="Grid.TaskPlanningFieldRow">
             <Setter Property="ColumnSpacing" Value="4"/>
+            <Setter Property="Margin" Value="0,0,8,6"/>
         </Style>
         <Style Selector="CalendarDatePicker.TaskPlanningValueControl">
-            <Setter Property="MinWidth" Value="210"/>
+            <Setter Property="MinWidth" Value="0"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
             <Setter Property="Padding" Value="10,6,6,5"/>
         </Style>
         <Style Selector="TextBox.TaskPlanningValueControl">
-            <Setter Property="MinWidth" Value="210"/>
+            <Setter Property="MinWidth" Value="0"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="MinHeight" Value="40"/>
         </Style>
@@ -785,21 +807,34 @@
                         BoxShadow="{DynamicResource GlowAccent}"/>
                 <TextBlock Text="Unlimotion" Classes="title" VerticalAlignment="Center"/>
             </StackPanel>
-            <unlimotion:EmojiTextBlock x:Name="BreadcrumbsTextBlock"
-                                       Grid.Column="1"
-                                       AutomationProperties.AutomationId="BreadcrumbsTextBlock"
-                                       EmojiText="{Binding BreadScrumbs}"
-                                       TextWrapping="NoWrap"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxLines="1"
-                                       ToolTip.Tip="{Binding BreadScrumbs}"
-                                       PointerPressed="BreadScrumbs_OnPointerPressed"
-                                       FontWeight="SemiBold"
-                                       FontSize="{DynamicResource FsBody}"
-                                       Foreground="{DynamicResource Text2Brush}"
-                                       Margin="14,0,0,0"
-                                       HorizontalAlignment="Stretch"
-                                       VerticalAlignment="Center"/>
+            <!-- clickable breadcrumb: each crumb navigates to that ancestor task -->
+            <ItemsControl x:Name="BreadcrumbsTextBlock"
+                          Grid.Column="1"
+                          AutomationProperties.AutomationId="BreadcrumbsTextBlock"
+                          ItemsSource="{Binding BreadScrumbItems}"
+                          Margin="14,0,0,0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="viewModel:BreadcrumbSegment">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <unlimotion:EmojiTextBlock Classes="breadcrumb-crumb"
+                                                       EmojiText="{Binding Title}"
+                                                       TextWrapping="NoWrap"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="1"
+                                                       ToolTip.Tip="{Binding Title}"
+                                                       PointerPressed="BreadcrumbCrumb_OnPointerPressed"/>
+                            <TextBlock Classes="breadcrumb-sep" Text="/" IsVisible="{Binding !IsLast}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <!-- theme toggle -->
             <Button Grid.Column="2"
                     Classes="subtle"
@@ -861,29 +896,43 @@
         <!-- Aurora: left sidebar (VIEWS) + content -->
         <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
 
-            <!-- LEFT SIDEBAR -->
+            <!-- LEFT SIDEBAR (collapses on narrow widths — see SidebarResponsive in code-behind) -->
             <Border Grid.Column="0"
+                    x:Name="SidebarPanel"
                     Width="{DynamicResource SidebarW}"
                     Background="{DynamicResource SurfaceRailBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,0,1,0">
                 <DockPanel Margin="12,14,12,12">
-                <!-- Settings pinned to the bottom -->
+                <!-- Pinned footer: compact settings + hotkey-help icon buttons -->
                 <Border DockPanel.Dock="Bottom"
-                        x:Name="SettingsNavItem"
-                        Classes="nav-item"
                         Margin="0,10,0,0"
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="0,1,0,0"
-                        PointerPressed="SettingsNav_OnPointerPressed"
-                        AutomationProperties.AutomationId="SettingsNavItem">
-                    <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0">
-                        <PathIcon Classes="nav-glyph" Data="{StaticResource IconGear}"/>
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{DynamicResource Settings}"/>
-                    </Grid>
+                        Padding="0,8,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left">
+                        <Border x:Name="SettingsNavItem"
+                                Classes="footer-icon-item"
+                                PointerPressed="SettingsNav_OnPointerPressed"
+                                ToolTip.Tip="{DynamicResource Settings}"
+                                AutomationProperties.AutomationId="SettingsNavItem">
+                            <PathIcon Classes="nav-glyph" Data="{StaticResource IconGear}"/>
+                        </Border>
+                        <Border x:Name="HotkeyHelpButton"
+                                Classes="footer-icon-item"
+                                PointerPressed="HotkeyHelpButton_OnPointerPressed"
+                                ToolTip.Tip="{DynamicResource HotkeyPanelTitle}"
+                                AutomationProperties.AutomationId="HotkeyHelpButton">
+                            <TextBlock Classes="footer-help-glyph" Text="?"/>
+                        </Border>
+                    </StackPanel>
                 </Border>
-                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Spacing="0">
+                <ScrollViewer Classes="sidebar-scroll"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto"
+                              AllowAutoHide="False"
+                              Margin="0,0,-8,0">
+                <StackPanel Spacing="0" Margin="0,0,4,0">
                     <TextBlock Classes="section-eyebrow"
                                Text="{DynamicResource ViewsGroup}"
                                Margin="8,0,0,10"/>
@@ -895,9 +944,15 @@
                              SelectionChanged="SidebarNav_OnSelectionChanged"
                              AutomationProperties.AutomationId="SidebarNav">
                         <ListBoxItem>
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
                                 <PathIcon Classes="nav-glyph" Data="{StaticResource IconList}"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{DynamicResource AllTasks}"/>
+                                <Border Grid.Column="2"
+                                        Classes="count-pill neutral"
+                                        IsVisible="{Binding CurrentAllTasksItems.Count, Converter={converters:CountToBoolConverter}}"
+                                        AutomationProperties.AutomationId="AllTasksCountPill">
+                                    <TextBlock Text="{Binding CurrentAllTasksItems.Count}"/>
+                                </Border>
                             </Grid>
                         </ListBoxItem>
                         <ListBoxItem>
@@ -925,9 +980,15 @@
                             </Grid>
                         </ListBoxItem>
                         <ListBoxItem>
-                            <Grid ColumnDefinitions="Auto,*">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
                                 <PathIcon Classes="nav-glyph" Data="{StaticResource IconClock}"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{DynamicResource InProgress}"/>
+                                <Border Grid.Column="2"
+                                        Classes="count-pill neutral"
+                                        IsVisible="{Binding InProgressItems.Count, Converter={converters:CountToBoolConverter}}"
+                                        AutomationProperties.AutomationId="InProgressCountPill">
+                                    <TextBlock Text="{Binding InProgressItems.Count}"/>
+                                </Border>
                             </Grid>
                         </ListBoxItem>
                         <ListBoxItem>
@@ -956,38 +1017,47 @@
                         </ListBoxItem>
                     </ListBox>
 
-                    <!-- GOALS group: top-level tasks (goals) -->
-                    <TextBlock Classes="section-eyebrow"
-                               Text="{DynamicResource GoalsGroup}"
-                               Margin="8,16,0,10"
-                               IsVisible="{Binding CurrentAllTasksItems.Count, Converter={converters:CountToBoolConverter}}"/>
-                    <ItemsControl ItemsSource="{Binding CurrentAllTasksItems}"
+                    <!-- GOALS group: top-level tasks (goals) — collapsible header -->
+                    <Border Classes="goals-header"
+                            x:Name="SidebarGoalsHeader"
+                            PointerPressed="GoalsHeader_OnPointerPressed"
+                            AutomationProperties.AutomationId="SidebarGoalsHeader"
+                            IsVisible="{Binding CurrentAllTasksItems.Count, Converter={converters:CountToBoolConverter}}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Classes="section-eyebrow"
+                                       VerticalAlignment="Center"
+                                       Text="{DynamicResource GoalsGroup}"/>
+                            <PathIcon Grid.Column="1" Classes="goals-chevron"
+                                      x:Name="GoalsChevron"
+                                      Data="{StaticResource IconChevronDown}"/>
+                        </Grid>
+                    </Border>
+                    <ItemsControl x:Name="SidebarGoalsList"
+                                  ItemsSource="{Binding CurrentAllTasksItems}"
                                   AutomationProperties.AutomationId="SidebarGoals">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="viewModel:TaskWrapperViewModel">
                                 <Border Classes="goal-row"
                                         PointerPressed="GoalItem_OnPointerPressed"
                                         DataContext="{Binding TaskItem}">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
-                                        <Border Classes="goal-tile" Grid.Row="0" Grid.RowSpan="2" Grid.Column="0">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <Border Classes="goal-tile" Grid.Column="0">
                                             <PathIcon Classes="goal-glyph" Data="{StaticResource IconTarget}"/>
                                         </Border>
-                                        <TextBlock Grid.Row="0" Grid.Column="1"
-                                                   VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   Text="{Binding Title}"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="2"
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                                            <TextBlock TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding Title}"/>
+                                            <ProgressBar Classes="goal-progress"
+                                                         Minimum="0" Maximum="1"
+                                                         IsVisible="{Binding HasChildren}"
+                                                         Value="{Binding GoalProgress}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2"
                                                    Classes="meta"
                                                    VerticalAlignment="Center"
                                                    Margin="6,0,0,0"
                                                    IsVisible="{Binding HasChildren}"
                                                    Text="{Binding GoalProgressPercent, StringFormat='{}{0}%'}"/>
-                                        <ProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
-                                                     Classes="goal-progress"
-                                                     Minimum="0" Maximum="1"
-                                                     Margin="0,4,0,0"
-                                                     IsVisible="{Binding HasChildren}"
-                                                     Value="{Binding GoalProgress}"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -1008,7 +1078,7 @@
                    CompactPaneLength="20"
                    PanePlacement="Right">
             <Grid x:Name="MainTabsHost"
-                  Margin="0"
+                  Margin="16,14,12,0"
                   HorizontalAlignment="Stretch">
                 <TabControl x:Name="MainTabs"
                             TabStripPlacement="Top"
@@ -1038,10 +1108,14 @@
                         <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
                             <Setter Property="Padding" Value="0"/>
                         </Style>
-                        <!-- Aurora: hide the horizontal tab strip (views live in the sidebar) -->
+                        <!-- Aurora: collapse the horizontal tab strip (views live in the sidebar)
+                             but keep it in the tree so tab items stay focusable (hotkeys route
+                             through MainControl after a tab switch). -->
                         <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
-                            <Setter Property="IsVisible" Value="False"/>
                             <Setter Property="Height" Value="0"/>
+                            <Setter Property="Opacity" Value="0"/>
+                            <Setter Property="IsHitTestVisible" Value="False"/>
+                            <Setter Property="ClipToBounds" Value="True"/>
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
@@ -2094,8 +2168,12 @@
                                                                    AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
                                                 </StackPanel>
                                             </WrapPanel>
-                                            <DropDownButton Grid.Column="1"
-                                                            Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                            <Border Grid.Column="1"
+                                                    VerticalAlignment="Center"
+                                                    AutomationProperties.ControlTypeOverride="Group"
+                                                    AutomationProperties.IsControlElementOverride="True"
+                                                    AutomationProperties.AutomationId="CurrentTaskCommandBar">
+                                            <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                             Content="⋮"
                                                             VerticalAlignment="Center"
                                                             ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
@@ -2127,13 +2205,16 @@
                                                     </MenuFlyout>
                                                 </DropDownButton.Flyout>
                                             </DropDownButton>
+                                            </Border>
                                         </Grid>
 
                                         <!-- metadata: id + timestamps, each with its own label -->
                                         <WrapPanel Grid.Row="2" Grid.ColumnSpan="2" Classes="TaskHeaderMetaLine" Margin="0,8,0,0">
-                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <StackPanel Orientation="Horizontal" Spacing="4" MaxWidth="180">
                                                 <TextBlock Classes="meta TaskHeaderMetaLabel" Text="ID"/>
                                                 <TextBlock Classes="meta TaskHeaderIdMeta"
+                                                           MaxWidth="140"
+                                                           TextTrimming="CharacterEllipsis"
                                                            Text="{Binding Id, Mode=OneWay}"
                                                            ToolTip.Tip="{Binding Id}"
                                                            AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
@@ -2206,7 +2287,7 @@
                                             AutomationProperties.ControlTypeOverride="Group"
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskPlanningSection">
-                                        <StackPanel Classes="TaskCardSectionContent TaskPlanningGroups">
+                                        <UniformGrid x:Name="PlanningFieldsGrid" Columns="3">
                                                     <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
                                                         <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
                                                                             Classes="TaskPlanningValueControl"
@@ -2296,7 +2377,7 @@
                                                             </DropDownButton.Flyout>
                                                         </DropDownButton>
                                                     </Grid>
-                                        </StackPanel>
+                                        </UniformGrid>
                                     </Border>
 
                                     <Border Classes="TaskCardSection"
@@ -2622,15 +2703,15 @@
               Focusable="True"
               Background="#66000000"
               AutomationProperties.AutomationId="HotkeyHelpOverlayHost">
-            <Border HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    MaxWidth="560"
-                    MaxHeight="520"
-                    Margin="16"
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="640"
+                    MaxHeight="600"
+                    Margin="24"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource ThemeControlMidBrush}"
-                    CornerRadius="6"
-                    Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                    BorderBrush="{DynamicResource BorderStrongBrush}"
+                    CornerRadius="{DynamicResource RadiusMd}"
+                    Background="{DynamicResource SurfaceRaisedBrush}"
                     AutomationProperties.AutomationId="HotkeyHelpOverlayPanelFrame">
                 <views:HotkeyHelpPanel x:Name="EmbeddedHotkeyHelpPanel"/>
             </Border>
