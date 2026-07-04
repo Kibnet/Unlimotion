@@ -63,7 +63,33 @@ namespace Unlimotion.ViewModel
             new(new ObservableCollectionExtended<EmojiFilter>());
 
         public ITaskStorage? taskRepository;
-        public IDialogs? Dialogs { get; set; }
+        private IDialogs? _dialogs;
+
+        public IDialogs? Dialogs
+        {
+            get => _dialogs;
+            set
+            {
+                _dialogs = value;
+                // The profile screen shares the same file/image dialogs; it is created in the
+                // constructor, so forward the instance the host assigns after construction.
+                if (Profile != null)
+                {
+                    Profile.Dialogs = value;
+                }
+            }
+        }
+
+        // Profiles live in a "Users" sub-folder of the task storage folder so they ride the same git
+        // backup while staying out of the task scan. Fall back to the default relative "Tasks" folder.
+        private string ResolveProfileStorageRoot()
+        {
+            var configuredPath = _configuration?
+                .GetSection("TaskStorage")
+                .GetSection(nameof(TaskStorageSettings.Path))
+                .Get<string>();
+            return string.IsNullOrWhiteSpace(configuredPath) ? "Tasks" : configuredPath;
+        }
         public Func<TaskItemViewModel, ITaskStorage?, string, Task>? MoveTaskTreeToFileStorageAsync { get; set; }
         private readonly Func<ITaskStorage?>? _getTaskStorage;
         private readonly string? _taskTreeExpansionStatePath;
@@ -75,7 +101,8 @@ namespace Unlimotion.ViewModel
             Func<ITaskStorage?>? getTaskStorage = null,
             SettingsViewModel? settings = null,
             GraphViewModel? graph = null,
-            string? taskTreeExpansionStatePath = null)
+            string? taskTreeExpansionStatePath = null,
+            UserProfileViewModel? profile = null)
         {
             Title = appNameService?.GetAppName() ?? "";
             connectionDisposableList.AddToDispose(this);
@@ -84,6 +111,9 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
+            Profile = profile ?? new UserProfileViewModel(
+                new FileUserProfileStorage(ResolveProfileStorageRoot()),
+                _configuration);
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
@@ -2789,6 +2819,7 @@ namespace Unlimotion.ViewModel
         public bool ArchivedMode { get; set; }
         public bool GraphMode { get; set; }
         public bool SettingsMode { get; set; }
+        public bool ProfileMode { get; set; }
         public bool LastCreatedMode { get; set; }
         public bool LastUpdatedMode { get; set; }
         public bool LastOpenedMode { get; set; }
@@ -2932,6 +2963,7 @@ namespace Unlimotion.ViewModel
         public bool? ShowWanted { get; set; }
 
         public SettingsViewModel Settings { get; set; }
+        public UserProfileViewModel Profile { get; set; }
         public GraphViewModel Graph { get; set; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters = EmptyEmojiFilters;

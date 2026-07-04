@@ -598,6 +598,10 @@ namespace Unlimotion.Views
         // Aurora: index of the Settings tab (it lives in the pinned footer, not the
         // sidebar ListBox). Keep in sync with the TabControl item order.
         private const int SettingsTabIndex = 9;
+
+        // Aurora: index of the Profile tab ("личный кабинет"). Reached via the header avatar, never
+        // shown as a visible tab or sidebar entry. Keep in sync with the TabControl item order.
+        private const int ProfileTabIndex = 10;
         private bool _syncingSidebar;
 
         // Mirror the TabControl selection onto the sidebar: views 0..8 highlight in the
@@ -641,6 +645,14 @@ namespace Unlimotion.Views
             if (MainTabs is not null)
             {
                 MainTabs.SelectedIndex = SettingsTabIndex;
+            }
+        }
+
+        private void UserAvatar_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (MainTabs is not null)
+            {
+                MainTabs.SelectedIndex = ProfileTabIndex;
             }
         }
 

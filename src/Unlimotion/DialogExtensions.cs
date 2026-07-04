@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
@@ -12,6 +13,9 @@ namespace Unlimotion;
 public class Dialogs : IDialogs
 {
     public static Func<string?, string?, Task<string?>>? PlatformOpenFolderDialogAsync { get; set; }
+
+    /// <summary>Test/platform seam: when set, replaces the real file picker (args: title, directory).</summary>
+    public static Func<string?, string?, Task<string?>>? PlatformOpenFileDialogAsync { get; set; }
 
     public async Task<string> ShowOpenFolderDialogAsync(string? title = null, string? directory = null)
     {
@@ -40,6 +44,61 @@ public class Dialogs : IDialogs
         }
 
         return string.Empty;
+    }
+
+    public async Task<string> ShowOpenFileDialogAsync(
+        string? title = null,
+        IReadOnlyList<string>? allowedExtensions = null,
+        string? directory = null)
+    {
+        var platformOpenFileDialogAsync = PlatformOpenFileDialogAsync;
+        if (platformOpenFileDialogAsync != null)
+        {
+            return await platformOpenFileDialogAsync(title, directory) ?? string.Empty;
+        }
+
+        var topLevel = DialogExtensions.GetTopLevel();
+        var storageProvider = topLevel?.StorageProvider;
+        if (storageProvider != null && storageProvider.CanOpen)
+        {
+            var options = new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                FileTypeFilter = BuildFileTypeFilters(allowedExtensions),
+                SuggestedStartLocation = await TryResolveSuggestedStartLocationAsync(storageProvider, directory)
+            };
+
+            var result = await storageProvider.OpenFilePickerAsync(options);
+            var file = result?.FirstOrDefault();
+            if (file != null)
+            {
+                var localPath = file.TryGetLocalPath();
+                if (!string.IsNullOrWhiteSpace(localPath))
+                {
+                    return localPath;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static IReadOnlyList<FilePickerFileType>? BuildFileTypeFilters(IReadOnlyList<string>? allowedExtensions)
+    {
+        if (allowedExtensions == null || allowedExtensions.Count == 0)
+        {
+            return null;
+        }
+
+        var patterns = allowedExtensions
+            .Select(ext => "*" + (ext.StartsWith('.') ? ext : "." + ext))
+            .ToArray();
+
+        return new[]
+        {
+            new FilePickerFileType("Images") { Patterns = patterns }
+        };
     }
 
     internal static async Task<FolderPickerOpenOptions> CreateFolderPickerOpenOptionsAsync(

@@ -549,4 +549,34 @@
   <data name="FridayShort" xml:space="preserve"><value>Пт</value></data>
   <data name="SaturdayShort" xml:space="preserve"><value>Сб</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Неподдерживаемое действие подключения Git: {0}.</value></data>
+  <data name="ProfileTitle" xml:space="preserve"><value>Профиль</value></data>
+  <data name="ProfileIntro" xml:space="preserve"><value>Ваш личный кабинет. Задайте имя, почту и аватар, которые видны в приложении. Хранится в файле рядом с задачами и попадает в ту же резервную копию.</value></data>
+  <data name="ProfileAvatarTitle" xml:space="preserve"><value>Аватар</value></data>
+  <data name="ProfileAvatarHint" xml:space="preserve"><value>Выберите картинку рядом с именем. Она копируется в папку с задачами.</value></data>
+  <data name="ProfileAvatarAdjustHint" xml:space="preserve"><value>Тащите картинку, чтобы сдвинуть; колесо или ползунок — масштаб. В кружке — то, что видно.</value></data>
+  <data name="ProfileAvatarZoomLabel" xml:space="preserve"><value>Масштаб</value></data>
+  <data name="ProfilePickAvatar" xml:space="preserve"><value>Выбрать картинку…</value></data>
+  <data name="ProfileRemoveAvatar" xml:space="preserve"><value>Удалить</value></data>
+  <data name="ProfileIdentityTitle" xml:space="preserve"><value>Данные</value></data>
+  <data name="ProfileIdentityHint" xml:space="preserve"><value>Кто вы в этом пространстве.</value></data>
+  <data name="ProfileDisplayNameLabel" xml:space="preserve"><value>Отображаемое имя</value></data>
+  <data name="ProfileDisplayNameWatermark" xml:space="preserve"><value>Как вас показывать, напр. Алекс</value></data>
+  <data name="ProfileDisplayNameRequired" xml:space="preserve"><value>Укажите отображаемое имя.</value></data>
+  <data name="ProfileFullNameLabel" xml:space="preserve"><value>Полное имя</value></data>
+  <data name="ProfileFullNameWatermark" xml:space="preserve"><value>Необязательное полное имя</value></data>
+  <data name="ProfileEmailLabel" xml:space="preserve"><value>Почта</value></data>
+  <data name="ProfileEmailWatermark" xml:space="preserve"><value>name@example.com</value></data>
+  <data name="ProfileEmailInvalid" xml:space="preserve"><value>Введите корректный адрес почты или оставьте поле пустым.</value></data>
+  <data name="ProfileBirthdayLabel" xml:space="preserve"><value>День рождения</value></data>
+  <data name="ProfileAboutTitle" xml:space="preserve"><value>О себе</value></data>
+  <data name="ProfileAboutHint" xml:space="preserve"><value>Пара слов о себе.</value></data>
+  <data name="ProfileAboutWatermark" xml:space="preserve"><value>Расскажите о себе…</value></data>
+  <data name="ProfileSave" xml:space="preserve"><value>Сохранить</value></data>
+  <data name="ProfileSaved" xml:space="preserve"><value>Профиль сохранён.</value></data>
+  <data name="ProfileSaveFailed" xml:space="preserve"><value>Не удалось сохранить профиль: {0}</value></data>
+  <data name="ProfilePickAvatarTitle" xml:space="preserve"><value>Выберите картинку для аватара</value></data>
+  <data name="ProfileAvatarUnsupported" xml:space="preserve"><value>Этот тип файла не поддерживается. Выберите PNG, JPG, GIF, BMP или WebP.</value></data>
+  <data name="ProfileAvatarUpdated" xml:space="preserve"><value>Аватар обновлён.</value></data>
+  <data name="ProfileAvatarImportFailed" xml:space="preserve"><value>Не удалось использовать картинку: {0}</value></data>
+  <data name="ProfileAvatarRemoved" xml:space="preserve"><value>Аватар удалён.</value></data>
 </root>

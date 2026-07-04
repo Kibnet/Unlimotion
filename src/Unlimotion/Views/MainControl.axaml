@@ -871,11 +871,16 @@
                     </MenuFlyout>
                 </DropDownButton.Flyout>
             </DropDownButton>
-            <!-- avatar (teal → blue gradient) -->
+            <!-- avatar (teal → blue gradient); click opens the personal profile ("личный кабинет") -->
             <Border Grid.Column="4"
-                    Width="28" Height="28"
+                    x:Name="UserAvatar"
+                    Width="38" Height="38"
                     CornerRadius="{DynamicResource RadiusPill}"
+                    ClipToBounds="True"
+                    Cursor="Hand"
                     VerticalAlignment="Center"
+                    PointerPressed="UserAvatar_OnPointerPressed"
+                    ToolTip.Tip="{Binding Profile.DisplayName}"
                     AutomationProperties.AutomationId="UserAvatar">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -883,12 +888,29 @@
                         <GradientStop Offset="1" Color="{DynamicResource AccentColor}"/>
                     </LinearGradientBrush>
                 </Border.Background>
-                <TextBlock Text="U"
-                           Foreground="White"
-                           FontWeight="SemiBold"
-                           FontSize="13"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                <Panel>
+                    <TextBlock Text="{Binding Profile.Initials}"
+                               IsVisible="{Binding Profile.HasNoAvatar}"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               FontSize="16"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                    <!-- Same circular-crop framing as the profile editor, scaled to 38px -->
+                    <Image Source="{Binding Profile.AvatarAbsolutePath, Converter={converters:ImagePathConverter}}"
+                           IsVisible="{Binding Profile.HasAvatar}"
+                           Width="38" Height="38"
+                           Stretch="UniformToFill"
+                           RenderTransformOrigin="50%,50%">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="{Binding Profile.AvatarZoom}" ScaleY="{Binding Profile.AvatarZoom}"/>
+                                <TranslateTransform X="{Binding Profile.AvatarOffsetX, Converter={converters:ScaleByConverter}, ConverterParameter=38}"
+                                                    Y="{Binding Profile.AvatarOffsetY, Converter={converters:ScaleByConverter}, ConverterParameter=38}"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                    </Image>
+                </Panel>
             </Border>
         </Grid>
         </Border>
@@ -916,7 +938,9 @@
                                 PointerPressed="SettingsNav_OnPointerPressed"
                                 ToolTip.Tip="{DynamicResource Settings}"
                                 AutomationProperties.AutomationId="SettingsNavItem">
-                            <PathIcon Classes="nav-glyph" Data="{StaticResource IconGear}"/>
+                            <!-- no nav-glyph: that class adds a right margin for sidebar rows and would
+                                 push the gear off-centre inside the square footer button -->
+                            <PathIcon Data="{StaticResource IconGear}"/>
                         </Border>
                         <Border x:Name="HotkeyHelpButton"
                                 Classes="footer-icon-item"
@@ -2045,6 +2069,11 @@
                     <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}"
                              AutomationProperties.AutomationId="SettingsTabItem">
                         <views:SettingsControl DataContext="{Binding Settings}"/>
+                    </TabItem>
+                    <!--Profile (личный кабинет): reached via the avatar in the header, not a visible tab-->
+                    <TabItem Header="{DynamicResource ProfileTitle}" IsSelected="{Binding ProfileMode, Mode=OneWayToSource}"
+                             AutomationProperties.AutomationId="ProfileTabItem">
+                        <views:ProfileControl DataContext="{Binding Profile}"/>
                     </TabItem>
                 </TabControl>
                 <Button x:Name="MainTabsOverflowButton"

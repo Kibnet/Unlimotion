@@ -549,4 +549,34 @@
   <data name="FridayShort" xml:space="preserve"><value>Fri</value></data>
   <data name="SaturdayShort" xml:space="preserve"><value>Sat</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Unsupported Git connect action: {0}.</value></data>
+  <data name="ProfileTitle" xml:space="preserve"><value>Profile</value></data>
+  <data name="ProfileIntro" xml:space="preserve"><value>Your personal profile. Set the name, e-mail and avatar shown across the app. Stored in a file next to your tasks, so it is backed up together with them.</value></data>
+  <data name="ProfileAvatarTitle" xml:space="preserve"><value>Avatar</value></data>
+  <data name="ProfileAvatarHint" xml:space="preserve"><value>Pick a picture to show next to your name. It is copied into your tasks folder.</value></data>
+  <data name="ProfileAvatarAdjustHint" xml:space="preserve"><value>Drag the picture to reposition it; scroll or use the slider to zoom. The circle is what shows.</value></data>
+  <data name="ProfileAvatarZoomLabel" xml:space="preserve"><value>Zoom</value></data>
+  <data name="ProfilePickAvatar" xml:space="preserve"><value>Choose picture…</value></data>
+  <data name="ProfileRemoveAvatar" xml:space="preserve"><value>Remove</value></data>
+  <data name="ProfileIdentityTitle" xml:space="preserve"><value>Identity</value></data>
+  <data name="ProfileIdentityHint" xml:space="preserve"><value>Who you are in this workspace.</value></data>
+  <data name="ProfileDisplayNameLabel" xml:space="preserve"><value>Display name</value></data>
+  <data name="ProfileDisplayNameWatermark" xml:space="preserve"><value>How you appear, e.g. Alex</value></data>
+  <data name="ProfileDisplayNameRequired" xml:space="preserve"><value>A display name is required.</value></data>
+  <data name="ProfileFullNameLabel" xml:space="preserve"><value>Full name</value></data>
+  <data name="ProfileFullNameWatermark" xml:space="preserve"><value>Optional full name</value></data>
+  <data name="ProfileEmailLabel" xml:space="preserve"><value>E-mail</value></data>
+  <data name="ProfileEmailWatermark" xml:space="preserve"><value>name@example.com</value></data>
+  <data name="ProfileEmailInvalid" xml:space="preserve"><value>Enter a valid e-mail address, or leave it empty.</value></data>
+  <data name="ProfileBirthdayLabel" xml:space="preserve"><value>Birthday</value></data>
+  <data name="ProfileAboutTitle" xml:space="preserve"><value>About</value></data>
+  <data name="ProfileAboutHint" xml:space="preserve"><value>A few words about yourself.</value></data>
+  <data name="ProfileAboutWatermark" xml:space="preserve"><value>Tell us about yourself…</value></data>
+  <data name="ProfileSave" xml:space="preserve"><value>Save</value></data>
+  <data name="ProfileSaved" xml:space="preserve"><value>Profile saved.</value></data>
+  <data name="ProfileSaveFailed" xml:space="preserve"><value>Could not save the profile: {0}</value></data>
+  <data name="ProfilePickAvatarTitle" xml:space="preserve"><value>Choose an avatar picture</value></data>
+  <data name="ProfileAvatarUnsupported" xml:space="preserve"><value>That file type is not supported. Pick a PNG, JPG, GIF, BMP or WebP image.</value></data>
+  <data name="ProfileAvatarUpdated" xml:space="preserve"><value>Avatar updated.</value></data>
+  <data name="ProfileAvatarImportFailed" xml:space="preserve"><value>Could not use that picture: {0}</value></data>
+  <data name="ProfileAvatarRemoved" xml:space="preserve"><value>Avatar removed.</value></data>
 </root>

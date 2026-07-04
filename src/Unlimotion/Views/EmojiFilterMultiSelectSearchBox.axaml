@@ -20,6 +20,14 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+        <!-- In collapsed summary mode the box is read-only and acts as a button, so its label must
+             not be selectable/editable-looking: hide the caret and selection highlight and use a hand
+             cursor. Active typing mode (IsReadOnly=False) keeps normal text selection. -->
+        <Style Selector="TextBox.EmojiFilterSummaryInput[IsReadOnly=True]">
+            <Setter Property="SelectionBrush" Value="Transparent"/>
+            <Setter Property="CaretBrush" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
         <Style Selector="TextBox.EmojiFilterSummaryInput.Exclude">
             <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BlockedBrush}"/>

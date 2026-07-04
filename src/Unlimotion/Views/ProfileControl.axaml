@@ -1,0 +1,224 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:converters="clr-namespace:Unlimotion.Converters"
+             xmlns:behavior="clr-namespace:Unlimotion.Behavior"
+             mc:Ignorable="d"
+             d:DesignWidth="900"
+             d:DesignHeight="700"
+             x:DataType="viewModel:UserProfileViewModel"
+             x:Class="Unlimotion.Views.ProfileControl"
+             AutomationProperties.AutomationId="ProfileRoot">
+    <UserControl.Styles>
+        <!-- each profile section is an Aurora card, matching SettingsControl -->
+        <Style Selector="Border.SettingsSection">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusCard}" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="BoxShadow" Value="{DynamicResource ShadowRaised}" />
+        </Style>
+        <Style Selector="TextBlock.PageTitle">
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource FsHeading}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.SectionTitle">
+            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource FsSubtitle}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.SectionHint">
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,14" />
+        </Style>
+        <Style Selector="TextBlock.StatusText">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Opacity" Value="0.85" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style Selector="StackPanel.FieldGroup">
+            <Setter Property="Spacing" Value="6" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style Selector="TextBlock.FieldLabel">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.FieldError">
+            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="FontSize" Value="{DynamicResource FsSmall}" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MinWidth" Value="140" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  behavior:KeyboardAwareScrollViewer.IsEnabled="True">
+        <StackPanel x:Name="ProfileContent" Margin="20">
+            <StackPanel Margin="2,0,0,16">
+                <TextBlock Classes="PageTitle" Text="{DynamicResource ProfileTitle}" />
+                <TextBlock Classes="SectionHint" Margin="0,4,0,0"
+                           Text="{DynamicResource ProfileIntro}" />
+            </StackPanel>
+
+            <!-- Avatar -->
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource ProfileAvatarTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource ProfileAvatarHint}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="20" VerticalAlignment="Top">
+                        <StackPanel Spacing="8">
+                            <!-- Circular crop editor: drag to pan, wheel or slider to zoom. The visible
+                                 circle IS the thumbnail zone shown across the app. -->
+                            <Border x:Name="AvatarEditor"
+                                    Width="200" Height="200"
+                                    CornerRadius="100"
+                                    ClipToBounds="True"
+                                    VerticalAlignment="Top"
+                                    PointerPressed="AvatarEditor_OnPointerPressed"
+                                    PointerMoved="AvatarEditor_OnPointerMoved"
+                                    PointerReleased="AvatarEditor_OnPointerReleased"
+                                    PointerWheelChanged="AvatarEditor_OnPointerWheelChanged"
+                                    AutomationProperties.AutomationId="ProfileAvatarPreview">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                        <GradientStop Offset="0" Color="{DynamicResource TealColor}" />
+                                        <GradientStop Offset="1" Color="{DynamicResource AccentColor}" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Panel>
+                                    <TextBlock Text="{Binding Initials}"
+                                               IsVisible="{Binding HasNoAvatar}"
+                                               Foreground="White"
+                                               FontWeight="SemiBold"
+                                               FontSize="72"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               AutomationProperties.AutomationId="ProfileInitials" />
+                                    <Image x:Name="AvatarPreviewImage"
+                                           Source="{Binding AvatarAbsolutePath, Converter={converters:ImagePathConverter}}"
+                                           IsVisible="{Binding HasAvatar}"
+                                           Width="200" Height="200"
+                                           Stretch="UniformToFill"
+                                           RenderTransformOrigin="50%,50%"
+                                           AutomationProperties.AutomationId="ProfileAvatarImage">
+                                        <Image.RenderTransform>
+                                            <TransformGroup>
+                                                <ScaleTransform ScaleX="{Binding AvatarZoom}" ScaleY="{Binding AvatarZoom}" />
+                                                <TranslateTransform X="{Binding AvatarOffsetX, Converter={converters:ScaleByConverter}, ConverterParameter=200}"
+                                                                    Y="{Binding AvatarOffsetY, Converter={converters:ScaleByConverter}, ConverterParameter=200}" />
+                                            </TransformGroup>
+                                        </Image.RenderTransform>
+                                    </Image>
+                                </Panel>
+                            </Border>
+
+                            <StackPanel IsVisible="{Binding HasAvatar}" Spacing="2">
+                                <TextBlock Classes="SectionHint"
+                                           Margin="0"
+                                           Text="{DynamicResource ProfileAvatarAdjustHint}" />
+                                <Slider Minimum="1" Maximum="5"
+                                        Value="{Binding AvatarZoom, Mode=TwoWay}"
+                                        Width="200"
+                                        ValueChanged="AvatarZoom_OnValueChanged"
+                                        ToolTip.Tip="{DynamicResource ProfileAvatarZoomLabel}"
+                                        AutomationProperties.AutomationId="ProfileAvatarZoomSlider" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" VerticalAlignment="Top">
+                            <Button Content="{DynamicResource ProfilePickAvatar}"
+                                    Command="{Binding PickAvatarCommand}"
+                                    AutomationProperties.AutomationId="ProfilePickAvatarButton" />
+                            <Button Content="{DynamicResource ProfileRemoveAvatar}"
+                                    Command="{Binding RemoveAvatarCommand}"
+                                    IsVisible="{Binding HasAvatar}"
+                                    AutomationProperties.AutomationId="ProfileRemoveAvatarButton" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Identity -->
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource ProfileIdentityTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource ProfileIdentityHint}" />
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource ProfileDisplayNameLabel}" />
+                        <TextBox Text="{Binding DisplayName}"
+                                 Watermark="{DynamicResource ProfileDisplayNameWatermark}"
+                                 AutomationProperties.AutomationId="ProfileDisplayNameInput" />
+                        <TextBlock Classes="FieldError"
+                                   Text="{DynamicResource ProfileDisplayNameRequired}"
+                                   IsVisible="{Binding DisplayNameMissing}"
+                                   AutomationProperties.AutomationId="ProfileDisplayNameError" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource ProfileFullNameLabel}" />
+                        <TextBox Text="{Binding FullName}"
+                                 Watermark="{DynamicResource ProfileFullNameWatermark}"
+                                 AutomationProperties.AutomationId="ProfileFullNameInput" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource ProfileEmailLabel}" />
+                        <TextBox Text="{Binding Email}"
+                                 Watermark="{DynamicResource ProfileEmailWatermark}"
+                                 AutomationProperties.AutomationId="ProfileEmailInput" />
+                        <TextBlock Classes="FieldError"
+                                   Text="{DynamicResource ProfileEmailInvalid}"
+                                   IsVisible="{Binding !EmailIsValid}"
+                                   AutomationProperties.AutomationId="ProfileEmailError" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource ProfileBirthdayLabel}" />
+                        <DatePicker SelectedDate="{Binding Birthday}"
+                                    AutomationProperties.AutomationId="ProfileBirthdayPicker" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- About -->
+            <Border Classes="SettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource ProfileAboutTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource ProfileAboutHint}" />
+
+                    <TextBox Text="{Binding AboutMe}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MinHeight="90"
+                             Watermark="{DynamicResource ProfileAboutWatermark}"
+                             AutomationProperties.AutomationId="ProfileAboutInput" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,8">
+                <Button Content="{DynamicResource ProfileSave}"
+                        Classes="accent"
+                        Command="{Binding SaveCommand}"
+                        AutomationProperties.AutomationId="ProfileSaveButton" />
+                <TextBlock Classes="StatusText"
+                           VerticalAlignment="Center"
+                           Text="{Binding Status}"
+                           AutomationProperties.AutomationId="ProfileStatusText" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
