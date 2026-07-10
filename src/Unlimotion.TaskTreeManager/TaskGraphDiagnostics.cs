@@ -49,7 +49,7 @@ public sealed record TaskGraphValidationReport
         {
             TaskCount = validation.TaskCount,
             LoadErrors = readResult.LoadErrors,
-            DuplicateIdIssues = readResult.DuplicateIdIssues,
+            DuplicateIdIssues = BuildDuplicateIdIssues(readResult, validation.DuplicateIdIssues),
             ReferenceIssues = validation.ReferenceIssues,
             AvailabilityMismatches = validation.AvailabilityMismatches
         };
@@ -65,5 +65,37 @@ public sealed record TaskGraphValidationReport
         return messages.Count == 0
             ? "Task graph is safe for write commands."
             : "Task graph is not safe for write commands: " + string.Join("; ", messages);
+    }
+
+    private static IReadOnlyList<TaskGraphDuplicateIdIssue> BuildDuplicateIdIssues(
+        TaskGraphReadResult readResult,
+        IReadOnlyList<TaskDuplicateIdIssue> fallbackIssues)
+    {
+        var issues = readResult.DuplicateIdIssues.ToList();
+        var reportedIds = issues
+            .Select(static issue => issue.TaskId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var issue in fallbackIssues)
+        {
+            if (!reportedIds.Add(issue.TaskId))
+            {
+                continue;
+            }
+
+            var locations = readResult.Tasks
+                .Where(task => string.Equals(task.Id, issue.TaskId, StringComparison.Ordinal))
+                .Select((task, index) =>
+                    index == 0 && readResult.FilesByTaskId.TryGetValue(task.Id, out var file)
+                        ? file
+                        : $"<diagnostic-duplicate:{index + 1}>")
+                .ToArray();
+
+            issues.Add(new TaskGraphDuplicateIdIssue(
+                issue.TaskId,
+                locations.Length == 0 ? [$"<diagnostic-duplicate-count:{issue.Count}>"] : locations));
+        }
+
+        return issues;
     }
 }

@@ -457,6 +457,27 @@ flowchart LR
 - Needs human: Нет.
 - Residual risks / follow-ups: full suite hang needs separate investigation if required; legacy `TaskTreeManager` internals still contain private rule helpers for existing UI/runtime behavior, while CLI command/read boundary now uses shared rules.
 
+### Post-EXEC Review Addendum: review-fix
+- Статус: PASS
+- Scope reviewed: review findings после реализации, `TaskGraphCommandService`, `TaskGraphDiagnostics`, `TaskGraphCommandServiceTests`, targeted validation evidence.
+- Decision: fix можно коммитить и пушить в существующий PR.
+- Review passes:
+  - Structured failure pass: exceptions из mutation path и post-mutation diagnostic read больше не уходят наружу, а превращаются в `TaskOperationDeniedKind.StorageFailed`.
+  - Duplicate fallback pass: `TaskGraphValidationReport` больше не доверяет только storage-provided duplicate list; analyzer fallback duplicate ids добавляются в report, если diagnostic storage вернул пустой список.
+  - Regression pass: добавлены тесты на post-mutation diagnostic failure и fallback duplicate detection без записи.
+- Evidence inspected:
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/TaskGraphCommandServiceTests/*"` -> PASS, 9 tests.
+  - `dotnet build src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release --no-restore` -> PASS, 0 warnings/errors.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/UnlimotionCliIntegrationTests/*"` -> PASS, 8 tests.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/TaskAvailabilityParityTests/*"` -> PASS, 1 test.
+  - `git diff --check` -> PASS, only CRLF warnings from Git.
+- Findings:
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| HIGH | error contract | Exceptions around command mutation could bypass JSON/structured CLI error envelope | Catch command-service mutation/read failures and return `StorageFailed` | fixed |
+| MEDIUM | validation | Diagnostic storage with empty duplicate report could hide analyzer-detected duplicate ids | Merge fallback duplicate diagnostics into validation report | fixed |
+
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
@@ -469,3 +490,4 @@ flowchart LR
 | EXEC | Реализовать engine/storage/CLI boundary | 0.85 | Нужна тестовая проверка edge cases | Добавить command-service, parity и CLI regression tests | Нет | Нет | Добавлены shared rules, diagnostic storage interface, typed operation result и command service; CLI write path больше не вызывает `TaskTreeManager.UpdateTask` напрямую | `src/Unlimotion.TaskTreeManager/*`, `src/Unlimotion.FileStorage/FileTaskStorage.cs`, `src/Unlimotion.Cli/Program.cs` |
 | EXEC | Добавить targeted regression tests | 0.9 | Full suite еще не запущен | Запустить CLI build, diff check и full project gate | Нет | Нет | Новые `TaskGraphCommandServiceTests` и `TaskAvailabilityParityTests` прошли; существующие `UnlimotionCliIntegrationTests` и `TaskAvailabilityAnalyzerTests` тоже прошли | `src/Unlimotion.Test/TaskGraphCommandServiceTests.cs`, `src/Unlimotion.Test/TaskAvailabilityParityTests.cs` |
 | EXEC | Завершить validation и post-EXEC review | 0.9 | Full suite зависает без failed test identity | Стадировать, сделать коммит и запушить branch | Нет | Нет | Targeted affected suites и CLI build прошли; full suite timeout задокументирован как residual validation risk с next-best evidence | `specs/2026-06-29-cli-engine-boundary.md`, test/build evidence |
+| EXEC | Исправить review findings после реализации | 0.9 | Нет блокирующих данных | Добавить regression tests, затем исправить structured storage failures и duplicate fallback | Нет | Да, пользователь сказал `Исправляй` | Review выявил два точечных риска: exceptions из `TaskTreeManager.UpdateTask` должны становиться `StorageFailed`, а diagnostic validation не должна доверять пустому duplicate list | `src/Unlimotion.TaskTreeManager/*`, `src/Unlimotion.Test/TaskGraphCommandServiceTests.cs` |

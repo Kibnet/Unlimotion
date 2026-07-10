@@ -154,6 +154,39 @@ public sealed class TaskGraphCommandServiceTests
     }
 
     [Test]
+    public async Task TrySetStatus_PostMutationDiagnosticFailureReturnsStorageFailed()
+    {
+        var task = CreateTask("task", DomainTaskStatus.Prepared);
+        var storage = new DiagnosticStorage([task])
+        {
+            ThrowOnReadAfterCount = 1
+        };
+
+        var result = await new TaskGraphCommandService(storage)
+            .TrySetStatusAsync(task.Id, DomainTaskStatus.InProgress);
+
+        await Assert.That(result.Success).IsFalse();
+        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.StorageFailed);
+        await Assert.That(storage.SaveCount).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task TrySetStatus_DiagnosticStorageDuplicateTasksWithoutDuplicateIssuesBlocksWrite()
+    {
+        var first = CreateTask("duplicate", DomainTaskStatus.Prepared, title: "first");
+        var second = CreateTask("duplicate", DomainTaskStatus.Prepared, title: "second");
+        var storage = new DiagnosticStorage([first, second]);
+
+        var result = await new TaskGraphCommandService(storage)
+            .TrySetStatusAsync("duplicate", DomainTaskStatus.InProgress);
+
+        await Assert.That(result.Success).IsFalse();
+        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.ValidationFailed);
+        await Assert.That(result.DeniedReason?.Message.Contains("duplicate id: duplicate", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(storage.SaveCount).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task TrySetStatus_RepeatingCompletionReturnsOriginalCloneAndReverseLinkTasks()
     {
         using var temp = TempTaskDirectory.Create();
@@ -295,6 +328,127 @@ public sealed class TaskGraphCommandServiceTests
 
         public Task Disconnect() => Task.CompletedTask;
     }
+
+    private sealed class DiagnosticStorage : IStorage, ITaskGraphDiagnosticStorage
+    {
+        private readonly List<TaskItem> _tasks;
+        private int _readCount;
+
+        public DiagnosticStorage(IEnumerable<TaskItem> tasks)
+        {
+            _tasks = tasks.Select(CloneTask).ToList();
+        }
+
+        public int SaveCount { get; private set; }
+        public int? ThrowOnReadAfterCount { get; init; }
+
+        public event EventHandler<TaskStorageUpdateEventArgs> Updating
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<Exception?>? OnConnectionError
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<TaskGraphReadResult> ReadGraphAsync()
+        {
+            if (ThrowOnReadAfterCount.HasValue && _readCount >= ThrowOnReadAfterCount.Value)
+            {
+                throw new TimeoutException("diagnostic read timed out");
+            }
+
+            _readCount++;
+            return Task.FromResult(new TaskGraphReadResult(
+                _tasks.Select(CloneTask).ToArray(),
+                _tasks
+                    .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+                    .GroupBy(static task => task.Id, StringComparer.Ordinal)
+                    .ToDictionary(static group => group.Key, static group => $"memory:{group.Key}", StringComparer.Ordinal),
+                Array.Empty<TaskGraphLoadError>(),
+                Array.Empty<TaskGraphDuplicateIdIssue>()));
+        }
+
+        public Task<TaskItem> Save(TaskItem item)
+        {
+            SaveCount++;
+            var clone = CloneTask(item);
+            var index = _tasks.FindIndex(task => string.Equals(task.Id, item.Id, StringComparison.Ordinal));
+            if (index >= 0)
+            {
+                _tasks[index] = clone;
+            }
+            else
+            {
+                _tasks.Add(clone);
+            }
+
+            return Task.FromResult(CloneTask(clone));
+        }
+
+        public Task<bool> Remove(string itemId)
+        {
+            _tasks.RemoveAll(task => string.Equals(task.Id, itemId, StringComparison.Ordinal));
+            return Task.FromResult(true);
+        }
+
+        public Task<TaskItem?> Load(string itemId)
+        {
+            var task = _tasks.LastOrDefault(task => string.Equals(task.Id, itemId, StringComparison.Ordinal));
+            return Task.FromResult(task == null ? null : CloneTask(task));
+        }
+
+        public async IAsyncEnumerable<TaskItem> GetAll()
+        {
+            foreach (var task in _tasks)
+            {
+                yield return CloneTask(task);
+            }
+
+            await Task.CompletedTask;
+        }
+
+        public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
+        {
+            foreach (var taskItem in taskItems)
+            {
+                await Save(taskItem);
+            }
+        }
+
+        public Task<bool> Connect() => Task.FromResult(true);
+
+        public Task Disconnect() => Task.CompletedTask;
+    }
+
+    private static TaskItem CloneTask(TaskItem task) => task with
+    {
+        StatusHistory = task.StatusHistory?
+            .Select(entry => new TaskStatusHistoryEntry
+            {
+                Status = entry.Status,
+                ChangedAt = entry.ChangedAt,
+                Author = entry.Author,
+                ExtensionData = entry.ExtensionData
+            })
+            .ToList() ?? new List<TaskStatusHistoryEntry>(),
+        CompletionCriteria = task.CompletionCriteria?
+            .Select(criterion => new TaskCompletionCriterion
+            {
+                Id = criterion.Id,
+                Text = criterion.Text,
+                IsSatisfied = criterion.IsSatisfied,
+                ExtensionData = criterion.ExtensionData
+            })
+            .ToList() ?? new List<TaskCompletionCriterion>(),
+        ContainsTasks = task.ContainsTasks?.ToList() ?? new List<string>(),
+        ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
+        BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
+        BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>()
+    };
 
     private sealed class TempTaskDirectory : IDisposable
     {

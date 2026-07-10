@@ -85,9 +85,25 @@ public sealed class TaskGraphCommandService
         var change = CloneForUpdate(task);
         change.Status = requestedStatus;
 
-        var manager = CreateManager(author);
-        var changedTasks = await manager.UpdateTask(change);
-        var afterRead = await ReadGraphForWriteAsync();
+        IReadOnlyList<TaskItem> changedTasks;
+        TaskOperationReadResult afterRead;
+        try
+        {
+            var manager = CreateManager(author);
+            changedTasks = await manager.UpdateTask(change);
+            afterRead = await ReadGraphForWriteAsync();
+        }
+        catch (Exception ex)
+        {
+            return CreateStorageFailedResult(
+                ex,
+                task.Id,
+                requestedStatus,
+                criterionId: null,
+                before,
+                validation);
+        }
+
         if (afterRead.Result != null)
         {
             return afterRead.Result with { Before = before, Validation = validation };
@@ -182,9 +198,25 @@ public sealed class TaskGraphCommandService
 
         criterion.IsSatisfied = satisfied;
 
-        var manager = CreateManager(author);
-        var changedTasks = await manager.UpdateTask(change);
-        var afterRead = await ReadGraphForWriteAsync();
+        IReadOnlyList<TaskItem> changedTasks;
+        TaskOperationReadResult afterRead;
+        try
+        {
+            var manager = CreateManager(author);
+            changedTasks = await manager.UpdateTask(change);
+            afterRead = await ReadGraphForWriteAsync();
+        }
+        catch (Exception ex)
+        {
+            return CreateStorageFailedResult(
+                ex,
+                task.Id,
+                requestedStatus: null,
+                criterionId,
+                before,
+                validation);
+        }
+
         if (afterRead.Result != null)
         {
             return afterRead.Result with { Before = before, Validation = validation };
@@ -235,7 +267,7 @@ public sealed class TaskGraphCommandService
         {
             return new TaskOperationReadResult(await diagnosticStorage.ReadGraphAsync(), null);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex)
         {
             return new TaskOperationReadResult(null, TaskOperationResult.Denied(
                 TaskOperationDeniedReason.Create(
@@ -253,6 +285,23 @@ public sealed class TaskGraphCommandService
 
         return await operation();
     }
+
+    private static TaskOperationResult CreateStorageFailedResult(
+        Exception ex,
+        string? taskId,
+        DomainTaskStatus? requestedStatus,
+        string? criterionId,
+        TaskAvailabilityAnalysis? before,
+        TaskGraphValidationReport? validation) =>
+        TaskOperationResult.Denied(
+            TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.StorageFailed,
+                $"Task graph write failed: {ex.Message}",
+                taskId,
+                requestedStatus,
+                criterionId),
+            before,
+            validation: validation);
 
     private TaskTreeManager CreateManager(string? author) => new(_storage)
     {
