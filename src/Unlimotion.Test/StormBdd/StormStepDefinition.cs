@@ -149,5 +149,11 @@ internal sealed class StormScenarioContext
 
     public WorkspaceBreadcrumbsLastOpenedScenarioResult? WorkspaceBreadcrumbsLastOpenedResult { get; set; }
 
+    public bool WorkspaceTreeCommandsTaskSetAvailable { get; set; }
+
+    public bool WorkspaceTreeCommandsStoryBehaviorConfirmed { get; set; }
+
+    public WorkspaceTreeCommandsScenarioResult? WorkspaceTreeCommandsResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
