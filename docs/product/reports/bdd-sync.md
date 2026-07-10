@@ -1,27 +1,28 @@
 # STORM BDD Sync
 
 Сгенерировано: 2026-07-10
-Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0003-003`
+Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0004-001`
 
 ## Итог
 
 | Проверка | Результат |
 | --- | --- |
 | Scenario -> Test links | 45/45 |
-| Scenario -> Step Definition links | 19/45 |
-| Новые связи | `SC-0003-003 -> TS-0044 -> SD-0071..SD-0074`; existing `TS-0002` и `TS-0003` сохранены |
-| ST-0003 | done: `SC-0003-001`, `SC-0003-002` и `SC-0003-003` step-executable |
+| Scenario -> Step Definition links | 20/45 |
+| Новые связи | `SC-0004-001 -> TS-0045 -> SD-0075..SD-0078`; existing `TS-0001`, `TS-0004` и `TS-0011` сохранены |
+| ST-0004 | partial: `SC-0004-001` step-executable; `SC-0004-002` и `SC-0004-003` остаются linked automated tests без step definitions |
 | Existing test annotations changed | no |
 | Feature wording changed | no |
+| Automation IDs changed | no |
 | Production code changed | no |
-| Full suite gate | passed 575/575 on controlled retry |
+| Full suite gate | passed 576/576 |
 
 ## Decision Sync
 
-BDD links обновлены для `SC-0003-003`: новый `TS-0044` связывает scenario text с existing InProgress rollback domain evidence через `SD-0071..SD-0074`. Acceptance criteria не заменялись на Gherkin; production code, `.feature` wording и existing test annotations не менялись.
+BDD links обновлены для `SC-0004-001`: новый `TS-0045` связывает scenario text с existing workspace navigation UI behavior через `SD-0075..SD-0078` и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, `.feature` wording, automation IDs и existing test annotations не менялись.
 
 ## Оставшиеся gaps
 
-Step definitions покрывают 19/45 scenarios. `ST-0003` закрыт на executable BDD layer 3/3; продолжение `/storm:cover` должно перейти к следующей active story, рекомендуемый кандидат `ST-0004 / SC-0004-001`.
+Step definitions покрывают 20/45 scenarios. `ST-0004` продолжает `/storm:cover` с двумя кандидатами без step definitions: `SC-0004-002` и `SC-0004-003`.
 
-Full-suite validation: initial full run failed 573/575 on two unrelated Avalonia.Headless teardown NREs; both failed UI tests passed isolated 1/1. Controlled full retry passed 575/575 with `C:\tmp\unlimotion-full-suite-sc0003-inprogress-rollback-bdd-retry.log`.
+UI video evidence uses fallback: current Avalonia.Headless/TUnit runner does not emit safe video artifacts, so targeted headless output and full-suite validation are used as next-best evidence. Full `Unlimotion.Test` passed 576/576 with `C:\tmp\unlimotion-full-suite-sc0004-workspace-tabs-bdd.log`.

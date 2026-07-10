@@ -137,5 +137,11 @@ internal sealed class StormScenarioContext
 
     public TaskAvailabilityInProgressRollbackScenarioResult? TaskAvailabilityInProgressRollbackResult { get; set; }
 
+    public bool WorkspaceNavigationTabsTaskSetAvailable { get; set; }
+
+    public bool WorkspaceNavigationTabsStoryBehaviorConfirmed { get; set; }
+
+    public WorkspaceNavigationTabsScenarioResult? WorkspaceNavigationTabsResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
