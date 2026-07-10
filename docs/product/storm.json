@@ -68,11 +68,12 @@
       "BDD executable slice добавлен 2026-07-10: SC-0003-002 исполняется из feature text через repo-local step definitions SD-0067..SD-0070 и TUnit evidence TS-0043; linked TS-0002/TS-0014 preserved.",
       "Validation stabilization 2026-07-10: unrelated MainControlTreeCommandsUiTests TreeSearch_ClearSearch_RestoresExpansionState full-suite blocker закрыт test-only применением existing Headless dispose helper; targeted UI passed 7/7, full Unlimotion.Test passed 574/574.",
       "BDD executable slice добавлен 2026-07-10: SC-0003-003 исполняется из feature text через repo-local step definitions SD-0071..SD-0074 и TUnit evidence TS-0044; linked TS-0002/TS-0003 preserved; ST-0003 now 3/3 step-executable.",
-      "BDD executable slice добавлен 2026-07-10: SC-0004-001 исполняется из feature text через repo-local step definitions SD-0075..SD-0078 и TUnit/Avalonia.Headless evidence TS-0045; linked TS-0001/TS-0004/TS-0011 preserved; ST-0004 now 1/3 step-executable."
+      "BDD executable slice добавлен 2026-07-10: SC-0004-001 исполняется из feature text через repo-local step definitions SD-0075..SD-0078 и TUnit/Avalonia.Headless evidence TS-0045; linked TS-0001/TS-0004/TS-0011 preserved; ST-0004 now 1/3 step-executable.",
+      "BDD executable slice добавлен 2026-07-10: SC-0004-002 исполняется из feature text через repo-local step definitions SD-0079..SD-0082 и TUnit/Avalonia.Headless evidence TS-0046; linked TS-0001/TS-0004/TS-0011/TS-0016 preserved; ST-0004 now 2/3 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0004-001 workspace tabs executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0004-002 breadcrumbs last-opened executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -1306,17 +1307,30 @@
         {
           "id": "AC-0011",
           "text": "Breadcrumbs и last-opened контекст помогают вернуться к недавно открытым задачам.",
-          "coverage_level": "critical",
+          "coverage_level": "full",
           "linked_tests": [
             "TS-0001",
             "TS-0004",
             "TS-0011",
-            "TS-0016"
+            "TS-0016",
+            "TS-0046"
           ],
           "evidence": [
             {
               "path": "src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs",
               "symbol": "TreeCommandUi_*"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+              "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+              "description": "Executable BDD evidence for AC-0011 / SC-0004-002.",
+              "test_id": "TS-0046 New-EvidencePath"
+            },
+            {
+              "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+              "symbol": "WorkspaceBreadcrumbsLastOpenedUiContract",
+              "description": "Avalonia.Headless contract for breadcrumbs path rendering and Last Opened context restore.",
+              "test_id": "TS-0046 New-EvidencePath"
             }
           ],
           "linked_rules": [
@@ -1358,7 +1372,8 @@
         "TS-0004",
         "TS-0011",
         "TS-0016",
-        "TS-0045"
+        "TS-0045",
+        "TS-0046"
       ],
       "linked_code": [
         "CU-0004",
@@ -1387,7 +1402,7 @@
         "SC-0004-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0004-001 получил executable BDD evidence TS-0045/SD-0075..SD-0078; SC-0004-002 и SC-0004-003 остаются linked automated tests без step definitions. ST-0004 now 1/3 step-executable."
+      "behavior_coverage_note": "SC-0004-001 и SC-0004-002 получили executable BDD evidence TS-0045/SD-0075..SD-0078 и TS-0046/SD-0079..SD-0082; SC-0004-003 остается linked automated test без step definitions. ST-0004 now 2/3 step-executable."
     },
     {
       "id": "ST-0005",
@@ -5069,6 +5084,64 @@
         }
       ],
       "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0004-001. Existing TS-0001/TS-0004/TS-0011 links preserved; UI video evidence uses documented fallback because Avalonia.Headless runner does not emit video artifacts."
+    },
+    {
+      "id": "TS-0046",
+      "name": "StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner + Avalonia.Headless",
+      "type": "bdd-executable-spec/workspace-breadcrumbs-last-opened",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0004-002_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0004"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0011"
+      ],
+      "linked_constraints": [
+        "CN-0002",
+        "CN-0004",
+        "CN-0007"
+      ],
+      "linked_scenarios": [
+        "SC-0004-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0004-002 steps from features/storm/st-0004-workspace-navigation.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/WorkspaceBreadcrumbsLastOpenedStepDefinitions.cs",
+          "symbol": "SD-0079..SD-0082",
+          "description": "Step definitions bind Given/When/Then product wording to the breadcrumbs and Last Opened UI contract."
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenarioResult",
+          "description": "Avalonia.Headless UI contract verifies BreadcrumbsTextBlock rendering, LastOpenedItems projection and LastOpenedTree selection restoring CurrentTaskItem."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-07-10"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BreadcrumbEmojiUiTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-07-10"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work\" --output Detailed",
+          "result": "прошло 4/4 on 2026-07-10"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed *> C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log",
+          "result": "прошло 577/577 on controlled retry on 2026-07-10"
+        }
+      ],
+      "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0004-002. Existing TS-0001/TS-0004/TS-0011/TS-0016 links preserved; UI video evidence uses documented fallback because Avalonia.Headless runner does not emit video artifacts."
     }
   ],
   "code_units": [
@@ -7438,12 +7511,12 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-07-10",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0004-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0004-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "ST-0004/AC-0010 now preserves existing TS-0001/TS-0004/TS-0011 evidence and adds executable BDD UI/headless evidence TS-0045 through SD-0075..SD-0078; ST-0004 step-executable coverage is now 1/3.",
+    "summary": "ST-0004/AC-0011 now preserves existing TS-0001/TS-0004/TS-0011/TS-0016 evidence and adds executable BDD UI/headless evidence TS-0046 through SD-0079..SD-0082; ST-0004 step-executable coverage is now 2/3.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -7856,7 +7929,7 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-07-10",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0003-002",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0004-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -7870,18 +7943,18 @@
       "acceptance_criteria_without_tests": 0,
       "acceptance_criteria_with_rules": 44,
       "acceptance_criteria_with_scenarios": 44,
-      "automated_scenarios": 27,
+      "automated_scenarios": 24,
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 18,
+      "passing_scenarios": 21,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 70,
-      "step_executable_scenarios": 18,
-      "step_definition_coverage_ratio": "18/45",
-      "executable_specification_ratio": "18/45 step-executable; 18/45 passing scenarios",
+      "step_definitions_total": 82,
+      "step_executable_scenarios": 21,
+      "step_definition_coverage_ratio": "21/45",
+      "executable_specification_ratio": "21/45 step-executable; 21/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -7890,41 +7963,46 @@
       "test_annotations_changed": false,
       "tests_run": true,
       "validation_evidence": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal /nr:false => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskAvailabilityUnlockedTimeExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskAvailabilityCalculationTests/*\" --output Detailed => прошло 26/26",
-        "initial full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd.log => 573/574, unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree) timeout; isolated rerun passed 7/7",
-        "controlled full retry with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-retry.log => 573/574, same unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree) headless DisposeAsync NRE",
-        "test-only stability SPEC applied existing DisposeIgnoringHeadlessTeardownNullReferenceAsync helper to TreeSearch_ClearSearch_RestoresExpansionState; targeted rerun C:\\tmp\\unlimotion-tree-search-clear-final-sc0003-unlocked-time-bdd.log => прошло 7/7",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 8 warnings по intentional shared steps",
-        "full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-final.log => прошло 574/574",
-        "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BreadcrumbEmojiUiTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work\" --output Detailed => прошло 4/4",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings по intentional shared steps",
+        "initial full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-2.log => 576/577; unrelated CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome teardown NRE in Avalonia.Headless DisposeAsync",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome\" --output Detailed => прошло 1/1",
+        "controlled full retry with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log => прошло 577/577",
+        "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
+        "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "Full Unlimotion.Test gate passed after test-only headless stability patch: outside-sandbox run passed 574/574 with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-final.log. Initial full attempts failed 573/574 in unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree); isolated/after-fix targeted UI passed 7/7.",
-      "production_code_changed": false
+      "full_suite_result": "Full Unlimotion.Test gate passed on controlled retry: 577/577 with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log. Initial full run was 576/577 due unrelated Avalonia.Headless DisposeAsync teardown NRE in CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome; isolated rerun passed 1/1.",
+      "production_code_changed": false,
+      "bdd_lint_issues": 9,
+      "step_reuse_ratio": "85/85"
     },
     "bdd_sync_summary": {
       "updated_at": "2026-07-10",
-      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0003-002",
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0004-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "status": "synced",
       "synced_links": [
-        "SC-0003-002 -> TS-0043 -> SD-0067..SD-0070",
-        "existing TS-0002 and TS-0014 preserved"
+        "SC-0004-002 -> TS-0046 -> SD-0079..SD-0082",
+        "existing TS-0001, TS-0004, TS-0011 and TS-0016 preserved",
+        "ST-0004 now 2/3 step-executable"
       ],
       "not_changed": [
         "production code",
         "feature wording",
+        "automation IDs",
         "existing test annotations",
         "project files",
         "workflows"
       ],
       "tests_changed": true,
-      "decision": "BDD links обновлены для SC-0003-002: новый TS-0043 связывает scenario text с existing UnlockedDateTime domain/storage evidence через SD-0067..SD-0070. Acceptance criteria не заменялись на Gherkin; production code, feature wording и existing test annotations не менялись.",
+      "decision": "BDD links обновлены для SC-0004-002: новый TS-0046 связывает scenario text с existing breadcrumbs и Last Opened UI behavior через SD-0079..SD-0082 и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись. Full-suite gate прошёл 577/577 on controlled retry.",
       "gaps": [
-        "Step definitions покрывают 18/45 scenarios.",
-        "ST-0003 now has 2/3 step-executable scenarios: SC-0003-001 and SC-0003-002 closed; SC-0003-003 remains linked automated test without step definitions.",
-        "Full-suite validation for this slice passed 574/574 after unrelated headless UI stability patch."
+        "Step definitions покрывают 21/45 scenarios.",
+        "ST-0004 now has 2/3 step-executable scenarios: SC-0004-001 and SC-0004-002 closed; SC-0004-003 remains linked automated test without step definitions.",
+        "Full-suite validation for this slice passed 577/577 on controlled retry after unrelated teardown flake was isolated."
       ],
       "code_changed": false
     },
@@ -8086,21 +8164,35 @@
           "SD-0070"
         ],
         "result": "passing targeted BDD and TaskAvailabilityCalculationTests gates; full suite 574/574 after unrelated TreeSearch headless teardown stabilization"
+      },
+      {
+        "story": "ST-0004",
+        "acceptance_criteria": "AC-0011",
+        "scenario": "SC-0004-002",
+        "added_test": "TS-0046",
+        "added_step_definitions": [
+          "SD-0079",
+          "SD-0080",
+          "SD-0081",
+          "SD-0082"
+        ],
+        "result": "passing targeted BDD, preserved breadcrumbs/Last Opened gates and full suite 577/577 on controlled retry"
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full Unlimotion.Test gate passed after test-only headless stability patch: outside-sandbox run passed 574/574 with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-final.log. Initial full attempts failed 573/574 in unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree); isolated/after-fix targeted UI passed 7/7.",
-    "targeted_validation_result": "SC-0003-002 executable BDD passed 1/1; TaskAvailabilityCalculationTests passed 26/26; TreeSearch_ClearSearch_RestoresExpansionState passed 7/7 after test-only headless teardown stabilization; full Unlimotion.Test passed 574/574.",
+    "full_suite_result": "Full Unlimotion.Test gate passed on controlled retry: 577/577 with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log. Initial full run was 576/577 due unrelated Avalonia.Headless DisposeAsync teardown NRE in CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome; isolated rerun passed 1/1.",
+    "targeted_validation_result": "SC-0004-002 executable BDD passed 1/1; BreadcrumbEmojiUiTests passed 1/1; Last Opened tree command evidence passed 4/4; full suite passed 577/577 on controlled retry.",
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskAvailabilityUnlockedTimeExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskAvailabilityCalculationTests/*\" --output Detailed => прошло 26/26",
-      "initial full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd.log => 573/574, unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree) timeout; isolated rerun passed 7/7",
-      "controlled full retry with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-retry.log => 573/574, same unrelated TreeSearch_ClearSearch_RestoresExpansionState(CompletedTree) headless DisposeAsync NRE",
-      "test-only stability SPEC applied existing DisposeIgnoringHeadlessTeardownNullReferenceAsync helper to TreeSearch_ClearSearch_RestoresExpansionState; targeted rerun C:\\tmp\\unlimotion-tree-search-clear-final-sc0003-unlocked-time-bdd.log => прошло 7/7",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 8 warnings по intentional shared steps",
-      "full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0003-unlocked-time-bdd-final.log => прошло 574/574",
-      "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BreadcrumbEmojiUiTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work\" --output Detailed => прошло 4/4",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings по intentional shared steps",
+      "initial full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-2.log => 576/577; unrelated CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome teardown NRE in Avalonia.Headless DisposeAsync",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome\" --output Detailed => прошло 1/1",
+      "controlled full retry with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log => прошло 577/577",
+      "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
+      "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
   "ranking_analysis": {
@@ -8868,6 +8960,18 @@
         {
           "path": "src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs",
           "symbol": "TreeCommandUi_*"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "description": "Executable BDD evidence for GR-011 / SC-0004-002.",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedUiContract",
+          "description": "UI/headless evidence for breadcrumbs and Last Opened return context.",
+          "test_id": "TS-0046"
         }
       ]
     },
@@ -11392,16 +11496,22 @@
         "CN-0007"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_executable_bdd",
       "linked_tests": [
         "TS-0001",
         "TS-0004",
         "TS-0011",
-        "TS-0016"
+        "TS-0016",
+        "TS-0046"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0079",
+        "SD-0080",
+        "SD-0081",
+        "SD-0082"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -11448,6 +11558,18 @@
           "path": "tests/Unlimotion.UiTests.Headless/Tests/ReadmeDemoHeadlessTests.cs",
           "description": "README demo проверяет Last Opened tab и раскрытие дерева.",
           "test_id": "TS-0016"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0004-002 feature steps through repo-local BDD step definitions.",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedUiContract",
+          "description": "Avalonia.Headless contract verifies breadcrumbs path rendering and Last Opened selection restoring task context.",
+          "test_id": "TS-0046"
         }
       ]
     },
@@ -15197,11 +15319,95 @@
           "symbol": "WorkspaceNavigationTabsScenarioResult"
         }
       ]
+    },
+    {
+      "id": "SD-0079",
+      "path": "src/Unlimotion.Test/StormBdd/WorkspaceBreadcrumbsLastOpenedStepDefinitions.cs",
+      "symbol": "WorkspaceBreadcrumbsLastOpenedStepDefinitions.Create / SD-0079",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0004-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0080",
+      "path": "src/Unlimotion.Test/StormBdd/WorkspaceBreadcrumbsLastOpenedStepDefinitions.cs",
+      "symbol": "WorkspaceBreadcrumbsLastOpenedStepDefinitions.Create / SD-0080",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0004",
+      "supports_scenarios": [
+        "SC-0004-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0081",
+      "path": "src/Unlimotion.Test/StormBdd/WorkspaceBreadcrumbsLastOpenedStepDefinitions.cs",
+      "symbol": "WorkspaceBreadcrumbsLastOpenedStepDefinitions.Create / SD-0081",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": [
+        "SC-0004-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0082",
+      "path": "src/Unlimotion.Test/StormBdd/WorkspaceBreadcrumbsLastOpenedStepDefinitions.cs",
+      "symbol": "WorkspaceBreadcrumbsLastOpenedStepDefinitions.Create / SD-0082",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Breadcrumbs и last-opened контекст помогают вернуться к недавно открытым задачам.",
+      "supports_scenarios": [
+        "SC-0004-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0046"
+        },
+        {
+          "path": "src/Unlimotion.Test/WorkspaceBreadcrumbsLastOpenedUiContract.cs",
+          "symbol": "WorkspaceBreadcrumbsLastOpenedScenarioResult"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-10",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0004-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0004-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -15215,18 +15421,18 @@
     "acceptance_criteria_without_tests": 0,
     "acceptance_criteria_with_rules": 44,
     "acceptance_criteria_with_scenarios": 44,
-    "automated_scenarios": 25,
+    "automated_scenarios": 24,
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 20,
+    "passing_scenarios": 21,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 78,
-    "step_executable_scenarios": 20,
-    "step_definition_coverage_ratio": "20/45",
-    "executable_specification_ratio": "20/45 step-executable; 20/45 passing scenarios",
+    "step_definitions_total": 82,
+    "step_executable_scenarios": 21,
+    "step_definition_coverage_ratio": "21/45",
+    "executable_specification_ratio": "21/45 step-executable; 21/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -15236,26 +15442,30 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormWorkspaceNavigationTabsExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainWindowViewModelTests/SelectCurrentTaskMode_SyncsCorrectly\" --output Detailed => прошло 1/1",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_LastCreatedTab_CurrentCommands_WorkOnClickedItem\" --output Detailed => прошло 1/1",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 8 warnings по intentional shared steps",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed with C:\\tmp\\unlimotion-full-suite-sc0004-workspace-tabs-bdd.log => прошло 576/576",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormWorkspaceBreadcrumbsLastOpenedExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/BreadcrumbEmojiUiTests/*\" --output Detailed => прошло 1/1",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_NonAllTasksTabs_CurrentAndAllCommands_Work\" --output Detailed => прошло 4/4",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings по intentional shared steps",
+      "initial full Unlimotion.Test run with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-2.log => 576/577; unrelated CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome teardown NRE in Avalonia.Headless DisposeAsync",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome\" --output Detailed => прошло 1/1",
+      "controlled full retry with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log => прошло 577/577",
       "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
-    "full_suite_result": "Full Unlimotion.Test gate passed: 576/576 with C:\\tmp\\unlimotion-full-suite-sc0004-workspace-tabs-bdd.log.",
-    "production_code_changed": false
+    "full_suite_result": "Full Unlimotion.Test gate passed on controlled retry: 577/577 with C:\\tmp\\unlimotion-full-suite-sc0004-breadcrumbs-last-opened-bdd-retry.log. Initial full run was 576/577 due unrelated Avalonia.Headless DisposeAsync teardown NRE in CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome; isolated rerun passed 1/1.",
+    "production_code_changed": false,
+    "bdd_lint_issues": 9,
+    "step_reuse_ratio": "85/85"
   },
   "bdd_sync": {
     "updated_at": "2026-07-10",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0004-001",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0004-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0004-001 -> TS-0045 -> SD-0075..SD-0078",
-      "existing TS-0001, TS-0004 and TS-0011 preserved",
-      "ST-0004 now 1/3 step-executable"
+      "SC-0004-002 -> TS-0046 -> SD-0079..SD-0082",
+      "existing TS-0001, TS-0004, TS-0011 and TS-0016 preserved",
+      "ST-0004 now 2/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -15266,41 +15476,42 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0004-001: новый TS-0045 связывает scenario text с existing workspace navigation UI behavior через SD-0075..SD-0078 и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0004-002: новый TS-0046 связывает scenario text с existing breadcrumbs и Last Opened UI behavior через SD-0079..SD-0082 и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись. Full-suite gate прошёл 577/577 on controlled retry.",
     "gaps": [
-      "Step definitions покрывают 20/45 scenarios.",
-      "ST-0004 now has 1/3 step-executable scenarios: SC-0004-001 closed; SC-0004-002 and SC-0004-003 remain linked automated tests without step definitions.",
-      "Full-suite validation for this slice passed 576/576."
+      "Step definitions покрывают 21/45 scenarios.",
+      "ST-0004 now has 2/3 step-executable scenarios: SC-0004-001 and SC-0004-002 closed; SC-0004-003 remains linked automated test without step definitions.",
+      "Full-suite validation for this slice passed 577/577 on controlled retry after unrelated teardown flake was isolated."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-10",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0004-001",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0004-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text across scenario-specific step definitions, now including SD-0067, SD-0071 and SD-0075; intentional shared task-set context.",
+      "Duplicate shared Given step text across scenario-specific step definitions, now including SD-0075 and SD-0079; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains from earlier scenarios.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text across SD-0045, SD-0065, SD-0069, SD-0073 and SD-0077; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0081; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
-      "Duplicate ST-0003 story step text across SD-0064, SD-0068 and SD-0072; intentional scenario-specific binding."
+      "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
+      "Duplicate ST-0004 story step text across SD-0076 and SD-0080; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0004-001 additionally linked to TS-0045.",
-      "scenario_step_definition_links": "WARNING: 20/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0004-002 additionally linked to TS-0046.",
+      "scenario_step_definition_links": "WARNING: 21/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
-      "st_0004": "PARTIAL: SC-0004-001 is step-executable; SC-0004-002 and SC-0004-003 remain linked automated tests without step definitions.",
+      "st_0004": "PARTIAL: SC-0004-001 and SC-0004-002 are step-executable; SC-0004-003 remains linked automated test without step definitions.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
       "ui_video_evidence": "FALLBACK: Avalonia.Headless/TUnit runner does not emit video artifacts; targeted headless output and full-suite gate are next-best evidence.",
-      "targeted_gate": "PASS: SC-0004-001 executable BDD, ViewModel selection sync and Last Created tab UI command checks passed.",
-      "full_suite_gate": "PASS: Full Unlimotion.Test passed 576/576."
+      "targeted_gate": "PASS: SC-0004-002 executable BDD, BreadcrumbEmojiUiTests and Last Opened tree command checks passed.",
+      "full_suite_gate": "PASS: Full Unlimotion.Test passed 577/577 on controlled retry after unrelated teardown flake was isolated."
     }
   }
 }
