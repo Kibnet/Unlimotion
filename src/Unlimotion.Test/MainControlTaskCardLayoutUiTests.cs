@@ -443,6 +443,58 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_LongCompletionCriterion_PhoneWidthWrapsWithoutHorizontalOverflow()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    360,
+                    844,
+                    MainWindowViewModelFixture.RootTask1Id,
+                    task =>
+                    {
+                        task.CompletionCriteria.Add(new TaskCompletionCriterion
+                        {
+                            Text =
+                                "Review the prepared lesson plan with every stakeholder and confirm that " +
+                                "the launch checklist, support notes, and retrospective prompts are all complete.",
+                            IsSatisfied = false
+                        });
+                    });
+                window = createdWindow;
+                RunLayoutJobs();
+
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+                var section = FindControlByAutomationId<Control>(view, "CurrentTaskCompletionCriteriaSection");
+                var checkBox = FindControlByAutomationId<CheckBox>(section, "CompletionCriterionSatisfiedCheckBox");
+                var textBox = FindControlByAutomationId<TextBox>(section, "CompletionCriterionTextBox");
+                var removeButton = FindControlByAutomationId<Button>(section, "CompletionCriterionRemoveButton");
+
+                await Assert.That(textBox.TextWrapping).IsEqualTo(TextWrapping.Wrap);
+                await Assert.That(textBox.Bounds.Height).IsGreaterThan(44);
+                AssertHorizontallyContained(scrollViewer, checkBox);
+                AssertHorizontallyContained(scrollViewer, textBox);
+                AssertHorizontallyContained(scrollViewer, removeButton);
+                AssertNoHorizontalOverflow(scrollViewer, card);
+            }
+            finally
+            {
+                CloseWindow(window);
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_AddCompletionCriterion_FocusesNewCriterionTextBox()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
