@@ -125,5 +125,11 @@ internal sealed class StormScenarioContext
 
     public TaskAvailabilityBlockersScenarioResult? TaskAvailabilityBlockersResult { get; set; }
 
+    public bool TaskAvailabilityUnlockedTimeTaskSetAvailable { get; set; }
+
+    public bool TaskAvailabilityUnlockedTimeStoryBehaviorConfirmed { get; set; }
+
+    public TaskAvailabilityUnlockedTimeScenarioResult? TaskAvailabilityUnlockedTimeResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
