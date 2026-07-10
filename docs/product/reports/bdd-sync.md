@@ -1,27 +1,27 @@
 # STORM BDD Sync
 
 Сгенерировано: 2026-06-29
-Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0002-003`
+Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0003-001`
 
 ## Итог
 
 | Проверка | Результат |
 | --- | --- |
 | Scenario -> Test links | 45/45 |
-| Scenario -> Step Definition links | 16/45 |
-| Новые связи | `SC-0002-003 -> TS-0041 -> SD-0059..SD-0062`; existing `TS-0003` и `TS-0014` сохранены |
-| ST-0002 | complete: `SC-0002-001`, `SC-0002-002`, `SC-0002-003` step-executable |
+| Scenario -> Step Definition links | 17/45 |
+| Новые связи | `SC-0003-001 -> TS-0042 -> SD-0063..SD-0066`; existing `TS-0002`, `TS-0003` и `TS-0005` сохранены |
+| ST-0003 | partial: `SC-0003-001` step-executable; `SC-0003-002` и `SC-0003-003` остаются linked automated tests без step definitions |
 | Existing test annotations changed | no |
 | Feature wording changed | no |
 | Production code changed | no |
-| Full suite gate | passed 572/572 |
+| Full suite gate | passed 573/573 on controlled retry |
 
 ## Decision Sync
 
-BDD links обновлены для `SC-0002-003`: новый `TS-0041` связывает scenario text с existing TaskStatus migration/storage evidence через `SD-0059..SD-0062`. Acceptance criteria не заменялись на Gherkin; production code, `.feature` wording и existing test annotations не менялись.
+BDD links обновлены для `SC-0003-001`: новый `TS-0042` связывает scenario text с existing availability domain/UI evidence через `SD-0063..SD-0066`. Acceptance criteria не заменялись на Gherkin; production code, `.feature` wording и existing test annotations не менялись.
 
 ## Оставшиеся gaps
 
-Step definitions покрывают 16/45 scenarios. `ST-0002` завершена на executable BDD layer; следующий кандидат для `/storm:cover` выбирается из оставшихся active scenarios без step definitions, текущий ближайший по порядку артефактов: `SC-0003-001`.
+Step definitions покрывают 17/45 scenarios. `ST-0003` продолжает `/storm:cover` с двумя кандидатами без step definitions: `SC-0003-002` и `SC-0003-003`.
 
-Full-suite validation восстановлен: `Unlimotion.Test` проходит 572/572 вне managed sandbox, лог `C:\tmp\unlimotion-full-suite-sc0002-status-migration-bdd.log`.
+Full-suite validation восстановлен: initial run caught unrelated Headless transient, failed test passed isolated 1/1, controlled retry `Unlimotion.Test` passed 573/573 with `C:\tmp\unlimotion-full-suite-sc0003-availability-blockers-bdd-retry.log`.
