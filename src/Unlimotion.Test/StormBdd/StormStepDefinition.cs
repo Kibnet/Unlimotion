@@ -131,5 +131,11 @@ internal sealed class StormScenarioContext
 
     public TaskAvailabilityUnlockedTimeScenarioResult? TaskAvailabilityUnlockedTimeResult { get; set; }
 
+    public bool TaskAvailabilityInProgressRollbackTaskSetAvailable { get; set; }
+
+    public bool TaskAvailabilityInProgressRollbackStoryBehaviorConfirmed { get; set; }
+
+    public TaskAvailabilityInProgressRollbackScenarioResult? TaskAvailabilityInProgressRollbackResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
