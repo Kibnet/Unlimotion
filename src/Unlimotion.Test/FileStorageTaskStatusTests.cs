@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
@@ -75,6 +76,36 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task OnUpdating_MalformedTaskFileDoesNotThrowAndRaisesUpdating()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var filePath = Path.Combine(tempDir, "malformed-task");
+            await File.WriteAllTextAsync(filePath, "{ malformed json");
+            var storage = new TestFileStorage(tempDir);
+            var raised = false;
+            string? observedId = null;
+
+            storage.Updating += (_, args) =>
+            {
+                raised = true;
+                observedId = args.Id;
+            };
+
+            storage.TriggerUpdating("malformed-task");
+
+            await Assert.That(raised).IsTrue();
+            await Assert.That(observedId).IsEqualTo("malformed-task");
+            await Assert.That(await storage.Load("malformed-task", forced: true)).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
@@ -92,5 +123,14 @@ public class FileStorageTaskStatusTests
         {
             // Best-effort cleanup for temp artifacts.
         }
+    }
+
+    private sealed class TestFileStorage(string path) : FileStorage(path, watcher: false)
+    {
+        public void TriggerUpdating(string id) => OnUpdating(new TaskStorageUpdateEventArgs
+        {
+            Id = id,
+            Type = UpdateType.Saved
+        });
     }
 }

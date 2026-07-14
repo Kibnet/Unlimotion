@@ -478,6 +478,42 @@ flowchart LR
 | HIGH | error contract | Exceptions around command mutation could bypass JSON/structured CLI error envelope | Catch command-service mutation/read failures and return `StorageFailed` | fixed |
 | MEDIUM | validation | Diagnostic storage with empty duplicate report could hide analyzer-detected duplicate ids | Merge fallback duplicate diagnostics into validation report | fixed |
 
+### Post-EXEC Review Addendum: tolerant file load review-fix
+- Статус: PASS
+- Scope reviewed: актуальный PR review thread по `FileTaskStorage.Load`, `FileTaskStorage.cs`, `FileTaskStorageTests.cs`, `FileStorageTaskStatusTests.cs`, локальные targeted/full validation runs, PR #271 `All tests` status.
+- Decision: fix можно коммитить и пушить в существующий PR; красный `All tests` остается отдельным branch/CI risk вне текущего storage-review finding.
+- Review passes:
+  - Scope/Evidence pass: проверены текущий diff, старый `FileStorage.Load` contract из `origin/main`, актуальный reviewer comment, red/green storage test и watcher adapter test.
+  - Contract pass: `Load` снова tolerant и возвращает `null` на malformed/partial task file; `ReadDirectoryAsync` продолжает собирать load errors для validation, то есть write-safety contract не ослаблен.
+  - Adversarial risk pass: проверены валидные storage load/migration tests, CLI command-service tests и CLI integration tests; full suite failure локализован в unrelated UI/tree-command area.
+  - Role-Based pass: tester/developer/storage reviewer применимы; UX automation не применим, потому что нет visual/UI layout/flow change, adapter path покрыт unit-level watcher-facing test.
+  - Fix and re-review: после добавления adapter-level test повторно выполнены storage tests и diff self-review.
+  - Stop decision: PASS with residual unrelated `All tests` risk.
+- Evidence inspected:
+  - Red test before fix: `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release -- --treenode-filter "/*/*/FileTaskStorageTests/*"` -> failed with `JsonReaderException` from `FileTaskStorage.Load`.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/FileTaskStorageTests/*"` -> PASS, 1/1.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/FileStorageTaskStatusTests/*"` -> PASS, 2/2.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/TaskGraphCommandServiceTests/*"` -> PASS, 9/9.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --treenode-filter "/*/*/UnlimotionCliIntegrationTests/*"` -> PASS, 8/8.
+  - `dotnet build src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release --no-restore` -> PASS, 0 warnings/errors.
+  - `git diff --check` -> PASS, only Git CRLF warnings.
+  - Full local suite: `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --fail-fast --output Detailed` -> failed in unrelated `MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask`.
+  - Isolated unrelated UI failure: same `MainControlTreeCommandsUiTests.TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask` -> failed independently.
+  - PR #271 checks before this fix: `All tests` already failed on remote head; `android-build` and CodeQL checks passed.
+- Depth checklist:
+  - Scope drift / unrelated changes: product change limited to `FileTaskStorage.Load`; tests limited to storage/core and watcher-facing adapter path; spec journal updated.
+  - Acceptance criteria: malformed file load no longer throws; diagnostic read still reports load error.
+  - Validation evidence: targeted storage/CLI checks passed; full suite failure recorded separately.
+  - Regression / edge case: valid load and status migration tests pass; malformed load returns `null`; watcher adapter does not throw and raises `Updating`.
+  - Comments/docs/changelog: no README/changelog change required; public CLI contract unchanged.
+  - Hidden contract change: restored old tolerant `Load` behavior, no new API.
+  - Manual-review challenge: reviewer may ask why full suite is red; evidence points to isolated UI/tree-command failure unrelated to storage load and already red on current PR remote.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| HIGH | storage contract | `FileTaskStorage.Load` threw on malformed task files and could fault UI watcher path | Catch load/parse failures in `Load` and return `null`; keep diagnostic read strict | fixed |
+| MEDIUM | validation evidence | Full local suite and current PR `All tests` fail in unrelated UI/tree-command tests | Record exact failing test/check and keep storage fix scoped | accepted-risk |
+
 ## Approval
 Ожидается фраза: "Спеку подтверждаю"
 
@@ -491,3 +527,4 @@ flowchart LR
 | EXEC | Добавить targeted regression tests | 0.9 | Full suite еще не запущен | Запустить CLI build, diff check и full project gate | Нет | Нет | Новые `TaskGraphCommandServiceTests` и `TaskAvailabilityParityTests` прошли; существующие `UnlimotionCliIntegrationTests` и `TaskAvailabilityAnalyzerTests` тоже прошли | `src/Unlimotion.Test/TaskGraphCommandServiceTests.cs`, `src/Unlimotion.Test/TaskAvailabilityParityTests.cs` |
 | EXEC | Завершить validation и post-EXEC review | 0.9 | Full suite зависает без failed test identity | Стадировать, сделать коммит и запушить branch | Нет | Нет | Targeted affected suites и CLI build прошли; full suite timeout задокументирован как residual validation risk с next-best evidence | `specs/2026-06-29-cli-engine-boundary.md`, test/build evidence |
 | EXEC | Исправить review findings после реализации | 0.9 | Нет блокирующих данных | Добавить regression tests, затем исправить structured storage failures и duplicate fallback | Нет | Да, пользователь сказал `Исправляй` | Review выявил два точечных риска: exceptions из `TaskTreeManager.UpdateTask` должны становиться `StorageFailed`, а diagnostic validation не должна доверять пустому duplicate list | `src/Unlimotion.TaskTreeManager/*`, `src/Unlimotion.Test/TaskGraphCommandServiceTests.cs` |
+| EXEC | Исправить актуальный PR-review finding по tolerant file load | 0.95 | Нет | Сначала добавить regression test, затем вернуть tolerant `Load` без ослабления diagnostic read | Нет | Да, пользователь сказал `Исправляй` | Review показал, что UI watcher path может fault на malformed/partial task file; `Load` должен вернуть `null`, а `ReadDirectoryAsync` продолжить отдавать load error | `src/Unlimotion.FileStorage/FileTaskStorage.cs`, `src/Unlimotion.Test/*` |

@@ -74,7 +74,16 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             return null;
         }
 
-        var task = await Task.Run(() => DeserializeTask(filePath));
+        TaskItem? task;
+        try
+        {
+            task = await Task.Run(() => DeserializeTask(filePath));
+        }
+        catch
+        {
+            return null;
+        }
+
         if (task == null || string.IsNullOrWhiteSpace(task.Id))
         {
             return null;
