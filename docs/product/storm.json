@@ -71,11 +71,12 @@
       "BDD executable slice добавлен 2026-07-10: SC-0004-001 исполняется из feature text через repo-local step definitions SD-0075..SD-0078 и TUnit/Avalonia.Headless evidence TS-0045; linked TS-0001/TS-0004/TS-0011 preserved; ST-0004 now 1/3 step-executable.",
       "BDD executable slice добавлен 2026-07-10: SC-0004-002 исполняется из feature text через repo-local step definitions SD-0079..SD-0082 и TUnit/Avalonia.Headless evidence TS-0046; linked TS-0001/TS-0004/TS-0011/TS-0016 preserved; ST-0004 now 2/3 step-executable.",
       "BDD executable slice добавлен 2026-07-10: SC-0004-003 исполняется из feature text через repo-local step definitions SD-0083..SD-0086 и TUnit/Avalonia.Headless evidence TS-0047; linked TS-0004/TS-0011 preserved; ST-0004 now 3/3 step-executable.",
-      "BDD executable slice добавлен 2026-07-14: SC-0006-001 исполняется из feature text через repo-local step definitions SD-0087..SD-0090 и TUnit/Avalonia.Headless evidence TS-0048; linked TS-0005/TS-0013 preserved; ST-0006 now 1/3 step-executable."
+      "BDD executable slice добавлен 2026-07-14: SC-0006-001 исполняется из feature text через repo-local step definitions SD-0087..SD-0090 и TUnit/Avalonia.Headless evidence TS-0048; linked TS-0005/TS-0013 preserved; ST-0006 now 1/3 step-executable.",
+      "BDD executable slice добавлен 2026-07-14: SC-0006-002 исполняется из feature text через repo-local step definitions SD-0091..SD-0094 и TUnit evidence TS-0049; linked TS-0013 preserved; ST-0006 now 2/3 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0006-001 planning dates executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0006-002 repeater pattern executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -1606,14 +1607,27 @@
         {
           "id": "AC-0017",
           "text": "RepeaterPattern поддерживает none/daily/weekly/monthly/yearly и after-complete режим.",
-          "coverage_level": "critical",
+          "coverage_level": "full",
           "linked_tests": [
-            "TS-0013"
+            "TS-0013",
+            "TS-0049"
           ],
           "evidence": [
             {
               "path": "src/Unlimotion.Domain/RepeaterPatternExtensions.cs",
               "symbol": "GetNextOccurrence"
+            },
+            {
+              "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+              "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+              "description": "Executable BDD evidence for AC-0017 / SC-0006-002.",
+              "test_id": "TS-0049 New-EvidencePath"
+            },
+            {
+              "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+              "symbol": "RepeaterPatternScenarioContract",
+              "description": "Contract checks supported RepeaterPattern types, occurrence semantics, after-complete mode and active repeater marker behavior.",
+              "test_id": "TS-0049 New-EvidencePath"
             }
           ],
           "linked_rules": [
@@ -1656,7 +1670,8 @@
       "linked_tests": [
         "TS-0005",
         "TS-0013",
-        "TS-0048"
+        "TS-0048",
+        "TS-0049"
       ],
       "linked_code": [
         "CU-0001",
@@ -1686,7 +1701,7 @@
         "SC-0006-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "BDD-сценарии связаны с существующими тестами; tests не запускались в artifact-only BDD sync."
+      "behavior_coverage_note": "SC-0006-001 и SC-0006-002 теперь step-executable через TS-0048/SD-0087..SD-0090 и TS-0049/SD-0091..SD-0094; SC-0006-003 wanted/importance remains linked-existing-tests only."
     },
     {
       "id": "ST-0007",
@@ -5298,6 +5313,52 @@
         }
       ],
       "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0006-001. Existing TS-0005/TS-0013 links preserved; UI video evidence uses documented fallback because Avalonia.Headless runner does not emit video artifacts."
+    },
+    {
+      "id": "TS-0049",
+      "name": "StormTaskPlanningRepeaterExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/task-planning-repeater-pattern",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0006-002_step_definitions",
+      "confidence": 0.84,
+      "linked_stories": [
+        "ST-0006"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0017"
+      ],
+      "linked_constraints": [],
+      "linked_scenarios": [
+        "SC-0006-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0006-002 steps from features/storm/st-0006-calendar-planning.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/RepeaterPatternStepDefinitions.cs",
+          "symbol": "SD-0091..SD-0094",
+          "description": "Step definitions bind Given/When/Then product wording to the RepeaterPattern contract."
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract",
+          "description": "Contract verifies supported repeater types, TaskItemViewModel repeater options, occurrence semantics, after-complete mode and active repeater marker behavior."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningRepeaterExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-07-14"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskItemRepeaterListMarkerTests/*|/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls|/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithRepeater_CreatesPreparedClone\" --output Detailed",
+          "result": "прошло 4/4 on 2026-07-14"
+        }
+      ],
+      "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and runs repo-local step definitions for SC-0006-002. Existing TS-0013 link preserved; UI video evidence не применимо, так как UI behavior/layout не менялись, preserved UI repeater test запущен как regression evidence."
     }
   ],
   "code_units": [
@@ -7667,12 +7728,12 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0006-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0006-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "ST-0006/AC-0016 now preserves existing TS-0005/TS-0013 evidence and adds executable BDD UI/headless evidence TS-0048 through SD-0087..SD-0090; ST-0006 step-executable coverage is now 1/3.",
+    "summary": "ST-0006/AC-0017 now preserves existing TS-0013 evidence and adds executable BDD evidence TS-0049 through SD-0091..SD-0094; ST-0006 step-executable coverage is now 2/3.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -8085,7 +8146,7 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-07-14",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0006-001",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0006-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -8103,14 +8164,14 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 23,
+      "passing_scenarios": 24,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 90,
-      "step_executable_scenarios": 23,
-      "step_definition_coverage_ratio": "23/45",
-      "executable_specification_ratio": "23/45 step-executable; 23/45 passing scenarios",
+      "step_definitions_total": 94,
+      "step_executable_scenarios": 24,
+      "step_definition_coverage_ratio": "24/45",
+      "executable_specification_ratio": "24/45 step-executable; 24/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -8120,33 +8181,27 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningDatesExecutableSpecTests/*\" --output Detailed => initial passed 1/1; after stability fix passed 1/1 on 2026-07-14",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlDateQuickSelectionUiTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlNewTaskDeadlineUiTests/*\" --output Detailed => прошло 9/9 on 2026-07-14",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls\" --output Detailed => прошло 1/1 on 2026-07-14",
-        "initial sandbox full Unlimotion.Test => 577/579; GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows failed due sandbox inherited ACL and InProgressTree_DisplaysStartedDateTimeInLocalTime failed on Avalonia.Headless DisposeAsync NRE",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/InProgressTree_DisplaysStartedDateTimeInLocalTime\" --output Detailed => прошло 1/1 on 2026-07-14",
-        "sandbox isolated BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows reproduced ACL failure; escalated isolated run passed 1/1 on 2026-07-14",
-        "first escalated full retry => 578/579; new TaskPlanningDatesScenario exposed EndNoneAction order/autosave instability; fixed test-only by suppressing autosave and clearing begin before end",
-        "controlled escalated full retry dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 579/579 on 2026-07-14",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings after final artifact sync",
-        "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningRepeaterExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskItemRepeaterListMarkerTests/*|/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls|/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithRepeater_CreatesPreparedClone\" --output Detailed => прошло 4/4 on 2026-07-14",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 580/580 on escalated full-suite gate on 2026-07-14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings after artifact sync",
+        "UI video evidence не применимо: UI behavior/layout не менялись; preserved repeater UI/headless test used as next-best evidence.",
         "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "full_suite_result": "Full Unlimotion.Test gate passed 579/579 on controlled escalated retry on 2026-07-14. Initial sandbox run failed 577/579 because the Windows ACL hardening test is invalidated by managed sandbox inherited ACL and one unrelated Avalonia.Headless DisposeAsync NRE; both were isolated, and the final full retry passed after the new BDD helper stability fix.",
+      "full_suite_result": "Full Unlimotion.Test gate passed 580/580 on escalated run on 2026-07-14; escalation used to avoid the known managed-sandbox false failure in Windows ACL hardening tests.",
       "production_code_changed": false,
-      "bdd_lint_issues": 9,
-      "step_reuse_ratio": "93/93"
+      "bdd_lint_issues": 10,
+      "step_reuse_ratio": "97/97"
     },
     "bdd_sync_summary": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0006-001",
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0006-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "status": "synced",
       "synced_links": [
-        "SC-0006-001 -> TS-0048 -> SD-0087..SD-0090",
-        "existing TS-0005 and TS-0013 preserved",
-        "ST-0006 now 1/3 step-executable"
+        "SC-0006-002 -> TS-0049 -> SD-0091..SD-0094",
+        "existing TS-0013 preserved",
+        "ST-0006 now 2/3 step-executable"
       ],
       "not_changed": [
         "production code",
@@ -8157,11 +8212,11 @@
         "workflows"
       ],
       "tests_changed": true,
-      "decision": "BDD links обновлены для SC-0006-001: новый TS-0048 связывает scenario text с existing planning UI behavior через SD-0087..SD-0090 и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись. Full-suite gate прошёл 579/579 on controlled escalated retry.",
+      "decision": "BDD links обновлены для SC-0006-002: новый TS-0049 связывает scenario text с existing RepeaterPattern behavior через SD-0091..SD-0094 и test-only domain/viewmodel contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
       "gaps": [
-        "Step definitions покрывают 23/45 scenarios.",
-        "ST-0006 now has 1/3 step-executable scenarios; SC-0006-002 and SC-0006-003 remain gaps.",
-        "Full-suite validation passed 579/579 on controlled escalated retry after sandbox ACL and headless teardown conditions were isolated."
+        "Step definitions покрывают 24/45 scenarios.",
+        "ST-0006 now has 2/3 step-executable scenarios; SC-0006-003 remains gap.",
+        "Full-suite validation passed 580/580 on escalated run after artifact sync."
       ],
       "code_changed": false
     },
@@ -8375,24 +8430,31 @@
           "SD-0090"
         ],
         "result": "passing targeted BDD, preserved planning UI gates and full suite 579/579 on controlled escalated retry"
+      },
+      {
+        "story": "ST-0006",
+        "acceptance_criteria": "AC-0017",
+        "scenario": "SC-0006-002",
+        "added_test": "TS-0049",
+        "added_step_definitions": [
+          "SD-0091",
+          "SD-0092",
+          "SD-0093",
+          "SD-0094"
+        ],
+        "result": "passing targeted BDD, preserved repeater regression gates and full suite 580/580 on escalated run"
       }
     ],
     "code_changed": false,
-    "full_suite_result": "Full Unlimotion.Test gate passed 579/579 on controlled escalated retry on 2026-07-14. Initial sandbox run failed 577/579 because the Windows ACL hardening test is invalidated by managed sandbox inherited ACL and one unrelated Avalonia.Headless DisposeAsync NRE; both were isolated, and the final full retry passed after the new BDD helper stability fix.",
-    "targeted_validation_result": "SC-0006-001 executable BDD passed 1/1; preserved planning UI gates passed 1/1, 9/9 and 1/1; full suite passed 579/579 on controlled escalated retry.",
+    "full_suite_result": "Full Unlimotion.Test gate passed 580/580 on escalated run on 2026-07-14; escalation used to avoid the known managed-sandbox false failure in Windows ACL hardening tests.",
+    "targeted_validation_result": "SC-0006-002 executable BDD passed 1/1; preserved repeater regression gates passed 4/4; full suite passed 580/580 on escalated run.",
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningDatesExecutableSpecTests/*\" --output Detailed => initial passed 1/1; after stability fix passed 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlDateQuickSelectionUiTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlNewTaskDeadlineUiTests/*\" --output Detailed => прошло 9/9 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "initial sandbox full Unlimotion.Test => 577/579; GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows failed due sandbox inherited ACL and InProgressTree_DisplaysStartedDateTimeInLocalTime failed on Avalonia.Headless DisposeAsync NRE",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/InProgressTree_DisplaysStartedDateTimeInLocalTime\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "sandbox isolated BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows reproduced ACL failure; escalated isolated run passed 1/1 on 2026-07-14",
-      "first escalated full retry => 578/579; new TaskPlanningDatesScenario exposed EndNoneAction order/autosave instability; fixed test-only by suppressing autosave and clearing begin before end",
-      "controlled escalated full retry dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 579/579 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings after final artifact sync",
-      "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningRepeaterExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskItemRepeaterListMarkerTests/*|/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls|/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithRepeater_CreatesPreparedClone\" --output Detailed => прошло 4/4 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 580/580 on escalated full-suite gate on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings after artifact sync",
+      "UI video evidence не применимо: UI behavior/layout не менялись; preserved repeater UI/headless test used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
@@ -11924,13 +11986,19 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "passing_executable_bdd",
       "linked_tests": [
-        "TS-0013"
+        "TS-0013",
+        "TS-0049"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0091",
+        "SD-0092",
+        "SD-0093",
+        "SD-0094"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -11957,6 +12025,18 @@
           "path": "src/Unlimotion.Test/TaskItemRepeaterListMarkerTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0013"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0006-002 through repo-local STORM BDD runner.",
+          "test_id": "TS-0049 New-EvidencePath"
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract",
+          "description": "Contract verifies RepeaterPattern supported types, occurrence semantics, after-complete mode and marker behavior.",
+          "test_id": "TS-0049 New-EvidencePath"
         }
       ]
     },
@@ -15820,11 +15900,95 @@
           "symbol": "TaskPlanningDatesScenarioResult"
         }
       ]
+    },
+    {
+      "id": "SD-0091",
+      "path": "src/Unlimotion.Test/StormBdd/RepeaterPatternStepDefinitions.cs",
+      "symbol": "RepeaterPatternStepDefinitions.Create / SD-0091",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0006-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0049"
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract"
+        }
+      ]
+    },
+    {
+      "id": "SD-0092",
+      "path": "src/Unlimotion.Test/StormBdd/RepeaterPatternStepDefinitions.cs",
+      "symbol": "RepeaterPatternStepDefinitions.Create / SD-0092",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0006",
+      "supports_scenarios": [
+        "SC-0006-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0049"
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract"
+        }
+      ]
+    },
+    {
+      "id": "SD-0093",
+      "path": "src/Unlimotion.Test/StormBdd/RepeaterPatternStepDefinitions.cs",
+      "symbol": "RepeaterPatternStepDefinitions.Create / SD-0093",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": [
+        "SC-0006-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0049"
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract"
+        }
+      ]
+    },
+    {
+      "id": "SD-0094",
+      "path": "src/Unlimotion.Test/StormBdd/RepeaterPatternStepDefinitions.cs",
+      "symbol": "RepeaterPatternStepDefinitions.Create / SD-0094",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда RepeaterPattern поддерживает none/daily/weekly/monthly/yearly и after-complete режим.",
+      "supports_scenarios": [
+        "SC-0006-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskPlanningRepeaterExecutableSpecTests.cs",
+          "symbol": "TaskPlanningRepeaterScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0049"
+        },
+        {
+          "path": "src/Unlimotion.Test/RepeaterPatternScenarioContract.cs",
+          "symbol": "RepeaterPatternScenarioContract"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0006-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0006-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -15842,14 +16006,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 23,
+    "passing_scenarios": 24,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 90,
-    "step_executable_scenarios": 23,
-    "step_definition_coverage_ratio": "23/45",
-    "executable_specification_ratio": "23/45 step-executable; 23/45 passing scenarios",
+    "step_definitions_total": 94,
+    "step_executable_scenarios": 24,
+    "step_definition_coverage_ratio": "24/45",
+    "executable_specification_ratio": "24/45 step-executable; 24/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -15859,33 +16023,27 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningDatesExecutableSpecTests/*\" --output Detailed => initial passed 1/1; after stability fix passed 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlDateQuickSelectionUiTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlNewTaskDeadlineUiTests/*\" --output Detailed => прошло 9/9 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopLayout_ExposesSectionsAndKeyControls\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "initial sandbox full Unlimotion.Test => 577/579; GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows failed due sandbox inherited ACL and InProgressTree_DisplaysStartedDateTimeInLocalTime failed on Avalonia.Headless DisposeAsync NRE",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskStatusIconUiTests/InProgressTree_DisplaysStartedDateTimeInLocalTime\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "sandbox isolated BackupViaGitServiceTests/GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows reproduced ACL failure; escalated isolated run passed 1/1 on 2026-07-14",
-      "first escalated full retry => 578/579; new TaskPlanningDatesScenario exposed EndNoneAction order/autosave instability; fixed test-only by suppressing autosave and clearing begin before end",
-      "controlled escalated full retry dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 579/579 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 9 warnings after final artifact sync",
-      "UI/headless video evidence fallback: Avalonia.Headless/TUnit runner does not emit video artifacts; next-best evidence is targeted headless output plus full-suite gate.",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskPlanningRepeaterExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/TaskItemRepeaterListMarkerTests/*|/*/*/MainControlTaskCardLayoutUiTests/CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls|/*/*/TaskStatusTransitionTests/HandleTaskStatusChange_CompletedTaskWithRepeater_CreatesPreparedClone\" --output Detailed => прошло 4/4 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => прошло 580/580 on escalated full-suite gate on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings after artifact sync",
+      "UI video evidence не применимо: UI behavior/layout не менялись; preserved repeater UI/headless test used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
-    "full_suite_result": "Full Unlimotion.Test gate passed 579/579 on controlled escalated retry on 2026-07-14. Initial sandbox run failed 577/579 because the Windows ACL hardening test is invalidated by managed sandbox inherited ACL and one unrelated Avalonia.Headless DisposeAsync NRE; both were isolated, and the final full retry passed after the new BDD helper stability fix.",
+    "full_suite_result": "Full Unlimotion.Test gate passed 580/580 on escalated run on 2026-07-14; escalation used to avoid the known managed-sandbox false failure in Windows ACL hardening tests.",
     "production_code_changed": false,
-    "bdd_lint_issues": 9,
-    "step_reuse_ratio": "93/93"
+    "bdd_lint_issues": 10,
+    "step_reuse_ratio": "97/97"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0006-001",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0006-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0006-001 -> TS-0048 -> SD-0087..SD-0090",
-      "existing TS-0005 and TS-0013 preserved",
-      "ST-0006 now 1/3 step-executable"
+      "SC-0006-002 -> TS-0049 -> SD-0091..SD-0094",
+      "existing TS-0013 preserved",
+      "ST-0006 now 2/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -15896,43 +16054,44 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0006-001: новый TS-0048 связывает scenario text с existing planning UI behavior через SD-0087..SD-0090 и Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись. Full-suite gate прошёл 579/579 on controlled escalated retry.",
+    "decision": "BDD links обновлены для SC-0006-002: новый TS-0049 связывает scenario text с existing RepeaterPattern behavior через SD-0091..SD-0094 и test-only domain/viewmodel contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 23/45 scenarios.",
-      "ST-0006 now has 1/3 step-executable scenarios; SC-0006-002 and SC-0006-003 remain gaps.",
-      "Full-suite validation passed 579/579 on controlled escalated retry after sandbox ACL and headless teardown conditions were isolated."
+      "Step definitions покрывают 24/45 scenarios.",
+      "ST-0006 now has 2/3 step-executable scenarios; SC-0006-003 remains gap.",
+      "Full-suite validation passed 580/580 on escalated run after artifact sync."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0006-001",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0006-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text across scenario-specific step definitions, now including SD-0087; intentional shared task-set context.",
+      "Duplicate shared Given step text across scenario-specific step definitions, now including SD-0091; intentional shared task-set context.",
+      "Duplicate ST-0006 story step text now includes SD-0092; intentional scenario-specific binding.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains from earlier scenarios.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text now includes SD-0089; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0093; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
       "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
       "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0006-001 additionally linked to TS-0048.",
-      "scenario_step_definition_links": "WARNING: 23/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0006-002 additionally linked to TS-0049.",
+      "scenario_step_definition_links": "WARNING: 24/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "FALLBACK: Avalonia.Headless/TUnit runner does not emit video artifacts; targeted headless output and full-suite gate are next-best evidence.",
-      "targeted_gate": "PASS: SC-0006-001 executable BDD and preserved planning UI gates passed.",
-      "full_suite_gate": "PASS: Full Unlimotion.Test passed 579/579 on controlled escalated retry after sandbox ACL and headless teardown conditions were isolated.",
-      "st_0006": "PARTIAL: SC-0006-001 is step-executable; SC-0006-002 and SC-0006-003 remain linked-existing-tests only."
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; preserved repeater UI/headless test used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0006-002 executable BDD and preserved repeater regression gates passed.",
+      "full_suite_gate": "PASS: full Unlimotion.Test passed 580/580 on escalated run after artifact sync.",
+      "st_0006": "PARTIAL: SC-0006-001 and SC-0006-002 are step-executable; SC-0006-003 remains linked-existing-tests only."
     }
   }
 }

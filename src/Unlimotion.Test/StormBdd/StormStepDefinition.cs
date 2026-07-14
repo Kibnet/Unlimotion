@@ -161,5 +161,11 @@ internal sealed class StormScenarioContext
 
     public TaskPlanningDatesScenarioResult? TaskPlanningDatesResult { get; set; }
 
+    public bool RepeaterPatternTaskSetAvailable { get; set; }
+
+    public bool RepeaterPatternStoryBehaviorConfirmed { get; set; }
+
+    public RepeaterPatternScenarioResult? RepeaterPatternResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
