@@ -207,5 +207,9 @@ internal sealed class StormScenarioContext
     public bool RoadmapInteractionsStoryBehaviorConfirmed { get; set; }
     public RoadmapInteractionsScenarioResult? RoadmapInteractionsResult { get; set; }
 
+    public bool LocalJsonStorageTaskSetAvailable { get; set; }
+    public bool LocalJsonStorageStoryBehaviorConfirmed { get; set; }
+    public LocalJsonStorageScenarioResult? LocalJsonStorageResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

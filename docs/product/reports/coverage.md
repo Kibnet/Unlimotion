@@ -1,25 +1,23 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:cover -> /storm:bdd-implement SC-0008-003`
+Команда: `/storm:cover -> /storm:bdd-implement SC-0009-001`
 
-`SC-0008-003` теперь исполняется через `TS-0056` и `SD-0119..SD-0122`. Contract подтверждает responsive filters, search, inline rename, modifier multi-selection и standard viewport/minimap controls. Production code, `.feature`, automation IDs, project files, workflows и existing test annotations не менялись.
+`SC-0009-001` исполняется через `TS-0057` и `SD-0123..SD-0126`. Contract подтверждает JSON Save/Load в выбранной local folder. Production code, `.feature` и existing annotations не менялись.
 
 | Метрика | Значение |
 | --- | --- |
-| Scenario -> Test links | 45/45 |
-| Passing scenarios | 31 |
-| Step definitions | 122 |
-| Step-executable scenarios | 31/45 |
-| ST-0008 executable coverage | 3/3 scenarios |
-| Full suite gate | не подтверждён: предыдущий run timeout после 304 секунд без summary |
+| Passing scenarios | 32 |
+| Step definitions | 126 |
+| Step-executable scenarios | 32/45 |
+| ST-0009 executable coverage | 1/3 scenarios |
+| Full suite gate | не подтверждён: предыдущий timeout без summary |
 
 | Проверка | Результат |
 | --- | --- |
 | Build Release | прошло с 69 existing warnings, errors 0 |
-| `StormRoadmapInteractionsExecutableSpecTests` | прошло 1/1 |
-| `RoadmapGraphUiTests` | прошло 47/47 |
-| `MainControlFilterToolbarResponsiveUiTests` | прошло 14/14 |
-| Artifact validator | 0 errors, 12 known warnings, 31/45 executable |
+| `StormLocalJsonStorageExecutableSpecTests` | прошло 1/1 |
+| `FileStorageTaskStatusTests` | прошло 1/1 |
+| Artifact validator | 0 errors, 12 known warnings, 32/45 executable |
 
-Оставшиеся gaps: 14 scenarios without step definitions; `ST-0008` полностью step-executable.
+Оставшиеся gaps: 13 scenarios without step definitions; следующие внутри `ST-0009`: `SC-0009-002/003`.

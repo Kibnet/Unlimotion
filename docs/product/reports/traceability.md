@@ -1,15 +1,11 @@
 # STORM Traceability
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0008-003`
+Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0009-001`
 
 | Story | AC | Scenario | Test | Status |
 | --- | --- | --- | --- | --- |
-| ST-0007 | AC-0019 | SC-0007-001 | TS-0051 + SD-0099..SD-0102 | passing executable BDD |
-| ST-0007 | AC-0020 | SC-0007-002 | TS-0052 + SD-0103..SD-0106 | passing executable BDD |
-| ST-0007 | AC-0021 | SC-0007-003 | TS-0053 + SD-0107..SD-0110 | passing executable BDD |
-| ST-0008 | AC-0022 | SC-0008-001 | TS-0007 + TS-0054 + SD-0111..SD-0114 | passing executable BDD |
-| ST-0008 | AC-0023 | SC-0008-002 | TS-0007 + TS-0055 + SD-0115..SD-0118 | passing executable BDD |
-| ST-0008 | AC-0024 | SC-0008-003 | TS-0006 + TS-0007 + TS-0056 + SD-0119..SD-0122 | passing executable BDD |
+| ST-0008 | AC-0022..AC-0024 | SC-0008-001..003 | TS-0054..TS-0056 | 3/3 passing executable BDD |
+| ST-0009 | AC-0025 | SC-0009-001 | TS-0014 + TS-0057 + SD-0123..SD-0126 | passing executable BDD; direct JSON Save/Load |
 
-`ST-0008` is now 3/3 step-executable. Общий executable ratio: 31/45.
+`ST-0009` is now 1/3 step-executable. Общий executable ratio: 32/45.

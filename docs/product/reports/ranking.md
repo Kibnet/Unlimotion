@@ -1,6 +1,6 @@
 # STORM Ранжирование С Учётом Зависимостей
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:rank` + `/storm:bdd-implement SC-0008-003`
+Команда: `/storm:rank` + `/storm:bdd-implement SC-0009-001`
 
-`ST-0008` полностью step-executable через `TS-0054..TS-0056`. До полного executable BDD coverage остаётся 14 scenarios. Следующий `/storm:cover` candidate должен быть выбран вне ST-0008 из remaining high-value scenarios; required full-suite gate остаётся отдельным environment risk.
+`SC-0009-001` закрыт через `TS-0057`. Следующий `/storm:cover` candidate: `SC-0009-002` -- migration reverse links/status/availability, с existing `TS-0003/TS-0014`; он продолжает тот же local-first storage contract без product/config changes.
