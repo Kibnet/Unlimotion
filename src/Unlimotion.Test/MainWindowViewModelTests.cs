@@ -494,9 +494,13 @@ namespace Unlimotion.Test
             var child = await taskRepository.AddChild(parent!);
             child.Title = "Outline VM copy child";
             await taskRepository.Update(child);
+            await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
             var grandchild = await taskRepository.AddChild(child);
             grandchild.Title = "Outline VM copy grandchild";
             await taskRepository.Update(grandchild);
+            await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             string? clipboardText = null;
             mainWindowVM.SetClipboardTextAsync = text =>

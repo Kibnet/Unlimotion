@@ -1,12 +1,15 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using KellermanSoftware.CompareNetObjects;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 
@@ -80,7 +83,33 @@ namespace Unlimotion.Test
             ITaskStorage taskRepository,
             int expectedNewTasks = 1)
         {
-            return await CreateAndReturnNewTaskItem(() => command.Execute(null), taskRepository, expectedNewTasks);
+            var taskCountBefore = taskRepository.Tasks.Count;
+            var commandCompletion = ExecuteCommandAsync(command);
+
+            await Assert.That(await WaitUntilAsync(
+                    () => taskRepository.Tasks.Count == taskCountBefore + expectedNewTasks,
+                    TimeSpan.FromSeconds(5)))
+                .IsTrue();
+            await commandCompletion.WaitAsync(TimeSpan.FromSeconds(5));
+            await WaitForPendingSavesAsync(taskRepository);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + expectedNewTasks);
+            return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
+        }
+
+        private static Task ExecuteCommandAsync(ICommand command)
+        {
+            if (command is ReactiveCommand<Unit, Unit> parameterlessCommand)
+            {
+                return parameterlessCommand.Execute().ToTask();
+            }
+
+            if (command is ReactiveCommand<bool, Unit> booleanCommand)
+            {
+                return booleanCommand.Execute(false).ToTask();
+            }
+
+            command.Execute(null);
+            return Task.CompletedTask;
         }
 
         public static async Task WaitThrottleTime()
