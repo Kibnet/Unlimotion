@@ -255,5 +255,9 @@ internal sealed class StormScenarioContext
     public bool OutlineClipboardPasteStoryBehaviorConfirmed { get; set; }
     public OutlineClipboardPasteScenarioResult? OutlineClipboardPasteResult { get; set; }
 
+    public bool DesktopShellPackagingTaskSetAvailable { get; set; }
+    public bool DesktopShellPackagingStoryBehaviorConfirmed { get; set; }
+    public DesktopShellPackagingScenarioResult? DesktopShellPackagingResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
