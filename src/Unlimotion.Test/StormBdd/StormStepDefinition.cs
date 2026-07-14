@@ -215,5 +215,9 @@ internal sealed class StormScenarioContext
     public bool StorageMigrationStoryBehaviorConfirmed { get; set; }
     public StorageMigrationScenarioResult? StorageMigrationResult { get; set; }
 
+    public bool JsonRecoveryTaskSetAvailable { get; set; }
+    public bool JsonRecoveryStoryBehaviorConfirmed { get; set; }
+    public JsonRecoveryScenarioResult? JsonRecoveryResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

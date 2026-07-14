@@ -76,11 +76,12 @@
       "BDD executable slice добавлен 2026-07-14: SC-0006-003 исполняется из feature text через repo-local step definitions SD-0095..SD-0098 и TUnit/Avalonia.Headless evidence TS-0050; linked TS-0005/TS-0013 preserved; ST-0006 now 3/3 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0007-001 исполняется из feature text через repo-local step definitions SD-0099..SD-0102 и TUnit/Avalonia.Headless evidence TS-0051; linked TS-0005 preserved; ST-0007 now 1/3 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0007-002 исполняется из feature text через repo-local step definitions SD-0103..SD-0106 и TUnit/Avalonia.Headless evidence TS-0052; linked TS-0005/TS-0008 preserved; ST-0007 now 2/3 step-executable.",
-      "BDD executable slice добавлен 2026-07-14: SC-0009-002 исполняется из feature text через repo-local step definitions SD-0127..SD-0130 и TUnit evidence TS-0058; linked TS-0003/TS-0014 preserved; ST-0009 now 2/3 step-executable."
+      "BDD executable slice добавлен 2026-07-14: SC-0009-002 исполняется из feature text через repo-local step definitions SD-0127..SD-0130 и TUnit evidence TS-0058; linked TS-0003/TS-0014 preserved; ST-0009 now 2/3 step-executable.",
+      "BDD executable slice добавлен 2026-07-14: SC-0009-003 исполняется из feature text через repo-local step definitions SD-0131..SD-0134 и TUnit evidence TS-0059; linked TS-0014 preserved; ST-0009 now 3/3 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0009-002 storage migration executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0009-003 JSON recovery executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -2021,7 +2022,8 @@
           "text": "Восстановление JSON и исключение migration reports защищают загрузку от некорректных файлов.",
           "coverage_level": "critical",
           "linked_tests": [
-            "TS-0014"
+            "TS-0014",
+            "TS-0059"
           ],
           "evidence": [
             {
@@ -2045,7 +2047,8 @@
         "TS-0003",
         "TS-0014",
         "TS-0057",
-        "TS-0058"
+        "TS-0058",
+        "TS-0059"
       ],
       "linked_code": [
         "CU-0003",
@@ -2073,7 +2076,7 @@
         "SC-0009-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0009-001 исполняется через TS-0057/SD-0123..SD-0126 и подтверждает direct FileStorage JSON Save/Load contract; SC-0009-002 исполняется через TS-0058/SD-0127..SD-0130 и подтверждает миграцию reverse links, availability и status model; SC-0009-003 остаётся linked-only scenario."
+      "behavior_coverage_note": "SC-0009-001 исполняется через TS-0057/SD-0123..SD-0126 и подтверждает direct FileStorage JSON Save/Load contract; SC-0009-002 исполняется через TS-0058/SD-0127..SD-0130 и подтверждает миграцию reverse links, availability и status model; SC-0009-003 исполняется через TS-0059/SD-0131..SD-0134 и подтверждает восстановление JSON и исключение migration reports."
     },
     {
       "id": "ST-0010",
@@ -5737,6 +5740,29 @@
         { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/TaskStatusMigrationTests/*\" --output Detailed", "result": "прошло 5/5 on 2026-07-14" }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0003/TS-0014 links preserved. Full suite remains unconfirmed after the earlier 304-second timeout without a summary."
+    },
+    {
+      "id": "TS-0059",
+      "name": "StormJsonRecoveryExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/json-recovery",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0009-003_step_definitions",
+      "confidence": 0.88,
+      "linked_stories": ["ST-0009"],
+      "linked_acceptance_criteria": ["AC-0027"],
+      "linked_constraints": ["CN-0001", "CN-0002"],
+      "linked_scenarios": ["SC-0009-003"],
+      "evidence": [
+        { "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs", "symbol": "JsonRecoveryScenario_ExecutesFeatureSteps", "description": "Исполняет шаги SC-0009-003 через локальные STORM BDD definitions." },
+        { "path": "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs", "symbol": "SD-0131..SD-0134", "description": "Связывает формулировку восстановления JSON с действующими регрессионными проверками." },
+        { "path": "src/Unlimotion.Test/JsonRecoveryContract.cs", "symbol": "JsonRecoveryContract", "description": "Подтверждает ремонт JSON и исключение migration reports при загрузке задач." },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormJsonRecoveryExecutableSpecTests/*\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/JsonRepairingReaderTests/*\" --output Detailed", "result": "прошло 5/5 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/*\" --output Detailed", "result": "прошло 4/4 on 2026-07-14" }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0014 link preserved. Full suite remains unconfirmed after the earlier 304-second timeout without a summary."
     }
   ],
   "code_units": [
@@ -6800,57 +6826,57 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Продолжить /storm:cover через SC-0009-003: восстановление JSON и исключение migration reports; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0009-002 executable step definitions",
+    "recommended_next_step": "Продолжить /storm:cover через следующий high-value scenario вне завершённой ST-0009; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0009-003 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0009-002",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0009-003",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0009-002",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0009-003",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0009-002 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0009-003 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0009-002 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0009-003 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-implement SC-0009-002",
+      "command": "/storm:bdd-implement SC-0009-003",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-07-14-storm-sc0009-storage-migration-bdd.md",
-      "classification": "SC-0009-002 storage migration scenario now executes from feature text through repo-local step definitions and existing reverse-link, availability and status-model regression evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0009-json-recovery-bdd.md",
+      "classification": "SC-0009-003 JSON recovery scenario now executes from feature text through repo-local step definitions and existing JSON repair plus migration-report loading regression evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/StorageMigrationContract.cs",
-        "src/Unlimotion.Test/StormBdd/StorageMigrationStepDefinitions.cs",
-        "src/Unlimotion.Test/StormStorageMigrationExecutableSpecTests.cs",
+        "src/Unlimotion.Test/JsonRecoveryContract.cs",
+        "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs",
+        "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormStorageMigrationExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormJsonRecoveryExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/JsonRepairingReaderTests/*\" --output Detailed => прошло 5/5",
         "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/*\" --output Detailed => прошло 4/4",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/TaskStatusMigrationTests/*\" --output Detailed => прошло 5/5",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 13 warnings, executable_specification_ratio 33/45 after artifact sync",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 13 warnings, executable_specification_ratio 34/45 after artifact sync",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
         "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0009-002 прошёл как executable BDD slice; ST-0009 now 2/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
-      "next_recommended_action": "Продолжать /storm:cover через SC-0009-003, оставшийся сценарий восстановления JSON для ST-0009.",
+      "result": "SC-0009-003 прошёл как executable BDD slice; ST-0009 now 3/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
+      "next_recommended_action": "Продолжать /storm:cover через следующий high-value scenario вне завершённой ST-0009.",
       "validation_status": "passed_with_known_bdd_lint_warnings",
       "known_warning": "Validator reports 13 shared context/action/story step text warnings; all are intentional scenario-specific reuse, not blockers."
     }
@@ -10169,6 +10195,18 @@
         {
           "path": "src/Unlimotion/JsonCommaFixer.cs",
           "symbol": "JsonRepairingReader"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs",
+          "symbol": "JsonRecoveryScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0059",
+          "description": "Executable BDD evidence for GR-027 / SC-0009-003."
+        },
+        {
+          "path": "src/Unlimotion.Test/JsonRecoveryContract.cs",
+          "symbol": "JsonRecoveryContract",
+          "test_id": "TS-0059",
+          "description": "Выполняет действующие регрессионные тесты ремонта JSON и загрузки с migration reports."
         }
       ]
     },
@@ -14236,13 +14274,14 @@
         "CN-0002"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0059_on_2026-07-14",
       "linked_tests": [
-        "TS-0014"
+        "TS-0014",
+        "TS-0059"
       ],
-      "step_definitions": [],
+      "step_definitions": ["SD-0131", "SD-0132", "SD-0133", "SD-0134"],
       "coverage_role": "regression",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -14269,6 +14308,18 @@
           "path": "src/Unlimotion.Test/JsonRepairingReaderTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0014"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs",
+          "symbol": "JsonRecoveryScenario_ExecutesFeatureSteps",
+          "description": "Исполняет SC-0009-003 через repo-local STORM BDD runner.",
+          "test_id": "TS-0059 New-EvidencePath"
+        },
+        {
+          "path": "src/Unlimotion.Test/JsonRecoveryContract.cs",
+          "symbol": "JsonRecoveryContract",
+          "description": "Выполняет ремонт JSON и загрузку задач при наличии migration reports.",
+          "test_id": "TS-0059 New-EvidencePath"
         }
       ]
     },
@@ -17112,11 +17163,47 @@
       "step_text": "Тогда Миграции восстанавливают reverse links, status model и availability при загрузке.",
       "supports_scenarios": ["SC-0009-002"],
       "evidence": [{ "path": "src/Unlimotion.Test/StorageMigrationContract.cs", "symbol": "StorageMigrationContract.AssertAsync", "test_id": "TS-0058" }]
+    },
+    {
+      "id": "SD-0131",
+      "path": "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs",
+      "symbol": "JsonRecoveryStepDefinitions.Create / SD-0131",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0009-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs", "symbol": "JsonRecoveryScenario_ExecutesFeatureSteps", "test_id": "TS-0059" }]
+    },
+    {
+      "id": "SD-0132",
+      "path": "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs",
+      "symbol": "JsonRecoveryStepDefinitions.Create / SD-0132",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0009",
+      "supports_scenarios": ["SC-0009-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormJsonRecoveryExecutableSpecTests.cs", "symbol": "JsonRecoveryScenario_ExecutesFeatureSteps", "test_id": "TS-0059" }]
+    },
+    {
+      "id": "SD-0133",
+      "path": "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs",
+      "symbol": "JsonRecoveryStepDefinitions.Create / SD-0133",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": ["SC-0009-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/JsonRecoveryContract.cs", "symbol": "JsonRecoveryContract", "test_id": "TS-0059" }]
+    },
+    {
+      "id": "SD-0134",
+      "path": "src/Unlimotion.Test/StormBdd/JsonRecoveryStepDefinitions.cs",
+      "symbol": "JsonRecoveryStepDefinitions.Create / SD-0134",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Восстановление JSON и исключение migration reports защищают загрузку от некорректных файлов.",
+      "supports_scenarios": ["SC-0009-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/JsonRecoveryContract.cs", "symbol": "JsonRecoveryContract.AssertAsync", "test_id": "TS-0059" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0009-002",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0009-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -17130,18 +17217,18 @@
     "acceptance_criteria_without_tests": 0,
     "acceptance_criteria_with_rules": 44,
     "acceptance_criteria_with_scenarios": 44,
-    "automated_scenarios": 12,
+    "automated_scenarios": 11,
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 33,
+    "passing_scenarios": 34,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 130,
-    "step_executable_scenarios": 33,
-    "step_definition_coverage_ratio": "33/45",
-    "executable_specification_ratio": "33/45 step-executable; 33/45 passing scenarios",
+    "step_definitions_total": 134,
+    "step_executable_scenarios": 34,
+    "step_definition_coverage_ratio": "34/45",
+    "executable_specification_ratio": "34/45 step-executable; 34/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -17151,28 +17238,28 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormStorageMigrationExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormJsonRecoveryExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/JsonRepairingReaderTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/UnifiedTaskStorageMigrationRegressionTests/*\" --output Detailed => прошло 4/4 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/TaskStatusMigrationTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 13 known duplicate-step warnings, executable_specification_ratio 33/45 after artifact sync",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 13 known duplicate-step warnings, executable_specification_ratio 34/45 after artifact sync",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; targeted storage migration TUnit contracts used as next-best evidence.",
+      "UI video evidence не применимо: UI behavior/layout не менялись; targeted JSON recovery TUnit contracts used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
     "bdd_lint_issues": 13,
-    "step_reuse_ratio": "133/133"
+    "step_reuse_ratio": "137/137"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0009-002",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0009-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0009-002 -> TS-0058 -> SD-0127..SD-0130",
-      "existing TS-0003/TS-0014 preserved",
-      "ST-0009 now 2/3 step-executable"
+      "SC-0009-003 -> TS-0059 -> SD-0131..SD-0134",
+      "existing TS-0014 preserved",
+      "ST-0009 now 3/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -17183,50 +17270,50 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0009-002: новый TS-0058 связывает scenario text с действующими проверками восстановления reverse links, пересчёта availability и миграции status model через SD-0127..SD-0130. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0009-003: новый TS-0059 связывает scenario text с действующими проверками ремонта JSON и загрузки задач при наличии migration reports через SD-0131..SD-0134. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 33/45 scenarios.",
-      "ST-0009 now has 2/3 step-executable scenarios; SC-0009-003 remains a gap.",
+      "Step definitions покрывают 34/45 scenarios.",
+      "ST-0009 now has 3/3 step-executable scenarios.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0009-002",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0009-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text now includes SD-0127; intentional shared task-set context.",
+      "Duplicate shared Given step text now includes SD-0131; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains intentional scenario-specific binding.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text now includes SD-0129; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0133; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
       "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
       "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios.",
       "Duplicate ST-0006 story step text remains from earlier planning scenarios.",
       "Duplicate ST-0007 story step text remains from earlier scenarios.",
       "Duplicate ST-0008 story step text remains from earlier scenarios.",
-      "Duplicate ST-0009 story step text includes SD-0124 and SD-0128; intentional scenario-specific binding."
+      "Duplicate ST-0009 story step text includes SD-0124, SD-0128 and SD-0132; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0009-002 additionally linked to TS-0058.",
-      "scenario_step_definition_links": "WARNING: 33/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0009-003 additionally linked to TS-0059.",
+      "scenario_step_definition_links": "WARNING: 34/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted storage migration TUnit evidence used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0009-002 executable BDD passed 1/1, UnifiedTaskStorage migration tests passed 4/4 and TaskStatus migration tests passed 5/5.",
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted JSON recovery TUnit evidence used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0009-003 executable BDD passed 1/1, JsonRepairingReader tests passed 5/5 and UnifiedTaskStorage migration tests passed 4/4.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
       "st_0008": "PASS: SC-0008-001, SC-0008-002 and SC-0008-003 are step-executable through TS-0054..TS-0056 and SD-0111..SD-0122.",
-      "st_0009": "PARTIAL: SC-0009-001 and SC-0009-002 are step-executable through TS-0057..TS-0058 and SD-0123..SD-0130; SC-0009-003 remains a gap."
+      "st_0009": "PASS: SC-0009-001, SC-0009-002 and SC-0009-003 are step-executable through TS-0057..TS-0059 and SD-0123..SD-0134."
     }
   }
 }
