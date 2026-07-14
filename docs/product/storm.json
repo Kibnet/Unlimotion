@@ -85,7 +85,7 @@
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0012-001 Settings appearance executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0012-002 Settings storage/Git executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -2394,7 +2394,8 @@
           "coverage_level": "critical",
           "linked_tests": [
             "TS-0008",
-            "TS-0009"
+            "TS-0009",
+            "TS-0065"
           ],
           "evidence": [
             {
@@ -2440,7 +2441,8 @@
         "TS-0009",
         "TS-0012",
         "TS-0015",
-        "TS-0064"
+        "TS-0064",
+        "TS-0065"
       ],
       "linked_code": [
         "CU-0008",
@@ -2469,7 +2471,7 @@
         "SC-0012-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0012-001 исполняется через TS-0064/SD-0151..SD-0154 и подтверждает theme, font size, language и fuzzy-search setting/effect; SC-0012-002/003 остаются linked-only scenarios."
+      "behavior_coverage_note": "SC-0012-001 исполняется через TS-0064/SD-0151..SD-0154 и подтверждает theme, font size, language и fuzzy-search setting/effect; SC-0012-002 исполняется через TS-0065/SD-0155..SD-0158 и подтверждает storage readiness, Git backup readiness и conflict actions; SC-0012-003 остаётся linked-only scenario."
     },
     {
       "id": "ST-0013",
@@ -5898,6 +5900,31 @@
         { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/RoadmapGraphUiTests/RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0008/TS-0012 links preserved. Full suite remains unconfirmed after the earlier timeout without a summary."
+    },
+    {
+      "id": "TS-0065",
+      "name": "StormSettingsStorageGitExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/settings-storage-git",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0012-002_step_definitions",
+      "confidence": 0.90,
+      "linked_stories": ["ST-0012"],
+      "linked_acceptance_criteria": ["AC-0035"],
+      "linked_constraints": ["CN-0004", "CN-0005"],
+      "linked_scenarios": ["SC-0012-002"],
+      "evidence": [
+        { "path": "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs", "symbol": "SettingsStorageGitScenario_ExecutesFeatureSteps", "description": "Исполняет шаги SC-0012-002 через локальные STORM BDD definitions." },
+        { "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs", "symbol": "SD-0155..SD-0158", "description": "Связывает Gherkin storage/Git settings с readiness и conflict-action evidence." },
+        { "path": "src/Unlimotion.Test/SettingsStorageGitContract.cs", "symbol": "SettingsStorageGitContract", "description": "Подтверждает storage, Git и conflict actions в Settings." },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormSettingsStorageGitExecutableSpecTests/*\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/SettingsViewModelTests/CanConnectStorage_FollowsSelectedModeRequirements\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/SettingsViewModelTests/CanSyncRepository_RequiresBackupRemoteAndPushRefSpecWithoutConnectedState\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/SettingsViewModelTests/ConflictResolutionMode_DisablesSyncAndEnablesSelectedConflictActions\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/SettingsControlResponsiveUiTests/SettingsControl_SyncConflictResolutionMode_ShowsOpenResolverAction\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0008/TS-0009 links preserved. Full suite remains unconfirmed after the earlier timeout without a summary."
     }
   ],
   "code_units": [
@@ -6961,58 +6988,58 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Продолжить /storm:cover через SC-0010-004: автоматические Git pull/push и backup-задачи без потери локальных или удалённых задач; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0010-003 executable step definitions",
+    "recommended_next_step": "Продолжить /storm:cover через SC-0012-003: controls обновления и compatibility checks; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0012-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0010-003",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0012-002",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0010-003",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0012-002",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0010-003 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0012-002 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0010-003 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0012-002 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-implement SC-0010-003",
+      "command": "/storm:bdd-implement SC-0012-002",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-07-14-storm-sc0010-conflict-resolution-bdd.md",
-      "classification": "SC-0010-003 Git conflict-resolution scenario now executes from feature text through repo-local step definitions and existing file/field commit/push regression evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0012-storage-git-bdd.md",
+      "classification": "SC-0012-002 Settings storage/Git scenario now executes from feature text through repo-local step definitions and existing storage, Git readiness and conflict-action regression evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/GitConflictResolutionContract.cs",
-        "src/Unlimotion.Test/StormBdd/GitConflictResolutionStepDefinitions.cs",
-        "src/Unlimotion.Test/StormGitConflictResolutionExecutableSpecTests.cs",
+        "src/Unlimotion.Test/SettingsStorageGitContract.cs",
+        "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+        "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormGitConflictResolutionExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "two targeted BackupViaGitServiceTests file/field conflict-resolution methods => прошло 2/2",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 15 warnings, executable_specification_ratio 37/45 after artifact sync",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 33 existing warnings, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormSettingsStorageGitExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "three targeted SettingsViewModelTests storage/Git/conflict methods => прошло 3/3; SettingsControl conflict action UI => прошло 1/1",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 warnings, executable_specification_ratio 40/45",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
         "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0010-003 прошёл как executable BDD slice; ST-0010 now 3/4 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
-      "next_recommended_action": "Продолжать /storm:cover через SC-0010-004 (автоматические Git pull/push и backup-задачи).",
+      "result": "SC-0012-002 прошёл как executable BDD slice; ST-0012 now 2/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
+      "next_recommended_action": "Продолжать /storm:cover через SC-0012-003 (update controls и compatibility checks).",
       "validation_status": "passed_with_known_bdd_lint_warnings",
-      "known_warning": "Validator reports 15 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Windows ACL SSH-key hardening remains outside this scenario."
+      "known_warning": "Validator reports 16 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Full-suite timeout without summary remains separate from this scenario."
     }
   },
   "traceability": {
@@ -9025,7 +9052,7 @@
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "targeted_validation_result": "SC-0007-002 executable BDD passed 1/1; preserved MainControlRelationPickerUiTests passed 5/5; full suite remains unconfirmed after the earlier 304-second timeout.",
     "validation_evidence": [
-      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
+      "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 33 existing warnings, errors 0",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
@@ -10583,6 +10610,16 @@
         {
           "path": "src/Unlimotion/Views/SettingsControl.axaml",
           "symbol": "StorageTitle"
+        },
+        {
+          "path": "src/Unlimotion.Test/SettingsStorageGitContract.cs",
+          "symbol": "SettingsStorageGitContract",
+          "test_id": "TS-0065"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+          "symbol": "SD-0155..SD-0158",
+          "test_id": "TS-0065"
         }
       ]
     },
@@ -13339,14 +13376,20 @@
         "CN-0005"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0065_on_2026-07-14",
       "linked_tests": [
         "TS-0008",
-        "TS-0009"
+        "TS-0009",
+        "TS-0065"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0155",
+        "SD-0156",
+        "SD-0157",
+        "SD-0158"
+      ],
       "coverage_role": "constraint_check",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -13383,6 +13426,11 @@
           "path": "src/Unlimotion.Test/GitBackupJobTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0009"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs",
+          "description": "Исполняемая BDD-связь feature-сценария с storage, Git и conflict-action evidence.",
+          "test_id": "TS-0065"
         }
       ]
     },
@@ -17578,11 +17626,47 @@
       "step_text": "Тогда Настройки поддерживают параметры внешнего вида: язык, тему, масштаб шрифта и fuzzy search.",
       "supports_scenarios": ["SC-0012-001"],
       "evidence": [{ "path": "src/Unlimotion.Test/SettingsAppearanceContract.cs", "symbol": "SettingsAppearanceContract.AssertAsync", "test_id": "TS-0064" }]
+    },
+    {
+      "id": "SD-0155",
+      "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+      "symbol": "SettingsStorageGitStepDefinitions.Create / SD-0155",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0012-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs", "symbol": "SettingsStorageGitScenario_ExecutesFeatureSteps", "test_id": "TS-0065" }]
+    },
+    {
+      "id": "SD-0156",
+      "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+      "symbol": "SettingsStorageGitStepDefinitions.Create / SD-0156",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0012",
+      "supports_scenarios": ["SC-0012-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormSettingsStorageGitExecutableSpecTests.cs", "symbol": "SettingsStorageGitScenario_ExecutesFeatureSteps", "test_id": "TS-0065" }]
+    },
+    {
+      "id": "SD-0157",
+      "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+      "symbol": "SettingsStorageGitStepDefinitions.Create / SD-0157",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь запускает или проверяет remote backup flow",
+      "supports_scenarios": ["SC-0012-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/SettingsStorageGitContract.cs", "symbol": "SettingsStorageGitContract.ExecuteAsync", "test_id": "TS-0065" }]
+    },
+    {
+      "id": "SD-0158",
+      "path": "src/Unlimotion.Test/StormBdd/SettingsStorageGitStepDefinitions.cs",
+      "symbol": "SettingsStorageGitStepDefinitions.Create / SD-0158",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Настройки поддерживают локальное/серверное хранилище, Git backup и действия разрешения конфликтов.",
+      "supports_scenarios": ["SC-0012-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/SettingsStorageGitContract.cs", "symbol": "SettingsStorageGitContract.AssertAsync", "test_id": "TS-0065" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0012-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0012-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -17600,14 +17684,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 39,
+    "passing_scenarios": 40,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 154,
-    "step_executable_scenarios": 39,
-    "step_definition_coverage_ratio": "39/45",
-    "executable_specification_ratio": "39/45 step-executable; 39/45 passing scenarios",
+    "step_definitions_total": 158,
+    "step_executable_scenarios": 40,
+    "step_definition_coverage_ratio": "40/45",
+    "executable_specification_ratio": "40/45 step-executable; 40/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -17617,27 +17701,28 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormGitConflictResolutionExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "two targeted BackupViaGitServiceTests file/field conflict-resolution methods => прошло 2/2 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 15 known duplicate-step warnings, executable_specification_ratio 37/45 after artifact sync",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormSettingsStorageGitExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "three targeted SettingsViewModelTests storage/Git/conflict methods => прошло 3/3 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/SettingsControlResponsiveUiTests/SettingsControl_SyncConflictResolutionMode_ShowsOpenResolverAction\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 known duplicate-step warnings, executable_specification_ratio 40/45",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Git conflict-resolution TUnit contracts used as next-best evidence.",
+      "UI video evidence не применимо: UI behavior/layout не менялись; existing headless Settings UI test used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
-    "bdd_lint_issues": 15,
-    "step_reuse_ratio": "157/157"
+    "bdd_lint_issues": 16,
+    "step_reuse_ratio": "161/161"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0010-004",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0012-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0010-004 -> TS-0063 -> SD-0147..SD-0150",
-      "existing TS-0009 preserved",
-      "ST-0010 now 4/4 step-executable"
+      "SC-0012-002 -> TS-0065 -> SD-0155..SD-0158",
+      "existing TS-0008/TS-0009 preserved",
+      "ST-0012 now 2/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -17648,23 +17733,23 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0010-003: новый TS-0062 связывает scenario text с passing file/field conflict-resolution проверками временных local Git repositories через SD-0143..SD-0146. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0012-002: новый TS-0065 связывает scenario text с passing storage-mode, Git backup readiness и conflict-action evidence через SD-0155..SD-0158. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 38/45 scenarios.",
-      "ST-0010 now has 4/4 step-executable scenarios.",
-      "Windows ACL SSH-key hardening remains separate sandbox-sensitive evidence and is outside this conflict-resolution scenario.",
+      "Step definitions покрывают 40/45 scenarios.",
+      "ST-0012 now has 2/3 step-executable scenarios; остаётся SC-0012-003.",
+      "Остаются четыре сценария ST-0013/ST-0015 без step definitions.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0010-004",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0012-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text now includes SD-0143; intentional shared task-set context.",
+      "Duplicate shared Given step text now includes SD-0155; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains intentional scenario-specific binding.",
@@ -17678,25 +17763,27 @@
       "Duplicate ST-0008 story step text remains from earlier scenarios.",
       "Duplicate ST-0009 story step text includes SD-0124, SD-0128 and SD-0132; intentional scenario-specific binding.",
       "Duplicate ST-0010 story step text includes SD-0136, SD-0140 and SD-0144; intentional scenario-specific binding.",
-      "Duplicate remote backup flow step text includes SD-0137 and SD-0141; intentional scenario-specific binding."
+      "Duplicate remote backup flow step text includes SD-0137, SD-0141, SD-0149 and SD-0157; intentional scenario-specific binding.",
+      "Duplicate ST-0012 story step text includes SD-0152 and SD-0156; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0010-004 additionally linked to TS-0063.",
-      "scenario_step_definition_links": "WARNING: 38/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0012-002 additionally linked to TS-0065.",
+      "scenario_step_definition_links": "WARNING: 40/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted Git conflict-resolution TUnit evidence used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0010-003 executable BDD passed 1/1; two related BackupViaGitServiceTests file/field conflict-resolution methods passed 2/2.",
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; existing headless Settings UI test used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0012-002 executable BDD passed 1/1; three SettingsViewModelTests storage/Git/conflict methods passed 3/3; SettingsControl conflict action UI passed 1/1.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
       "st_0008": "PASS: SC-0008-001, SC-0008-002 and SC-0008-003 are step-executable through TS-0054..TS-0056 and SD-0111..SD-0122.",
       "st_0009": "PASS: SC-0009-001, SC-0009-002 and SC-0009-003 are step-executable through TS-0057..TS-0059 and SD-0123..SD-0134.",
       "st_0010": "PASS: SC-0010-001..SC-0010-004 are step-executable through TS-0060..TS-0063 and SD-0135..SD-0150.",
-      "unrelated_backup_fixture_gate": "KNOWN ENVIRONMENT BLOCKER: BackupViaGitServiceTests was 51/52 because GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows fails under current Windows ACL sandbox; it does not affect SC-0010-003 targeted evidence."
+      "st_0012": "PARTIAL: SC-0012-001/002 are step-executable through TS-0064/TS-0065 and SD-0151..SD-0158; SC-0012-003 remains a gap.",
+      "remaining_gaps": "SC-0013-001, SC-0013-002, SC-0015-001, SC-0015-003 and SC-0012-003 remain without step definitions."
     }
   }
 }
