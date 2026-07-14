@@ -997,6 +997,7 @@ public class MainControlTaskCardLayoutUiTests
         var splitView = view.GetVisualDescendants()
             .OfType<SplitView>()
             .FirstOrDefault();
+        var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
         var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
         ApplyDetailsPaneTestWidth(scrollViewer, width);
         UpdateTaskDetailsLayoutForTest(view);
@@ -1009,7 +1010,7 @@ public class MainControlTaskCardLayoutUiTests
 
         for (var attempt = 0; attempt < 8; attempt++)
         {
-            if (scrollViewer.Bounds.Width > 100)
+            if (IsDetailsPaneArranged(detailsPanelFrame, scrollViewer))
             {
                 return;
             }
@@ -1032,13 +1033,14 @@ public class MainControlTaskCardLayoutUiTests
             UpdateTaskDetailsLayoutForTest(view);
         }
 
-        if (TryArrangeDetailsPaneFallback(view, scrollViewer, width, height))
+        if (TryArrangeDetailsPaneFallback(view, detailsPanelFrame, scrollViewer, width, height))
         {
             return;
         }
 
         throw new InvalidOperationException(
-            $"Task details pane did not arrange to an open width: bounds={scrollViewer.Bounds}.");
+            $"Task details pane did not arrange to an open width: " +
+            $"frame={detailsPanelFrame.Bounds}; scrollViewer={scrollViewer.Bounds}.");
     }
 
     private static void UpdateTaskDetailsLayoutForTest(MainControl view)
@@ -1065,20 +1067,27 @@ public class MainControlTaskCardLayoutUiTests
 
     private static bool TryArrangeDetailsPaneFallback(
         MainControl view,
+        Border detailsPanelFrame,
         ScrollViewer scrollViewer,
         double width,
         double height)
     {
-        var detailsWidth = ApplyDetailsPaneTestWidth(scrollViewer, width);
-        if (detailsWidth <= 100)
+        if (detailsPanelFrame.GetVisualParent() is not Grid paneRoot)
         {
             return false;
         }
 
-        scrollViewer.Measure(new Size(detailsWidth, height));
-        scrollViewer.Arrange(new Rect(0, 0, detailsWidth, height));
-        RunLayoutJobs();
+        var paneWidth = Math.Min(width, 600d);
+        var detailsWidth = ApplyDetailsPaneTestWidth(scrollViewer, width);
+        if (paneWidth <= 100 || detailsWidth <= 100)
+        {
+            return false;
+        }
+
         UpdateTaskDetailsLayoutForTest(view);
+        paneRoot.Measure(new Size(paneWidth, height));
+        paneRoot.Arrange(new Rect(0, 0, paneWidth, height));
+        RunLayoutJobs();
 
         if (scrollViewer.Content is Control content)
         {
@@ -1088,8 +1097,16 @@ public class MainControlTaskCardLayoutUiTests
         }
 
         RunLayoutJobs();
-        return scrollViewer.Bounds.Width > 100;
+        return IsDetailsPaneArranged(detailsPanelFrame, scrollViewer);
     }
+
+    private static bool IsDetailsPaneArranged(Border detailsPanelFrame, ScrollViewer scrollViewer) =>
+        detailsPanelFrame.IsVisible &&
+        detailsPanelFrame.Bounds.Width > 100 &&
+        detailsPanelFrame.Bounds.Height > 0 &&
+        scrollViewer.IsVisible &&
+        scrollViewer.Bounds.Width > 100 &&
+        scrollViewer.Bounds.Height > 0;
 
     private static T FindControlByAutomationId<T>(Control root, string automationId)
         where T : Control
