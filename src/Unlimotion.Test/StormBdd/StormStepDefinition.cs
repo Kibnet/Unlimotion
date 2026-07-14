@@ -259,5 +259,9 @@ internal sealed class StormScenarioContext
     public bool DesktopShellPackagingStoryBehaviorConfirmed { get; set; }
     public DesktopShellPackagingScenarioResult? DesktopShellPackagingResult { get; set; }
 
+    public bool CiReadmeMediaTaskSetAvailable { get; set; }
+    public bool CiReadmeMediaStoryBehaviorConfirmed { get; set; }
+    public CiReadmeMediaScenarioResult? CiReadmeMediaResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

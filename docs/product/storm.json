@@ -2795,7 +2795,8 @@
           "coverage_level": "critical",
           "linked_tests": [
             "TS-0011",
-            "TS-0015"
+            "TS-0015",
+            "TS-0070"
           ],
           "evidence": [
             {
@@ -2820,7 +2821,8 @@
         "TS-0011",
         "TS-0015",
         "TS-0024",
-        "TS-0069"
+        "TS-0069",
+        "TS-0070"
       ],
       "linked_code": [
         "CU-0015",
@@ -2853,7 +2855,7 @@
         "SC-0015-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0015-001 исполняется через TS-0069 и SD-0171..SD-0174: неизменяемый контракт desktop project/workflow и passing evidence startup/update/package UI подтверждают AC-0041 без заявления о published release. SC-0015-002 связан с TS-0024 и passing contract tests; platform validation добавила Browser Release, iOS Debug и Android Debug build smoke evidence. Non-desktop runtime release maturity всё ещё не заявляется."
+      "behavior_coverage_note": "SC-0015-001 исполняется через TS-0069 и SD-0171..SD-0174: неизменяемый контракт desktop project/workflow и passing evidence startup/update/package UI подтверждают AC-0041 без заявления о published release. SC-0015-002 связан с TS-0024 и passing contract tests; platform validation добавила Browser Release, iOS Debug и Android Debug build smoke evidence. SC-0015-003 исполняется через TS-0070 и SD-0175..SD-0178: неизменяемый CI/media contract, локальный ReadmeDemo headless smoke и UI responsiveness evidence подтверждают AC-0043 без заявления о remote CI или generated media. Non-desktop runtime release maturity всё ещё не заявляется."
     },
     {
       "id": "ST-0016",
@@ -6032,6 +6034,29 @@
         { "command": "two SingleViewStartupUiTests + RoadmapDropAndFolderPickerCompatibility_Work", "result": "прошло 3/3 on 2026-07-14" }
       ],
       "notes": "Production code, project/workflow files, feature wording и existing test annotations не менялись; existing TS-0011/TS-0015 links preserved. No published release claim."
+    },
+    {
+      "id": "TS-0070",
+      "name": "StormCiReadmeMediaExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/ci-readme-media",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0015-003_step_definitions",
+      "confidence": 0.90,
+      "linked_stories": ["ST-0015"],
+      "linked_acceptance_criteria": ["AC-0043"],
+      "linked_constraints": ["CN-0004", "CN-0007", "CN-0008"],
+      "linked_scenarios": ["SC-0015-003"],
+      "evidence": [
+        { "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs", "symbol": "CiReadmeMediaScenario_ExecutesFeatureSteps", "description": "Исполняет шаги SC-0015-003 через локальные STORM BDD definitions." },
+        { "path": "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs", "symbol": "SD-0175..SD-0178", "description": "Связывает Gherkin CI/media automation с workflow, script, ReadmeDemo и UI responsiveness evidence." },
+        { "path": "src/Unlimotion.Test/CiReadmeMediaContract.cs", "symbol": "CiReadmeMediaContract", "description": "Проверяет неизменяемый контракт CI/media и изолированный headless UI smoke." },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormCiReadmeMediaExecutableSpecTests/*\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "ReadmeDemoEnglishHeadlessTests filter", "result": "прошло 10/10, включая Readme_demo_uses_capture_presentation_state, on 2026-07-14" }
+      ],
+      "notes": "Production code, project/workflow/script/README/media files, feature wording и existing test annotations не менялись; existing TS-0011/TS-0015 links preserved. No remote CI or generated media claim."
     }
   ],
   "code_units": [
@@ -7085,79 +7110,79 @@
       "docs/product/storm.json",
       "docs/product/reports/stories.md"
     ],
-    "validation_expectation": "Центральный STORM validator должен проходить без errors; 17 intentional duplicate-step warnings допускаются как известный lint baseline.",
+    "validation_expectation": "Центральный STORM validator должен проходить без errors; 18 intentional duplicate-step warnings допускаются как известный lint baseline.",
     "scope_control": [
       "Функциональный код, feature wording, project files и workflows не изменялись.",
-      "Добавлен только test-side executable BDD bridge для SC-0015-001; existing tests/annotations не изменялись.",
-      "Адресные headless UI-тесты startup/update/package прошли 3/3."
+      "Добавлен только test-side executable BDD bridge для SC-0015-003; existing tests/annotations не изменялись.",
+      "Адресные headless UI-тесты ReadmeDemo и responsiveness прошли 11/11."
     ],
     "open_risks": [
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Продолжить /storm:cover через SC-0015-003: CI и README media automation должны получить executable Scenario -> Test -> Step Definition bridge; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0015-001 executable step definitions",
+    "recommended_next_step": "Провести итоговый /storm:cover audit 45/45: подтвердить metrics, traceability и known full-suite limitation без изменения продукта.",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0015-003 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0015-001",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0015-003",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0015-001",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0015-003",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0015-001 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0015-003 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0015-001 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0015-003 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-implement SC-0015-001",
+      "command": "/storm:bdd-implement SC-0015-003",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-07-14-storm-sc0015-desktop-shell-bdd.md",
-      "classification": "SC-0015-001 desktop-shell packaging scenario now executes from feature text through repo-local step definitions, read-only project/workflow contract and existing startup/update/package UI evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0015-ci-readme-media-bdd.md",
+      "classification": "SC-0015-003 CI/readme-media scenario now executes from feature text through repo-local step definitions, read-only workflow/script/docs contract and existing ReadmeDemo/responsiveness UI evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/DesktopShellPackagingContract.cs",
-        "src/Unlimotion.Test/StormBdd/DesktopShellPackagingStepDefinitions.cs",
-        "src/Unlimotion.Test/StormDesktopShellPackagingExecutableSpecTests.cs",
+        "src/Unlimotion.Test/CiReadmeMediaContract.cs",
+        "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs",
+        "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-        "dotnet build src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj -c Release --no-restore -v minimal /nr:false => прошло; errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormDesktopShellPackagingExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "two SingleViewStartupUiTests + RoadmapDropAndFolderPickerCompatibility_Work => прошло 3/3",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 17 warnings, executable_specification_ratio 44/45",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormCiReadmeMediaExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad => прошло 1/1",
+        "ReadmeDemoEnglishHeadlessTests filter => прошло 10/10, включая Readme_demo_uses_capture_presentation_state",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 18 warnings, executable_specification_ratio 45/45",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
         "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
-        "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+        "production code, .feature wording, .csproj, workflows, scripts, README, media и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0015-001 прошёл как executable BDD slice; ST-0015 now 2/3 step-executable; production behavior не менялось; full-suite regression PASS и published release не заявлены.",
-      "next_recommended_action": "Продолжать /storm:cover через SC-0015-003 (CI и README media automation smoke/regression evidence).",
+      "result": "SC-0015-003 прошёл как executable BDD slice; ST-0015 now 3/3 step-executable and overall coverage is 45/45; production behavior не менялось; full-suite regression PASS, remote CI и generated media не заявлены.",
+      "next_recommended_action": "Провести итоговый /storm:cover audit 45/45 и зафиксировать known full-suite limitation без изменения продукта.",
       "validation_status": "passed_with_known_bdd_lint_warnings",
-      "known_warning": "Validator reports 17 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Full-suite timeout without summary remains separate from this scenario."
+      "known_warning": "Validator reports 18 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Full-suite timeout without summary remains separate from this scenario."
     }
   },
   "traceability": {
     "updated_at": "2026-07-14",
-    "command": "/storm:trace sync after /storm:bdd-implement SC-0015-001 executable step definitions",
+    "command": "/storm:trace sync after /storm:bdd-implement SC-0015-003 executable step definitions",
     "route": "delivery-task",
     "mode": "test-only executable BDD sync",
     "annotations_added": false,
-    "annotations_reason": "Test annotations не менялись; TS-0069 и existing TS-0011/TS-0015 связаны с STORM artifacts через storm.json/feature/report links.",
-    "summary": "ST-0015/AC-0041 preserves existing TS-0011/TS-0015 evidence and adds executable BDD evidence TS-0069 through SD-0171..SD-0174.",
+    "annotations_reason": "Test annotations не менялись; TS-0070 и existing TS-0011/TS-0015 связаны с STORM artifacts через storm.json/feature/report links.",
+    "summary": "ST-0015/AC-0043 preserves existing TS-0011/TS-0015 evidence and adds executable BDD evidence TS-0070 through SD-0175..SD-0178.",
     "story_to_tests": {
       "ST-0001": {
         "tests": [
@@ -7700,7 +7725,8 @@
           "TS-0015",
           "TS-0024",
           "TS-0026",
-          "TS-0069"
+          "TS-0069",
+          "TS-0070"
         ],
         "code_units": [
           "CU-0015",
@@ -7730,7 +7756,8 @@
             "id": "AC-0043",
             "tests": [
               "TS-0011",
-              "TS-0015"
+              "TS-0015",
+              "TS-0070"
             ],
             "coverage_level": "critical"
           }
@@ -11001,6 +11028,14 @@
         {
           "path": ".github/workflows/tests.yml",
           "symbol": "all-tests"
+        },
+        {
+          "path": "src/Unlimotion.Test/CiReadmeMediaContract.cs",
+          "symbol": "CiReadmeMediaContract"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs",
+          "symbol": "CiReadmeMediaScenario_ExecutesFeatureSteps"
         }
       ]
     },
@@ -14966,14 +15001,20 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0070_on_2026-07-14",
       "linked_tests": [
         "TS-0011",
-        "TS-0015"
+        "TS-0015",
+        "TS-0070"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0175",
+        "SD-0176",
+        "SD-0177",
+        "SD-0178"
+      ],
       "coverage_role": "constraint_check",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -15010,6 +15051,17 @@
           "path": "src/Unlimotion.Test/MainScreenLoadingUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0015"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs",
+          "symbol": "CiReadmeMediaScenario_ExecutesFeatureSteps",
+          "description": "SC-0015-003 исполняется через локальные BDD definitions и неизменяемый CI/media contract.",
+          "test_id": "TS-0070"
+        },
+        {
+          "command": "dotnet test tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj -c Debug --no-restore --treenode-filter \"/*/*/ReadmeDemoEnglishHeadlessTests/*\" --output Detailed",
+          "result": "прошло 10/10, включая Readme_demo_uses_capture_presentation_state, on 2026-07-14",
+          "test_id": "TS-0070"
         }
       ]
     },
@@ -18007,11 +18059,47 @@
       "step_text": "Тогда Десктопная оболочка собирается как Avalonia WinExe и связана с update/package проверками.",
       "supports_scenarios": ["SC-0015-001"],
       "evidence": [{ "path": "src/Unlimotion.Test/DesktopShellPackagingContract.cs", "symbol": "DesktopShellPackagingContract.AssertAsync", "test_id": "TS-0069" }]
+    },
+    {
+      "id": "SD-0175",
+      "path": "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs",
+      "symbol": "CiReadmeMediaStepDefinitions.Create / SD-0175",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0015-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs", "symbol": "CiReadmeMediaScenario_ExecutesFeatureSteps", "test_id": "TS-0070" }]
+    },
+    {
+      "id": "SD-0176",
+      "path": "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs",
+      "symbol": "CiReadmeMediaStepDefinitions.Create / SD-0176",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0015",
+      "supports_scenarios": ["SC-0015-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormCiReadmeMediaExecutableSpecTests.cs", "symbol": "CiReadmeMediaScenario_ExecutesFeatureSteps", "test_id": "TS-0070" }]
+    },
+    {
+      "id": "SD-0177",
+      "path": "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs",
+      "symbol": "CiReadmeMediaStepDefinitions.Create / SD-0177",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": ["SC-0015-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/CiReadmeMediaContract.cs", "symbol": "CiReadmeMediaContract.ExecuteAsync", "test_id": "TS-0070" }]
+    },
+    {
+      "id": "SD-0178",
+      "path": "src/Unlimotion.Test/StormBdd/CiReadmeMediaStepDefinitions.cs",
+      "symbol": "CiReadmeMediaStepDefinitions.Create / SD-0178",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда CI и README media automation дают smoke/regression-доказательства для UI-потоков.",
+      "supports_scenarios": ["SC-0015-003"],
+      "evidence": [{ "path": "src/Unlimotion.Test/CiReadmeMediaContract.cs", "symbol": "CiReadmeMediaContract.AssertAsync", "test_id": "TS-0070" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0015-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0015-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -18029,14 +18117,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 44,
+    "passing_scenarios": 45,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 174,
-    "step_executable_scenarios": 44,
-    "step_definition_coverage_ratio": "44/45",
-    "executable_specification_ratio": "44/45 step-executable; 44/45 passing scenarios",
+    "step_definitions_total": 178,
+    "step_executable_scenarios": 45,
+    "step_definition_coverage_ratio": "45/45",
+    "executable_specification_ratio": "45/45 step-executable; 45/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -18046,28 +18134,28 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-      "dotnet build src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj -c Release --no-restore -v minimal /nr:false => прошло; errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormDesktopShellPackagingExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "SingleViewStartup_ConnectsExistingTaskStorage, SingleViewStartup_ReplaysStartupUpdateCheck_WhenUpdateServiceAttachesAfterStartup и RoadmapDropAndFolderPickerCompatibility_Work => прошло 3/3 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 17 known duplicate-step warnings, executable_specification_ratio 44/45",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormCiReadmeMediaExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad => прошло 1/1 on 2026-07-14",
+      "ReadmeDemoEnglishHeadlessTests filter => прошло 10/10, включая Readme_demo_uses_capture_presentation_state, on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 18 known duplicate-step warnings, executable_specification_ratio 45/45",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; existing headless startup/update/package UI tests used as next-best evidence.",
-      "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
+      "UI video evidence не применимо: UI behavior/layout и media assets не менялись; existing headless ReadmeDemo and responsiveness UI tests used as next-best evidence.",
+      "production code, .feature wording, automation IDs, .csproj, workflows, scripts, README, media и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
-    "bdd_lint_issues": 17,
-    "step_reuse_ratio": "177/177"
+    "bdd_lint_issues": 18,
+    "step_reuse_ratio": "181/181"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0015-001",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0015-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0015-001 -> TS-0069 -> SD-0171..SD-0174",
+      "SC-0015-003 -> TS-0070 -> SD-0175..SD-0178",
       "existing TS-0011/TS-0015 preserved",
-      "ST-0015 now 2/3 step-executable"
+      "ST-0015 now 3/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -18078,28 +18166,28 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0015-001: новый TS-0069 связывает scenario text с passing неизменяемым desktop project/workflow contract и startup/update/package UI evidence через SD-0171..SD-0174. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs, existing test annotations, project files и workflows не менялись.",
+    "decision": "BDD links обновлены для SC-0015-003: новый TS-0070 связывает scenario text с passing неизменяемым CI/media contract, локальным ReadmeDemo headless smoke и UI responsiveness evidence через SD-0175..SD-0178. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs, existing test annotations, project files, workflows, scripts, README и media не менялись.",
     "gaps": [
-      "Step definitions покрывают 44/45 scenarios.",
-      "ST-0015 now has 2/3 step-executable scenarios.",
-      "Остаётся SC-0015-003 без step definitions.",
+      "Step definitions покрывают 45/45 scenarios.",
+      "ST-0015 now has 3/3 step-executable scenarios.",
+      "Нет active scenarios без step definitions.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0015-001",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0015-003",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text now includes SD-0171; intentional shared task-set context.",
+      "Duplicate shared Given step text now includes SD-0175; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains intentional scenario-specific binding.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text now includes SD-0173; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0177; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
       "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
       "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios.",
@@ -18110,18 +18198,19 @@
       "Duplicate ST-0010 story step text includes SD-0136, SD-0140 and SD-0144; intentional scenario-specific binding.",
       "Duplicate remote backup flow step text includes SD-0137, SD-0141, SD-0149 and SD-0157; intentional scenario-specific binding.",
       "Duplicate ST-0012 story step text includes SD-0152, SD-0156 and SD-0160; intentional scenario-specific binding.",
-      "Duplicate ST-0013 story step text includes SD-0164 and SD-0168; intentional scenario-specific binding."
+      "Duplicate ST-0013 story step text includes SD-0164 and SD-0168; intentional scenario-specific binding.",
+      "Duplicate ST-0015 story step text includes SD-0172 and SD-0176; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0015-001 additionally linked to TS-0069.",
-      "scenario_step_definition_links": "WARNING: 44/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0015-003 additionally linked to TS-0070.",
+      "scenario_step_definition_links": "PASS: 45/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; existing headless startup/update/package UI tests used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0015-001 executable BDD passed 1/1; desktop Release build errors 0; startup/update/package UI checks passed 3/3.",
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout и media assets не менялись; existing headless ReadmeDemo and responsiveness UI tests used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0015-003 executable BDD passed 1/1; ReadmeDemo headless test project passed 10/10; responsiveness UI check passed 1/1.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
@@ -18130,8 +18219,8 @@
       "st_0010": "PASS: SC-0010-001..SC-0010-004 are step-executable through TS-0060..TS-0063 and SD-0135..SD-0150.",
       "st_0012": "PASS: SC-0012-001..SC-0012-003 are step-executable through TS-0064..TS-0066 and SD-0151..SD-0162.",
       "st_0013": "PASS: SC-0013-001..SC-0013-002 are step-executable through TS-0067/TS-0068 and SD-0163..SD-0170.",
-      "st_0015": "PARTIAL: SC-0015-001 and SC-0015-002 are step-executable; SC-0015-003 remains a gap.",
-      "remaining_gaps": "SC-0015-003 remains without step definitions."
+      "st_0015": "PASS: SC-0015-001..SC-0015-003 are step-executable through TS-0069/TS-0070 and SD-0171..SD-0178.",
+      "remaining_gaps": "Нет: 45/45 active scenarios имеют step definitions."
     }
   }
 }

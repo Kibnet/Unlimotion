@@ -1,7 +1,7 @@
 # STORM Stories
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:bdd-implement SC-0015-001`
+Команда: `/storm:bdd-implement SC-0015-003`
 
 | Story | Изменение | Доказательства |
 | --- | --- | --- |
@@ -14,6 +14,7 @@
 | ST-0013 | `AC-0038`: preview/import и дерево после подтверждения executable через `TS-0068` и `SD-0167..SD-0170`. | BDD 1/1, parser/VM/UI 3/3 |
 | ST-0013 | 2/2 scenarios step-executable. | `TS-0067..TS-0068` |
 | ST-0015 | `AC-0041`: desktop WinExe/package contract исполняем через `TS-0069` и `SD-0171..SD-0174`. | BDD 1/1, Desktop Release build, startup/update/package UI 3/3 |
-| ST-0015 | 2/3 сценария исполняемы через шаги; `SC-0015-003` остаётся разрывом. | `TS-0011`, `TS-0015`, `TS-0024`, `TS-0069` |
+| ST-0015 | `AC-0043`: CI и README media automation исполняемы через `TS-0070` и `SD-0175..SD-0178`. | BDD 1/1, ReadmeDemo headless 10/10, responsiveness UI 1/1 |
+| ST-0015 | 3/3 сценария исполняемы через шаги. | `TS-0011`, `TS-0015`, `TS-0024`, `TS-0069`, `TS-0070` |
 
-Оставшиеся исполняемые BDD-разрывы: 1 сценарий. Full suite остаётся неподтверждённым; Windows ACL SSH-key hardening остаётся отдельным sandbox-sensitive evidence.
+Executable BDD-разрывы отсутствуют: 45/45. Full suite остаётся неподтверждённым; Windows ACL SSH-key hardening остаётся отдельным sandbox-sensitive evidence.
