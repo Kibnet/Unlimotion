@@ -1,7 +1,7 @@
 # STORM Traceability
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0010-003`
+Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0010-004`
 
 | Story | AC | Scenario | Test | Status |
 | --- | --- | --- | --- | --- |
@@ -12,5 +12,6 @@
 | ST-0010 | AC-0028 | SC-0010-001 | TS-0008 + TS-0009 + TS-0060 + SD-0135..SD-0138 | passing executable BDD; Git remote preview/connect |
 | ST-0010 | AC-0029 | SC-0010-002 | TS-0008 + TS-0009 + TS-0061 + SD-0139..SD-0142 | passing executable BDD; SSH/token remote authentication and key storage |
 | ST-0010 | AC-0030 | SC-0010-003 | TS-0008 + TS-0009 + TS-0062 + SD-0143..SD-0146 | passing executable BDD; file/field conflict resolution before commit/push |
+| ST-0010 | AC-0031 | SC-0010-004 | TS-0009 + TS-0063 + SD-0147..SD-0150 | passing executable BDD; Git jobs, remote pull and task preservation |
 
-`ST-0009` is 3/3; `ST-0010` is now 3/4 step-executable. Общий executable ratio: 37/45.
+`ST-0009` is 3/3; `ST-0010` is now 4/4 step-executable. Общий executable ratio: 38/45.

@@ -231,5 +231,9 @@ internal sealed class StormScenarioContext
     public bool GitConflictResolutionStoryBehaviorConfirmed { get; set; }
     public GitConflictResolutionScenarioResult? GitConflictResolutionResult { get; set; }
 
+    public bool GitBackupJobsTaskSetAvailable { get; set; }
+    public bool GitBackupJobsStoryBehaviorConfirmed { get; set; }
+    public GitBackupJobsScenarioResult? GitBackupJobsResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

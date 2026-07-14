@@ -80,11 +80,12 @@
       "BDD executable slice добавлен 2026-07-14: SC-0009-003 исполняется из feature text через repo-local step definitions SD-0131..SD-0134 и TUnit evidence TS-0059; linked TS-0014 preserved; ST-0009 now 3/3 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0010-001 исполняется из feature text через repo-local step definitions SD-0135..SD-0138 и TUnit evidence TS-0060; linked TS-0008/TS-0009 preserved; ST-0010 now 1/4 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0010-002 исполняется из feature text через repo-local step definitions SD-0139..SD-0142 и TUnit evidence TS-0061; linked TS-0008/TS-0009 preserved; ST-0010 now 2/4 step-executable.",
-      "BDD executable slice добавлен 2026-07-14: SC-0010-003 исполняется из feature text через repo-local step definitions SD-0143..SD-0146 и TUnit evidence TS-0062; linked TS-0008/TS-0009 preserved; ST-0010 now 3/4 step-executable."
+      "BDD executable slice добавлен 2026-07-14: SC-0010-003 исполняется из feature text через repo-local step definitions SD-0143..SD-0146 и TUnit evidence TS-0062; linked TS-0008/TS-0009 preserved; ST-0010 now 3/4 step-executable.",
+      "BDD executable slice добавлен 2026-07-14: SC-0010-004 исполняется из feature text через repo-local step definitions SD-0147..SD-0150 и TUnit evidence TS-0063; linked TS-0009 preserved; ST-0010 now 4/4 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0010-003 Git conflict resolution executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0010-004 Git backup jobs executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -2173,7 +2174,8 @@
           "text": "Автоматические pull/push и backup-задачи не должны терять существующие локальные или удалённые задачи.",
           "coverage_level": "critical",
           "linked_tests": [
-            "TS-0009"
+            "TS-0009",
+            "TS-0063"
           ],
           "evidence": [
             {
@@ -2202,7 +2204,8 @@
         "TS-0009",
         "TS-0060",
         "TS-0061",
-        "TS-0062"
+        "TS-0062",
+        "TS-0063"
       ],
       "linked_code": [
         "CU-0008",
@@ -2231,7 +2234,7 @@
         "SC-0010-004"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0010-001 исполняется через TS-0060/SD-0135..SD-0138 и подтверждает preview/connect Git remote flows; SC-0010-002 исполняется через TS-0061/SD-0139..SD-0142 и подтверждает SSH/token remote-аутентификацию и SSH key storage; SC-0010-003 исполняется через TS-0062/SD-0143..SD-0146 и подтверждает file/field conflict resolution before commit/push; SC-0010-004 остаётся linked-only scenario."
+      "behavior_coverage_note": "SC-0010-001 исполняется через TS-0060/SD-0135..SD-0138 и подтверждает preview/connect Git remote flows; SC-0010-002 исполняется через TS-0061/SD-0139..SD-0142 и подтверждает SSH/token remote-аутентификацию и SSH key storage; SC-0010-003 исполняется через TS-0062/SD-0143..SD-0146 и подтверждает file/field conflict resolution before commit/push; SC-0010-004 исполняется через TS-0063/SD-0147..SD-0150 и подтверждает Git backup jobs, remote pull и сохранность local/remote tasks."
     },
     {
       "id": "ST-0011",
@@ -5846,6 +5849,30 @@
         { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/BackupViaGitServiceTests/ResolveConflictFields_UsesSelectedVersionsAndMergedFields\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0008/TS-0009 links preserved. Full suite remains unconfirmed after the earlier 304-second timeout without a summary."
+    },
+    {
+      "id": "TS-0063",
+      "name": "StormGitBackupJobsExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormGitBackupJobsExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/git-backup-jobs",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0010-004_step_definitions",
+      "confidence": 0.90,
+      "linked_stories": ["ST-0010"],
+      "linked_acceptance_criteria": ["AC-0031"],
+      "linked_constraints": ["CN-0005"],
+      "linked_scenarios": ["SC-0010-004"],
+      "evidence": [
+        { "path": "src/Unlimotion.Test/StormGitBackupJobsExecutableSpecTests.cs", "symbol": "GitBackupJobsScenario_ExecutesFeatureSteps", "description": "Исполняет шаги SC-0010-004 через локальные STORM BDD definitions." },
+        { "path": "src/Unlimotion.Test/StormBdd/GitBackupJobsStepDefinitions.cs", "symbol": "SD-0147..SD-0150", "description": "Связывает Git backup jobs с remote pull и task-preservation evidence." },
+        { "path": "src/Unlimotion.Test/GitBackupJobsContract.cs", "symbol": "GitBackupJobsContract", "description": "Подтверждает запуск jobs, remote pull и сохранность local/remote tasks." },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormGitBackupJobsExecutableSpecTests/*\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/GitBackupJobTests/Jobs_RunWhenBackupIsEnabledAndNoConflictResolutionIsInProgress\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/BackupViaGitServiceTests/PullExistingRepository_PullsRemoteChanges_WhenTaskFolderIsExistingRepository\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/BackupViaGitServiceTests/ConnectRepository_MergesNonEmptyRemoteWithLocalFolderAfterConfirmation\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0009 link preserved. Full suite remains unconfirmed after the earlier timeout without a summary."
     }
   ],
   "code_units": [
@@ -14738,13 +14765,14 @@
         "CN-0005"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0063_on_2026-07-14",
       "linked_tests": [
-        "TS-0009"
+        "TS-0009",
+        "TS-0063"
       ],
-      "step_definitions": [],
+      "step_definitions": ["SD-0147", "SD-0148", "SD-0149", "SD-0150"],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -17452,11 +17480,47 @@
       "step_text": "Тогда Разрешение конфликтов поддерживает решения на уровне файла и отдельных полей перед commit/push.",
       "supports_scenarios": ["SC-0010-003"],
       "evidence": [{ "path": "src/Unlimotion.Test/GitConflictResolutionContract.cs", "symbol": "GitConflictResolutionContract.AssertAsync", "test_id": "TS-0062" }]
+    },
+    {
+      "id": "SD-0147",
+      "path": "src/Unlimotion.Test/StormBdd/GitBackupJobsStepDefinitions.cs",
+      "symbol": "GitBackupJobsStepDefinitions.Create / SD-0147",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0010-004"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormGitBackupJobsExecutableSpecTests.cs", "symbol": "GitBackupJobsScenario_ExecutesFeatureSteps", "test_id": "TS-0063" }]
+    },
+    {
+      "id": "SD-0148",
+      "path": "src/Unlimotion.Test/StormBdd/GitBackupJobsStepDefinitions.cs",
+      "symbol": "GitBackupJobsStepDefinitions.Create / SD-0148",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0010",
+      "supports_scenarios": ["SC-0010-004"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormGitBackupJobsExecutableSpecTests.cs", "symbol": "GitBackupJobsScenario_ExecutesFeatureSteps", "test_id": "TS-0063" }]
+    },
+    {
+      "id": "SD-0149",
+      "path": "src/Unlimotion.Test/StormBdd/GitBackupJobsStepDefinitions.cs",
+      "symbol": "GitBackupJobsStepDefinitions.Create / SD-0149",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь запускает или проверяет remote backup flow",
+      "supports_scenarios": ["SC-0010-004"],
+      "evidence": [{ "path": "src/Unlimotion.Test/GitBackupJobsContract.cs", "symbol": "GitBackupJobsContract", "test_id": "TS-0063" }]
+    },
+    {
+      "id": "SD-0150",
+      "path": "src/Unlimotion.Test/StormBdd/GitBackupJobsStepDefinitions.cs",
+      "symbol": "GitBackupJobsStepDefinitions.Create / SD-0150",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Автоматические pull/push и backup-задачи не должны терять существующие локальные или удалённые задачи.",
+      "supports_scenarios": ["SC-0010-004"],
+      "evidence": [{ "path": "src/Unlimotion.Test/GitBackupJobsContract.cs", "symbol": "GitBackupJobsContract.AssertAsync", "test_id": "TS-0063" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0010-003",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0010-004",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -17474,14 +17538,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 37,
+    "passing_scenarios": 38,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 146,
-    "step_executable_scenarios": 37,
-    "step_definition_coverage_ratio": "37/45",
-    "executable_specification_ratio": "37/45 step-executable; 37/45 passing scenarios",
+    "step_definitions_total": 150,
+    "step_executable_scenarios": 38,
+    "step_definition_coverage_ratio": "38/45",
+    "executable_specification_ratio": "38/45 step-executable; 38/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -17501,17 +17565,17 @@
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
     "bdd_lint_issues": 15,
-    "step_reuse_ratio": "149/149"
+    "step_reuse_ratio": "153/153"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0010-003",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0010-004",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0010-003 -> TS-0062 -> SD-0143..SD-0146",
-      "existing TS-0008/TS-0009 preserved",
-      "ST-0010 now 3/4 step-executable"
+      "SC-0010-004 -> TS-0063 -> SD-0147..SD-0150",
+      "existing TS-0009 preserved",
+      "ST-0010 now 4/4 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -17524,8 +17588,8 @@
     "tests_changed": true,
     "decision": "BDD links обновлены для SC-0010-003: новый TS-0062 связывает scenario text с passing file/field conflict-resolution проверками временных local Git repositories через SD-0143..SD-0146. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 37/45 scenarios.",
-      "ST-0010 now has 3/4 step-executable scenarios; SC-0010-004 remains the story gap.",
+      "Step definitions покрывают 38/45 scenarios.",
+      "ST-0010 now has 4/4 step-executable scenarios.",
       "Windows ACL SSH-key hardening remains separate sandbox-sensitive evidence and is outside this conflict-resolution scenario.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
@@ -17533,7 +17597,7 @@
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0010-003",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0010-004",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
@@ -17555,8 +17619,8 @@
       "Duplicate remote backup flow step text includes SD-0137 and SD-0141; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0010-003 additionally linked to TS-0062.",
-      "scenario_step_definition_links": "WARNING: 37/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0010-004 additionally linked to TS-0063.",
+      "scenario_step_definition_links": "WARNING: 38/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
@@ -17569,7 +17633,7 @@
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
       "st_0008": "PASS: SC-0008-001, SC-0008-002 and SC-0008-003 are step-executable through TS-0054..TS-0056 and SD-0111..SD-0122.",
       "st_0009": "PASS: SC-0009-001, SC-0009-002 and SC-0009-003 are step-executable through TS-0057..TS-0059 and SD-0123..SD-0134.",
-      "st_0010": "PARTIAL: SC-0010-001..SC-0010-003 are step-executable through TS-0060..TS-0062 and SD-0135..SD-0146; SC-0010-004 remains a gap.",
+      "st_0010": "PASS: SC-0010-001..SC-0010-004 are step-executable through TS-0060..TS-0063 and SD-0135..SD-0150.",
       "unrelated_backup_fixture_gate": "KNOWN ENVIRONMENT BLOCKER: BackupViaGitServiceTests was 51/52 because GetCredentials_HardensConfiguredPrivateKeyPermissionsOnWindows fails under current Windows ACL sandbox; it does not affect SC-0010-003 targeted evidence."
     }
   }
