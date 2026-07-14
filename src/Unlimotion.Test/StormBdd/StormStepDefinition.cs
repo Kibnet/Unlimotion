@@ -247,5 +247,9 @@ internal sealed class StormScenarioContext
     public bool SettingsUpdateCompatibilityStoryBehaviorConfirmed { get; set; }
     public SettingsUpdateCompatibilityScenarioResult? SettingsUpdateCompatibilityResult { get; set; }
 
+    public bool OutlineClipboardCopyTaskSetAvailable { get; set; }
+    public bool OutlineClipboardCopyStoryBehaviorConfirmed { get; set; }
+    public OutlineClipboardCopyScenarioResult? OutlineClipboardCopyResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

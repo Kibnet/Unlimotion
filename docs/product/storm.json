@@ -81,11 +81,12 @@
       "BDD executable slice добавлен 2026-07-14: SC-0010-001 исполняется из feature text через repo-local step definitions SD-0135..SD-0138 и TUnit evidence TS-0060; linked TS-0008/TS-0009 preserved; ST-0010 now 1/4 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0010-002 исполняется из feature text через repo-local step definitions SD-0139..SD-0142 и TUnit evidence TS-0061; linked TS-0008/TS-0009 preserved; ST-0010 now 2/4 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0010-003 исполняется из feature text через repo-local step definitions SD-0143..SD-0146 и TUnit evidence TS-0062; linked TS-0008/TS-0009 preserved; ST-0010 now 3/4 step-executable.",
-      "BDD executable slice добавлен 2026-07-14: SC-0010-004 исполняется из feature text через repo-local step definitions SD-0147..SD-0150 и TUnit evidence TS-0063; linked TS-0009 preserved; ST-0010 now 4/4 step-executable."
+      "BDD executable slice добавлен 2026-07-14: SC-0010-004 исполняется из feature text через repo-local step definitions SD-0147..SD-0150 и TUnit evidence TS-0063; linked TS-0009 preserved; ST-0010 now 4/4 step-executable.",
+      "BDD executable slice добавлен 2026-07-14: SC-0013-001 исполняется из feature text через repo-local step definitions SD-0163..SD-0166 и TUnit/Avalonia.Headless evidence TS-0067; linked TS-0001/TS-0004/TS-0010 preserved; ST-0013 now 1/2 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0012-002 Settings storage/Git executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0013-001 outline copy executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -2491,7 +2492,8 @@
           "linked_tests": [
             "TS-0001",
             "TS-0004",
-            "TS-0010"
+            "TS-0010",
+            "TS-0067"
           ],
           "evidence": [
             {
@@ -2536,7 +2538,8 @@
       "linked_tests": [
         "TS-0001",
         "TS-0004",
-        "TS-0010"
+        "TS-0010",
+        "TS-0067"
       ],
       "linked_code": [
         "CU-0017",
@@ -2563,7 +2566,7 @@
         "SC-0013-002"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "BDD-сценарии связаны с существующими тестами; tests не запускались в artifact-only BDD sync."
+      "behavior_coverage_note": "SC-0013-001 исполняется через TS-0067/SD-0163..SD-0166 и подтверждает Markdown outline с descriptions, применённые settings и копирование выбранного поддерева через tree commands; SC-0013-002 остаётся linked-only scenario."
     },
     {
       "id": "ST-0014",
@@ -5953,6 +5956,30 @@
         { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/PackageUpdateCompatibilityUiTests/RoadmapDropAndFolderPickerCompatibility_Work\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
       ],
       "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0008/TS-0015 links preserved. Full suite remains unconfirmed after the earlier timeout without a summary."
+    },
+    {
+      "id": "TS-0067",
+      "name": "StormOutlineClipboardCopyExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner",
+      "type": "bdd-executable-spec/outline-clipboard-copy",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0013-001_step_definitions",
+      "confidence": 0.90,
+      "linked_stories": ["ST-0013"],
+      "linked_acceptance_criteria": ["AC-0037"],
+      "linked_constraints": ["CN-0002", "CN-0004", "CN-0007"],
+      "linked_scenarios": ["SC-0013-001"],
+      "evidence": [
+        { "path": "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs", "symbol": "OutlineClipboardCopyScenario_ExecutesFeatureSteps", "description": "Исполняет шаги SC-0013-001 через локальные STORM BDD definitions." },
+        { "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs", "symbol": "SD-0163..SD-0166", "description": "Связывает Gherkin копирования outline с passing format, settings и tree-command evidence." },
+        { "path": "src/Unlimotion.Test/OutlineClipboardCopyContract.cs", "symbol": "OutlineClipboardCopyContract", "description": "Подтверждает Markdown descriptions, settings и копирование поддерева в isolated existing tests." },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormOutlineClipboardCopyExecutableSpecTests/*\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/TaskOutlineClipboardServiceTests/BuildOutline_MarkdownWithDescriptions_UsesChecklistAndIndentedDescriptions\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/MainWindowViewModelTests/CopyTaskOutline_UsesMarkdownAndDescriptionSettings\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" },
+        { "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work\" --output Detailed", "result": "прошло 1/1 on 2026-07-14" }
+      ],
+      "notes": "Production code, feature wording и existing test annotations не менялись; existing TS-0001/TS-0004/TS-0010 links preserved. Full suite remains unconfirmed after the earlier timeout without a summary."
     }
   ],
   "code_units": [
@@ -7016,56 +7043,56 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Продолжить /storm:cover через SC-0013-001: export/import outline с сохранением статуса и структуры; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0012-003 executable step definitions",
+    "recommended_next_step": "Продолжить /storm:cover через SC-0013-002: preview/import outline с сохранением будущего дерева после подтверждения; production code, feature wording и existing test annotations не менять без отдельной delivery SPEC.",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0013-001 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0012-003",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0013-001",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0012-003",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0013-001",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0012-003 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0013-001 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0012-003 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0013-001 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-implement SC-0012-003",
+      "command": "/storm:bdd-implement SC-0013-001",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-07-14-storm-sc0012-update-compatibility-bdd.md",
-      "classification": "SC-0012-003 Settings update/compatibility scenario now executes from feature text through repo-local step definitions and existing update-state, Settings control and package-compatibility evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0013-outline-copy-bdd.md",
+      "classification": "SC-0013-001 outline-copy scenario now executes from feature text through repo-local step definitions and existing Markdown-format, ViewModel-settings and tree-command evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/SettingsUpdateCompatibilityContract.cs",
-        "src/Unlimotion.Test/StormBdd/SettingsUpdateCompatibilityStepDefinitions.cs",
-        "src/Unlimotion.Test/StormSettingsUpdateCompatibilityExecutableSpecTests.cs",
+        "src/Unlimotion.Test/OutlineClipboardCopyContract.cs",
+        "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+        "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormSettingsUpdateCompatibilityExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "three targeted SettingsViewModelTests update methods => прошло 3/3; Settings/package compatibility UI => прошло 2/2",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 warnings, executable_specification_ratio 41/45",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormOutlineClipboardCopyExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "targeted Markdown format, ViewModel settings и tree-command UI methods => прошло 3/3",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 warnings, executable_specification_ratio 42/45",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
         "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0012-003 прошёл как executable BDD slice; ST-0012 now 3/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
-      "next_recommended_action": "Продолжать /storm:cover через SC-0013-001 (export/import outline с сохранением статуса и структуры).",
+      "result": "SC-0013-001 прошёл как executable BDD slice; ST-0013 now 1/2 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
+      "next_recommended_action": "Продолжать /storm:cover через SC-0013-002 (preview/import outline с сохранением будущего дерева после подтверждения).",
       "validation_status": "passed_with_known_bdd_lint_warnings",
       "known_warning": "Validator reports 16 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Full-suite timeout without summary remains separate from this scenario."
     }
@@ -7549,7 +7576,8 @@
         "tests": [
           "TS-0001",
           "TS-0004",
-          "TS-0010"
+          "TS-0010",
+          "TS-0067"
         ],
         "code_units": [
           "CU-0017",
@@ -7562,7 +7590,8 @@
             "tests": [
               "TS-0001",
               "TS-0004",
-              "TS-0010"
+              "TS-0010",
+              "TS-0067"
             ],
             "coverage_level": "critical"
           },
@@ -10709,6 +10738,16 @@
         {
           "path": "src/Unlimotion.ViewModel/TaskOutlineClipboardService.cs",
           "symbol": "BuildOutlineText"
+        },
+        {
+          "path": "src/Unlimotion.Test/OutlineClipboardCopyContract.cs",
+          "symbol": "OutlineClipboardCopyContract",
+          "test_id": "TS-0067"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+          "symbol": "SD-0163..SD-0166",
+          "test_id": "TS-0067"
         }
       ]
     },
@@ -12042,15 +12081,21 @@
         "CN-0007"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0067_on_2026-07-14",
       "linked_tests": [
         "TS-0001",
         "TS-0004",
-        "TS-0010"
+        "TS-0010",
+        "TS-0067"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0163",
+        "SD-0164",
+        "SD-0165",
+        "SD-0166"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -12082,6 +12127,11 @@
           "path": "src/Unlimotion.Test/TaskOutlineClipboardServiceTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0010"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs",
+          "description": "Исполняемая BDD-связь feature-сценария с Markdown-format, settings и tree-command evidence.",
+          "test_id": "TS-0067"
         }
       ]
     },
@@ -17747,11 +17797,47 @@
       "step_text": "Тогда Контролы обновления и compatibility checks защищают release/update flow.",
       "supports_scenarios": ["SC-0012-003"],
       "evidence": [{ "path": "src/Unlimotion.Test/SettingsUpdateCompatibilityContract.cs", "symbol": "SettingsUpdateCompatibilityContract.AssertAsync", "test_id": "TS-0066" }]
+    },
+    {
+      "id": "SD-0163",
+      "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+      "symbol": "OutlineClipboardCopyStepDefinitions.Create / SD-0163",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0013-001"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs", "symbol": "OutlineClipboardCopyScenario_ExecutesFeatureSteps", "test_id": "TS-0067" }]
+    },
+    {
+      "id": "SD-0164",
+      "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+      "symbol": "OutlineClipboardCopyStepDefinitions.Create / SD-0164",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "И поведение относится к истории ST-0013",
+      "supports_scenarios": ["SC-0013-001"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormOutlineClipboardCopyExecutableSpecTests.cs", "symbol": "OutlineClipboardCopyScenario_ExecutesFeatureSteps", "test_id": "TS-0067" }]
+    },
+    {
+      "id": "SD-0165",
+      "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+      "symbol": "OutlineClipboardCopyStepDefinitions.Create / SD-0165",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Когда пользователь копирует или вставляет outline задач",
+      "supports_scenarios": ["SC-0013-001"],
+      "evidence": [{ "path": "src/Unlimotion.Test/OutlineClipboardCopyContract.cs", "symbol": "OutlineClipboardCopyContract.ExecuteAsync", "test_id": "TS-0067" }]
+    },
+    {
+      "id": "SD-0166",
+      "path": "src/Unlimotion.Test/StormBdd/OutlineClipboardCopyStepDefinitions.cs",
+      "symbol": "OutlineClipboardCopyStepDefinitions.Create / SD-0166",
+      "framework": "repo-local STORM BDD runner + TUnit",
+      "step_text": "Тогда Копирование может вывести markdown outline и description по выбранной задаче или поддереву.",
+      "supports_scenarios": ["SC-0013-001"],
+      "evidence": [{ "path": "src/Unlimotion.Test/OutlineClipboardCopyContract.cs", "symbol": "OutlineClipboardCopyContract.AssertAsync", "test_id": "TS-0067" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0012-003",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0013-001",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -17769,14 +17855,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 41,
+    "passing_scenarios": 42,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 162,
-    "step_executable_scenarios": 41,
-    "step_definition_coverage_ratio": "41/45",
-    "executable_specification_ratio": "41/45 step-executable; 41/45 passing scenarios",
+    "step_definitions_total": 166,
+    "step_executable_scenarios": 42,
+    "step_definition_coverage_ratio": "42/45",
+    "executable_specification_ratio": "42/45 step-executable; 42/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -17786,28 +17872,27 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormSettingsUpdateCompatibilityExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "three targeted SettingsViewModelTests update methods => прошло 3/3 on 2026-07-14",
-      "two targeted Settings/package compatibility UI methods => прошло 2/2 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 known duplicate-step warnings, executable_specification_ratio 41/45",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --treenode-filter \"/*/*/StormOutlineClipboardCopyExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "targeted Markdown format, ViewModel settings и tree-command UI methods => прошло 3/3 on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 16 known duplicate-step warnings, executable_specification_ratio 42/45",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; existing headless Settings/package UI tests used as next-best evidence.",
+      "UI video evidence не применимо: UI behavior/layout не менялись; existing headless tree-command UI test used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
     "bdd_lint_issues": 16,
-    "step_reuse_ratio": "165/165"
+    "step_reuse_ratio": "169/169"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0012-003",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0013-001",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0012-003 -> TS-0066 -> SD-0159..SD-0162",
-      "existing TS-0008/TS-0015 preserved",
-      "ST-0012 now 3/3 step-executable"
+      "SC-0013-001 -> TS-0067 -> SD-0163..SD-0166",
+      "existing TS-0001/TS-0004/TS-0010 preserved",
+      "ST-0013 now 1/2 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -17818,23 +17903,23 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0012-003: новый TS-0066 связывает scenario text с passing update-state, Settings update control и package-compatibility evidence через SD-0159..SD-0162. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0013-001: новый TS-0067 связывает scenario text с passing Markdown-format, ViewModel-settings и tree-command evidence через SD-0163..SD-0166. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 41/45 scenarios.",
-      "ST-0012 now has 3/3 step-executable scenarios.",
-      "Остаются четыре сценария ST-0013/ST-0015 без step definitions.",
+      "Step definitions покрывают 42/45 scenarios.",
+      "ST-0013 now has 1/2 step-executable scenarios.",
+      "Остаются три сценария ST-0013/ST-0015 без step definitions.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0012-003",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0013-001",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text now includes SD-0159; intentional shared task-set context.",
+      "Duplicate shared Given step text now includes SD-0163; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text remains intentional scenario-specific binding.",
@@ -17852,15 +17937,15 @@
       "Duplicate ST-0012 story step text includes SD-0152, SD-0156 and SD-0160; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0012-003 additionally linked to TS-0066.",
-      "scenario_step_definition_links": "WARNING: 41/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0013-001 additionally linked to TS-0067.",
+      "scenario_step_definition_links": "WARNING: 42/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; existing headless Settings/package UI tests used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0012-003 executable BDD passed 1/1; three SettingsViewModelTests update methods passed 3/3; Settings/package UI methods passed 2/2.",
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; existing headless tree-command UI test used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0013-001 executable BDD passed 1/1; Markdown format, ViewModel settings и tree-command UI methods passed 3/3.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
@@ -17868,7 +17953,8 @@
       "st_0009": "PASS: SC-0009-001, SC-0009-002 and SC-0009-003 are step-executable through TS-0057..TS-0059 and SD-0123..SD-0134.",
       "st_0010": "PASS: SC-0010-001..SC-0010-004 are step-executable through TS-0060..TS-0063 and SD-0135..SD-0150.",
       "st_0012": "PASS: SC-0012-001..SC-0012-003 are step-executable through TS-0064..TS-0066 and SD-0151..SD-0162.",
-      "remaining_gaps": "SC-0013-001, SC-0013-002, SC-0015-001 and SC-0015-003 remain without step definitions."
+      "st_0013": "PARTIAL: SC-0013-001 is step-executable through TS-0067 and SD-0163..SD-0166; SC-0013-002 remains a gap.",
+      "remaining_gaps": "SC-0013-002, SC-0015-001 and SC-0015-003 remain without step definitions."
     }
   }
 }

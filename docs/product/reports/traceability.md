@@ -1,7 +1,7 @@
 # STORM Traceability
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0012-003`
+Команда: `/storm:trace` sync after `/storm:bdd-implement SC-0013-001`
 
 | Story | AC | Scenario | Test | Status |
 | --- | --- | --- | --- | --- |
@@ -16,5 +16,6 @@
 | ST-0012 | AC-0034 | SC-0012-001 | TS-0008 + TS-0012 + TS-0064 + SD-0151..SD-0154 | passing executable BDD; appearance setting and effect |
 | ST-0012 | AC-0035 | SC-0012-002 | TS-0008 + TS-0009 + TS-0065 + SD-0155..SD-0158 | passing executable BDD; storage/Git readiness and conflict actions |
 | ST-0012 | AC-0036 | SC-0012-003 | TS-0008 + TS-0015 + TS-0066 + SD-0159..SD-0162 | passing executable BDD; update states, Settings controls and package compatibility |
+| ST-0013 | AC-0037 | SC-0013-001 | TS-0001 + TS-0004 + TS-0010 + TS-0067 + SD-0163..SD-0166 | passing executable BDD; Markdown descriptions, settings and tree-command copy |
 
-`ST-0009` is 3/3; `ST-0010` is 4/4; `ST-0012` is now 3/3 step-executable. Общий executable ratio: 41/45.
+`ST-0009` is 3/3; `ST-0010` is 4/4; `ST-0012` is 3/3; `ST-0013` is now 1/2 step-executable. Общий executable ratio: 42/45.
