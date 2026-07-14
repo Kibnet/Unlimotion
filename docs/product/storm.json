@@ -7120,18 +7120,18 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Провести итоговый /storm:cover audit 45/45: подтвердить metrics, traceability и known full-suite limitation без изменения продукта.",
+    "recommended_next_step": "STORM /storm:cover завершён с 45/45 исполняемыми сценариями; исторический timeout полного набора можно расследовать только отдельной QUEST-задачей, без пересмотра текущего scenario coverage.",
     "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0015-003 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0015-003",
+    "last_cover_command": "/storm:cover final audit after /storm:bdd-implement SC-0015-003",
     "coverage_report": "docs/product/reports/coverage.md",
-    "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
+    "coverage_mode": "artifact-only final executable coverage audit",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0015-003",
+    "last_rank_command": "/storm:rank final audit after /storm:bdd-implement SC-0015-003",
     "ranking_report": "docs/product/reports/ranking.md",
-    "ranking_mode": "artifact sync after test-only executable BDD slice",
+    "ranking_mode": "final audit after executable BDD backlog completion",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
@@ -7173,6 +7173,15 @@
       "next_recommended_action": "Провести итоговый /storm:cover audit 45/45 и зафиксировать known full-suite limitation без изменения продукта.",
       "validation_status": "passed_with_known_bdd_lint_warnings",
       "known_warning": "Validator reports 18 shared context/action/story step warnings; all are intentional scenario-specific reuse, not blockers. Full-suite timeout without summary remains separate from this scenario."
+    },
+    "final_coverage_audit": {
+      "updated_at": "2026-07-14",
+      "command": "/storm:cover final audit",
+      "mode": "artifact-only",
+      "inventory": "45 active; 45 passing; no scenarios without test links or step definitions",
+      "validator": "OK: 0 errors, 18 known duplicate-step warnings, executable_specification_ratio 45/45, step_reuse_ratio 181/181",
+      "result": "Исполняемое BDD coverage STORM завершено: 45/45 сценариев; в аудите нет изменений production, tests, annotations, feature, projects, workflows, scripts, README или media.",
+      "known_limitation": "Полный набор Unlimotion.Test ранее превысил timeout после 304 секунд без summary; это не regression PASS claim и не меняет scenario-level coverage."
     }
   },
   "traceability": {

@@ -22,3 +22,9 @@
 | Artifact validator | 0 errors, 18 известных предупреждений, 45/45 исполняемых сценариев |
 
 Executable BDD gaps отсутствуют: 45/45. Следующий шаг: итоговый `/storm:cover` audit; remote CI, generated media и full-suite PASS не заявляются.
+
+## Итоговый Аудит
+
+- Центральный validator: `0 errors`, `18` известных предупреждений о повторном использовании шагов, executable ratio `45/45`, reuse `181/181`.
+- Независимый JSON inventory: `45` active, `45` passing, без сценариев без test links или step definitions.
+- Очередь `/storm:cover` завершена. Исторический timeout полного набора без summary остаётся отдельным непроходившим подтверждением и не считается PASS.
