@@ -167,5 +167,11 @@ internal sealed class StormScenarioContext
 
     public RepeaterPatternScenarioResult? RepeaterPatternResult { get; set; }
 
+    public bool WantedImportanceTaskSetAvailable { get; set; }
+
+    public bool WantedImportanceStoryBehaviorConfirmed { get; set; }
+
+    public WantedImportanceScenarioResult? WantedImportanceResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
