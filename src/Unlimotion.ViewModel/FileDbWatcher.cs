@@ -97,7 +97,9 @@ namespace Unlimotion.ViewModel
 
                 var fullPath = e.FullPath;
                 
-                if (fullPath.Contains(GitFolderName) || fullPath.EndsWith(GitOrigPostfix))
+                if (fullPath.Contains(GitFolderName) ||
+                    fullPath.EndsWith(GitOrigPostfix) ||
+                    IsStorageServiceArtifact(e.Name))
                     return;
                 
                 if (fullPath.EndsWith(GitLockPostfix)) 
@@ -144,6 +146,13 @@ namespace Unlimotion.ViewModel
             }
             Debug.WriteLine($"{DateTimeOffset.Now}: {e.FullPath} {e.ChangeType}.");
         }
+
+        private static bool IsStorageServiceArtifact(string? fileName) =>
+            string.IsNullOrWhiteSpace(fileName) ||
+            fileName.Equals(".unlimotion.lock", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase);
         
         private CacheItemPolicy GetCachePolicy(Action handler)
         {

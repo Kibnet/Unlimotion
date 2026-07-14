@@ -42,6 +42,29 @@ public sealed class TaskAvailabilityParityTests
         }
     }
 
+    [Test]
+    public async Task Validate_ReportsSelfDuplicateRelationsAndDuplicateCriterionIds()
+    {
+        var target = CreateTask("target", DomainTaskStatus.Prepared);
+        var source = CreateTask("source", DomainTaskStatus.Prepared);
+        source.ContainsTasks = [source.Id, target.Id, target.Id];
+        target.ParentTasks = [source.Id];
+        source.CompletionCriteria =
+        [
+            new TaskCompletionCriterion { Id = "same", Text = "First" },
+            new TaskCompletionCriterion { Id = "same", Text = "Second" }
+        ];
+
+        var validation = new TaskAvailabilityService([source, target]).Validate();
+
+        await Assert.That(validation.ReferenceIssues.Select(static issue => issue.Kind))
+            .Contains(TaskGraphReferenceIssueKind.SelfRelation);
+        await Assert.That(validation.ReferenceIssues.Select(static issue => issue.Kind))
+            .Contains(TaskGraphReferenceIssueKind.DuplicateRelation);
+        await Assert.That(validation.ReferenceIssues.Select(static issue => issue.Kind))
+            .Contains(TaskGraphReferenceIssueKind.DuplicateCriterionId);
+    }
+
     private static IReadOnlyList<ParityScenario> CreateScenarios()
     {
         var available = CreateTask("available", DomainTaskStatus.Prepared);

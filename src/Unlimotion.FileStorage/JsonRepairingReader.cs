@@ -11,7 +11,12 @@ public static class JsonRepairingReader
 
         try
         {
-            using var reader = File.OpenText(fullPath);
+            using var stream = new FileStream(
+                fullPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             using var jsonReader = new JsonTextReader(reader);
             return jsonSerializer.Deserialize<T>(jsonReader)!;
         }
@@ -20,7 +25,16 @@ public static class JsonRepairingReader
             // Fall through to the small historical repair pass below.
         }
 
-        var original = File.ReadAllText(fullPath, Encoding.UTF8);
+        string original;
+        using (var stream = new FileStream(
+                   fullPath,
+                   FileMode.Open,
+                   FileAccess.Read,
+                   FileShare.ReadWrite | FileShare.Delete))
+        using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        {
+            original = reader.ReadToEnd();
+        }
         var repaired = FixMissingCommas(original);
 
         try

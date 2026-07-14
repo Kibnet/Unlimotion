@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Polly;
-using Polly.Retry;
 using Unlimotion.Domain;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -11,6 +9,8 @@ namespace Unlimotion.TaskTree;
 
 public class TaskTreeManager
 {
+    private readonly AsyncLocal<int> _mutationLockDepth = new();
+
     public IStorage Storage { get; init; }
     public Func<TaskItem, string>? StatusAuthorProvider { get; set; }
 
@@ -22,8 +22,37 @@ public class TaskTreeManager
     private string ResolveStatusAuthor(TaskItem task) =>
         TaskItem.NormalizeAuthor(StatusAuthorProvider?.Invoke(task) ?? task.UserId ?? "local-user");
 
+    private bool ShouldAcquireMutationLock =>
+        _mutationLockDepth.Value == 0 && Storage is ITaskGraphWriteLock;
+
+    private async Task<T> ExecuteWithMutationLockAsync<T>(Func<Task<T>> operation)
+    {
+        if (Storage is not ITaskGraphWriteLock writeLock || _mutationLockDepth.Value > 0)
+        {
+            return await operation();
+        }
+
+        return await writeLock.WithWriteLockAsync(async () =>
+        {
+            _mutationLockDepth.Value++;
+            try
+            {
+                return await operation();
+            }
+            finally
+            {
+                _mutationLockDepth.Value--;
+            }
+        });
+    }
+
     public async Task<List<TaskItem>> AddTask(TaskItem change, TaskItem? currentTask = null, bool isBlocked = false)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => AddTask(change, currentTask, isBlocked));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         // Create
@@ -102,6 +131,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> AddChildTask(TaskItem change, TaskItem currentTask)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => AddChildTask(change, currentTask));
+        }
+
         var result = new Dictionary<string, TaskItem>();
         string? newTaskId = null;
 
@@ -138,6 +172,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> DeleteTask(TaskItem change, bool deleteInStorage = true)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => DeleteTask(change, deleteInStorage));
+        }
+
         if (!deleteInStorage)
         {
             return await DeleteSingleTask(change, false);
@@ -373,6 +412,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> UpdateTask(TaskItem change)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => UpdateTask(change));
+        }
+
         var result = new Dictionary<string, TaskItem>();
         await IsCompletedAsync(async Task<bool> () =>
         {
@@ -409,6 +453,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => CloneTask(change, stepParents));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         await IsCompletedAsync(async Task<bool> () =>
@@ -502,6 +551,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> AddNewParentToTask(TaskItem change, TaskItem additionalParent)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => AddNewParentToTask(change, additionalParent));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         result.AddOrUpdateRange(
@@ -515,6 +569,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> MoveTaskToNewParent(TaskItem change, TaskItem newParent, TaskItem? prevParent)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => MoveTaskToNewParent(change, newParent, prevParent));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         result.AddOrUpdateRange(
@@ -544,6 +603,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> UnblockTask(TaskItem taskToUnblock, TaskItem blockingTask)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => UnblockTask(taskToUnblock, blockingTask));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         result.AddOrUpdateRange(
@@ -554,6 +618,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> BlockTask(TaskItem taskToBlock, TaskItem blockingTask)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => BlockTask(taskToBlock, blockingTask));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         result.AddOrUpdateRange(
@@ -569,6 +638,11 @@ public class TaskTreeManager
 
     public async Task<List<TaskItem>> DeleteParentChildRelation(TaskItem parent, TaskItem child)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => DeleteParentChildRelation(parent, child));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         result.AddOrUpdateRange(
@@ -747,28 +821,23 @@ public class TaskTreeManager
         return result.Values.ToList();
     }
 
-    private async Task<bool> IsCompletedAsync(Func<Task<bool>> task, TimeSpan? timeout = null)
+    private async Task<bool> IsCompletedAsync(Func<Task<bool>> task)
     {
-        TimeSpan countRetry = timeout ?? TimeSpan.FromMinutes(2);
-
-        AsyncRetryPolicy<bool>? retryPolicy = Policy.HandleResult<bool>(x => !x)
-            .WaitAndRetryAsync(
-                (int)countRetry.TotalSeconds, _ => TimeSpan.FromSeconds(1), (_, _, count,
-                    _) =>
-                {
-                    //_logger.Error($"Попытка выполнения операции с таском  №{count}");
-                });
-
-        var res = await retryPolicy.ExecuteAsync(() => task.Invoke());
+        var res = await task.Invoke();
 
         if (!res)
             throw new TimeoutException(
-                $"Операция не была корректно завершена за заданный таймаут {timeout}");
+                "Task graph mutation failed. It was not retried because the operation may have been partially persisted.");
         return (res);
     }
 
     public async Task<List<TaskItem>> CalculateAndUpdateAvailability(TaskItem task)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => CalculateAndUpdateAvailability(task));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
@@ -860,6 +929,7 @@ public class TaskTreeManager
             task.IsCanBeCompleted = newIsCanBeCompleted;
             task.UnlockedDateTime = newUnlockedDateTime;
             ApplyAutomaticInProgressRollbackIfNeeded(task);
+            task.UpdatedDateTime = GetNextUpdatedDateTime(task);
             await Storage.Save(task);
             result.AddOrUpdate(task);
         }
@@ -999,42 +1069,20 @@ public class TaskTreeManager
 
     private async Task<bool> CanTransitionToStatus(TaskItem task, DomainTaskStatus targetStatus)
     {
-        return targetStatus switch
+        var tasks = new List<TaskItem>();
+        await foreach (var storedTask in Storage.GetAll())
         {
-            DomainTaskStatus.NotReady => true,
-            DomainTaskStatus.Prepared => true,
-            DomainTaskStatus.Archived => task.Status != DomainTaskStatus.Completed,
-            DomainTaskStatus.InProgress => await IsTaskStartable(task),
-            DomainTaskStatus.Completed => task.Status != DomainTaskStatus.Archived &&
-                                          await IsTaskCompletable(task),
-            _ => false
-        };
-    }
-
-    private async Task<bool> IsTaskStartable(TaskItem task)
-    {
-        if (HasFuturePlannedBegin(task))
-        {
-            return false;
+            if (!string.Equals(storedTask.Id, task.Id, StringComparison.Ordinal))
+            {
+                tasks.Add(storedTask);
+            }
         }
 
-        return await AreContainedTasksCompleted(task) &&
-               !await HasIncompleteBlockerInTaskOrAncestors(
-                   task,
-                   new HashSet<string>(StringComparer.Ordinal));
+        tasks.Add(task);
+        return new TaskAvailabilityService(tasks)
+            .EvaluateStatusTransition(task, targetStatus)
+            .Allowed;
     }
-
-    private async Task<bool> IsTaskCompletable(TaskItem task)
-    {
-        return AreCompletionCriteriaSatisfied(task) &&
-               await AreContainedTasksCompleted(task) &&
-               !await HasIncompleteBlockerInTaskOrAncestors(
-                   task,
-                   new HashSet<string>(StringComparer.Ordinal));
-    }
-
-    private static bool AreCompletionCriteriaSatisfied(TaskItem task) =>
-        task.CompletionCriteria?.All(static criterion => criterion.IsSatisfied) != false;
 
     private static bool HasFuturePlannedBegin(TaskItem task) =>
         task.PlannedBeginDateTime.HasValue &&
@@ -1061,6 +1109,11 @@ public class TaskTreeManager
     /// <returns>List of affected tasks</returns>
     public async Task<List<TaskItem>> HandleTaskStatusChange(TaskItem task, TaskItem? existingTask = null)
     {
+        if (ShouldAcquireMutationLock)
+        {
+            return await ExecuteWithMutationLockAsync(() => HandleTaskStatusChange(task, existingTask));
+        }
+
         var result = new Dictionary<string, TaskItem>();
 
         await IsCompletedAsync(async () =>
@@ -1076,6 +1129,10 @@ public class TaskTreeManager
                 {
                     task.StatusHistory = existingTask.StatusHistory?.ToList() ?? new List<TaskStatusHistoryEntry>();
                     task.Status = existingTask.Status;
+                }
+                else
+                {
+                    task.Status = DomainTaskStatus.NotReady;
                 }
 
                 if (!await CanTransitionToStatus(task, requestedStatus))

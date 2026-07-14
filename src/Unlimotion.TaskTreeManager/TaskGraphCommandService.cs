@@ -95,7 +95,7 @@ public sealed class TaskGraphCommandService
         }
         catch (Exception ex)
         {
-            return CreateStorageFailedResult(
+            return CreateOutcomeUnknownResult(
                 ex,
                 task.Id,
                 requestedStatus,
@@ -106,7 +106,13 @@ public sealed class TaskGraphCommandService
 
         if (afterRead.Result != null)
         {
-            return afterRead.Result with { Before = before, Validation = validation };
+            return CreateOutcomeUnknownResult(
+                new InvalidOperationException(afterRead.Result.DeniedReason?.Message ?? "Post-write graph read failed."),
+                task.Id,
+                requestedStatus,
+                criterionId: null,
+                before,
+                validation);
         }
 
         var afterGraph = afterRead.Graph!;
@@ -114,7 +120,7 @@ public sealed class TaskGraphCommandService
         {
             return TaskOperationResult.Denied(
                 TaskOperationDeniedReason.Create(
-                    TaskOperationDeniedKind.StorageFailed,
+                    TaskOperationDeniedKind.OutcomeUnknown,
                     $"Task '{task.Id}' was not persisted with requested status {requestedStatus}.",
                     task.Id,
                     requestedStatus),
@@ -208,7 +214,7 @@ public sealed class TaskGraphCommandService
         }
         catch (Exception ex)
         {
-            return CreateStorageFailedResult(
+            return CreateOutcomeUnknownResult(
                 ex,
                 task.Id,
                 requestedStatus: null,
@@ -219,7 +225,13 @@ public sealed class TaskGraphCommandService
 
         if (afterRead.Result != null)
         {
-            return afterRead.Result with { Before = before, Validation = validation };
+            return CreateOutcomeUnknownResult(
+                new InvalidOperationException(afterRead.Result.DeniedReason?.Message ?? "Post-write graph read failed."),
+                task.Id,
+                requestedStatus: null,
+                criterionId,
+                before,
+                validation);
         }
 
         var afterGraph = afterRead.Graph!;
@@ -227,7 +239,7 @@ public sealed class TaskGraphCommandService
         {
             return TaskOperationResult.Denied(
                 TaskOperationDeniedReason.Create(
-                    TaskOperationDeniedKind.StorageFailed,
+                    TaskOperationDeniedKind.OutcomeUnknown,
                     $"Task '{task.Id}' was not found after criterion update.",
                     task.Id,
                     criterionId: criterionId),
@@ -241,7 +253,7 @@ public sealed class TaskGraphCommandService
         {
             return TaskOperationResult.Denied(
                 TaskOperationDeniedReason.Create(
-                    TaskOperationDeniedKind.StorageFailed,
+                    TaskOperationDeniedKind.OutcomeUnknown,
                     $"Criterion '{criterionId}' in task '{task.Id}' was not persisted with requested value.",
                     task.Id,
                     criterionId: criterionId),
@@ -278,12 +290,25 @@ public sealed class TaskGraphCommandService
 
     private async Task<TaskOperationResult> ExecuteWriteAsync(Func<Task<TaskOperationResult>> operation)
     {
-        if (_storage is ITaskGraphWriteLock writeLock)
+        try
         {
-            return await writeLock.WithWriteLockAsync(operation);
-        }
+            if (_storage is ITaskGraphWriteLock writeLock)
+            {
+                return await writeLock.WithWriteLockAsync(operation);
+            }
 
-        return await operation();
+            return await operation();
+        }
+        catch (Exception ex)
+        {
+            return CreateStorageFailedResult(
+                ex,
+                taskId: null,
+                requestedStatus: null,
+                criterionId: null,
+                before: null,
+                validation: null);
+        }
     }
 
     private static TaskOperationResult CreateStorageFailedResult(
@@ -297,6 +322,23 @@ public sealed class TaskGraphCommandService
             TaskOperationDeniedReason.Create(
                 TaskOperationDeniedKind.StorageFailed,
                 $"Task graph write failed: {ex.Message}",
+                taskId,
+                requestedStatus,
+                criterionId),
+            before,
+            validation: validation);
+
+    private static TaskOperationResult CreateOutcomeUnknownResult(
+        Exception ex,
+        string? taskId,
+        DomainTaskStatus? requestedStatus,
+        string? criterionId,
+        TaskAvailabilityAnalysis? before,
+        TaskGraphValidationReport? validation) =>
+        TaskOperationResult.Denied(
+            TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.OutcomeUnknown,
+                $"Task graph write may have been persisted, but the final outcome could not be verified: {ex.Message}",
                 taskId,
                 requestedStatus,
                 criterionId),
@@ -344,7 +386,10 @@ public sealed class TaskGraphCommandService
                 Type = repeater.Type,
                 Period = repeater.Period,
                 AfterComplete = repeater.AfterComplete,
-                Pattern = repeater.Pattern?.ToList()!
+                Pattern = repeater.Pattern?.ToList()!,
+                ExtensionData = repeater.ExtensionData?.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => pair.Value.DeepClone())
             };
 
     private sealed record TaskOperationReadResult(TaskGraphReadResult? Graph, TaskOperationResult? Result);

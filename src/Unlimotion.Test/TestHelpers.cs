@@ -32,6 +32,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
+            await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
 
@@ -41,6 +42,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             await action.Invoke();
             await WaitThrottleTime();
+            await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
 
@@ -50,7 +52,11 @@ namespace Unlimotion.Test
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
-            await WaitThrottleTime();
+            await Assert.That(await WaitUntilAsync(
+                    () => taskRepository.Tasks.Count == taskCountBefore + expectedNewTasks,
+                    TimeSpan.FromSeconds(5)))
+                .IsTrue();
+            await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + expectedNewTasks);
             return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
         }
@@ -61,7 +67,11 @@ namespace Unlimotion.Test
         {
             var taskCountBefore = taskRepository.Tasks.Count;
             await action.Invoke();
-            await WaitThrottleTime();
+            await Assert.That(await WaitUntilAsync(
+                    () => taskRepository.Tasks.Count == taskCountBefore + expectedNewTasks,
+                    TimeSpan.FromSeconds(5)))
+                .IsTrue();
+            await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + expectedNewTasks);
             return taskRepository.Tasks.Items.OrderBy(m => m.CreatedDateTime).Last();
         }
@@ -78,6 +88,9 @@ namespace Unlimotion.Test
             var sleepTime = TaskItemViewModel.DefaultThrottleTime.Add(TimeSpan.FromSeconds(0.1));
             await Task.Delay(sleepTime);
         }
+
+        public static Task WaitForPendingSavesAsync(ITaskStorage taskRepository) =>
+            Task.WhenAll(taskRepository.Tasks.Items.Select(task => task.WaitForPendingSavesAsync()));
 
         public static async Task<bool> WaitUntilAsync(
             Func<bool> predicate,

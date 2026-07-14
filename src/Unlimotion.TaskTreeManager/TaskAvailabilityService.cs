@@ -142,6 +142,7 @@ public sealed class TaskAvailabilityService
         var referenceIssues = new List<TaskGraphReferenceIssue>();
         foreach (var task in _tasks.Values)
         {
+            ValidateCompletionCriteria(referenceIssues, task);
             ValidateRelation(referenceIssues, task, nameof(TaskItem.ContainsTasks), task.ContainsTasks, nameof(TaskItem.ParentTasks));
             ValidateRelation(referenceIssues, task, nameof(TaskItem.ParentTasks), task.ParentTasks, nameof(TaskItem.ContainsTasks));
             ValidateRelation(referenceIssues, task, nameof(TaskItem.BlocksTasks), task.BlocksTasks, nameof(TaskItem.BlockedByTasks));
@@ -187,8 +188,41 @@ public sealed class TaskAvailabilityService
         IEnumerable<string>? targetIds,
         string inverseRelationName)
     {
-        foreach (var targetId in DistinctIds(targetIds))
+        var relationIds = targetIds?
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .ToArray() ?? Array.Empty<string>();
+
+        foreach (var duplicate in relationIds
+                     .GroupBy(static id => id, StringComparer.Ordinal)
+                     .Where(static group => group.Count() > 1))
         {
+            issues.Add(new TaskGraphReferenceIssue
+            {
+                Kind = TaskGraphReferenceIssueKind.DuplicateRelation,
+                SourceTaskId = source.Id,
+                SourceTaskTitle = source.Title,
+                Relation = relationName,
+                TargetTaskId = duplicate.Key,
+                Details = $"{relationName} contains task '{duplicate.Key}' {duplicate.Count()} times."
+            });
+        }
+
+        foreach (var targetId in relationIds.Distinct(StringComparer.Ordinal))
+        {
+            if (string.Equals(source.Id, targetId, StringComparison.Ordinal))
+            {
+                issues.Add(new TaskGraphReferenceIssue
+                {
+                    Kind = TaskGraphReferenceIssueKind.SelfRelation,
+                    SourceTaskId = source.Id,
+                    SourceTaskTitle = source.Title,
+                    Relation = relationName,
+                    TargetTaskId = targetId,
+                    Details = $"{relationName} contains a self-reference to task '{targetId}'."
+                });
+                continue;
+            }
+
             if (!_tasks.TryGetValue(targetId, out var target))
             {
                 issues.Add(new TaskGraphReferenceIssue
@@ -218,6 +252,27 @@ public sealed class TaskAvailabilityService
                     Details = $"{relationName} -> {targetId} is missing reverse {inverseRelationName} -> {source.Id}."
                 });
             }
+        }
+    }
+
+    private static void ValidateCompletionCriteria(
+        ICollection<TaskGraphReferenceIssue> issues,
+        TaskItem task)
+    {
+        foreach (var duplicate in (task.CompletionCriteria ?? [])
+                     .Where(static criterion => !string.IsNullOrWhiteSpace(criterion.Id))
+                     .GroupBy(static criterion => criterion.Id, StringComparer.Ordinal)
+                     .Where(static group => group.Count() > 1))
+        {
+            issues.Add(new TaskGraphReferenceIssue
+            {
+                Kind = TaskGraphReferenceIssueKind.DuplicateCriterionId,
+                SourceTaskId = task.Id,
+                SourceTaskTitle = task.Title,
+                Relation = nameof(TaskItem.CompletionCriteria),
+                TargetTaskId = duplicate.Key,
+                Details = $"CompletionCriteria contains criterion id '{duplicate.Key}' {duplicate.Count()} times."
+            });
         }
     }
 

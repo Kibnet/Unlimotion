@@ -153,7 +153,7 @@ public class TaskStatusTransitionTests
         var source = new TaskItem
         {
             Id = "source",
-            Status = DomainTaskStatus.Completed,
+            Status = DomainTaskStatus.Prepared,
             Repeater = new RepeaterPattern
             {
                 Type = RepeaterType.Daily,
@@ -172,6 +172,7 @@ public class TaskStatusTransitionTests
         await storage.Save(blocker);
         await storage.Save(blocked);
         await storage.Save(source);
+        source.Status = DomainTaskStatus.Completed;
 
         var result = await manager.HandleTaskStatusChange(source);
 

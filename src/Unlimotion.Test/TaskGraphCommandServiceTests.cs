@@ -154,7 +154,7 @@ public sealed class TaskGraphCommandServiceTests
     }
 
     [Test]
-    public async Task TrySetStatus_PostMutationDiagnosticFailureReturnsStorageFailed()
+    public async Task TrySetStatus_PostMutationDiagnosticFailureReturnsOutcomeUnknown()
     {
         var task = CreateTask("task", DomainTaskStatus.Prepared);
         var storage = new DiagnosticStorage([task])
@@ -166,8 +166,44 @@ public sealed class TaskGraphCommandServiceTests
             .TrySetStatusAsync(task.Id, DomainTaskStatus.InProgress);
 
         await Assert.That(result.Success).IsFalse();
-        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.StorageFailed);
+        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.OutcomeUnknown);
         await Assert.That(storage.SaveCount).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task TrySetStatus_WriteLockFailureReturnsStructuredStorageFailure()
+    {
+        var task = CreateTask("task", DomainTaskStatus.Prepared);
+        var storage = new ThrowingWriteLockStorage([task]);
+
+        var result = await new TaskGraphCommandService(storage)
+            .TrySetStatusAsync(task.Id, DomainTaskStatus.InProgress);
+
+        await Assert.That(result.Success).IsFalse();
+        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.StorageFailed);
+        await Assert.That(storage.SaveCount).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task TrySetCriterion_DuplicateCriterionIdsBlockWrite()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("task", DomainTaskStatus.Prepared);
+        task.CompletionCriteria =
+        [
+            new TaskCompletionCriterion { Id = "duplicate", Text = "First" },
+            new TaskCompletionCriterion { Id = "duplicate", Text = "Second" }
+        ];
+        var storage = CreateStorage(temp.DirectoryPath);
+        await storage.Save(task);
+
+        var result = await new TaskGraphCommandService(storage)
+            .TrySetCriterionAsync(task.Id, "duplicate", satisfied: true);
+
+        await Assert.That(result.Success).IsFalse();
+        await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.ValidationFailed);
+        var persisted = await storage.Load(task.Id, forced: true);
+        await Assert.That(persisted!.CompletionCriteria.All(static criterion => !criterion.IsSatisfied)).IsTrue();
     }
 
     [Test]
@@ -422,6 +458,49 @@ public sealed class TaskGraphCommandServiceTests
         public Task<bool> Connect() => Task.FromResult(true);
 
         public Task Disconnect() => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingWriteLockStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock
+    {
+        private readonly DiagnosticStorage _inner;
+
+        public ThrowingWriteLockStorage(IEnumerable<TaskItem> tasks)
+        {
+            _inner = new DiagnosticStorage(tasks);
+        }
+
+        public int SaveCount => _inner.SaveCount;
+
+        public event EventHandler<TaskStorageUpdateEventArgs> Updating
+        {
+            add { }
+            remove { }
+        }
+
+        public event Action<Exception?>? OnConnectionError
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation) =>
+            throw new IOException("simulated lock failure");
+
+        public Task<TaskGraphReadResult> ReadGraphAsync() => _inner.ReadGraphAsync();
+
+        public Task<TaskItem> Save(TaskItem item) => _inner.Save(item);
+
+        public Task<bool> Remove(string itemId) => _inner.Remove(itemId);
+
+        public Task<TaskItem?> Load(string itemId) => _inner.Load(itemId);
+
+        public IAsyncEnumerable<TaskItem> GetAll() => _inner.GetAll();
+
+        public Task BulkInsert(IEnumerable<TaskItem> taskItems) => _inner.BulkInsert(taskItems);
+
+        public Task<bool> Connect() => _inner.Connect();
+
+        public Task Disconnect() => _inner.Disconnect();
     }
 
     private static TaskItem CloneTask(TaskItem task) => task with

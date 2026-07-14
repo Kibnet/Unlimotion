@@ -69,5 +69,6 @@ public enum TaskOperationDeniedKind
     CriterionNotFound,
     StatusTransitionDenied,
     CompletedCriteriaImmutable,
-    StorageFailed
+    StorageFailed,
+    OutcomeUnknown
 }

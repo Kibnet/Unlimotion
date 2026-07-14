@@ -77,6 +77,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         }
 
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
+        foreach (var task in Tasks.Items.ToArray())
+        {
+            task.Dispose();
+        }
+
         Tasks.Dispose();
     }
 
@@ -223,6 +228,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             if (cachedTask.HasValue)
             {
                 Tasks.Remove(cachedTask.Value);
+                cachedTask.Value.Dispose();
             }
         }
     }
@@ -244,23 +250,33 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     public async Task<TaskItemViewModel> Update(TaskItem change)
     {
         var connItemList = (await TaskTreeManager.UpdateTask(change)).OrderBy(t => t.CreatedDateTime).ToList();
-        
         var last = connItemList.Last();
-        if (connItemList.Count>1)
-        {
-            var vm = CreateTaskViewModel(last);
-            Tasks.AddOrUpdate(vm);
+        TaskItemViewModel? lastViewModel = null;
 
-            foreach (var task in connItemList.SkipLast(1)) UpdateCache(task);
-            RefreshRelations();
-            return vm;
-        }
-        else
+        foreach (var task in connItemList)
         {
-            UpdateCache(last);
-            RefreshRelations();
-            return null!;
+            var cached = Tasks.Lookup(task.Id);
+            if (cached.HasValue)
+            {
+                cached.Value.Update(task);
+                if (task.Id == last.Id)
+                {
+                    lastViewModel = cached.Value;
+                }
+
+                continue;
+            }
+
+            var created = CreateTaskViewModel(task);
+            Tasks.AddOrUpdate(created);
+            if (task.Id == last.Id)
+            {
+                lastViewModel = created;
+            }
         }
+
+        RefreshRelations();
+        return lastViewModel!;
     }
 
     public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)

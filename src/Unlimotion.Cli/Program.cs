@@ -316,7 +316,9 @@ public static class Program
         {
             if (!output.Success)
             {
-                WriteJson(ErrorOutput.Create(MapDeniedKind(output.DeniedKind), output.Error ?? "Command was denied."));
+                WriteJson(ErrorOutput.Create(
+                    MapDeniedKind(output.DeniedKind ?? TaskOperationDeniedKind.StorageFailed),
+                    output.Error ?? "Command was denied."));
                 return;
             }
 
@@ -348,6 +350,7 @@ public static class Program
         TaskOperationDeniedKind.StatusTransitionDenied => "businessRuleDenied",
         TaskOperationDeniedKind.CompletedCriteriaImmutable => "businessRuleDenied",
         TaskOperationDeniedKind.StorageFailed => "operationFailed",
+        TaskOperationDeniedKind.OutcomeUnknown => "operationFailed",
         _ => "operationFailed"
     };
 
@@ -452,6 +455,18 @@ public static class Program
 
 public sealed record CliOptions
 {
+    private static readonly HashSet<string> KnownCommands =
+    [
+        "status",
+        "unlocked",
+        "task",
+        "validate",
+        "set-status",
+        "complete",
+        "set-criterion",
+        "satisfy-criterion"
+    ];
+
     public string Command { get; init; } = string.Empty;
     public string? TasksPath { get; init; }
     public string? TaskId { get; init; }
@@ -470,6 +485,11 @@ public sealed record CliOptions
         }
 
         var command = args[0].ToLowerInvariant();
+        if (!KnownCommands.Contains(command))
+        {
+            throw new CliException($"Unknown command '{command}'.");
+        }
+
         string? tasksPath = null;
         string? taskId = null;
         string? criterionId = null;
@@ -477,6 +497,7 @@ public sealed record CliOptions
         bool? satisfied = null;
         string? author = null;
         var format = OutputFormat.Text;
+        var suppliedOptions = new HashSet<string>(StringComparer.Ordinal);
 
         for (var i = 1; i < args.Length; i++)
         {
@@ -485,32 +506,39 @@ public sealed record CliOptions
             {
                 case "--tasks":
                 case "-t":
+                    suppliedOptions.Add("--tasks");
                     tasksPath = RequireValue(args, ref i, arg);
                     break;
                 case "--id":
+                    suppliedOptions.Add(arg);
                     taskId = RequireValue(args, ref i, arg);
                     break;
                 case "--criterion":
+                    suppliedOptions.Add(arg);
                     criterionId = RequireValue(args, ref i, arg);
                     break;
                 case "--status":
+                    suppliedOptions.Add(arg);
                     status = ParseStatus(RequireValue(args, ref i, arg));
                     break;
                 case "--satisfied":
+                    suppliedOptions.Add(arg);
                     satisfied = ParseBoolean(RequireValue(args, ref i, arg), arg);
                     break;
                 case "--author":
+                    suppliedOptions.Add(arg);
                     author = RequireValue(args, ref i, arg);
                     break;
                 case "--format":
+                    suppliedOptions.Add(arg);
                     format = ParseFormat(RequireValue(args, ref i, arg));
-                    break;
-                case "--explain":
                     break;
                 default:
                     throw new CliException($"Unknown option '{arg}'.");
             }
         }
+
+        ValidateOptions(command, suppliedOptions);
 
         return new CliOptions
         {
@@ -543,10 +571,34 @@ public sealed record CliOptions
         _ => throw new CliException("--format must be 'text' or 'json'.")
     };
 
-    private static DomainTaskStatus ParseStatus(string value) =>
-        Enum.TryParse<DomainTaskStatus>(value, ignoreCase: true, out var status)
-            ? status
+    private static DomainTaskStatus ParseStatus(string value)
+    {
+        var statusName = Enum.GetNames<DomainTaskStatus>()
+            .FirstOrDefault(name => string.Equals(name, value, StringComparison.OrdinalIgnoreCase));
+        return statusName != null
+            ? Enum.Parse<DomainTaskStatus>(statusName)
             : throw new CliException("--status must be one of NotReady, Prepared, InProgress, Completed, Archived.");
+    }
+
+    private static void ValidateOptions(string command, IReadOnlySet<string> suppliedOptions)
+    {
+        var allowedOptions = command switch
+        {
+            "status" or "unlocked" or "validate" => new[] { "--tasks", "--format" },
+            "task" => new[] { "--tasks", "--id", "--format" },
+            "set-status" => new[] { "--tasks", "--id", "--status", "--author", "--format" },
+            "complete" => new[] { "--tasks", "--id", "--author", "--format" },
+            "set-criterion" => new[] { "--tasks", "--id", "--criterion", "--satisfied", "--format" },
+            "satisfy-criterion" => new[] { "--tasks", "--id", "--criterion", "--format" },
+            _ => Array.Empty<string>()
+        };
+        var allowed = allowedOptions.ToHashSet(StringComparer.Ordinal);
+        var invalid = suppliedOptions.FirstOrDefault(option => !allowed.Contains(option));
+        if (invalid != null)
+        {
+            throw new CliException($"Option '{invalid}' is not valid for command '{command}'.");
+        }
+    }
 
     private static bool ParseBoolean(string value, string optionName) => value.ToLowerInvariant() switch
     {
@@ -659,8 +711,11 @@ public sealed record WriteCommandOutput
     public string TaskId { get; init; } = string.Empty;
     public string? Title { get; init; }
     public string Action { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Error { get; init; }
-    public TaskOperationDeniedKind DeniedKind { get; init; } = TaskOperationDeniedKind.StorageFailed;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TaskOperationDeniedKind? DeniedKind { get; init; }
     public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
     public TaskAvailabilityAnalysis? Analysis { get; init; }
 

@@ -90,7 +90,10 @@ public sealed record TaskGraphReferenceIssue
 public enum TaskGraphReferenceIssueKind
 {
     MissingReference,
-    MissingReverseLink
+    MissingReverseLink,
+    SelfRelation,
+    DuplicateRelation,
+    DuplicateCriterionId
 }
 
 public sealed record TaskAvailabilityMismatch

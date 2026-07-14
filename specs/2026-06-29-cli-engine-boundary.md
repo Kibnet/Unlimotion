@@ -109,7 +109,7 @@ flowchart LR
     - `string Message`
     - `string? TaskId`
     - `DomainTaskStatus? RequestedStatus`
-  - `TaskOperationDeniedKind`: `ValidationFailed`, `TaskNotFound`, `CriterionNotFound`, `StatusTransitionDenied`, `CompletedCriteriaImmutable`, `StorageFailed`.
+  - `TaskOperationDeniedKind`: `ValidationFailed`, `TaskNotFound`, `CriterionNotFound`, `StatusTransitionDenied`, `CompletedCriteriaImmutable`, `StorageFailed`, `OutcomeUnknown`.
 - Добавить command methods:
   - `Task<TaskOperationResult> TrySetStatusAsync(string taskId, DomainTaskStatus requestedStatus, string? author = null)`
   - `Task<TaskOperationResult> TrySetCriterionAsync(string taskId, string criterionId, bool satisfied, string? author = null)`
@@ -514,8 +514,66 @@ flowchart LR
 | HIGH | storage contract | `FileTaskStorage.Load` threw on malformed task files and could fault UI watcher path | Catch load/parse failures in `Load` and return `null`; keep diagnostic read strict | fixed |
 | MEDIUM | validation evidence | Full local suite and current PR `All tests` fail in unrelated UI/tree-command tests | Record exact failing test/check and keep storage fix scoped | accepted-risk |
 
+### Post-EXEC Review Addendum: full-branch hardening
+- Статус: PASS
+- Scope reviewed: полный `origin/main...HEAD`, CLI parsing/output, file storage, UI file-storage adapter, task command boundary, legacy manager retries, package/tests и актуальный PR #271 `All tests` log.
+- User authorization: пользователь сказал `Исправь` после полного review ветки; это продолжение утвержденного EXEC, а не новый SPEC cycle.
+- User-observable scenarios:
+  - Невалидный или path-like `TaskItem.Id` не может читать, создавать, заменять или удалять файлы вне task directory.
+  - Файл `task.json` с `Id=task` обновляется на исходном пути и не создает duplicate `task`.
+  - Параллельные UI/CLI writes ждут directory lock с ограниченным timeout; одна graph mutation не перемежается с другой.
+  - Внешнее изменение файла сначала обновляет storage cache и только затем публикует `Updating`; собственные `.tmp/.bak/lock` события не попадают в UI как task updates.
+  - Retry повторяющейся задачи не создает второй occurrence и не сообщает success при несохраненной reverse link.
+  - UI/runtime manager и CLI command service принимают одинаковые решения о status transition.
+  - JSON success output не содержит denial fields; numeric/неприменимые CLI options дают `invalidArguments`.
+- Visual planning artifact: Не применимо. Layout, navigation и visual state не меняются. Textual state sequence для watcher acceptance: `filesystem event -> forced load completes/cache updated -> Updating event -> UI reads fresh model`.
+- Decision ledger:
+  - Path policy: запрещать rooted IDs и directory separators; все resolved paths обязаны оставаться непосредственными детьми task directory.
+  - Existing filename policy: сохранять уникальный source path, обнаруженный storage; новые tasks по-прежнему получают canonical filename `Id`.
+  - Lock policy: process-local async serialization + bounded retry для cross-process file lock; public manager mutation удерживает один graph lock, nested saves остаются reentrant.
+  - Retry policy: graph mutations не повторяются автоматически после частичной записи; bounded retry применяется только к получению directory lock. Mutation failure возвращает `OutcomeUnknown`, а command service выполняет post-write validation при успешном manager result.
+  - Result policy: post-commit verification failure отличается от pre-commit denial через `OutcomeUnknown`.
+- Acceptance-to-Test Matrix:
+  - path traversal/source filename/filter/read-share/unknown nested JSON -> `FileTaskStorageTests`.
+  - lock acquisition, graph-level serialization и structured lock failure -> `FileTaskStorageTests`, `TaskTreeManagerSafetyTests`, `TaskGraphCommandServiceTests`.
+  - watcher ordering/self-event suppression -> `FileStorageTaskStatusTests` + релевантный Avalonia.Headless startup/storage UI test.
+  - manager/service transition parity и запрет unsafe recurrence retry -> `TaskAvailabilityParityTests` + `TaskTreeManagerSafetyTests` + `TaskGraphCommandServiceTests`.
+  - CLI success JSON, numeric status, irrelevant options, unknown command ordering -> `UnlimotionCliIntegrationTests`.
+  - regression gate -> targeted suites, CLI build, relevant UI tests, full `Unlimotion.Test` project and GitHub checks after push.
+- Expected user review objections:
+  - "Lock по-прежнему только per-file" -> public manager mutation должна брать graph lock целиком.
+  - "Parity test снова сравнивает facade с самим собой" -> test обязан вызывать реальный `TaskTreeManager.UpdateTask`.
+  - "Ошибка после commit выглядит как denial" -> result contract обязан отражать unknown committed outcome.
+  - "PreserveUnknownJson сохраняет не все persisted nested fields" -> добавить extension data минимум в `RepeaterPattern` и проверить round-trip.
+- Role-Based Review Result:
+  - Business/domain: сохраняются существующие task transition semantics, но source of truth становится единым.
+  - UX/UI state: восстанавливается fresh-cache-before-event и подавление собственных watcher events; layout не меняется.
+  - Tester: каждый review finding получает reproducing regression test; UI-facing storage state получает headless UI coverage.
+  - Developer/architect: path identity, lock ownership и retry idempotency становятся явными контрактами.
+  - Delivery/security: path traversal и duplicate-file corruption являются merge blockers; красный `All tests` должен быть закрыт до завершения.
+- Final validation evidence:
+  - `dotnet build src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-restore` -> PASS; новых nullable warnings в добавленных тестах нет.
+  - `dotnet test src\Unlimotion.Test\Unlimotion.Test.csproj -c Release --no-build -- --output Normal` -> PASS, 600/600.
+  - `MainWindowViewModelTests` sequential -> PASS, 96/96; late autosave/lock cleanup failures не воспроизводятся.
+  - `FileTaskStorageTests` -> PASS, 7/7; `FileStorageTaskStatusTests` -> PASS, 5/5; `TaskTreeManagerSafetyTests` -> PASS, 3/3.
+  - `TaskGraphCommandServiceTests` -> PASS, 11/11; `TaskAvailabilityParityTests` -> PASS, 2/2; `TaskStatusTransitionTests` -> PASS, 18/18.
+  - `UnlimotionCliIntegrationTests` -> PASS, 12/12; `SingleViewStartupUiTests` -> PASS, 5/5.
+  - Ранее падавшие headless UI scenarios для task-card layout, outline paste hotkey и clear-search reselection -> PASS, 3/3 isolated reruns.
+  - `git diff --check` -> PASS; только ожидаемые Git CRLF conversion warnings.
+- Decision: все findings полного review закрыты кодом и regression coverage; прежний `All tests` accepted-risk снят полным зелёным прогоном.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| BLOCKER | security/storage | `TaskItem.Id` может выйти за task directory | Safe resolver + validation + sentinel regression test | fixed |
+| HIGH | storage identity | Source filename теряется при save | Persist unique id-to-source-path mapping | fixed |
+| HIGH | concurrency | Fail-fast/per-file lock не защищает graph mutation | Async bounded lock + operation-level ownership | fixed |
+| HIGH | watcher | Event публикуется до async forced reload; own writes не suppressed | Await reload + suppression/filtering | fixed |
+| HIGH | engine retries | Retry неидемпотентен для recurrence/reverse links | Не повторять потенциально частично записанную mutation; возвращать unknown outcome | fixed |
+| HIGH | engine parity | Manager и shared service расходятся | Manager delegates transition decisions + real parity test | fixed |
+| MEDIUM | contracts | Outcome unknown, validation gaps, unknown nested JSON и CLI DTO/parser drift | Typed outcomes, diagnostics, extension data и strict CLI validation | fixed |
+
 ## Approval
-Ожидается фраза: "Спеку подтверждаю"
+Подтверждено пользователем фразой: "Спеку подтверждаю".
 
 ## 20. Журнал действий агента
 | Фаза (SPEC/EXEC) | Тип намерения/сценария | Уверенность в решении (0.0-1.0) | Каких данных не хватает | Следующее действие | Нужна ли передача управления/решения человеку | Было ли фактическое обращение к человеку / решение человека | Короткое объяснение выбора | Затронутые артефакты/файлы |
@@ -528,3 +586,5 @@ flowchart LR
 | EXEC | Завершить validation и post-EXEC review | 0.9 | Full suite зависает без failed test identity | Стадировать, сделать коммит и запушить branch | Нет | Нет | Targeted affected suites и CLI build прошли; full suite timeout задокументирован как residual validation risk с next-best evidence | `specs/2026-06-29-cli-engine-boundary.md`, test/build evidence |
 | EXEC | Исправить review findings после реализации | 0.9 | Нет блокирующих данных | Добавить regression tests, затем исправить structured storage failures и duplicate fallback | Нет | Да, пользователь сказал `Исправляй` | Review выявил два точечных риска: exceptions из `TaskTreeManager.UpdateTask` должны становиться `StorageFailed`, а diagnostic validation не должна доверять пустому duplicate list | `src/Unlimotion.TaskTreeManager/*`, `src/Unlimotion.Test/TaskGraphCommandServiceTests.cs` |
 | EXEC | Исправить актуальный PR-review finding по tolerant file load | 0.95 | Нет | Сначала добавить regression test, затем вернуть tolerant `Load` без ослабления diagnostic read | Нет | Да, пользователь сказал `Исправляй` | Review показал, что UI watcher path может fault на malformed/partial task file; `Load` должен вернуть `null`, а `ReadDirectoryAsync` продолжить отдавать load error | `src/Unlimotion.FileStorage/FileTaskStorage.cs`, `src/Unlimotion.Test/*` |
+| EXEC | Закрыть findings полного review ветки | 0.9 | Нужно подтвердить fixes тестами и full gate | Добавить failing tests по storage/lock/watcher/engine/CLI, затем исправить слоями | Нет | Да, пользователь сказал `Исправь` | Full review выявил path traversal, source-path corruption, lock/watcher regressions, non-idempotent retries и расхождение manager/shared rules | `specs/2026-06-29-cli-engine-boundary.md`, `src/Unlimotion.*`, `src/Unlimotion.Test/*` |
+| EXEC | Завершить full-branch hardening и regression gate | 0.98 | Нет | Передать результат пользователю; commit/push только по отдельной команде | Нет | Нет | Все BLOCKER/HIGH/MEDIUM findings закрыты; targeted suites, 96 VM tests, 3 UI regressions и полный набор 600/600 прошли | `specs/2026-06-29-cli-engine-boundary.md`, production и test diff текущей ветки |

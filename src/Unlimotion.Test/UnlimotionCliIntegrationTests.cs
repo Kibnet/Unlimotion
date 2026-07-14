@@ -278,6 +278,101 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(result.StdOut.Contains("--explain", StringComparison.Ordinal)).IsFalse();
     }
 
+    [Test]
+    public async Task JsonMode_SuccessOmitsDeniedFields()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("success", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var result = await RunCli(
+            "set-status",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            task.Id,
+            "--status",
+            "InProgress",
+            "--format",
+            "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var root = ParseJson(result.StdOut);
+        await Assert.That(root.GetProperty("success").GetBoolean()).IsTrue();
+        await Assert.That(root.TryGetProperty("deniedKind", out _)).IsFalse();
+        await Assert.That(root.TryGetProperty("error", out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task SetStatus_RejectsNumericEnumValuesWithoutWriting()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("numeric-status", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, task);
+        var filePath = Path.Combine(temp.DirectoryPath, task.Id);
+        var before = await File.ReadAllTextAsync(filePath);
+
+        foreach (var numericStatus in new[] { "3", "99" })
+        {
+            var result = await RunCli(
+                "set-status",
+                "--tasks",
+                temp.DirectoryPath,
+                "--id",
+                task.Id,
+                "--status",
+                numericStatus,
+                "--format",
+                "json");
+
+            await Assert.That(result.ExitCode).IsEqualTo(2);
+            await AssertJsonError(result.StdOut, "invalidArguments");
+        }
+
+        await Assert.That(await File.ReadAllTextAsync(filePath)).IsEqualTo(before);
+    }
+
+    [Test]
+    public async Task Parser_RejectsOptionsThatDoNotBelongToCommand()
+    {
+        using var temp = TempTaskDirectory.Create();
+
+        var irrelevant = await RunCli(
+            "status",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            "ignored",
+            "--format",
+            "json");
+        var hiddenExplain = await RunCli(
+            "task",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            "missing",
+            "--explain",
+            "--format",
+            "json");
+
+        await Assert.That(irrelevant.ExitCode).IsEqualTo(2);
+        await AssertJsonError(irrelevant.StdOut, "invalidArguments");
+        await Assert.That(hiddenExplain.ExitCode).IsEqualTo(2);
+        await AssertJsonError(hiddenExplain.StdOut, "invalidArguments");
+    }
+
+    [Test]
+    public async Task UnknownCommand_IsReportedBeforeMissingTasksPath()
+    {
+        var result = await RunCli("unknown-command", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(2);
+        var root = ParseJson(result.StdOut);
+        await Assert.That(root.GetProperty("error").GetProperty("kind").GetString()).IsEqualTo("invalidArguments");
+        await Assert.That(root.GetProperty("error").GetProperty("message").GetString())
+            .Contains("Unknown command");
+    }
+
     private static TaskItem CreateTask(
         string id,
         DomainTaskStatus status,
