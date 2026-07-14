@@ -185,5 +185,11 @@ internal sealed class StormScenarioContext
 
     public TaskCardRelationsScenarioResult? TaskCardRelationsResult { get; set; }
 
+    public bool TaskCardCompletionCriteriaTaskSetAvailable { get; set; }
+
+    public bool TaskCardCompletionCriteriaStoryBehaviorConfirmed { get; set; }
+
+    public TaskCardCompletionCriteriaScenarioResult? TaskCardCompletionCriteriaResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

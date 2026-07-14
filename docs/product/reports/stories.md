@@ -1,20 +1,11 @@
 # STORM Stories
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:bdd-implement SC-0007-002`
-
-## Story Changes
+Команда: `/storm:bdd-implement SC-0007-003`
 
 | Story | Изменение | Evidence |
 | --- | --- | --- |
-| ST-0007 | `AC-0020` поднят до `full`: existing `TS-0005`/`TS-0008` сохранены, `SC-0007-002` исполняется через `SD-0103..SD-0106` и `TS-0052`. | `TS-0005`, `TS-0008`, `TS-0052` |
-| ST-0007 | Второй scenario стал step-executable; contract покрывает четыре picker routes и reciprocal links для parents/containing/blocked-by/blocked. | `StormTaskCardRelationsExecutableSpecTests` |
+| ST-0007 | `AC-0021` поднят до `full`; `SC-0007-003` исполняется через `TS-0053` и `SD-0107..SD-0110`. | BDD 1/1, task-card UI 15/15 |
+| ST-0007 | Все 3/3 scenarios теперь step-executable. | `TS-0051..TS-0053` |
 
-## Residual Story Gaps
-
-| Story / область | Gap | Следующее действие |
-| --- | --- | --- |
-| ST-0007 | `SC-0007-003` — completion criteria | Подготовить отдельную SPEC для executable BDD bridge. |
-| BDD execution | Step definitions покрывают 27/45 scenarios. | Выбрать следующий high-value scenario. |
-
-Full `Unlimotion.Test` остаётся непроверенным для текущего slice из-за предыдущего timeout 304 seconds; targeted BDD/UI evidence прошло.
+Remaining executable BDD gaps: 17 scenarios. Full suite remains unconfirmed after previous 304-second timeout.
