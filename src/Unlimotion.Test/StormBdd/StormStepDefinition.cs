@@ -173,5 +173,11 @@ internal sealed class StormScenarioContext
 
     public WantedImportanceScenarioResult? WantedImportanceResult { get; set; }
 
+    public bool TaskCardLayoutTaskSetAvailable { get; set; }
+
+    public bool TaskCardLayoutStoryBehaviorConfirmed { get; set; }
+
+    public TaskCardLayoutScenarioResult? TaskCardLayoutResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
