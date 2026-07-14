@@ -251,5 +251,9 @@ internal sealed class StormScenarioContext
     public bool OutlineClipboardCopyStoryBehaviorConfirmed { get; set; }
     public OutlineClipboardCopyScenarioResult? OutlineClipboardCopyResult { get; set; }
 
+    public bool OutlineClipboardPasteTaskSetAvailable { get; set; }
+    public bool OutlineClipboardPasteStoryBehaviorConfirmed { get; set; }
+    public OutlineClipboardPasteScenarioResult? OutlineClipboardPasteResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
