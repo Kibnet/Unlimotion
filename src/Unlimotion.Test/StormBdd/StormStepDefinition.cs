@@ -155,5 +155,11 @@ internal sealed class StormScenarioContext
 
     public WorkspaceTreeCommandsScenarioResult? WorkspaceTreeCommandsResult { get; set; }
 
+    public bool TaskPlanningDatesTaskSetAvailable { get; set; }
+
+    public bool TaskPlanningDatesStoryBehaviorConfirmed { get; set; }
+
+    public TaskPlanningDatesScenarioResult? TaskPlanningDatesResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
