@@ -1884,7 +1884,8 @@
           "text": "Компоновка остаётся читаемой и покрыта регрессионными тестами для viewport и overlay-состояний.",
           "coverage_level": "critical",
           "linked_tests": [
-            "TS-0007"
+            "TS-0007",
+            "TS-0055"
           ],
           "evidence": [
             {
@@ -1928,7 +1929,8 @@
       "linked_tests": [
         "TS-0006",
         "TS-0007",
-        "TS-0054"
+        "TS-0054",
+        "TS-0055"
       ],
       "linked_code": [
         "CU-0004",
@@ -1957,7 +1959,7 @@
         "SC-0008-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0008-001 исполняется через TS-0054/SD-0111..SD-0114 и подтверждает projection + rendered Roadmap nodes/typed connections; SC-0008-002/003 остаются linked-only scenarios."
+      "behavior_coverage_note": "SC-0008-001 исполняется через TS-0054/SD-0111..SD-0114 для projection/rendered nodes; SC-0008-002 -- через TS-0055/SD-0115..SD-0118 для viewport/overlay states; SC-0008-003 остаётся linked-only scenario."
     },
     {
       "id": "ST-0009",
@@ -5620,6 +5622,46 @@
         }
       ],
       "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; existing TS-0007 link preserved. UI video evidence не применимо, так как UI behavior/layout не менялись. Full suite remains unconfirmed after the earlier 304-second timeout without a summary."
+    },
+    {
+      "id": "TS-0055",
+      "name": "StormRoadmapViewportOverlayExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner + Avalonia.Headless",
+      "type": "bdd-executable-spec/roadmap-viewport-overlay",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0008-002_step_definitions",
+      "confidence": 0.88,
+      "linked_stories": ["ST-0008"],
+      "linked_acceptance_criteria": ["AC-0023"],
+      "linked_constraints": ["CN-0004"],
+      "linked_scenarios": ["SC-0008-002"],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs",
+          "symbol": "RoadmapViewportOverlayScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0008-002 feature steps through repo-local STORM BDD definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+          "symbol": "SD-0115..SD-0118",
+          "description": "Binds Roadmap viewport and overlay scenario wording to standard and compact UI evidence."
+        },
+        {
+          "path": "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs",
+          "symbol": "RoadmapViewportOverlayContract",
+          "description": "Verifies standard minimap/viewport controls and narrow-window compact overlay recovery."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormRoadmapViewportOverlayExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-07-14"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/*\" --output Detailed",
+          "result": "прошло 47/47 on 2026-07-14"
+        }
+      ],
+      "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; existing TS-0007 link preserved. UI video evidence не применимо, так как UI behavior/layout не менялись. Full suite remains unconfirmed after the earlier 304-second timeout without a summary."
     }
   ],
   "code_units": [
@@ -6683,58 +6725,58 @@
       "Server storage, Telegram bot и non-desktop shells требуют явного product-owner решения о поддержке.",
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
-    "recommended_next_step": "Продолжить /storm:cover через отдельную SPEC для SC-0008-002: связать viewport/overlay Gherkin text с существующим Roadmap UI evidence, не меняя production code, feature wording или existing test annotations.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0008-001 executable step definitions",
+    "recommended_next_step": "Продолжить /storm:cover через отдельную SPEC для SC-0008-003: связать filters, inline rename, multi-selection и overlay/minimap Gherkin text с существующим Roadmap UI evidence, не меняя production code, feature wording или existing test annotations.",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0008-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0008-001",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0008-002",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0008-001",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0008-002",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0008-001 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0008-002 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0008-001 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0008-002 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-implement SC-0008-001",
+      "command": "/storm:bdd-implement SC-0008-002",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-07-14-storm-sc0008-roadmap-projection-bdd.md",
-      "classification": "SC-0008-001 Roadmap projection scenario now executes from feature text through repo-local step definitions, current-model projection and rendered Headless Roadmap evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0008-roadmap-viewport-overlay-bdd.md",
+      "classification": "SC-0008-002 Roadmap viewport/overlay scenario now executes from feature text through repo-local step definitions, standard controls and compact overlay recovery evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/RoadmapProjectionContract.cs",
-        "src/Unlimotion.Test/StormBdd/RoadmapProjectionStepDefinitions.cs",
-        "src/Unlimotion.Test/StormRoadmapProjectionExecutableSpecTests.cs",
+        "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs",
+        "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+        "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormRoadmapProjectionExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormRoadmapViewportOverlayExecutableSpecTests/*\" --output Detailed => прошло 1/1",
         "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/*\" --output Detailed => прошло 47/47",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 11 warnings, executable_specification_ratio 29/45 after artifact sync",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 12 warnings, executable_specification_ratio 30/45 after artifact sync",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
         "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0008-001 прошёл как executable BDD slice; ST-0008 now 1/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
-      "next_recommended_action": "Продолжать /storm:cover через SC-0008-002 отдельной SPEC с test-only BDD binding для viewport и overlay states.",
+      "result": "SC-0008-002 прошёл как executable BDD slice; ST-0008 now 2/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
+      "next_recommended_action": "Продолжать /storm:cover через SC-0008-003 отдельной SPEC с test-only BDD binding для remaining Roadmap filters, rename, selection и overlay/minimap controls.",
       "validation_status": "passed_with_known_bdd_lint_warnings",
-      "known_warning": "Validator reports 11 shared context/action/story step text warnings; all are intentional reuse, not blockers."
+      "known_warning": "Validator reports 12 shared context/action/story step text warnings; all are intentional scenario-specific reuse, not blockers."
     }
   },
   "traceability": {
@@ -9907,6 +9949,18 @@
         {
           "path": "src/Unlimotion.Test/RoadmapGraphUiTests.cs",
           "symbol": "RoadmapGraphProjection_*"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs",
+          "symbol": "RoadmapViewportOverlayScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0055",
+          "description": "Executable BDD evidence for GR-023 / SC-0008-002."
+        },
+        {
+          "path": "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs",
+          "symbol": "RoadmapViewportOverlayContract",
+          "test_id": "TS-0055",
+          "description": "Headless contract for standard and compact Roadmap viewport overlays."
         }
       ]
     },
@@ -12553,13 +12607,14 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "executed_by_TS-0055_on_2026-07-14",
       "linked_tests": [
-        "TS-0007"
+        "TS-0007",
+        "TS-0055"
       ],
-      "step_definitions": [],
+      "step_definitions": ["SD-0115", "SD-0116", "SD-0117", "SD-0118"],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -12581,6 +12636,18 @@
           "path": "src/Unlimotion.Test/RoadmapGraphUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0007"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs",
+          "symbol": "RoadmapViewportOverlayScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0008-002 through repo-local STORM BDD runner.",
+          "test_id": "TS-0055 New-EvidencePath"
+        },
+        {
+          "path": "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs",
+          "symbol": "RoadmapViewportOverlayContract",
+          "description": "Verifies standard and compact Roadmap viewport overlay states.",
+          "test_id": "TS-0055 New-EvidencePath"
         }
       ]
     },
@@ -16750,11 +16817,47 @@
       "step_text": "Тогда Roadmap строит узлы и связи из текущей модели задач.",
       "supports_scenarios": ["SC-0008-001"],
       "evidence": [{ "path": "src/Unlimotion.Test/RoadmapProjectionContract.cs", "symbol": "RoadmapProjectionContract.AssertRoadmapProjectionScenarioResultAsync", "test_id": "TS-0054" }]
+    },
+    {
+      "id": "SD-0115",
+      "path": "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+      "symbol": "RoadmapViewportOverlayStepDefinitions.Create / SD-0115",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": ["SC-0008-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs", "symbol": "RoadmapViewportOverlayScenario_ExecutesFeatureSteps", "test_id": "TS-0055" }]
+    },
+    {
+      "id": "SD-0116",
+      "path": "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+      "symbol": "RoadmapViewportOverlayStepDefinitions.Create / SD-0116",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0008",
+      "supports_scenarios": ["SC-0008-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/StormRoadmapViewportOverlayExecutableSpecTests.cs", "symbol": "RoadmapViewportOverlayScenario_ExecutesFeatureSteps", "test_id": "TS-0055" }]
+    },
+    {
+      "id": "SD-0117",
+      "path": "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+      "symbol": "RoadmapViewportOverlayStepDefinitions.Create / SD-0117",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": ["SC-0008-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs", "symbol": "RoadmapViewportOverlayContract", "test_id": "TS-0055" }]
+    },
+    {
+      "id": "SD-0118",
+      "path": "src/Unlimotion.Test/StormBdd/RoadmapViewportOverlayStepDefinitions.cs",
+      "symbol": "RoadmapViewportOverlayStepDefinitions.Create / SD-0118",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Компоновка остаётся читаемой и покрыта регрессионными тестами для viewport и overlay-состояний.",
+      "supports_scenarios": ["SC-0008-002"],
+      "evidence": [{ "path": "src/Unlimotion.Test/RoadmapViewportOverlayContract.cs", "symbol": "RoadmapViewportOverlayContract.AssertRoadmapViewportOverlayScenarioResultAsync", "test_id": "TS-0055" }]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0008-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0008-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -16768,18 +16871,18 @@
     "acceptance_criteria_without_tests": 0,
     "acceptance_criteria_with_rules": 44,
     "acceptance_criteria_with_scenarios": 44,
-    "automated_scenarios": 18,
+    "automated_scenarios": 17,
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 29,
+    "passing_scenarios": 30,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 114,
-    "step_executable_scenarios": 29,
-    "step_definition_coverage_ratio": "29/45",
-    "executable_specification_ratio": "29/45 step-executable; 29/45 passing scenarios",
+    "step_definitions_total": 118,
+    "step_executable_scenarios": 30,
+    "step_definition_coverage_ratio": "30/45",
+    "executable_specification_ratio": "30/45 step-executable; 30/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -16789,27 +16892,27 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormRoadmapProjectionExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormRoadmapViewportOverlayExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/*\" --output Detailed => прошло 47/47 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 11 warnings, executable_specification_ratio 29/45 after artifact sync",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 12 warnings, executable_specification_ratio 30/45 after artifact sync",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless Roadmap BDD contract and preserved Roadmap UI suite used as next-best evidence.",
+      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless Roadmap viewport/overlay contract and preserved Roadmap UI suite used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
-    "bdd_lint_issues": 11,
-    "step_reuse_ratio": "117/117"
+    "bdd_lint_issues": 12,
+    "step_reuse_ratio": "121/121"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0008-001",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0008-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0008-001 -> TS-0054 -> SD-0111..SD-0114",
+      "SC-0008-002 -> TS-0055 -> SD-0115..SD-0118",
       "existing TS-0007 preserved",
-      "ST-0008 now 1/3 step-executable"
+      "ST-0008 now 2/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -16820,47 +16923,48 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0008-001: новый TS-0054 связывает scenario text с existing Roadmap projection и rendered-view behavior через SD-0111..SD-0114 и test-only Avalonia.Headless contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0008-002: новый TS-0055 связывает scenario text с existing Roadmap standard/compact viewport overlay behavior через SD-0115..SD-0118 и test-only Avalonia.Headless contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 29/45 scenarios.",
-      "ST-0008 now has 1/3 step-executable scenarios; SC-0008-002/003 остаются gaps.",
+      "Step definitions покрывают 30/45 scenarios.",
+      "ST-0008 now has 2/3 step-executable scenarios; SC-0008-003 остаётся gap.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0008-001",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0008-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text across scenario-specific step definitions now includes SD-0111; intentional shared task-set context.",
+      "Duplicate shared Given step text across scenario-specific step definitions now includes SD-0115; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text now includes SD-0097; intentional scenario-specific binding.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text now includes SD-0105; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0117; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
       "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
       "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios.",
       "Duplicate ST-0006 story step text remains from earlier planning scenarios.",
-      "Duplicate ST-0007 story step text now includes SD-0104; intentional scenario-specific binding."
+      "Duplicate ST-0007 story step text now includes SD-0104; intentional scenario-specific binding.",
+      "Duplicate ST-0008 story step text now includes SD-0116; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0008-001 additionally linked to TS-0054.",
-      "scenario_step_definition_links": "WARNING: 29/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0008-002 additionally linked to TS-0055.",
+      "scenario_step_definition_links": "WARNING: 30/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
       "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted Roadmap Avalonia.Headless evidence used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0008-001 executable BDD passed 1/1 and RoadmapGraphUiTests passed 47/47.",
+      "targeted_gate": "PASS: SC-0008-002 executable BDD passed 1/1 and RoadmapGraphUiTests passed 47/47.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
-      "st_0008": "PARTIAL: SC-0008-001 is step-executable through TS-0054 and SD-0111..SD-0114; SC-0008-002/003 remain linked-only."
+      "st_0008": "PARTIAL: SC-0008-001 and SC-0008-002 are step-executable through TS-0054/TS-0055 and SD-0111..SD-0118; SC-0008-003 remains linked-only."
     }
   }
 }

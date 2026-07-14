@@ -197,5 +197,11 @@ internal sealed class StormScenarioContext
 
     public RoadmapProjectionScenarioResult? RoadmapProjectionResult { get; set; }
 
+    public bool RoadmapViewportOverlayTaskSetAvailable { get; set; }
+
+    public bool RoadmapViewportOverlayStoryBehaviorConfirmed { get; set; }
+
+    public RoadmapViewportOverlayScenarioResult? RoadmapViewportOverlayResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
