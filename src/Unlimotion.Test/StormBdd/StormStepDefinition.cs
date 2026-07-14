@@ -219,5 +219,9 @@ internal sealed class StormScenarioContext
     public bool JsonRecoveryStoryBehaviorConfirmed { get; set; }
     public JsonRecoveryScenarioResult? JsonRecoveryResult { get; set; }
 
+    public bool GitConnectTaskSetAvailable { get; set; }
+    public bool GitConnectStoryBehaviorConfirmed { get; set; }
+    public GitConnectScenarioResult? GitConnectResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

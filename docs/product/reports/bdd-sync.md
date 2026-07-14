@@ -1,14 +1,14 @@
 # STORM BDD Sync
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0009-003`
+Команда: `/storm:bdd-sync` after `/storm:bdd-implement SC-0010-001`
 
 | Проверка | Результат |
 | --- | --- |
 | Scenario -> Test links | 45/45 |
-| Scenario -> Step Definition links | 34/45 |
-| Новая связь | `SC-0009-003 -> TS-0059 -> SD-0131..SD-0134`; existing `TS-0014` сохранён |
-| ST-0009 | PASS: 3/3 scenarios step-executable |
+| Scenario -> Step Definition links | 35/45 |
+| Новая связь | `SC-0010-001 -> TS-0060 -> SD-0135..SD-0138`; existing `TS-0008/TS-0009` сохранены |
+| ST-0010 | PARTIAL: 1/4 scenarios step-executable |
 | Production/feature/annotations | no changes |
 
-`TS-0059` связывает текущий Gherkin с регрессионными проверками ремонта JSON и загрузки задач при наличии migration reports. Full-suite PASS не заявляется.
+`TS-0060` связывает текущий Gherkin с preview/connect проверками временных local Git repositories. Full-suite PASS не заявляется.

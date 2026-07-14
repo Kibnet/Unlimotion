@@ -1,6 +1,6 @@
 # STORM Ранжирование С Учётом Зависимостей
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:rank` + `/storm:bdd-implement SC-0009-003`
+Команда: `/storm:rank` + `/storm:bdd-implement SC-0010-001`
 
-`SC-0009-003` закрыт через `TS-0059`; история `ST-0009` теперь покрыта 3/3 executable scenarios. Следующий `/storm:cover` candidate следует выбрать вне `ST-0009` по текущему ranking и зависимостям, без product/config changes.
+`SC-0010-001` закрыт через `TS-0060`; история `ST-0010` теперь покрыта 1/4 executable scenarios. Следующий `/storm:cover` candidate: `SC-0010-002` -- SSH/token remote-аутентификация с existing `TS-0008/TS-0009`, без product/config changes.

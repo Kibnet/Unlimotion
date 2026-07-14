@@ -1,24 +1,24 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:cover -> /storm:bdd-implement SC-0009-003`
+Команда: `/storm:cover -> /storm:bdd-implement SC-0010-001`
 
-`SC-0009-003` исполняется через `TS-0059` и `SD-0131..SD-0134`. Contract подтверждает ремонт JSON и загрузку задач при наличии migration reports. Production code, `.feature` и existing annotations не менялись.
+`SC-0010-001` исполняется через `TS-0060` и `SD-0135..SD-0138`. Contract подтверждает preview и подключение пустого или непустого remote на временных local Git repositories. Production code, `.feature` и existing annotations не менялись.
 
 | Метрика | Значение |
 | --- | --- |
-| Passing scenarios | 34 |
-| Step definitions | 134 |
-| Step-executable scenarios | 34/45 |
-| ST-0009 executable coverage | 3/3 scenarios |
+| Passing scenarios | 35 |
+| Step definitions | 138 |
+| Step-executable scenarios | 35/45 |
+| ST-0010 executable coverage | 1/4 scenarios |
 | Full suite gate | не подтверждён: предыдущий timeout без summary |
 
 | Проверка | Результат |
 | --- | --- |
 | Build Release | прошло с 69 existing warnings, errors 0 |
-| `StormJsonRecoveryExecutableSpecTests` | прошло 1/1 |
-| `JsonRepairingReaderTests` | прошло 5/5 |
-| `UnifiedTaskStorageMigrationRegressionTests` | прошло 4/4 |
-| Artifact validator | 0 errors, 13 known warnings, 34/45 executable |
+| `StormGitConnectExecutableSpecTests` | прошло 1/1 |
+| `BackupViaGitServiceTests` preview/connect | прошло 4/4 адресных метода |
+| `BackupViaGitServiceTests` полный класс | 51/52: независимый Windows ACL SSH-key sandbox blocker |
+| Artifact validator | 0 errors, 13 known warnings, 35/45 executable |
 
-Оставшиеся gaps: 11 scenarios without step definitions; `ST-0009` полностью закрыта.
+Оставшиеся gaps: 10 scenarios without step definitions; следующий внутри `ST-0010`: `SC-0010-002`.
