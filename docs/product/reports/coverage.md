@@ -1,24 +1,25 @@
 # STORM Coverage Analysis
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:cover -> /storm:bdd-implement SC-0008-002`
+Команда: `/storm:cover -> /storm:bdd-implement SC-0008-003`
 
-`SC-0008-002` теперь исполняется через `TS-0055` и `SD-0115..SD-0118`. Contract подтверждает standard minimap/toolbar controls, zoom/pan/reset и narrow-window compact collapse/restore с сохранением интерактивности. Production code, `.feature`, automation IDs, project files, workflows и existing test annotations не менялись.
+`SC-0008-003` теперь исполняется через `TS-0056` и `SD-0119..SD-0122`. Contract подтверждает responsive filters, search, inline rename, modifier multi-selection и standard viewport/minimap controls. Production code, `.feature`, automation IDs, project files, workflows и existing test annotations не менялись.
 
 | Метрика | Значение |
 | --- | --- |
 | Scenario -> Test links | 45/45 |
-| Passing scenarios | 30 |
-| Step definitions | 118 |
-| Step-executable scenarios | 30/45 |
-| ST-0008 executable coverage | 2/3 scenarios |
+| Passing scenarios | 31 |
+| Step definitions | 122 |
+| Step-executable scenarios | 31/45 |
+| ST-0008 executable coverage | 3/3 scenarios |
 | Full suite gate | не подтверждён: предыдущий run timeout после 304 секунд без summary |
 
 | Проверка | Результат |
 | --- | --- |
 | Build Release | прошло с 69 existing warnings, errors 0 |
-| `StormRoadmapViewportOverlayExecutableSpecTests` | прошло 1/1 |
+| `StormRoadmapInteractionsExecutableSpecTests` | прошло 1/1 |
 | `RoadmapGraphUiTests` | прошло 47/47 |
-| Artifact validator | 0 errors, 12 known warnings, 30/45 executable |
+| `MainControlFilterToolbarResponsiveUiTests` | прошло 14/14 |
+| Artifact validator | 0 errors, 12 known warnings, 31/45 executable |
 
-Оставшиеся gaps: 15 scenarios without step definitions; следующий внутри `ST-0008`: `SC-0008-003`.
+Оставшиеся gaps: 14 scenarios without step definitions; `ST-0008` полностью step-executable.

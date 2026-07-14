@@ -203,5 +203,9 @@ internal sealed class StormScenarioContext
 
     public RoadmapViewportOverlayScenarioResult? RoadmapViewportOverlayResult { get; set; }
 
+    public bool RoadmapInteractionsTaskSetAvailable { get; set; }
+    public bool RoadmapInteractionsStoryBehaviorConfirmed { get; set; }
+    public RoadmapInteractionsScenarioResult? RoadmapInteractionsResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
