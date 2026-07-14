@@ -74,11 +74,12 @@
       "BDD executable slice добавлен 2026-07-14: SC-0006-001 исполняется из feature text через repo-local step definitions SD-0087..SD-0090 и TUnit/Avalonia.Headless evidence TS-0048; linked TS-0005/TS-0013 preserved; ST-0006 now 1/3 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0006-002 исполняется из feature text через repo-local step definitions SD-0091..SD-0094 и TUnit evidence TS-0049; linked TS-0013 preserved; ST-0006 now 2/3 step-executable.",
       "BDD executable slice добавлен 2026-07-14: SC-0006-003 исполняется из feature text через repo-local step definitions SD-0095..SD-0098 и TUnit/Avalonia.Headless evidence TS-0050; linked TS-0005/TS-0013 preserved; ST-0006 now 3/3 step-executable.",
-      "BDD executable slice добавлен 2026-07-14: SC-0007-001 исполняется из feature text через repo-local step definitions SD-0099..SD-0102 и TUnit/Avalonia.Headless evidence TS-0051; linked TS-0005 preserved; ST-0007 now 1/3 step-executable."
+      "BDD executable slice добавлен 2026-07-14: SC-0007-001 исполняется из feature text через repo-local step definitions SD-0099..SD-0102 и TUnit/Avalonia.Headless evidence TS-0051; linked TS-0005 preserved; ST-0007 now 1/3 step-executable.",
+      "BDD executable slice добавлен 2026-07-14: SC-0007-002 исполняется из feature text через repo-local step definitions SD-0103..SD-0106 и TUnit/Avalonia.Headless evidence TS-0052; linked TS-0005/TS-0008 preserved; ST-0007 now 2/3 step-executable."
     ],
     "language": "ru",
     "feature_root": "features/",
-    "last_artifact_command": "/storm:bdd-implement SC-0007-001 task-card layout executable slice",
+    "last_artifact_command": "/storm:bdd-implement SC-0007-002 task-card relations executable slice",
     "last_artifact_mode": "delivery-task test-only executable BDD implementation + artifact sync"
   },
   "vision": {
@@ -1752,15 +1753,22 @@
         {
           "id": "AC-0020",
           "text": "Блоки отношений позволяют просматривать и менять parents, containing, blocked и blocked-by связи.",
-          "coverage_level": "critical",
+          "coverage_level": "full",
           "linked_tests": [
             "TS-0005",
-            "TS-0008"
+            "TS-0008",
+            "TS-0052"
           ],
           "evidence": [
             {
-              "path": "src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs",
-              "symbol": "CurrentTaskCard_*Layout*"
+              "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+              "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+              "test_id": "TS-0052"
+            },
+            {
+              "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+              "symbol": "TaskCardRelationsContract",
+              "test_id": "TS-0052"
             }
           ],
           "linked_rules": [
@@ -1801,7 +1809,8 @@
         "TS-0003",
         "TS-0005",
         "TS-0008",
-        "TS-0051"
+        "TS-0051",
+        "TS-0052"
       ],
       "linked_code": [
         "CU-0005",
@@ -1830,7 +1839,7 @@
         "SC-0007-003"
       ],
       "behavior_coverage_level": 4,
-      "behavior_coverage_note": "SC-0007-001 теперь step-executable через TS-0051/SD-0099..SD-0102; independent Avalonia.Headless contract проверяет desktop и widths 360/390/430, existing TS-0005 сохранён."
+      "behavior_coverage_note": "SC-0007-001 исполняется через TS-0051/SD-0099..SD-0102, а SC-0007-002 — через TS-0052/SD-0103..SD-0106; contracts подтверждают task-card layout и все четыре relation routes с обратными storage links. Existing TS-0005/TS-0008 сохранены."
     },
     {
       "id": "ST-0008",
@@ -5471,6 +5480,56 @@
         }
       ],
       "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and запускает independent Avalonia.Headless contract. Existing TS-0005 link preserved; UI video evidence не применимо, так как UI behavior/layout не менялись. Full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence."
+    },
+    {
+      "id": "TS-0052",
+      "name": "StormTaskCardRelationsExecutableSpecTests",
+      "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+      "framework": "TUnit + repo-local STORM BDD runner + Avalonia.Headless",
+      "type": "bdd-executable-spec/task-card-relations",
+      "status": "active",
+      "provenance": "added_by_approved_bdd_implement_delivery_for_SC-0007-002_step_definitions",
+      "confidence": 0.86,
+      "linked_stories": [
+        "ST-0007"
+      ],
+      "linked_acceptance_criteria": [
+        "AC-0020"
+      ],
+      "linked_constraints": [
+        "CN-0003",
+        "CN-0004",
+        "CN-0005"
+      ],
+      "linked_scenarios": [
+        "SC-0007-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0007-002 steps from features/storm/st-0007-task-card.feature through repo-local STORM BDD step definitions."
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+          "symbol": "SD-0103..SD-0106",
+          "description": "Step definitions bind existing relation-block wording to picker routes and directed relation storage evidence."
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsContract",
+          "description": "Contract verifies four relation editor routes and parent/containing/blocked-by/blocked reciprocal persisted links."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed",
+          "result": "прошло 1/1 on 2026-07-14"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed",
+          "result": "прошло 5/5 on 2026-07-14"
+        }
+      ],
+      "notes": "Production code, feature wording, automation IDs и existing test annotations не менялись; executable spec читает existing .feature wording and запускает relation route/direction contract. Existing TS-0005/TS-0008 links preserved; UI video evidence не применимо, так как UI behavior/layout не менялись. Full Unlimotion.Test gate remains unconfirmed after the earlier 304-second timeout without a summary."
     }
   ],
   "code_units": [
@@ -6535,59 +6594,57 @@
       "Некоторые сгенерированными страницами repowiki устарели относительно текущей статусной модели."
     ],
     "recommended_next_step": "Android, iOS и Browser теперь имеют build-smoke evidence для SC-0015-002, но runtime/release support не заявляется. Следующий шаг для /storm:cover: либо отдельная runtime/release SPEC для platform launch/package evidence, либо переход к следующему high-value executable BDD scenario; repo config/tests/code не менять без отдельной delivery SPEC.",
-    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0007-001 executable step definitions",
+    "last_trace_command": "/storm:trace sync after /storm:bdd-implement SC-0007-002 executable step definitions",
     "traceability_report": "docs/product/reports/traceability.md",
     "traceability_mode": "artifact-only",
     "traceability_updated_at": "2026-07-14",
-    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0007-001",
+    "last_cover_command": "/storm:cover -> /storm:bdd-implement SC-0007-002",
     "coverage_report": "docs/product/reports/coverage.md",
     "coverage_mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "coverage_updated_at": "2026-07-14",
-    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0007-001",
+    "last_rank_command": "/storm:rank + /storm:bdd-implement SC-0007-002",
     "ranking_report": "docs/product/reports/ranking.md",
     "ranking_mode": "artifact sync after test-only executable BDD slice",
     "ranking_updated_at": "2026-07-14",
     "bdd_sync": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-sync",
-      "mode": "test-only executable BDD sync for SC-0007-001 after approved SPEC",
+      "mode": "test-only executable BDD sync for SC-0007-002 after approved SPEC",
       "report": "docs/product/reports/bdd-sync.md"
     },
     "bdd_lint": {
       "updated_at": "2026-07-14",
       "command": "/storm:bdd-lint",
-      "mode": "test-only executable BDD lint for SC-0007-001 after approved SPEC",
+      "mode": "test-only executable BDD lint for SC-0007-002 after approved SPEC",
       "report": "docs/product/reports/bdd-lint.md"
     },
     "last_exec": {
-      "updated_at": "2026-06-28",
-      "command": "/storm:bdd-implement SC-0005-001",
+      "updated_at": "2026-07-14",
+      "command": "/storm:bdd-implement SC-0007-002",
       "mode": "delivery-task test-only executable BDD implementation",
-      "approved_spec": "specs/2026-06-28-storm-sc0005-search-behavior-bdd.md",
-      "classification": "SC-0005-001 search/fuzzy scenario now executes from feature text through repo-local step definitions and existing UI evidence",
+      "approved_spec": "specs/2026-07-14-storm-sc0007-task-card-relations-bdd.md",
+      "classification": "SC-0007-002 relation-block scenario now executes from feature text through repo-local step definitions, four picker routes and directed relation storage evidence",
       "changed_code": [],
       "tests_changed": [
-        "src/Unlimotion.Test/SearchBehaviorUiContract.cs",
-        "src/Unlimotion.Test/StormBdd/SearchBehaviorStepDefinitions.cs",
-        "src/Unlimotion.Test/StormSearchBehaviorExecutableSpecTests.cs",
+        "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+        "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+        "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
         "src/Unlimotion.Test/StormBdd/StormStepDefinition.cs"
       ],
       "test_annotations_changed": false,
       "validation": [
-        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release -v minimal => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormSearchBehaviorExecutableSpecTests/*\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTreeCommandsUiTests/TreeSearch_AllTasksSearchEditor_FiltersVisibleTree\" --output Detailed => прошло 1/1",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/RoadmapGraphUiTests/RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode\" --output Detailed => прошло 1/1",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 3 warnings (shared ST-0005 Given/And/When step text reuse)",
+        "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; 69 existing warnings, errors 0",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed => прошло 1/1",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed => прошло 5/5",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 11 warnings, executable_specification_ratio 27/45",
         "git diff --check => прошло with LF-to-CRLF working-copy warnings only",
-        "rg -n \"[ \\t]+$\" src\\Unlimotion.Test docs\\product specs\\2026-06-28-storm-sc0005-search-behavior-bdd.md => no matches (rg exit 1)",
-        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed вне managed sandbox => прошло 566/566",
+        "full dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed ранее timed out after 304 seconds without a summary; no passing claim",
         "production code, .feature wording, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
-      "result": "SC-0005-001 прошёл как executable BDD slice; ST-0005 fully step-executable; full Unlimotion.Test прошёл 566/566 вне managed sandbox; production behavior не менялось.",
-      "next_recommended_action": "Продолжать /storm:cover через следующий high-value scenario без step definitions вне ST-0005, отдельной SPEC с test-only BDD binding.",
+      "result": "SC-0007-002 прошёл как executable BDD slice; ST-0007 now 2/3 step-executable; production behavior не менялось; full-suite regression PASS не заявлен.",
+      "next_recommended_action": "Продолжать /storm:cover через SC-0007-003 отдельной SPEC с test-only BDD binding для completion criteria.",
       "validation_status": "passed_with_known_bdd_lint_warnings",
-      "known_warning": "Validator reports three shared ST-0005 context/action step text warnings; all are intentional reuse, not blockers."
+      "known_warning": "Validator reports 11 shared context/action/story step text warnings; all are intentional reuse, not blockers."
     }
   },
   "traceability": {
@@ -7840,12 +7897,12 @@
   },
   "coverage_analysis": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0007-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0007-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "annotations_added": false,
     "tests_changed": true,
     "tests_run": true,
-    "summary": "ST-0007/AC-0019 preserves existing TS-0005 evidence and adds executable BDD evidence TS-0051 through SD-0099..SD-0102; SC-0007-001 is step-executable for desktop and widths 360/390/430.",
+    "summary": "ST-0007/AC-0020 preserves existing TS-0005/TS-0008 evidence and adds executable BDD evidence TS-0052 through SD-0103..SD-0106; SC-0007-002 is step-executable for four relation picker routes and directed reverse storage links.",
     "improved_by_existing_evidence": [
       {
         "id": "AC-0011",
@@ -8258,7 +8315,7 @@
     ],
     "behavior_coverage_metrics": {
       "updated_at": "2026-07-14",
-      "command": "/storm:cover -> /storm:bdd-implement SC-0007-001",
+      "command": "/storm:cover -> /storm:bdd-implement SC-0007-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "features_total": 16,
       "rules_total": 44,
@@ -8276,14 +8333,14 @@
       "automated_or_passing_scenarios": 45,
       "draft_scenarios": 0,
       "manual_scenarios": 0,
-      "passing_scenarios": 26,
+      "passing_scenarios": 27,
       "failing_scenarios": 0,
       "scenario_test_links": 45,
       "scenarios_without_test_links": 0,
-      "step_definitions_total": 102,
-      "step_executable_scenarios": 26,
-      "step_definition_coverage_ratio": "26/45",
-      "executable_specification_ratio": "26/45 step-executable; 26/45 passing scenarios",
+      "step_definitions_total": 106,
+      "step_executable_scenarios": 27,
+      "step_definition_coverage_ratio": "27/45",
+      "executable_specification_ratio": "27/45 step-executable; 27/45 passing scenarios",
       "automation_coverage_ratio": "45/45",
       "behavior_coverage_ratio": "16/16",
       "rule_coverage_ratio": "44/44",
@@ -8293,27 +8350,27 @@
       "tests_run": true,
       "validation_evidence": [
         "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardLayoutExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/*\" --output Detailed => прошло 15/15 on 2026-07-14",
-        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings, executable_specification_ratio 26/45 after artifact sync",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+        "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
+        "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 11 warnings, executable_specification_ratio 27/45 after artifact sync",
         "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-        "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless BDD contract and preserved task-card UI suite used as next-best evidence.",
+        "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless relation BDD contract and preserved relation picker UI suite used as next-best evidence.",
         "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
       ],
       "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
       "production_code_changed": false,
-      "bdd_lint_issues": 10,
-      "step_reuse_ratio": "105/105"
+      "bdd_lint_issues": 11,
+      "step_reuse_ratio": "109/109"
     },
     "bdd_sync_summary": {
       "updated_at": "2026-07-14",
-      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0007-001",
+      "command": "/storm:bdd-sync after /storm:bdd-implement SC-0007-002",
       "mode": "delivery-task test-only executable BDD implementation + artifact sync",
       "status": "synced",
       "synced_links": [
-        "SC-0007-001 -> TS-0051 -> SD-0099..SD-0102",
-        "existing TS-0005 preserved",
-        "ST-0007 now 1/3 step-executable"
+        "SC-0007-002 -> TS-0052 -> SD-0103..SD-0106",
+        "existing TS-0005/TS-0008 preserved",
+        "ST-0007 now 2/3 step-executable"
       ],
       "not_changed": [
         "production code",
@@ -8324,10 +8381,10 @@
         "workflows"
       ],
       "tests_changed": true,
-      "decision": "BDD links обновлены для SC-0007-001: новый TS-0051 связывает scenario text с existing task-card desktop/narrow behavior через SD-0099..SD-0102 и test-only Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+      "decision": "BDD links обновлены для SC-0007-002: новый TS-0052 связывает scenario text с existing relation picker routes и directed storage links через SD-0103..SD-0106 и test-only Avalonia.Headless contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
       "gaps": [
-        "Step definitions покрывают 26/45 scenarios.",
-        "ST-0007 now has 1/3 step-executable scenarios; SC-0007-002 и SC-0007-003 остаются gaps.",
+        "Step definitions покрывают 27/45 scenarios.",
+        "ST-0007 now has 2/3 step-executable scenarios; SC-0007-003 остаётся gap.",
         "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
       ],
       "code_changed": false
@@ -8581,24 +8638,37 @@
           "SD-0102"
         ],
         "result": "passing targeted BDD 1/1 and preserved task-card UI suite 15/15; full suite timed out after 304 seconds without a summary"
+      },
+      {
+        "story": "ST-0007",
+        "acceptance_criteria": "AC-0020",
+        "scenario": "SC-0007-002",
+        "added_test": "TS-0052",
+        "added_step_definitions": [
+          "SD-0103",
+          "SD-0104",
+          "SD-0105",
+          "SD-0106"
+        ],
+        "result": "passing targeted BDD 1/1 and preserved relation picker UI suite 5/5; full suite remains unconfirmed after the earlier 304-second timeout"
       }
     ],
     "code_changed": false,
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
-    "targeted_validation_result": "SC-0007-001 executable BDD passed 1/1; preserved MainControlTaskCardLayoutUiTests passed 15/15; full suite timed out after 304 seconds without a summary.",
+    "targeted_validation_result": "SC-0007-002 executable BDD passed 1/1; preserved MainControlRelationPickerUiTests passed 5/5; full suite remains unconfirmed after the earlier 304-second timeout.",
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardLayoutExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/*\" --output Detailed => прошло 15/15 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings, executable_specification_ratio 26/45 after artifact sync",
-      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless BDD contract and preserved task-card UI suite used as next-best evidence.",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => выполнить after artifact sync; expected 0 errors and executable_specification_ratio 27/45",
+      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless relation BDD contract and preserved relation picker UI suite used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ]
   },
   "ranking_analysis": {
     "updated_at": "2026-07-14",
-    "command": "/storm:rank + /storm:bdd-implement SC-0007-001",
+    "command": "/storm:rank + /storm:bdd-implement SC-0007-002",
     "mode": "artifact sync after test-only executable BDD slice",
     "scope": "coverage_backlog_and_partial_story_candidates",
     "dependency_cycles": [],
@@ -8612,7 +8682,7 @@
           "SC-0007-002",
           "SC-0007-003"
         ],
-        "recommendation": "SC-0007-001 закрыт через TS-0051; следующий приоритетный gap -- SC-0007-002, поскольку он продолжает тот же UI-контракт связей и не требует изменения production code."
+        "recommendation": "SC-0007-001 и SC-0007-002 закрыты через TS-0051/TS-0052; следующий приоритетный gap -- SC-0007-003, поскольку он завершает story-level BDD coverage без изменения production code."
       },
       {
         "story": "ST-0011",
@@ -8649,7 +8719,7 @@
         "recommendation": "CV-0005 покрыт на уровне project-contract + Browser/iOS/Android build smoke. Runtime launch, emulator/device validation and release pipeline evidence остаются отдельным scope."
       }
     ],
-    "next_recommended_action": "Следующий /storm:cover step: оформить отдельную SPEC для SC-0007-002 и связать её Gherkin text с существующим relation-picker UI evidence без изменения production code."
+    "next_recommended_action": "Следующий /storm:cover step: оформить отдельную SPEC для SC-0007-003 и связать её Gherkin text с существующим completion-criteria UI evidence без изменения production code."
   },
   "gherkin_features": [
     {
@@ -9646,8 +9716,16 @@
       ],
       "evidence": [
         {
-          "path": "src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs",
-          "symbol": "CurrentTaskCard_*Layout*"
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0052",
+          "description": "Executable BDD evidence for GR-020 / SC-0007-002."
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsContract",
+          "test_id": "TS-0052",
+          "description": "Headless route and directed relation-storage contract for all four task-card relation blocks."
         }
       ]
     },
@@ -12254,14 +12332,20 @@
         "CN-0005"
       ],
       "threatens_needs": [],
-      "automation_status": "linked_existing_tests_not_run_in_current_update",
+      "automation_status": "targeted_executable_bdd_1_of_1_and_relation_picker_ui_5_of_5_passing_on_2026_07_14",
       "linked_tests": [
         "TS-0005",
-        "TS-0008"
+        "TS-0008",
+        "TS-0052"
       ],
-      "step_definitions": [],
+      "step_definitions": [
+        "SD-0103",
+        "SD-0104",
+        "SD-0105",
+        "SD-0106"
+      ],
       "coverage_role": "happy_path",
-      "status": "automated",
+      "status": "passing",
       "gherkin": {
         "given": [
           "у пользователя открыт актуальный набор задач Unlimotion",
@@ -12298,6 +12382,24 @@
           "path": "src/Unlimotion.Test/SettingsControlResponsiveUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение.",
           "test_id": "TS-0008"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "description": "Executes SC-0007-002 through repo-local STORM BDD runner.",
+          "test_id": "TS-0052 New-EvidencePath"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsContract",
+          "description": "Verifies all four relation picker routes and directed parent/containing/blocked-by/blocked storage links.",
+          "test_id": "TS-0052 New-EvidencePath"
+        },
+        {
+          "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+          "symbol": "SD-0103..SD-0106",
+          "description": "Step definitions bind all four SC-0007-002 Gherkin steps to relation behavior evidence.",
+          "test_id": "TS-0052 New-EvidencePath"
         }
       ]
     },
@@ -16356,11 +16458,95 @@
           "symbol": "TaskCardLayoutScenarioResult"
         }
       ]
+    },
+    {
+      "id": "SD-0103",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+      "symbol": "TaskCardRelationsStepDefinitions.Create / SD-0103",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Дано у пользователя открыт актуальный набор задач Unlimotion",
+      "supports_scenarios": [
+        "SC-0007-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0052"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0104",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+      "symbol": "TaskCardRelationsStepDefinitions.Create / SD-0104",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "И поведение относится к истории ST-0007",
+      "supports_scenarios": [
+        "SC-0007-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0052"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsScenarioResult"
+        }
+      ]
+    },
+    {
+      "id": "SD-0105",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+      "symbol": "TaskCardRelationsStepDefinitions.Create / SD-0105",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Когда пользователь выполняет действие, описанное в критерии приёмки",
+      "supports_scenarios": [
+        "SC-0007-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0052"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsContract"
+        }
+      ]
+    },
+    {
+      "id": "SD-0106",
+      "path": "src/Unlimotion.Test/StormBdd/TaskCardRelationsStepDefinitions.cs",
+      "symbol": "TaskCardRelationsStepDefinitions.Create / SD-0106",
+      "framework": "repo-local STORM BDD runner + TUnit + Avalonia.Headless",
+      "step_text": "Тогда Блоки отношений позволяют просматривать и менять parents, containing, blocked и blocked-by связи.",
+      "supports_scenarios": [
+        "SC-0007-002"
+      ],
+      "evidence": [
+        {
+          "path": "src/Unlimotion.Test/StormTaskCardRelationsExecutableSpecTests.cs",
+          "symbol": "TaskCardRelationsScenario_ExecutesFeatureSteps",
+          "test_id": "TS-0052"
+        },
+        {
+          "path": "src/Unlimotion.Test/TaskCardRelationsContract.cs",
+          "symbol": "TaskCardRelationsContract.AssertTaskCardRelationsScenarioResultAsync"
+        }
+      ]
     }
   ],
   "behavior_coverage_metrics": {
     "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0007-001",
+    "command": "/storm:cover -> /storm:bdd-implement SC-0007-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "features_total": 16,
     "rules_total": 44,
@@ -16378,14 +16564,14 @@
     "automated_or_passing_scenarios": 45,
     "draft_scenarios": 0,
     "manual_scenarios": 0,
-    "passing_scenarios": 26,
+    "passing_scenarios": 27,
     "failing_scenarios": 0,
     "scenario_test_links": 45,
     "scenarios_without_test_links": 0,
-    "step_definitions_total": 102,
-    "step_executable_scenarios": 26,
-    "step_definition_coverage_ratio": "26/45",
-    "executable_specification_ratio": "26/45 step-executable; 26/45 passing scenarios",
+    "step_definitions_total": 106,
+    "step_executable_scenarios": 27,
+    "step_definition_coverage_ratio": "27/45",
+    "executable_specification_ratio": "27/45 step-executable; 27/45 passing scenarios",
     "automation_coverage_ratio": "45/45",
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
@@ -16395,27 +16581,27 @@
     "tests_run": true,
     "validation_evidence": [
       "dotnet build src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-restore -v minimal /nr:false => прошло; existing warnings, errors 0",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardLayoutExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
-      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlTaskCardLayoutUiTests/*\" --output Detailed => прошло 15/15 on 2026-07-14",
-      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 10 warnings, executable_specification_ratio 26/45 after artifact sync",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormTaskCardRelationsExecutableSpecTests/*\" --output Detailed => прошло 1/1 on 2026-07-14",
+      "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/MainControlRelationPickerUiTests/*\" --output Detailed => прошло 5/5 on 2026-07-14",
+      "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 11 warnings, executable_specification_ratio 27/45 after artifact sync",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
-      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless BDD contract and preserved task-card UI suite used as next-best evidence.",
+      "UI video evidence не применимо: UI behavior/layout не менялись; targeted Avalonia.Headless relation BDD contract and preserved relation picker UI suite used as next-best evidence.",
       "production code, .feature wording, automation IDs, .csproj, workflows и existing test annotations не менялись в этой SPEC"
     ],
     "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
     "production_code_changed": false,
-    "bdd_lint_issues": 10,
-    "step_reuse_ratio": "105/105"
+    "bdd_lint_issues": 11,
+    "step_reuse_ratio": "109/109"
   },
   "bdd_sync": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0007-001",
+    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0007-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "synced",
     "synced_links": [
-      "SC-0007-001 -> TS-0051 -> SD-0099..SD-0102",
-      "existing TS-0005 preserved",
-      "ST-0007 now 1/3 step-executable"
+      "SC-0007-002 -> TS-0052 -> SD-0103..SD-0106",
+      "existing TS-0005/TS-0008 preserved",
+      "ST-0007 now 2/3 step-executable"
     ],
     "not_changed": [
       "production code",
@@ -16426,45 +16612,46 @@
       "workflows"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0007-001: новый TS-0051 связывает scenario text с existing task-card desktop/narrow behavior через SD-0099..SD-0102 и test-only Avalonia.Headless UI contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
+    "decision": "BDD links обновлены для SC-0007-002: новый TS-0052 связывает scenario text с existing relation picker routes и directed storage links через SD-0103..SD-0106 и test-only Avalonia.Headless contract. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs и existing test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 26/45 scenarios.",
-      "ST-0007 now has 1/3 step-executable scenarios; SC-0007-002 и SC-0007-003 остаются gaps.",
+      "Step definitions покрывают 27/45 scenarios.",
+      "ST-0007 now has 2/3 step-executable scenarios; SC-0007-003 остаётся gap.",
       "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
     ],
     "code_changed": false
   },
   "bdd_lint": {
     "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0007-001",
+    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0007-002",
     "mode": "delivery-task test-only executable BDD implementation + artifact sync",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
-      "Duplicate shared Given step text across scenario-specific step definitions, now including SD-0099; intentional shared task-set context.",
-      "Duplicate ST-0006 story step text now includes SD-0096; intentional scenario-specific binding.",
+      "Duplicate shared Given step text across scenario-specific step definitions now includes SD-0103; intentional shared task-set context.",
       "Duplicate ST-0005 story step text remains from earlier scenarios.",
       "Duplicate ST-0002 status-change When step text remains from earlier lifecycle scenarios.",
       "Duplicate search/filter When step text now includes SD-0097; intentional scenario-specific binding.",
       "Duplicate ST-0001 story step text remains from earlier task-graph scenarios.",
-      "Duplicate generic criterion-action When step text now includes SD-0101; intentional scenario-specific binding.",
+      "Duplicate generic criterion-action When step text now includes SD-0105; intentional scenario-specific binding.",
       "Duplicate ST-0002 story step text remains from earlier lifecycle scenarios.",
       "Duplicate ST-0003 story step text remains from earlier availability scenarios.",
-      "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios."
+      "Duplicate ST-0004 story step text remains from earlier workspace-navigation scenarios.",
+      "Duplicate ST-0006 story step text remains from earlier planning scenarios.",
+      "Duplicate ST-0007 story step text now includes SD-0104; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0007-001 additionally linked to TS-0051.",
-      "scenario_step_definition_links": "WARNING: 26/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0007-002 additionally linked to TS-0052.",
+      "scenario_step_definition_links": "WARNING: 27/45 scenarios step-executable.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
       "test_annotations": "PASS: existing test annotations не менялись.",
       "production_code": "PASS: production code, project files and workflows не менялись.",
       "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted task-card Avalonia.Headless evidence used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0007-001 executable BDD passed 1/1 and MainControlTaskCardLayoutUiTests passed 15/15.",
+      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout не менялись; targeted relation Avalonia.Headless evidence used as next-best evidence.",
+      "targeted_gate": "PASS: SC-0007-002 executable BDD passed 1/1 and MainControlRelationPickerUiTests passed 5/5.",
       "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
-      "st_0007": "PASS: SC-0007-001 is step-executable through TS-0051 and SD-0099..SD-0102."
+      "st_0007": "PASS: SC-0007-001 and SC-0007-002 are step-executable through TS-0051/TS-0052 and SD-0099..SD-0106."
     }
   }
 }
