@@ -1,218 +1,91 @@
-using DynamicData;
-using KellermanSoftware.CompareNetObjects;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Globalization;
+using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using Unlimotion.Domain;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
-namespace Unlimotion
+namespace Unlimotion;
+
+public class FileStorage : global::Unlimotion.Storage.FileTaskStorage
 {
-    public class FileStorage : IStorage
+    private readonly IDatabaseWatcher? _dbWatcher;
+
+    public FileStorage(string path, bool watcher = false, INotificationManagerWrapper? notificationManager = null)
+        : base(new global::Unlimotion.Storage.FileTaskStorageOptions { Path = PreparePath(path) })
     {
-        public string Path { get; private set; }
-
-        private ConcurrentDictionary<string, TaskItem> tasks;
-
-        private IDatabaseWatcher? dbWatcher;
-        public IDatabaseWatcher? Watcher => dbWatcher;
-        private CompareLogic compareLogic;
-
-        public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
-        public event Action<Exception?>? OnConnectionError
+        if (!watcher)
         {
-            add { }
-            remove { }
+            return;
         }
 
-        public FileStorage(string path, bool watcher = false, INotificationManagerWrapper? notificationManager = null)
-        {
-            var normalizedPath = string.IsNullOrWhiteSpace(path) ? "Tasks" : path;
-            if (string.IsNullOrWhiteSpace(normalizedPath))
-            {
-                normalizedPath = "Tasks";
-            }
+        _dbWatcher = new FileDbWatcher(Path, notificationManager);
+        SubscribeToWatcher(_dbWatcher);
+    }
 
-            Path = normalizedPath;
+    protected FileStorage(string path, IDatabaseWatcher watcher)
+        : base(new global::Unlimotion.Storage.FileTaskStorageOptions { Path = PreparePath(path) })
+    {
+        _dbWatcher = watcher ?? throw new ArgumentNullException(nameof(watcher));
+        SubscribeToWatcher(_dbWatcher);
+    }
+
+    public IDatabaseWatcher? Watcher => _dbWatcher;
+
+    protected virtual async Task OnUpdatingAsync(TaskStorageUpdateEventArgs e)
+    {
+        var taskId = TryGetTaskIdBySourceFileName(e.Id, out var mappedTaskId)
+            ? mappedTaskId
+            : e.Id;
+        var loaded = await Load(taskId, forced: true);
+        RaiseUpdating(new TaskStorageUpdateEventArgs
+        {
+            Id = loaded?.Id ?? taskId,
+            Type = e.Type
+        });
+    }
+
+    protected override void OnBeforeWrite(string taskId, string filePath) =>
+        _dbWatcher?.AddIgnoredTask(System.IO.Path.GetFileName(filePath));
+
+    protected override void OnBeforeRemove(string taskId, string filePath) =>
+        _dbWatcher?.AddIgnoredTask(System.IO.Path.GetFileName(filePath));
+
+    private void SubscribeToWatcher(IDatabaseWatcher watcher)
+    {
+        watcher.OnUpdated += async (_, args) =>
+        {
             try
             {
-                Directory.CreateDirectory(Path);
+                await OnUpdatingAsync(new TaskStorageUpdateEventArgs
+                {
+                    Id = args.Id,
+                    Type = args.Type
+                });
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(L10n.Format("FileStorageNoAccess", Path), ex);
+                Debug.WriteLine($"Failed to process file storage update for '{args.Id}': {ex}");
             }
-            tasks = new();
-            if (watcher)
-            {
-                dbWatcher = new FileDbWatcher(Path, notificationManager);
-                dbWatcher.OnUpdated += (sender, args) => OnUpdating(new TaskStorageUpdateEventArgs()
-                {
-                    Id = args.Id,
-                    Type = args.Type,
-                });
-            }
+        };
+    }
 
-            compareLogic = new CompareLogic
-            {
-                Config =
-                {
-                    MaxDifferences = 1
-                }
-            };
-        }
-
-        public async Task<TaskItem> Save(TaskItem taskItem)
-        {
-            taskItem.EnsureStatusHistory(taskItem.UserId ?? "local-user");
-            if (!string.IsNullOrWhiteSpace(taskItem.Id))
-            {
-                var exist = await Load(taskItem.Id, true);
-                var result = compareLogic.Compare(exist, taskItem);
-                if (result.AreEqual)
-                {
-                    return exist!;
-                }
-            }
-            var item = taskItem with {};
-
-            var id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString() : item.Id;
-            dbWatcher?.AddIgnoredTask(id);
-            item.Id = id;
-
-            var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, item.Id));
-            var converter = new IsoDateTimeConverter
-            {
-                DateTimeFormat = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffzzz",
-                Culture = CultureInfo.InvariantCulture,
-                DateTimeStyles = DateTimeStyles.None
-            };
-            try
-            {
-                using var writer = fileInfo.CreateText();
-                var json = JsonConvert.SerializeObject(item, Formatting.Indented, converter, new StringEnumConverter());
-                await writer.WriteAsync(json);
-                taskItem.Id = item.Id;
-
-                tasks.AddOrUpdate(taskItem.Id, item, (key, oldValue) => item);
-                return item;
-            }
-            catch
-            {
-                return null!;
-            }
-        }
-
-        public async Task<bool> Remove(string itemId)
-        {
-            var directoryInfo = new DirectoryInfo(Path);
-            var fileInfo = new FileInfo(System.IO.Path.Combine(directoryInfo.FullName, itemId));
-            try
-            {
-                tasks.TryRemove(itemId, out _);
-                dbWatcher?.AddIgnoredTask(itemId);
-                fileInfo.Delete();
-                // Tasks.Remove(itemId);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public async Task<TaskItem?> Load(string itemId)
-        {
-            return await Load(itemId, false);
-        }
-
-        public async Task<TaskItem?> Load(string itemId, bool forced)
-        {
-            if (!forced && tasks.TryGetValue(itemId, out var value))
-            {
-                return value;
-            }
-            var jsonSerializer = new JsonSerializer();
-            jsonSerializer.Converters.Add(new StringEnumConverter());
-            try
-            {
-                var fullPath = System.IO.Path.Combine(Path, itemId);
-                var item = JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, jsonSerializer, saveRepairedSidecar: false);
-                tasks.AddOrUpdate(item.Id, item, (s, oldValue) => item); 
-                return item;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        protected virtual void OnUpdating(TaskStorageUpdateEventArgs e)
-        {
-            _ = Load(e.Id, true);
-            Updating?.Invoke(this, e);
-        }
-
-    public async IAsyncEnumerable<TaskItem> GetAll()
+    private static string PreparePath(string path)
     {
-        var directoryInfo = new DirectoryInfo(Path);
-            foreach (var fileInfo in directoryInfo.EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-                         .Where(info =>
-                             info.Length > 0 &&
-                             (string.IsNullOrEmpty(info.Extension) ||
-                              string.Equals(info.Extension, ".json", StringComparison.OrdinalIgnoreCase)) &&
-                             !string.Equals(info.Name, "migration.report", StringComparison.OrdinalIgnoreCase) &&
-                             !info.Name.EndsWith(".migration.report", StringComparison.OrdinalIgnoreCase)))
-            {
-                var task = await Load(fileInfo.Name);
-                if (task != null)
-                {
-                    if (task.Id == null)
-                    {
-                        continue;
-                    }
+        var normalizedPath = string.IsNullOrWhiteSpace(path)
+            ? "Tasks"
+            : path;
 
-                    yield return task;
-                }
-                else
-                {
-                    try
-                    {
-                        fileInfo.Delete();
-                    }
-                    catch
-                    {
-                    }
-                    //throw new FileLoadException($"Не удалось загрузить файл с задачей {fileInfo.FullName}");
-                }
-            }
-        }
-        
-        public async Task BulkInsert(IEnumerable<TaskItem> taskItems)
+        try
         {
-            foreach (var taskItem in taskItems)
-            {
-                await Save(taskItem);
-            }
+            Directory.CreateDirectory(normalizedPath);
+            return normalizedPath;
         }
-        
-        public async Task<bool> Connect()
+        catch (Exception ex)
         {
-            return await Task.FromResult(true);
-        }
-
-        public async Task Disconnect()
-        {
+            throw new InvalidOperationException(L10n.Format("FileStorageNoAccess", normalizedPath), ex);
         }
     }
 }

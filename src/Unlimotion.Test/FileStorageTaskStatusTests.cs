@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
+using Unlimotion.ViewModel;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
@@ -75,6 +79,115 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task OnUpdating_MalformedTaskFileDoesNotThrowAndRaisesUpdating()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var filePath = Path.Combine(tempDir, "malformed-task");
+            await File.WriteAllTextAsync(filePath, "{ malformed json");
+            var storage = new TestFileStorage(tempDir);
+            var raised = false;
+            string? observedId = null;
+
+            storage.Updating += (_, args) =>
+            {
+                raised = true;
+                observedId = args.Id;
+            };
+
+            await storage.TriggerUpdatingAsync("malformed-task");
+
+            await Assert.That(raised).IsTrue();
+            await Assert.That(observedId).IsEqualTo("malformed-task");
+            await Assert.That(await storage.Load("malformed-task", forced: true)).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task OnUpdating_RefreshesCacheBeforeRaisingUpdating()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new TestFileStorage(tempDir);
+            var task = new TaskItem { Id = "updated-task", Title = "Old title" };
+            await storage.Save(task);
+            _ = await storage.Load(task.Id, forced: true);
+            task.Title = "New title";
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, task.Id),
+                JsonConvert.SerializeObject(task));
+            string? observedTitle = null;
+
+            storage.Updating += (_, args) =>
+                observedTitle = storage.Load(args.Id).GetAwaiter().GetResult()?.Title;
+
+            await storage.TriggerUpdatingAsync(task.Id);
+
+            await Assert.That(observedTitle).IsEqualTo("New title");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task Save_TellsWatcherToIgnoreActualSourceFileName()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(sourcePath, JsonConvert.SerializeObject(new TaskItem
+            {
+                Id = "alias",
+                Title = "Original"
+            }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            var task = (await storage.ReadDirectoryAsync()).Tasks.Single();
+
+            await storage.Save(task);
+
+            await Assert.That(watcher.IgnoredTaskIds).Contains("alias.json");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task OnUpdating_SourceFileNameRaisesDomainTaskId()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "alias.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "alias", Title = "Aliased" }));
+            var storage = new TestFileStorage(tempDir);
+            _ = await storage.ReadDirectoryAsync();
+            string? observedId = null;
+            storage.Updating += (_, args) => observedId = args.Id;
+
+            await storage.TriggerUpdatingAsync("alias.json");
+
+            await Assert.That(observedId).IsEqualTo("alias");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
@@ -92,5 +205,41 @@ public class FileStorageTaskStatusTests
         {
             // Best-effort cleanup for temp artifacts.
         }
+    }
+
+    private sealed class TestFileStorage : FileStorage
+    {
+        public TestFileStorage(string path) : base(path, watcher: false)
+        {
+        }
+
+        public TestFileStorage(string path, IDatabaseWatcher watcher) : base(path, watcher)
+        {
+        }
+
+        public Task TriggerUpdatingAsync(string id) => OnUpdatingAsync(new TaskStorageUpdateEventArgs
+        {
+            Id = id,
+            Type = UpdateType.Saved
+        });
+    }
+
+    private sealed class RecordingDatabaseWatcher : IDatabaseWatcher
+    {
+        public List<string> IgnoredTaskIds { get; } = [];
+
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
+
+        public void AddIgnoredTask(string taskId) => IgnoredTaskIds.Add(taskId);
+
+        public void SetEnable(bool enable)
+        {
+        }
+
+        public void ForceUpdateFile(string filename, UpdateType type) => OnUpdated?.Invoke(this, new DbUpdatedEventArgs
+        {
+            Id = filename,
+            Type = type
+        });
     }
 }

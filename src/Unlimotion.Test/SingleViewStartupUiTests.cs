@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
@@ -48,7 +51,28 @@ public class SingleViewStartupUiTests
                 await Assert.That(vm.CurrentAllTasksItems.Count).IsEqualTo(1);
                 await Assert.That(context.Storage.ConnectCallCount).IsEqualTo(1);
                 await Assert.That(context.Storage.GetAllCallCount).IsEqualTo(1);
+                await Assert.That(context.Storage.SaveCallCount).IsEqualTo(0);
             }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SingleViewStartup_DisposeStopsPendingTaskAutosave()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = SingleViewStartupContext.Create();
+            var vm = context.MainWindowViewModel;
+            await GetCurrentApp().InitializeStartupViewModelAsync(vm);
+            var task = vm.taskRepository!.Tasks.Items[0];
+            task.PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromMilliseconds(100);
+
+            task.Title = "Pending title change";
+            context.TaskStorage.Dispose();
+            await Task.Delay(200);
+
+            await Assert.That(context.Storage.SaveCallCount).IsEqualTo(0);
         }, CancellationToken.None);
     }
 
@@ -114,11 +138,13 @@ public class SingleViewStartupUiTests
                     "legacy-task")))
                 .IsTrue();
 
-            vm.Create.Execute(null);
+            await ((ReactiveCommand<Unit, Unit>)vm.Create).Execute().ToTask();
             var createCompleted = WaitFor(() =>
                 vm.taskRepository?.Tasks.Count == 2 &&
                 vm.CurrentTaskItem is { Id: not null } &&
-                vm.CurrentTaskItem.Id != "legacy-task");
+                vm.CurrentTaskItem.Id != "legacy-task" &&
+                File.Exists(Path.Combine(context.TasksPath, vm.CurrentTaskItem.Id)) &&
+                CanAcquireDirectoryLock(context.TasksPath));
 
             await Assert.That(createCompleted).IsTrue();
             await Assert.That(vm.CurrentAllTasksItems.Count).IsEqualTo(2);
@@ -170,6 +196,25 @@ public class SingleViewStartupUiTests
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
     }
 
+    private static bool CanAcquireDirectoryLock(string tasksPath)
+    {
+        var lockPath = Path.Combine(tasksPath, ".unlimotion.lock");
+        if (!File.Exists(lockPath))
+        {
+            return true;
+        }
+
+        try
+        {
+            using var stream = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     private static App GetCurrentApp()
     {
         return Application.Current as App
@@ -184,16 +229,20 @@ public class SingleViewStartupUiTests
         private SingleViewStartupContext(
             string configPath,
             CountingStorage storage,
+            UnifiedTaskStorage taskStorage,
             MainWindowViewModel mainWindowViewModel,
             IDisposable? configurationDisposable)
         {
             _configPath = configPath;
             Storage = storage;
+            TaskStorage = taskStorage;
             MainWindowViewModel = mainWindowViewModel;
             _configurationDisposable = configurationDisposable;
         }
 
         public CountingStorage Storage { get; }
+
+        public UnifiedTaskStorage TaskStorage { get; }
 
         public MainWindowViewModel MainWindowViewModel { get; }
 
@@ -225,6 +274,7 @@ public class SingleViewStartupUiTests
             return new SingleViewStartupContext(
                 configPath,
                 storage,
+                taskStorage,
                 mainWindowViewModel,
                 configuration as IDisposable);
         }
@@ -232,6 +282,7 @@ public class SingleViewStartupUiTests
         public void Dispose()
         {
             MainWindowViewModel.Dispose();
+            TaskStorage.Dispose();
             _configurationDisposable?.Dispose();
 
             if (File.Exists(_configPath))
@@ -381,6 +432,8 @@ public class SingleViewStartupUiTests
 
         public int GetAllCallCount { get; private set; }
 
+        public int SaveCallCount { get; private set; }
+
         public event EventHandler<TaskStorageUpdateEventArgs> Updating
         {
             add { }
@@ -428,6 +481,7 @@ public class SingleViewStartupUiTests
 
         public Task<TaskItem> Save(TaskItem item)
         {
+            SaveCallCount++;
             return Task.FromResult(item);
         }
 

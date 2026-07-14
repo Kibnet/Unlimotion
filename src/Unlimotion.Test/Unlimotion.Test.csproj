@@ -128,7 +128,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Unlimotion.Cli\Unlimotion.Cli.csproj" />
 		<ProjectReference Include="..\Unlimotion.Desktop\Unlimotion.Desktop.csproj" />
+		<ProjectReference Include="..\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceInterface\Unlimotion.Server.ServiceInterface.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion\Unlimotion.csproj" />

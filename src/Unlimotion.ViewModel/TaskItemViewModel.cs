@@ -10,6 +10,7 @@ using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -64,6 +65,8 @@ namespace Unlimotion.ViewModel
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _blockedByTasks;
         private readonly SerialDisposable _repeaterPropertyChangedSubscription = new();
         private readonly SerialDisposable _completionCriteriaPropertyChangedSubscription = new();
+        private readonly object _pendingSavesLock = new();
+        private readonly HashSet<Task> _pendingSaves = [];
         private bool _isUpdatingFromModel;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
@@ -84,6 +87,8 @@ namespace Unlimotion.ViewModel
             {
                  await taskStorage.Update(this);
             });
+            var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
+                .Subscribe(new ObservableExceptionHandler(NotificationManager));
 
             var canEditCompletionCriteria = this.WhenAnyValue(
                 t => t.Status,
@@ -114,15 +119,15 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RecalculateEmoji())
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.Status).Subscribe(status =>
-            {
-                RefreshStatusOptions();
+            this.WhenAnyValue(m => m.Status)
+                .Subscribe(_ => RefreshStatusOptions())
+                .AddToDispose(this);
 
-                if (IsInitialized)
-                {
-                    SaveItemCommand.Execute().Subscribe();
-                }
-            });
+            this.WhenAnyValue(m => m.Status)
+                .Skip(1)
+                .Where(_ => IsInitialized && !_isUpdatingFromModel)
+                .Subscribe(_ => ExecuteSaveCommand())
+                .AddToDispose(this);
 
             this.WhenAnyValue(m => m.Status)
                 .Select(status => status == DomainTaskStatus.InProgress
@@ -223,7 +228,6 @@ namespace Unlimotion.ViewModel
                         {
                             case nameof(Title):
                             case nameof(Description):
-                            case nameof(Status):
                             case nameof(PlannedBeginDateTime):
                             case nameof(PlannedEndDateTime):
                             case nameof(PlannedDuration):
@@ -235,82 +239,78 @@ namespace Unlimotion.ViewModel
                                 return false;
                         }
                     })
-                    .Publish(shared =>
-                        shared.Where(_ => !IsInitialized)
-                              .Merge(
-                                  shared.Where(_ => IsInitialized)
-                                        .Throttle(PropertyChangedThrottleTimeSpanDefault)
-                              )
-                    );
+                    .Where(_ => IsInitialized && !_isUpdatingFromModel)
+                    .Throttle(PropertyChangedThrottleTimeSpanDefault);
 
                 propertyChanged
-                    .Subscribe(_ =>
-                    {
-                        if (IsInitialized)
-                            SaveItemCommand.Execute();
-                    })
+                    .Subscribe(_ => ExecuteSaveCommand())
                     .AddToDispose(this);
             }
 
             //При изменении начала
-            this.WhenAnyValue(m => m.PlannedBeginDateTime).Subscribe(b =>
-            {
-                //Если есть начальная и конечная дата
-                if (b.HasValue)
+            this.WhenAnyValue(m => m.PlannedBeginDateTime)
+                .Subscribe(b =>
                 {
-                    if (PlannedEndDateTime != null)
+                    //Если есть начальная и конечная дата
+                    if (b.HasValue)
                     {
-                        //Если есть вычисленный период
-                        if (plannedPeriod.HasValue)
+                        if (PlannedEndDateTime != null)
                         {
-                            //Вычисляется новая конечная дата
-                            var newValue = b.Value.Add(plannedPeriod.Value);
-                            //Если есть изменения
-                            if (PlannedEndDateTime != newValue)
+                            //Если есть вычисленный период
+                            if (plannedPeriod.HasValue)
                             {
-                                //Меняем дату
-                                PlannedEndDateTime = newValue;
+                                //Вычисляется новая конечная дата
+                                var newValue = b.Value.Add(plannedPeriod.Value);
+                                //Если есть изменения
+                                if (PlannedEndDateTime != newValue)
+                                {
+                                    //Меняем дату
+                                    PlannedEndDateTime = newValue;
+                                }
+                            }
+                            else
+                            {
+                                //Если начало раньше либо равно концу
+                                if (b.Value <= PlannedEndDateTime)
+                                    //Вычисляем период
+                                    plannedPeriod = PlannedEndDateTime - b.Value;
+                                //Если начало позже конца
+                                else
+                                    //Обнуляем период
+                                    plannedPeriod = null;
                             }
                         }
-                        //Если нет вычисленного периода
                         else
                         {
-                            //Если начало раньше либо равно концу
-                            if (b.Value <= PlannedEndDateTime)
-                                //Вычисляем период
-                                plannedPeriod = PlannedEndDateTime - b.Value;
-                            //Если начало позже конца
-                            else
-                                //Обнуляем период
-                                plannedPeriod = null;
+                            PlannedEndDateTime = b.Value;
                         }
                     }
-                    else
-                    {
-                        PlannedEndDateTime = b.Value;
-                    }
-                }
-            });
+                })
+                .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.PlannedEndDateTime).Subscribe(b =>
-            {
-                //Если есть начальная и конечная дата
-                if (PlannedBeginDateTime != null && b.HasValue)
+            this.WhenAnyValue(m => m.PlannedEndDateTime)
+                .Subscribe(b =>
                 {
-                    //Если начало раньше либо равно концу
-                    if (PlannedBeginDateTime <= b.Value)
-                        //Вычисляем период
-                        plannedPeriod = b.Value - PlannedBeginDateTime;
-                    //Если начало позже конца
-                    else
-                        //Обнуляем период
-                        plannedPeriod = null;
-                }
-            });            
+                    //Если есть начальная и конечная дата
+                    if (PlannedBeginDateTime != null && b.HasValue)
+                    {
+                        //Если начало раньше либо равно концу
+                        if (PlannedBeginDateTime <= b.Value)
+                            //Вычисляем период
+                            plannedPeriod = b.Value - PlannedBeginDateTime;
+                        //Если начало позже конца
+                        else
+                            //Обнуляем период
+                            plannedPeriod = null;
+                    }
+                })
+                .AddToDispose(this);
 
             this.WhenAnyValue(t => t.Repeater)
                 .Subscribe(RegisterRepeaterPropertyChangedSubscription)
                 .AddToDispose(this);
+
+            new CompositeDisposable(saveExceptionSubscription, SaveItemCommand).AddToDispose(this);
         }
 
         private void RegisterRepeaterPropertyChangedSubscription(RepeaterPatternViewModel? repeater)
@@ -333,11 +333,9 @@ namespace Unlimotion.ViewModel
 
             var saveSubscription = repeaterChanges
                 .Where(changed => IsRepeaterPatternPersistenceProperty(changed.EventArgs.PropertyName))
+                .Where(_ => IsInitialized && !_isUpdatingFromModel)
                 .Throttle(TimeSpan.FromSeconds(2))
-                .Subscribe(_ =>
-                {
-                    if (IsInitialized) SaveItemCommand.Execute();
-                });
+                .Subscribe(_ => ExecuteSaveCommand());
 
             _repeaterPropertyChangedSubscription.Disposable = new CompositeDisposable(markerSubscription, saveSubscription);
         }
@@ -881,64 +879,64 @@ namespace Unlimotion.ViewModel
             if (taskItem == null) throw new ArgumentNullException(nameof(taskItem));
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
 
-            // Update the backing model
-            if (IsCanBeCompleted != taskItem.IsCanBeCompleted) IsCanBeCompleted = taskItem.IsCanBeCompleted;
-            if (Title != taskItem.Title) Title = taskItem.Title;
-            if (Description != taskItem.Description) Description = taskItem.Description;
-            if (CreatedDateTime != taskItem.CreatedDateTime) CreatedDateTime = taskItem.CreatedDateTime;
-            if (UpdatedDateTime != taskItem.UpdatedDateTime) UpdatedDateTime = taskItem.UpdatedDateTime;
-            if (UnlockedDateTime != taskItem.UnlockedDateTime) UnlockedDateTime = taskItem.UnlockedDateTime;
-            if (CompletedDateTime != taskItem.CompletedDateTime) CompletedDateTime = taskItem.CompletedDateTime;
-            if (ArchiveDateTime != taskItem.ArchiveDateTime) ArchiveDateTime = taskItem.ArchiveDateTime;
-            if (StartedDateTime != taskItem.StartedDateTime) StartedDateTime = taskItem.StartedDateTime;
-            if (PlannedBeginDateTime != taskItem.PlannedBeginDateTime?.LocalDateTime)
-                PlannedBeginDateTime = taskItem.PlannedBeginDateTime?.LocalDateTime;
-            if (PlannedEndDateTime != taskItem.PlannedEndDateTime?.LocalDateTime)
-                PlannedEndDateTime = taskItem.PlannedEndDateTime?.LocalDateTime;
-            if (PlannedDuration != taskItem.PlannedDuration) PlannedDuration = taskItem.PlannedDuration;
-            if (Importance != taskItem.Importance) Importance = taskItem.Importance;
-            if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
-            if (Status != taskItem.Status) Status = taskItem.Status;
             _isUpdatingFromModel = true;
+            _completionCriteriaPropertyChangedSubscription.Disposable = Disposable.Empty;
             try
             {
+                // Update the backing model without scheduling another persistence round-trip.
+                if (IsCanBeCompleted != taskItem.IsCanBeCompleted) IsCanBeCompleted = taskItem.IsCanBeCompleted;
+                if (Title != taskItem.Title) Title = taskItem.Title;
+                if (Description != taskItem.Description) Description = taskItem.Description;
+                if (CreatedDateTime != taskItem.CreatedDateTime) CreatedDateTime = taskItem.CreatedDateTime;
+                if (UpdatedDateTime != taskItem.UpdatedDateTime) UpdatedDateTime = taskItem.UpdatedDateTime;
+                if (UnlockedDateTime != taskItem.UnlockedDateTime) UnlockedDateTime = taskItem.UnlockedDateTime;
+                if (CompletedDateTime != taskItem.CompletedDateTime) CompletedDateTime = taskItem.CompletedDateTime;
+                if (ArchiveDateTime != taskItem.ArchiveDateTime) ArchiveDateTime = taskItem.ArchiveDateTime;
+                if (StartedDateTime != taskItem.StartedDateTime) StartedDateTime = taskItem.StartedDateTime;
+                if (PlannedBeginDateTime != taskItem.PlannedBeginDateTime?.LocalDateTime)
+                    PlannedBeginDateTime = taskItem.PlannedBeginDateTime?.LocalDateTime;
+                if (PlannedEndDateTime != taskItem.PlannedEndDateTime?.LocalDateTime)
+                    PlannedEndDateTime = taskItem.PlannedEndDateTime?.LocalDateTime;
+                if (PlannedDuration != taskItem.PlannedDuration) PlannedDuration = taskItem.PlannedDuration;
+                if (Importance != taskItem.Importance) Importance = taskItem.Importance;
+                if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
+                if (Status != taskItem.Status) Status = taskItem.Status;
                 SynchronizeCollections(StatusHistory, taskItem.StatusHistory ?? new List<TaskStatusHistoryEntry>());
                 SynchronizeCollections(CompletionCriteria, taskItem.CompletionCriteria ?? new List<TaskCompletionCriterion>());
-            }
-            finally
-            {
-                _isUpdatingFromModel = false;
-                RegisterCompletionCriteriaPropertyChangedSubscription();
-            }
-            if (Version != taskItem.Version) Version = taskItem.Version;
+                if (Version != taskItem.Version) Version = taskItem.Version;
 
+                SynchronizeCollections(Blocks, taskItem.BlocksTasks);
+                SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
+                SynchronizeCollections(Contains, taskItem.ContainsTasks);
+                SynchronizeCollections(Parents, taskItem.ParentTasks);
 
-            SynchronizeCollections(Blocks, taskItem.BlocksTasks);
-            SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
-            SynchronizeCollections(Contains, taskItem.ContainsTasks);
-            SynchronizeCollections(Parents, taskItem.ParentTasks);
-
-            if (taskItem.Repeater != null)
-            {
-                if (Repeater != null)
+                if (taskItem.Repeater != null)
                 {
-                    if (!taskItem.Repeater.Equals(Repeater.Model))
+                    if (Repeater != null)
                     {
+                        if (!taskItem.Repeater.Equals(Repeater.Model))
+                        {
+                            Repeater.Model = taskItem.Repeater;
+                        }
+                    }
+                    else
+                    {
+                        Repeater = new RepeaterPatternViewModel();
                         Repeater.Model = taskItem.Repeater;
                     }
                 }
                 else
                 {
-                    Repeater = new RepeaterPatternViewModel();
-                    Repeater.Model = taskItem.Repeater;
+                    if (Repeater != null)
+                    {
+                        Repeater = null;
+                    }
                 }
             }
-            else
+            finally
             {
-                if (Repeater != null)
-                {
-                    Repeater = null;
-                }
+                _isUpdatingFromModel = false;
+                RegisterCompletionCriteriaPropertyChangedSubscription();
             }
 
             RefreshStatusOptions();
@@ -1049,7 +1047,47 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            SaveItemCommand.Execute().Subscribe();
+            ExecuteSaveCommand();
+        }
+
+        private void ExecuteSaveCommand()
+        {
+            var saveTask = SaveItemCommand.Execute().ToTask();
+            lock (_pendingSavesLock)
+            {
+                _pendingSaves.Add(saveTask);
+            }
+
+            _ = ObserveSaveCompletionAsync(saveTask);
+        }
+
+        public Task WaitForPendingSavesAsync()
+        {
+            lock (_pendingSavesLock)
+            {
+                return _pendingSaves.Count == 0
+                    ? Task.CompletedTask
+                    : Task.WhenAll(_pendingSaves.ToArray());
+            }
+        }
+
+        private async Task ObserveSaveCompletionAsync(Task saveTask)
+        {
+            try
+            {
+                await saveTask;
+            }
+            catch
+            {
+                // SaveItemCommand.ThrownExceptions reports the failure to the UI.
+            }
+            finally
+            {
+                lock (_pendingSavesLock)
+                {
+                    _pendingSaves.Remove(saveTask);
+                }
+            }
         }
 
         private void RefreshStatusOptions()

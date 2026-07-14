@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Unlimotion.Domain;
 
@@ -10,6 +12,9 @@ public class RepeaterPattern
     public int Period { get; set; } = 1;
     public bool AfterComplete { get; set; }
     public List<int> Pattern { get; set; } = null!;
+
+    [JsonExtensionData]
+    public IDictionary<string, JToken>? ExtensionData { get; set; }
 
     public override bool Equals(object? obj)
     {

@@ -824,6 +824,10 @@ namespace Unlimotion.Test
 
             _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateSibling, taskRepository);
 
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => mainWindowVM.TitleFocusRequestVersion == focusVersionBefore + 1,
+                    TimeSpan.FromSeconds(1)))
+                .IsTrue();
             await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
             await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
         }
@@ -1767,6 +1771,7 @@ namespace Unlimotion.Test
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             mainWindowVM.CurrentTaskItem.IsCompleted = true;
             await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             // Assert
             var rootTask = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
@@ -1785,6 +1790,7 @@ namespace Unlimotion.Test
             mainWindowVM.CurrentTaskItem = completedTaskViewModel;
             mainWindowVM.CurrentTaskItem.IsCompleted = false;
             await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             // Assert
             var completedTask = GetStorageTaskItem(MainWindowViewModelFixture.CompletedTaskId);
@@ -1807,6 +1813,7 @@ namespace Unlimotion.Test
             mainWindowVM.CurrentTaskItem = blockingTaskViewModel;
             mainWindowVM.CurrentTaskItem.IsCompleted = true;
             await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             // Assert
             // Загружаем задачу "blocked task 5" из файла, которая была заблокированная
@@ -1890,15 +1897,17 @@ namespace Unlimotion.Test
                 await Assert.That(blocksTasksDifference).IsNotNull();
 
                 result = compareLogic.Compare(draggableBeforeTest, blockeddraggableAfterTest);
-                //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
-                await Assert.That(result.Differences.Count).IsEqualTo(3);
+                //Должно быть 4 различия: BlockedByTasks.Count, IsCanBeCompleted, UnlockedDateTime и UpdatedDateTime
+                await Assert.That(result.Differences.Count).IsEqualTo(4);
                 var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
                 var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
                 var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
+                var updatedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UpdatedDateTime));
 
                 await Assert.That(blockedByTasksDifference).IsNotNull();
                 await Assert.That(isCanBeCompletedDifference).IsNotNull();
                 await Assert.That(unlockedDateTimeDifference).IsNotNull();
+                await Assert.That(updatedDateTimeDifference).IsNotNull();
 
                 await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(true);
                 await Assert.That(isCanBeCompletedDifference.Object2).IsEqualTo(false);
@@ -1952,15 +1961,17 @@ namespace Unlimotion.Test
                 await Assert.That(blocksTasksDifference).IsNotNull();
 
                 result = compareLogic.Compare(destinationBeforeTest, destinationAfterTest);
-                //Должно быть 3 различия: BlockedByTasks.Count, IsCanBeCompleted и UnlockedDateTime
-                await Assert.That(result.Differences.Count).IsEqualTo(3);
+                //Должно быть 4 различия: BlockedByTasks.Count, IsCanBeCompleted, UnlockedDateTime и UpdatedDateTime
+                await Assert.That(result.Differences.Count).IsEqualTo(4);
                 var blockedByTasksDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.BlockedByTasks));
                 var isCanBeCompletedDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.IsCanBeCompleted));
                 var unlockedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UnlockedDateTime));
+                var updatedDateTimeDifference = result.Differences.FirstOrDefault(d => d.PropertyName == nameof(TaskItem.UpdatedDateTime));
 
                 await Assert.That(blockedByTasksDifference).IsNotNull();
                 await Assert.That(isCanBeCompletedDifference).IsNotNull();
                 await Assert.That(unlockedDateTimeDifference).IsNotNull();
+                await Assert.That(updatedDateTimeDifference).IsNotNull();
 
                 await Assert.That(isCanBeCompletedDifference.Object1).IsEqualTo(true);
                 await Assert.That(isCanBeCompletedDifference.Object2).IsEqualTo(false);
@@ -2069,6 +2080,7 @@ namespace Unlimotion.Test
             await Assert.That(repeateTask9ViewModel.Repeater).IsNotNull();
             repeateTask9ViewModel.IsCompleted = true;
             await TestHelpers.WaitThrottleTime();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             //Assert
             //Проверяем что создалась ровно 1 задача

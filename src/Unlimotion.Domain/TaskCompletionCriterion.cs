@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Unlimotion.Domain;
 
@@ -12,6 +14,9 @@ public class TaskCompletionCriterion : INotifyPropertyChanged
     private bool _isSatisfied;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    [JsonExtensionData]
+    public IDictionary<string, JToken>? ExtensionData { get; set; }
 
     public string Id
     {
