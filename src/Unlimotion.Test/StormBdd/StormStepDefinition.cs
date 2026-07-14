@@ -227,5 +227,9 @@ internal sealed class StormScenarioContext
     public bool GitRemoteAuthStoryBehaviorConfirmed { get; set; }
     public GitRemoteAuthScenarioResult? GitRemoteAuthResult { get; set; }
 
+    public bool GitConflictResolutionTaskSetAvailable { get; set; }
+    public bool GitConflictResolutionStoryBehaviorConfirmed { get; set; }
+    public GitConflictResolutionScenarioResult? GitConflictResolutionResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
