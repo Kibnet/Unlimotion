@@ -191,5 +191,11 @@ internal sealed class StormScenarioContext
 
     public TaskCardCompletionCriteriaScenarioResult? TaskCardCompletionCriteriaResult { get; set; }
 
+    public bool RoadmapProjectionTaskSetAvailable { get; set; }
+
+    public bool RoadmapProjectionStoryBehaviorConfirmed { get; set; }
+
+    public RoadmapProjectionScenarioResult? RoadmapProjectionResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }

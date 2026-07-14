@@ -1,6 +1,6 @@
 # STORM Ранжирование С Учётом Зависимостей
 
 Сгенерировано: 2026-07-14
-Команда: `/storm:rank` + `/storm:bdd-implement SC-0007-003`
+Команда: `/storm:rank` + `/storm:bdd-implement SC-0008-001`
 
-`ST-0007` полностью step-executable через `TS-0051..TS-0053`. До полного executable BDD coverage остаётся 17 scenarios. Следующий `/storm:cover` candidate должен быть выбран вне ST-0007 из remaining high-value scenarios; required full-suite gate остаётся отдельным environment risk.
+`SC-0008-001` закрыт через `TS-0054`; до полного executable BDD coverage остаётся 16 scenarios. Следующий `/storm:cover` candidate: `SC-0008-002` (`AC-0023 / GR-023`) — viewport и overlay states имеют существующую UI suite `TS-0007`, остаются в той же story и не требуют product/config changes. Required full-suite gate остаётся отдельным environment risk.
