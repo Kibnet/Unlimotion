@@ -218,4 +218,3 @@ Outcome contract:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | `/storm:bdd-implement SC-0002-001` | 0.90 | Нет | Перейти к EXEC | Нет | Да, пользователь подтвердил SPEC | Один scenario-first slice снижает риск scope drift | `specs/2026-06-29-storm-sc0002-status-support-bdd.md` |
 | EXEC | /storm:bdd-implement SC-0002-001 | 0.93 | Нет | Commit после финальных checks | Нет | Да, SPEC подтверждена | Scenario получил executable BDD links, full-suite gate восстановлен через отдельный stability sub-scope | src/Unlimotion.Test/StormTaskStatusSupportExecutableSpecTests.cs; src/Unlimotion.Test/StormBdd/TaskStatusSupportStepDefinitions.cs; docs/product/storm.json; docs/product/reports/* |
-

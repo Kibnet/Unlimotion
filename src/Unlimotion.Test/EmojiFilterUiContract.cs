@@ -9,19 +9,19 @@ internal static class EmojiFilterUiContract
         var result = new EmojiFilterScenarioResult();
         var tests = new MainControlFilterToolbarResponsiveUiTests();
 
-        await tests.FilterFlyout_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing();
+        await tests.Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing();
         result.IncludeExcludeSearchAndFlyoutSemanticsPassed = true;
 
-        await tests.FilterFlyout_EmojiFilters_AllItemTogglesEveryEmojiFilter();
+        await tests.Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter();
         result.AllItemTogglePassed = true;
 
-        await tests.FilterFlyout_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList();
+        await tests.Toolbar_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList();
         result.NoMatchesBehaviorPassed = true;
 
-        await tests.FilterFlyout_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup();
+        await tests.Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup();
         result.KeyboardFlowPassed = true;
 
-        await tests.RoadmapFilterFlyout_EmojiFilters_UsesSearchableMultiSelectDropdown();
+        await tests.RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown();
         result.RoadmapFlyoutPassed = true;
 
         return result;

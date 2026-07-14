@@ -204,4 +204,3 @@ Guard от autosave при model-sync включён слишком поздно
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SPEC | full-suite stability blocker | 0.88 | Нет | Перейти к EXEC | Нет | Да, пользователь подтвердил continuation | Full-suite gate блокирует завершение approved BDD slice | `specs/2026-06-29-taskitem-model-sync-autosave-stability.md` |
 | EXEC | full-suite stability blocker | 0.92 | Нет | Commit после финальных checks | Нет | Да, continuation подтверждён | Root cause закрыт existing guard contract; full suite прошёл 570/570 | src/Unlimotion.ViewModel/TaskItemViewModel.cs; src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs; src/Unlimotion.Test/PackageUpdateCompatibilityUiTests.cs; docs/product/reports/* |
-
