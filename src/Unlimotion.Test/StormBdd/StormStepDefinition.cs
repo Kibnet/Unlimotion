@@ -243,5 +243,9 @@ internal sealed class StormScenarioContext
     public bool SettingsStorageGitStoryBehaviorConfirmed { get; set; }
     public SettingsStorageGitScenarioResult? SettingsStorageGitResult { get; set; }
 
+    public bool SettingsUpdateCompatibilityTaskSetAvailable { get; set; }
+    public bool SettingsUpdateCompatibilityStoryBehaviorConfirmed { get; set; }
+    public SettingsUpdateCompatibilityScenarioResult? SettingsUpdateCompatibilityResult { get; set; }
+
     public HashSet<string> ExecutedStepDefinitionIds { get; } = new(StringComparer.Ordinal);
 }
