@@ -2797,6 +2797,21 @@ namespace Unlimotion.ViewModel
 
         public string BreadScrumbs => AllTasksMode ? CurrentAllTasksItem?.BreadScrumbs ?? string.Empty : BredScrumbsAlgorithms.FirstTaskParent(CurrentTaskItem);
 
+        // Segmented breadcrumb (root first) so the top bar can render each ancestor as a
+        // clickable crumb that navigates to that task.
+        public IReadOnlyList<BreadcrumbSegment> BreadScrumbItems
+        {
+            get
+            {
+                var tasks = AllTasksMode
+                    ? BredScrumbsAlgorithms.WrapperParentItems(CurrentAllTasksItem)
+                    : BredScrumbsAlgorithms.FirstTaskParentItems(CurrentTaskItem);
+                return tasks
+                    .Select((task, index) => new BreadcrumbSegment(task, index == tasks.Count - 1))
+                    .ToList();
+            }
+        }
+
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems = EmptyTaskWrappers;
         private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }

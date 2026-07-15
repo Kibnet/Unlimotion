@@ -1,0 +1,100 @@
+<!--
+  Unlimotion · "Aurora" — BUTTON variants
+  =======================================
+  Opt-in classes layered over FluentTheme (does not restyle every Button
+  globally — apply the class where the Aurora look is wanted):
+    accent   → violet primary action ("New task", "Add")
+    default  → quiet neutral fill ("Cancel")
+    subtle   → borderless inline affordance
+    danger   → destructive (delete) — uses blocked/coral
+  Sizes: md (default 34px), sm (26px), lg (40px) via Classes="sm"/"lg".
+  States via :pointerover / :pressed / :disabled.
+  Included via StyleInclude in App.Styles.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- shared chrome for Aurora-classed buttons -->
+  <Style Selector="Button.accent, Button.default, Button.subtle, Button.danger">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
+    <Setter Property="FontSize" Value="{DynamicResource FsBody}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Height" Value="{DynamicResource ControlH}"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+
+  <!-- sizes -->
+  <Style Selector="Button.accent.sm, Button.default.sm, Button.subtle.sm, Button.danger.sm">
+    <Setter Property="Height" Value="{DynamicResource ControlHSm}"/>
+    <Setter Property="Padding" Value="10,0"/>
+  </Style>
+  <Style Selector="Button.accent.lg, Button.default.lg, Button.subtle.lg, Button.danger.lg">
+    <Setter Property="Height" Value="{DynamicResource ControlHLg}"/>
+    <Setter Property="Padding" Value="18,0"/>
+  </Style>
+
+  <!-- ===== accent (primary) ===== -->
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+  </Style>
+  <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentPressBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentPressBrush}"/>
+  </Style>
+
+  <!-- ===== default (neutral) ===== -->
+  <Style Selector="Button.default">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+  </Style>
+  <Style Selector="Button.default:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+  </Style>
+  <Style Selector="Button.default:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+
+  <!-- ===== subtle (ghost) ===== -->
+  <Style Selector="Button.subtle">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}"/>
+  </Style>
+  <Style Selector="Button.subtle:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+  </Style>
+
+  <!-- ===== danger (destructive) ===== -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{DynamicResource BlockedSoftBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource BlockedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BlockedLineBrush}"/>
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BlockedBrush}"/>
+  </Style>
+  <Style Selector="Button.danger:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
+  </Style>
+
+  <!-- disabled -->
+  <Style Selector="Button.accent:disabled, Button.default:disabled, Button.subtle:disabled, Button.danger:disabled">
+    <Setter Property="Opacity" Value="0.5"/>
+  </Style>
+
+</Styles>

@@ -109,7 +109,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertIconOnlyDropDownButton(createMenuButton, "➕", 42);
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
-                AssertIconOnlyDropDownButton(actionsMenuButton, "⚙", 36);
+                AssertIconOnlyDropDownButton(actionsMenuButton, "⋮", 36);
                 AssertActionsMenuContainsTaskCommands(actionsMenuButton);
                 AssertHasClass(titleTextBox, "CurrentTaskTitleEditor");
                 AssertHasClass(titleTextBox, BorderlessTextBoxChromeClass);
@@ -1145,12 +1145,12 @@ public class MainControlTaskCardLayoutUiTests
         AssertUsesResourceColor(
             detailsPanelFrame,
             detailsPanelFrame.BorderBrush,
-            "SystemBaseMediumColor",
+            "BorderStrongColor",
             "Current task details panel frame border");
         AssertUsesResourceColor(
             detailsPanelFrame,
             detailsPanelFrame.Background,
-            "SystemChromeLowColor",
+            "SurfaceRailColor",
             "Current task details panel frame background");
 
         var borderColor = GetSolidBrushColor(detailsPanelFrame.BorderBrush ?? Brushes.Transparent);

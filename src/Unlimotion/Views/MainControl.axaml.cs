@@ -15,6 +15,8 @@ using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
@@ -187,8 +189,49 @@ namespace Unlimotion.Views
             QueueMainTabsOverflowUpdate();
             QueueLateMainTabsOverflowUpdate();
             QueueFilterToolbarLayoutUpdate();
+            SyncSidebarSelection();
+            UpdateSidebarResponsive();
+            UpdateContentPadding();
             ObserveTaskDetailsBounds();
             QueueTaskDetailsLayoutUpdate();
+        }
+
+        // Aurora: the desktop nav sidebar consumes a fixed width; collapse it on narrow
+        // viewports so the main column (and the detail rail) keep usable width.
+        private const double SidebarCollapseWidth = 900d;
+
+        private void UpdateSidebarResponsive()
+        {
+            if (SidebarPanel is null)
+            {
+                return;
+            }
+
+            SidebarPanel.IsVisible = Bounds.Width >= SidebarCollapseWidth;
+        }
+
+        // Aurora: the filter toolbar / tree get a left+top gutter, but the horizontal inset is
+        // dropped once the content column gets too narrow (e.g. a wide details pane squeezing the
+        // toolbar) so the search field keeps room to stay on the row.
+        private const double ContentPaddingMinWidth = 240d;
+        private static readonly Thickness WideContentPadding = new(16, 14, 12, 0);
+        private static readonly Thickness NarrowContentPadding = new(0, 14, 0, 0);
+
+        private void UpdateContentPadding()
+        {
+            if (MainTabsHost is null)
+            {
+                return;
+            }
+
+            // Measure the layout slot (bounds + current margin) rather than the post-margin bounds,
+            // so toggling the margin can't oscillate the decision.
+            var slotWidth = MainTabsHost.Bounds.Width + MainTabsHost.Margin.Left + MainTabsHost.Margin.Right;
+            var target = slotWidth >= ContentPaddingMinWidth ? WideContentPadding : NarrowContentPadding;
+            if (MainTabsHost.Margin != target)
+            {
+                MainTabsHost.Margin = target;
+            }
         }
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -224,9 +267,20 @@ namespace Unlimotion.Views
                 return;
             }
 
+            _mainTabsLayoutSubscriptions.Add(this.GetObservable(BoundsProperty)
+                .Subscribe(_ =>
+                {
+                    UpdateSidebarResponsive();
+                    UpdateContentPadding();
+                }));
+
             _mainTabsLayoutSubscriptions.Add(MainTabsHost.GetObservable(BoundsProperty)
                 .Skip(1)
-                .Subscribe(_ => QueueMainTabsOverflowUpdate()));
+                .Subscribe(_ =>
+                {
+                    QueueMainTabsOverflowUpdate();
+                    UpdateContentPadding();
+                }));
             _mainTabsLayoutSubscriptions.Add(MainTabs.GetObservable(BoundsProperty)
                 .Skip(1)
                 .Subscribe(_ => QueueMainTabsOverflowUpdate()));
@@ -489,7 +543,17 @@ namespace Unlimotion.Views
                          .OfType<TextBlock>()
                          .Where(static textBlock => textBlock.Classes.Contains("TaskHeaderIdMeta")))
             {
-                idText.MaxWidth = isCompact ? compactCardContentWidth : RegularTaskIdMaxWidth;
+                // The id sits inline after an "ID" label in a wrapping meta row, so leave
+                // room for the label + spacing instead of taking the full content width.
+                idText.MaxWidth = isCompact
+                    ? Math.Max(80d, Math.Min(RegularTaskIdMaxWidth, compactCardContentWidth - 60d))
+                    : RegularTaskIdMaxWidth;
+            }
+
+            // Planning fields: one compact row on desktop, stacked full-width when narrow.
+            if (PlanningFieldsGrid is not null)
+            {
+                PlanningFieldsGrid.Columns = isCompact ? 1 : 3;
             }
 
             foreach (var suggestions in TaskDetailsPanelRoot.GetVisualDescendants()
@@ -527,6 +591,56 @@ namespace Unlimotion.Views
             {
                 QueueMainTabsOverflowUpdate();
                 QueueFilterToolbarLayoutUpdate();
+                SyncSidebarSelection();
+            }
+        }
+
+        // Aurora: index of the Settings tab (it lives in the pinned footer, not the
+        // sidebar ListBox). Keep in sync with the TabControl item order.
+        private const int SettingsTabIndex = 9;
+        private bool _syncingSidebar;
+
+        // Mirror the TabControl selection onto the sidebar: views 0..8 highlight in the
+        // ListBox; Settings (9) lights the pinned footer and clears the ListBox.
+        private void SyncSidebarSelection()
+        {
+            if (SidebarNav is null || MainTabs is null)
+            {
+                return;
+            }
+
+            _syncingSidebar = true;
+            try
+            {
+                var index = MainTabs.SelectedIndex;
+                SidebarNav.SelectedIndex = index >= 0 && index < SettingsTabIndex ? index : -1;
+                SettingsNavItem?.Classes.Set("active", index == SettingsTabIndex);
+            }
+            finally
+            {
+                _syncingSidebar = false;
+            }
+        }
+
+        private void SidebarNav_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_syncingSidebar || MainTabs is null)
+            {
+                return;
+            }
+
+            var index = SidebarNav.SelectedIndex;
+            if (index >= 0 && index != MainTabs.SelectedIndex)
+            {
+                MainTabs.SelectedIndex = index;
+            }
+        }
+
+        private void SettingsNav_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (MainTabs is not null)
+            {
+                MainTabs.SelectedIndex = SettingsTabIndex;
             }
         }
 
@@ -558,8 +672,105 @@ namespace Unlimotion.Views
                 DispatcherPriority.Background);
         }
 
+        // Aurora redesign: the views moved to the left sidebar and the horizontal
+        // tab strip is hidden, so the strip-overflow machinery is disabled.
+        private const bool MainTabsStripHidden = true;
+
+        // Aurora redesign: clicking a goal tile in the sidebar GOALS group
+        // selects that goal and opens the detail rail on it.
+        private void GoalItem_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (sender is Control { DataContext: TaskItemViewModel task } && DataContext is MainWindowViewModel vm)
+            {
+                vm.CurrentTaskItem = task;
+                vm.DetailsAreOpen = true;
+            }
+        }
+
+        // Aurora redesign: the sidebar GOALS header doubles as a collapse toggle —
+        // click hides/shows the goals list and rotates the chevron.
+        private void GoalsHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (SidebarGoalsList is null || SidebarGoalsHeader is null)
+            {
+                return;
+            }
+
+            var expanded = SidebarGoalsList.IsVisible;
+            SidebarGoalsList.IsVisible = !expanded;
+
+            // Swap the caret glyph (down when expanded, right when collapsed) instead of
+            // rotating a single glyph — rotation left the non-square chevron looking crooked.
+            var chevronKey = expanded ? "IconChevronRight" : "IconChevronDown";
+            if (GoalsChevron is not null
+                && this.TryFindResource(chevronKey, out var chevronResource)
+                && chevronResource is Geometry chevronGeometry)
+            {
+                GoalsChevron.Data = chevronGeometry;
+            }
+        }
+
+        // Aurora redesign: the footer "?" button opens the centered hotkey-help overlay
+        // (hotkeys moved out of Settings and off the old side panel).
+        private void HotkeyHelpButton_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            ShowHotkeyHelp();
+            e.Handled = true;
+        }
+
+        // Aurora redesign: top-bar sun/moon theme toggle. Routes through the
+        // Settings view-model so the choice persists to config and is applied
+        // by the same reactive path as Settings → Appearance.
+        private void ThemeToggle_OnClick(object? sender, RoutedEventArgs e)
+        {
+            var app = Application.Current;
+            if (app is null)
+            {
+                return;
+            }
+
+            var goingDark = app.ActualThemeVariant != ThemeVariant.Dark;
+
+            if (DataContext is MainWindowViewModel { Settings: { } settings })
+            {
+                settings.ThemeModeIndex = goingDark ? 2 : 1; // 1 = Light, 2 = Dark
+            }
+            else
+            {
+                app.RequestedThemeVariant = goingDark ? ThemeVariant.Dark : ThemeVariant.Light;
+            }
+
+            SetThemeToggleIcon(goingDark);
+        }
+
+        // dark → show moon, light → show sun (icon reflects the active theme)
+        private void SetThemeToggleIcon(bool isDark)
+        {
+            if (ThemeToggleIcon is null)
+            {
+                return;
+            }
+
+            var key = isDark ? "IconMoon" : "IconSun";
+            if (this.TryFindResource(key, out var res) && res is Geometry geo)
+            {
+                ThemeToggleIcon.Data = geo;
+            }
+        }
+
+        private void UpdateThemeToggleIcon()
+        {
+            SetThemeToggleIcon((Application.Current?.ActualThemeVariant ?? ThemeVariant.Dark) == ThemeVariant.Dark);
+        }
+
         private void UpdateMainTabsOverflow()
         {
+            if (MainTabsStripHidden)
+            {
+                MainTabsOverflowButton.IsVisible = false;
+                return;
+            }
+
             var tabs = MainTabs.Items.OfType<TabItem>().ToList();
             if (tabs.Count == 0)
             {
@@ -2216,17 +2427,16 @@ namespace Unlimotion.Views
             _treeDragInProgress = false;
         }
 
-        private async void BreadScrumbs_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+        // Click a breadcrumb crumb to navigate to that ancestor task and open its detail rail.
+        private void BreadcrumbCrumb_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            var dc = (DataContext as MainWindowViewModel)?.CurrentTaskItem;
-            if (dc == null)
+            if (sender is Control { DataContext: BreadcrumbSegment segment }
+                && DataContext is MainWindowViewModel vm)
             {
-                return;
+                vm.CurrentTaskItem = segment.Task;
+                vm.DetailsAreOpen = true;
+                e.Handled = true;
             }
-
-            var dragData = DragDataFormats.CreateTransfer(CustomDataFormat, dc);
-
-            await DragDrop.DoDragDropAsync(e, dragData, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
         }
 
         private void Task_OnDoubleTapped(object sender, TappedEventArgs e)

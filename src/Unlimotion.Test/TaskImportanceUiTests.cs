@@ -182,7 +182,7 @@ public class TaskImportanceUiTests
         var xaml = File.ReadAllText(FindViewXamlPath("MainControl.axaml"));
         var titleLine = xaml
             .Split(["\r\n", "\n"], StringSplitOptions.None)
-            .Single(line => line.Contains("<unlimotion:EmojiTextBlock Grid.Column=\"2\"", StringComparison.Ordinal));
+            .Single(line => line.Contains("<unlimotion:EmojiTextBlock Grid.Column=\"3\"", StringComparison.Ordinal));
 
         await Assert.That(titleLine).Contains("EmojiText=\"{Binding Title}\"");
         await Assert.That(titleLine).Contains("Classes.IsWanted=\"{Binding Wanted}\"");

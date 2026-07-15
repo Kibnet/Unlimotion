@@ -26,6 +26,9 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private const double MinPopupWidth = 280d;
     private const double MaxPopupWidth = 340d;
     public const double DefaultSummaryWidth = 112d;
+    // The empty-state text label may grow wider than the selected-summary width so localized
+    // labels ("Исключить эмодзи") fit without truncation; the selected summary still uses SummaryWidth.
+    private const double EmptyLabelMaxWidth = 210d;
     public static double DefaultSummaryMinWidth => AppearanceSettings.DefaultSearchControlHeight;
     private const double DropDownNonListHeight = 8d;
     private const double MinListHeight = 60d;
@@ -72,6 +75,10 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     public static readonly StyledProperty<bool> IsExcludeProperty =
         AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, bool>(nameof(IsExclude));
+
+    // Narrow toolbars collapse the empty state to a compact emoji square; wide ones show the label.
+    public static readonly StyledProperty<bool> CompactSummaryProperty =
+        AvaloniaProperty.Register<EmojiFilterMultiSelectSearchBox, bool>(nameof(CompactSummary));
 
     private readonly ObservableCollection<EmojiFilter> displayedFilters = [];
     private readonly List<EmojiFilter> selectableFilters = [];
@@ -174,6 +181,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         set => SetValue(IsExcludeProperty, value);
     }
 
+    public bool CompactSummary
+    {
+        get => GetValue(CompactSummaryProperty);
+        set => SetValue(CompactSummaryProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -199,6 +212,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
             return;
         }
 
+        if (change.Property == CompactSummaryProperty)
+        {
+            UpdateInputTextFromState();
+            return;
+        }
+
         if (change.Property == IsExcludeProperty)
         {
             UpdateExcludeClass();
@@ -218,11 +237,40 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         }
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        LayoutUpdated += OnLayoutUpdatedForCompactSummary;
+    }
+
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        LayoutUpdated -= OnLayoutUpdatedForCompactSummary;
         CloseDropDown();
         UnsubscribeFromFilters();
         base.OnDetachedFromVisualTree(e);
+    }
+
+    // Self-adaptive: collapse to the compact emoji square when the hosting filter toolbar is
+    // narrow (so the search box keeps room), otherwise show the descriptive label. Driven from
+    // our own LayoutUpdated so it applies reliably in every layout pass (incl. headless tests).
+    private void OnLayoutUpdatedForCompactSummary(object? sender, EventArgs e)
+    {
+        var toolbar = this.GetVisualAncestors()
+            .OfType<Grid>()
+            .FirstOrDefault(static grid => grid.Classes.Any(
+                static c => c.EndsWith("FilterToolbar", StringComparison.Ordinal)));
+        if (toolbar is null || toolbar.Bounds.Width <= 0)
+        {
+            return;
+        }
+
+        // Matches MainControl.NarrowFilterToolbarMaxWidth.
+        var isNarrow = toolbar.Bounds.Width <= 520d;
+        if (CompactSummary != isNarrow)
+        {
+            CompactSummary = isNarrow;
+        }
     }
 
     private void Input_OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -589,6 +637,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     private void UpdateStaticTextAndAutomation()
     {
         PART_Input.PlaceholderText = Watermark;
+        ToolTip.SetTip(PART_Input, Watermark);
         PART_NoMatches.Text = NoMatchesText;
         AutomationProperties.SetAutomationId(PART_DropDown, DropDownAutomationId);
         AutomationProperties.SetAutomationId(PART_List, ListAutomationId);
@@ -604,20 +653,39 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         {
             var selectedTokens = GetSelectedSummaryTokens();
             var isEmptySummary = !isSearchActive && selectedTokens.Length == 0;
+            // Wide toolbar: show the descriptive label ("Emoji filter" / "Exclude emoji").
+            // Narrow toolbar (CompactSummary): fall back to the compact emoji square.
+            var isWideLabel = !CompactSummary && !string.IsNullOrEmpty(Watermark);
+            var emptyLabel = isWideLabel ? Watermark! : EmptySummaryToken;
+
+            // Wide toolbar keeps ONE fixed footprint (the label width) for every state — empty,
+            // selected and search — so choosing emoji never shrinks or grows the box. Narrow toolbars
+            // keep the tight content-fit sizing (empty square, selection sized to its tokens).
+            var fixedLabelWidth = isWideLabel ? GetFixedLabelWidth() : 0d;
+            var tokenAvailableWidth = (isWideLabel ? fixedLabelWidth : GetSummaryMaxWidth())
+                - GetSummaryTextHorizontalReserve();
+
             var inputText = isSearchActive
                 ? searchText
                 : isEmptySummary
-                    ? EmptySummaryToken
-                    : BuildFittedSummary(selectedTokens);
+                    ? emptyLabel
+                    : BuildFittedSummary(selectedTokens, tokenAvailableWidth);
 
             PART_Input.Text = inputText;
             PART_Input.PlaceholderText = isSearchActive ? Watermark : null;
-            PART_Input.TextAlignment = !isSearchActive && (isEmptySummary || selectedTokens.Length == 1)
+            // Center only the compact square states (empty square, or a lone emoji in a square);
+            // wide states read as left-aligned text, matching the label.
+            PART_Input.TextAlignment = !isSearchActive && CompactSummary && (isEmptySummary || selectedTokens.Length == 1)
                 ? TextAlignment.Center
                 : TextAlignment.Left;
             PART_Input.Padding = SummaryPadding;
             PART_Input.MinWidth = GetSummarySquareWidth();
-            PART_Input.Width = GetSummaryInputWidth(inputText, isEmptySummary);
+            // The style caps MaxWidth at SummaryWidth; let the wide label footprint grow past it so
+            // localized labels fit (narrow mode keeps the SummaryWidth cap).
+            PART_Input.MaxWidth = isWideLabel ? fixedLabelWidth : SummaryWidth;
+            PART_Input.Width = isWideLabel
+                ? fixedLabelWidth
+                : GetCompactInputWidth(inputText, isEmptySummary);
             UpdateInputSummaryClasses(isEmptySummary);
             UpdateInputAutomationId();
         }
@@ -627,7 +695,20 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         }
     }
 
-    private double GetSummaryInputWidth(string inputText, bool isEmptySummary)
+    // Wide toolbar: the box is fixed to the label width for every state (empty, selected, search)
+    // so selecting emoji never resizes it. Allowed to grow past SummaryWidth (up to EmptyLabelMaxWidth)
+    // so long localized labels ("Исключить эмодзи") fit; floored at the standard SummaryWidth. The
+    // small fudge covers a slight under-measure on Cyrillic labels that would clip the last glyph.
+    private double GetFixedLabelWidth()
+    {
+        var labelWidth = MeasureInputTextWidth(Watermark ?? string.Empty)
+            + GetSummaryTextHorizontalReserve() + 12d;
+        return Math.Clamp(Math.Ceiling(labelWidth), GetSummaryMaxWidth(), EmptyLabelMaxWidth);
+    }
+
+    // Narrow toolbar: empty state is a compact square; selection/search size to their content,
+    // capped at the standard SummaryWidth so the box stays tight.
+    private double GetCompactInputWidth(string inputText, bool isEmptySummary)
     {
         var squareWidth = GetSummarySquareWidth();
         if (isEmptySummary)
@@ -750,10 +831,8 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
             .ToArray();
     }
 
-    private string BuildFittedSummary(IReadOnlyList<string> selectedTokens)
+    private string BuildFittedSummary(IReadOnlyList<string> selectedTokens, double availableWidth)
     {
-        var availableWidth = GetSummaryMaxWidth() - GetSummaryTextHorizontalReserve();
-
         for (var visibleCount = selectedTokens.Count; visibleCount >= 0; visibleCount--)
         {
             var overflowCount = selectedTokens.Count - visibleCount;

@@ -340,7 +340,9 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
                 await Assert.That(Math.Abs(dropDownBounds.Left - inputBounds.Left)).IsLessThanOrEqualTo(2);
                 await Assert.That(Math.Abs(dropDownBounds.Top - inputBounds.Bottom)).IsLessThanOrEqualTo(2);
-                await Assert.That(dropDown.CornerRadius).IsEqualTo(new CornerRadius(4));
+                Application.Current!.TryGetResource("RadiusMd", null, out var dropDownRadiusResource);
+                await Assert.That(dropDownRadiusResource).IsAssignableTo<CornerRadius>();
+                await Assert.That(dropDown.CornerRadius).IsEqualTo((CornerRadius)dropDownRadiusResource!);
                 AssertVisibleItemsStayInsideDropDown(dropDown, includeList);
 
                 await ClickControlAsync(window, includeInput);
@@ -500,6 +502,60 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(summaryParts[^1]).StartsWith("+");
                 await Assert.That(summaryParts.Length).IsLessThan(selectedFilters.Length);
                 await Assert.That(includeInput.Bounds.Width).IsLessThanOrEqualTo(includeControl.SummaryWidth + 1);
+            }
+            finally
+            {
+                window?.Close();
+                fixture.CleanTasks();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Toolbar_EmojiFilters_WideToolbar_KeepsFixedWidthWhenSelecting()
+    {
+        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                // Sidebar hides below 900, so an 810 window gives a wide (label) toolbar.
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 810, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                var includeInput = GetEmojiFilterInput(includeControl);
+
+                // Empty wide state shows the descriptive label; capture its footprint.
+                await AssertEmojiFilterInputShowsEmptyLabel(includeControl);
+                var emptyWidth = includeInput.Bounds.Width;
+
+                // Selecting emoji must NOT resize the box — the width stays fixed to the label.
+                foreach (var filter in vm.EmojiFilters
+                             .Where(static filter => !string.IsNullOrWhiteSpace(filter.Emoji))
+                             .Take(3))
+                {
+                    filter.ShowTasks = true;
+                }
+
+                RunLayoutJobs();
+
+                await Assert.That(includeInput.Text).IsNotEqualTo(includeControl.Watermark);
+                await Assert.That(includeInput.Classes.Contains("EmptySummary")).IsFalse();
+                await Assert.That(Math.Abs(includeInput.Bounds.Width - emptyWidth)).IsLessThanOrEqualTo(1);
             }
             finally
             {
@@ -883,12 +939,9 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                 var wideToolbar = FindVisibleFilterToolbar(view);
                 var (wideIncludeControl, wideExcludeControl) = FindVisibleToolbarEmojiFilterControls(wideToolbar);
-                var wideFiltersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
 
-                await AssertEmojiFilterInputIsEmptySquare(wideIncludeControl);
-                await AssertEmojiFilterInputIsEmptySquare(wideExcludeControl);
-                await Assert.That(GetEmojiFilterInput(wideIncludeControl).Bounds.Width)
-                    .IsLessThanOrEqualTo(wideFiltersButton.Bounds.Width + 1);
+                await AssertEmojiFilterInputShowsEmptyLabel(wideIncludeControl);
+                await AssertEmojiFilterInputShowsEmptyLabel(wideExcludeControl);
 
                 vm.DetailsAreOpen = true;
                 RunLayoutJobs();
@@ -1118,6 +1171,16 @@ public class MainControlFilterToolbarResponsiveUiTests
         await Assert.That(input.Text).IsEqualTo("🙂");
         await Assert.That(Math.Abs(input.Bounds.Width - input.Bounds.Height)).IsLessThanOrEqualTo(1);
         await Assert.That(input.Bounds.Width).IsLessThanOrEqualTo(input.Bounds.Height + 1);
+        await AssertEmojiFilterInputIsMutedEmptySummary(input);
+    }
+
+    private static async Task AssertEmojiFilterInputShowsEmptyLabel(EmojiFilterMultiSelectSearchBox control)
+    {
+        var input = GetEmojiFilterInput(control);
+
+        // Wide toolbar: the empty state shows the descriptive watermark label, not a bare square.
+        await Assert.That(input.Text).IsEqualTo(control.Watermark);
+        await Assert.That(input.Bounds.Width).IsGreaterThan(input.Bounds.Height + 1);
         await AssertEmojiFilterInputIsMutedEmptySummary(input);
     }
 

@@ -456,3 +456,6 @@ src/Unlimotion/Tasks
 src/Unlimotion.Server/RavenDB
 src/RavenDB
 .native/libgit2-build-*/
+
+## graphify — generated codebase knowledge graph (rebuild with `graphify update ./src`)
+graphify-out/

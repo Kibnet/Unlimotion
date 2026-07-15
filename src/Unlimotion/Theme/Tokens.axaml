@@ -1,0 +1,86 @@
+<!--
+  Unlimotion · "Aurora" — FONTS, TYPE SCALE, SPACING, RADII for Avalonia
+  =====================================================================
+  Theme-independent tokens (same values in light & dark). Plain
+  ResourceDictionary — included alongside Colors.axaml in App.axaml.
+
+  ⚠ FONTS (TEMPORARY): the Aurora spec calls for "General Sans" (UI) and
+  "IBM Plex Mono" (machine values). The handoff package ships only .woff2,
+  which Avalonia's text stack cannot load. Until the .ttf/.otf cuts are
+  added to Assets/Fonts/, UiFontFamily falls back to Inter (already bundled
+  via Avalonia.Fonts.Inter) and MonoFontFamily to system mono. To finish
+  the swap: drop the OTF/TTF into Assets/Fonts/ (AvaloniaResource) and set
+  these two keys to "avares://Unlimotion/Assets/Fonts/#General Sans" and
+  "avares://Unlimotion/Assets/Fonts/#IBM Plex Mono".
+
+  ⚠ UNITS: Avalonia FontSize / LetterSpacing / LineHeight are in DIPs
+  (absolute), NOT CSS multipliers/em.
+  =====================================================================
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=netstandard">
+
+  <!-- ===== Font families (TEMPORARY fallbacks — see header) ===== -->
+  <FontFamily x:Key="UiFontFamily">Inter</FontFamily>
+  <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Cascadia Code, Consolas, Courier New, monospace</FontFamily>
+
+  <!-- ===== Font sizes (DIP) ===== -->
+  <x:Double x:Key="FsEyebrow">10.5</x:Double>  <!-- uppercase eyebrow / legend -->
+  <x:Double x:Key="FsMeta">11</x:Double>       <!-- mono: dates, slugs, counts -->
+  <x:Double x:Key="FsCaption">12</x:Double>    <!-- captions, labels, sub-lines -->
+  <x:Double x:Key="FsBody">13</x:Double>       <!-- control / nav body -->
+  <x:Double x:Key="FsTask">14</x:Double>       <!-- task-row title (base read size) -->
+  <x:Double x:Key="FsSubtitle">16</x:Double>   <!-- progress %, panel sub-heading -->
+  <x:Double x:Key="FsTitle">18</x:Double>      <!-- detail-panel task title -->
+  <x:Double x:Key="FsHeading">21</x:Double>    <!-- page / view / goal heading -->
+  <x:Double x:Key="FsDisplay">28</x:Double>    <!-- specimen / marketing only -->
+
+  <!-- ===== Letter spacing (DIP) ===== -->
+  <x:Double x:Key="LsEyebrow">1.4</x:Double>   <!-- 0.13em @ 10.5 -->
+  <x:Double x:Key="LsTight">-0.18</x:Double>   <!-- ≈ -0.01em on headings -->
+
+  <!-- FontWeight enum to use in styles:
+       Regular=Normal(400) · Medium(500) · SemiBold(600) · Bold(700) -->
+
+  <!-- ===== Spacing scale (4px grid, DIP) ===== -->
+  <Thickness x:Key="Space2">4</Thickness>
+  <Thickness x:Key="Space3">6</Thickness>
+  <Thickness x:Key="Space4">8</Thickness>
+  <Thickness x:Key="Space6">12</Thickness>
+  <Thickness x:Key="Space8">16</Thickness>
+  <Thickness x:Key="Space10">20</Thickness>
+  <Thickness x:Key="Space12">24</Thickness>
+  <Thickness x:Key="Space16">32</Thickness>
+  <!-- raw doubles for Spacing/Margin one-offs -->
+  <x:Double x:Key="Gap2">4</x:Double>
+  <x:Double x:Key="Gap4">8</x:Double>
+  <x:Double x:Key="Gap6">12</x:Double>
+  <x:Double x:Key="Gap8">16</x:Double>
+  <x:Double x:Key="ContentPad">26</x:Double>
+
+  <!-- ===== Corner radii (Aurora family) ===== -->
+  <CornerRadius x:Key="RadiusXs">6</CornerRadius>       <!-- checkbox, tiny tiles -->
+  <CornerRadius x:Key="RadiusSm">8</CornerRadius>       <!-- nav items, day chips -->
+  <CornerRadius x:Key="RadiusMd">9</CornerRadius>       <!-- inputs, top-bar buttons, pills -->
+  <CornerRadius x:Key="RadiusRow">11</CornerRadius>     <!-- task rows, ready-now chips -->
+  <CornerRadius x:Key="RadiusLg">12</CornerRadius>      <!-- relation items, roadmap nodes, dialogs-inner -->
+  <CornerRadius x:Key="RadiusCard">16</CornerRadius>    <!-- cards, panels, ready-now strip -->
+  <CornerRadius x:Key="RadiusWin">14</CornerRadius>     <!-- the app window -->
+  <CornerRadius x:Key="RadiusPill">999</CornerRadius>   <!-- status tags, count pills, switches -->
+
+  <!-- ===== Control / layout sizing (DIP) ===== -->
+  <x:Double x:Key="ControlHSm">26</x:Double>
+  <x:Double x:Key="ControlH">34</x:Double>      <!-- default input / top-bar button / New task -->
+  <x:Double x:Key="ControlHLg">40</x:Double>
+  <x:Double x:Key="CheckboxSize">19</x:Double>
+  <x:Double x:Key="RowH">38</x:Double>          <!-- task-tree row -->
+  <x:Double x:Key="IconSm">14</x:Double>
+  <x:Double x:Key="IconMd">16</x:Double>
+  <x:Double x:Key="IconLg">19</x:Double>
+  <x:Double x:Key="TopbarH">52</x:Double>       <!-- command bar -->
+  <x:Double x:Key="SidebarW">236</x:Double>     <!-- left nav rail -->
+  <x:Double x:Key="DetailW">372</x:Double>      <!-- right detail rail -->
+  <x:Double x:Key="IndentStep">21</x:Double>    <!-- tree nesting indent -->
+
+</ResourceDictionary>
