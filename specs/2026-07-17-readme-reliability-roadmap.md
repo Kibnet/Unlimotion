@@ -781,30 +781,32 @@ Stop rules для validation:
   - Debian support matrix требует native/package smoke evidence.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до утверждения roadmap и выполнения child packages
-- Decision: Не применимо до EXEC
+- Статус: В процессе; stage 1 PASS, stages 2-10 pending
+- Scope reviewed: выполненный child package stage 1, его связь с roadmap AC/exit criteria и отсутствие преждевременных изменений из следующих packages
+- Decision: stage 1 завершён и не блокирует подготовку child spec stage 2; master roadmap остаётся незавершённой до последующих package gates и финального stage 10
 - Review passes:
-  - Scope/Evidence pass: Не применимо до EXEC
-  - Contract pass: Не применимо до EXEC
-  - Adversarial risk pass: Не применимо до EXEC
-  - Role-Based pass: Не применимо до EXEC
-  - Re-review after fixes / Fix and re-review: Не применимо до EXEC
-  - Stop decision: Не применимо до EXEC
-- Evidence inspected: Не применимо до EXEC
-- Depth checklist: Не применимо до EXEC
-- No-findings justification: Не применимо до EXEC
+  - Scope/Evidence pass: stage 1 PASS; docs-only diff и local/live evidence соответствуют child spec.
+  - Contract pass: stage 1 PASS; release, support, signing, updater и source-build claims сужены до проверяемого AS-IS.
+  - Adversarial risk pass: stage 1 PASS; проверены drift latest release, unsupported-platform overclaim, `v`-tag edge case, mobile overflow и unrelated changes.
+  - Role-Based pass: stage 1 PASS после release, tester/diff, copy/UX и delivery reviews.
+  - Re-review after fixes / Fix and re-review: stage 1 PASS; copy findings исправлены и полный gate повторён.
+  - Stop decision: продолжать только с отдельной child spec stage 2 и её approval; stage 2 EXEC пока запрещён.
+- Evidence inspected: child Post-EXEC review, commit `458cef7`, PR #274, release/parity/structural/GFM reports, фактический EN/RU GitHub render на desktop/mobile
+- Depth checklist: stage-1 ownership, exit criteria, dependency boundaries, live evidence, rollback и residual routing проверены; незавершённые stages не объявлены выполненными
+- No-findings justification: относится только к stage 1 после fixes; по невыполненным packages выводов PASS нет
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | phase | EXEC ещё не начинался | Выполнить после каждого child EXEC и финального package | follow-up |
+| LOW | stage 1 / future tag | Raw `v`-prefixed tag и normalized filename version могут разойтись в будущем | Закрыть canonical manifest/dry-run contract в stage 3 | follow-up stage 3 |
+| LOW | stage 1 / mobile IA | Трёхколоночная таблица на 390 px требует локального horizontal scroll | Пересмотреть root README IA в stage 7 | follow-up stage 7 |
+| INFO | program | Stages 2-10 ещё не завершены | Продолжать только через child SPEC/approval/post-EXEC gates | pending |
 
-- Fixed before final report: Не применимо до EXEC
-- Checks rerun: Не применимо до EXEC
-- Validation evidence: Не применимо до EXEC
-- Unrelated changes: Не применимо до EXEC
-- Needs human: approval roadmap и последующих child specs
-- Residual risks / follow-ups: перечислены выше
+- Fixed before final report: stage-1 copy/scope findings исправлены; program-level final report ещё не наступил
+- Checks rerun: для stage 1 — full deterministic/external/GFM/live-render gate и независимые reviews
+- Validation evidence: stage 1 — PASS; stages 2-10 — pending и не оценены как выполненные
+- Unrelated changes: в stage 1 не обнаружены
+- Needs human: отдельное approval подготовленной child spec stage 2 перед её EXEC
+- Residual risks / follow-ups: stages 2-10 и перечисленные program risks сохраняются
 
 ## Approval
 Master roadmap подтверждена пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. Stage 1 child spec также отдельно подтверждена 2026-07-17; approvals следующих child specs остаются обязательными.
@@ -823,3 +825,5 @@ Master roadmap подтверждена пользователем 2026-07-17 т
 | EXEC | Принять approval stage-1 child spec | 1.00 | Нет | Выполнить README install-safety package | Нет | Пользователь отдельно сообщил `Спеку подтверждаю` | Child post-SPEC reviews PASS; stage-1 EXEC разрешён | `specs/2026-07-17-readme-install-safety.md`, `specs/2026-07-17-readme-reliability-roadmap.md` |
 | EXEC | Создать stage-1 branch от свежего base | 1.00 | Нет | Обновить и проверить два README | Нет | Не применимо | `docs/readme-install-safety` создана от актуального `origin/main`, не от detached tag | `README.md`, `README.RU.md`, `specs/2026-07-17-readme-install-safety.md`, `specs/2026-07-17-readme-reliability-roadmap.md` |
 | EXEC | Пройти локальный stage-1 validation gate | 1.00 | Actual GitHub viewport после push | Создать commit/draft PR | Нет | Не применимо | Full release contract 22/22, parity 20/20, protected sections, exact allowlist, links и GFM API прошли; independent diff/copy/release reviews PASS | `README.md`, `README.RU.md`, `specs/2026-07-17-readme-install-safety.md`, `artifacts/documentation-validation/*` |
+| EXEC | Доставить и проверить stage 1 | 1.00 | Нет | Закрыть child Post-EXEC gate | Нет | Не применимо | Commit `458cef7`, push и draft PR #274 выполнены; actual GitHub EN/RU desktop/mobile render PASS | `README.md`, `README.RU.md`, обе spec, `artifacts/documentation-validation/github-viewport-check.json`, GitHub PR #274 |
+| EXEC | Завершить stage 1 | 1.00 | Child spec stage 2 ещё не подготовлена/подтверждена | Подготовить stage-2 SPEC без начала EXEC | Да перед stage-2 EXEC | Не применимо | Stage-1 exit criteria выполнены; отдельные package approvals из roadmap сохраняются | `specs/2026-07-17-readme-install-safety.md`, `specs/2026-07-17-readme-reliability-roadmap.md` |

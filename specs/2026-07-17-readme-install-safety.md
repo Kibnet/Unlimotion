@@ -47,7 +47,7 @@
 Outcome contract:
 - Success means:
   - пользователь находит `/releases/latest` и выбирает существующий asset по платформе/архитектуре;
-  - README честно сообщает, что project release process пока не публикует verified Windows/macOS signing/notarization evidence, поэтому ОС может показать warning;
+  - README честно сообщает, что project release process пока не публикует verified Windows/macOS signing/notarization evidence; возможные предупреждения ОС описаны отдельно как platform behavior, а не как следствие отсутствия опубликованного evidence;
   - Linux AppImage и Android APK видимы, а `.deb` не выдаётся за проверенную current Debian support;
   - source-build steps совпадают с `global.json` и существующими run scripts;
   - отсутствуют `chmod -R 755`, blanket «no extra steps», Fork promotion, `main.zip` как stable source, встроенный stale backlog и историческое обещание rollback миграции через Git history;
@@ -136,7 +136,7 @@ Freshness evidence:
 
 | Available build | Asset | Role / caveat |
 | --- | --- | --- |
-| Windows x64 | `Unlimotion-win-Setup.exe`; `Unlimotion-win-Portable.zip` | installer и portable alternative; verified Authenticode evidence не публикуется, поэтому SmartScreen может показать warning |
+| Windows x64 | `Unlimotion-win-Setup.exe`; `Unlimotion-win-Portable.zip` | installer и portable alternative; project release process не публикует verified Authenticode evidence; SmartScreen может отдельно показать warning |
 | Linux x64 (AppImage) | `Unlimotion.AppImage` | generic published Linux option; compatibility ещё не подтверждена distro smoke matrix |
 | Linux x64 (.deb) | `Unlimotion-<version>.deb` | preview alternative; official current Debian compatibility пока не подтверждена |
 | macOS x64 | `Unlimotion-osx-Setup.pkg`; `Unlimotion-osx-Portable.zip` | Intel; verified Developer ID/notarization evidence не публикуется |
@@ -615,24 +615,38 @@ Child EXEC обязан повторно проверить перед edit:
   - root README останется длинным до stage 7.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо до approval/EXEC
-- Decision: Не применимо до EXEC
-- Review passes: Не применимо до EXEC
-- Evidence inspected: Не применимо до EXEC
-- Depth checklist: Не применимо до EXEC
-- No-findings justification: Не применимо до EXEC
+- Статус: PASS
+- Scope reviewed: `README.md`, `README.RU.md`, эта child spec, master roadmap, diff относительно `origin/main`, релиз `1.27.0` и все 22 asset, локальные deterministic/external/GFM reports, фактический GitHub render ветки `docs/readme-install-safety`, commit/push и PR #274
+- Decision: stage 1 выполнен в согласованном docs-only scope; install/source guidance можно передавать в review, а следующий package начинается только через отдельный child SPEC gate
+- Review passes:
+  - Scope/Evidence pass: PASS; изменены только два README и две утверждённые spec, runtime/workflows/scripts/media не затронуты.
+  - Release-contract pass: PASS; 22/22 asset классифицированы, missing/unknown/multiple/duplicate = 0, все 10 рекламируемых filename-pattern существуют в latest release.
+  - Copy/parity pass: PASS после fixes; 20/20 structural parity checks, одинаковые 7 platform rows, одинаковые safety/update/source contracts.
+  - Diff/protected-section pass: PASS; ровно 6 разрешённых README hunks, status/concept sections сохранили ожидаемые SHA-256.
+  - Link/Markdown/GFM pass: PASS; локальные ссылки, 4 внешних URL, fenced blocks и GitHub Markdown API render проверены.
+  - Actual GitHub viewport pass: PASS; EN/RU при `1280x900` и `390x844`, 7 rows и CTA найдены, page-level overflow отсутствует, mobile tables прокручиваются до максимального `scrollLeft`; portable/AppImage, macOS/Android/updater caveats и оба source code blocks найдены и читаемы, console errors = 0.
+  - Delivery pass: PASS; ветка создана от свежего `origin/main`, commit `458cef7`, push и draft PR #274 выполнены.
+- Evidence inspected: `artifacts/documentation-validation/release-check.json`, `parity-check.json`, `structural-check.json`, `github-viewport-check.json`, локальные GFM HTML, 16 viewport screenshots, `git diff origin/main...HEAD`, GitHub branch render и PR #274
+- Depth checklist: happy path, unsupported/unknown claims, future tag normalization, EN/RU drift, protected prose, external-link drift, mobile overflow, signing/update overclaim, rollback и unrelated-diff проверены
+- No-findings justification: после исправления copy-review findings повторные release/diff/copy и actual-render проверки не выявили открытых BLOCKER/HIGH/MEDIUM замечаний
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | phase | EXEC ещё не начат | Выполнить full post-EXEC review после docs edit/validation | follow-up |
+| MEDIUM | copy/update | Первичная формулировка обещала broad package-manager detection, хотя код проверяет managed Velopack install | Привязать claim точно к `Velopack.IsInstalled` | fixed |
+| MEDIUM | copy/signing | Первичная формулировка могла связывать отсутствие опубликованного evidence с обязательным OS warning | Разделить отсутствие evidence и возможную реакцию ОС; назвать владельца evidence | fixed |
+| MEDIUM | spec consistency | Две design-формулировки child spec после README-fix всё ещё использовали причинное `поэтому` для signing evidence и OS warning | Разделить факты также в outcome/table самой spec и повторить поиск | fixed |
+| MEDIUM | render evidence | Первые screenshots закрывали таблицу, но не code blocks и platform caveats из S1-AC-09 | Проверить нижний install/source block в обеих локалях и viewports, сохранить DOM metrics и screenshots | fixed |
+| MEDIUM | delivery | Draft PR содержал placeholder о будущем viewport evidence, а Post-EXEC spec updates ещё не были отправлены | Commit/push evidence journal, обновить PR body и перевести PR в ready после зелёных checks | fixed |
+| LOW | scope contract | Удаление backlog включает соседний пустой separator вне первоначального line allowlist | Зафиксировать separator boundaries и проверять semantic hunks | fixed |
+| LOW | responsive UX | На 390 px трёхколоночная таблица требует локальной горизонтальной прокрутки | Проверить достижимость правого края и отсутствие page overflow; пересмотреть IA в stage 7 | accepted follow-up |
+| LOW | future release | `v`-prefixed raw tag может расходиться с normalized version в asset names | Разделить raw tag/normalized version в stage-3 canonical manifest и dry run | follow-up stage 3 |
 
-- Fixed before final report: Не применимо до EXEC
-- Checks rerun: Не применимо до EXEC
-- Validation evidence: Не применимо до EXEC
-- Unrelated changes: Не применимо до EXEC
-- Needs human: approval child spec
-- Residual risks / follow-ups: перечислены выше
+- Fixed before final report: copy/scope/spec-consistency/render findings исправлены; Post-EXEC journal отправлен, PR body обновлён фактическим evidence и PR переведён в ready после зелёных checks
+- Checks rerun: `pwsh -File artifacts/documentation-validation/validate-stage1.ps1`; `git diff --check`; независимые release/diff/copy reviews; actual GitHub desktop/mobile render и console-log check
+- Validation evidence: release 22/22; advertised patterns 10/10; parity 20/20; scoped hunks 6/6; protected sections 2/2; external URLs 4/4; table viewports 4/4; lower-content target checks 28/28; screenshots 16; console errors 0
+- Unrelated changes: не обнаружены; stage-1 diff ограничен четырьмя документационными файлами
+- Needs human: для stage 1 — нет; отдельное approval потребуется для child spec stage 2
+- Residual risks / follow-ups: native/package smoke evidence остаётся stage 3; signing evidence — stage 9; root README information architecture и mobile table ergonomics — stage 7
 
 ## Approval
 Подтверждено пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. EXEC stage 1 разрешён; это approval не распространяется автоматически на следующие child specs.
@@ -651,3 +665,6 @@ Child EXEC обязан повторно проверить перед edit:
 | EXEC | Обновить install/source guidance | 0.98 | Независимый copy/render review | Прогнать deterministic и external checks | Нет | Не применимо | EN/RU получили 7-row published-build matrix, caveats, source commands; historical migration/backlog удалены | `README.md`, `README.RU.md` |
 | EXEC | Исправить copy-review findings | 1.00 | Нет | Повторить полный validation set | Нет | Независимый reviewer сначала нашёл broad package-manager wording, signing-evidence precision и ложную причинность OS warnings; после fixes вернул PASS | Updater привязан к `Velopack.IsInstalled`; absence of evidence отделена от реакции ОС | `README.md`, `README.RU.md` |
 | EXEC | Выполнить deterministic/external/GFM gate | 1.00 | Только actual GitHub viewport после push | Commit и push draft PR | Нет | Не применимо | 22/22 assets, 20/20 parity, 6 scoped hunks, protected hashes, local/external links, Markdown и GFM API PASS | `README.md`, `README.RU.md`, `artifacts/documentation-validation/*` |
+| EXEC | Доставить docs patch | 1.00 | Только actual GitHub viewport | Проверить branch render | Нет | Не применимо | Commit `458cef7` отправлен в `docs/readme-install-safety`, открыт draft PR #274 | `README.md`, `README.RU.md`, обе spec, GitHub PR #274 |
+| EXEC | Проверить фактический GitHub render | 1.00 | Нет | Провести финальный post-EXEC review | Нет | Независимый review потребовал дополнить первоначальные table-only screenshots нижними командами/caveats; finding закрыт повторным capture | EN/RU desktop/mobile PASS: 7 rows, CTA, no page overflow, table horizontal scroll reachability, 28/28 lower-content target checks, console errors = 0 | `artifacts/documentation-validation/github-viewport-check.json`, 16 screenshots |
+| EXEC | Завершить stage-1 post-EXEC gate | 1.00 | Нет | Обновить PR и перейти к SPEC stage 2 | Нет | Не применимо | Открытых BLOCKER/HIGH/MEDIUM findings нет; residual risks маршрутизированы в stages 3/7/9 | `specs/2026-07-17-readme-install-safety.md`, `specs/2026-07-17-readme-reliability-roadmap.md` |
