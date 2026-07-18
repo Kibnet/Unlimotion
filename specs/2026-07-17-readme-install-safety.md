@@ -615,7 +615,7 @@ Child EXEC обязан повторно проверить перед edit:
   - root README останется длинным до stage 7.
 
 ### Post-EXEC Review
-- Статус: PASS
+- Статус: PASS для stage-1 content/local validation; local branch rebased после merged lifecycle prerequisite, force-with-lease push и новый GitHub rerun PR #274 ещё pending
 - Scope reviewed: `README.md`, `README.RU.md`, эта child spec, master roadmap, diff относительно `origin/main`, релиз `1.27.0` и все 22 asset, локальные deterministic/external/GFM reports, фактический GitHub render ветки `docs/readme-install-safety`, commit/push и PR #274
 - Decision: stage 1 выполнен в согласованном docs-only scope; install/source guidance можно передавать в review, а следующий package начинается только через отдельный child SPEC gate
 - Review passes:
@@ -625,8 +625,8 @@ Child EXEC обязан повторно проверить перед edit:
   - Diff/protected-section pass: PASS; ровно 6 разрешённых README hunks, status/concept sections сохранили ожидаемые SHA-256.
   - Link/Markdown/GFM pass: PASS; локальные ссылки, 4 внешних URL, fenced blocks и GitHub Markdown API render проверены.
   - Actual GitHub viewport pass: PASS; EN/RU при `1280x900` и `390x844`, 7 rows и CTA найдены, page-level overflow отсутствует, mobile tables прокручиваются до максимального `scrollLeft`; portable/AppImage, macOS/Android/updater caveats и оба source code blocks найдены и читаемы, console errors = 0.
-  - Delivery pass: PASS; ветка создана от свежего `origin/main`, commit `458cef7`, push и draft PR #274 выполнены.
-- Evidence inspected: `artifacts/documentation-validation/release-check.json`, `parity-check.json`, `structural-check.json`, `github-viewport-check.json`, локальные GFM HTML, 16 viewport screenshots, `git diff origin/main...HEAD`, GitHub branch render и PR #274
+  - Delivery pass: исходный content commit `458cef7` после local rebase соответствует `b658411`, evidence commit `760f353` — `f9416bb`; lifecycle prerequisite PR #275 merged как `118c2dc`, local branch rebased на актуальный `origin/main`, local S1 validator PASS; remote PR #274 пока остаётся на `760f353` до force-with-lease push и нового rerun.
+- Evidence inspected: `artifacts/documentation-validation/release-check.json`, `parity-check.json`, `structural-check.json`, `github-viewport-check.json`, локальные GFM HTML, 16 viewport screenshots, `git diff origin/main...HEAD`, GitHub branch render, merged PR #275 и PR #274
 - Depth checklist: happy path, unsupported/unknown claims, future tag normalization, EN/RU drift, protected prose, external-link drift, mobile overflow, signing/update overclaim, rollback и unrelated-diff проверены
 - No-findings justification: после исправления copy-review findings повторные release/diff/copy и actual-render проверки не выявили открытых BLOCKER/HIGH/MEDIUM замечаний
 
@@ -637,15 +637,16 @@ Child EXEC обязан повторно проверить перед edit:
 | MEDIUM | spec consistency | Две design-формулировки child spec после README-fix всё ещё использовали причинное `поэтому` для signing evidence и OS warning | Разделить факты также в outcome/table самой spec и повторить поиск | fixed |
 | MEDIUM | render evidence | Первые screenshots закрывали таблицу, но не code blocks и platform caveats из S1-AC-09 | Проверить нижний install/source block в обеих локалях и viewports, сохранить DOM metrics и screenshots | fixed |
 | MEDIUM | delivery | Draft PR содержал placeholder о будущем viewport evidence, а Post-EXEC spec updates ещё не были отправлены | Commit/push evidence journal, обновить PR body и перевести PR в ready после зелёных checks | fixed |
+| HIGH | CI prerequisite | Evidence-only commit выявил pre-existing fixture cleanup/Headless false-await race; повторный `All tests` был cancelled по 30-minute timeout | Исправить lifecycle отдельной approved child spec/PR, пройти exact full suites и только затем rebase/rerun PR #274 | fixed by PR #275; local 606/606, Headless 31/31 и PR #275 GitHub `All tests` PASS; PR #274 rerun pending push |
 | LOW | scope contract | Удаление backlog включает соседний пустой separator вне первоначального line allowlist | Зафиксировать separator boundaries и проверять semantic hunks | fixed |
 | LOW | responsive UX | На 390 px трёхколоночная таблица требует локальной горизонтальной прокрутки | Проверить достижимость правого края и отсутствие page overflow; пересмотреть IA в stage 7 | accepted follow-up |
 | LOW | future release | `v`-prefixed raw tag может расходиться с normalized version в asset names | Разделить raw tag/normalized version в stage-3 canonical manifest и dry run | follow-up stage 3 |
 
-- Fixed before final report: copy/scope/spec-consistency/render findings исправлены; Post-EXEC journal отправлен, PR body обновлён фактическим evidence и PR переведён в ready после зелёных checks
-- Checks rerun: `pwsh -File artifacts/documentation-validation/validate-stage1.ps1`; `git diff --check`; независимые release/diff/copy reviews; actual GitHub desktop/mobile render и console-log check
+- Fixed before final report: copy/scope/spec-consistency/render findings исправлены; lifecycle prerequisite исправлен и merged в PR #275; local branch rebased на `origin/main@118c2dc`; PR body/evidence journal update, force-with-lease push и повторные checks pending
+- Checks rerun после rebase: `pwsh -File artifacts/documentation-validation/validate-stage1.ps1`; release 22/22, parity 20/20, protected sections, 6 scoped hunks, local/external links, Markdown/GFM и `git diff --check` PASS; actual GitHub desktop/mobile render повторяется после force-with-lease push
 - Validation evidence: release 22/22; advertised patterns 10/10; parity 20/20; scoped hunks 6/6; protected sections 2/2; external URLs 4/4; table viewports 4/4; lower-content target checks 28/28; screenshots 16; console errors 0
 - Unrelated changes: не обнаружены; stage-1 diff ограничен четырьмя документационными файлами
-- Needs human: для stage 1 — нет; отдельное approval потребуется для child spec stage 2
+- Needs human: для stage 1 — нет; Stage-2 child spec уже отдельно approved, но её EXEC заблокирован до merge PR #274
 - Residual risks / follow-ups: native/package smoke evidence остаётся stage 3; signing evidence — stage 9; root README information architecture и mobile table ergonomics — stage 7
 
 ## Approval
@@ -665,6 +666,8 @@ Child EXEC обязан повторно проверить перед edit:
 | EXEC | Обновить install/source guidance | 0.98 | Независимый copy/render review | Прогнать deterministic и external checks | Нет | Не применимо | EN/RU получили 7-row published-build matrix, caveats, source commands; historical migration/backlog удалены | `README.md`, `README.RU.md` |
 | EXEC | Исправить copy-review findings | 1.00 | Нет | Повторить полный validation set | Нет | Независимый reviewer сначала нашёл broad package-manager wording, signing-evidence precision и ложную причинность OS warnings; после fixes вернул PASS | Updater привязан к `Velopack.IsInstalled`; absence of evidence отделена от реакции ОС | `README.md`, `README.RU.md` |
 | EXEC | Выполнить deterministic/external/GFM gate | 1.00 | Только actual GitHub viewport после push | Commit и push draft PR | Нет | Не применимо | 22/22 assets, 20/20 parity, 6 scoped hunks, protected hashes, local/external links, Markdown и GFM API PASS | `README.md`, `README.RU.md`, `artifacts/documentation-validation/*` |
-| EXEC | Доставить docs patch | 1.00 | Только actual GitHub viewport | Проверить branch render | Нет | Не применимо | Commit `458cef7` отправлен в `docs/readme-install-safety`, открыт draft PR #274 | `README.md`, `README.RU.md`, обе spec, GitHub PR #274 |
+| EXEC | Доставить docs patch | 1.00 | Только actual GitHub viewport | Проверить branch render | Нет | Не применимо | Исходный commit `458cef7` отправлен в `docs/readme-install-safety`, открыт draft PR #274; после lifecycle rebase тот же content commit = `b658411` | `README.md`, `README.RU.md`, обе spec, GitHub PR #274 |
 | EXEC | Проверить фактический GitHub render | 1.00 | Нет | Провести финальный post-EXEC review | Нет | Независимый review потребовал дополнить первоначальные table-only screenshots нижними командами/caveats; finding закрыт повторным capture | EN/RU desktop/mobile PASS: 7 rows, CTA, no page overflow, table horizontal scroll reachability, 28/28 lower-content target checks, console errors = 0 | `artifacts/documentation-validation/github-viewport-check.json`, 16 screenshots |
 | EXEC | Завершить stage-1 post-EXEC gate | 1.00 | Нет | Обновить PR и перейти к SPEC stage 2 | Нет | Не применимо | Открытых BLOCKER/HIGH/MEDIUM findings нет; residual risks маршрутизированы в stages 3/7/9 | `specs/2026-07-17-readme-install-safety.md`, `specs/2026-07-17-readme-reliability-roadmap.md` |
+| EXEC | Устранить CI lifecycle prerequisite | 1.00 | Нет | Rebase PR #274 на merged fix и повторить S1/GitHub gates | Нет | Пользователь отдельно approved lifecycle child spec и поручил выполнить все этапы | PR #275 merged в `main` как `118c2dc`; exact local 606/606, Headless 31/31 и все PR #275 GitHub checks PASS | `specs/2026-07-17-test-fixture-lifecycle.md`, GitHub PR #275 |
+| EXEC | Повторить freshness/S1 gate после rebase | 1.00 | Только actual branch render после push | Force-with-lease push, обновить PR body, дождаться checks | Нет | Не применимо | Local branch rebased на `origin/main@118c2dc`; remote PR #274 ещё на `760f353`; docs-only 4-file diff, release 22/22, parity 20/20, protected/scoped/link/GFM gates PASS | `README.md`, `README.RU.md`, обе spec, `artifacts/documentation-validation/*` |
