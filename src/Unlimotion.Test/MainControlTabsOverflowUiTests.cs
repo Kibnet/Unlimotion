@@ -61,7 +61,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -103,7 +103,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -143,7 +143,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -179,7 +179,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -215,7 +215,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -247,7 +247,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -301,7 +301,7 @@ public class MainControlTabsOverflowUiTests
                     localization.SetLanguage(LocalizationService.EnglishLanguage);
                     RunLayoutJobs();
                     CloseWindow(window);
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -342,7 +342,7 @@ public class MainControlTabsOverflowUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

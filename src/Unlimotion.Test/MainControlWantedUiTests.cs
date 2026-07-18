@@ -65,7 +65,7 @@ public class MainControlWantedUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

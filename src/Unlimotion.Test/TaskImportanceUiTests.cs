@@ -69,7 +69,7 @@ public class TaskImportanceUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -113,7 +113,7 @@ public class TaskImportanceUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -171,7 +171,7 @@ public class TaskImportanceUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

@@ -84,7 +84,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -139,7 +139,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -203,7 +203,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -266,7 +266,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -324,7 +324,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -370,7 +370,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -435,7 +435,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -499,7 +499,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -564,7 +564,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -620,7 +620,7 @@ public class MainControlResetFiltersUiTests
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

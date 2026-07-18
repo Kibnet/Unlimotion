@@ -20,7 +20,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Test
 {
-    public class BaseModelTests : IDisposable
+    public class BaseModelTests
     {
         private MainWindowViewModelFixture? _fixture;
         private MainWindowViewModel? _mainWindowVM;
@@ -40,7 +40,19 @@ namespace Unlimotion.Test
         /// <summary>
         /// Очистка после тестов
         /// </summary>
-        public void Dispose() => _fixture?.CleanTasks();
+        [TUnit.Core.After(TUnit.Core.HookType.Test)]
+        public async Task CleanupFixtureAsync()
+        {
+            var fixtureToClean = _fixture;
+            _fixture = null;
+            _mainWindowVM = null;
+            _taskRepository = null;
+
+            if (fixtureToClean is not null)
+            {
+                await fixtureToClean.CleanTasksAsync();
+            }
+        }
 
         private (MainWindowViewModelFixture Fixture, MainWindowViewModel MainWindowViewModel, ITaskStorage TaskRepository) EnsureInitialized()
         {
@@ -90,7 +102,7 @@ namespace Unlimotion.Test
                     }
                     finally
                     {
-                        projectionFixture.CleanTasks();
+                        await projectionFixture.CleanTasksAsync();
                     }
                 }, CancellationToken.None);
             }

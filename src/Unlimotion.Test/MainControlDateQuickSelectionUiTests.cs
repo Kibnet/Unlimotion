@@ -59,7 +59,10 @@ public class MainControlDateQuickSelectionUiTests
                 finally
                 {
                     CloseWindow(window);
-                    fixture?.CleanTasks();
+                    if (fixture is not null)
+                    {
+                        await fixture.CleanTasksAsync();
+                    }
                 }
             }, CancellationToken.None);
         }

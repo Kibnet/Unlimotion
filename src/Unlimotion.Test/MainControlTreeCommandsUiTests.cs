@@ -120,7 +120,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -164,7 +164,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -285,7 +285,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -391,7 +391,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -469,7 +469,7 @@ public class MainControlTreeCommandsUiTests
             }
             finally
             {
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -555,7 +555,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -686,7 +686,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -819,7 +819,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -903,7 +903,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -969,7 +969,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1014,7 +1014,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1053,7 +1053,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1101,7 +1101,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1153,7 +1153,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1203,7 +1203,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1282,7 +1282,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1335,7 +1335,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1402,7 +1402,7 @@ public class MainControlTreeCommandsUiTests
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -1452,7 +1452,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1559,7 +1559,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1620,7 +1620,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1692,7 +1692,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1743,7 +1743,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1804,7 +1804,7 @@ public class MainControlTreeCommandsUiTests
                 }
 
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1846,7 +1846,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1908,7 +1908,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -1962,7 +1962,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2015,7 +2015,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2092,7 +2092,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2132,7 +2132,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2183,7 +2183,7 @@ public class MainControlTreeCommandsUiTests
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -2234,7 +2234,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2279,7 +2279,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2331,7 +2331,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2384,7 +2384,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -2476,7 +2476,7 @@ public class MainControlTreeCommandsUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

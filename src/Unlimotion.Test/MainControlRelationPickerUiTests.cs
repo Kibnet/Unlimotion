@@ -71,7 +71,7 @@ public class MainControlRelationPickerUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -150,7 +150,7 @@ public class MainControlRelationPickerUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

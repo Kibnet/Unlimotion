@@ -139,7 +139,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -177,7 +177,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -227,9 +227,15 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
-                CloseWindow(window);
-                fixture.CleanTasks();
-                app.RequestedThemeVariant = previousTheme;
+                try
+                {
+                    CloseWindow(window);
+                    await fixture.CleanTasksAsync();
+                }
+                finally
+                {
+                    app.RequestedThemeVariant = previousTheme;
+                }
             }
         }, CancellationToken.None);
     }
@@ -265,7 +271,7 @@ public class MainControlTaskCardLayoutUiTests
                 finally
                 {
                     CloseWindow(window);
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -305,7 +311,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -344,7 +350,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -389,7 +395,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -437,7 +443,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -489,7 +495,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -547,7 +553,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -598,7 +604,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -646,7 +652,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -738,7 +744,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -769,7 +775,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -843,7 +849,7 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

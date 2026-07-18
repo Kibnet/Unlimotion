@@ -67,6 +67,8 @@ namespace Unlimotion.ViewModel
         private readonly SerialDisposable _completionCriteriaPropertyChangedSubscription = new();
         private readonly object _pendingSavesLock = new();
         private readonly HashSet<Task> _pendingSaves = [];
+        private bool _acceptingSaves = true;
+        private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
@@ -1052,13 +1054,30 @@ namespace Unlimotion.ViewModel
 
         private void ExecuteSaveCommand()
         {
-            var saveTask = SaveItemCommand.Execute().ToTask();
+            Task saveTask;
             lock (_pendingSavesLock)
             {
+                if (!_acceptingSaves)
+                {
+                    return;
+                }
+
+                saveTask = SaveItemCommand.Execute().ToTask();
                 _pendingSaves.Add(saveTask);
             }
 
             _ = ObserveSaveCompletionAsync(saveTask);
+        }
+
+        internal Task SealPendingSaves()
+        {
+            lock (_pendingSavesLock)
+            {
+                _acceptingSaves = false;
+                return _sealedPendingSavesTask ??= _pendingSaves.Count == 0
+                    ? Task.CompletedTask
+                    : Task.WhenAll(_pendingSaves.ToArray());
+            }
         }
 
         public Task WaitForPendingSavesAsync()

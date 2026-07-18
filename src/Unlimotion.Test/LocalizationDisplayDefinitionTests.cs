@@ -93,9 +93,17 @@ public class LocalizationDisplayDefinitionTests
         }
         finally
         {
-            fixture?.MainWindowViewModelTest.Dispose();
-            fixture?.CleanTasks();
-            LocalizationService.Current = previousLocalization;
+            try
+            {
+                if (fixture is not null)
+                {
+                    await fixture.CleanTasksAsync();
+                }
+            }
+            finally
+            {
+                LocalizationService.Current = previousLocalization;
+            }
         }
     }
 
@@ -131,9 +139,17 @@ public class LocalizationDisplayDefinitionTests
         }
         finally
         {
-            fixture?.MainWindowViewModelTest.Dispose();
-            fixture?.CleanTasks();
-            LocalizationService.Current = previousLocalization;
+            try
+            {
+                if (fixture is not null)
+                {
+                    await fixture.CleanTasksAsync();
+                }
+            }
+            finally
+            {
+                LocalizationService.Current = previousLocalization;
+            }
         }
     }
 
