@@ -24,7 +24,7 @@ internal static class OutlineClipboardCopyContract
         }
         finally
         {
-            viewModelTests.Dispose();
+            await viewModelTests.CleanupFixtureAsync();
         }
     }
 

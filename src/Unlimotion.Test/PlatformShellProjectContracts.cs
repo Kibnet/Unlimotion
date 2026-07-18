@@ -52,7 +52,9 @@ internal static class PlatformShellProjectContracts
         await Assert.That(mainActivity).Contains("ConfigureCoreAppServices");
         await Assert.That(mainActivity).Contains("App.ConfigureUpdateService");
         await Assert.That(mainActivity).Contains("Dialogs.PlatformOpenFolderDialogAsync");
-        await Assert.That(mainActivity).Contains("TaskStorageFactory.PrepareFileStoragePathAsync");
+        await Assert.That(mainActivity).Contains("new UnlimotionClientOptions");
+        await Assert.That(mainActivity).Contains("PrepareFileStoragePathAsync = context is MainActivity activity");
+        await Assert.That(mainActivity).Contains("App.ConfigureFileStoragePathPreparation");
     }
 
     public static async Task AssertBrowserProjectUsesSharedUiAndBrowserAppStartupContractAsync()
@@ -67,8 +69,9 @@ internal static class PlatformShellProjectContracts
         await Assert.That(program).Contains("BuildAvaloniaApp");
         await Assert.That(program).Contains("UseReactiveUI(App.ConfigureReactiveUIBuilder)");
         await Assert.That(program).Contains("StartBrowserAppAsync");
-        await Assert.That(program).Contains("TaskStorageFactory.DefaultStoragePath");
-        await Assert.That(program).Contains("MainControl.DialogsInstance");
+        await Assert.That(program).Contains("new UnlimotionClientOptions");
+        await Assert.That(program).Contains("DefaultTaskStoragePath = defaultTaskStoragePath");
+        await Assert.That(program).Contains("App.Init(");
         await Assert.That(program).Contains("AppBuilder.Configure<App>()");
     }
 

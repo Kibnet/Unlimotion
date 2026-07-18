@@ -71,7 +71,7 @@ internal static class TaskCardRelationsContract
         }
         finally
         {
-            tests.Dispose();
+            await tests.CleanupFixtureAsync();
         }
     }
 }

@@ -117,7 +117,7 @@ internal static class TaskCardLayoutUiContract
         finally
         {
             CloseWindow(window);
-            fixture.CleanTasks();
+            await fixture.CleanTasksAsync();
         }
     }
 
@@ -145,7 +145,7 @@ internal static class TaskCardLayoutUiContract
         finally
         {
             CloseWindow(window);
-            fixture.CleanTasks();
+            await fixture.CleanTasksAsync();
         }
     }
 

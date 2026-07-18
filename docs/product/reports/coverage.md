@@ -1,30 +1,33 @@
 # STORM Coverage Analysis
 
-Сгенерировано: 2026-07-14
-Команда: `/storm:cover -> /storm:bdd-implement SC-0015-003`
-
-`SC-0015-003` исполняется через `TS-0070` и `SD-0175..SD-0178`. Контракт подтверждает неизменяемые CI workflow, README media script/docs и ReadmeDemo test markers; existing headless tests подтверждают responsiveness и capture presentation. Production code, `.feature`, проекты, workflows, scripts, README, media и existing annotations не менялись.
+Сгенерировано: 2026-07-18
+Команда: `/storm:cover -> /storm:bdd-sync -> /storm:bdd-lint`
 
 | Метрика | Значение |
 | --- | --- |
-| Прошедшие сценарии | 45 |
-| Определения шагов | 178 |
+| Активные stories со сценариями | 16/16 |
+| Acceptance criteria со сценариями и тестами | 44/44 |
+| Прошедшие сценарии | 45/45 |
+| Scenario -> Test links | 45/45 |
 | Сценарии, исполняемые через шаги | 45/45 |
-| Исполняемое покрытие ST-0015 | 3/3 сценария |
-| Full suite gate | не подтверждён: предыдущий timeout без summary |
+| Определения шагов | 178 |
+| Полный serial gate | PASS post-rebase: `Unlimotion.Test` 830/830 за 19m35.329s; Headless UI 33/33 за 1m34.053s |
+| Тесты дольше 180 секунд | 0; максимум 35.837 секунды |
 
-| Проверка | Результат |
-| --- | --- |
-| Test Release build | прошло с 69 существующими предупреждениями, ошибок 0 |
-| `StormCiReadmeMediaExecutableSpecTests` | прошло 1/1 |
-| Loading responsiveness UI | прошло 1/1 |
-| ReadmeDemo headless test project | прошло 10/10, включая `Readme_demo_uses_capture_presentation_state` |
-| Artifact validator | 0 errors, 18 известных предупреждений, 45/45 исполняемых сценариев |
+## Актуализированные сценарии
 
-Executable BDD gaps отсутствуют: 45/45. Следующий шаг: итоговый `/storm:cover` audit; remote CI, generated media и full-suite PASS не заявляются.
+| Story | Scenario | Роль покрытия | Фактическое evidence |
+| --- | --- | --- | --- |
+| `ST-0005` | `SC-0005-002` | business rule | Filter reset executable BDD прошёл 1/1; проверяется независимая status collection каждого tab |
+| `ST-0011` | `SC-0011-001` | happy path | Auth contract прошёл 1/1, executable BDD прошёл 1/1 |
+| `ST-0011` | `SC-0011-002` | happy path | Server live integration прошёл 2/2, executable BDD прошёл 1/1 |
+| `ST-0015` | `SC-0015-002` | constraint check | Platform contracts прошли 3/3, executable BDD прошёл 1/1 |
 
-## Итоговый Аудит
+Lifecycle fixture дополнительно защищена четырьмя регрессионными тестами: concurrent drain, агрегация fault, snapshot barrier и идемпотентный async cleanup. Это test-infrastructure evidence, а не новый продуктовый сценарий.
 
-- Центральный validator: `0 errors`, `18` известных предупреждений о повторном использовании шагов, executable ratio `45/45`, reuse `181/181`.
-- Независимый JSON inventory: `45` active, `45` passing, без сценариев без test links или step definitions.
-- Очередь `/storm:cover` завершена. Исторический timeout полного набора без summary остаётся отдельным непроходившим подтверждением и не считается PASS.
+## Итоговый аудит
+
+- Executable BDD gaps отсутствуют: 45/45.
+- Полные наборы подтверждены TUnit HTML/console evidence на `origin/main@75efc04`: failed 0, skipped 0; финальный docs-only rebase на `origin/main@ad90260` не изменил `src`/`tests`/`.github` tree.
+- Исторические RED и timeout записи сохранены и не подменены текущим PASS.
+- Gherkin, acceptance criteria и test annotations не менялись.

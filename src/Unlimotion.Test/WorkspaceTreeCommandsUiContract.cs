@@ -129,7 +129,7 @@ internal static class WorkspaceTreeCommandsUiContract
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }

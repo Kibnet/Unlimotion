@@ -112,7 +112,7 @@ internal static class WantedImportanceUiContract
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }

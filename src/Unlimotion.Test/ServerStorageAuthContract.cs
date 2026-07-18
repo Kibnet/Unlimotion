@@ -58,10 +58,11 @@ internal static class ServerStorageAuthContract
         string source = await ReadRepoFileAsync("src/Unlimotion/ServerStorage.cs");
 
         await Assert.That(source).Contains("serviceClient.PostAsync(new AuthViaPassword");
-        await Assert.That(source).Contains("await RefreshToken(settings, configuration!)");
+        await Assert.That(source).Contains("await RefreshToken(settings).ConfigureAwait(false)");
         await Assert.That(source).Contains("await RegisterUser().ConfigureAwait(false)");
         await Assert.That(source).Contains("settings.RefreshToken = tokens.RefreshToken");
         await Assert.That(source).Contains("settings.RefreshToken = tokenResult.RefreshToken");
+        await Assert.That(source).Contains("PersistSettings()");
     }
 
     public static async Task AssertLoginRegisterRefreshScenarioResultAsync(

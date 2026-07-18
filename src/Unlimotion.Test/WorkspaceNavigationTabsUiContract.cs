@@ -115,7 +115,7 @@ internal static class WorkspaceNavigationTabsUiContract
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }

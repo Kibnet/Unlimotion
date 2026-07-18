@@ -100,7 +100,7 @@ internal static class TaskGraphWorkspaceCommandContract
         }
         finally
         {
-            tests.Dispose();
+            await tests.CleanupFixtureAsync();
         }
     }
 }

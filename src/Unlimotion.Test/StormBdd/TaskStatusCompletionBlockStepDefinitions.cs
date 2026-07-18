@@ -192,7 +192,7 @@ internal static class TaskStatusCompletionBlockStepDefinitions
             () => false);
         var completedOption = task.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
         var completedAvailable = task.AvailableStatusTransitionOptions
-            .Any(option => option.Status == DomainTaskStatus.Completed);
+            .Any(option => option.Status == DomainTaskStatus.Completed && option.IsEnabled);
 
         task.StatusOption = completedOption;
 

@@ -99,7 +99,7 @@ internal static class WorkspaceBreadcrumbsLastOpenedUiContract
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }

@@ -12035,7 +12035,7 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "passing_contract_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-23",
+      "automation_status": "passing_contract_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-23; recovery_targeted_and_full_suite_passed_on_2026-07-18",
       "linked_tests": [
         "TS-0017",
         "TS-0031"
@@ -12083,6 +12083,26 @@
         {
           "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --output Detailed",
           "result": "passed 1/1 on 2026-06-23"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageBddContractTests/ServerStorage_Connect_UsesLoginRegisterAndRefreshTokenFlow\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 1/1, потому что ServerStorageAuthContract ожидал устаревший текст RefreshToken(settings, configuration!); текущий клиент использует RefreshToken(settings).ConfigureAwait(false) и PersistSettings()."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 1/1 через TS-0031 на той же устаревшей проверке auth source contract."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageBddContractTests/ServerStorage_Connect_UsesLoginRegisterAndRefreshTokenFlow\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 1/1 после синхронизации source contract с RefreshToken(settings).ConfigureAwait(false) и PersistSettings()."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageAuthExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 1/1 через TS-0031."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --maximum-parallel-tests 1 --output Detailed --no-ansi --report-trx --report-html",
+          "result": "2026-07-18 полный последовательный gate: прошло 678/678; failed 0, skipped 0; максимум 62.047 секунды; тестов дольше 180 секунд нет."
         }
       ]
     },
@@ -12936,7 +12956,7 @@
         "CN-0004"
       ],
       "threatens_needs": [],
-      "automation_status": "passing_filter_reset_headless_ui_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-28",
+      "automation_status": "passing_filter_reset_headless_ui_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-28; recovery_targeted_and_full_suite_passed_on_2026-07-18",
       "linked_tests": [
         "TS-0006",
         "TS-0013",
@@ -13001,6 +13021,18 @@
         {
           "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --output Detailed",
           "result": "passed 1/1 on 2026-06-28"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 1/1 за 9.390 секунды, потому что FilterResetUiContract проверял status collection вкладки All Tasks после сброса независимых collections вкладок Last Created и Unlocked."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormFilterResetExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 1/1 за 11.387 секунды после проверки status collection, принадлежащей каждому сбрасываемому tab."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --maximum-parallel-tests 1 --output Detailed --no-ansi --report-trx --report-html",
+          "result": "2026-07-18 полный последовательный gate: прошло 678/678; failed 0, skipped 0; максимум 62.047 секунды; тестов дольше 180 секунд нет."
         }
       ]
     },
@@ -13476,7 +13508,7 @@
       ],
       "protects_constraints": [],
       "threatens_needs": [],
-      "automation_status": "passing_contract_security_live_signalr_and_live_servicestack_api_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-24",
+      "automation_status": "passing_contract_security_live_signalr_and_live_servicestack_api_coverage; executable_step_definition_slice_passed_1_of_1_on_2026-06-24; recovery_targeted_and_full_suite_passed_on_2026-07-18",
       "linked_tests": [
         "TS-0017",
         "TS-0018",
@@ -13566,6 +13598,26 @@
         {
           "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --output Detailed",
           "result": "passed 1/1 on 2026-06-24"
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --minimum-expected-tests 2 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 2/2; валидация AppModelMapping сообщила о доменном TaskItem.ExtensionData без mapping для входных maps TaskItemMold и TaskItemHubMold."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 1/1 через TS-0032 на той же ошибке конфигурации mapping для TaskItem.ExtensionData."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --minimum-expected-tests 2 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 2/2 после явного ignore доменного TaskItem.ExtensionData во входных mappings TaskItemMold и TaskItemHubMold."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormServerStorageCrudRealtimeExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 1/1 через TS-0032."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --maximum-parallel-tests 1 --output Detailed --no-ansi --report-trx --report-html",
+          "result": "2026-07-18 полный последовательный gate: прошло 678/678; failed 0, skipped 0; максимум 62.047 секунды; тестов дольше 180 секунд нет."
         }
       ]
     },
@@ -13865,7 +13917,7 @@
         "CN-0008"
       ],
       "threatens_needs": [],
-      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; executable_step_definition_slice_passed_1_of_1_on_2026-06-19; ios_debug_build_smoke_passed_on_2026-06-28; android_debug_build_smoke_passed_on_2026-06-28; runtime_release_support_not_claimed",
+      "automation_status": "passed_3_of_3_on_2026-06-17; browser_release_build_passed_on_2026-06-18; executable_step_definition_slice_passed_1_of_1_on_2026-06-19; ios_debug_build_smoke_passed_on_2026-06-28; android_debug_build_smoke_passed_on_2026-06-28; runtime_release_support_not_claimed; recovery_targeted_and_full_suite_passed_on_2026-07-18",
       "linked_tests": [
         "TS-0015",
         "TS-0024",
@@ -13984,6 +14036,26 @@
         {
           "command": "dotnet build src\\Unlimotion.Android\\Unlimotion.Android.csproj -c Debug -v minimal",
           "result": "2026-06-28: passed in 00:00:08.66 after restore state settled; warnings 4, errors 0; build smoke evidence only, not runtime release support."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --minimum-expected-tests 3 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: всего 3, прошло 1, не прошло 2, потому что Android и Browser assertions ожидали устаревшие startup symbols TaskStorageFactory, заменённые на UnlimotionClientOptions."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 RED baseline: не прошло 1/1 через TS-0026 на той же устаревшей проверке Android startup source contract."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/PlatformShellProjectContractTests/*\" --minimum-expected-tests 3 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 3/3 после синхронизации Android и Browser source contracts с UnlimotionClientOptions и текущими startup hooks."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --treenode-filter \"/*/*/StormPlatformShellExecutableSpecTests/*\" --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed --no-ansi",
+          "result": "2026-07-18 GREEN: прошло 1/1 через TS-0026."
+        },
+        {
+          "command": "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Debug --no-build --no-restore -- --maximum-parallel-tests 1 --output Detailed --no-ansi --report-trx --report-html",
+          "result": "2026-07-18 полный последовательный gate: прошло 678/678; failed 0, skipped 0; максимум 62.047 секунды; тестов дольше 180 секунд нет."
         }
       ]
     },
@@ -18107,9 +18179,9 @@
     }
   ],
   "behavior_coverage_metrics": {
-    "updated_at": "2026-07-14",
-    "command": "/storm:cover -> /storm:bdd-implement SC-0015-003",
-    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
+    "updated_at": "2026-07-18",
+    "command": "/storm:bdd-sync -> /storm:bdd-lint после утверждённого восстановления полного набора тестов",
+    "mode": "восстановление регрессий, lifecycle тестовой fixture и синхронизация BDD evidence",
     "features_total": 16,
     "rules_total": 44,
     "scenarios_total": 45,
@@ -18138,7 +18210,7 @@
     "behavior_coverage_ratio": "16/16",
     "rule_coverage_ratio": "44/44",
     "tests_changed": true,
-    "code_changed": false,
+    "code_changed": true,
     "test_annotations_changed": false,
     "tests_run": true,
     "validation_evidence": [
@@ -18149,45 +18221,57 @@
       "python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 18 known duplicate-step warnings, executable_specification_ratio 45/45",
       "dotnet test src\\Unlimotion.Test\\Unlimotion.Test.csproj -c Release --no-build --no-restore -- --output Detailed => timed out after 304 seconds without a summary; not claimed as passing evidence",
       "UI video evidence не применимо: UI behavior/layout и media assets не менялись; existing headless ReadmeDemo and responsiveness UI tests used as next-best evidence.",
-      "production code, .feature wording, automation IDs, .csproj, workflows, scripts, README, media и existing test annotations не менялись в этой SPEC"
+      "production code, .feature wording, automation IDs, .csproj, workflows, scripts, README, media и existing test annotations не менялись в этой SPEC",
+      "2026-07-18: targeted lifecycle fixture gate прошёл 3/3; auth contract 1/1 и executable BDD 1/1; server live integration 2/2 и executable BDD 1/1; platform contracts 3/3 и executable BDD 1/1; filter reset executable BDD 1/1",
+      "2026-07-18: первый полный serial-прогон завершился 675/678 и выявил три гонки ожидания в тестах; после синхронизации команд и persistence все три targeted regression gates прошли",
+      "2026-07-18: dotnet test Debug --no-build --no-restore -- --maximum-parallel-tests 1 --report-trx --report-html => прошло 678/678 за 32m20.317s; failed 0, skipped 0, unobserved markers 0, тестов дольше 180 секунд 0, максимум 62.047 секунды",
+      "2026-07-18: python C:\\Users\\Kibnet\\.codex\\agents\\scripts\\storm\\validate-artifacts.py docs\\product\\storm.json => OK: 0 errors, 18 известных предупреждений, executable specification 45/45, step reuse 181/181",
+      "2026-07-18 post-rebase: ветка перебазирована на origin/main@75efc04; targeted gates прошли: lifecycle 4/4, Telegram status 11/11, callback coverage 7/7, callback BDD 1/1, tree-search 7/7, filter reset 1/1, wanted 2/2, relation add 1/1 и multi-parent delete 1/1",
+      "2026-07-18 post-rebase: полный последовательный Unlimotion.Test прошёл 830/830 за 19m35.329s; failed 0, skipped 0; максимум отдельного теста 35.837 секунды, тестов дольше 180 секунд нет",
+      "2026-07-18 post-rebase: после свежего restore полный последовательный Unlimotion.UiTests.Headless прошёл 33/33 за 1m34.053s; failed 0, skipped 0; максимум 3.502 секунды, тестов дольше 180 секунд нет",
+      "2026-07-19 final rebase: ветка перебазирована на origin/main@ad90260; upstream PR #278 изменил только две SPEC-документации, diff между проверенным и финальным head для src, tests и .github пуст",
+      "Gherkin feature wording, acceptance criteria, test annotations и существующие Scenario -> Test -> Step Definition связи не менялись"
     ],
-    "full_suite_result": "Current full Unlimotion.Test gate timed out after 304 seconds without a summary; it is not claimed as passing evidence. The timed-out run left test-host processes that could not be terminated without broader process access approval.",
-    "production_code_changed": false,
+    "full_suite_result": "PASS post-rebase 2026-07-18: тестовый evidence снят на origin/main@75efc04; полный последовательный Unlimotion.Test прошёл 830/830 за 19m35.329s, Unlimotion.UiTests.Headless прошёл 33/33 за 1m34.053s; failed 0, skipped 0; максимальная длительность отдельного теста 35.837 секунды, тестов дольше 180 секунд нет. Финальный rebase на origin/main@ad90260 добавил только документацию PR #278, code/test/workflow tree не изменился. Исторические timeout и 678/678 evidence сохранены в validation_evidence.",
+    "production_code_changed": true,
     "bdd_lint_issues": 18,
     "step_reuse_ratio": "181/181"
   },
   "bdd_sync": {
-    "updated_at": "2026-07-14",
-    "command": "/storm:bdd-sync after /storm:bdd-implement SC-0015-003",
-    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
+    "updated_at": "2026-07-18",
+    "command": "/storm:bdd-sync после post-rebase валидации утверждённой SPEC",
+    "mode": "синхронизация post-rebase BDD evidence без изменения Gherkin и test annotations",
     "status": "synced",
     "synced_links": [
       "SC-0015-003 -> TS-0070 -> SD-0175..SD-0178",
-      "existing TS-0011/TS-0015 preserved",
-      "ST-0015 now 3/3 step-executable"
+      "Существующие TS-0011/TS-0015 для SC-0015-003 сохранены",
+      "SC-0005-002 -> TS-0006/TS-0013/TS-0033 -> SD-0027..SD-0030",
+      "SC-0011-001 -> TS-0017/TS-0031 -> SD-0022..SD-0025",
+      "SC-0011-002 -> TS-0017..TS-0020/TS-0032 -> SD-0022..SD-0024/SD-0026",
+      "SC-0015-002 -> TS-0015/TS-0024/TS-0026 -> SD-0001..SD-0004",
+      "Все существующие связи сохранены; 45/45 сценариев исполняются через шаги"
     ],
     "not_changed": [
-      "production code",
-      "feature wording",
-      "automation IDs",
-      "existing test annotations",
-      "project files",
-      "workflows"
+      "формулировки feature и acceptance criteria",
+      "automation IDs и существующие test annotations",
+      "проектные файлы и workflows",
+      "поведение и layout продукта"
     ],
     "tests_changed": true,
-    "decision": "BDD links обновлены для SC-0015-003: новый TS-0070 связывает scenario text с passing неизменяемым CI/media contract, локальным ReadmeDemo headless smoke и UI responsiveness evidence через SD-0175..SD-0178. Acceptance criteria не заменялись на Gherkin; production code, feature wording, automation IDs, existing test annotations, project files, workflows, scripts, README и media не менялись.",
+    "decision": "Для SC-0005-002, SC-0011-001, SC-0011-002 и SC-0015-002 сохранено историческое RED evidence и добавлено фактическое GREEN evidence targeted и полного serial-прогона. Сценарии возвращены в passing. Acceptance criteria не заменялись на Gherkin; feature wording, automation IDs и test annotations не менялись.",
     "gaps": [
-      "Step definitions покрывают 45/45 scenarios.",
-      "ST-0015 now has 3/3 step-executable scenarios.",
-      "Нет active scenarios без step definitions.",
-      "Current full-suite validation timed out after 304 seconds without a summary and is not claimed as passing evidence."
+      "Step definitions покрывают 45/45 сценариев.",
+      "ST-0015 сохраняет 3/3 сценария, исполняемых через шаги.",
+      "Нет активных сценариев без test links или step definitions.",
+      "Post-rebase полный последовательный Unlimotion.Test прошёл 830/830, Headless UI прошёл 33/33; тестов дольше 180 секунд нет.",
+      "Остаются 18 известных неблокирующих предупреждений о намеренном повторном использовании шагов."
     ],
-    "code_changed": false
+    "code_changed": true
   },
   "bdd_lint": {
-    "updated_at": "2026-07-14",
-    "command": "/storm:bdd-lint after /storm:bdd-implement SC-0015-003",
-    "mode": "delivery-task test-only executable BDD implementation + artifact sync",
+    "updated_at": "2026-07-18",
+    "command": "/storm:bdd-lint после post-rebase валидации утверждённой SPEC",
+    "mode": "проверка связности и фактического BDD evidence",
     "status": "passed_with_warnings",
     "errors": [],
     "warnings": [
@@ -18211,16 +18295,16 @@
       "Duplicate ST-0015 story step text includes SD-0172 and SD-0176; intentional scenario-specific binding."
     ],
     "checks": {
-      "scenario_test_links": "PASS: 45/45 scenarios linked; SC-0015-003 additionally linked to TS-0070.",
-      "scenario_step_definition_links": "PASS: 45/45 scenarios step-executable.",
+      "scenario_test_links": "PASS: 45/45 сценариев связаны с тестами.",
+      "scenario_step_definition_links": "PASS: 45/45 сценариев исполняются через определения шагов.",
       "st_0003": "PASS: SC-0003-001, SC-0003-002 and SC-0003-003 are step-executable.",
       "st_0004": "PASS: SC-0004-001, SC-0004-002 and SC-0004-003 are step-executable.",
-      "test_annotations": "PASS: existing test annotations не менялись.",
-      "production_code": "PASS: production code, project files and workflows не менялись.",
-      "feature_wording": "PASS: .feature wording не менялся.",
-      "ui_video_evidence": "NOT APPLICABLE: UI behavior/layout и media assets не менялись; existing headless ReadmeDemo and responsiveness UI tests used as next-best evidence.",
-      "targeted_gate": "PASS: SC-0015-003 executable BDD passed 1/1; ReadmeDemo headless test project passed 10/10; responsiveness UI check passed 1/1.",
-      "full_suite_gate": "NOT RUN: current full Unlimotion.Test timed out after 304 seconds without a summary.",
+      "test_annotations": "PASS: существующие test annotations не менялись.",
+      "production_code": "PASS: изменения production code ограничены исправлением входного mapping и lifecycle seal/drain; поведение продукта не менялось.",
+      "feature_wording": "PASS: формулировки .feature не менялись.",
+      "ui_video_evidence": "НЕ ПРИМЕНИМО: UI layout и пользовательский поток не менялись; соответствующие Avalonia.Headless проверки прошли в полном наборе.",
+      "targeted_gate": "PASS post-rebase: lifecycle 4/4; Telegram status 11/11; callback 7/7 + BDD 1/1; tree-search 7/7; filter reset BDD 1/1; wanted 2/2; relation add 1/1; multi-parent delete 1/1.",
+      "full_suite_gate": "PASS post-rebase: Unlimotion.Test 830/830 за 19m35.329s и Headless UI 33/33 за 1m34.053s; failed 0, skipped 0; максимум 35.837 секунды, тестов дольше 180 секунд нет.",
       "st_0006": "PASS: SC-0006-001, SC-0006-002 and SC-0006-003 are step-executable.",
       "st_0007": "PASS: SC-0007-001, SC-0007-002 and SC-0007-003 are step-executable through TS-0051..TS-0053 and SD-0099..SD-0110.",
       "st_0008": "PASS: SC-0008-001, SC-0008-002 and SC-0008-003 are step-executable through TS-0054..TS-0056 and SD-0111..SD-0122.",

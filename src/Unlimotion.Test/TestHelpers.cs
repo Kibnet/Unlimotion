@@ -49,6 +49,18 @@ namespace Unlimotion.Test
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
 
+        public static async Task ActionNotCreateItemsAsync(
+            ICommand command,
+            ITaskStorage taskRepository,
+            int changeCount = 0)
+        {
+            var taskCountBefore = taskRepository.Tasks.Count;
+            await ExecuteCommandAsync(command);
+            await WaitThrottleTime();
+            await WaitForPendingSavesAsync(taskRepository);
+            await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
+        }
+
         public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(Action action,
             ITaskStorage taskRepository,
             int expectedNewTasks = 1)

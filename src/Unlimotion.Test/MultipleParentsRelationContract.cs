@@ -74,7 +74,7 @@ internal static class MultipleParentsRelationContract
         }
         finally
         {
-            tests.Dispose();
+            await tests.CleanupFixtureAsync();
         }
     }
 
@@ -88,7 +88,7 @@ internal static class MultipleParentsRelationContract
         }
         finally
         {
-            tests.Dispose();
+            await tests.CleanupFixtureAsync();
         }
     }
 

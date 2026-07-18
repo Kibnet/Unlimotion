@@ -86,7 +86,7 @@ internal static class FilterResetUiContract
             {
                 await DrainUiThrottlesAsync();
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
 
@@ -115,7 +115,7 @@ internal static class FilterResetUiContract
         bool defaultShowArchived,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm);
+        SetActiveFilters(vm, vm.StatusFilters);
         notificationManager.ClearMessages();
 
         SelectTab(view, 0);
@@ -133,9 +133,11 @@ internal static class FilterResetUiContract
         result.EmojiFiltersReset = ToggleFiltersReset(vm.EmojiFilters) &&
                                    ToggleFiltersReset(vm.EmojiExcludeFilters);
         result.StatusFiltersReset = CompletionVisibilityMatchesDefaults(
-            vm,
+            vm.StatusFilters,
             defaultShowCompleted,
-            defaultShowArchived);
+            defaultShowArchived) &&
+            vm.ShowCompleted == defaultShowCompleted &&
+            vm.ShowArchived == defaultShowArchived;
     }
 
     private static async Task ExecuteLastCreatedDateResetAsync(
@@ -147,7 +149,7 @@ internal static class FilterResetUiContract
         bool defaultShowArchived,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm);
+        SetActiveFilters(vm, vm.LastCreatedStatusFilters);
         notificationManager.ClearMessages();
 
         SelectTab(view, 1);
@@ -161,7 +163,7 @@ internal static class FilterResetUiContract
 
         result.ConfirmationAsked &= notificationManager.AskCount == 1;
         result.StatusFiltersReset &= CompletionVisibilityMatchesDefaults(
-            vm,
+            vm.LastCreatedStatusFilters,
             defaultShowCompleted,
             defaultShowArchived);
         result.DateFilterReset = DateFilterIsDefault(vm.LastCreatedDateFilter) &&
@@ -180,7 +182,7 @@ internal static class FilterResetUiContract
         bool? defaultShowWanted,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm);
+        SetActiveFilters(vm, vm.UnlockedStatusFilters);
         notificationManager.ClearMessages();
 
         SelectTab(view, 3);
@@ -194,7 +196,7 @@ internal static class FilterResetUiContract
 
         result.ConfirmationAsked &= notificationManager.AskCount == 1;
         result.StatusFiltersReset &= CompletionVisibilityMatchesDefaults(
-            vm,
+            vm.UnlockedStatusFilters,
             defaultShowCompleted,
             defaultShowArchived);
         result.DurationFiltersReset = ToggleFiltersReset(vm.DurationFilters) &&
@@ -202,13 +204,20 @@ internal static class FilterResetUiContract
         result.WantedFilterReset = vm.ShowWanted == defaultShowWanted;
     }
 
-    private static void SetActiveFilters(MainWindowViewModel vm)
+    private static void SetActiveFilters(
+        MainWindowViewModel vm,
+        IEnumerable<TaskStatusFilter> statusFilters)
     {
         vm.Search.SearchText = "Task";
         vm.ShowCompleted = true;
         vm.ShowArchived = true;
         vm.ShowWanted = true;
         vm.Graph.OnlyUnlocked = true;
+
+        foreach (var filter in statusFilters)
+        {
+            filter.ShowTasks = false;
+        }
 
         SetFirstFilter(vm.EmojiFilters);
         SetFirstFilter(vm.EmojiExcludeFilters);
@@ -245,22 +254,22 @@ internal static class FilterResetUiContract
     }
 
     private static bool CompletionVisibilityMatchesDefaults(
-        MainWindowViewModel vm,
+        IEnumerable<TaskStatusFilter> statusFilters,
         bool defaultShowCompleted,
         bool defaultShowArchived)
     {
-        return StatusFilterSelected(vm, DomainTaskStatus.NotReady) &&
-               StatusFilterSelected(vm, DomainTaskStatus.Prepared) &&
-               StatusFilterSelected(vm, DomainTaskStatus.InProgress) &&
-               StatusFilterSelected(vm, DomainTaskStatus.Completed) == defaultShowCompleted &&
-               StatusFilterSelected(vm, DomainTaskStatus.Archived) == defaultShowArchived &&
-               vm.ShowCompleted == defaultShowCompleted &&
-               vm.ShowArchived == defaultShowArchived;
+        return StatusFilterSelected(statusFilters, DomainTaskStatus.NotReady) &&
+               StatusFilterSelected(statusFilters, DomainTaskStatus.Prepared) &&
+               StatusFilterSelected(statusFilters, DomainTaskStatus.InProgress) &&
+               StatusFilterSelected(statusFilters, DomainTaskStatus.Completed) == defaultShowCompleted &&
+               StatusFilterSelected(statusFilters, DomainTaskStatus.Archived) == defaultShowArchived;
     }
 
-    private static bool StatusFilterSelected(MainWindowViewModel vm, DomainTaskStatus status)
+    private static bool StatusFilterSelected(
+        IEnumerable<TaskStatusFilter> statusFilters,
+        DomainTaskStatus status)
     {
-        return vm.StatusFilters.Single(filter => filter.Status == status).ShowTasks;
+        return statusFilters.Single(filter => filter.Status == status).ShowTasks;
     }
 
     private static bool ToggleFiltersReset(IEnumerable<EmojiFilter> filters)

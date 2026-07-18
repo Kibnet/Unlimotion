@@ -59,7 +59,7 @@ internal static class TaskCreationGraphUiContract
         }
         finally
         {
-            tests.Dispose();
+            await tests.CleanupFixtureAsync();
         }
     }
 }

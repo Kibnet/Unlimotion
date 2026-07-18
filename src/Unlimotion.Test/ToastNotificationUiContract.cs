@@ -68,7 +68,7 @@ internal static class ToastNotificationUiContract
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
 

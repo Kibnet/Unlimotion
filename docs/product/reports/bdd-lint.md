@@ -1,17 +1,20 @@
 # STORM BDD Lint
 
-Сгенерировано: 2026-07-14
-Команда: `/storm:bdd-lint` after `/storm:bdd-implement SC-0015-003`
+Сгенерировано: 2026-07-18
+Команда: `/storm:bdd-lint` после post-rebase валидации утверждённой SPEC
 
-passed_with_warnings
+Статус: `passed_with_warnings`
 
 | Проверка | Результат |
 | --- | --- |
-| Scenario -> Test links | PASS: 45/45; `SC-0015-003` имеет `TS-0070` и сохраняет `TS-0011/TS-0015` |
-| Scenario -> Step Definition links | PASS: 45/45 исполняемы через шаги |
-| ST-0015 | PASS: все 3/3 сценария исполняемы через шаги |
-| Feature/production/annotations/projects/workflows/scripts/media | PASS: изменений нет |
-| Targeted gate | PASS: BDD 1/1, responsiveness UI 1/1, ReadmeDemo headless 10/10 |
-| Full suite | NOT RUN: предыдущий timeout не дал итогового summary |
+| Scenario -> Test | PASS: 45/45 |
+| Scenario -> Step Definition | PASS: 45/45 |
+| Активные сценарии без links | PASS: 0 |
+| Формулировки `.feature` и acceptance criteria | PASS: не менялись |
+| Test annotations | PASS: не менялись |
+| Targeted gate | PASS: lifecycle 4/4; Telegram status 11/11; callback 7/7 + BDD 1/1; tree-search 7/7; filter BDD 1/1; wanted 2/2; relation add и delete 1/1 |
+| Полный serial gate | PASS: `Unlimotion.Test` 830/830; Headless UI 33/33; failed 0, skipped 0 |
+| Ограничение 180 секунд | PASS: превышений 0; максимум 35.837 секунды |
+| Центральный validator | PASS: 0 errors, 18 известных warnings; executable specification 45/45, step reuse 181/181 |
 
-Остаются 18 ожидаемых предупреждений о повторном использовании шагов, включая общий контекст набора задач и общее действие критерия, теперь также используемые `SD-0175` и `SD-0177`, а также shared story step `ST-0015` (`SD-0172`, `SD-0176`). Они не блокируют sync.
+Остаются 18 известных неблокирующих предупреждений о намеренном повторном использовании общих Given/When шагов. Новых lint gaps не обнаружено.
