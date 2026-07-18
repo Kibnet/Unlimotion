@@ -50,16 +50,23 @@ public class PackageUpdateCompatibilityUiTests
 
                 await MainControl.Drop(view, dropArgs);
                 await Assert.That(await TestHelpers.WaitUntilAsync(
-                        () => sourceTask.Blocks.Contains(targetTask.Id) &&
-                              targetTask.BlockedBy.Contains(sourceTask.Id),
+                        () =>
+                        {
+                            var currentSourceTask = TestHelpers.GetTask(vm, sourceTask.Id);
+                            var currentTargetTask = TestHelpers.GetTask(vm, targetTask.Id);
+                            return currentSourceTask.Blocks.Contains(targetTask.Id) &&
+                                   currentTargetTask.BlockedBy.Contains(sourceTask.Id);
+                        },
                         TimeSpan.FromSeconds(10)))
                     .IsTrue();
                 Dispatcher.UIThread.RunJobs();
+                var updatedSourceTask = TestHelpers.GetTask(vm, sourceTask.Id);
+                var updatedTargetTask = TestHelpers.GetTask(vm, targetTask.Id);
 
                 await Assert.That(dropArgs.Handled).IsTrue();
                 await Assert.That(dropArgs.DragEffects).IsEqualTo(DragDropEffects.Link);
-                await Assert.That(sourceTask.Blocks).Contains(targetTask.Id);
-                await Assert.That(targetTask.BlockedBy).Contains(sourceTask.Id);
+                await Assert.That(updatedSourceTask.Blocks).Contains(targetTask.Id);
+                await Assert.That(updatedTargetTask.BlockedBy).Contains(sourceTask.Id);
 
                 var selectedPath = Path.Combine(fixture.DefaultTasksFolderPath, "Selected");
                 Dialogs.PlatformOpenFolderDialogAsync = (_, _) => Task.FromResult<string?>(selectedPath);

@@ -757,18 +757,26 @@ public class MainControlTreeCommandsUiTests
 
                 PressHotkey(window, Key.V, PhysicalKey.V, RawInputModifiers.Control | RawInputModifiers.Shift);
 
-                var pasteStarted = WaitFor(
-                    () => clipboardReadCount == 1,
-                    SearchExpansionWaitMilliseconds);
+                var pasteStarted = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return clipboardReadCount == 1;
+                    },
+                    TimeSpan.FromMilliseconds(SearchExpansionWaitMilliseconds));
                 await Assert.That(pasteStarted).IsTrue();
 
-                var pasted = WaitFor(() =>
-                    vm.taskRepository.Tasks.Count == countBefore + 4 &&
-                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste root") &&
-                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste child") &&
-                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste grandchild") &&
-                    vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste sibling"),
-                    SearchExpansionWaitMilliseconds);
+                var pasted = await TestHelpers.WaitUntilAsync(
+                    () =>
+                    {
+                        Dispatcher.UIThread.RunJobs();
+                        return vm.taskRepository.Tasks.Count == countBefore + 4 &&
+                               vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste root") &&
+                               vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste child") &&
+                               vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste grandchild") &&
+                               vm.taskRepository.Tasks.Items.Any(task => task.Title == "Outline UI paste sibling");
+                    },
+                    TimeSpan.FromMilliseconds(SearchExpansionWaitMilliseconds));
                 if (!pasted)
                 {
                     throw new InvalidOperationException(
@@ -781,7 +789,6 @@ public class MainControlTreeCommandsUiTests
                         $"CurrentTask={vm.CurrentTaskItem?.Title ?? "<null>"}; " +
                         $"Titles={string.Join("|", vm.taskRepository.Tasks.Items.Select(task => task.Title))}.");
                 }
-
                 await Assert.That(clipboardReadCount).IsEqualTo(1);
                 await Assert.That(notificationManager.LastTaskOutlinePastePreview).IsNotNull();
                 await Assert.That(notificationManager.LastTaskOutlinePastePreview!.TaskCount).IsEqualTo(4);
@@ -790,9 +797,10 @@ public class MainControlTreeCommandsUiTests
                 TaskItemViewModel? pastedChild = null;
                 TaskItemViewModel? pastedGrandchild = null;
                 TaskItemViewModel? pastedSibling = null;
-                var relationsReady = WaitFor(
+                var relationsReady = await TestHelpers.WaitUntilAsync(
                     () =>
                     {
+                        Dispatcher.UIThread.RunJobs();
                         pastedRoot = FindTaskByTitle(vm, "Outline UI paste root");
                         pastedChild = FindTaskByTitle(vm, "Outline UI paste child");
                         pastedGrandchild = FindTaskByTitle(vm, "Outline UI paste grandchild");
@@ -806,7 +814,7 @@ public class MainControlTreeCommandsUiTests
                                pastedChild.Contains.Contains(pastedGrandchild.Id) &&
                                pastedGrandchild.Parents.Contains(pastedChild.Id);
                     },
-                    SearchExpansionWaitMilliseconds);
+                    TimeSpan.FromMilliseconds(SearchExpansionWaitMilliseconds));
                 await Assert.That(relationsReady).IsTrue();
 
                 await Assert.That(parent.Contains).Contains(pastedRoot!.Id);
@@ -2586,6 +2594,25 @@ public class MainControlTreeCommandsUiTests
         return text?
             .Replace("\r\n", "\n")
             .Replace('\r', '\n');
+    }
+
+    private static async Task<TaskItemViewModel> UpdateTaskViewModelAsync(
+        ITaskStorage repository,
+        TaskItemViewModel task,
+        Action<TaskItemViewModel> update)
+    {
+        var isInitializedProvider = task.IsInitializedProvider;
+        task.IsInitializedProvider = () => false;
+        try
+        {
+            update(task);
+            var updated = await repository.Update(task);
+            return updated?.Id == task.Id ? updated : task;
+        }
+        finally
+        {
+            task.IsInitializedProvider = isInitializedProvider;
+        }
     }
 
     private static TaskItemViewModel FindTaskByTitle(MainWindowViewModel vm, string title)

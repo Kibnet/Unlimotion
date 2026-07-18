@@ -2444,35 +2444,27 @@ namespace Unlimotion.ViewModel
                 ? await taskRepository!.Add()
                 : await taskRepository!.AddChild(parent);
 
+            var createdModel = created.Model;
+            createdModel.Title = node.Title;
+            if (!string.IsNullOrWhiteSpace(node.Description))
+            {
+                createdModel.Description = node.Description;
+            }
+
+            if (node.Status.HasValue)
+            {
+                createdModel.Status = node.Status.Value;
+                createdModel.StatusHistory.Clear();
+                createdModel.StatusHistory.Add(new Unlimotion.Domain.TaskStatusHistoryEntry
+                {
+                    Status = node.Status.Value,
+                    ChangedAt = DateTimeOffset.UtcNow,
+                    Author = createdModel.UserId ?? "local-user"
+                });
+            }
+
             var createdId = created.Id;
-            var isInitializedProvider = created.IsInitializedProvider;
-            created.IsInitializedProvider = () => false;
-            try
-            {
-                created.Title = node.Title;
-                if (!string.IsNullOrWhiteSpace(node.Description))
-                {
-                    created.Description = node.Description;
-                }
-
-                if (node.Status.HasValue)
-                {
-                    created.Status = node.Status.Value;
-                    created.StatusHistory.Clear();
-                    created.StatusHistory.Add(new Unlimotion.Domain.TaskStatusHistoryEntry
-                    {
-                        Status = node.Status.Value,
-                        ChangedAt = DateTimeOffset.UtcNow,
-                        Author = created.Model.UserId ?? "local-user"
-                    });
-                }
-            }
-            finally
-            {
-                created.IsInitializedProvider = isInitializedProvider;
-            }
-
-            var updated = await taskRepository.Update(created);
+            var updated = await taskRepository.Update(createdModel);
             created = updated?.Id == createdId
                 ? updated
                 : FindTaskById(createdId) ?? created;

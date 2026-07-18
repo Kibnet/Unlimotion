@@ -1,0 +1,64 @@
+using System.IO;
+using System.Threading.Tasks;
+
+namespace Unlimotion.Test;
+
+internal static class CiReadmeMediaContract
+{
+    public static async Task<CiReadmeMediaScenarioResult> ExecuteAsync()
+    {
+        var workflow = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/tests.yml"));
+        var mediaScript = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("scripts/update-readme-media.ps1"));
+        var mediaReadme = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("tests/Unlimotion.ReadmeMedia/README.md"));
+        var readmeDemoTests = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("tests/Unlimotion.UiTests.Headless/Tests/ReadmeDemoHeadlessTests.cs"));
+
+        await Assert.That(workflow).Contains("all-tests:");
+        await Assert.That(workflow).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(workflow).Contains("Run Headless UI Tests");
+        await Assert.That(workflow).Contains("--maximum-parallel-tests 1");
+
+        await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj");
+        await Assert.That(mediaScript).Contains("tests/Unlimotion.ReadmeMedia/Unlimotion.ReadmeMedia.csproj");
+        await Assert.That(mediaScript).Contains("--copy-to-media");
+        await Assert.That(mediaScript).Contains("[string]$Languages = \"en,ru\"");
+
+        await Assert.That(mediaReadme).Contains("scripts/update-readme-media.ps1");
+        await Assert.That(mediaReadme).Contains("runs the headless and FlaUI UI tests sequentially");
+        await Assert.That(mediaReadme).Contains("ReadmeDemo");
+        await Assert.That(mediaReadme).Contains("English and Russian variants");
+        await Assert.That(readmeDemoTests).Contains("ReadmeDemoEnglishHeadlessTests");
+        await Assert.That(readmeDemoTests).Contains("ReadmeDemoRussianHeadlessTests");
+        await Assert.That(readmeDemoTests).Contains("Readme_demo_uses_capture_presentation_state");
+
+        var loadingTests = new MainScreenLoadingUiTests();
+        await loadingTests.MainScreen_Connect_KeepsUiResponsive_DuringBlockingInitialLoad();
+
+        return new CiReadmeMediaScenarioResult
+        {
+            CiSmokeContractPassed = true,
+            ReadmeMediaAutomationContractPassed = true,
+            UiResponsiveSmokePassed = true
+        };
+    }
+
+    public static async Task AssertAsync(CiReadmeMediaScenarioResult result)
+    {
+        await Assert.That(result.CiSmokeContractPassed).IsTrue();
+        await Assert.That(result.ReadmeMediaAutomationContractPassed).IsTrue();
+        await Assert.That(result.UiResponsiveSmokePassed).IsTrue();
+    }
+}
+
+internal sealed class CiReadmeMediaScenarioResult
+{
+    public bool CiSmokeContractPassed { get; set; }
+
+    public bool ReadmeMediaAutomationContractPassed { get; set; }
+
+    public bool UiResponsiveSmokePassed { get; set; }
+}

@@ -1,0 +1,608 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Threading.Tasks;
+using Funq;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Raven.Client.Documents;
+using Raven.Client.Documents.Session;
+using ServiceStack;
+using ServiceStack.Auth;
+using ServiceStack.Configuration;
+using SignalR.EasyUse.Client;
+using Unlimotion.Domain;
+using Unlimotion.Interface;
+using Unlimotion.Server;
+using Unlimotion.Server.Hubs;
+using Unlimotion.Server.ServiceInterface;
+using Unlimotion.Server.ServiceModel;
+using Unlimotion.Server.ServiceModel.Molds.Tasks;
+
+namespace Unlimotion.Test;
+
+internal static class ServerStorageCrudRealtimeContract
+{
+    public static async Task<ServerStorageCrudRealtimeScenarioResult> ExecuteCrudRealtimeScenarioAsync()
+    {
+        var result = new ServerStorageCrudRealtimeScenarioResult();
+
+        await AssertTaskEndpointsRequireAuthenticatedRequestsAsync();
+        result.TaskEndpointsRequireAuthenticatedRequests = true;
+
+        await AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync();
+        result.GetAllAndBulkInsertPreserveAuthenticatedUserScope = true;
+
+        await AssertGetTaskPreservesAuthenticatedUserScopeAsync();
+        result.GetTaskPreservesAuthenticatedUserScope = true;
+
+        await AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync();
+        result.SignalRHandlersMapRemoteTaskUpdates = true;
+
+        await AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync();
+        result.LiveSignalRDeliveryVerified = true;
+
+        await AssertLiveServiceStackTaskApiRoundTripsAuthenticatedUserTasksAsync();
+        result.LiveServiceStackTaskApiRoundTripVerified = true;
+
+        return result;
+    }
+
+    public static async Task AssertTaskEndpointsRequireAuthenticatedRequestsAsync()
+    {
+        MethodInfo getAll = GetServiceMethod<TaskService, GetAllTasks>("Get");
+        MethodInfo getOne = GetServiceMethod<TaskService, GetTask>("GetAsync");
+        MethodInfo bulkInsert = GetServiceMethod<TaskService, BulkInsertTasks>("Post");
+
+        await Assert.That(getAll.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
+        await Assert.That(getOne.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
+        await Assert.That(bulkInsert.GetCustomAttribute<AuthenticateAttribute>()).IsNotNull();
+    }
+
+    public static async Task AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync()
+    {
+        string source = await ReadRepoFileAsync("src", "Unlimotion.Server.ServiceInterface", "TaskService.cs");
+
+        await Assert.That(source).Contains("var uid = session.UserAuthId");
+        await Assert.That(source).Contains(".Where(chat => chat.UserId == uid)");
+        await Assert.That(source).Contains("task.UserId = uid");
+        await Assert.That(source).Contains("private const string TaskPrefix = \"TaskItem/\"");
+        await Assert.That(source).Contains("task.Id = $\"{TaskPrefix}{task.Id}\"");
+    }
+
+    public static async Task AssertGetTaskPreservesAuthenticatedUserScopeAsync()
+    {
+        string source = await ReadRepoFileAsync("src", "Unlimotion.Server.ServiceInterface", "TaskService.cs");
+        string methodSource = ExtractMethodSource(
+            source,
+            "public async Task<TaskItemMold> GetAsync(GetTask request)",
+            "public async Task Post(BulkInsertTasks request)");
+
+        await Assert.That(methodSource).Contains("var uid = session.UserAuthId");
+        await Assert.That(methodSource).Contains(".Where(chat => chat.Id == decodedId && chat.UserId == uid)");
+    }
+
+    public static async Task AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync()
+    {
+        string source = await ReadRepoFileAsync("src", "Unlimotion", "ServerStorage.cs");
+
+        await Assert.That(source).Contains("_connection.Subscribe<ReceiveTaskItem>");
+        await Assert.That(source).Contains("Type = UpdateType.Saved");
+        await Assert.That(source).Contains("_connection.Subscribe<DeleteTaskItem>");
+        await Assert.That(source).Contains("Type = UpdateType.Removed");
+    }
+
+    public static async Task AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync()
+    {
+        await using var fixture = await ServerStorageLiveIntegrationFixture.StartAsync();
+        string accessToken = await fixture.CreateAuthenticatedUserTokenAsync();
+        string taskId = $"TaskItem/live-signalr-{Guid.NewGuid():N}";
+
+        await using var sender = fixture.CreateHubConnection();
+        await using var receiver = fixture.CreateHubConnection();
+
+        var receivedTask = new TaskCompletionSource<ReceiveTaskItem>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var senderEcho = new TaskCompletionSource<ReceiveTaskItem>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        receiver.Subscribe<ReceiveTaskItem>(data => receivedTask.TrySetResult(data));
+        sender.Subscribe<ReceiveTaskItem>(data => senderEcho.TrySetResult(data));
+
+        await sender.StartAsync();
+        await receiver.StartAsync();
+
+        var senderHub = sender.CreateHub<IChatHub>();
+        var receiverHub = receiver.CreateHub<IChatHub>();
+
+        await senderHub.Login(accessToken, "test", "127.0.0.1", "live-integration-test");
+        await receiverHub.Login(accessToken, "test", "127.0.0.1", "live-integration-test");
+
+        string savedId = await senderHub.SaveTask(new TaskItemHubMold
+        {
+            Id = taskId,
+            Title = "Live SignalR delivery",
+            Description = "Задача отправлена live integration test",
+            Status = Unlimotion.Domain.TaskStatus.NotReady,
+            ContainsTasks = [],
+            ParentTasks = [],
+            BlocksTasks = [],
+            BlockedByTasks = []
+        });
+
+        ReceiveTaskItem delivered = await WaitForAsync(receivedTask.Task, TimeSpan.FromSeconds(10));
+        bool senderReceivedEcho = await CompletesWithinAsync(senderEcho.Task, TimeSpan.FromMilliseconds(500));
+
+        await Assert.That(savedId).IsEqualTo(taskId);
+        await Assert.That(delivered.Id).IsEqualTo(taskId);
+        await Assert.That(delivered.Title).IsEqualTo("Live SignalR delivery");
+        await Assert.That(senderReceivedEcho).IsFalse();
+    }
+
+    public static async Task AssertLiveServiceStackTaskApiRoundTripsAuthenticatedUserTasksAsync()
+    {
+        await using var fixture = await ServerStorageLiveIntegrationFixture.StartAsync(
+            LiveIntegrationHostMode.ServiceStackTaskApiNarrow);
+        string ownerToken = await fixture.CreateAuthenticatedUserTokenAsync();
+        string otherUserToken = await fixture.CreateAuthenticatedUserTokenAsync();
+        string localTaskId = $"live-api-{Guid.NewGuid():N}";
+        string storedTaskId = $"TaskItem/{localTaskId}";
+
+        using var ownerClient = fixture.CreateServiceClient(ownerToken);
+        using var otherUserClient = fixture.CreateServiceClient(otherUserToken);
+
+        await ownerClient.PostAsync(new BulkInsertTasks
+        {
+            Tasks =
+            [
+                new TaskItemMold
+                {
+                    Id = localTaskId,
+                    Title = "Live ServiceStack task API",
+                    Description = "Задача отправлена live ServiceStack API test",
+                    Status = Unlimotion.Domain.TaskStatus.NotReady,
+                    ContainsTasks = [],
+                    ParentTasks = [],
+                    BlocksTasks = [],
+                    BlockedByTasks = []
+                }
+            ]
+        });
+
+        TaskItemPage ownerPage = await ownerClient.GetAsync(new GetAllTasks());
+        TaskItemMold loaded = await ownerClient.GetAsync(new GetTask { Id = storedTaskId });
+        TaskItemPage otherUserPage = await otherUserClient.GetAsync(new GetAllTasks());
+        TaskItemMold? otherUserLoaded = await TryGetTaskAsync(otherUserClient, storedTaskId);
+
+        await Assert.That(ownerPage.Tasks.Select(task => task.Id)).Contains(storedTaskId);
+        await Assert.That(loaded.Id).IsEqualTo(storedTaskId);
+        await Assert.That(loaded.Title).IsEqualTo("Live ServiceStack task API");
+        await Assert.That(otherUserPage.Tasks.Select(task => task.Id)).DoesNotContain(storedTaskId);
+        await Assert.That(otherUserLoaded).IsNull();
+    }
+
+    public static async Task AssertCrudRealtimeScenarioResultAsync(
+        ServerStorageCrudRealtimeScenarioResult result)
+    {
+        await Assert.That(result.TaskEndpointsRequireAuthenticatedRequests).IsTrue();
+        await Assert.That(result.GetAllAndBulkInsertPreserveAuthenticatedUserScope).IsTrue();
+        await Assert.That(result.GetTaskPreservesAuthenticatedUserScope).IsTrue();
+        await Assert.That(result.SignalRHandlersMapRemoteTaskUpdates).IsTrue();
+        await Assert.That(result.LiveSignalRDeliveryVerified).IsTrue();
+        await Assert.That(result.LiveServiceStackTaskApiRoundTripVerified).IsTrue();
+    }
+
+    private static MethodInfo GetServiceMethod<TService, TRequest>(string name)
+    {
+        return typeof(TService)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Single(method =>
+                method.Name == name &&
+                method.GetParameters() is [{ ParameterType: var parameterType }] &&
+                parameterType == typeof(TRequest));
+    }
+
+    private static string ExtractMethodSource(string source, string startMarker, string endMarker)
+    {
+        int start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        int end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+
+        if (start < 0 || end < 0 || end <= start)
+        {
+            throw new InvalidOperationException($"Could not find method source between '{startMarker}' and '{endMarker}'.");
+        }
+
+        return source[start..end];
+    }
+
+    private static async Task<T> WaitForAsync<T>(Task<T> task, TimeSpan timeout)
+    {
+        var timeoutTask = Task.Delay(timeout);
+        var completed = await Task.WhenAny(task, timeoutTask);
+        if (completed == timeoutTask)
+        {
+            throw new TimeoutException($"Timed out after {timeout} waiting for live integration evidence.");
+        }
+
+        return await task;
+    }
+
+    private static async Task<bool> CompletesWithinAsync<T>(Task<T> task, TimeSpan timeout)
+    {
+        var timeoutTask = Task.Delay(timeout);
+        return await Task.WhenAny(task, timeoutTask) == task;
+    }
+
+    private static async Task<TaskItemMold?> TryGetTaskAsync(JsonServiceClient client, string taskId)
+    {
+        try
+        {
+            return await client.GetAsync(new GetTask { Id = taskId });
+        }
+        catch (WebServiceException)
+        {
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<string> ReadRepoFileAsync(params string[] segments)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory != null)
+        {
+            string candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return await File.ReadAllTextAsync(candidate);
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(segments)}");
+    }
+
+    private sealed class ServerStorageLiveIntegrationFixture : IAsyncDisposable
+    {
+        private readonly string _tempRoot;
+        private readonly IHost _host;
+
+        private ServerStorageLiveIntegrationFixture(string tempRoot, IHost host, string baseUrl)
+        {
+            _tempRoot = tempRoot;
+            _host = host;
+            BaseUrl = baseUrl;
+        }
+
+        private string BaseUrl { get; }
+
+        public static async Task<ServerStorageLiveIntegrationFixture> StartAsync(
+            LiveIntegrationHostMode mode = LiveIntegrationHostMode.SignalR)
+        {
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "Unlimotion.LiveIntegration",
+                Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempRoot);
+
+            string serverProjectRoot = FindRepoFile("src", "Unlimotion.Server", "appsettings.json")
+                .Directory!
+                .FullName;
+            string contentRoot = Path.Combine(tempRoot, "ServerContentRoot");
+            Directory.CreateDirectory(contentRoot);
+            File.Copy(Path.Combine(serverProjectRoot, "appsettings.json"), Path.Combine(contentRoot, "appsettings.json"));
+            File.Copy(
+                Path.Combine(serverProjectRoot, "RavenDBLicense.json"),
+                Path.Combine(tempRoot, "RavenDBLicense.json"));
+            string url = $"http://127.0.0.1:{GetFreeTcpPort()}";
+
+            var host = Host.CreateDefaultBuilder(["--hostBuilder:reloadConfigOnChange=false"])
+                .UseEnvironment("Development")
+                .ConfigureLogging(logging => logging.ClearProviders())
+                .ConfigureAppConfiguration((_, builder) =>
+                {
+                    builder.AddJsonFile(
+                        Path.Combine(contentRoot, "appsettings.json"),
+                        optional: false,
+                        reloadOnChange: false);
+                    builder.AddInMemoryCollection(new[]
+                    {
+                        new KeyValuePair<string, string?>("RavenDb:DatabaseRecord:DatabaseName", $"UnlimotionLiveTest_{Guid.NewGuid():N}"),
+                        new KeyValuePair<string, string?>("RavenDb:ServerOptions:ServerUrl", $"http://127.0.0.1:{GetFreeTcpPort()}"),
+                        new KeyValuePair<string, string?>("RavenDb:ServerOptions:DataDirectory", Path.Combine(tempRoot, "RavenDB")),
+                        new KeyValuePair<string, string?>("RavenDb:ServerOptions:LogsPath", Path.Combine(tempRoot, "Log", "RavenDB")),
+                        new KeyValuePair<string, string?>("LiveIntegration:Mode", mode.ToString())
+                    });
+                })
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder
+                        .UseContentRoot(contentRoot)
+                        .UseUrls(url)
+                        .UseStartup<LiveSignalRTestStartup>();
+                })
+                .Build();
+
+            await host.StartAsync();
+            return new ServerStorageLiveIntegrationFixture(tempRoot, host, url);
+        }
+
+        public async Task<string> CreateAuthenticatedUserTokenAsync()
+        {
+            string suffix = Guid.NewGuid().ToString("N");
+            string userId = $"User/{Guid.NewGuid()}";
+
+            using (var scope = _host.Services.CreateScope())
+            {
+                var session = scope.ServiceProvider.GetRequiredService<IAsyncDocumentSession>();
+                await session.StoreAsync(new User
+                {
+                    Id = userId,
+                    Login = $"live-{suffix}",
+                    DisplayName = $"Live {suffix}",
+                    AboutMe = string.Empty,
+                    RegisteredTime = DateTimeOffset.UtcNow
+                });
+                await session.SaveChangesAsync();
+            }
+
+            var jwtProvider = (JwtAuthProvider)AuthenticateService.GetAuthProvider("jwt");
+            if (jwtProvider?.PublicKey == null)
+            {
+                throw new InvalidOperationException("JWT provider was not initialized for live SignalR test host.");
+            }
+
+            var payload = JwtAuthProvider.CreateJwtPayload(
+                new AuthUserSession
+                {
+                    UserAuthId = userId,
+                    CreatedAt = DateTime.UtcNow,
+                    DisplayName = $"live-{suffix}"
+                },
+                issuer: jwtProvider.Issuer,
+                expireIn: TimeSpan.FromHours(1));
+
+            payload["useragent"] = "live-integration-test";
+            payload["session"] = Guid.NewGuid().ToString();
+
+            return JwtAuthProvider.CreateEncryptedJweToken(payload, jwtProvider.PublicKey.Value);
+        }
+
+        public HubConnection CreateHubConnection()
+        {
+            return new HubConnectionBuilder()
+                .WithUrl($"{BaseUrl}/ChatHub")
+                .Build();
+        }
+
+        public JsonServiceClient CreateServiceClient(string accessToken)
+        {
+            return new JsonServiceClient(BaseUrl)
+            {
+                BearerToken = accessToken
+            };
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _host.StopAsync(TimeSpan.FromSeconds(5));
+            _host.Dispose();
+
+            try
+            {
+                Directory.Delete(_tempRoot, recursive: true);
+            }
+            catch
+            {
+                // RavenDB may keep files locked briefly after embedded server shutdown.
+            }
+        }
+
+        private static FileInfo FindRepoFile(params string[] segments)
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (directory != null)
+            {
+                string candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
+                if (File.Exists(candidate))
+                {
+                    return new FileInfo(candidate);
+                }
+
+                directory = directory.Parent;
+            }
+
+            throw new FileNotFoundException($"Could not find repository file: {Path.Combine(segments)}");
+        }
+
+        private static int GetFreeTcpPort()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+            return port;
+        }
+    }
+
+    private sealed class LiveSignalRTestStartup
+    {
+        public LiveSignalRTestStartup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        private IConfiguration Configuration { get; }
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.AddSingleton(Configuration);
+            services.AddSingleton<IAppSettings, Unlimotion.Server.AppSettings>();
+            services.AddSingleton<LiveSignalRTestAppHost>();
+            services.AddSingleton<LiveServiceStackTaskApiNarrowAppHost>();
+            services.AddRavenDbServices();
+            services.AddSignalR();
+            services.AddSingleton<AutoMapper.IMapper>(Unlimotion.Server.AppModelMapping.ConfigureMapping());
+        }
+
+        public void Configure(IApplicationBuilder app)
+        {
+            var mode = Enum.Parse<LiveIntegrationHostMode>(
+                Configuration["LiveIntegration:Mode"] ?? nameof(LiveIntegrationHostMode.SignalR));
+
+            if (mode == LiveIntegrationHostMode.ServiceStackTaskApiNarrow)
+            {
+                app.UseServiceStack(app.ApplicationServices.GetRequiredService<LiveServiceStackTaskApiNarrowAppHost>());
+                return;
+            }
+
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapHub<ChatHub>("/chathub");
+            });
+
+            app.UseServiceStack(app.ApplicationServices.GetRequiredService<LiveSignalRTestAppHost>());
+        }
+    }
+
+    private enum LiveIntegrationHostMode
+    {
+        SignalR,
+        ServiceStackTaskApiNarrow
+    }
+
+    private sealed class LiveSignalRTestAppHost : AppHostBase
+    {
+        private readonly IAppSettings _settings;
+
+        public LiveSignalRTestAppHost(IAppSettings settings)
+            : base("Unlimotion.LiveSignalRTest", typeof(LiveSignalRTestAppHost).Assembly)
+        {
+            _settings = settings;
+        }
+
+        public override void Configure(Container container)
+        {
+            var jwtProvider = new JwtAuthProvider(_settings)
+            {
+                RequireSecureConnection = false,
+                HashAlgorithm = "RS512",
+                PrivateKeyXml = _settings.GetString("Security:PrivateKeyXml"),
+                EncryptPayload = true,
+                ExpireTokensInDays = 1,
+                ExpireRefreshTokensIn = TimeSpan.FromDays(30),
+                AllowInQueryString = true,
+                AllowInFormData = true,
+                PopulateSessionFilter = (session, payload, _) =>
+                {
+                    if (payload.TryGetValue("session", out var sessionId) &&
+                        session is AuthUserSession authUserSession)
+                    {
+                        authUserSession.Id = sessionId;
+                    }
+                }
+            };
+            jwtProvider.ServiceRoutes?.Clear();
+
+            var authFeature = new AuthFeature(
+                () => new AuthUserSession(),
+                [jwtProvider])
+            {
+                IncludeAssignRoleServices = false,
+                IncludeAuthMetadataProvider = false,
+                IncludeRegistrationService = false
+            };
+            authFeature.ServiceRoutes.Clear();
+            Plugins.Add(authFeature);
+        }
+    }
+
+    private sealed class LiveServiceStackTaskApiNarrowAppHost : AppHostBase
+    {
+        private readonly IAppSettings _settings;
+        private readonly IServiceProvider _serviceProvider;
+
+        public LiveServiceStackTaskApiNarrowAppHost(
+            IAppSettings settings,
+            IServiceProvider serviceProvider)
+            : base("Unlimotion.LiveServiceStackTaskApiNarrowTest", typeof(LiveSignalRTestAppHost).Assembly)
+        {
+            _settings = settings;
+            _serviceProvider = serviceProvider;
+        }
+
+        public override void Configure(Container container)
+        {
+            container.Register(c => _serviceProvider.GetRequiredService<IDocumentStore>());
+            container.Register(c => _serviceProvider.GetRequiredService<IAsyncDocumentSession>())
+                .ReusedWithin(ReuseScope.Request);
+            container.Register(c => _serviceProvider.GetRequiredService<AutoMapper.IMapper>());
+            RegisterService(typeof(TaskService));
+
+            var jwtProvider = new JwtAuthProvider(_settings)
+            {
+                RequireSecureConnection = false,
+                HashAlgorithm = "RS512",
+                PrivateKeyXml = _settings.GetString("Security:PrivateKeyXml"),
+                EncryptPayload = true,
+                ExpireTokensInDays = 1,
+                ExpireRefreshTokensIn = TimeSpan.FromDays(30),
+                AllowInQueryString = true,
+                AllowInFormData = true,
+                PopulateSessionFilter = (session, payload, _) =>
+                {
+                    if (payload.TryGetValue("session", out var sessionId) &&
+                        session is AuthUserSession authUserSession)
+                    {
+                        authUserSession.Id = sessionId;
+                    }
+                }
+            };
+            jwtProvider.ServiceRoutes?.Clear();
+
+            var authFeature = new AuthFeature(
+                () => new AuthUserSession(),
+                [jwtProvider])
+            {
+                IncludeAssignRoleServices = false,
+                IncludeAuthMetadataProvider = false,
+                IncludeRegistrationService = false
+            };
+            authFeature.ServiceRoutes.Clear();
+            Plugins.Add(authFeature);
+        }
+    }
+}
+
+internal sealed class ServerStorageCrudRealtimeScenarioResult
+{
+    public bool TaskEndpointsRequireAuthenticatedRequests { get; set; }
+
+    public bool GetAllAndBulkInsertPreserveAuthenticatedUserScope { get; set; }
+
+    public bool GetTaskPreservesAuthenticatedUserScope { get; set; }
+
+    public bool SignalRHandlersMapRemoteTaskUpdates { get; set; }
+
+    public bool LiveSignalRDeliveryVerified { get; set; }
+
+    public bool LiveServiceStackTaskApiRoundTripVerified { get; set; }
+}

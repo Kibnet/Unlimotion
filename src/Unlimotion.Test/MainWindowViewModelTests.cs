@@ -160,6 +160,18 @@ namespace Unlimotion.Test
                 .Replace('\r', '\n');
         }
 
+        private static async Task<TaskItemViewModel> UpdateTaskModelAsync(
+            ITaskStorage repository,
+            TaskItemViewModel task,
+            Action<TaskItem> update)
+        {
+            var model = task.Model;
+            update(model);
+
+            var updated = await repository.Update(model);
+            return updated?.Id == task.Id ? updated : task;
+        }
+
         private static IReadOnlyList<string> ReadExpandedTaskIds(string statePath, string treeName)
         {
             if (!File.Exists(statePath))
@@ -595,13 +607,23 @@ namespace Unlimotion.Test
             mainWindowVM.ResetCurrentTabFilters();
 
             var parent = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.RootTask1Id);
-            parent!.Description = "Parent description";
-            parent.IsCompleted = true;
-            await taskRepository.Update(parent);
+            parent = await UpdateTaskModelAsync(
+                taskRepository,
+                parent!,
+                model =>
+                {
+                    model.Description = "Parent description";
+                    model.IsCompleted = true;
+                });
             var child = await taskRepository.AddChild(parent);
-            child.Title = "Outline markdown child";
-            child.Description = "Child description";
-            await taskRepository.Update(child);
+            child = await UpdateTaskModelAsync(
+                taskRepository,
+                child,
+                model =>
+                {
+                    model.Title = "Outline markdown child";
+                    model.Description = "Child description";
+                });
             await Assert.That(await TestHelpers.WaitUntilAsync(
                     () => parent.Contains.Contains(child.Id) &&
                           child.Parents.Contains(parent.Id) &&
@@ -714,7 +736,14 @@ namespace Unlimotion.Test
             var parent = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.RootTask2Id);
             var child = TestHelpers.GetTask(mainWindowVM, MainWindowViewModelFixture.SubTask22Id);
             var grandchild = await taskRepository.AddChild(child!);
-            grandchild.Title = "Wanted cascade grandchild";
+            grandchild = await UpdateTaskModelAsync(
+                taskRepository,
+                grandchild,
+                model => model.Title = "Wanted cascade grandchild");
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => child.ContainsTasks.Any(task => task.Id == grandchild.Id),
+                    TimeSpan.FromSeconds(5)))
+                .IsTrue();
             parent!.Wanted = false;
             child!.Wanted = true;
             grandchild.Wanted = false;
@@ -723,6 +752,11 @@ namespace Unlimotion.Test
             NotificationManager.AskResult = true;
             parent.WantedFromUi = true;
             await TestHelpers.WaitThrottleTime();
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => grandchild.Wanted,
+                    TimeSpan.FromSeconds(5)))
+                .IsTrue();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
 
             await Assert.That(NotificationManager.AskCount).IsEqualTo(1);
             await Assert.That(parent.Wanted).IsTrue();
@@ -1112,7 +1146,7 @@ namespace Unlimotion.Test
 
             editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask1Id);
 
-            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(editor.ConfirmCommand, taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
             var parentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
@@ -1132,7 +1166,7 @@ namespace Unlimotion.Test
 
             editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(editor.ConfirmCommand, taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask1Id);
             var childStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -1152,7 +1186,7 @@ namespace Unlimotion.Test
 
             editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.RootTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(editor.ConfirmCommand, taskRepository);
 
             var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
             var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -1174,7 +1208,7 @@ namespace Unlimotion.Test
 
             editor.SelectedCandidate = editor.Suggestions.First(candidate => candidate.Task.Id == MainWindowViewModelFixture.BlockedTask7Id);
 
-            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(editor.ConfirmCommand, taskRepository);
 
             var blockerStored = GetStorageTaskItem(MainWindowViewModelFixture.RootTask7Id);
             var blockedStored = GetStorageTaskItem(MainWindowViewModelFixture.BlockedTask7Id);
@@ -1255,7 +1289,7 @@ namespace Unlimotion.Test
                 candidateTask.Title,
                 candidateTask.Id);
 
-            await TestHelpers.ActionNotCreateItems(() => editor.ConfirmCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(editor.ConfirmCommand, taskRepository);
 
             var currentStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockTask6Id);
             var candidateStored = GetStorageTaskItem(MainWindowViewModelFixture.DeadlockBlockedTask6Id);
@@ -1468,7 +1502,25 @@ namespace Unlimotion.Test
 
                 ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
                 viewModel.RemoveSelectedWrappers([root2Wrapper!, root3Wrapper!]);
-                await TestHelpers.WaitThrottleTime();
+                await Assert.That(await TestHelpers.WaitUntilAsync(
+                        () =>
+                        {
+                            var taskFile = TestHelpers.GetStorageTaskItem(
+                                projectionFixture.DefaultTasksFolderPath,
+                                MainWindowViewModelFixture.SubTask22Id);
+                            var root2Stored = TestHelpers.GetStorageTaskItem(
+                                projectionFixture.DefaultTasksFolderPath,
+                                MainWindowViewModelFixture.RootTask2Id);
+                            var root3Stored = TestHelpers.GetStorageTaskItem(
+                                projectionFixture.DefaultTasksFolderPath,
+                                MainWindowViewModelFixture.RootTask3Id);
+
+                            return taskFile == null &&
+                                   root2Stored?.ContainsTasks.Contains(MainWindowViewModelFixture.SubTask22Id) == false &&
+                                   root3Stored?.ContainsTasks.Contains(MainWindowViewModelFixture.SubTask22Id) == false;
+                        },
+                        TimeSpan.FromSeconds(5)))
+                    .IsTrue();
 
                 var taskFile = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask22Id);
                 var root2Stored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
