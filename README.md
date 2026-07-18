@@ -71,45 +71,34 @@ bash ./run.macos.sh
 ## Conceptual description
 
 ### Task states
+
 Any task can be in only one of five statuses:
+
 1. Not ready - an empty square
 2. Prepared - a square with `!`
 3. In progress - a square with a play sign
 4. Completed - a square with a check mark
 5. Archived - a square inside a square
 
-`Prepared` means the task has enough context to be started or delegated. Dependency and planned-date blocking is not a status: it is calculated separately and makes the task visually muted.
+Lifecycle status, graph availability and transition guards are separate concepts:
 
-Acceptable transitions are described by the diagram:
-```mermaid
-stateDiagram-v2
-    notReady: Not ready
-    prepared: Prepared
-    inProgress: In progress
-    completed: Completed
-    archived: Archived
-    [*] --> notReady: Creation
-    notReady --> prepared
-    notReady --> inProgress
-    notReady --> completed
-    notReady --> archived
-    prepared --> notReady
-    prepared --> inProgress
-    prepared --> completed
-    prepared --> archived
-    inProgress --> notReady
-    inProgress --> prepared
-    inProgress --> completed
-    inProgress --> archived
-    archived --> notReady
-    archived --> prepared
-    archived --> inProgress
-    completed --> notReady
-    completed --> prepared
-    completed --> inProgress
-```
+- `Prepared` means that the task has enough context to be started or delegated.
+- Graph availability is calculated from active contained tasks, direct blockers and blockers inherited from parent tasks. The status control of a graph-unavailable task is shown with opacity `0.4`; completed and archived blockers do not block it.
+- A future planned begin date is only a guard for entering `In progress`. It does not change graph availability, the `Unlocked` projection or opacity.
 
-Moving to `In progress` is blocked when dependency blockers are incomplete or the planned begin date is still in the future. Moving to `Completed` is blocked when child tasks, blockers, or completion criteria are unfinished.
+The canonical transition matrix is:
+
+| Current \ requested | Not ready | Prepared | In progress | Completed | Archived |
+| --- | --- | --- | --- | --- | --- |
+| Not ready | No-op | Allowed | Start guards | Completion guards | Allowed |
+| Prepared | Allowed | No-op | Start guards | Completion guards | Allowed |
+| In progress | Allowed | Allowed | No-op | Completion guards | Allowed |
+| Completed | Allowed | Allowed | Denied | No-op | Denied |
+| Archived | Allowed | Allowed | Denied | Denied | No-op |
+
+`Start guards` require graph availability and a planned begin date that is not in the future. `Completion guards` require graph availability and every completion criterion to be satisfied. A same-status request is a no-op and does not add a history entry.
+
+If an `In progress` task loses graph availability or receives a future planned begin date, it is moved once to `Prepared` with a system history entry. Unarchiving restores `Not ready` as `Not ready`, and restores both `Prepared` and `In progress` as `Prepared`. Invalid history entries are ignored, so an older valid non-archived entry can still determine the result; a previous `Completed` status or the absence of any valid non-archived entry falls back to `Not ready`.
 
 Markdown outline import/export uses these markers:
 
@@ -121,7 +110,7 @@ Markdown outline import/export uses these markers:
 | `[x]` | Completed |
 | `[#]` | Archived |
 
-The same status picker is available in task lists, the roadmap and the current task card, so a task can move between planning, active work, completion and archive without changing views.
+The same status picker is available in task lists, the roadmap and the current task card. It hides the current status and shows the other four targets; denied targets remain visible but disabled with a localized reason. The Telegram bot shows only enabled non-current targets and applies the same storage-backed transition contract.
 
 ### Tasks links
 Each task can have links to other tasks of 4 types:
@@ -140,12 +129,16 @@ This will allow you to observe the same task in different slices right at the hi
 
 
 ### Blocking
-A blocked task cannot be completed until it becomes unblocked.
-Blocking is visually expressed by a more transparent color of the checkbox and the text of the task description.
-A task is considered **Blocked** if it has:
-1. Uncompleted tasks inside
-2. Has uncompleted blocking tasks
-3. Has uncompleted blocking tasks for any parent task
+
+A graph-unavailable task cannot be started or completed until it becomes available. Its status control is shown with opacity `0.4`.
+
+A task is graph-unavailable if it has:
+
+1. Active incomplete contained tasks.
+2. Active incomplete direct blockers.
+3. Active incomplete blockers inherited from any parent task.
+
+Archived and completed related tasks are not incomplete blockers. Graph availability does not prevent moving a task to `Not ready`, `Prepared` or `Archived` when the lifecycle matrix allows that target.
 
 
 ## Interface description
@@ -171,7 +164,7 @@ Shows the tasks with the most recent edits first.
 ![Last Updated](media/readme/en/last-updated.png)
 
 ### Unlocked
-Window of Opportunity - represents only those tasks that are currently available for execution.
+The `Unlocked` projection contains graph-available, non-archived tasks. Status and time filters are applied separately, so it can include completed or future-planned tasks; a future task remains fully opaque but cannot enter `In progress` before its planned begin date.
 ![Unlocked](media/readme/en/unlocked.png)
 
 ### Completed

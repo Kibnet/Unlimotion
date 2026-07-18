@@ -24,12 +24,16 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     private const string StatusModelMigrationBackupDirectoryName = "status-model.migration.backup";
     private readonly bool isFileStorage;
     private readonly TaskItemViewModelContext? taskContext;
-    private bool disposed;
+    private readonly SemaphoreSlim statusCommandGate = new(1, 1);
+    private readonly CancellationTokenSource cacheLifetime = new();
+    private SynchronizationContext? cacheSynchronizationContext;
+    private volatile bool disposed;
 
     public UnifiedTaskStorage(TaskTreeManager taskTreeManager, TaskItemViewModelContext? taskContext = null)
     {
         TaskTreeManager = taskTreeManager;
         this.taskContext = taskContext;
+        cacheSynchronizationContext = SynchronizationContext.Current;
         isFileStorage = taskTreeManager.Storage is FileStorage;
         Tasks = new SourceCache<TaskItemViewModel, string>(item => item.Id);
         Relations = new TaskRelationsIndex();
@@ -45,6 +49,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task Init()
     {
+        CaptureCacheSynchronizationContext(replaceExisting: true);
         StatusModelMigrationWasApplied = false;
         Tasks.Edit(operations => operations.Clear());
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
@@ -71,6 +76,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         }
 
         disposed = true;
+        cacheLifetime.Cancel();
         if (TaskTreeManager.Storage is FileStorage fileStorage)
         {
             fileStorage.Watcher?.SetEnable(false);
@@ -277,6 +283,186 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
         RefreshRelations();
         return lastViewModel!;
+    }
+
+    public Task<TaskOperationResult> TrySetStatusAsync(
+        string taskId,
+        DomainTaskStatus requestedStatus,
+        string? author = null) =>
+        ExecuteStatusCommandAsync(
+            taskId,
+            commandService => commandService.TrySetStatusAsync(taskId, requestedStatus, author));
+
+    public Task<TaskOperationResult> TryUnarchiveAsync(
+        string taskId,
+        string? author = null) =>
+        ExecuteStatusCommandAsync(
+            taskId,
+            commandService => commandService.TryUnarchiveAsync(taskId, author));
+
+    private async Task<TaskOperationResult> ExecuteStatusCommandAsync(
+        string taskId,
+        Func<TaskGraphCommandService, Task<TaskOperationResult>> execute)
+    {
+        ThrowIfDisposed();
+        CaptureCacheSynchronizationContext();
+        await statusCommandGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            var result = await execute(new TaskGraphCommandService(TaskTreeManager.Storage))
+                .ConfigureAwait(false);
+            await ReconcileStatusCommandResultAsync(taskId, result).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            statusCommandGate.Release();
+        }
+    }
+
+    private async Task ReconcileStatusCommandResultAsync(
+        string taskId,
+        TaskOperationResult result)
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        if (result.DeniedReason?.Kind == TaskOperationDeniedKind.OutcomeUnknown)
+        {
+            TaskItem? reloadedTask = null;
+            try
+            {
+                reloadedTask = await TaskTreeManager.Storage.Load(taskId).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The command result already reports OutcomeUnknown. A failed authoritative reload
+                // must leave the existing cache untouched rather than inventing a rollback snapshot.
+            }
+
+            if (reloadedTask is not null)
+            {
+                await RunOnCacheSynchronizationContextAsync(() =>
+                {
+                    if (HydrateCache(reloadedTask, create: false))
+                    {
+                        RefreshRelations();
+                    }
+                })
+                    .ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        var tasksToHydrate = result.ChangedTasks
+            .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+            .GroupBy(static task => task.Id, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (Task: group.Last(), Create: true),
+                StringComparer.Ordinal);
+        if (result.AuthoritativeTask is { Id: not null } authoritativeTask)
+        {
+            var create = tasksToHydrate.TryGetValue(authoritativeTask.Id, out var existing)
+                && existing.Create;
+            tasksToHydrate[authoritativeTask.Id] = (authoritativeTask, create);
+        }
+
+        if (tasksToHydrate.Count == 0)
+        {
+            return;
+        }
+
+        await RunOnCacheSynchronizationContextAsync(() =>
+        {
+            var hydrated = false;
+            foreach (var (task, create) in tasksToHydrate.Values)
+            {
+                hydrated |= HydrateCache(task, create);
+            }
+
+            if (hydrated)
+            {
+                RefreshRelations();
+            }
+        }).ConfigureAwait(false);
+    }
+
+    private void CaptureCacheSynchronizationContext(bool replaceExisting = false)
+    {
+        var current = SynchronizationContext.Current;
+        if (current is not null)
+        {
+            if (replaceExisting)
+            {
+                Volatile.Write(ref cacheSynchronizationContext, current);
+            }
+            else
+            {
+                Interlocked.CompareExchange(ref cacheSynchronizationContext, current, null);
+            }
+        }
+    }
+
+    private async Task RunOnCacheSynchronizationContextAsync(Action action)
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        var context = cacheSynchronizationContext;
+        if (context is null || ReferenceEquals(context, SynchronizationContext.Current))
+        {
+            if (!disposed)
+            {
+                action();
+            }
+
+            return;
+        }
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellationRegistration = cacheLifetime.Token.Register(
+            static state => ((TaskCompletionSource)state!).TrySetResult(),
+            completion);
+        try
+        {
+            context.Post(_ =>
+            {
+                try
+                {
+                    if (!disposed)
+                    {
+                        action();
+                    }
+
+                    completion.TrySetResult();
+                }
+                catch (Exception exception)
+                {
+                    completion.TrySetException(exception);
+                }
+            }, null);
+        }
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
+
+        await completion.Task.ConfigureAwait(false);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (disposed)
+        {
+            throw new ObjectDisposedException(nameof(UnifiedTaskStorage));
+        }
     }
 
     public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
@@ -900,17 +1086,26 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private void UpdateCache(TaskItem task, bool create)
     {
+        HydrateCache(task, create);
+    }
+
+    private bool HydrateCache(TaskItem task, bool create)
+    {
         var vm = Tasks.Lookup(task.Id);
 
         if (vm.HasValue)
         {
             vm.Value.Update(task);
+            return true;
         }
-        else if(create) 
+        else if (create)
         {
             vm = CreateTaskViewModel(task);
             Tasks.AddOrUpdate(vm.Value);
+            return true;
         }
+
+        return false;
     }
 
     private TaskItemViewModel CreateTaskViewModel(

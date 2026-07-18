@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test
 {
@@ -160,6 +161,37 @@ namespace Unlimotion.Test
             // Assert
             await Assert.That(blockedTask.IsCanBeCompleted).IsTrue();
             await Assert.That(blockedTask.UnlockedDateTime).IsNotNull();
+        }
+
+        [Test]
+        public async Task TaskWithArchivedBlocker_ShouldBeAvailable()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+            var blockerTask = new TaskItem
+            {
+                Id = "archived-blocker",
+                Title = "Archived blocker",
+                Status = DomainTaskStatus.Archived,
+                BlocksTasks = ["blocked-by-archive"]
+            };
+            var blockedTask = new TaskItem
+            {
+                Id = "blocked-by-archive",
+                Title = "Blocked by archived task",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = false,
+                BlockedByTasks = [blockerTask.Id]
+            };
+            await storage.Save(blockerTask);
+
+            await manager.CalculateAndUpdateAvailability(blockedTask);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(blockedTask.IsCanBeCompleted).IsTrue();
+                await Assert.That(blockedTask.UnlockedDateTime).IsNotNull();
+            }
         }
 
         [Test]
@@ -652,6 +684,50 @@ namespace Unlimotion.Test
             await Assert.That(updatedChild.IsCanBeCompleted).IsFalse();
             await Assert.That(updatedChild.UnlockedDateTime).IsNull();
             await Assert.That(updatedChild.BlockedByTasks).IsEmpty();
+        }
+
+        [Test]
+        public async Task ChildTask_ShouldRemainAvailable_WhenParentBlockerIsArchived()
+        {
+            var storage = new InMemoryStorage();
+            var manager = new TaskTreeManager(storage);
+            var blocker = new TaskItem
+            {
+                Id = "archived-ancestor-blocker",
+                Status = DomainTaskStatus.Archived,
+                BlocksTasks = ["parent-with-archived-blocker"]
+            };
+            var parent = new TaskItem
+            {
+                Id = "parent-with-archived-blocker",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = false,
+                ContainsTasks = ["child-of-archived-blocker"],
+                BlockedByTasks = [blocker.Id]
+            };
+            var child = new TaskItem
+            {
+                Id = "child-of-archived-blocker",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = false,
+                ParentTasks = [parent.Id]
+            };
+            await storage.Save(blocker);
+            await storage.Save(parent);
+            await storage.Save(child);
+
+            await manager.CalculateAndUpdateAvailability(parent);
+
+            var updatedParent = await storage.Load(parent.Id);
+            var updatedChild = await storage.Load(child.Id);
+            using (Assert.Multiple())
+            {
+                await Assert.That(updatedParent).IsNotNull();
+                await Assert.That(updatedChild).IsNotNull();
+                await Assert.That(updatedParent!.IsCanBeCompleted).IsFalse();
+                await Assert.That(updatedChild!.IsCanBeCompleted).IsTrue();
+                await Assert.That(updatedChild.UnlockedDateTime).IsNotNull();
+            }
         }
 
         [Test]

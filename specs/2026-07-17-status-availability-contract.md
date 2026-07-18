@@ -13,12 +13,13 @@
   - `TaskStatusDomainTests`: 4/4 PASS, включая устаревшее ожидание `Archived(previous InProgress) -> InProgress`;
   - `TaskAvailabilityParityTests`: 2/2 PASS, но тест сравнивает service с его wrapper, а не UI consumer;
   - `MainControlTaskStatusIconUiTests`: 20/20 PASS, но текущие assertions используют ViewModel как собственный oracle;
-  - before/after visual evidence создаётся в EXEC из одного автоматизированного FlaUI-сценария.
-- Целевой релиз / ветка: `fix/status-availability-contract`; audit baseline `origin/main` = `5aebebc`, но EXEC разрешён только после merge PR #274 и rebase этой ветки на новый `origin/main`
+  - dependency/freshness gate повторён 2026-07-18 на merged PR #274 / `origin/main` commit `8e34408a29894b9eaab2981b79ded86c83a634a5`;
+  - фактические before/after MP4 и четыре after-снимка получены автоматизированным FlaUI flow; Headless используется для semantic/accessibility assertions без недостоверной fake-backend raster capture.
+- Целевой релиз / ветка: `fix/status-availability-contract`; EXEC base = merged PR #274 / `origin/main` `8e34408a29894b9eaab2981b79ded86c83a634a5`; локальная реализация и validation завершены, delivery gate выполняется
 - Ограничения:
   - текущая фаза `EXEC`: пользователь 2026-07-17 сообщил точную фразу `Спеку подтверждаю` и попросил выполнить все этапы;
   - утверждены рекомендованные product choices: denied desktop targets видны disabled с inline reason/HelpText; previous `Completed`/missing/corrupt history восстанавливается в `NotReady`; Telegram входит в Stage 2;
-  - master roadmap и stage-1 child spec находятся в PR #274; до green checks, ready-for-review, merge PR #274, `git fetch` и rebase на содержащий его `origin/main` production edits запрещены, разрешены только spec/journal, dependency и branch-preparation действия;
+  - master roadmap и stage-1 child spec доставлены merged PR #274; ancestry `8e34408 -> HEAD` и повторный baseline подтверждены до production edits;
   - локальный `AGENTS.override.md` требует UI tests для UI-facing поведения;
   - не менять enum статусов, JSON schema, DTO/molds, status-history schema или существующие данные;
   - не добавлять server wire method в Stage 2: server mode использует существующие GetAll/Load/Save endpoints; отсутствие cross-client compare-and-swap фиксируется честно и не называется atomic;
@@ -26,8 +27,8 @@
   - не завершать EXEC без targeted, full domain, full headless и релевантного FlaUI gate;
   - UI video evidence `до`/`после` обязательно попытаться получить через автоматизированный FlaUI run; fallback допустим только с объективной причиной и next-best screenshots/logs.
 - Связанные ссылки:
-  - master roadmap: PR #274, `specs/2026-07-17-readme-reliability-roadmap.md`;
-  - stage 1: PR #274, `specs/2026-07-17-readme-install-safety.md`;
+  - master roadmap: merged PR #274, `specs/2026-07-17-readme-reliability-roadmap.md`;
+  - stage 1: merged PR #274, `specs/2026-07-17-readme-install-safety.md`;
   - прежняя status spec: `specs/2026-06-09-task-status-model.md`;
   - `src/Unlimotion.Domain/TaskStatus.cs`;
   - `src/Unlimotion.Domain/TaskItem.cs`;
@@ -52,7 +53,7 @@ Outcome contract:
   - `InProgress -> Archived -> Unarchive` возвращает `Prepared`, а все legacy/missing-history cases следуют явной normalization matrix;
   - parent и подтверждённый child cascade используют одну normalization function;
   - lifecycle status, graph availability, start guard и completion guard больше не смешиваются в UI assertions и README;
-  - future planned begin запрещает start, но не меняет graph availability и opacity;
+  - future planned begin запрещает start, но не меняет graph availability и status-control opacity;
   - `Completed` и `Archived` не являются активными blockers;
   - Telegram показывает только реально разрешённые target statuses и применяет тот же storage-backed guard без локальной мутации;
   - EN/RU README и errata прежней status spec описывают один контракт;
@@ -73,7 +74,9 @@ Outcome contract:
   - не завершать при расхождении Headless и FlaUI behavior;
   - не доставлять README diff поверх незакрытого конфликта с PR #274.
 
-## 2. Текущее состояние (AS-IS)
+## 2. Текущее состояние (AS-IS, исторический pre-EXEC baseline)
+
+Ниже зафиксирован исходный audit baseline до Stage-2 production edits; актуальное состояние и evidence после реализации находятся в Post-EXEC review.
 - Пять статусов определены в `src/Unlimotion.Domain/TaskStatus.cs`: `NotReady`, `Prepared`, `InProgress`, `Completed`, `Archived`.
 - Канонический engine contract живёт в `TaskAvailabilityService.EvaluateStatusTransition`:
   - `NotReady` и `Prepared` всегда доступны как target;
@@ -104,10 +107,10 @@ Outcome contract:
 - Прежняя spec обещает `Any -> InProgress`, `Archived -> Any`, disabled reasons и общий Telegram guard, поэтому больше не является точным current contract.
 
 Freshness evidence:
-- `git fetch origin --prune` выполнен 2026-07-17.
-- branch `fix/status-availability-contract` создана непосредственно от `origin/main` commit `5aebebc`.
+- `git fetch origin --prune` повторён после merge PR #274.
+- branch `fix/status-availability-contract` rebased/пересоздана поверх `origin/main` commit `8e34408a29894b9eaab2981b79ded86c83a634a5`; текущий spec commit `9f9a0f22d48eb71930e26a7aff797f4603fa862a`.
 - latest release остаётся `1.27.0`; stage 2 не зависит от asset inventory.
-- PR #274 содержит master/stage-1 specs и README install correction; текущая branch не включает его commit. Stage-2 EXEC запрещён до merge PR #274, после чего обязательны `git fetch origin --prune`, rebase на новый `origin/main`, проверка ancestry merge commit и повтор всего characterization baseline.
+- PR #274 merged как `8e34408a29894b9eaab2981b79ded86c83a634a5`; `git merge-base --is-ancestor 8e34408 HEAD` = PASS, поэтому prerequisite Stage-2 EXEC закрыт до production edits.
 
 ## 3. Проблема
 У приложения есть канонический engine guard, но пользовательские entry points вычисляют или применяют переходы самостоятельно. Из-за этого UI и Telegram предлагают запрещённые действия, unarchive обходит собственную матрицу, тесты используют дублирующую реализацию как oracle, а README документирует несуществующее поведение.
@@ -142,9 +145,9 @@ Freshness evidence:
 - `TaskGraphCommandService` -> execution boundary: заново читает graph/status/date/criteria, применяет policy, сохраняет clone и возвращает structured `TaskOperationResult`; для `ITaskGraphWriteLock` это один atomic critical section, для server storage — best-effort verified command без cross-client CAS.
 - `ServerStorage` -> реализует `ITaskGraphDiagnosticStorage.ReadGraphAsync` через уже существующий GetAll REST contract с propagation read failure; wire DTO/hub methods не меняются. Он намеренно не объявляется `ITaskGraphWriteLock`.
 - `TaskTreeManager.UpdateTask` -> сохраняет прежнюю generic mixed-update semantics; no-write guarantee к этому API целиком не применяется.
-- `ITaskStorage` / `UnifiedTaskStorage` -> новый storage-backed `TrySetStatusAsync(taskId, target, author)` поверх `TaskGraphCommandService`; same-client calls сериализуются local gate, cache hydrate выполняется из authoritative command snapshot, не из предварительно мутированной ViewModel.
+- `ITaskStorage` / `UnifiedTaskStorage` -> два storage-backed intent: `TrySetStatusAsync(taskId, target, author)` для явного target и `TryUnarchiveAsync(taskId, author)` для authoritative history normalization поверх `TaskGraphCommandService`; same-client calls сериализуются одним local gate, cache hydrate выполняется из authoritative command snapshot, не из предварительно мутированной ViewModel. Оба новых interface members имеют fail-closed default body, чтобы ранее скомпилированные implementers продолжали загружаться без silent write.
 - `TaskItem` -> получает normalized restore helper на основе pure policy, без raw restore `InProgress`/terminal legacy states.
-- `TaskItemViewModel` -> использует cached facts только для preview options и предоставляет async `TryTransitionToStatusAsync`; picker/archive/cascade не присваивают `Status` до успешного storage result.
+- `TaskItemViewModel` -> использует cached facts только для preview options и выбора archive/unarchive intent; picker/archive/cascade не вычисляют restore target и не присваивают `Status` до authoritative storage result.
 - `MainWindowViewModel` -> `Ctrl+D` вызывает тот же async method, а не присваивает `Completed` перед generic `Update`.
 - `TaskStatusPicker` -> current status не показывает; остальные четыре options видны, denied disabled с видимой краткой причиной, supplementary tooltip, `AutomationProperties.HelpText` и stable AutomationId.
 - `MainControl.axaml` / ViewModel resources -> команда называется `Archive` или `Unarchive` по текущему status; automation identity остаётся стабильной.
@@ -201,13 +204,14 @@ Policy invariants:
 
 Preview и mutation boundary:
 - preview options разрешено вычислять из текущего cache snapshot; они не являются разрешением на запись;
-- `ITaskStorage.TrySetStatusAsync(string taskId, TaskStatus requestedStatus, string? author = null)` возвращает `TaskOperationResult` и является единственным новым status-write API для desktop и Telegram;
-- `UnifiedTaskStorage` вызывает `new TaskGraphCommandService(TaskTreeManager.Storage).TrySetStatusAsync(...)`; для FileStorage command выполняет read/re-evaluate/mutation/verification внутри `ITaskGraphWriteLock`, для `ServerStorage` — через новый diagnostic read без cross-client lock;
+- `ITaskStorage.TrySetStatusAsync(string taskId, TaskStatus requestedStatus, string? author = null)` обслуживает явный target из desktop picker/hotkey и Telegram, а `TryUnarchiveAsync(string taskId, string? author = null)` является отдельным storage-bound intent без client-computed target; оба возвращают `TaskOperationResult`;
+- `UnifiedTaskStorage` направляет оба intent в `TaskGraphCommandService` под одним local gate. Для FileStorage read/resolve/re-evaluate/mutation/verification выполняются внутри `ITaskGraphWriteLock`; для `ServerStorage` — через diagnostic read без cross-client lock;
 - `TaskOperationResult` additively содержит cloned `TaskItem? AuthoritativeTask`: текущий persisted snapshot для no-op/deny и post-write snapshot для verified success; `ChangedTasks` остаётся списком реально записанных tasks;
 - при наличии `AuthoritativeTask` `UnifiedTaskStorage` hydrate соответствующий cached ViewModel даже при no-op/deny; это cache reconciliation без storage mutation. При success также применяются `ChangedTasks` и refresh relations;
 - same-status success возвращает пустой `ChangedTasks`, но authoritative snapshot; history/version/file не меняются, а stale cache может и должен обновиться до persisted truth;
 - business-rule deny возвращает stable policy reason, `Before` и authoritative snapshot; history/version/file не меняются, cache может reconcile stale display;
-- `StorageFailed` не маскируется success; `OutcomeUnknown` не обещает no-write и может не иметь authoritative snapshot. Тогда adapter делает explicit `Storage.Load(taskId)`; при success hydrate cache, при повторном failure оставляет cache как есть и показывает «итог неизвестен», а не success/rollback;
+- unarchive вычисляет restore target только из authoritative history после входа в command/write boundary; если authoritative source уже не `Archived`, `StatusPreconditionFailed` возвращает snapshot, не пишет storage и останавливает child cascade;
+- `StorageFailed` не маскируется success и использует честную retry copy без утверждения о refresh; `OutcomeUnknown` не обещает no-write и может не иметь authoritative snapshot. Тогда adapter делает explicit `Storage.Load(taskId)`; при success hydrate cache, при повторном failure оставляет cache как есть и показывает «итог неизвестен», а не success/rollback;
 - stale graph, planned date, criteria или current status между открытием flyout и click учитываются повторной command-level проверкой;
 - duplicate Telegram callback становится no-op либо deny по фактическому storage state и не создаёт повторную history entry.
 
@@ -225,7 +229,7 @@ Generic mixed-update compatibility:
 - `denied requested status + title change` сохраняет прежнее поведение manager: non-status payload может сохраниться, а status восстанавливается в прежний persisted source — даже если этот source сам undefined; этот partial legacy result явно характеризуется тестом;
 - новые status entry points не используют generic mixed update, поэтому structured success/deny не выводится из этого partial behavior;
 - правило `undefined target always denied` относится к dedicated status API/raw policy; generic `UpdateTask` остаётся compatibility path с прежним partial behavior;
-- wire DTO/JSON schema не меняются, но публичный .NET interface `ITaskStorage` расширяется dedicated status method; все test doubles обновляются.
+- wire DTO/JSON schema не меняются, но публичный .NET interface `ITaskStorage` расширяется двумя default fail-closed status methods; concrete production adapters и управляющие test doubles переопределяют их. Legacy CLR signatures фабрик result/reason и numeric values существующего `TaskOperationDeniedKind` сохранены; новые snapshot/reason данные имеют distinct factories без positional-null ambiguity.
 
 Diagnostic envelope:
 - pure Domain reason остаётся coarse (`GraphUnavailableForStart` / `GraphUnavailableForCompletion`) и не зависит от `TaskAvailabilityReasonKind`;
@@ -295,9 +299,9 @@ README contract:
   - graph availability = children/blockers, cached as `IsCanBeCompleted`;
   - start guard = graph + future date + non-terminal source;
   - completion guard = graph + criteria + non-terminal source;
-- future date запрещает start, но не dimming;
-- dimming `0.4` зависит только от graph unavailable;
-- `Unlocked` означает graph-unblocked и не обещает, что task можно начать прямо сейчас;
+- future date запрещает start, но не status-control dimming;
+- status-control dimming `0.4` зависит только от graph unavailable;
+- `Unlocked` означает graph-available и non-archived; projection не обещает, что task можно начать прямо сейчас;
 
 Visual planning artifact — утверждённый disabled/`NotReady` storyboard:
 
@@ -317,17 +321,20 @@ UI test video evidence:
   - тот же seed/scenario показывает disabled terminal targets с reason и успешный normalize to `Prepared`.
 - Supporting screenshots:
   - `artifacts/ui-tests/status-contract/before-terminal-picker.png`;
+  - `artifacts/ui-tests/status-contract/before-after-unarchive.png`;
   - `artifacts/ui-tests/status-contract/after-terminal-picker.png`;
-  - `artifacts/ui-tests/status-contract/after-future-vs-blocked.png`.
+  - `artifacts/ui-tests/status-contract/after-after-unarchive.png`;
+  - `artifacts/ui-tests/status-contract/after-future-vs-blocked.png`;
+  - `artifacts/ui-tests/status-contract/after-blocked.png`.
 - Capture выполняется через `record-app-screen`/реальный синхронный `record_app_window.ps1` вокруг конкретного FlaUI test run. Repo wrapper принимает `-RecorderScriptPath`; если он не задан, разрешает только `$env:CODEX_HOME\skills\record-app-screen\scripts\record_app_window.ps1`, а при отсутствии пути останавливается с точной ошибкой.
 - Test владеет `window-ready.json` и `scenario-complete.json`; wrapper владеет `scenario-go.signal` и `recording-finished.signal`. Test запускает видимое окно, устанавливает outer geometry `1280x800`, пишет exact title/process/rect в ready JSON и ждёт go.
 - Test задаёт уникальный GUID-suffixed window title; ready JSON содержит PID/title/outer rect, а wrapper до запуска recorder проверяет, что этот PID владеет ровно одним visible top-level window с тем же title/rect, и передаёт recorder полный уникальный title. Совпадение только по общему process name не принимается.
 - Wrapper запускает recorder отдельным `pwsh` process с `DurationSeconds` строго больше scenario timeout плюс 10 секунд, ждёт живой descendant `ffmpeg` и созданный nonempty output, затем пишет go; recorder снимает `30 fps` без audio/cursor scope change. `scenario-complete.json` обязан появиться, пока recorder и `ffmpeg` ещё живы; ранний exit делает capture failed. После полного flow wrapper дожидается штатного recorder exit, пишет результат/finished, и только после этого test выполняет assertions/закрывает окно.
 - Один и тот же `StatusContract_TerminalPickerAndUnarchive` собирает observations и screenshots до assertions; все assertions выполняются после полного interaction flow, поэтому ожидаемый pre-fix failure не закрывает окно до записи unarchive шага.
-- Before/after используют один seed, light theme, geometry и interaction order; отдельный dark-theme Headless render проверяет контраст без второго обязательного видео.
+- Before/after используют один seed, light theme, geometry и interaction order; отдельные RU/dark FlaUI scenarios дают real-pixel evidence future и blocked states, а Headless проверяет semantic theme/accessibility contract без raster claim.
 - MP4 проверяется `ffprobe` на readable video stream, geometry, frame rate и duration `> 0`; SHA-256, duration, resolution, command и локальный repo-relative path записываются в Post-EXEC/PR Validation.
 - Видео и screenshots остаются ignored local-only artifacts по master policy и не коммитятся; reviewer evidence — проверенные локальные paths + hashes/metadata в PR. Если remote review потребует downloadable artifact, это stop/ASK-HUMAN для отдельного upload mechanism, а не silent commit крупного бинарника.
-- Fallback разрешён только если recorder/window capture объективно не может привязаться к test-host window: сохранить точную ошибку, FlaUI/Headless screenshots, test log и причину в Post-EXEC review. Отсутствие времени не является причиной.
+- Fallback разрешён только если recorder/window capture объективно не может привязаться к test-host window: сохранить точную ошибку, Headless semantic assertions, FlaUI screenshots/logs и причину в Post-EXEC review. Отсутствие времени не является причиной.
 
 Границы сохранения поведения:
 - status enum/order/icons/tabs/filter semantics остаются прежними;
@@ -357,12 +364,12 @@ UI test video evidence:
 | Scenario | User action / trigger | Expected visible result / output | Evidence required | Covered by AC |
 | --- | --- | --- | --- | --- |
 | Terminal picker | Открыть picker у `Completed` | `InProgress`/`Archived` видны disabled с объяснением; `NotReady`/`Prepared` доступны | Domain + Headless + FlaUI + video | S2-AC-01..04 |
-| Archived picker | Открыть picker у `Archived` | `InProgress`/`Completed` disabled; активные targets доступны | Policy + Headless screenshot | S2-AC-02..04 |
+| Archived picker | Открыть picker у `Archived` | `InProgress`/`Completed` disabled; активные targets доступны | Policy + Headless semantic assertions + FlaUI screenshot | S2-AC-02..04 |
 | Unarchive after work | `InProgress -> Archived`, затем `Unarchive` | Status становится `Prepared`, history содержит одну новую запись | Domain/ViewModel/FlaUI/video | S2-AC-05, S2-AC-06 |
 | Legacy unarchive | Разархивировать task с previous `Completed` или без history | Status = `NotReady`, приложение не падает | Data-driven domain test | S2-AC-05 |
 | Child cascade | Подтвердить/отклонить unarchive children | Подтверждённые children нормализованы каждый отдельно; отказ оставляет их archived | ViewModel/UI tests | S2-AC-06 |
-| Future start | Открыть future `Prepared` task | `InProgress` disabled; opacity остаётся `1` | Availability + Headless + screenshot | S2-AC-07 |
-| Blocked task | Открыть graph-blocked task | `InProgress`/`Completed` disabled; opacity `0.4` | Direct/inherited blocker tests + UI | S2-AC-08 |
+| Future start | Открыть future `Prepared` task | `InProgress` disabled; status-control opacity остаётся `1` | Availability + Headless semantic assertions + FlaUI screenshot | S2-AC-07 |
+| Blocked task | Открыть graph-blocked task | `InProgress`/`Completed` disabled; status-control opacity `0.4` | Direct/inherited blocker tests + UI | S2-AC-08 |
 | Criteria incomplete | Открыть available task с unchecked criteria | `Completed` disabled, `InProgress` не блокируется criteria | Policy/UI tests | S2-AC-09 |
 | Lost availability | Добавить active blocker к `InProgress` | Автоматический `Prepared` ровно один раз | Manager tests | S2-AC-10 |
 | Telegram status | Открыть task и выбрать status / отправить stale callback | Только allowed buttons; denied callback не меняет task и возвращает reason | Handler test + bot build/log | S2-AC-11 |
@@ -422,9 +429,9 @@ Interaction notes:
 | Graph availability | `TaskAvailabilityService.Analyze`, cached `IsCanBeCompleted` | Без semantics change | Полная | direct/inherited blocker tests |
 | Start guard | service + duplicate VM | Shared facts/policy | Behavior engine сохраняется, UI исправляется | future/terminal/UI tests |
 | Completion guard | service + duplicate VM | Shared facts/policy | Behavior engine сохраняется, UI исправляется | criteria/terminal tests |
-| Unarchive | raw last non-archived history | normalization matrix | No bulk rewrite; action-time normalization | domain + parent/child UI tests |
+| Unarchive | raw last non-archived history в cached ViewModel | authoritative normalization внутри storage command boundary | No bulk rewrite; action-time normalization | domain + stale-cache + locked concurrency + parent/child UI tests |
 | Desktop picker | hidden denied options | четыре non-current rows; denied disabled с inline reason/HelpText | AutomationIds сохраняются | Headless + FlaUI |
-| Status mutation | generic optimistic ViewModel update | `ITaskStorage.TrySetStatusAsync` + structured result/cache refresh | Public .NET API additive; wire schema unchanged | stale/save/no-mutation tests |
+| Status mutation | generic optimistic ViewModel update | `ITaskStorage.TrySetStatusAsync` + `TryUnarchiveAsync` + structured result/cache refresh | Default-interface/CLR-compatible additive API; wire schema unchanged | stale/save/precondition/no-mutation tests |
 | FileStorage command | Existing diagnostic read + directory lock available | Atomic read/evaluate/write/verify | No data migration | locked integration tests |
 | ServerStorage command | Existing GetAll/Load/Save, no diagnostic interface/CAS | Diagnostic read via existing endpoint + verified best-effort command | No wire change; cross-client atomicity not claimed | injected fetch + non-locking/failure tests |
 | Cascade confirmation | Sync callback-only `Ask` | exactly-once `ConfirmAsync` | Public in-process API additive | yes/no/dismiss/exception/null tests |
@@ -442,8 +449,8 @@ Interaction notes:
 7. Complete требует graph available, non-terminal source и все criteria satisfied; future begin не блокирует complete сам по себе.
 8. Для locked storage либо stable server snapshot dedicated business-rule deny/no-op не меняет status, history, timestamps, version и persisted file; cross-client server race классифицируется `OutcomeUnknown`, а generic mixed `UpdateTask` сохраняет прежнюю partial semantics.
 9. Все status entry points не делают optimistic assignment и проходят authoritative storage-backed re-evaluation при stale/concurrent action.
-10. Future begin не меняет `IsCanBeCompleted`, `Unlocked` membership и opacity.
-11. Graph unavailable даёт opacity `0.4`; future-only task остаётся `1`.
+10. Future begin не меняет `IsCanBeCompleted`, `Unlocked` membership и status-control opacity.
+11. Graph unavailable даёт status-control opacity `0.4`; future-only task остаётся `1`.
 12. `InProgress`, потерявшая start availability, автоматически становится `Prepared` ровно один раз с `Author=System`.
 13. Archived direct и inherited blocker не блокирует dependants.
 14. Unarchive previous `InProgress` -> `Prepared`; previous `Completed`/missing/corrupt -> `NotReady`.
@@ -457,11 +464,11 @@ Interaction notes:
 ## 8. Точки интеграции и триггеры
 - `TaskAvailabilityService.Analyze` -> формирует shared facts.
 - `TaskAvailabilityService.EvaluateStatusTransition` -> делегирует pure policy.
-- `TaskGraphCommandService.TrySetStatusAsync` -> под write lock re-evaluate и применяет только allowed decision.
-- `UnifiedTaskStorage.TrySetStatusAsync` -> command adapter + cache refresh.
+- `TaskGraphCommandService.TrySetStatusAsync` -> под write lock re-evaluate и применяет explicit target; `TryUnarchiveAsync` внутри той же boundary разрешает target из authoritative history и проверяет archived precondition.
+- `UnifiedTaskStorage.TrySetStatusAsync` / `TryUnarchiveAsync` -> общий command gate + cache refresh.
 - `TaskTreeManager.UpdateTask` -> legacy generic mixed update, не используется новыми status entry points.
 - `TaskItemViewModel.RefreshStatusOptions` -> preview обновляется при status, graph availability, planned begin и completion criteria changes.
-- `TaskItemViewModel.StatusOption`, `MainWindowViewModel.Ctrl+D`, `ArchiveCommand`, async child cascade -> один storage-backed async transition method.
+- `TaskItemViewModel.StatusOption` и `MainWindowViewModel.Ctrl+D` -> explicit-target command; `ArchiveCommand`/async child cascade -> archive target либо dedicated unarchive intent без cached restore target.
 - `TaskStatusPicker.BuildStatusFlyout` -> строит четыре non-current items, включая disabled denied targets с reason.
 - `MainControl` context menu -> reactive Archive/Unarchive label.
 - Telegram `ShowTask` -> enabled targets only; callback -> validated method.
@@ -471,10 +478,10 @@ Interaction notes:
 - Новых persisted fields нет.
 - `TaskStatus`, `StatusHistory`, `CompletionCriteria`, dates и relation lists не меняются.
 - Добавляются только runtime value types/policy/reason codes.
-- `ITaskStorage` получает публичный .NET method `TrySetStatusAsync`; wire DTO/JSON schema не меняются.
+- `ITaskStorage` получает публичные default fail-closed `.NET` methods `TrySetStatusAsync` и `TryUnarchiveAsync`; wire DTO/JSON schema не меняются.
 - Legacy history не переписывается массово.
-- Accepted unarchive записывает существующую обычную status history entry; denied/no-op не пишет запись.
-- Wire DTO/JSON compatibility: без изменений; public in-process .NET `ITaskStorage` API расширяется additively и требует обновить implementers/test doubles.
+- Accepted unarchive записывает существующую обычную status history entry; stale-source `StatusPreconditionFailed`, другой deny/no-op не пишет запись.
+- Wire DTO/JSON compatibility: без изменений; public in-process `.NET` API расширяется additively с default implementations, старые CLR factory signatures и enum numerics остаются доступны; production adapters/управляющие doubles переопределяют новые intents.
 
 ## 10. Миграция / Rollout / Rollback
 - Миграция данных: Не применимо; schema не меняется.
@@ -508,19 +515,19 @@ Interaction notes:
 ### Acceptance Criteria
 - **S2-AC-01:** Pure policy data-driven воспроизводит текущие 25 raw-service results и является единственным reusable off-diagonal source; dedicated command отдельно short-circuits все пять same-status cases как no-op; raw-service и effective-command semantics не смешиваются.
 - **S2-AC-02:** `Completed/Archived -> InProgress`, `Completed -> Archived`, `Archived -> Completed` denied через service, command manager, desktop и stale Telegram callback.
-- **S2-AC-03:** Все входящие в Stage 2 user status writes идут через storage-backed `ITaskStorage.TrySetStatusAsync`; preview не мутирует ViewModel. Dedicated stable deny/no-op не меняет status/history/timestamps/version/file и возвращает `AuthoritativeTask` для stale-cache hydration; stale graph/date/criteria/status, save failure, outcome-unknown, invalid-equals-invalid и duplicate Telegram callback имеют structured result tests. Generic `UpdateTask` отдельно сохраняет текущие `same status + title` и denied-status mixed-update semantics.
-- **S2-AC-04:** Desktop picker скрывает current status, показывает остальные четыре, allowed enabled, denied presentation соответствует решению пользователя; для disabled-варианта reason постоянно видим, RU/EN локализован, имеет `ShowOnDisabled`, HelpText и stable AutomationIds, проверенные Headless/FlaUI accessibility assertions.
+- **S2-AC-03:** Все входящие в Stage 2 user status writes идут через storage-backed `ITaskStorage.TrySetStatusAsync` либо intent-specific `TryUnarchiveAsync`; preview не мутирует ViewModel и не вычисляет authoritative restore target. Stable deny/no-op/precondition failure не меняет status/history/timestamps/version/file и возвращает `AuthoritativeTask`, когда persisted task известна; stale graph/date/criteria/status/history, save failure, outcome-unknown, invalid-equals-invalid и duplicate Telegram callback имеют structured result tests. Generic `UpdateTask` отдельно сохраняет текущие `same status + title` и denied-status mixed-update semantics.
+- **S2-AC-04:** Desktop picker скрывает current status, показывает остальные четыре, allowed enabled, denied presentation соответствует решению пользователя; для disabled-варианта reason постоянно видим, RU/EN локализован, имеет `ShowOnDisabled`, HelpText и stable AutomationIds. Runtime EN↔RU switch обновляет уже созданные task/options, cached reason и открытый flyout без status/history mutation. Headless проверяет semantic/accessibility contract, а FlaUI — реальный Windows render, pointer tooltip и end-user interaction.
 - **S2-AC-05:** Unarchive normalization соответствует утверждённой таблице для `NotReady`, `Prepared`, `InProgress`, `Completed`, missing/corrupt history; undefined target/source/history разделены и покрыты `(TaskStatus)int.MaxValue`, null, equal-timestamp, far-future и newer-invalid/older-valid cases. End-to-end FileStorage command с null/future legacy history не падает, сохраняет raw entries и добавляет ровно одну новую entry.
-- **S2-AC-06:** Parent/child unarchive cascade использует ту же normalization; `0 children`, null manager, no/click-away/exception не меняют children и не зависают; confirmed tasks обрабатываются awaited sequentially, accepted task получает одну history entry, mixed save failure даёт точный partial summary без ложного rollback.
-- **S2-AC-07:** Future planned begin запрещает только `InProgress`; graph availability/Unlocked/opacity не меняются.
-- **S2-AC-08:** Active direct/inherited blockers запрещают start/complete и дают opacity `0.4`; archived blockers не блокируют.
-- **S2-AC-09:** Completion criteria блокируют только `Completed`, но не `InProgress`, graph availability или opacity.
+- **S2-AC-06:** Parent/child unarchive cascade вызывает dedicated storage-bound normalization отдельно для parent и каждого child; stale cached history не влияет на target, а authoritative non-archived parent даёт `StatusPreconditionFailed`, hydrate cache и останавливает confirmation/cascade. `0 children`, null manager, no/click-away/exception не меняют children и не зависают; confirmed tasks обрабатываются awaited sequentially, accepted task получает одну history entry, mixed save failure даёт точный partial summary без ложного rollback.
+- **S2-AC-07:** Future planned begin запрещает только `InProgress`; graph availability/Unlocked/status-control opacity не меняются.
+- **S2-AC-08:** Active direct/inherited blockers запрещают start/complete и дают status-control opacity `0.4`; archived blockers не блокируют.
+- **S2-AC-09:** Completion criteria блокируют только `Completed`, но не `InProgress`, graph availability или status-control opacity.
 - **S2-AC-10:** Потерявшая availability `InProgress` один раз становится `Prepared` с system history entry и не зацикливается.
 - **S2-AC-11:** Telegram keyboard показывает только enabled non-current targets; denied/stale/duplicate handler callback возвращает reason без мутации, а allowed callback awaits storage-backed command и показывает persisted refreshed status.
 - **S2-AC-12:** README EN/RU содержат одинаковую canonical matrix и отдельно объясняют lifecycle/graph/start/complete.
 - **S2-AC-13:** README исправляет future dimming и `Unlocked`; Markdown marker/export copy остаётся в Stage 7 и не меняется здесь.
 - **S2-AC-14:** Old status spec содержит заметную errata/supersession note перед разделами transition rules, availability и Telegram status behavior со ссылкой на эту spec, без переписывания исторического журнала.
-- **S2-AC-15:** Domain enum, persisted schema, server wire DTO/hub methods и existing history entries не изменены; additive in-process `.NET` API (`ITaskStorage.TrySetStatusAsync`, `ConfirmAsync`, structured result snapshot/reason, `ServerStorage.ReadGraphAsync`) и обновлённые doubles перечислены в diff/PR.
+- **S2-AC-15:** Domain status enum, persisted schema, server wire DTO/hub methods и existing history entries не изменены; additive in-process `.NET` API (`ITaskStorage.TrySetStatusAsync`/`TryUnarchiveAsync` и `ConfirmAsync` с default bodies, structured result snapshot/reason с legacy CLR overloads, `ServerStorage.ReadGraphAsync`) и обновлённые adapters/doubles перечислены в diff/PR. Numeric values существующих denial kinds сохранены; новые reason enum values зафиксированы snapshot tests.
 - **S2-AC-16:** Все перечисленные targeted filters, full `Unlimotion.Test`, full Headless и релевантный FlaUI suite PASS serially; solution и Telegram build PASS; FileStorage locked и ServerStorage non-locking/failure tests PASS; required GitHub PR checks green.
 - **S2-AC-17:** Один и тот же automated flow имеет verified before/after MP4 либо объективный recorder failure с screenshots/logs; PR содержит paths, SHA-256, duration/resolution/FPS и local-only retention disclosure.
 - **S2-AC-18:** PR #274 green/ready/merged до EXEC; после merge выполнены fetch/rebase, ancestry check и повтор baseline, а перед delivery — clean scope, `git diff --check`, Post-EXEC review и PR/release-note handoff.
@@ -532,29 +539,36 @@ Characterization baseline до EXEC:
 - `MainControlTaskStatusIconUiTests`: 20 PASS — недостаточный oracle, должен проверять независимые expected options/reasons.
 
 Targeted tests to add/update:
+- `StatusAvailabilityContractCharacterizationTests` — observation-first terminal picker/unarchive drift и post-fix contract.
 - `TaskStatusTransitionPolicyTests` — raw 5x5 service parity, reason priority и invalid enum; не подменяет command-level no-op.
 - `TaskAvailabilityCalculationTests` — contained/direct/inherited diagnostics, future и criteria facts.
 - `TaskAvailabilityParityTests` — service facts/policy parity.
 - `TaskTreeManagerSafetyTests` — legacy mixed-update compatibility и automatic rollback idempotency.
-- `TaskGraphCommandServiceTests` — пять valid diagonal no-op cases, invalid-equals-invalid deny, authoritative snapshot/cache inputs, locked/non-locking diagnostic storage, concurrent/stale/save-failure/undefined-source behavior.
+- `TaskGraphCommandServiceTests` — пять valid diagonal no-op cases, invalid-equals-invalid deny, legacy API/numeric snapshots, authoritative unarchive history/precondition, locked concurrent unarchive, non-locking diagnostic storage, concurrent/stale/save-failure/undefined-source behavior.
 - `TaskStatusDomainTests` — valid-entry predicate, deterministic order, null/future idempotency и unarchive normalization table.
-- `ServerStorageStatusCommandTests` (new) — diagnostic GetAll mapping, no unconditional `StorageFailed`, propagated read failure и non-locking verified/unknown result; internal injected fetch delegate/client, без real network.
+- `ServerStorageStatusCommandTests` (new) — diagnostic GetAll mapping, no unconditional `StorageFailed`, propagated read failure, explicit-target и unarchive authoritative/precondition/post-verify results; internal injected fetch delegate/client, без real network.
 - `FileStorageTaskStatusTests` — end-to-end null/future history clone/save и ровно одна accepted entry.
 - `TaskStatusTransitionTests` — ViewModel uses preview policy + storage-backed command, no optimistic assignment/duplicate switch.
+- `TaskItemViewModelStatusCommandTests` — public setter compatibility, dedicated parent/child unarchive, stale cached-history inversion, precondition stop, honest no-snapshot failure copy, preview/authoritative diagnostics and reason priority.
+- `UnifiedTaskStorageStatusCommandTests` — authoritative hydration, stale cached vs persisted unarchive history, deny/no-op/save failure и disposed behavior на desktop storage boundary.
 - `MainControlTaskStatusIconUiTests` — four options, disabled state, tooltip, AutomationId.
-- `MainControlAvailabilityUiTests` — future opacity `1` vs blocker opacity `0.4`.
+- `MainControlAvailabilityUiTests` — future status-control opacity `1` vs blocker status-control opacity `0.4`.
 - `MainWindowViewModelTests` — hotkey, 0-child/null-manager/yes/no/click-away/exception/mixed-history/mixed-save parent/child cascade и single history entry.
+- `LocalizationDisplayDefinitionTests` — уже созданная archived task, её ViewModel/status options и cached denial copy обновляются EN↔RU без status/history/collection/option-instance mutation.
 - `NotificationManagerWrapperTests` (new) — реальный `NotificationManagerWrapper` с смонтированным `MainScreen`/`DialogHost`: yes/no/click-away/programmatic close/host exception завершают `ConfirmAsync` exactly once без hang; ViewModel mock не считается заменой этого gate.
 - `TelegramStatusContractTests` — full handler-level keyboard/callback test без real Telegram network.
-- `MainWindowScenariosBase` inherited Headless/FlaUI `StatusContract_TerminalPickerAndUnarchive`; Headless владеет dynamic menu rows/HelpText/theme assertions, FlaUI — end-user click/keyboard flow и visible result.
+- `StatusContractScenariosBase` inherited Headless/FlaUI `StatusContract_TerminalPickerAndUnarchive`; Headless владеет dynamic menu rows/HelpText и semantic theme assertions, FlaUI — end-user click/keyboard flow, visible result и pixel screenshots.
+- `MainWindowHeadlessTests.StatusContract_RussianDarkFutureAndBlocker` — уже открытый picker и archive command синхронно обновляют visible title/reason EN↔RU; сценарий остаётся semantic/accessibility oracle без raster claim.
+- Изолированные FlaUI `StatusContract_RussianDarkFuture` и `StatusContract_RussianDarkBlocked` проверяют фактические RU/dark rows, opacity и pointer tooltip без разделяемого process state.
 
 Visual acceptance:
 - Storyboard frames A-F соблюдены в desktop app.
 - Disabled item визуально отличим, текст/иконка читаемы в light/dark theme.
 - Reason постоянно видим в disabled row, tooltip открывается pointer при `ShowOnDisabled=true`, HelpText/automation name доступен screen reader; keyboard не обязан фокусировать disabled action.
 - EN и RU reason mapping проверены отдельно; RU UI screenshot содержит фактическую русскую причину.
+- Уже открытый picker и Archive/Unarchive copy обновляются при runtime EN↔RU switch.
 - Archive/Unarchive copy соответствует status.
-- Future и blocker различаются opacity.
+- Future и blocker различаются status-control opacity.
 - Automation test использует row-scoped selectors, не случайный первый picker.
 - Уже открытый flyout не исполняет stale preview после конкурентного blocker/date/status change: click/callback получает command-level deny и UI refresh.
 
@@ -564,10 +578,10 @@ Visual acceptance:
 | --- | --- | --- | --- | --- |
 | S2-AC-01 | `TaskStatusTransitionPolicyTests`, parity tests | Diff confirms no duplicate switch | test log | — |
 | S2-AC-02,03 | policy/manager/command/VM/Telegram adapter tests | Inspect denied UI/callback | test log + before/after video | — |
-| S2-AC-04 | Headless picker assertions + inherited FlaUI scenario | Light/dark screenshot, tooltip | screenshots/video | — |
+| S2-AC-04 | Headless semantic/accessibility assertions + inherited и RU/dark FlaUI scenarios | Light/dark screenshots, реальный pointer tooltip | screenshots/video | Headless fake drawing backend не используется как pixel oracle |
 | S2-AC-05,06 | domain normalization + ViewModel cascade + real `NotificationManagerWrapperTests` | Unarchive visible result and DialogHost dismissal | after video/log | — |
-| S2-AC-07 | availability/domain/UI tests | Future opacity screenshot | `after-future-vs-blocked.png` | — |
-| S2-AC-08 | direct/inherited/archived blocker tests + UI | Blocked opacity screenshot | test log/screenshot | — |
+| S2-AC-07 | availability/domain/UI + `StatusContract_RussianDarkFuture` | Future opacity screenshot | `after-future-vs-blocked.png` | — |
+| S2-AC-08 | direct/inherited/archived blocker tests + `StatusContract_RussianDarkBlocked` | Blocked opacity и pointer tooltip screenshot | `after-blocked.png` | — |
 | S2-AC-09 | policy/criteria/UI tests | Disabled Complete reason | test log | — |
 | S2-AC-10 | manager regression | Inspect single history entry | test log | — |
 | S2-AC-11 | Telegram adapter test + bot build | Sanitized callback log | test/build log | Telegram client network call не требуется |
@@ -604,6 +618,7 @@ Targeted pattern, повторить для перечисленных клас�
 
 ```powershell
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskStatusTransitionPolicyTests/*" --maximum-parallel-tests 1 --output Detailed
+dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/StatusAvailabilityContractCharacterizationTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskAvailabilityCalculationTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskAvailabilityParityTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskTreeManagerSafetyTests/*" --maximum-parallel-tests 1 --output Detailed
@@ -612,13 +627,17 @@ dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/ServerStorageStatusCommandTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/FileStorageTaskStatusTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskStatusTransitionTests/*" --maximum-parallel-tests 1 --output Detailed
+dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TaskItemViewModelStatusCommandTests/*" --maximum-parallel-tests 1 --output Detailed
+dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/UnifiedTaskStorageStatusCommandTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainControlTaskStatusIconUiTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainControlAvailabilityUiTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowViewModelTests/*" --maximum-parallel-tests 1 --output Detailed
+dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/LocalizationDisplayDefinitionTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/NotificationManagerWrapperTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --treenode-filter "/*/*/TelegramStatusContractTests/*" --maximum-parallel-tests 1 --output Detailed
 dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowHeadlessTests/StatusContract_TerminalPickerAndUnarchive" --maximum-parallel-tests 1 --output Detailed
-dotnet test tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowFlaUiTests/StatusContract_TerminalPickerAndUnarchive" --maximum-parallel-tests 1 --output Detailed
+dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowHeadlessTests/StatusContract_RussianDarkFutureAndBlocker" --maximum-parallel-tests 1 --output Detailed
+dotnet test tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowFlaUiTests/StatusContract*" --maximum-parallel-tests 1 --output Detailed
 ```
 
 Если `dotnet test ... -- --list-tests` для UI project сообщает 0, discovery выполняется repo-proven fallback-командой `dotnet run --project <UiTests.csproj> -c Debug --no-build -- --list-tests`; известный FlaUI baseline должен содержать не менее 9 inherited nodes до добавления нового scenario. Любая targeted команда обязана показать ровно ненулевое число tests; exit code 0 без executed node не считается PASS.
@@ -628,7 +647,7 @@ Full gate:
 ```powershell
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Debug --no-build -- --maximum-parallel-tests 1 --output Detailed
 dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj -c Debug --no-build -- --maximum-parallel-tests 1 --output Detailed
-dotnet test tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowFlaUiTests/StatusContract_TerminalPickerAndUnarchive" --maximum-parallel-tests 1 --output Detailed
+dotnet test tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -c Debug --no-build -- --treenode-filter "/*/*/MainWindowFlaUiTests/StatusContract*" --maximum-parallel-tests 1 --output Detailed
 
 git diff --check
 
@@ -695,22 +714,22 @@ Stop rules для validation:
 
 ## 13. План выполнения
 1. Завершено 2026-07-17: пользователь утвердил disabled-with-reason, legacy fallback `NotReady`, Telegram included и сообщил отдельное `Спеку подтверждаю`; product-specific re-review выполняется перед production edits.
-2. Дождаться green/ready/merge PR #274. До его merge production edits запрещены; CI lifecycle blocker оформляется отдельной child spec/PR, а не смешивается со Stage 2.
-3. Выполнить `git fetch origin --prune`, rebase `fix/status-availability-contract` на новый `origin/main`, доказать ancestry merge commit PR #274, clean scope и повторить 29-test characterization baseline.
-4. До production edits добавить observation-first failing characterization/UI scenario и записать before FlaUI evidence через orchestration script.
-5. Добавить pure Domain off-diagonal transition policy/facts/reason codes, command diagonal contract и invalid source/target/history tests.
-6. Реализовать `ITaskStorage.TrySetStatusAsync` через `TaskGraphCommandService`, cache refresh и structured stale/save/no-op behavior; сохранить generic mixed-update compatibility tests.
-7. Добавить deterministic unarchive normalizer и awaited parent/child cascade с mixed-failure tests.
-8. Перевести ViewModel/picker/`Ctrl+D` на storage-backed path; реализовать утверждённый denied UX, localized accessibility contract и reactive Archive/Unarchive label.
-9. Обновить Headless/FlaUI flow, RU/EN/light/dark assertions и записать/проверить after evidence.
-10. Перевести Telegram keyboard/callback на storage-backed path и добавить handler test/build.
-11. Обновить README EN/RU и точечную errata старой spec после behavior/tests; не менять Stage-7 marker-export copy.
-12. Выполнить все targeted filters -> full domain -> full Headless -> targeted FlaUI -> build/diff -> required GitHub checks; затем независимый Post-EXEC review, commit/push, draft PR и ready transition.
+2. Завершено 2026-07-18: PR #274 green/ready/merged как `8e34408`; lifecycle blocker был вынесен в отдельный merged PR #275.
+3. Завершено 2026-07-18: fetch/rebase/ancestry и повторный characterization baseline PASS.
+4. Завершено 2026-07-18: observation-first characterization/UI scenario и before FlaUI MP4 записаны до fixes.
+5. Завершено: pure Domain off-diagonal transition policy/facts/reason codes, command diagonal contract и invalid source/target/history tests добавлены.
+6. Завершено: default-compatible `ITaskStorage.TrySetStatusAsync`/`TryUnarchiveAsync`, command/storage adapters, cache hydration и structured stale/save/no-op/precondition behavior реализованы с CLR/source/numeric compatibility tests.
+7. Завершено: deterministic authoritative unarchive normalizer внутри storage boundary и awaited parent/child cascade реализованы с stale-history, locked concurrency, server verification и mixed-failure tests.
+8. Завершено: ViewModel/picker/`Ctrl+D` переведены на storage-backed path; denied UX, localized accessibility contract и reactive Archive/Unarchive label реализованы.
+9. Завершено локально: Headless semantic contract, три focused FlaUI flows, RU/EN/light/dark assertions, after MP4 и четыре screenshots PASS.
+10. Завершено: Telegram keyboard/callback переведены на storage-backed path и покрыты handler tests/build.
+11. Завершено: README EN/RU и точечная errata старой spec обновлены; Stage-7 marker-export copy не менялась.
+12. Локальный gate завершён 2026-07-18: targeted Unit, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds, diff/schema/API checks, visual evidence и независимый Post-EXEC review PASS. Delivery остаётся: commit/push, draft PR, required checks, ready/merge и последующая фиксация merge record.
 
 ## 14. Открытые вопросы
 Блокирующих product-вопросов нет. Пользователь 2026-07-17 утвердил рекомендованный набор: disabled-with-reason, legacy fallback `NotReady`, Telegram included, и сообщил точную фразу `Спеку подтверждаю`.
 
-Внешняя dependency не является открытым product-вопросом: production EXEC ждёт green/ready/merge PR #274 и rebase/ancestry gate. CI lifecycle race из full suite изолируется отдельной child spec/PR.
+Внешняя dependency закрыта: PR #274 merged, rebase/ancestry/baseline gate пройден. Оставшиеся lifecycle/CAS/Headless-capture вопросы изолированы как follow-up и не расширяют утверждённый Stage-2 scope.
 
 ## 15. Соответствие профилю
 - Stack + overlay: `.NET desktop client`, `ui-automation-testing`.
@@ -726,39 +745,45 @@ Stop rules для validation:
 
 ## 16. Таблица изменений файлов
 
+Таблица актуализирована по фактическому EXEC diff; строки могут группировать однотипные test doubles и regression suites.
+
 | Файл | Изменения | Причина |
 | --- | --- | --- |
 | `src/Unlimotion.Domain/TaskStatusTransitionPolicy.cs` (new) | Pure facts/evaluation/reason/restore normalization | Единый contract без UI dependency |
 | `src/Unlimotion.Domain/TaskItem.cs` | Normalized restore + null/future-safe idempotent history helpers | Исправить unarchive bypass/duplicate entry |
 | `src/Unlimotion.Domain/TaskStatusExtensions.cs` | Null-safe history queries либо delegation в new normalizer | Не падать на corrupt legacy list |
 | `src/Unlimotion.TaskTreeManager/TaskAvailabilityService.cs` | Делегировать matrix pure policy | Удалить отдельный switch source |
-| `src/Unlimotion.TaskTreeManager/TaskTreeManager.cs` | Сохранить generic mixed-update semantics; использовать shared policy для internal automatic status correction | Engine consistency без скрытого API break |
-| `src/Unlimotion.TaskTreeManager/TaskGraphCommandService.cs` | Dedicated same/stale/no-op/invalid-target alignment, structured engine diagnostics | Authoritative storage-write boundary |
-| `src/Unlimotion.TaskTreeManager/TaskOperationResult.cs` | Additive `AuthoritativeTask` snapshot + nullable Domain status-reason property | Stale-cache hydration и stable mapping без parsing English message |
-| `src/Unlimotion.ViewModel/ITaskStorage.cs` | Добавить `TrySetStatusAsync` contract | Запрет optimistic mutation у consumers |
-| `src/Unlimotion/UnifiedTaskStorage.cs` | Реализовать local command gate, adapter и cache hydration из `AuthoritativeTask`/`ChangedTasks` | Storage-backed desktop/Telegram result |
+| `src/Unlimotion.TaskTreeManager/TaskTreeManager.cs` | Сохранить generic mixed-update semantics и использовать existing mutation lock как bridge для dedicated command path | Command consistency без скрытого API break |
+| `src/Unlimotion.TaskTreeManager/TaskGraphCommandService.cs` | Dedicated explicit-target и authoritative-history unarchive intents, precondition/no-op/invalid-target alignment, structured diagnostics | Authoritative storage-write boundary |
+| `src/Unlimotion.TaskTreeManager/TaskOperationResult.cs` | Additive `AuthoritativeTask`/reason data через distinct factories; legacy overloads и existing enum numerics сохранены | Stale-cache hydration без binary/source ambiguity |
+| `src/Unlimotion.ViewModel/ITaskStorage.cs` | Добавить default fail-closed `TrySetStatusAsync`/`TryUnarchiveAsync` contracts | Запрет optimistic/cached-history mutation без break старых implementers |
+| `src/Unlimotion/UnifiedTaskStorage.cs` | Реализовать общий local command gate, два adapters и cache hydration из `AuthoritativeTask`/`ChangedTasks` | Storage-backed desktop/Telegram result |
 | `src/Unlimotion/ServerStorage.cs` | Реализовать diagnostic graph read через existing endpoint с propagated errors/internal test seam; без wire/CAS claim | Не сломать server-backed status commands |
 | Четыре `ITaskStorage` doubles: `tests/Unlimotion.Performance/Program.cs`, `src/Unlimotion.Test/TaskItemRepeaterListMarkerTests.cs`, `src/Unlimotion.Test/RoadmapGraphUiTests.cs`, `src/Unlimotion.Test/MainControlTaskStatusIconUiTests.cs` | Реализовать новый method или shared fake adapter | Сохранить compile и controllable results |
-| `src/Unlimotion.ViewModel/TaskItemViewModel.cs` | Удалить duplicate switch, async validated method, awaited normalized parent/child unarchive, reactive label | Desktop contract |
-| `src/Unlimotion.ViewModel/MainWindowViewModel.cs` | Перевести `Ctrl+D` на async status command | Закрыть optimistic hotkey path |
-| `src/Unlimotion.ViewModel/INotificationManagerWrapper.cs` | Additive generic `ConfirmAsync` | Awaitable confirmation contract |
+| `src/Unlimotion.ViewModel/TaskItemViewModel.cs` | Удалить duplicate switch/cached restore target, async validated methods, awaited dedicated parent/child unarchive, reactive label | Desktop contract и authoritative stale-history safety |
+| `src/Unlimotion.ViewModel/MainWindowViewModel.cs` | Перевести `Ctrl+D` на async status command; централизованно refresh existing task status copy при culture switch | Закрыть optimistic hotkey path и stale localization без per-task subscriptions |
+| `src/Unlimotion.ViewModel/INotificationManagerWrapper.cs` | Additive default fail-closed generic `ConfirmAsync` | Awaitable confirmation contract без break старых implementers |
 | `src/Unlimotion/NotificationManagerWrapper.cs` | Exactly-once yes/no/dismiss/exception completion | Не зависать и не запускать fire-and-forget writes |
 | `src/Unlimotion.Test/NotificationManagerWrapperMock.cs`, `tests/Unlimotion.AppAutomation.TestHost/UnlimotionAppLaunchHost.cs` | Реализовать deterministic confirmation result/dismiss behavior | Compile + unit/UI cascade tests |
 | `src/Unlimotion.Test/NotificationManagerWrapperTests.cs` (new) | Смонтировать реальный `MainScreen`/`DialogHost` и проверить yes/no/click-away/close/exception exactly once | Исполнимый gate production `ConfirmAsync`, не только mock ViewModel |
-| `src/Unlimotion.ViewModel/TaskStatusOption.cs` | Reason mapping/state при необходимости | Disabled picker copy |
-| `src/Unlimotion.ViewModel/Resources/Strings.resx` / `Strings.ru.resx` | Localized denial и Archive/Unarchive text | UX/accessibility |
-| `src/Unlimotion/TaskStatusPicker.cs` | Disabled non-current options + inline reason/`ShowOnDisabled`/HelpText | Утверждённый denied UX |
+| `src/Unlimotion.ViewModel/TaskStatusOption.cs` | Reason mapping/state и localization notifications | Disabled picker copy, включая уже открытый flyout |
+| `src/Unlimotion.ViewModel/Resources/Strings.resx` / `Strings.ru.resx` | Localized denial, honest storage-failure retry, stale-source и Archive/Unarchive text | UX/accessibility без ложного refresh claim |
+| `src/Unlimotion/TaskStatusPicker.cs` | Disabled non-current options + inline reason/`ShowOnDisabled`/HelpText + reactive localized title binding | Утверждённый denied UX и runtime language parity |
 | `src/Unlimotion/Views/MainControl.axaml` | Reactive command header/AutomationId при необходимости | Correct Unarchive copy |
 | `src/Unlimotion.TelegramBot/Bot.cs` | Enabled targets only, storage-backed callback | Закрыть policy bypass |
-| `src/Unlimotion.TelegramBot/AssemblyInfo.cs` (optional new) | Test internals only если нужен handler test | Direct bot coverage без public API |
+| `src/Unlimotion.TelegramBot/TelegramStatusContract.cs` (new), `AssemblyInfo.cs` (new) | Чистый keyboard/callback adapter и test internals | Direct bot coverage без network/public API expansion |
 | `src/Unlimotion.Test/Unlimotion.Test.csproj` | Bot project reference для handler test | Test Telegram adapter |
-| `src/Unlimotion.Test/TaskStatusTransitionPolicyTests.cs` (new) | Raw 5x5/reasons/invalid parity | Canonical raw-policy tests |
+| `src/Unlimotion.Test/InMemoryStorage.cs` | Реализовать diagnostic graph read и deep clone | Executable command/storage tests без filesystem dependency |
+| `src/Unlimotion.Test/StatusAvailabilityContractCharacterizationTests.cs` (new) | Observation-first baseline/contract characterization | Зафиксировать исходный drift и итоговый contract |
+| `src/Unlimotion.Test/TaskItemViewModelStatusCommandTests.cs`, `UnifiedTaskStorageStatusCommandTests.cs` (new) | Setter/preview/no-optimistic-write, dedicated unarchive stale-history/precondition и storage hydration/failure coverage | Проверить additive API compatibility и mutation boundary |
+| `src/Unlimotion.Test/TaskStatusTransitionPolicyTests.cs` (new) | Raw 5x5/reasons/invalid parity и reason numeric snapshot | Canonical stable raw-policy tests |
 | `src/Unlimotion.Test/TaskAvailabilityCalculationTests.cs`, `TaskAvailabilityParityTests.cs`, `TaskTreeManagerSafetyTests.cs`, `TaskGraphCommandServiceTests.cs`, `TaskStatusDomainTests.cs`, `FileStorageTaskStatusTests.cs`, `TaskStatusTransitionTests.cs`, `MainControlTaskStatusIconUiTests.cs`, `MainControlAvailabilityUiTests.cs`, `MainWindowViewModelTests.cs` | Расширить exact cases из section 11 | Regression coverage |
-| `src/Unlimotion.Test/ServerStorageStatusCommandTests.cs` (new) | Existing-endpoint diagnostic/failure/non-locking contract | Server-mode regression |
+| `src/Unlimotion.Test/LocalizationDisplayDefinitionTests.cs` | Existing task/status option PropertyChanged и no-mutation assertions при EN↔RU | Закрыть runtime localization regression |
+| `src/Unlimotion.Test/ServerStorageStatusCommandTests.cs` (new) | Existing-endpoint diagnostic/failure/non-locking explicit-target и unarchive contract | Server-mode regression |
 | `src/Unlimotion.Test/TelegramStatusContractTests.cs` (new) | Handler-level keyboard/callback contract без network | Проверить Telegram shared-policy integration |
 | `tests/Unlimotion.UiTests.Authoring/Pages/MainWindowPage.cs` | Row-scoped status/archive controls и generic accessibility reads только для supported adapter primitives | Shared user-flow page object |
-| `tests/Unlimotion.UiTests.Authoring/Tests/MainWindowScenariosBase.cs` | Inherited terminal/unarchive observation-first scenario | Один flow в двух harnesses |
-| `tests/Unlimotion.AppAutomation.TestHost/UnlimotionAutomationScenarioData.cs` | Deterministic status/future/blocked seed | Stable automation evidence |
+| `tests/Unlimotion.AppAutomation.TestHost/UnlimotionAutomationScenario.cs`, `UnlimotionAutomationScenarioData.cs`, `UnlimotionAppLaunchHost.cs` | StatusContract scenario, deterministic status/future/blocked seed и recorder handshake | Stable automation evidence |
+| `tests/Unlimotion.UiTests.Authoring/Tests/StatusContractScenariosBase.cs` (new) | Shared terminal/unarchive flow с явной screenshot capability | Один observation-first contract для Headless/FlaUI без ложной pixel parity |
 | `tests/Unlimotion.UiTests.Headless/Tests/MainWindowHeadlessTests.cs` / headless-specific helper | Dynamic menu row, tooltip/HelpText, RU/EN и light/dark assertions | Покрыть adapter capabilities, которых нет в shared abstraction |
 | `tests/Unlimotion.UiTests.FlaUI/Tests/MainWindowFlaUiTests.cs` | End-user click/keyboard flow и accessibility-tree assertions | Реальный Windows UI evidence |
 | `scripts/record-status-contract-evidence.ps1` (new) | Test/window handshake, `record_app_window.ps1` orchestration, 1280x800/30fps и `ffprobe`/SHA report | Воспроизводимое before/after video evidence |
@@ -766,7 +791,7 @@ Stop rules для validation:
 | `specs/2026-06-09-task-status-model.md` | Supersession/errata перед 6.2, 7.2, status-control и Telegram claims | Не выдавать stale contract за current |
 | `specs/2026-07-17-status-availability-contract.md` | Approval/Post-EXEC journal | Audit trail |
 
-Optional rows разрешены только если direct Telegram adapter test нельзя сделать без них; Post-EXEC обязан указать фактический file set и отсутствие unrelated changes.
+Фактический scope перед delivery: 45 tracked production/test/docs файлов изменены и 12 новых файлов добавлены; после journal updates также изменены эта child spec и master roadmap (итого 47 tracked content diffs). `artifacts/ui-tests/status-contract/*` намеренно ignored/local-only и в commit не входят. Unrelated changes не обнаружены.
 
 ## 17. Таблица соответствий (было -> стало)
 
@@ -813,7 +838,7 @@ Optional rows разрешены только если direct Telegram adapter t
 | E. Готовность к автономной реализации | 17-19 | PASS | Sequence/files/commands заданы; explicit dependency gate запрещает production edits до merge PR #274 |
 | F. Соответствие профилю | 20 | PASS | .NET/TUnit/UI automation/local override отражены |
 
-Итог: `ГОТОВО`; spec утверждена, но production EXEC ожидает prerequisite PR #274.
+Итог SPEC gate: `ГОТОВО`; prerequisite PR #274 закрыт 2026-07-18, EXEC и локальный validation gate завершены, package находится на delivery gate.
 
 ### SPEC Rubric Result
 
@@ -827,7 +852,7 @@ Optional rows разрешены только если direct Telegram adapter t
 | 6. Готовность к автономной реализации | 5 | Sequence/files/commands/evidence заданы; external dependency имеет проверяемый stop/rebase gate |
 
 Итоговый балл: 30 / 30
-Зона: готово к автономному выполнению после prerequisite gate.
+Зона: автономный EXEC разрешён и выполнен после закрытия prerequisite gate; итоговый verdict фиксируется ниже в Post-EXEC.
 
 ### Role-Based Review Result
 
@@ -839,8 +864,8 @@ Optional rows разрешены только если direct Telegram adapter t
 | Developer / architect | applicable | Pure policy layering, no-mutation и no-schema boundaries coherent? | PASS | Storage fallback/concurrency, command ordering, authoritative snapshot, history и generic compatibility повторно проверены |
 | Delivery / operations / security | applicable | Dependency/rebase, artifacts, rollback и CI gates безопасны? | PASS | PR #274 dependency, separate CI-fix scope, rebase/ancestry, evidence и required-check stop rules явные |
 
-### Post-SPEC Review
-- Статус: PASS после technical и product-specific fix/re-review cycles; PR #274 остаётся обязательным sequencing prerequisite, но не недоопределённостью spec
+### Post-SPEC Review (исторический gate перед EXEC)
+- Статус: PASS после technical и product-specific fix/re-review cycles; на момент review PR #274 оставался обязательным sequencing prerequisite, который закрыт 2026-07-18
 - Scope reviewed: эта spec, source/test/docs evidence, central routing, branch/dependency metadata, PR #274 CI, recorder prerequisites и executable TUnit/UI filters
 - Decision: approval принят; Stage 2 можно исполнять только после green/ready/merge PR #274 и rebase/ancestry/baseline gate
 - Review passes:
@@ -849,13 +874,13 @@ Optional rows разрешены только если direct Telegram adapter t
   - Adversarial risk pass: PASS after re-review — accessibility, deterministic history, mixed cascade, real ConfirmAsync gate, code-only rollback и full-flow video orchestration согласованы.
   - Role-Based pass: PASS — Business/UX/Tester/Architecture/Delivery contracts согласованы с утверждёнными choices.
   - Re-review after fixes / Fix and re-review: PASS — невыбранные hidden/Prepared/exclude-Telegram ветви удалены из executable contract; conditional commands/file inventory и два последних Telegram test/callback упоминания сделаны обязательными.
-  - Stop decision: PASS для spec/approval; STOP production до prerequisite PR #274.
+  - Stop decision: PASS для spec/approval; исторический STOP production до prerequisite PR #274 был соблюдён.
 - Evidence inspected: source audit; 29 baseline targeted tests PASS; три initial independent NEEDS-FIX verdicts, два focused technical PASS verdicts и заключительный independent product-specific audit; exact engine/command/storage/ViewModel/Telegram source; old spec headings; PR #274 checks; actual recorder script/ffmpeg/ffprobe preflight; TUnit/FlaUI discovery behavior
 - Depth checklist:
   - Scope drift / unrelated changes: только эта spec изменена
   - Acceptance criteria: mapping расширен storage/concurrency/accessibility/history/CI cases
   - User-observable scenarios / Decision ledger / Expected objections: заполнены; user-owned decisions имеют chosen values и `Needs user = Нет`
-  - Validation evidence: baseline есть; exact targeted/full/video contract задан; EXEC evidence pending
+  - Validation evidence: baseline и exact targeted/full/video contract были заданы до EXEC; фактическое evidence отражено в Post-EXEC ниже
   - Unsupported claims: преждевременные 30/30 и source claim исправлены
   - Regression / edge case: undefined source/target/history, generic mixed update, stale flyout, 0/refusal/mixed cascade добавлены
   - Comments/docs/changelog: exact old-spec sections и PR release-note handoff заданы
@@ -870,43 +895,59 @@ Optional rows разрешены только если direct Telegram adapter t
 | HIGH | compatibility/invalid | Generic mixed update и invalid target/source/history были смешаны | Развести API semantics/recovery и добавить tests | fixed in spec, technical re-review PASS |
 | HIGH | UX/accessibility | Disabled tooltip был недоступен keyboard/screen reader | Inline reason + ShowOnDisabled + HelpText + fallback/test split | fixed in spec, product choice approved |
 | HIGH | validation/evidence | Не хватало exact filters, real ConfirmAsync gate, video orchestration/retention и CI gate | Добавить commands, handshake, ffprobe/hash/local-only disclosure | fixed in spec, technical re-review PASS |
-| MEDIUM | delivery prerequisite | PR #274 ещё не merged | Green/ready/merge, fetch/rebase/ancestry/baseline до production edits | enforced stop rule; separate CI child spec required |
+| MEDIUM | delivery prerequisite | На момент Post-SPEC PR #274 ещё не был merged | Green/ready/merge, fetch/rebase/ancestry/baseline до production edits | fixed 2026-07-18; gate observed |
 
 - Fixed before continuing: оба technical fix set и product-choice fix set внесены; hidden/Prepared/exclude-Telegram executable branches и два последних conditional Telegram test/callback упоминания удалены
 - Checks rerun: baseline targeted tests; structural spec checks PASS (22 H2, even fences, no unresolved decision rows); independent architecture/test re-review и заключительный product-specific audit PASS после fixes
 - Needs human: Stage 2 approval/choices закрыты; отдельная новая CI-lifecycle child spec потребует собственную точную approval-фразу до её code EXEC
-- Residual risks / follow-ups: PR #274 merge, recorder handshake implementation, actual full-suite duration и local-only video availability
+- Residual risks / follow-ups: исторические prerequisite/recorder implementation risks закрыты; актуальные residuals перечислены в Post-EXEC
 
 ### Post-EXEC Review
-- Статус: Не выполнен; EXEC утверждён, production phase не начата из-за prerequisite PR #274
-- Scope reviewed: Не применимо до EXEC
-- Decision: Не применимо до EXEC
+- Статус: `LOCAL PASS / DELIVERY PENDING`; утверждённый EXEC завершён, локальные implementation, validation, UI-evidence и independent re-review gates пройдены 2026-07-18; commit/PR/required GitHub checks/merge выполняются следующим delivery-шагом
+- Scope reviewed: 47 tracked content diffs и 12 новых файлов в утверждённых Domain, TaskTreeManager, ViewModel, desktop UI, storage adapters, Telegram, tests, paired README и spec/journal surfaces; `artifacts/ui-tests/status-contract/*` ignored/local-only и не входит в commit
+- Decision: локальные части S2-AC-01..17 и pre-delivery часть S2-AC-18 выполнены, package допускается к внешнему delivery gate; PR checks/merge остаются незакрытой частью S2-AC-18, а Stage 3 не начинается до отдельной child SPEC и явного approval
 - Review passes:
-  - Scope/Evidence pass: Не применимо
-  - Contract pass: Не применимо
-  - Adversarial risk pass: Не применимо
-  - Role-Based pass: Не применимо
-  - Re-review after fixes / Fix and re-review: Не применимо
-  - Stop decision: Не применимо
-- Evidence inspected: Не применимо
-- Depth checklist: Не применимо
-- No-findings justification: Не применимо
+  - Scope/Evidence pass: PASS — фактический diff сверен с section 16, unrelated files и schema/wire surfaces не затронуты; до/после video, шесть screenshots, TRX/HTML и build/diff evidence проверены.
+  - Contract pass: PASS — одна pure 5x5 policy управляет desktop/Telegram adapters; mutations идут через storage-backed commands; dedicated unarchive вычисляет target по freshly-read authoritative history внутри local write boundary.
+  - Adversarial risk pass: PASS — проверены invalid/undefined values, diagonal no-op ordering, corrupt/future/null history, stale cache, parent/child partial failure, concurrent unarchive, storage failure, server post-verification и runtime localization.
+  - Role-Based pass: PASS — Business/UX/Tester/Architecture/Delivery reviews не оставили BLOCKER/HIGH/MEDIUM findings после fixes.
+  - Re-review after fixes / Fix and re-review: PASS — повторный API/compatibility, code, docs parity и UI-evidence reviews подтвердили fixes и честные residuals.
+  - Stop decision: локальный delivery разрешён; после создания PR держать его draft до required GitHub checks, а stage 3 остаётся закрыт отдельным approval gate.
+- Evidence inspected:
+  - full Unit: 755/755 PASS, `C:\tmp\unlimotion-stage2-unit-20260718-final6\Unlimotion.Test-windows-net10.0-report.html` и `Kibnet_DESKTOP-AUDO1TJ_2026-07-18_19_04_20.6806803.trx`;
+  - full Headless: 33/33 PASS, `C:\tmp\unlimotion-stage2-headless-20260718-final6\Unlimotion.UiTests.Headless-windows-net10.0-report.html` и `Kibnet_DESKTOP-AUDO1TJ_2026-07-18_19_06_13.4238520.trx`;
+  - focused FlaUI: 3/3 PASS, `C:\tmp\unlimotion-stage2-flaui-20260718-final7\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html` и `Kibnet_DESKTOP-AUDO1TJ_2026-07-18_19_14_56.8637630.trx`;
+  - final targeted reruns: `TaskGraphCommandServiceTests` 38/38, `TaskItemViewModelStatusCommandTests` 15/15, `UnifiedTaskStorageStatusCommandTests` 12/12, `FileStorageTaskStatusTests` 6/6, `ServerStorageStatusCommandTests` 10/10 и `TaskStatusTransitionPolicyTests` 42/42 PASS;
+  - `dotnet build src/Unlimotion.sln -c Debug --no-restore -p:UseSharedCompilation=false`: PASS, 0 errors, 118 known baseline/platform/line-ending warnings; отдельный Telegram build: PASS, 0 errors, 47 warnings; exact warning counts наблюдались в финальном session output, отдельный build log не сохранялся;
+  - `git diff --check`, protected enum/schema/server-interface/service-model audit и проверка отсутствия cached-history resolver в `TaskItemViewModel`: PASS.
+- UI automation evidence:
+  - before video: `artifacts/ui-tests/status-contract/before-terminal-unarchive.mp4`, H.264, 1280x800, 105 s, 3141 frames, average 29.914 fps, SHA-256 `15D509B1C3A1F1EC22951B87118DF0D225B4B5B9080949565941D9EF793F7910`; recorder flow завершён с двумя ожидаемыми baseline failure ids;
+  - after video: `artifacts/ui-tests/status-contract/after-terminal-unarchive.mp4`, H.264, 1280x800, 105 s, 3145 frames, nominal 30 fps / average 29.952 fps, SHA-256 `3B175D5280519FE297C98289A32643BBD04480CA2E6096AC3BE1D8FFC9525281`; emitted wrapper session output reported run id `c611cf0ddf644f24af3f28be5a8b5d08`, test exit 0 и empty failure ids, но transient handshake JSON удалён wrapper cleanup;
+  - screenshots: `before-terminal-picker.png`, `before-after-unarchive.png`, `after-terminal-picker.png`, `after-after-unarchive.png`, `after-future-vs-blocked.png`, `after-blocked.png`; внешний test window/video настроен на 1280x800, все PNG client-area captures имеют 1252x721; финальные четыре кадра просмотрены и подтверждают terminal reasons, restore to `Prepared`, RU/dark future reason и реальный pointer tooltip для blocker reason.
+- Depth checklist: source-to-AC trace, public CLR/source/numeric compatibility, default-interface fallback, schema/wire stability, authoritative write boundary, localization/accessibility, executable UI semantics, video metadata/hash, rollback и delivery scope проверены.
+- No-findings justification: после последнего fix cycle независимые code/API и docs-parity reviewers вернули PASS; новые BLOCKER/HIGH/MEDIUM findings отсутствуют, а перечисленные ниже ограничения не маскируются как закрытые.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | phase | EXEC не начат | Выполнить полный Post-EXEC review после implementation/validation | follow-up |
+| MEDIUM | storage lifecycle | Прямой `UnifiedTaskStorage.Dispose()` не атомарно блокирует уже начавшийся confirmation producer | Вести отдельной production-storage-lifecycle child spec; не расширять Stage 2 | follow-up |
+| LOW | server concurrency | Existing transport не даёт cross-client compare-and-swap | Сохранять честный `OutcomeUnknown`; проектировать server-authoritative command отдельно | follow-up |
+| LOW | UI infrastructure | Fake Headless backend не является pixel oracle; real-Skia capture и process-global DPI awareness требуют отдельного hardening | Оставить semantics в Headless, реальное rendering evidence во FlaUI/video | follow-up |
+| LOW | public records | Новые additive record properties участвуют в equality/`ToString` и могут появиться у стороннего generic JSON serializer | Зафиксировать compatibility caveat; официальный persistence/server wire не затронут | accepted residual |
+| INFO | delivery evidence | UI artifacts intentionally ignored/local-only; exact build warning counts и wrapper RunId/TestExitCode/FailureIds сохранены только в session output/spec, без отдельного build/handshake log | Указать durable TRX/video/hash/paths и provenance полей в PR; не коммитить evidence и не выдавать session-derived поля за отдельный retained log | accepted residual |
 
-- Fixed before final report: Не применимо
-- Checks rerun: Не применимо
-- Validation evidence: Не применимо
-- Unrelated changes: Не применимо
-- Needs human: не для Stage 2; отдельный approval новой CI-lifecycle child spec
-- Residual risks / follow-ups: перечислены выше
+- Fixed before final report: public setter/API/numeric compatibility, blocker diagnostic priority, real tooltip and exact row selection, flyout close, deterministic confirmation TCS, recorder FPS gate, runtime localization including an open picker, README opacity truthfulness, authoritative stale-history unarchive/precondition и честная storage-failure copy.
+- Checks rerun: полный Unit/Headless/FlaUI gate, six final targeted classes, solution/Telegram builds, `git diff --check`, schema/wire audit, media `ffprobe`/SHA и independent code/docs re-reviews.
+- Validation evidence: `LOCAL PASS`; GitHub PR number, required-check results и merge commit будут дописаны в delivery record после выполнения внешнего gate.
+- Unrelated changes: не обнаружены; scope = 47 tracked content diffs + 12 new, ignored local UI evidence исключено.
+- Needs human: для Stage-2 delivery — нет; Stage-3 child spec требует отдельного explicit approval до EXEC.
+- Residual risks / follow-ups: storage lifecycle, server CAS, Headless/real-Skia and DPI capture hardening, generic external record serialization caveat и known build warnings, как перечислено в таблице.
 
 ## Approval
 Пользователь 2026-07-17 сообщил точную фразу `Спеку подтверждаю` и попросил выполнить все этапы. Approval трактуется вместе с ранее предложенным рекомендованным набором: disabled-with-reason, legacy fallback `NotReady`, Telegram included.
 
 Stage-2 EXEC разрешён, но production edits остаются заблокированы explicit dependency gate до green/ready/merge PR #274, fetch/rebase, ancestry check и повторного characterization baseline.
+
+Dependency update 2026-07-18: PR #274 merged как `8e34408`; fetch/rebase, ancestry и characterization gates выполнены до production edits. Указанная выше блокировка была соблюдена и больше не активна; локальный validation gate PASS, текущий gate — delivery.
 
 Approval master roadmap и stage 1 не распространяется автоматически на этот stage-2 child EXEC.
 
@@ -923,3 +964,5 @@ Approval master roadmap и stage 1 не распространяется авт�
 | SPEC | Провести focused technical re-review после fixes | 1.00 | Остаются product choices и PR #274 dependency | Запросить три явных ответа, удалить невыбранные ветви и провести product-specific review | Да | Два independent reviewers дали PASS по architecture и test/evidence contracts | Условный Telegram scope, full-flow recorder handshake и real ConfirmAsync gate проверены повторно | Эта spec |
 | EXEC | Принять approval и product choices Stage 2 | 1.00 | PR #274 ещё не green/merged | Зафиксировать choices, выполнить product-specific re-review и оформить отдельную CI-lifecycle child spec | Нет для Stage 2; отдельный approval нужен новой CI spec | Пользователь дословно сообщил `Спеку подтверждаю` и «Выполни все этапы» | Рекомендованные UX/legacy/Telegram варианты приняты; production edits не обходят dependency gate | Эта spec, PR #274 |
 | SPEC | Закрыть заключительный product-specific audit | 1.00 | Нет | Зафиксировать spec-only commit и перейти к отдельной CI-lifecycle child spec | Нет | Independent reviewer нашёл два conditional Telegram test/callback остатка; оба исправлены | S2-AC-03 и acceptance matrix теперь безусловно включают Telegram; executable scope согласован с утверждённым решением | Эта spec |
+| EXEC | Реализовать и стабилизировать Stage-2 contract | 1.00 | Нет | Выполнить финальный full gate | Нет | Не применимо | Storage-backed status/unarchive, disabled reasons, Telegram parity, localization, README/errata и compatibility guards реализованы; поздние review findings исправлены | Production/test/docs diff, UI automation harness |
+| EXEC | Завершить локальный Stage-2 validation и Post-EXEC review | 1.00 | Только внешний GitHub delivery gate | Commit/push, draft PR, required checks и merge | Нет для Stage 2 | Не применимо | Unit 755/755, Headless 33/33, FlaUI 3/3, builds/diff/schema/media gates и independent re-reviews PASS; residuals честно маршрутизированы | TRX/HTML, `artifacts/ui-tests/status-contract/*` local-only, эта spec, master roadmap |

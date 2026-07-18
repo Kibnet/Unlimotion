@@ -43,6 +43,50 @@ public sealed class TaskAvailabilityParityTests
     }
 
     [Test]
+    public async Task ServiceTransitionDecision_ContainsExactDomainPolicyEvaluation()
+    {
+        var requestedStatuses = Enum.GetValues<DomainTaskStatus>()
+            .Append((DomainTaskStatus)int.MaxValue);
+
+        foreach (var scenario in CreateScenarios())
+        {
+            var service = new TaskAvailabilityService(scenario.Tasks);
+            var subject = scenario.Tasks.Single(task => task.Id == scenario.SubjectId);
+            var analysis = service.Analyze(subject);
+            var facts = new TaskStatusTransitionFacts(
+                subject.Status,
+                analysis.IsCanBeCompleted,
+                analysis.PlannedBeginIsFuture,
+                analysis.CompletionCriteriaSatisfied);
+
+            foreach (var requestedStatus in requestedStatuses)
+            {
+                var expected = TaskStatusTransitionPolicy.Evaluate(requestedStatus, facts);
+                var actual = service.EvaluateStatusTransition(subject, requestedStatus);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(actual.Evaluation)
+                        .IsEqualTo(expected)
+                        .Because($"{scenario.Name}; requested {requestedStatus}");
+                    await Assert.That(actual.Allowed)
+                        .IsEqualTo(expected.IsAllowed)
+                        .Because($"{scenario.Name}; requested {requestedStatus}");
+                    await Assert.That(actual.Analysis.TaskId)
+                        .IsEqualTo(analysis.TaskId)
+                        .Because($"{scenario.Name}; requested {requestedStatus}");
+                    await Assert.That(actual.Analysis.IsCanBeCompleted)
+                        .IsEqualTo(analysis.IsCanBeCompleted)
+                        .Because($"{scenario.Name}; requested {requestedStatus}");
+                    await Assert.That(actual.Analysis.CompletionCriteriaSatisfied)
+                        .IsEqualTo(analysis.CompletionCriteriaSatisfied)
+                        .Because($"{scenario.Name}; requested {requestedStatus}");
+                }
+            }
+        }
+    }
+
+    [Test]
     public async Task Validate_ReportsSelfDuplicateRelationsAndDuplicateCriterionIds()
     {
         var target = CreateTask("target", DomainTaskStatus.Prepared);

@@ -183,6 +183,9 @@ Outcome contract:
 - `README.md` / `README.RU.md`:
   - обновляют описание статусной модели, markers и пользовательского flow.
 
+> [!IMPORTANT]
+> Разделы ниже сохраняются как исторический design baseline. Текущий authoritative-контракт переходов, graph availability, future-date guard и нормализации unarchive задан в [status-availability contract](2026-07-17-status-availability-contract.md); при расхождении применяется новая spec.
+
 ### 6.2 Ключевые пользовательские сценарии
 
 1. Подготовить задачу к делегированию:
@@ -351,6 +354,9 @@ Product decision для времени:
 - Priority для отображаемого автора: `Profile.DisplayName`, затем `TaskItem.UserId`, затем `GitSettings.UserName`, затем `local-user`.
 - Миграции и автоматические переходы: `System`.
 
+> [!IMPORTANT]
+> UI-правила этого исторического раздела уточнены в [status-availability contract](2026-07-17-status-availability-contract.md): current status не входит в меню, остальные четыре цели видимы, запрещённые цели disabled и постоянно показывают локализованную причину с automation HelpText.
+
 #### UI status control
 
 Status icon заменяет checkbox во всех местах, где задача сейчас управляется через `IsCompleted`:
@@ -437,6 +443,9 @@ Completion criteria checklist:
 - отказ в modal оставляет дочерние задачи в их текущих статусах;
 - `Completed` и уже `Archived` дочерние задачи не меняются.
 
+> [!IMPORTANT]
+> Telegram-контракт ниже superseded: актуальный bot показывает кнопки только для разрешённых non-current целей и применяет переход через storage-backed status command без optimistic mutation. См. [status-availability contract](2026-07-17-status-availability-contract.md).
+
 #### Telegram bot
 
 Telegram bot должен поддерживать все пять статусов:
@@ -497,6 +506,9 @@ UI test video evidence:
 5. `InProgress` запрещен для заблокированной задачи.
 6. `Completed` запрещен для задачи с невыполненными дочерними или блокерами.
 7. `Prepared` не гарантирует, что задачу можно начать сейчас; это означает, что контекста достаточно.
+
+> [!IMPORTANT]
+> Таблица ниже является исторической и не описывает terminal guards. Каноническая матрица 5x5, same-status no-op и deterministic unarchive normalization находятся в [status-availability contract](2026-07-17-status-availability-contract.md) и парных корневых README.
 
 ### 7.2 Transition table
 

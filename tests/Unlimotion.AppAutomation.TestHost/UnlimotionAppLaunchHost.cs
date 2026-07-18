@@ -1,5 +1,7 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
+using Avalonia;
+using Avalonia.Styling;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
@@ -46,9 +48,10 @@ public static class UnlimotionAppLaunchHost
         bool buildOncePerProcess = true,
         TimeSpan? buildTimeout = null,
         TimeSpan? mainWindowTimeout = null,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        string? theme = null)
     {
-        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId);
+        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var environmentVariables = CreateEnvironmentVariables(launchData);
 
         try
@@ -64,6 +67,9 @@ public static class UnlimotionAppLaunchHost
                     MainWindowTimeout = mainWindowTimeout ?? TimeSpan.FromSeconds(30),
                     PollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200),
                     UseIsolatedBuildOutput = buildBeforeLaunch,
+                    WindowPlacement = scenario == UnlimotionAutomationScenario.StatusContract
+                        ? DesktopWindowPlacement.Centered(1280, 800)
+                        : null,
                     Arguments = [$"--config={launchData.ConfigPath}"],
                     EnvironmentVariables = environmentVariables
                 },
@@ -82,32 +88,50 @@ public static class UnlimotionAppLaunchHost
         UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke,
         string? language = null,
         Action<MainWindowViewModel>? afterViewModelPrepared = null,
-        string? currentTaskId = null)
+        string? currentTaskId = null,
+        string? theme = null)
     {
-        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId);
+        var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         MainWindowViewModel? vm = null;
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
 
         return new HeadlessAppLaunchOptions
         {
-            BeforeLaunchAsync = async _ =>
+            BeforeLaunchAsync = async cancellationToken =>
             {
-                if (launchData.ExpandAllTaskTrees)
+                async Task PrepareViewModelAsync()
                 {
-                    TaskWrapperViewModel.DefaultIsExpanded = true;
+                    if (launchData.ExpandAllTaskTrees)
+                    {
+                        TaskWrapperViewModel.DefaultIsExpanded = true;
+                    }
+
+                    vm = CreateHeadlessViewModel(launchData);
+                    await vm.Connect();
+
+                    SelectAutomationTask(vm, launchData);
+                    ApplyAutomationWindowTitle(vm, launchData);
+                    afterViewModelPrepared?.Invoke(vm);
                 }
 
-                vm = CreateHeadlessViewModel(launchData);
-                await vm.Connect();
-                SelectAutomationTask(vm, launchData);
-                ApplyAutomationWindowTitle(vm, launchData);
-                afterViewModelPrepared?.Invoke(vm);
+                if (scenario == UnlimotionAutomationScenario.StatusContract)
+                {
+                    // Status commands capture their cache context on first use. Prepare this
+                    // synthetic ViewModel without inheriting TUnit's context so the real UI
+                    // command can capture the Headless dispatcher context deterministically.
+                    await Task.Run(PrepareViewModelAsync, cancellationToken);
+                }
+                else
+                {
+                    await PrepareViewModelAsync();
+                }
             },
             CreateMainWindow = () =>
             {
+                ApplyAutomationTheme(theme);
                 var window = new MainWindow
                 {
-                    Width = 1200,
+                    Width = scenario == UnlimotionAutomationScenario.StatusContract ? 1280 : 1200,
                     Height = 800,
                     DataContext = vm ?? throw new InvalidOperationException("Headless ViewModel was not initialized.")
                 };
@@ -121,6 +145,21 @@ public static class UnlimotionAppLaunchHost
                 launchData.Dispose();
             }
         };
+    }
+
+    private static void ApplyAutomationTheme(string? theme)
+    {
+        if (Application.Current is not { } application || string.IsNullOrWhiteSpace(theme))
+        {
+            return;
+        }
+
+        application.RequestedThemeVariant = string.Equals(
+            theme,
+            AppearanceSettings.DarkTheme,
+            StringComparison.OrdinalIgnoreCase)
+            ? ThemeVariant.Dark
+            : ThemeVariant.Light;
     }
 
     public static string GetCurrentTaskId(UnlimotionAutomationScenario scenario = UnlimotionAutomationScenario.Smoke)
@@ -166,6 +205,7 @@ public static class UnlimotionAppLaunchHost
             EnvironmentVariables = launchOptions.EnvironmentVariables,
             MainWindowTimeout = launchOptions.MainWindowTimeout,
             PollInterval = launchOptions.PollInterval,
+            WindowPlacement = launchOptions.WindowPlacement,
             DisposeCallback = () =>
             {
                 try
@@ -416,7 +456,8 @@ public static class UnlimotionAppLaunchHost
         public static UnlimotionAutomationLaunchData Create(
             UnlimotionAutomationScenario scenario,
             string? language = null,
-            string? currentTaskIdOverride = null)
+            string? currentTaskIdOverride = null,
+            string? theme = null)
         {
             var repositoryRoot = FindRepositoryRoot();
             var rootPath = Path.Combine(Path.GetTempPath(), "Unlimotion.AppAutomation", Guid.NewGuid().ToString("N"));
@@ -432,12 +473,16 @@ public static class UnlimotionAppLaunchHost
                     .Append(currentTaskId)
                     .ToArray()
                 : [];
-            var windowTitle = UnlimotionAutomationScenarioData.GetWindowTitle(scenario, language);
+            var environmentWindowTitle = Environment.GetEnvironmentVariable(
+                AutomationWindowTitleEnvironmentVariable);
+            var windowTitle = string.IsNullOrWhiteSpace(environmentWindowTitle)
+                ? UnlimotionAutomationScenarioData.GetWindowTitle(scenario, language)
+                : environmentWindowTitle;
             var expandAllTaskTrees = scenario == UnlimotionAutomationScenario.ReadmeDemo;
 
             Directory.CreateDirectory(tasksPath);
             UnlimotionAutomationScenarioData.SeedTasks(scenario, repositoryRoot, tasksPath, language);
-            UnlimotionAutomationScenarioData.WriteConfig(scenario, configPath, tasksPath, language);
+            UnlimotionAutomationScenarioData.WriteConfig(scenario, configPath, tasksPath, language, theme);
 
             return new UnlimotionAutomationLaunchData(
                 repositoryRoot,
@@ -492,6 +537,11 @@ public static class UnlimotionAppLaunchHost
             noAction?.Invoke();
         }
 
+        public Task<bool> ConfirmAsync(string header, string message)
+        {
+            return Task.FromResult(false);
+        }
+
         public Task<bool> ConfirmTaskOutlinePasteAsync(TaskOutlinePastePreview preview)
         {
             return Task.FromResult(false);
@@ -505,4 +555,5 @@ public static class UnlimotionAppLaunchHost
         {
         }
     }
+
 }

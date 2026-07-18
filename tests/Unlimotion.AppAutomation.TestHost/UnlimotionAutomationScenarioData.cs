@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LibGit2Sharp;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
@@ -16,6 +17,17 @@ public static class UnlimotionAutomationScenarioData
     public const string ReadmeDemoCurrentTaskTitleRu = "Собрать сценарий воркшопа к неделе запуска";
     public const string ReadmeDemoWindowTitle = "Unlimotion README Demo";
     public const string ReadmeDemoWindowTitleRu = "Unlimotion демо документации";
+    public const string StatusContractTerminalTaskId = "status-contract-terminal";
+    public const string StatusContractTerminalTaskTitle = "Terminal status contract task";
+    public const string StatusContractArchivedTaskId = "status-contract-archived";
+    public const string StatusContractArchivedTaskTitle = "Archived status contract task";
+    public const string StatusContractFutureTaskId = "status-contract-future";
+    public const string StatusContractFutureTaskTitle = "Future status contract task";
+    public const string StatusContractBlockedTaskId = "status-contract-blocked";
+    public const string StatusContractBlockedTaskTitle = "Blocked status contract task";
+    public const string StatusContractBlockerTaskId = "status-contract-blocker";
+    public const string StatusContractBlockerTaskTitle = "Status contract blocker";
+    public const string StatusContractWindowTitle = "Unlimotion Status Contract";
     public static readonly IReadOnlyList<string> ReadmeDemoLastOpenedTaskIds =
     [
         "launch-pilot",
@@ -38,6 +50,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.ReadmeDemo => IsRussian(language)
                 ? ReadmeDemoCurrentTaskIdRu
                 : ReadmeDemoCurrentTaskId,
+            UnlimotionAutomationScenario.StatusContract => StatusContractTerminalTaskId,
             _ => SmokeCurrentTaskId
         };
     }
@@ -81,6 +94,14 @@ public static class UnlimotionAutomationScenarioData
         return scenario switch
         {
             UnlimotionAutomationScenario.ReadmeDemo => GetReadmeDemoTaskTitle(taskId, language),
+            UnlimotionAutomationScenario.StatusContract => taskId switch
+            {
+                StatusContractArchivedTaskId => StatusContractArchivedTaskTitle,
+                StatusContractFutureTaskId => StatusContractFutureTaskTitle,
+                StatusContractBlockedTaskId => StatusContractBlockedTaskTitle,
+                StatusContractBlockerTaskId => StatusContractBlockerTaskTitle,
+                _ => StatusContractTerminalTaskTitle
+            },
             _ => SmokeCurrentTaskTitle
         };
     }
@@ -115,6 +136,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.ReadmeDemo => IsRussian(language)
                 ? ReadmeDemoWindowTitleRu
                 : ReadmeDemoWindowTitle,
+            UnlimotionAutomationScenario.StatusContract => StatusContractWindowTitle,
             _ => null
         };
     }
@@ -134,6 +156,9 @@ public static class UnlimotionAutomationScenarioData
             case UnlimotionAutomationScenario.ReadmeDemo:
                 SeedReadmeDemoTasks(tasksPath, language);
                 break;
+            case UnlimotionAutomationScenario.StatusContract:
+                SeedStatusContractTasks(tasksPath);
+                break;
             default:
                 CopySmokeSnapshots(repositoryRoot, tasksPath);
                 break;
@@ -144,7 +169,8 @@ public static class UnlimotionAutomationScenarioData
         UnlimotionAutomationScenario scenario,
         string configPath,
         string tasksPath,
-        string? language = null)
+        string? language = null,
+        string? theme = null)
     {
         switch (scenario)
         {
@@ -153,6 +179,9 @@ public static class UnlimotionAutomationScenarioData
                 break;
             case UnlimotionAutomationScenario.ReadmeDemo:
                 WriteReadmeDemoConfig(configPath, tasksPath, language);
+                break;
+            case UnlimotionAutomationScenario.StatusContract:
+                WriteStatusContractConfig(configPath, tasksPath, language, theme);
                 break;
             default:
                 WriteSmokeConfig(configPath, tasksPath);
@@ -323,6 +352,195 @@ public static class UnlimotionAutomationScenarioData
         };
 
         WriteJson(configPath, config);
+    }
+
+    private static void WriteStatusContractConfig(
+        string configPath,
+        string tasksPath,
+        string? language,
+        string? theme)
+    {
+        var languageMode = NormalizeReadmeLanguage(language);
+        var themeMode = string.Equals(theme, AppearanceSettings.DarkTheme, StringComparison.OrdinalIgnoreCase)
+            ? AppearanceSettings.DarkTheme
+            : AppearanceSettings.LightTheme;
+        var config = new
+        {
+            TaskStorage = new
+            {
+                Path = tasksPath,
+                URL = string.Empty,
+                Login = string.Empty,
+                Password = string.Empty,
+                IsServerMode = "False"
+            },
+            Git = new
+            {
+                BackupEnabled = "False",
+                ShowStatusToasts = "False",
+                RemoteUrl = string.Empty,
+                Branch = "main",
+                UserName = string.Empty,
+                Password = string.Empty,
+                PullIntervalSeconds = "30",
+                PushIntervalSeconds = "60",
+                RemoteName = "origin",
+                PushRefSpec = "refs/heads/main",
+                CommitterName = "Unlimotion Status Contract",
+                CommitterEmail = "status-contract@unlimotion.app"
+            },
+            AllTasks = new
+            {
+                ShowCompleted = "True",
+                ShowArchived = "True",
+                ShowWanted = "False",
+                CurrentSortDefinition = "Comfort",
+                CurrentSortDefinitionForUnlocked = "Comfort"
+            },
+            TaskStatusModel = new
+            {
+                MigrationNoticeShown = "True"
+            },
+            Appearance = new
+            {
+                Theme = themeMode,
+                FontSize = AppearanceSettings.DefaultFontSize,
+                Language = languageMode
+            }
+        };
+
+        WriteJson(configPath, config);
+    }
+
+    private static void SeedStatusContractTasks(string tasksPath)
+    {
+        // Keep one shared clock for deterministic relative ordering. The UI scenario
+        // explicitly selects the All Time archive filter before locating this task.
+        var seedTime = DateTimeOffset.Now;
+        var tasks = new[]
+        {
+            new TaskItem
+            {
+                Id = StatusContractTerminalTaskId,
+                Title = StatusContractTerminalTaskTitle,
+                Description = "Completed task used to verify terminal transition presentation.",
+                Status = Domain.TaskStatus.Completed,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-3)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.InProgress, seedTime.AddMinutes(-1)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Completed, seedTime)
+                ],
+                IsCanBeCompleted = true,
+                CreatedDateTime = seedTime.AddMinutes(-3),
+                UpdatedDateTime = seedTime,
+                Version = 1
+            },
+            new TaskItem
+            {
+                Id = StatusContractArchivedTaskId,
+                Title = StatusContractArchivedTaskTitle,
+                Description = "Archived task whose last active status was InProgress.",
+                Status = Domain.TaskStatus.Archived,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-3)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.InProgress, seedTime.AddMinutes(-1)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Archived, seedTime)
+                ],
+                IsCanBeCompleted = true,
+                CreatedDateTime = seedTime.AddMinutes(-3),
+                UpdatedDateTime = seedTime,
+                Version = 1
+            },
+            new TaskItem
+            {
+                Id = StatusContractFutureTaskId,
+                Title = StatusContractFutureTaskTitle,
+                Description = "Prepared task whose planned start is in the future.",
+                Status = Domain.TaskStatus.Prepared,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+                ],
+                PlannedBeginDateTime = seedTime.AddDays(1),
+                IsCanBeCompleted = true,
+                CreatedDateTime = seedTime.AddMinutes(-2),
+                UpdatedDateTime = seedTime.AddMinutes(-1),
+                Version = 1
+            },
+            new TaskItem
+            {
+                Id = StatusContractBlockedTaskId,
+                Title = StatusContractBlockedTaskTitle,
+                Description = "Prepared task with an active direct blocker.",
+                Status = Domain.TaskStatus.Prepared,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+                ],
+                BlockedByTasks = [StatusContractBlockerTaskId],
+                IsCanBeCompleted = false,
+                CreatedDateTime = seedTime.AddMinutes(-2),
+                UpdatedDateTime = seedTime.AddMinutes(-1),
+                Version = 1
+            },
+            new TaskItem
+            {
+                Id = StatusContractBlockerTaskId,
+                Title = StatusContractBlockerTaskTitle,
+                Description = "Active blocker for the status-contract blocked task.",
+                Status = Domain.TaskStatus.InProgress,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-3)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.InProgress, seedTime.AddMinutes(-1))
+                ],
+                BlocksTasks = [StatusContractBlockedTaskId],
+                IsCanBeCompleted = true,
+                CreatedDateTime = seedTime.AddMinutes(-3),
+                UpdatedDateTime = seedTime.AddMinutes(-1),
+                Version = 1
+            }
+        };
+
+        foreach (var task in tasks)
+        {
+            WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+        }
+    }
+
+    private static void WriteStatusContractTaskJson(string path, TaskItem task)
+    {
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var payload = JsonSerializer.SerializeToNode(task, options)?.AsObject()
+            ?? throw new InvalidOperationException($"Unable to serialize status-contract task '{task.Id}'.");
+
+        // TaskItem keeps these compatibility aliases for callers, but current-format task files
+        // must omit them or startup correctly treats the file as a legacy status-model payload.
+        payload.Remove(nameof(TaskItem.IsCompleted));
+        payload.Remove(nameof(TaskItem.CompletedDateTime));
+        payload.Remove(nameof(TaskItem.ArchiveDateTime));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, payload.ToJsonString(options));
+    }
+
+    private static TaskStatusHistoryEntry CreateStatusHistoryEntry(
+        Domain.TaskStatus status,
+        DateTimeOffset changedAt)
+    {
+        return new TaskStatusHistoryEntry
+        {
+            Status = status,
+            ChangedAt = changedAt,
+            Author = "status-contract-seed"
+        };
     }
 
     private static void SeedReadmeDemoTasks(string tasksPath, string? language)

@@ -15,6 +15,80 @@ namespace Unlimotion.Test;
 public class FileStorageTaskStatusTests
 {
     [Test]
+    public async Task UnarchiveCommand_PreservesNullAndFutureHistoryAndAppendsOneNormalizedEntry()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var validInProgressAt = now.AddHours(-2);
+            var farFutureAt = now.AddDays(30);
+            var storage = new FileStorage(tempDir, watcher: false);
+            var task = new TaskItem
+            {
+                Id = "legacy-unarchive-history-task",
+                UserId = "owner",
+                Title = "Legacy unarchive history",
+                Status = DomainTaskStatus.Archived,
+                IsCanBeCompleted = true,
+                StatusHistory =
+                [
+                    null!,
+                    new TaskStatusHistoryEntry
+                    {
+                        Status = DomainTaskStatus.InProgress,
+                        ChangedAt = validInProgressAt,
+                        Author = "legacy"
+                    },
+                    new TaskStatusHistoryEntry
+                    {
+                        Status = DomainTaskStatus.Completed,
+                        ChangedAt = farFutureAt,
+                        Author = "future-corrupt"
+                    },
+                    new TaskStatusHistoryEntry
+                    {
+                        Status = DomainTaskStatus.Archived,
+                        ChangedAt = now.AddHours(-1),
+                        Author = "legacy"
+                    }
+                ]
+            };
+            await storage.Save(task);
+            using var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await repository.Init();
+
+            var result = await repository.TryUnarchiveAsync(task.Id, "tester");
+            var persisted = await storage.Load(task.Id, forced: true);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(result.Success).IsTrue();
+                await Assert.That(result.AuthoritativeTask?.Status)
+                    .IsEqualTo(DomainTaskStatus.Prepared);
+                await Assert.That(persisted).IsNotNull();
+                await Assert.That(persisted!.Status).IsEqualTo(DomainTaskStatus.Prepared);
+                await Assert.That(persisted.StatusHistory.Count)
+                    .IsEqualTo(task.StatusHistory.Count + 1);
+                await Assert.That(persisted.StatusHistory[0]).IsNull();
+                await Assert.That(persisted.StatusHistory[1].Status)
+                    .IsEqualTo(DomainTaskStatus.InProgress);
+                await Assert.That(persisted.StatusHistory[1].ChangedAt.ToUnixTimeSeconds())
+                    .IsEqualTo(validInProgressAt.ToUnixTimeSeconds());
+                await Assert.That(persisted.StatusHistory[2].ChangedAt.ToUnixTimeSeconds())
+                    .IsEqualTo(farFutureAt.ToUnixTimeSeconds());
+                await Assert.That(persisted.StatusHistory[^1].Status)
+                    .IsEqualTo(DomainTaskStatus.Prepared);
+                await Assert.That(persisted.StatusHistory[^1].Author).IsEqualTo("tester");
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task Save_WritesExplicitStatusHistoryAndCompletionCriteriaWithoutLegacyFields()
     {
         var tempDir = CreateTempDirectory();

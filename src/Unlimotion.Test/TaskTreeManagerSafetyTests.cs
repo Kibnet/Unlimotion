@@ -67,6 +67,72 @@ public sealed class TaskTreeManagerSafetyTests
         await Assert.That(storage.SaveOutsideLock).IsFalse();
     }
 
+    [Test]
+    public async Task UpdateTask_SameStatusTitleChangePreservesGenericUpdateSemantics()
+    {
+        var storage = new InMemoryStorage();
+        var existing = CreateTask("same-status-title", DomainTaskStatus.Prepared);
+        existing.Title = "Before";
+        await storage.Save(existing);
+        var change = CreateTask(existing.Id, DomainTaskStatus.Prepared);
+        change.Title = "After";
+
+        await new TaskTreeManager(storage).UpdateTask(change);
+
+        var saved = await storage.Load(existing.Id);
+        await Assert.That(saved).IsNotNull();
+        await Assert.That(saved!.Title).IsEqualTo("After");
+        await Assert.That(saved.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
+    public async Task UpdateTask_DeniedStatusWithTitleChangeRestoresUndefinedPersistedSource()
+    {
+        var persistedStatus = (DomainTaskStatus)int.MaxValue;
+        var requestedStatus = (DomainTaskStatus)(int.MaxValue - 1);
+        var storage = new InMemoryStorage();
+        var existing = CreateTask("undefined-source-mixed", persistedStatus);
+        existing.Title = "Before";
+        await storage.Save(existing);
+        var change = CreateTask(existing.Id, requestedStatus);
+        change.Title = "After";
+
+        await new TaskTreeManager(storage).UpdateTask(change);
+
+        var saved = await storage.Load(existing.Id);
+        await Assert.That(saved).IsNotNull();
+        await Assert.That(saved!.Title).IsEqualTo("After");
+        await Assert.That(saved.Status).IsEqualTo(persistedStatus);
+    }
+
+    [Test]
+    public async Task UpdateTask_AutomaticUnavailableRollbackIsIdempotent()
+    {
+        var storage = new InMemoryStorage();
+        var manager = new TaskTreeManager(storage);
+        var task = CreateTask("rollback-idempotency", DomainTaskStatus.InProgress);
+        task.IsCanBeCompleted = false;
+        task.EnsureStatusHistory();
+        await storage.Save(task);
+
+        task.Title = "first update";
+        await manager.UpdateTask(task);
+        var afterFirstUpdate = await storage.Load(task.Id);
+        await Assert.That(afterFirstUpdate).IsNotNull();
+
+        afterFirstUpdate!.Title = "second update";
+        await manager.UpdateTask(afterFirstUpdate);
+        var afterSecondUpdate = await storage.Load(task.Id);
+
+        await Assert.That(afterSecondUpdate).IsNotNull();
+        await Assert.That(afterSecondUpdate!.Status).IsEqualTo(DomainTaskStatus.Prepared);
+        await Assert.That(afterSecondUpdate.StatusHistory.Count(entry =>
+                entry is not null &&
+                entry.Status == DomainTaskStatus.Prepared &&
+                string.Equals(entry.Author, "System", StringComparison.Ordinal)))
+            .IsEqualTo(1);
+    }
+
     private static TaskItem CreateTask(string id, DomainTaskStatus status) => new()
     {
         Id = id,

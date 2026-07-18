@@ -24,6 +24,7 @@
   <data name="AppearanceHint" xml:space="preserve"><value>How the app looks and reads.</value></data>
   <data name="AppearanceTitle" xml:space="preserve"><value>Appearance</value></data>
   <data name="Archive" xml:space="preserve"><value>Archive</value></data>
+  <data name="Unarchive" xml:space="preserve"><value>Unarchive</value></data>
   <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Archive contained tasks</value></data>
   <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Are you sure you want to archive the {0} contained tasks from "{1}"?</value></data>
   <data name="Archived" xml:space="preserve"><value>Archived</value></data>
@@ -37,9 +38,19 @@
   <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Completed tasks cannot be archived. Return the task to an active status first.</value></data>
   <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Archived tasks cannot be completed. Return the task to an active status first.</value></data>
   <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>The task cannot be started before its planned start date.</value></data>
+  <data name="TaskStatusStartTerminalBlocked" xml:space="preserve"><value>Completed or archived tasks cannot be started. Return the task to an active status first.</value></data>
+  <data name="TaskStatusStartGraphBlocked" xml:space="preserve"><value>Complete contained and blocking tasks before starting this task.</value></data>
   <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Mark all completion criteria before completing the task.</value></data>
+  <data name="TaskStatusCompleteTerminalBlocked" xml:space="preserve"><value>Completed or archived tasks cannot be completed again. Return the task to an active status first.</value></data>
+  <data name="TaskStatusCompleteGraphBlocked" xml:space="preserve"><value>Complete contained and blocking tasks before completing this task.</value></data>
   <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Complete all contained tasks before starting or completing this task.</value></data>
-  <data name="TaskStatusBlockersBlocked" xml:space="preserve"><value>Complete blocking tasks before starting or completing this task.</value></data>
+  <data name="TaskStatusDirectBlockersBlocked" xml:space="preserve"><value>Complete this task's direct blockers before starting or completing it.</value></data>
+  <data name="TaskStatusInheritedBlockersBlocked" xml:space="preserve"><value>Complete blockers inherited from parent tasks before starting or completing this task.</value></data>
+  <data name="TaskStatusSaveFailed" xml:space="preserve"><value>The task status could not be changed. Reload the task before retrying.</value></data>
+  <data name="TaskStatusOutcomeUnknown" xml:space="preserve"><value>The final status is unknown because storage verification failed. Reload the task before retrying.</value></data>
+  <data name="TaskStatusSourceChanged" xml:space="preserve"><value>The task changed in storage and can no longer be unarchived. Its current status has been refreshed.</value></data>
+  <data name="TaskStatusCascadeConfirmationFailed" xml:space="preserve"><value>Could not confirm changes to contained tasks: {0}</value></data>
+  <data name="TaskStatusCascadeSummary" xml:space="preserve"><value>Contained task status changes: {0} succeeded, {1} failed.</value></data>
   <data name="TaskStatusMigrationNotice" xml:space="preserve"><value>Active tasks were migrated to Not ready. Mark prepared tasks manually.</value></data>
   <data name="StatusHistory" xml:space="preserve"><value>Status history</value></data>
   <data name="ArchivedLabelFormat" xml:space="preserve"><value>Archived: {0:yyyy.MM.dd HH:mm}</value></data>

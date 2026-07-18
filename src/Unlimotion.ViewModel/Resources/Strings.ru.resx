@@ -24,6 +24,7 @@
   <data name="AppearanceHint" xml:space="preserve"><value>Как приложение выглядит и читается.</value></data>
   <data name="AppearanceTitle" xml:space="preserve"><value>Внешний вид</value></data>
   <data name="Archive" xml:space="preserve"><value>Архивировать</value></data>
+  <data name="Unarchive" xml:space="preserve"><value>Разархивировать</value></data>
   <data name="ArchiveContainedTasksHeader" xml:space="preserve"><value>Архивировать вложенные задачи</value></data>
   <data name="ArchiveContainedTasksMessage" xml:space="preserve"><value>Архивировать {0} вложенных задач из "{1}"?</value></data>
   <data name="Archived" xml:space="preserve"><value>Архивные</value></data>
@@ -37,9 +38,19 @@
   <data name="TaskStatusArchiveCompletedBlocked" xml:space="preserve"><value>Выполненную задачу нельзя архивировать. Сначала верните задачу в активный статус.</value></data>
   <data name="TaskStatusCompleteArchivedBlocked" xml:space="preserve"><value>Архивную задачу нельзя выполнить. Сначала верните задачу в активный статус.</value></data>
   <data name="TaskStatusStartFutureDateBlocked" xml:space="preserve"><value>Задачу нельзя начать раньше плановой даты начала.</value></data>
+  <data name="TaskStatusStartTerminalBlocked" xml:space="preserve"><value>Выполненную или архивную задачу нельзя запустить. Сначала верните задачу в активный статус.</value></data>
+  <data name="TaskStatusStartGraphBlocked" xml:space="preserve"><value>Перед запуском выполните вложенные и блокирующие задачи.</value></data>
   <data name="TaskStatusCompleteCriteriaBlocked" xml:space="preserve"><value>Отметьте все критерии выполнения перед завершением задачи.</value></data>
+  <data name="TaskStatusCompleteTerminalBlocked" xml:space="preserve"><value>Выполненную или архивную задачу нельзя завершить повторно. Сначала верните задачу в активный статус.</value></data>
+  <data name="TaskStatusCompleteGraphBlocked" xml:space="preserve"><value>Перед завершением выполните вложенные и блокирующие задачи.</value></data>
   <data name="TaskStatusContainedTasksBlocked" xml:space="preserve"><value>Сначала выполните все вложенные задачи.</value></data>
-  <data name="TaskStatusBlockersBlocked" xml:space="preserve"><value>Сначала выполните блокирующие задачи.</value></data>
+  <data name="TaskStatusDirectBlockersBlocked" xml:space="preserve"><value>Сначала выполните прямые блокирующие задачи.</value></data>
+  <data name="TaskStatusInheritedBlockersBlocked" xml:space="preserve"><value>Сначала выполните блокирующие задачи, унаследованные от родительских задач.</value></data>
+  <data name="TaskStatusSaveFailed" xml:space="preserve"><value>Не удалось изменить статус задачи. Обновите задачу перед повторной попыткой.</value></data>
+  <data name="TaskStatusOutcomeUnknown" xml:space="preserve"><value>Итоговый статус неизвестен: проверка хранилища завершилась ошибкой. Обновите задачу перед повторной попыткой.</value></data>
+  <data name="TaskStatusSourceChanged" xml:space="preserve"><value>Задача изменилась в хранилище, и её больше нельзя разархивировать. Текущий статус обновлён.</value></data>
+  <data name="TaskStatusCascadeConfirmationFailed" xml:space="preserve"><value>Не удалось подтвердить изменение вложенных задач: {0}</value></data>
+  <data name="TaskStatusCascadeSummary" xml:space="preserve"><value>Изменение статусов вложенных задач: успешно — {0}, с ошибкой — {1}.</value></data>
   <data name="TaskStatusMigrationNotice" xml:space="preserve"><value>Активные задачи перенесены в статус Не готово. Отметьте подготовленные задачи вручную.</value></data>
   <data name="StatusHistory" xml:space="preserve"><value>История статусов</value></data>
   <data name="ArchivedLabelFormat" xml:space="preserve"><value>Архивировано: {0:yyyy.MM.dd HH:mm}</value></data>
