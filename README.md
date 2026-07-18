@@ -9,23 +9,64 @@
 3. A task can be a subtask in several tasks at once
 4. Storing your data on your device
 
-## Launching the application
-Case 1:
-If you use OS Windows, Debian or MacOS, you can click on the link with releases and download the latest version of this application.
-You need to run the following command: sudo chmod -R 755 /Applications/Unlimotion.app after installing on MacOS.
-Rights aren't automatically granted due to Apple's security policy for unsigned applications.
-No additional steps are required for correct installation on OS Windows and Debian.
+## Download and install
 
-Case 2:
-1. Download and install the [.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download) for your operating system
-2. Download the latest version of the program's source code as a [zip-archive](https://github.com/Kibnet/Unlimotion/archive/refs/heads/main.zip) and **unpack** it to any folder on your computer.
-If you know the git version control system, instead of downloading the archive, clone this [git-repository](https://github.com/Kibnet/Unlimotion.git)
-to your computer in any folder using your favorite git-client (for example [Fork](https://git-fork.com/)).
-3. Open the resulting source сode folder on your computer.
-4. Run the script file from the folder depending on the operating system:
-    - Windows - `run.windows.cmd`
-    - Mac OS - `run.macos.sh`
-    - Linux - `run.linux.sh`
+Ready-to-run self-contained published builds are available on the [latest GitHub release](https://github.com/Kibnet/Unlimotion/releases/latest) page. They do not require the .NET SDK. An artifact being published does not guarantee compatibility with every OS version; a complete platform smoke-test matrix is still being established.
+
+| Available build | File to choose | Current validation status |
+| --- | --- | --- |
+| Windows x64 | `Unlimotion-win-Setup.exe` or `Unlimotion-win-Portable.zip` | Published. The project does not currently publish verified Authenticode evidence. Microsoft Defender SmartScreen may show a warning. |
+| Linux x64 (AppImage) | `Unlimotion.AppImage` | Published generic Linux option; distribution compatibility has not yet been smoke-tested as a complete matrix. |
+| Linux x64 (.deb) | `Unlimotion-<version>.deb` | Preview. Compatibility with current Debian releases has not yet been verified. |
+| macOS x64 | `Unlimotion-osx-Setup.pkg` or `Unlimotion-osx-Portable.zip` | Intel build. The project does not currently publish verified Developer ID signing and notarization evidence. |
+| macOS arm64 | `Unlimotion-osx-arm64-Setup.pkg` or `Unlimotion-osx-arm64-Portable.zip` | Apple Silicon build. The project does not currently publish verified Developer ID signing and notarization evidence. |
+| Android arm64 | `Unlimotion-<version>-android-arm64.apk` | Sideloaded APK. The project declares Android 6.0 / API 23 as its minimum; this is not a universal device-compatibility guarantee. |
+| Android x64 | `Unlimotion-<version>-android-x64.apk` | Sideloaded APK, primarily for x86_64 devices and emulators; the same Android minimum-version caveat applies. |
+
+- For a Windows or macOS portable ZIP, extract the archive before starting the included application.
+- For the AppImage, download it and run:
+
+```bash
+chmod +x Unlimotion.AppImage
+./Unlimotion.AppImage
+```
+
+- On macOS, the project does not currently publish verified signing and notarization evidence for these packages. Gatekeeper may block them. If you trust the downloaded artifact, follow Apple's official [Open Anyway guidance](https://support.apple.com/en-us/102445). Changing file permissions does not establish trust or notarization.
+- Android installation is performed outside an app store. The OS may ask you to allow installation from the selected source; the exact permission flow depends on the Android version and device. When updating in the app, Android downloads the matching APK and asks for system installation confirmation.
+- The desktop in-app updater is available only when Velopack recognizes the current installation as managed. Portable and source runs must not rely on that updater; use the Releases page instead.
+
+## Build and run from source
+
+Cloning `main` gives you the current development snapshot. For a stable build or matching source archive, use the Releases page above.
+
+Prerequisites:
+
+- Git
+- [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), compatible with `global.json`
+- Network access to NuGet for the first restore
+
+Run the commands from the repository root.
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/Kibnet/Unlimotion.git
+Set-Location Unlimotion
+.\run.windows.cmd
+```
+
+Linux or macOS:
+
+```bash
+git clone https://github.com/Kibnet/Unlimotion.git
+cd Unlimotion
+
+# Linux
+bash ./run.linux.sh
+
+# macOS
+bash ./run.macos.sh
+```
 
 ## Conceptual description
 
@@ -79,8 +120,6 @@ Markdown outline import/export uses these markers:
 | `[>]` | In progress |
 | `[x]` | Completed |
 | `[#]` | Archived |
-
-On first startup with the new model, old active tasks (`IsCompleted=false`) migrate to `Not ready`, because `Prepared` now means an explicit user decision that the task has enough context. Migration rollback is expected to use the Git history of the task storage directory.
 
 The same status picker is available in task lists, the roadmap and the current task card, so a task can move between planning, active work, completion and archive without changing views.
 
@@ -209,34 +248,3 @@ On the tabs where the tasks are not displayed in a hierarchical form, all the em
 This allows you to visually immediately understand where this task comes from.
 
 Emoji filters open as a searchable multi-select dropdown: type part of a tag title or emoji, keep the list open and toggle several include or exclude filters without resetting the panel.
-
-## Backlog of features
-- [x] Emoji in the title is inherited for subtasks
-- [x] Hotkey **Shift+Enter** to create a blocked subtask of a task
-- [x] Fields "Start date of planned execution" and "End date of planned execution"
-- [x] Filter by execution status
-- [x] Filter by the start date of the planned execution
-- [x] "Task Duration" field 
-- [x] Ability to clone tasks via drag and drop with **Ctrl+Shift**
-- [x] Automatic saving of tasks when links change
-- [x] Repeatable tasks can be created
-- [x] Emoji Filter
-- [x] Go to the task description by double-clicking from any list
-- [x] The unlocked view is updated when the day changes
-- [x] The buttons for adding tasks have been set up
-- [ ] Search for tasks
-- [ ] Navigating through breadcrumb tasks
-- [ ] Block all subtasks of a blocked task
-- [ ] Filter by the relevance of scheduled tasks
-- [ ] The planned period is inherited for children
-- [ ] When changing emoji, refresh all the inscriptions of children
-- [ ] Watcher for tracking file changes
-- [ ] Mass transfer of tasks
-- [ ] Fixing the time spent on the task
-- [ ] Advance task reminder
-- [ ] Build a mobile app for Android and iOS
-- [ ] When drag and drop, so that scrolling works when moving the pointer to the top and bottom of the list
-- [ ] Attaching files to a task
-- [ ] Write a server for storing tasks
-- [ ] History of transitions between tasks
-- [ ] Change history with the ability to roll back changes
