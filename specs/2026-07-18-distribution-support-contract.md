@@ -11,7 +11,7 @@
 - Execution / evidence runtime: локальный Windows/PowerShell workspace; native verification выполняется на Windows Server 2022, macOS 15 Intel/arm64, Android API 23/36 emulator и чистых Debian 12/13 x64 images.
 - Eval baseline / evidence: model eval — `Не применимо`; product/evidence baseline — release `1.27.0` и текущие production `release.published` workflows; runtime UI/data/update behavior не меняется.
 - Целевой релиз / ветка: `docs/distribution-support-contract`; prerequisite closeout PR #278 merged as `ad90260b62be899d9f9946e81ce710ed88c2f87a`; SPEC/EXEC base = `origin/main@ad90260b62be899d9f9946e81ce710ed88c2f87a`; future dry-run fixture = `v1.28.0`, публикация запрещена.
-- Текущая фаза: `SPEC`; production/workflow EXEC запрещён до отдельного approval точной фразой `Спеку подтверждаю`.
+- Текущая фаза: `EXEC`; пользователь подтвердил child spec точной фразой `Спеку подтверждаю` 2026-07-19.
 - Freshness baseline от 2026-07-18:
   - latest published release = `1.27.0`, target `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`, 22 assets;
   - Stage 2 доставлен merged PR #277, merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`;
@@ -800,7 +800,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 - [x] README support promotion fail-closed.
 - [x] Rollback не мутирует published release.
 - [x] Independent Post-SPEC review выполнен, три роли PASS, findings закрыты.
-- [ ] Пользователь явно утвердил child spec.
+- [x] Пользователь явно утвердил child spec точной фразой `Спеку подтверждаю`.
 
 ## 13. План выполнения
 
@@ -1033,9 +1033,9 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 
 Master roadmap подтверждена ранее. Это approval не распространяется автоматически на Stage 3.
 
-Stage-3 child approval: `PENDING`. Разрешающая фраза после final Post-SPEC PASS: `Спеку подтверждаю`.
+Stage-3 child approval: `APPROVED` 2026-07-19 точной фразой `Спеку подтверждаю`.
 
-До её получения разрешены только audit/review и edits/commit текущей working child spec. Packaging/workflow/run-script/README и другие project/spec files изменять запрещено.
+EXEC разрешён только в утверждённых границах, allowlist, non-goals и stop rules этой child spec.
 
 ## 20. Журнал действий агента
 
@@ -1047,9 +1047,10 @@ Stage-3 child approval: `PENDING`. Разрешающая фраза после 
 | SPEC | Проверить `.deb`/AppImage | 1.00 | Local Docker daemon unavailable | Сделать Debian CI mandatory | Нет | Не применимо | Exact artifact audit выявил dependency/layout/FUSE blockers | `.deb`/AppImage contents, WSL evidence |
 | SPEC | Определить manifest/version contract | 1.00 | Нет | Получить child approval перед EXEC | Нет | Не применимо | Raw tag отделён от normalized names; exact roles/version/cache policies прошли review | Эта spec |
 | SPEC | Зафиксировать no-publication/native evidence plan | 1.00 | Нет | Получить child approval перед EXEC | Нет | Не применимо | Exact-byte matrix, Android least privilege и Stage-4 rebuild boundary прошли review | Эта spec |
-| SPEC | Запросить Stage-3 approval | 1.00 | Только решение пользователя | Зафиксировать spec-only commit и запросить точную фразу | Да | Ещё не запрашивалось | Master approval не заменяет child approval; Post-SPEC теперь PASS | Эта spec |
+| SPEC | Запросить Stage-3 approval | 1.00 | Нет | Перейти к EXEC в утверждённом allowlist | Нет | Пользователь сообщил `Спеку подтверждаю` 2026-07-19 | Master approval не заменял child approval; отдельный Stage-3 gate теперь закрыт | Эта spec, user approval |
 | SPEC | Доставить factual Stage-2 delivery record отдельно от Stage 3 | 1.00 | Нет | Пересоздать Stage-3 branch от post-merge main | Нет | PR #278 merged as `ad90260b62be899d9f9946e81ce710ed88c2f87a` | Local `f26fa06` cherry-picked as `fc52779`, delivered separately; Stage-2 spec больше не входит в Stage-3 prospective diff | PR #278, `ad90260b`, `fc52779` |
 | SPEC | Повторить Stage-3 freshness/scope gate после PR #278 | 1.00 | Нет | Запросить child approval | Нет | Не применимо | HEAD основан на `origin/main@ad90260b`; branch diff пуст, working tree содержит только текущую Stage-3 spec | `git merge-base`, `git diff --name-status`, `git status --short`, эта spec |
 | SPEC | Выполнить first independent multi-role review | 1.00 | Найдены HIGH/MEDIUM gaps | Исправить все deterministic findings | Нет | Три reviewers вернули NEEDS-FIX, BLOCKER нет | Проверены package architecture, CI/security/event boundary и QA/docs/template trace | Эта spec, source/workflows/release evidence |
 | SPEC | Исправить Post-SPEC findings | 1.00 | Нет | Зафиксировать reviewed spec и запросить approval | Нет | Не применимо | Добавлены upgrade/single-publish/cache/feed, Android isolation, external Debian harness, exact trigger/transport/retry/support mapping и final-head sequence | Эта spec |
 | SPEC | Выполнить final independent re-review | 1.00 | Только user approval перед EXEC | Сделать spec-only commit и запросить `Спеку подтверждаю` | Да | Три reviewers вернули PASS | Platform/package, CI/security и QA/docs подтвердили SHA `0D68F964...`; 22 H2, 8 fences, 21/21 AC, scope/ancestry PASS | Reviewer verdicts, structural gates, эта spec |
+| EXEC | Принять Stage-3 child approval и открыть implementation phase | 1.00 | Native CI evidence появится после draft PR | Реализовать contract/builders/workflows/README в exact allowlist | Нет | Пользователь сообщил `Спеку подтверждаю` | Approval получен после final Post-SPEC PASS; release mutation по-прежнему запрещена | Эта spec, current branch |
