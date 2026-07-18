@@ -783,17 +783,17 @@ Stop rules для validation:
   - Debian support matrix требует native/package smoke evidence.
 
 ### Post-EXEC Review
-- Статус: В процессе; stage 1 доставлен merged PR #274 (`8e34408`); Stage-2 child EXEC и полный локальный validation/Post-EXEC gate PASS, delivery подготовлен — commit/push/PR/checks/merge pending; stages 3-10 pending
+- Статус: В процессе; stage 1 доставлен merged PR #274 (`8e34408`), stage 2 доставлен merged PR #277 (`75efc049`); Stage-3 child SPEC подготовлена на ветке `docs/distribution-support-contract`, EXEC ожидает отдельного approval; stages 4-10 pending
 - Scope reviewed: выполненный child package stage 1, фактический Stage-2 code/test/docs/UI-evidence diff, связь обоих packages с roadmap AC/exit criteria и отсутствие преждевременных изменений из stages 3+
-- Decision: stage 1 завершён; lifecycle prerequisite PR #275 и README PR #274 merged. Stage 2 прошёл dependency/ancestry, implementation, full local validation, visual evidence и independent Post-EXEC re-review; package допущен к commit/push/draft PR, но merge разрешён только после required GitHub checks
+- Decision: stages 1-2 завершены. Stage 2 прошёл dependency/ancestry, implementation, full local validation, visual evidence, independent Post-EXEC re-review и green GitHub checks; PR #277 merged. Следующий разрешённый шаг — только review/approval Stage-3 child spec, не production EXEC
 - Review passes:
   - Scope/Evidence pass: stage 1 PASS; docs-only diff и local/live evidence соответствуют child spec.
   - Contract pass: stage 1 PASS; release, support, signing, updater и source-build claims сужены до проверяемого AS-IS.
   - Adversarial risk pass: stage 1 PASS; проверены drift latest release, unsupported-platform overclaim, `v`-tag edge case, mobile overflow и unrelated changes.
   - Role-Based pass: stage 1 PASS после release, tester/diff, copy/UX и delivery reviews.
   - Re-review after fixes / Fix and re-review: stage 1 PASS; copy findings исправлены и полный gate повторён.
-  - Stop decision: Stage-2 approval, prerequisite и local gate закрыты; продолжить delivery, stages 3+ не начинать без отдельной child SPEC и approval.
-- Evidence inspected: stage-1 child Post-EXEC review, merged PR #275 (`118c2dc`) и PR #274 (`8e34408`), release/parity/structural/GFM reports и actual EN/RU GitHub render; для Stage 2 — 47 tracked content diffs + 12 new, targeted/full TRX/HTML, solution/Telegram builds, before/after MP4, six FlaUI screenshots, `ffprobe`/SHA metadata и independent API/docs reviews
+  - Stop decision: Stage-2 delivery закрыт; Stage-3 implementation не начинать без отдельной child SPEC, Post-SPEC PASS и approval.
+- Evidence inspected: stage-1 child Post-EXEC review, merged PR #275 (`118c2dc`) и PR #274 (`8e34408`), release/parity/structural/GFM reports и actual EN/RU GitHub render; для Stage 2 — 47 tracked content diffs + 12 new, targeted/full TRX/HTML, solution/Telegram builds, before/after MP4, six FlaUI screenshots, `ffprobe`/SHA metadata, independent API/docs reviews, PR #277 green checks и merge `75efc049`
 - Depth checklist: stage ownership, exit criteria, dependency/ancestry boundaries, API/schema compatibility, UI/accessibility/video evidence, rollback и residual routing проверены; незавершённые stages не объявлены выполненными
 - No-findings justification: stage 1 PASS после fixes; Stage-2 local verdict PASS после полного gate/re-review, новых BLOCKER/HIGH/MEDIUM findings нет; внешний delivery verdict появится после PR checks/merge; по stages 3-10 выводов PASS нет
 
@@ -804,13 +804,13 @@ Stop rules для validation:
 | MEDIUM | stage 2 / lifecycle | Прямой `UnifiedTaskStorage.Dispose()` не атомарно блокирует уже начавшийся confirmation producer | Вынести в отдельную production-storage-lifecycle child spec; не расширять утверждённый Stage-2 scope | follow-up |
 | LOW | stage 2 / server | Existing server transport не даёт cross-client compare-and-swap | Сохранять честный `OutcomeUnknown`; проектировать server-authoritative wire command отдельно | follow-up |
 | LOW | stage 2 / UI infra | Fake Headless drawing backend не является pixel oracle; real-Skia capture нестабилен | Семантика остаётся в Headless, реальные screenshot/tooltip evidence — во FlaUI; harden capture отдельно | follow-up |
-| INFO | program | Stage 2 local gate PASS, delivery PR/checks/merge ещё не завершён; stages 3-10 не начаты | Закрыть Stage-2 delivery, затем подготовить и отдельно утвердить Stage-3 child spec | delivery pending |
+| INFO | program | Stages 1-2 delivered; Stage-3 child SPEC подготовлена, но implementation не начата | Выполнить Post-SPEC gate и получить отдельное approval Stage 3 | approval pending |
 
 - Fixed before final report: stage-1 copy/scope findings исправлены; Stage-2 re-review исправил public setter/API/numeric compatibility, default-interface fallback, blocker-reason priority, authoritative stale-history unarchive/precondition, honest failure copy, real tooltip/evidence, row-scoped selection, deterministic confirmation, recorder FPS, runtime localization и README opacity overclaim; program-level final report ещё не наступил
-- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted suites PASS, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds с 0 errors, diff/schema/API gates и before/after recorder evidence PASS; required GitHub checks фиксируются после PR creation
-- Validation evidence: stage 1 — PASS/merged; Stage 2 — `LOCAL PASS / DELIVERY PENDING`; stages 3-10 — pending и не оценены как выполненные
-- Unrelated changes: в stages 1-2 не обнаружены; ignored UI evidence не входит в commit
-- Needs human: для Stage 2 — нет, отдельное approval уже получено; stage 3 и далее сохраняют child approval gates
+- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted suites PASS, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds с 0 errors, diff/schema/API/video evidence и required GitHub checks PASS
+- Validation evidence: stage 1 — PASS/merged; Stage 2 — PASS/merged PR #277; Stage 3 — SPEC/review only, implementation pending approval; stages 4-10 — pending и не оценены как выполненные
+- Unrelated changes: в stages 1-2 не обнаружены; ignored UI evidence не входит в commits; Stage-3 branch создана от merged `origin/main@75efc049`
+- Needs human: отдельное approval Stage 3 после Post-SPEC PASS; последующие stages сохраняют собственные child approval gates
 - Residual risks / follow-ups: production-storage lifecycle, server CAS, Headless pixel-capture infrastructure и stages 3-10 сохраняются
 
 ## Approval
@@ -841,3 +841,5 @@ Master roadmap подтверждена пользователем 2026-07-17 т
 | EXEC | Выполнить Stage-2 focused/full validation | 1.00 | Только внешний GitHub gate | Зафиксировать локальный PASS и начать delivery | Нет | Не применимо | Final targeted suites, Unit 755/755, Headless 33/33, FlaUI 3/3, solution/Telegram builds, diff/schema/API и media gates PASS | TUnit TRX/HTML, FlaUI screenshots/video, session build output (not separately retained) |
 | EXEC | Исправить поздние Stage-2 re-review findings | 1.00 | Нет локальных | Провести финальный independent re-review | Нет | Не применимо | Помимо runtime localization/README opacity исправлены public API/numeric compatibility, stale authoritative unarchive, default-interface fallback и honest failure copy; полный gate повторён | Production/API/UI/tests, paired README, child spec |
 | EXEC | Закрыть Stage-2 local Post-EXEC gate | 1.00 | PR number, required checks и merge commit | Commit/push, draft PR, дождаться checks и завершить delivery | Нет для Stage 2 | Не применимо | Independent code/API и docs-parity reviews PASS; scope 47 tracked content diffs + 12 new, unrelated changes отсутствуют, residuals вынесены в child Post-EXEC | `specs/2026-07-17-status-availability-contract.md`, этот roadmap, local validation evidence |
+| EXEC | Завершить Stage-2 delivery | 1.00 | Нет | Создать Stage-3 child SPEC от merged main | Нет | Не применимо | Commit `b7166d6`, PR #277 и все required GitHub checks PASS; merge commit `75efc049`, remote branch удалена | GitHub PR #277, `origin/main@75efc049`, Stage-2 child spec |
+| SPEC | Выполнить freshness/audit gate Stage 3 | 0.99 | Требуется Post-SPEC independent review и approval | Зафиксировать distribution contract, проверить rubric/linter и запросить approval | Да | Ещё не обращались за Stage-3 approval | Проверены 22 assets 1.27.0, четыре packaging workflows, run scripts и точные Windows/macOS/Linux/Android artifacts; implementation остаётся закрыта | `specs/2026-07-18-distribution-support-contract.md`, branch `docs/distribution-support-contract` |

@@ -15,7 +15,7 @@
   - `MainControlTaskStatusIconUiTests`: 20/20 PASS, но текущие assertions используют ViewModel как собственный oracle;
   - dependency/freshness gate повторён 2026-07-18 на merged PR #274 / `origin/main` commit `8e34408a29894b9eaab2981b79ded86c83a634a5`;
   - фактические before/after MP4 и четыре after-снимка получены автоматизированным FlaUI flow; Headless используется для semantic/accessibility assertions без недостоверной fake-backend raster capture.
-- Целевой релиз / ветка: `fix/status-availability-contract`; EXEC base = merged PR #274 / `origin/main` `8e34408a29894b9eaab2981b79ded86c83a634a5`; локальная реализация и validation завершены, delivery gate выполняется
+- Целевой релиз / ветка: `fix/status-availability-contract`; EXEC base = merged PR #274 / `origin/main` `8e34408a29894b9eaab2981b79ded86c83a634a5`; package доставлен merged PR #277, merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`
 - Ограничения:
   - текущая фаза `EXEC`: пользователь 2026-07-17 сообщил точную фразу `Спеку подтверждаю` и попросил выполнить все этапы;
   - утверждены рекомендованные product choices: denied desktop targets видны disabled с inline reason/HelpText; previous `Completed`/missing/corrupt history восстанавливается в `NotReady`; Telegram входит в Stage 2;
@@ -724,7 +724,7 @@ Stop rules для validation:
 9. Завершено локально: Headless semantic contract, три focused FlaUI flows, RU/EN/light/dark assertions, after MP4 и четыре screenshots PASS.
 10. Завершено: Telegram keyboard/callback переведены на storage-backed path и покрыты handler tests/build.
 11. Завершено: README EN/RU и точечная errata старой spec обновлены; Stage-7 marker-export copy не менялась.
-12. Локальный gate завершён 2026-07-18: targeted Unit, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds, diff/schema/API checks, visual evidence и независимый Post-EXEC review PASS. Delivery остаётся: commit/push, draft PR, required checks, ready/merge и последующая фиксация merge record.
+12. Локальный gate завершён 2026-07-18: targeted Unit, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds, diff/schema/API checks, visual evidence и независимый Post-EXEC review PASS. Delivery завершён: commit `b7166d6`, PR #277, required GitHub checks PASS и merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`.
 
 ## 14. Открытые вопросы
 Блокирующих product-вопросов нет. Пользователь 2026-07-17 утвердил рекомендованный набор: disabled-with-reason, legacy fallback `NotReady`, Telegram included, и сообщил точную фразу `Спеку подтверждаю`.
@@ -903,16 +903,16 @@ Stop rules для validation:
 - Residual risks / follow-ups: исторические prerequisite/recorder implementation risks закрыты; актуальные residuals перечислены в Post-EXEC
 
 ### Post-EXEC Review
-- Статус: `LOCAL PASS / DELIVERY PENDING`; утверждённый EXEC завершён, локальные implementation, validation, UI-evidence и independent re-review gates пройдены 2026-07-18; commit/PR/required GitHub checks/merge выполняются следующим delivery-шагом
+- Статус: `PASS / DELIVERED`; утверждённый EXEC, локальные implementation/validation/UI-evidence gates и внешний GitHub delivery завершены 2026-07-18; PR #277 merged как `75efc0497af0a1b4678372b67112a8f606ce28c9`
 - Scope reviewed: 47 tracked content diffs и 12 новых файлов в утверждённых Domain, TaskTreeManager, ViewModel, desktop UI, storage adapters, Telegram, tests, paired README и spec/journal surfaces; `artifacts/ui-tests/status-contract/*` ignored/local-only и не входит в commit
-- Decision: локальные части S2-AC-01..17 и pre-delivery часть S2-AC-18 выполнены, package допускается к внешнему delivery gate; PR checks/merge остаются незакрытой частью S2-AC-18, а Stage 3 не начинается до отдельной child SPEC и явного approval
+- Decision: S2-AC-01..18 выполнены; package доставлен в `main`. Stage 3 не начинается до отдельной child SPEC, Post-SPEC PASS и явного approval
 - Review passes:
   - Scope/Evidence pass: PASS — фактический diff сверен с section 16, unrelated files и schema/wire surfaces не затронуты; до/после video, шесть screenshots, TRX/HTML и build/diff evidence проверены.
   - Contract pass: PASS — одна pure 5x5 policy управляет desktop/Telegram adapters; mutations идут через storage-backed commands; dedicated unarchive вычисляет target по freshly-read authoritative history внутри local write boundary.
   - Adversarial risk pass: PASS — проверены invalid/undefined values, diagonal no-op ordering, corrupt/future/null history, stale cache, parent/child partial failure, concurrent unarchive, storage failure, server post-verification и runtime localization.
   - Role-Based pass: PASS — Business/UX/Tester/Architecture/Delivery reviews не оставили BLOCKER/HIGH/MEDIUM findings после fixes.
   - Re-review after fixes / Fix and re-review: PASS — повторный API/compatibility, code, docs parity и UI-evidence reviews подтвердили fixes и честные residuals.
-  - Stop decision: локальный delivery разрешён; после создания PR держать его draft до required GitHub checks, а stage 3 остаётся закрыт отдельным approval gate.
+  - Stop decision: delivery gate закрыт после green checks и merge PR #277; stage 3 остаётся закрыт отдельным approval gate.
 - Evidence inspected:
   - full Unit: 755/755 PASS, `C:\tmp\unlimotion-stage2-unit-20260718-final6\Unlimotion.Test-windows-net10.0-report.html` и `Kibnet_DESKTOP-AUDO1TJ_2026-07-18_19_04_20.6806803.trx`;
   - full Headless: 33/33 PASS, `C:\tmp\unlimotion-stage2-headless-20260718-final6\Unlimotion.UiTests.Headless-windows-net10.0-report.html` и `Kibnet_DESKTOP-AUDO1TJ_2026-07-18_19_06_13.4238520.trx`;
@@ -920,6 +920,7 @@ Stop rules для validation:
   - final targeted reruns: `TaskGraphCommandServiceTests` 38/38, `TaskItemViewModelStatusCommandTests` 15/15, `UnifiedTaskStorageStatusCommandTests` 12/12, `FileStorageTaskStatusTests` 6/6, `ServerStorageStatusCommandTests` 10/10 и `TaskStatusTransitionPolicyTests` 42/42 PASS;
   - `dotnet build src/Unlimotion.sln -c Debug --no-restore -p:UseSharedCompilation=false`: PASS, 0 errors, 118 known baseline/platform/line-ending warnings; отдельный Telegram build: PASS, 0 errors, 47 warnings; exact warning counts наблюдались в финальном session output, отдельный build log не сохранялся;
   - `git diff --check`, protected enum/schema/server-interface/service-model audit и проверка отсутствия cached-history resolver в `TaskItemViewModel`: PASS.
+  - GitHub delivery: PR #277; `All tests`, `android-build` и все CodeQL jobs PASS; commit `b7166d6` merged в `main` как `75efc0497af0a1b4678372b67112a8f606ce28c9`; remote feature branch удалена.
 - UI automation evidence:
   - before video: `artifacts/ui-tests/status-contract/before-terminal-unarchive.mp4`, H.264, 1280x800, 105 s, 3141 frames, average 29.914 fps, SHA-256 `15D509B1C3A1F1EC22951B87118DF0D225B4B5B9080949565941D9EF793F7910`; recorder flow завершён с двумя ожидаемыми baseline failure ids;
   - after video: `artifacts/ui-tests/status-contract/after-terminal-unarchive.mp4`, H.264, 1280x800, 105 s, 3145 frames, nominal 30 fps / average 29.952 fps, SHA-256 `3B175D5280519FE297C98289A32643BBD04480CA2E6096AC3BE1D8FFC9525281`; emitted wrapper session output reported run id `c611cf0ddf644f24af3f28be5a8b5d08`, test exit 0 и empty failure ids, но transient handshake JSON удалён wrapper cleanup;
@@ -937,7 +938,7 @@ Stop rules для validation:
 
 - Fixed before final report: public setter/API/numeric compatibility, blocker diagnostic priority, real tooltip and exact row selection, flyout close, deterministic confirmation TCS, recorder FPS gate, runtime localization including an open picker, README opacity truthfulness, authoritative stale-history unarchive/precondition и честная storage-failure copy.
 - Checks rerun: полный Unit/Headless/FlaUI gate, six final targeted classes, solution/Telegram builds, `git diff --check`, schema/wire audit, media `ffprobe`/SHA и independent code/docs re-reviews.
-- Validation evidence: `LOCAL PASS`; GitHub PR number, required-check results и merge commit будут дописаны в delivery record после выполнения внешнего gate.
+- Validation evidence: `PASS / DELIVERED`; локальный gate дополнен green GitHub checks и merged PR #277.
 - Unrelated changes: не обнаружены; scope = 47 tracked content diffs + 12 new, ignored local UI evidence исключено.
 - Needs human: для Stage-2 delivery — нет; Stage-3 child spec требует отдельного explicit approval до EXEC.
 - Residual risks / follow-ups: storage lifecycle, server CAS, Headless/real-Skia and DPI capture hardening, generic external record serialization caveat и known build warnings, как перечислено в таблице.
@@ -947,7 +948,7 @@ Stop rules для validation:
 
 Stage-2 EXEC разрешён, но production edits остаются заблокированы explicit dependency gate до green/ready/merge PR #274, fetch/rebase, ancestry check и повторного characterization baseline.
 
-Dependency update 2026-07-18: PR #274 merged как `8e34408`; fetch/rebase, ancestry и characterization gates выполнены до production edits. Указанная выше блокировка была соблюдена и больше не активна; локальный validation gate PASS, текущий gate — delivery.
+Dependency update 2026-07-18: PR #274 merged как `8e34408`; fetch/rebase, ancestry и characterization gates выполнены до production edits. Указанная выше блокировка была соблюдена и больше не активна; локальный validation и delivery gates закрыты merged PR #277 (`75efc049`).
 
 Approval master roadmap и stage 1 не распространяется автоматически на этот stage-2 child EXEC.
 
@@ -966,3 +967,4 @@ Approval master roadmap и stage 1 не распространяется авт�
 | SPEC | Закрыть заключительный product-specific audit | 1.00 | Нет | Зафиксировать spec-only commit и перейти к отдельной CI-lifecycle child spec | Нет | Independent reviewer нашёл два conditional Telegram test/callback остатка; оба исправлены | S2-AC-03 и acceptance matrix теперь безусловно включают Telegram; executable scope согласован с утверждённым решением | Эта spec |
 | EXEC | Реализовать и стабилизировать Stage-2 contract | 1.00 | Нет | Выполнить финальный full gate | Нет | Не применимо | Storage-backed status/unarchive, disabled reasons, Telegram parity, localization, README/errata и compatibility guards реализованы; поздние review findings исправлены | Production/test/docs diff, UI automation harness |
 | EXEC | Завершить локальный Stage-2 validation и Post-EXEC review | 1.00 | Только внешний GitHub delivery gate | Commit/push, draft PR, required checks и merge | Нет для Stage 2 | Не применимо | Unit 755/755, Headless 33/33, FlaUI 3/3, builds/diff/schema/media gates и independent re-reviews PASS; residuals честно маршрутизированы | TRX/HTML, `artifacts/ui-tests/status-contract/*` local-only, эта spec, master roadmap |
+| EXEC | Завершить Stage-2 GitHub delivery | 1.00 | Нет | Зафиксировать merge record и открыть Stage-3 SPEC gate | Нет | Не применимо | Commit `b7166d6` прошёл `All tests`, Android и CodeQL checks; PR #277 merged в `main` как `75efc049`, remote branch удалена | GitHub PR #277, `origin/main@75efc049`, эта spec, master roadmap |
