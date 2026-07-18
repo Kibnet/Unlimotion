@@ -83,7 +83,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -148,7 +148,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -195,7 +195,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -286,7 +286,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -391,7 +391,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -451,7 +451,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -504,7 +504,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -558,7 +558,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -602,9 +602,15 @@ public class MainControlFilterToolbarResponsiveUiTests
             }
             finally
             {
-                window?.Close();
-                fixture.CleanTasks();
-                ApplyApplicationFontResources(AppearanceSettings.DefaultFontSize);
+                try
+                {
+                    window?.Close();
+                    await fixture.CleanTasksAsync();
+                }
+                finally
+                {
+                    ApplyApplicationFontResources(AppearanceSettings.DefaultFontSize);
+                }
             }
         }, CancellationToken.None);
     }
@@ -674,7 +680,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -725,7 +731,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -764,7 +770,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -802,7 +808,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -854,7 +860,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -907,7 +913,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -949,7 +955,7 @@ public class MainControlFilterToolbarResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

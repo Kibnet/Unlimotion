@@ -88,7 +88,7 @@ public class PackageUpdateCompatibilityUiTests
             {
                 Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

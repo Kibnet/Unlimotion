@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using ServiceStack;
 using Unlimotion.Services;
@@ -9,18 +13,24 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test
 {
-    public class MainWindowViewModelFixture
+    public class MainWindowViewModelFixture : IAsyncDisposable
     {
         private const string DefaultConfigName = "TestSettings.json";
         private string UniquiId => guid.ToString()!;
         private readonly ThreadLocal<Guid> guid;
         private readonly IDisposable? configurationDisposable;
+        private readonly ITaskStorage ownedTaskStorage;
 
         private readonly string fixtureDirectory;
         private readonly string uniqueConfigName;
-        private bool isCleaned;
+        private readonly object cleanupLock = new();
+        private Task? cleanupTask;
+        internal Func<string, string, Exception?>? DeleteFailureInjector { get; set; }
+        internal Func<ITaskStorage, TaskItemViewModel[]> TaskItemsSnapshotProvider { get; set; } =
+            static repository => repository.Tasks.Items.ToArray();
         public MainWindowViewModel MainWindowViewModelTest { get; private set; }
         public string ConfigPath => Path.GetFullPath(uniqueConfigName);
+        internal string FixtureDirectoryPath => fixtureDirectory;
         public string? TaskTreeExpansionStatePath => TaskTreeExpansionStateStore.GetDefaultPath(ConfigPath);
         public readonly string DefaultTasksFolderPath;
         private readonly string defaultSnapshotsFolderPath;
@@ -91,7 +101,7 @@ namespace Unlimotion.Test
             // Create storage factory
             var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManagerMock);
             // Create file storage
-            storageFactory.CreateFileStorage(DefaultTasksFolderPath);
+            ownedTaskStorage = storageFactory.CreateFileStorage(DefaultTasksFolderPath);
 
             // Create SettingsViewModel
             var settingsViewModel = new SettingsViewModel(configuration);
@@ -101,7 +111,7 @@ namespace Unlimotion.Test
                 new AppNameDefinitionService(),
                 notificationManagerMock,
                 configuration,
-                () => storageFactory.SourceManager.ActiveStorage,
+                () => ownedTaskStorage,
                 settingsViewModel,
                 taskTreeExpansionStatePath: TaskTreeExpansionStatePath
             );
@@ -140,31 +150,194 @@ namespace Unlimotion.Test
             }
         }
 
-        public void CleanTasks()
+        public Task CleanTasksAsync()
         {
-            if (isCleaned)
+            lock (cleanupLock)
             {
+                return cleanupTask ??= CleanTasksCoreAsync();
+            }
+        }
+
+        public ValueTask DisposeAsync() => new(CleanTasksAsync());
+
+        private async Task CleanTasksCoreAsync()
+        {
+            var failures = new List<Exception>();
+            var taskRepository = MainWindowViewModelTest.taskRepository;
+            var filesystemDeletionSafe = true;
+
+            CaptureFailure(failures, MainWindowViewModelTest.Dispose);
+
+            if (taskRepository != null)
+            {
+                TaskItemViewModel[] taskItems = [];
+                try
+                {
+                    taskItems = TaskItemsSnapshotProvider(taskRepository);
+                }
+                catch (Exception exception)
+                {
+                    filesystemDeletionSafe = false;
+                    AddFailure(failures, exception);
+                }
+
+                var sealedSnapshots = new List<Task>(taskItems.Length);
+                foreach (var taskItem in taskItems)
+                {
+                    try
+                    {
+                        sealedSnapshots.Add(taskItem.SealPendingSaves());
+                    }
+                    catch (Exception exception)
+                    {
+                        filesystemDeletionSafe = false;
+                        AddFailure(failures, exception);
+                    }
+                }
+
+                var drainTask = Task.WhenAll(sealedSnapshots);
+                try
+                {
+                    await drainTask;
+                }
+                catch (Exception exception)
+                {
+                    if (drainTask.Exception != null)
+                    {
+                        foreach (var innerException in drainTask.Exception.Flatten().InnerExceptions)
+                        {
+                            failures.Add(innerException);
+                        }
+                    }
+                    else
+                    {
+                        AddFailure(failures, exception);
+                    }
+                }
+            }
+
+            if (ownedTaskStorage is IDisposable taskStorageDisposable)
+            {
+                CaptureFailure(failures, taskStorageDisposable.Dispose);
+            }
+
+            if (configurationDisposable != null)
+            {
+                CaptureFailure(failures, configurationDisposable.Dispose);
+            }
+
+            if (filesystemDeletionSafe)
+            {
+                await DeleteWithRetryAsync(
+                    "delete config file",
+                    uniqueConfigName,
+                    () => File.Exists(uniqueConfigName),
+                    () => File.Delete(uniqueConfigName),
+                    failures);
+
+                if (!string.IsNullOrWhiteSpace(TaskTreeExpansionStatePath))
+                {
+                    var expansionStatePath = TaskTreeExpansionStatePath;
+                    await DeleteWithRetryAsync(
+                        "delete expansion-state file",
+                        expansionStatePath,
+                        () => File.Exists(expansionStatePath),
+                        () => File.Delete(expansionStatePath),
+                        failures);
+                }
+
+                await DeleteWithRetryAsync(
+                    "delete tasks directory",
+                    DefaultTasksFolderPath,
+                    () => Directory.Exists(DefaultTasksFolderPath),
+                    () => Directory.Delete(DefaultTasksFolderPath, true),
+                    failures);
+                await DeleteWithRetryAsync(
+                    "delete fixture directory",
+                    fixtureDirectory,
+                    () => Directory.Exists(fixtureDirectory),
+                    () => Directory.Delete(fixtureDirectory, true),
+                    failures);
+            }
+
+            if (failures.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+
+            if (failures.Count > 1)
+            {
+                throw new AggregateException("Fixture cleanup failed.", failures);
+            }
+        }
+
+        private async Task DeleteWithRetryAsync(
+            string operation,
+            string path,
+            Func<bool> exists,
+            Action delete,
+            ICollection<Exception> failures,
+            int attempts = 3)
+        {
+            Exception? lastException = null;
+            for (var attempt = 1; attempt <= attempts; attempt++)
+            {
+                try
+                {
+                    if (!exists())
+                    {
+                        return;
+                    }
+
+                    var injectedFailure = DeleteFailureInjector?.Invoke(operation, path);
+                    if (injectedFailure != null)
+                    {
+                        throw injectedFailure;
+                    }
+
+                    delete();
+                    return;
+                }
+                catch (Exception exception)
+                {
+                    lastException = exception;
+                    if (attempt < attempts)
+                    {
+                        await Task.Delay(100);
+                    }
+                }
+            }
+
+            failures.Add(new IOException(
+                $"Failed to {operation} '{path}' after {attempts} attempts.",
+                lastException));
+        }
+
+        private static void CaptureFailure(ICollection<Exception> failures, Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                AddFailure(failures, exception);
+            }
+        }
+
+        private static void AddFailure(ICollection<Exception> failures, Exception exception)
+        {
+            if (exception is AggregateException aggregateException)
+            {
+                foreach (var innerException in aggregateException.Flatten().InnerExceptions)
+                {
+                    failures.Add(innerException);
+                }
+
                 return;
             }
 
-            isCleaned = true;
-            var taskStorageDisposable = MainWindowViewModelTest.taskRepository as IDisposable;
-            MainWindowViewModelTest.Dispose();
-            taskStorageDisposable?.Dispose();
-            configurationDisposable?.Dispose();
-
-            if (File.Exists(uniqueConfigName))
-            {
-                Try(() => File.Delete(uniqueConfigName));
-            }
-
-            if (!string.IsNullOrWhiteSpace(TaskTreeExpansionStatePath) && File.Exists(TaskTreeExpansionStatePath))
-            {
-                Try(() => File.Delete(TaskTreeExpansionStatePath));
-            }
-
-            Try(() => Directory.Delete(DefaultTasksFolderPath, true));
-            Try(() => Directory.Delete(fixtureDirectory, true));
+            failures.Add(exception);
         }
     }
 }

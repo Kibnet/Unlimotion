@@ -22,7 +22,7 @@ public static class HeadlessSessionExtensions
 
         async Task DispatchAndThrowAsync()
         {
-            await session.Dispatch(async () =>
+            await session.Dispatch<bool>(async () =>
             {
                 try
                 {
@@ -88,7 +88,7 @@ public sealed class SafeHeadlessUnitTestSession : IAsyncDisposable
 
     public Task Dispatch(Func<Task> action, CancellationToken cancellationToken)
     {
-        return _session.Dispatch(action, cancellationToken);
+        return _session.DispatchAsync(action, cancellationToken);
     }
 
     public Task DispatchAsync(Func<Task> action, CancellationToken cancellationToken)

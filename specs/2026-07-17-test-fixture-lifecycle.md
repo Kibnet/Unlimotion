@@ -3,7 +3,7 @@
 ## 0. Метаданные
 - Тип (профиль): CI / .NET test infrastructure / TUnit lifecycle.
 - Владелец: Unlimotion maintainers.
-- Масштаб: medium — одна корневая гонка, минимальный internal producer barrier в ViewModel и 147 consumer call sites в 21 test file.
+- Масштаб: medium — корневая гонка fixture cleanup/save, минимальный internal producer barrier в ViewModel, 147 consumer call sites в 21 test file и обнаруженный при валидации false-await в Headless test wrapper.
 - Целевое семейство / behavior baseline: Не применимо — задача не меняет model/prompt behavior.
 - Поверхность: Codex implementation, Microsoft.Testing.Platform/TUnit local runner и GitHub Actions `All tests`.
 - Effective runtime: `global.json` minimum .NET SDK `10.0.100` с `rollForward=latestFeature`; фактически локально и в проверенном CI run resolved `10.0.302`; `net10.0`; TUnit `1.44.0`; Microsoft.Testing.Platform; `windows-latest`; `--maximum-parallel-tests 1`.
@@ -11,7 +11,8 @@
   - PR #274 run `29584922060`, attempt 1, job `87899423421`: 600 total, 599 succeeded, 1 отдельный UI failure, затем три unobserved `FileNotFoundException` из удалённых `MainWindowViewModelFixture_*`; длительность 6m26s;
   - тот же run, attempt 2, job `87902291442`: test assembly стартовала, assertion output отсутствовал, job отменён по 30-minute timeout; это согласуется с lifecycle race, но самостоятельно не доказывает ту же причину;
   - в текущей рабочей сессии локальный full-suite прогон на том же head вошёл в low-CPU/no-output hang; discovery, одиночный тест и класс отдельного UI failure завершались; durable log этого локального наблюдения не сохранён, поэтому оно не используется как самостоятельное доказательство root cause;
-  - source inventory: 147 вызовов `CleanTasks()` в 21 файле.
+  - source inventory: 147 вызовов `CleanTasks()` в 21 файле;
+  - post-implementation residual gate выявил 18 небезопасных `.Dispatch(async ...)` source call sites (17 Roadmap + 1 Settings), которые создавали 20 незавершённых test instances/fixture directories из-за параметризованного Roadmap test.
 - Целевой релиз / ветка: base `origin/main@5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`; branch `fix/test-fixture-lifecycle`; отдельный PR в `main` до повторного CI/merge PR #274.
 - Ограничения:
   - до отдельной точной approval-фразы изменялась только эта spec; gate пройден 2026-07-18;
@@ -35,6 +36,8 @@ Outcome contract:
   - каталог и task file существуют, пока controlled save заблокирован, и удалены после его release;
   - старых синхронных `CleanTasks()` call sites нет;
   - targeted test проходит 20 последовательных запусков;
+  - safe Headless wrapper ждёт завершение inner async callback; небезопасных `.Dispatch(async ...)` вне намеренного regression нет;
+  - после targeted/UI/full runs отсутствуют `MainWindowViewModelFixture_*` directories;
   - full `Unlimotion.Test` и `Unlimotion.UiTests.Headless` проходят serially без `Unobserved task exception` и без timeout;
   - отдельный PR green/ready/merged; затем PR #274 обновлён от `main`, повторно green/ready/merged.
 - Итоговый артефакт / output: узкий lifecycle diff (`TaskItemViewModel` internal barrier + test fixture/consumers), deterministic regressions, local validation logs, green GitHub Actions evidence и PR body с root-cause/rollback.
@@ -44,7 +47,7 @@ Outcome contract:
   - STOP и отдельная диагностика, если post-fix full suite сохраняет hang/unobserved exceptions при GREEN targeted regression;
   - unrelated `Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter` failure не исправляется в этом package и не выдаётся за lifecycle evidence.
 
-## 2. Текущее состояние (AS-IS)
+## 2. Исходное состояние до EXEC (AS-IS snapshot)
 - `src/Unlimotion.Test/MainWindowViewModelFixture.cs:143-167` реализует синхронный `CleanTasks()`:
   1. выставляет `isCleaned`;
   2. синхронно вызывает `MainWindowViewModel.Dispose()` и storage/config dispose;
@@ -63,6 +66,7 @@ Outcome contract:
 - `.github/workflows/tests.yml` уже выполняет `Unlimotion.Test` и Headless serially с `--maximum-parallel-tests 1`; повышение timeout или уменьшение parallelism не исправляет отсутствующий await.
 - Синхронный cleanup используется 147 раз в 21 test file. `BaseModelTests` реализует `IDisposable`; два call sites в `LocalizationDisplayDefinitionTests` предварительно dispose ViewModel вручную и затем вызывают fixture cleanup.
 - TUnit `1.44.0` штатно вызывает `IAsyncDisposable.DisposeAsync()` и распространяет cleanup exception; локальные package XML/API подтверждают async disposer contract.
+- У `Avalonia.Headless.HeadlessUnitTestSession` нет overload `Dispatch(Func<Task>)`: старый wrapper выбирал generic overload с `TResult=Task` и ждал только outer task. Поэтому source выглядел awaited, но async callback продолжал работу после teardown. Исправление требует явного `Dispatch<bool>(Func<Task<bool>>)` и отдельного regression.
 
 CI evidence interpretation:
 - Attempt 1 напрямую подтверждает минимум три чтения из уже удалённых fixture directories.
@@ -102,11 +106,15 @@ Test fixture удаляет принадлежащие ей файлы до за
   - закрывает VM-side producers, atomically seals task saves и ждёт returned snapshots до storage dispose/delete;
   - выполняет bounded retry удаления и не скрывает terminal failure.
 - `BaseModelTests`:
-  - реализует `IAsyncDisposable` вместо `IDisposable`;
-  - awaits fixture cleanup через TUnit async lifecycle.
+  - использует явный `[After(HookType.Test)] async Task CleanupFixtureAsync()`;
+  - обнуляет owned fixture references до `await`, затем завершает cleanup после каждого test.
 - Каждый direct fixture owner:
   - awaits `CleanTasksAsync()` в своём `finally`;
   - для Headless сохраняет cleanup внутри dispatcher scope и завершает его до session dispose.
+- `SafeHeadlessUnitTestSession`:
+  - unwraps async callback через явный `Dispatch<bool>(Func<Task<bool>>)`;
+  - возвращает task, которая завершается только после inner callback;
+  - имеет regressions на ожидание callback и сохранение UI thread после `await`.
 - `MainWindowViewModelFixtureLifecycleTests`:
   - владеет controlled-save regression и idempotency assertions.
 - `TaskItemViewModel`:
@@ -147,7 +155,7 @@ Test fixture удаляет принадлежащие ей файлы до за
   3. snapshot task view models;
   4. synchronously seal every task and capture returned pending tasks;
   5. await every captured task, including already completed/faulted;
-  6. storage `IDisposable.Dispose()`;
+  6. fixture-owned storage `IDisposable.Dispose()` (тот же instance, который получает `MainWindowViewModel`);
   7. configuration dispose;
   8. config file delete;
   9. expansion-state file delete;
@@ -161,10 +169,11 @@ Test fixture удаляет принадлежащие ей файлы до за
 #### Consumer migration
 - Все 147 `fixture.CleanTasks()`/`projectionFixture.CleanTasks()` call sites заменяются на awaited `CleanTasksAsync()`.
 - Существующие async test methods/lambdas сохраняются async; synchronous consumer при необходимости становится `async Task`.
-- `BaseModelTests.Dispose()` заменяется на `ValueTask DisposeAsync()`.
+- `BaseModelTests.Dispose()` заменяется на явный `[After(HookType.Test)] async Task CleanupFixtureAsync()`; hook обнуляет ссылки до await и не полагается на наследуемый disposer contract.
 - `RunWithTreeProjectionAsync` awaits `projectionFixture.CleanTasksAsync()` внутри `session.DispatchAsync`, затем outer finally awaits headless session dispose.
 - Nullable fixture cleanup использует явный null-check; null-conditional await не вводится.
-- Для fixture без `Connect()` `taskRepository == null`: cleanup пропускает snapshot/seal/drain/storage-dispose, но ровно один раз dispose MainWindow/config и удаляет temp paths.
+- Для fixture без `Connect()` `taskRepository == null`: cleanup пропускает snapshot/seal/drain, но всё равно ровно один раз dispose принадлежащий fixture storage, MainWindow/config и удаляет temp paths.
+- Snapshot/seal является fail-closed barrier для filesystem deletion: если snapshot не получен полностью или хотя бы один `SealPendingSaves()` бросил exception, cleanup выполняет best-effort resource shutdown, сохраняет исходную ошибку и не удаляет ни один fixture path.
 - В четырёх callers, где после cleanup обязательно восстанавливается global state (две localization, application font resources, requested theme), restore помещается во вложенный `finally`, чтобы cleanup fault его не пропустил.
 
 #### Deterministic regression
@@ -206,7 +215,8 @@ Test fixture удаляет принадлежащие ей файлы до за
 | Current state | Trigger | Expected transition/result | Empty/error/disabled/concurrent case | Notes |
 | --- | --- | --- | --- | --- |
 | No cleanup started, no pending saves | First `CleanTasksAsync` | dispose producers -> atomic seal -> dispose storage/config -> delete -> completed | Empty repository allowed | No blocking adapter |
-| Fixture created, `Connect()` не вызван | First cleanup | skip task seal/drain, dispose config/VM, delete paths | `taskRepository == null` | Dedicated regression |
+| Fixture created, `Connect()` не вызван | First cleanup | skip task seal/drain, dispose owned storage/config/VM, delete paths | `taskRepository == null` | Dedicated regression |
+| Snapshot/seal barrier завершён не полностью | First cleanup | best-effort dispose, surface barrier failure, preserve every fixture path | `filesystemDeletionSafe == false` | Dedicated regression |
 | No cleanup started, pending save active | First cleanup | waits; files stay present | Save failure recorded, cleanup still releases resources | Core regression |
 | Cleanup running | Second cleanup | returns same task | No second dispose/delete | Reference equality asserted |
 | Cleanup completed | Later cleanup | returns same completed task | No-op observable as same result | Idempotent |
@@ -232,7 +242,8 @@ Test fixture удаляет принадлежащие ей файлы до за
 | Contract area | Current source of truth | Expected change | Compatibility / migration | Verification |
 | --- | --- | --- | --- | --- |
 | Test lifecycle | `MainWindowViewModelFixture.CleanTasks()` | async shared cleanup task | all test callers migrated atomically | build + zero old calls |
-| TUnit instance cleanup | `BaseModelTests : IDisposable` | `IAsyncDisposable` | TUnit 1.44 supported | base-class tests + full suite |
+| TUnit instance cleanup | `BaseModelTests : IDisposable` | explicit `[After(HookType.Test)] async Task` | TUnit 1.44 hook contract; owned refs cleared before await | base-class tests + full suite |
+| Headless async dispatch | generic overload мог вернуть outer `Task<Task>` | explicit `Dispatch<bool>` unwraps и awaits inner callback | unsafe source call sites migrated to `DispatchAsync` | 2 wrapper regressions + static gate |
 | Save admission | `TaskItemViewModel.ExecuteSaveCommand()` + `_pendingSavesLock` | internal same-lock `_acceptingSaves`/`SealPendingSaves()` | normal runtime flag stays true; seam доступен только friend test assembly | producer-barrier regression |
 | Pending saves | `TaskItemViewModel.WaitForPendingSavesAsync()` | existing API unchanged; fixture uses sealed one-time snapshot | no data/schema change | controlled real-storage regression |
 | File cleanup | silent `Try(Action)` | bounded async retry + surfaced path | test temp paths only | mandatory injected delete-failure tests + full suite |
@@ -249,18 +260,19 @@ Lifecycle invariants:
 6. Cleanup failure никогда не становится success из-за retry exhaustion/swallow.
 7. Save cancellation не используется как способ ускорить teardown.
 8. Normal production autosave и workflow settings не меняются; internal seal вызывается только test fixture.
+9. Возврат `SafeHeadlessUnitTestSession.DispatchAsync()` означает завершение inner async callback, включая его cleanup/fault.
 
 Atomic seal algorithm:
 1. Capture repository reference and dispose MainWindow-side subscriptions.
-2. If repository is null, skip task/storage branch and continue resource deletion.
+2. If repository is null, skip task snapshot/seal/drain, но всё равно dispose fixture-owned storage перед resource deletion.
 3. Snapshot task view models.
 4. Under each task's `_pendingSavesLock`, set `_acceptingSaves = false` and capture `Task.WhenAll` over all current saves, including completed/faulted.
 5. Create one outer `drainTask = Task.WhenAll(sealedSnapshots)`, await it once, and on fault retain every `drainTask.Exception!.Flatten().InnerExceptions` entry once.
-6. Dispose storage/config and delete paths; retain cleanup failures.
+6. Dispose owned storage/config; delete paths только если snapshot/seal barrier полностью завершён; retain cleanup failures.
 7. Throw the single retained error or one `AggregateException` without duplicate entries.
 
 ## 8. Точки интеграции и триггеры
-- TUnit test-class teardown вызывает `BaseModelTests.DisposeAsync()`.
+- TUnit test-class teardown вызывает явный `BaseModelTests.CleanupFixtureAsync()` через `[After(HookType.Test)]`.
 - Direct test `finally` blocks вызывают `await fixture.CleanTasksAsync()`.
 - Headless dispatcher lambdas выполняют awaited cleanup до `SafeHeadlessUnitTestSession.DisposeAsync()`.
 - `TaskItemViewModel.ExecuteSaveCommand()` и internal `SealPendingSaves()` используют один `_pendingSavesLock` как admission/join barrier.
@@ -298,11 +310,11 @@ Atomic seal algorithm:
 - **TF-AC-01:** `CleanTasksAsync()`/`DisposeAsync()` используют одну shared core task; concurrent mixed `CleanTasksAsync()` + `DisposeAsync().AsTask()`, repeated-after-success и repeated-after-failure caller не запускают второй dispose/delete и получают тот же completion/fault; две прямые `CleanTasksAsync()` references и `DisposeAsync().AsTask()` reference равны.
 - **TF-AC-02:** Same-lock seal линейризуется с `ExecuteSaveCommand`: controlled in-flight status save остаётся pending; post-seal status mutation не запускает вторую command; до release files существуют; после release controlled command выполняет реальный `repository.Update(task)`, cleanup завершается и directories отсутствуют.
 - **TF-AC-03:** Минимум два captured in-flight save failures из разных sealed snapshots и boundary-observable delete failure не скрываются; terminal delete failure содержит operation/path; combined failures дают один aggregate с каждой из трёх причин ровно один раз; existing inner `DisposableList.Dispose()` swallowing не расширяется этой spec и явно остаётся accepted limitation.
-- **TF-AC-04:** `BaseModelTests` использует TUnit async disposal; Headless cleanup остаётся внутри dispatcher до session disposal; четыре global-state restoration path выполнены во вложенном `finally` даже при cleanup fault.
-- **TF-AC-05:** Fixture без `Connect()`/repository очищается успешно, повторно идемпотентна и удаляет config/tasks/fixture paths.
+- **TF-AC-04:** `BaseModelTests` использует явный TUnit `[After(HookType.Test)]` async hook; Headless cleanup остаётся внутри dispatcher до session disposal; четыре global-state restoration path выполнены во вложенном `finally` даже при cleanup fault.
+- **TF-AC-05:** Fixture без `Connect()`/repository dispose-ит созданный owned storage, очищается успешно, повторно идемпотентна и удаляет config/tasks/fixture paths; неполный snapshot/seal barrier, напротив, явно падает и сохраняет все fixture paths.
 - **TF-AC-06:** Все 147 старых `.CleanTasks()` call sites в 21 файле мигрированы; `rg -n "\.CleanTasks\(\)" src/Unlimotion.Test` не находит совпадений; два manual pre-dispose удалены.
-- **TF-AC-07:** New lifecycle class содержит минимум три обязательных regression и проходит targeted run и 20 последовательных запусков с `--maximum-parallel-tests 1`.
-- **TF-AC-08:** Full `Unlimotion.Test` выполняет минимум 603 tests, а `Unlimotion.UiTests.Headless` — минимум 31 test; оба serial suites PASS в существующем 30-minute CI budget, bounded local runs не timeout и logs не содержат fixture `FileNotFoundException`/`Unobserved task exception`.
+- **TF-AC-07:** New lifecycle class содержит минимум четыре обязательных regression и проходит targeted run и 20 последовательных запусков с `--maximum-parallel-tests 1`.
+- **TF-AC-08:** Full `Unlimotion.Test` выполняет минимум 606 tests, а `Unlimotion.UiTests.Headless` — минимум 31 test; дополнительно Safe Headless 2/2, Roadmap 31/31 и Settings 12/12 проходят с нулём residual fixture directories; оба serial suites укладываются в существующий 30-minute CI budget, bounded local runs не timeout и logs не содержат fixture `FileNotFoundException`/`Unobserved task exception`.
 - **TF-AC-09:** Diff ограничен этой spec, `src/Unlimotion.Test/**`, `src/Unlimotion.ViewModel/TaskItemViewModel.cs` и новым `src/Unlimotion.ViewModel/AssemblyInfo.cs`; workflow, UI behavior и unrelated emoji assertion не меняются.
 - **TF-AC-10:** Fix PR green/ready/merged; PR #274 body обновлён точной root cause/validation/link на fix PR, branch обновлена от merge, required checks green, PR ready/merged до Stage 2 production EXEC.
 
@@ -310,10 +322,15 @@ Atomic seal algorithm:
 - New `MainWindowViewModelFixtureLifecycleTests`:
   - `CleanTasksAsync_ConcurrentCallersWaitForInFlightSaveBeforeDirectoryDeletion`;
   - `CleanTasksAsync_RepeatedCallAfterSaveAndDeleteFailuresReturnsSameAggregate`: два controlled saves на разных task VM сигнализируют `started` и остаются pending до seal, затем после общего `release` faulted двумя различимыми exceptions; injected test-only delete operation исчерпывает все три попытки; test проверяет ровно три причины без потерь/дублей, operation/path, один cleanup task и отсутствие повторного delete при повторном caller;
+  - `CleanTasksAsync_SnapshotBarrierFailurePreservesOwnedPaths`: injected snapshot failure доказывает fail-closed barrier — resource shutdown выполняется, delete boundary не вызывается, config/tasks/fixture paths сохраняются, repeated caller получает тот же fault;
   - `CleanTasksAsync_UnconnectedFixtureDeletesOwnedPathsOnce`.
 - Failure injection обязателен и остаётся внутри fixture/test assembly: cleanup operations/deletion delegate можно заменить в regression, normal constructor использует real filesystem.
 - Каждая controlled replacement `ReactiveCommand` имеет test-owned `ThrownExceptions` subscription; subscription и command dispose только после bounded observation всех её invocations.
-- Update all direct cleanup consumers and `BaseModelTests` lifecycle signatures.
+- Update all direct cleanup consumers и явный `BaseModelTests` After(Test) lifecycle hook.
+- New `SafeHeadlessUnitTestSessionTests`:
+  - `Dispatch_AwaitsAsyncCallbackBeforeReturning`;
+  - `DispatchAsync_PreservesUiThreadAcrossAwait`.
+- Migrate 18 unsafe Headless `.Dispatch(async ...)` call sites to `DispatchAsync`; one intentional raw call remains only inside the wrapper regression.
 - No new FlaUI/video test: no production UI behavior change.
 
 ### Characterization baseline
@@ -321,9 +338,12 @@ Atomic seal algorithm:
 - PR #274 run attempt 1: 600 total, 599 pass, 1 unrelated UI failure, three fixture `FileNotFoundException` unobserved exceptions.
 - PR #274 run attempt 2: no assertion result, 30m timeout after assembly start.
 - В текущей сессии baseline Headless run прошёл 31 test; durable log не сохранён, поэтому `--minimum-expected-tests 31` заново подтверждает count в EXEC evidence.
+- Pre-fix residual gate обнаружил 20 fixture directories, точно соответствовавших 18 unsafe Headless source call sites; это отдельный infrastructure finding, обнаруженный после первоначального 604-test false-green run.
 - Unchanged workflow already serializes tests.
 
 ### Commands
+Ниже приведён canonical reproducible rerun recipe. Он формирует 26 timestamped green run names и по два файла на run (`stdout`/`stderr`), то есть canonical manifest из 52 путей. Это контракт для повторного запуска, а не описание фактически сохранённых в EXEC имён. Фактический final evidence manifest из восьми stdout logs перечислен отдельно в Post-EXEC Review; прочие исторические logs в marker gate не входят.
+
 Evidence directory, bounded process helper и restore:
 
 ```powershell
@@ -369,6 +389,24 @@ function Invoke-BoundedDotnetTest {
     }
 }
 
+$fixtureRoot = [IO.Path]::GetFullPath(
+    (Join-Path (Get-Location) 'src/Unlimotion.Test/bin/Debug/net10.0'))
+function Assert-NoResidualFixtures([string] $Phase) {
+    $residualFixtures = @(
+        Get-ChildItem -LiteralPath $fixtureRoot `
+            -Directory `
+            -Filter 'MainWindowViewModelFixture_*' `
+            -ErrorAction SilentlyContinue
+    )
+    if ($residualFixtures.Count -ne 0) {
+        $residualFixtures.FullName
+        throw "Residual fixture directories after ${Phase}: $($residualFixtures.Count)"
+    }
+}
+
+$validationRunId = 'final-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$greenRunNames = [Collections.Generic.List[string]]::new()
+
 dotnet restore src/Unlimotion.Test/Unlimotion.Test.csproj
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 dotnet restore tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj
@@ -408,56 +446,105 @@ if (-not (Select-String -LiteralPath $redLog -SimpleMatch 'cleanup completed bef
 Targeted lifecycle GREEN после implementation:
 
 ```powershell
+$targetedGreenName = "$validationRunId-targeted-green"
+Assert-NoResidualFixtures 'targeted-green pre-run'
 Invoke-BoundedDotnetTest `
-  -Name 'targeted-green' `
+  -Name $targetedGreenName `
   -TimeoutSeconds 180 `
   -Arguments @(
       'test', 'src/Unlimotion.Test/Unlimotion.Test.csproj',
       '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false', '--',
       '--treenode-filter', '/*/*/MainWindowViewModelFixtureLifecycleTests/*',
-      '--minimum-expected-tests', '3',
+      '--minimum-expected-tests', '4',
       '--maximum-parallel-tests', '1', '--output', 'Detailed')
+$greenRunNames.Add($targetedGreenName)
+Assert-NoResidualFixtures 'targeted-green'
 ```
 
 Stress:
 
 ```powershell
 1..20 | ForEach-Object {
+    $stressName = '{0}-stress-{1:D2}' -f $validationRunId, $_
+    Assert-NoResidualFixtures "$stressName pre-run"
     Invoke-BoundedDotnetTest `
-      -Name ('stress-{0:D2}' -f $_) `
+      -Name $stressName `
       -TimeoutSeconds 180 `
       -Arguments @(
           'test', 'src/Unlimotion.Test/Unlimotion.Test.csproj',
           '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false', '--',
           '--treenode-filter', '/*/*/MainWindowViewModelFixtureLifecycleTests/*',
-          '--minimum-expected-tests', '3',
+          '--minimum-expected-tests', '4',
           '--maximum-parallel-tests', '1', '--output', 'Detailed')
+    $greenRunNames.Add($stressName)
+    Assert-NoResidualFixtures $stressName
+}
+```
+
+Headless-dispatch и восстановленные UI consumers:
+
+```powershell
+$targetedConsumers = @(
+    @('headless-dispatch', '/*/*/SafeHeadlessUnitTestSessionTests/*', 2, 180),
+    @('roadmap', '/*/*/RoadmapGraphUiTests/RoadmapGraph_*', 31, 300),
+    @('settings', '/*/*/SettingsControlResponsiveUiTests/*', 12, 180)
+)
+
+foreach ($target in $targetedConsumers) {
+    $name = "$validationRunId-$($target[0])"
+    Assert-NoResidualFixtures "$name pre-run"
+    Invoke-BoundedDotnetTest `
+      -Name $name `
+      -TimeoutSeconds $target[3] `
+      -Arguments @(
+          'test', 'src/Unlimotion.Test/Unlimotion.Test.csproj',
+          '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false', '--',
+          '--treenode-filter', $target[1],
+          '--minimum-expected-tests', [string]$target[2],
+          '--maximum-parallel-tests', '1', '--output', 'Detailed')
+    $greenRunNames.Add($name)
+    Assert-NoResidualFixtures $name
 }
 ```
 
 Full workflow equivalent:
 
 ```powershell
+$fullUnlimotionName = "$validationRunId-full-unlimotion"
+Assert-NoResidualFixtures 'full-unlimotion pre-run'
 Invoke-BoundedDotnetTest `
-  -Name 'full-unlimotion' `
+  -Name $fullUnlimotionName `
   -TimeoutSeconds 1200 `
   -Arguments @(
       'test', 'src/Unlimotion.Test/Unlimotion.Test.csproj',
       '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false', '--',
-      '--minimum-expected-tests', '603',
+      '--minimum-expected-tests', '606',
       '--maximum-parallel-tests', '1', '--output', 'Detailed')
+$greenRunNames.Add($fullUnlimotionName)
+Assert-NoResidualFixtures 'full-unlimotion'
 
+$fullHeadlessName = "$validationRunId-full-headless"
 Invoke-BoundedDotnetTest `
-  -Name 'full-headless' `
+  -Name $fullHeadlessName `
   -TimeoutSeconds 300 `
   -Arguments @(
       'test', 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj',
       '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false', '--',
       '--minimum-expected-tests', '31',
       '--maximum-parallel-tests', '1', '--output', 'Detailed')
+$greenRunNames.Add($fullHeadlessName)
+Assert-NoResidualFixtures 'full-headless'
 
-$greenLogs = Get-ChildItem $evidenceDir -Filter '*.log' |
-    Where-Object Name -Match '^(targeted-green|stress-\d+|full-(unlimotion|headless))\.(stdout|stderr)\.log$'
+$requiredGreenLogs = @($greenRunNames | ForEach-Object {
+    Join-Path $evidenceDir "$_.stdout.log"
+    Join-Path $evidenceDir "$_.stderr.log"
+})
+$missingGreenLogs = @($requiredGreenLogs | Where-Object { -not (Test-Path -LiteralPath $_) })
+if ($missingGreenLogs.Count -ne 0) {
+    $missingGreenLogs
+    throw 'Required final validation logs are missing.'
+}
+$greenLogs = Get-Item -LiteralPath $requiredGreenLogs
 $greenLogText = ($greenLogs | ForEach-Object {
     Get-Content -LiteralPath $_.FullName -Raw
 }) -join "`n"
@@ -478,6 +565,30 @@ if ($oldCleanupExit -eq 0) {
 }
 if ($oldCleanupExit -ne 1) {
     throw "rg inventory failed with exit code $oldCleanupExit"
+}
+
+$unsafeDispatch = @(
+    rg -n --pcre2 '\.Dispatch\s*\(\s*async\b' `
+        src/Unlimotion.Test `
+        --glob '*.cs' `
+        --glob '!SafeHeadlessUnitTestSessionTests.cs'
+)
+$unsafeDispatchExit = $LASTEXITCODE
+if ($unsafeDispatchExit -eq 0) {
+    $unsafeDispatch
+    throw 'Unsafe Headless Dispatch(async ...) call sites remain.'
+}
+if ($unsafeDispatchExit -ne 1) {
+    throw "Unsafe dispatch inventory failed with exit code $unsafeDispatchExit"
+}
+
+$intentionalDispatch = @(
+    rg -n --pcre2 '\.Dispatch\s*\(\s*async\b' `
+        src/Unlimotion.Test/SafeHeadlessUnitTestSessionTests.cs
+)
+if ($LASTEXITCODE -ne 0 -or $intentionalDispatch.Count -ne 1) {
+    $intentionalDispatch
+    throw 'Expected exactly one intentional raw Dispatch(async ...) regression call.'
 }
 
 $allowedPatterns = @(
@@ -524,6 +635,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Committed path inventory failed.' }
 Assert-Allowlisted -Paths $committedPaths
 git diff --check origin/main...HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Committed diff check failed.' }
+$dirtyAfterCommit = @(git status --porcelain --untracked-files=all)
+if ($LASTEXITCODE -ne 0) { throw 'Post-commit git status failed.' }
+if ($dirtyAfterCommit.Count -gt 0) {
+    $dirtyAfterCommit
+    throw 'Post-commit worktree is not clean.'
+}
 ```
 
 Expected `rg` result: exit code 1/no matches; exit 0 и infrastructure error fail closed. Allowlist проверяет tracked, untracked, staged и committed paths: this spec, `src/Unlimotion.Test/**`, `src/Unlimotion.ViewModel/TaskItemViewModel.cs`, `src/Unlimotion.ViewModel/AssemblyInfo.cs`.
@@ -542,11 +659,11 @@ Test loop stop rules:
 | TF-AC-01 | concurrent/success/failure idempotency tests | inspect shared-task implementation | targeted log | — |
 | TF-AC-02 | controlled real-storage in-flight save + post-seal mutation | RED/GREEN comparison | `targeted-red/green` logs | — |
 | TF-AC-03 | mandatory combined save/delete failure regression | inspect aggregate entries/path | targeted log + diff | Existing inner `DisposableList` swallowing is documented limitation |
-| TF-AC-04 | affected base/Headless tests + nested-finally source assertions | inspect dispatcher/global-state ordering | full logs | — |
+| TF-AC-04 | explicit After(Test), Safe Headless 2/2, affected Headless tests + nested-finally source assertions | inspect dispatcher/global-state ordering | targeted/full logs | — |
 | TF-AC-05 | unconnected fixture regression | inspect null-repository branch | targeted log | — |
 | TF-AC-06 | build + zero-match `rg` | compare expected 147/21 inventory | static-check output | — |
 | TF-AC-07 | targeted + 20x stress with minimum count | bounded elapsed time | `stress-*.log` | — |
-| TF-AC-08 | two bounded full serial runs with minimum counts | search logs for lifecycle markers | full logs + Actions URL | — |
+| TF-AC-08 | Safe 2/2, Roadmap 31/31, Settings 12/12 and two bounded full serial runs | search exact final-log manifest for lifecycle markers; residual gate after every relevant run | targeted/full logs + Actions URL | — |
 | TF-AC-09 | pre/post-commit scope gates | allowlist review | Post-EXEC review | — |
 | TF-AC-10 | GitHub required checks + PR #274 body/ancestry | inspect root-cause/link/check states | two PR URLs/check summaries | — |
 
@@ -554,9 +671,12 @@ Test loop stop rules:
 - Delayed producer может попытаться сохранить после cleanup start. Mitigation: same-lock atomic seal; post-seal mutation regression.
 - 147 mechanical conversions могут оставить один unawaited finally. Mitigation: zero-match `rg`, compile, full suite.
 - `async void` может появиться при неверной конверсии lambda/method. Mitigation: signatures review; разрешены только `async Task`/`ValueTask` lifecycle paths.
-- Cleanup exception в прямом C# `finally` может заменить body exception. Mitigation: accepted limitation явно указан; cleanup errors сохраняются внутри своего aggregate, а global state восстанавливается nested `finally`. TUnit `IAsyncDisposable` path отдельно проверяется.
+- Cleanup exception в прямом C# `finally` может заменить body exception. Mitigation: accepted limitation явно указан; cleanup errors сохраняются внутри своего aggregate, global state восстанавливается nested `finally`, а shared base fixture завершается явным `After(Test)` hook.
 - Delete retry может удлинить teardown. Mitigation: bounded three attempts, async backoff, path-specific failure.
 - Headless session может быть disposed раньше fixture. Mitigation: cleanup остаётся внутри dispatcher; explicit regression/review.
+- Generic Headless overload может снова принять async lambda как `TResult=Task`. Mitigation: explicit `Dispatch<bool>` wrapper, 2 regressions и zero-match static gate вне intentional test.
+- Roadmap background build может пережить per-test dispatcher reset. Mitigation: изменяющий граф CreateMenu test обнуляет DataContext и ждёт одновременно progress flag и active-build count до fixture cleanup; best-effort retry в `finally` не маскирует исходную ошибку.
+- UI test с названием CreateMenu может ложно пройти при прямом вызове ViewModel command. Mitigation: сценарий открывает реальный `MenuFlyout`, находит каждый `MenuItem` по AutomationId, требует visible/enabled state и поднимает `MenuItem.ClickEvent`; outcome assertions проверяют фактическую binding.
 - Attempt-2 timeout может иметь другую причину. Mitigation: не заявлять доказанную идентичность; требовать deterministic regression и полный post-fix green suite.
 - Unrelated emoji UI flake может снова сделать required check red. Mitigation: isolate and address only через отдельную approved package; не ослаблять assertion в этом diff.
 - Production source switch имеет похожий потенциальный risk. Mitigation: отдельный follow-up spec/evidence, без scope expansion здесь.
@@ -585,13 +705,14 @@ Test loop stop rules:
 2. Freshness gate: fetch, проверить `origin/main` base/branch, clean tree, PR #274 state.
 3. Добавить deterministic regression и минимальный compile seam; зафиксировать ожидаемый RED.
 4. Реализовать same-lock atomic producer seal в `TaskItemViewModel`, friend-only internal seam, shared async cleanup owner и dispose/delete error contract.
-5. Перевести `BaseModelTests` и все 147 call sites; удалить manual pre-dispose, сохранить unconnected-fixture path и вложенное восстановление четырёх global-state owners.
-6. Запустить build, bounded targeted GREEN, 20x stress, minimum-count/static/log-marker gates.
-7. Запустить full `Unlimotion.Test` и Headless serially; разобрать любой failure без scope masking.
-8. Выполнить Post-EXEC review и independent re-review после fixes.
-9. Commit/push; открыть draft PR с Summary/Changes/Validation/Risks-Rollback/Links; дождаться green checks, перевести ready и merge.
-10. Обновить body PR #274 точной root cause, validation evidence и ссылкой на merged fix PR; обновить branch от merged `main`, проверить ancestry и rerun required checks; только green PR перевести ready и merge.
-11. Вернуться на `fix/status-availability-contract`, rebase на новый `origin/main`, повторить Stage 2 baseline и начать уже утверждённый Stage 2 EXEC.
+5. Перевести `BaseModelTests` на explicit After(Test) hook и все 147 call sites; удалить manual pre-dispose, сохранить unconnected-fixture path и вложенное восстановление четырёх global-state owners.
+6. Исправить обнаруженный Headless false-await: explicit generic unwrap, 18 consumer migrations, 2 regressions и Roadmap/Settings test-only teardown/interaction repairs; CreateMenu должен проходить через реальные menu items, а не прямой ViewModel command.
+7. Запустить build, bounded targeted GREEN, 20x stress, Safe/Roadmap/Settings minimum-count, residual/static/log-marker gates.
+8. Запустить full `Unlimotion.Test` и Headless serially; разобрать любой failure без scope masking.
+9. Выполнить Post-EXEC review и independent re-review после fixes.
+10. Commit/push; открыть draft PR с Summary/Changes/Validation/Risks-Rollback/Links; дождаться green checks, перевести ready и merge.
+11. Обновить body PR #274 точной root cause, validation evidence и ссылкой на merged fix PR; обновить branch от merged `main`, проверить ancestry и rerun required checks; только green PR перевести ready и merge.
+12. Вернуться на `fix/status-availability-contract`, rebase на новый `origin/main`, повторить Stage 2 baseline и начать уже утверждённый Stage 2 EXEC.
 
 ## 14. Открытые вопросы
 Нет открытых design/product вопросов. Обязательная отдельная approval-фраза `Спеку подтверждаю` получена 2026-07-18.
@@ -618,11 +739,15 @@ Test loop stop rules:
 | `src/Unlimotion.ViewModel/AssemblyInfo.cs` (new) | `InternalsVisibleTo("Unlimotion.Test")` | Ограничить lifecycle seam тестовой assembly |
 | `src/Unlimotion.Test/MainWindowViewModelFixture.cs` | async shared cleanup, seal/drain, null-repository branch, injected delete boundary, surfaced failures, `IAsyncDisposable` | Root fix и детерминированные regressions |
 | `src/Unlimotion.Test/MainWindowViewModelFixtureLifecycleTests.cs` (new) | Controlled RED/GREEN lifecycle tests | Deterministic proof |
-| `src/Unlimotion.Test/MainWindowViewModelTests.cs` | `BaseModelTests : IAsyncDisposable`; awaited projection cleanup; remaining direct calls | TUnit lifecycle owner |
+| `src/Unlimotion.Test/MainWindowViewModelTests.cs` | explicit `[After(HookType.Test)]` cleanup hook; awaited projection cleanup; remaining direct calls | TUnit lifecycle owner |
+| `src/Unlimotion.Test/HeadlessSessionExtensions.cs` | explicit `Dispatch<bool>` unwrapping и awaited inner callback | Устранить false-await overload |
+| `src/Unlimotion.Test/SafeHeadlessUnitTestSessionTests.cs` (new) | 2 regressions: await inner callback и UI-thread affinity | Не допустить возврат false-await |
 | `src/Unlimotion.Test/LocalizationDisplayDefinitionTests.cs` | awaited cleanup; remove manual pre-dispose; nested culture restore | Single owner и guaranteed global-state restore |
 | `src/Unlimotion.Test/MainControlFilterToolbarResponsiveUiTests.cs` | awaited cleanup и nested application-font restore | Global-state restore even on cleanup fault |
 | `src/Unlimotion.Test/MainControlTaskCardLayoutUiTests.cs` | awaited cleanup и nested requested-theme restore | Global-state restore even on cleanup fault |
-| 19 consumer files below, кроме `MainWindowViewModelTests.cs` и `LocalizationDisplayDefinitionTests.cs`; два из 19 раскрыты отдельными строками выше | mechanical awaited cleanup migration | Remove all synchronous callers |
+| `src/Unlimotion.Test/RoadmapGraphUiTests.cs` | 17 `DispatchAsync` migrations, real MenuFlyout/MenuItem create flow, interaction repairs и explicit background-build drain в CreateMenu teardown | Устранить false-await, ложное command-level UI coverage и per-test dispatcher leak |
+| `src/Unlimotion.Test/SettingsControlResponsiveUiTests.cs` | `DispatchAsync` migration и viewport-safe click helper | Устранить false-await и восстановить реальный click flow |
+| 19 consumer files ниже, кроме отдельно перечисленных `MainWindowViewModelTests` и `LocalizationDisplayDefinitionTests` | mechanical awaited cleanup migration; четыре сложных UI-файла также детализированы отдельными строками выше | Remove all synchronous callers |
 
 Exact remaining consumer inventory:
 - `BreadcrumbEmojiUiTests.cs`
@@ -659,8 +784,8 @@ Explicitly unchanged:
 | Pending saves | API exists but teardown ignores it | one cached sealed snapshot полностью awaited before delete |
 | Repeated cleanup | bool early return, second caller cannot await first | same shared task/result/fault |
 | Delete failure | swallowed after three sleeps | bounded async retry then explicit path error |
-| TUnit teardown | `IDisposable` | `IAsyncDisposable` |
-| Headless order | sync cleanup in finally | awaited cleanup in dispatcher before session dispose |
+| TUnit teardown | `IDisposable` | explicit async `[After(HookType.Test)]` hook |
+| Headless order | sync cleanup / generic false-await | awaited cleanup и explicit inner callback unwrap before session dispose |
 | CI response | retry/timeout ambiguity | deterministic regression + unchanged full workflow proof |
 | Production behavior | autosave has no teardown admission state | normal autosave remains unchanged; only friend test fixture invokes internal seal |
 
@@ -696,7 +821,7 @@ Explicitly unchanged:
 | E. Готовность к автономной реализации | 17-19 | PASS | Independent reviews закрыты; commands, sequencing и stop conditions однозначны; approval — отдельный governance gate |
 | F. Соответствие профилю | 20 | PASS | TUnit/.NET/Headless/CI governance отражены |
 
-Итог: `ГОТОВО`. Production EXEC остаётся запрещён только до отдельной точной approval-фразы.
+Итог: `ГОТОВО`. Отдельная approval-фраза получена 2026-07-18; local EXEC и validation выполнены в утверждённом scope.
 
 ### SPEC Rubric Result
 
@@ -710,7 +835,7 @@ Explicitly unchanged:
 | 6. Готовность к автономной реализации | 5 | Independent fix/re-review PASS; exact commands/evidence/delivery handoff заданы |
 
 Итоговый балл: 30 / 30
-Зона: готово к автономному выполнению после обязательного approval gate.
+Зона: готово; обязательный approval gate пройден 2026-07-18.
 
 ### Role-Based Review Result
 
@@ -725,7 +850,7 @@ Explicitly unchanged:
 ### Post-SPEC Review
 - Статус: PASS
 - Scope reviewed: final spec, source/callsite inventory, delayed producer paths, TUnit package contract, PR #274 CI attempts, validation commands и delivery sequencing
-- Decision: запросить отдельную user approval; EXEC до неё не начинать
+- Decision на момент Post-SPEC review: запросить отдельную user approval; gate позднее пройден 2026-07-18
 - Review passes:
   - Scope/Evidence pass: self-review PASS
   - Contract pass: independent architect review PASS
@@ -756,29 +881,62 @@ Explicitly unchanged:
 | LOW | audit metadata | Linter/rubric/journal описывали старый test-only design | Согласовать §19/журнал с final contract | fixed |
 
 - Fixed before continuing: все initial independent findings исправлены; каждая substantive правка прошла повторное review
-- Checks rerun: 22 обязательных H2 section, 14 fences, 10 AC, 7 PowerShell blocks без parse errors, zero trailing whitespace/tabs, stale-term scan и untracked-file whitespace check
-- Needs human: только точная approval-фраза для child EXEC
-- Residual risks / follow-ups: production source-switch drain; unrelated emoji flake
+- Checks rerun: 22 обязательных H2 section, 16 fence lines, 10 AC, 8 PowerShell blocks без parse errors, zero trailing whitespace/tabs, stale-term scan и untracked-file whitespace check
+- Needs human: нет для local EXEC; GitHub merge остаётся gated зелёными required checks
+- Residual risks / follow-ups: cleanup не является общим barrier для произвольной уже запущенной `ITaskStorage` operation; production source-switch drain; уже запущенный callback `TaskTreeExpansionStateStore` timer не имеет отдельного join-контракта; unrelated emoji flake
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: Не применимо
-- Decision: Не применимо до approval/EXEC
-- Review passes: Не применимо
-- Evidence inspected: Не применимо
-- Depth checklist: Не применимо
-- No-findings justification: Не применимо
+- Статус: PASS для local implementation/validation; GitHub delivery по TF-AC-10 выполняется следующим шагом
+- Scope reviewed: все 28 allowlisted paths, production seal seam, fixture owner/error semantics, четыре lifecycle regression, 147 consumer migrations, Headless false-await regressions, Roadmap/Settings test-only repairs, full unit/Headless evidence и post-commit gate
+- Decision: разрешить intentional staging/commit и draft PR; merge только после green required checks
+- Review passes:
+  - architect initial verdict `NEEDS-FIX`: два MEDIUM — fail-open snapshot/seal barrier и undisposed owned storage без `Connect()`;
+  - delivery initial verdict `NEEDS-FIX`: post-commit gate не требовал clean worktree;
+  - tester initial verdict `PASS` по consumer migration и lifecycle regressions, затем migration re-review обнаружил недостаточный Roadmap build drain, masking в best-effort teardown и прямой command bypass в CreateMenu test;
+  - после исправлений architect re-review `PASS`, migration/Headless/Roadmap/Settings final re-review `PASS`; final delivery re-review выполняется на committed gate/evidence перед publish;
+  - self-review/static scope `PASS`.
+- Evidence inspected:
+  - deterministic RED: expected marker `cleanup completed before controlled save release`;
+  - final build `Unlimotion.Test`: PASS, 0 errors; Headless project build: PASS, 0 errors;
+  - targeted lifecycle GREEN: 4/4; stress: 20/20 runs, каждый 4/4 и residual 0;
+  - Safe Headless wrapper: 2/2; Settings: 12/12; Roadmap: 31/31; отдельный real CreateMenu flow: 1/1;
+  - exact final full `Unlimotion.Test`: 606/606, 0 failed, 11m58s;
+  - exact final full `Unlimotion.UiTests.Headless`: 31/31, 0 failed, 58s;
+  - actual final evidence manifest (ровно 8 stdout logs; historical/failed logs исключены):
+    - `artifacts/test-fixture-lifecycle/final-targeted-green-20260718.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-stress-20260718.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-headless-dispatch-20260718.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-settings-20260718.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-roadmap-create-menu-20260718.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-roadmap-20260718-05.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-full-unit-20260718-03.stdout.log`;
+    - `artifacts/test-fixture-lifecycle/final-full-headless-20260718.stdout.log`;
+  - marker scan только этого actual manifest: lifecycle markers 0; residual fixture directories 0;
+  - static gates: 28/28 allowlisted paths, old `.CleanTasks()` 0, awaited consumer cleanup 147/147, unsafe `.Dispatch(async ...)` outside regression 0, intentional raw regression 1, unconsumed `DispatchAsync` 0, added `async void` 0, `SealPendingSaves()` production caller только fixture, `git diff --check` PASS.
+- Depth checklist:
+  - Scope drift / unrelated changes: none; workflows, production UI и emoji assertion untouched
+  - Acceptance criteria: TF-AC-01..09 locally satisfied; TF-AC-10 pending GitHub delivery
+  - Unsupported claims: no timeout-causation claim added beyond attempt-1 direct evidence
+  - Regression / edge case: shared caller, in-flight real write, post-seal no-op, multi-save/delete aggregate, fail-closed snapshot barrier, unconnected owned storage, nullable/dispatcher/global-state paths, Headless inner-task await, Roadmap active-build drain и real menu binding
+  - Comments/docs/changelog: child spec updated; README/release notes/UI video N/A for this internal fix
+- No-findings justification: architecture/ownership, false-await, Roadmap isolation и menu-fidelity findings исправлены code+regressions и получили independent re-review `PASS`; exact final full suites и fail-closed static/log gates зелёные; delivery clean-worktree finding внесён в executable post-commit gate.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| LOW | phase | EXEC не начат | Выполнить полный Post-EXEC review после implementation/validation | follow-up |
+| MEDIUM | architecture | Snapshot/seal barrier позволял deletion после частичного seal | При неполном barrier сохранить paths и явно вернуть fault | fixed; regression + architect re-review PASS |
+| MEDIUM | ownership | Созданный storage не dispose-ился без `Connect()` | Хранить один owned storage и dispose в shared cleanup task | fixed; architect re-review PASS |
+| HIGH | validation | Headless wrapper ждал outer `Task<Task>`, давая false green и 20 residual fixture directories | Явно unwrap async callback, мигрировать 18 source call sites и добавить 2 regressions | fixed; Safe 2/2, full 606/606, reviewer PASS |
+| MEDIUM | test integration | Планировавшийся у BaseModel inherited `IAsyncDisposable` не обеспечил однозначный фактический TUnit owner | Использовать явный `[After(HookType.Test)] async Task CleanupFixtureAsync()` | fixed; 147/147 awaited consumer calls |
+| MEDIUM | test isolation | CreateMenu оставлял Roadmap build активным после dispatcher reset | Обнулить graph DataContext и ждать progress flag плюс active-build count; не маскировать body failure в `finally` | fixed; Roadmap 31/31 + reviewer PASS |
+| MEDIUM | test fidelity | CreateMenu test вызывал ViewModel command напрямую и мог пропустить отсутствующую/disabled/wrong binding | Открывать `MenuFlyout`, находить visible/enabled `MenuItem` по AutomationId и поднимать Click | fixed; focused 1/1 + Roadmap 31/31 + reviewer PASS |
+| MEDIUM | delivery | Post-commit allowlist мог пройти при забытых untracked files | Fail closed на непустом `git status --porcelain --untracked-files=all` | fixed; final execution после commit обязателен |
 
-- Fixed before final report: Не применимо
-- Checks rerun: Не применимо
-- Validation evidence: Не применимо
-- Unrelated changes: Не применимо
-- Needs human: approval child spec
-- Residual risks / follow-ups: перечислены выше
+- Fixed before final report: все findings исправлены; четвёртый lifecycle regression и два Headless regressions добавлены без расширения user-visible production scope
+- Checks rerun: builds, targeted lifecycle 4/4, stress 20×4/4, Safe 2/2, Settings 12/12, Roadmap 31/31, real CreateMenu 1/1, exact full 606/606, Headless 31/31, exact-manifest markers, residual/path/callsite/static gates
+- Validation evidence: восемь exact paths из actual final manifest выше (ignored local evidence; historical/failed logs исключены, итоговые counts переносятся в PR body)
+- Unrelated changes: none
+- Needs human: нет; текущая approval покрывает exact child scope
+- Residual risks / follow-ups: cleanup гарантирует drain зарегистрированных `TaskItemViewModel` saves, но не является универсальным barrier для произвольной уже запущенной `ITaskStorage` operation; production source-switch drain; already-running expansion-state timer callback without strict join; unrelated emoji flake
 
 ## Approval
 Получена отдельная точная фраза `Спеку подтверждаю` 2026-07-18. Статус: APPROVED FOR EXEC.
@@ -796,3 +954,9 @@ Approval master roadmap, Stage 1 или Stage 2 не распространяе�
 | SPEC | Fix and re-review | 1.00 | Нет | Провести повторные architect и delivery/validation reviews | Нет | Оба independent verdict `PASS` | Same-lock/cached seal, multi-fault aggregation и delivery gates подтверждены | Эта spec |
 | SPEC | Final adversarial consistency audit | 1.00 | Нет | Исправить RED masking, ReactiveCommand observer, AC mapping и fail-closed scope gates; повторить audit | Нет | Final verdict `PASS` | Исполняемый test/delivery contract проверен после последних правок | Эта spec, source, commands |
 | SPEC | Approval gate | 1.00 | Нет | Перейти к EXEC в exact allowlist | Да | Пользователь: `Спеку подтверждаю` | Roadmap-required child approval получен 2026-07-18 | Эта spec |
+| EXEC | Deterministic RED и implementation | 1.00 | Нет | Реализовать same-lock seal, shared cleanup и 147 migrations | Нет | Не применимо | RED упал только на ожидаемом old-order marker; targeted GREEN подтвердил новый порядок | ViewModel seam, fixture, consumers, lifecycle tests |
+| EXEC | Initial Post-EXEC reviews | 0.98 | Нужна была проверка edge ownership | Исправить fail-open barrier, unconnected storage ownership и clean-worktree gate | Нет | Architect/delivery `NEEDS-FIX`, tester `PASS` | Findings затрагивали false-success deletion/delivery, поэтому исправлены до full suites | Fixture, lifecycle regression, spec gate |
+| EXEC | Fix and re-review | 1.00 | Нет | Повторить targeted/stress/full validation | Нет | Architect/tester re-review `PASS` | Fail-closed barrier получил отдельный regression; owned storage единый | Fixture, lifecycle tests |
+| EXEC | Headless false-await diagnosis | 1.00 | Нет | Исправить wrapper, 18 source call sites и добавить regressions | Нет | Independent migration review | Correct residual gate связал false green с 20 незавершёнными callbacks/directories | Headless wrapper, Safe tests, Roadmap, Settings |
+| EXEC | Roadmap isolation and fidelity | 1.00 | Нет | Drain active builds, сохранить исходную ошибку и пройти через реальные menu items | Нет | Reviewer findings accepted; final verdict `PASS` | Order-dependent Drop failure и direct command bypass получили focused fixes без production UI change | Roadmap UI tests |
+| EXEC | Full local validation | 1.00 | Только GitHub required checks | Commit/push/draft PR, затем green/ready/merge | Нет | Не применимо | 20×4/4, Safe 2/2, Settings 12/12, Roadmap 31/31, unit 606/606, Headless 31/31, marker/residual/scope gates PASS | 8 final evidence logs, 28 allowlisted paths |

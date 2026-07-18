@@ -86,7 +86,7 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -132,7 +132,7 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -198,7 +198,7 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -267,7 +267,7 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -772,7 +772,7 @@ public class MainControlTaskStatusIconUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

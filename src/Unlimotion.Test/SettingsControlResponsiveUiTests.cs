@@ -63,7 +63,7 @@ public class SettingsControlResponsiveUiTests
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -108,7 +108,7 @@ public class SettingsControlResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -119,7 +119,7 @@ public class SettingsControlResponsiveUiTests
         var session = HeadlessUnitTestSession.StartNew(typeof(App));
         try
         {
-            await session.Dispatch(async () =>
+            await session.DispatchAsync(async () =>
             {
                 var fixture = new MainWindowViewModelFixture();
                 Window? window = null;
@@ -189,7 +189,7 @@ public class SettingsControlResponsiveUiTests
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
@@ -248,7 +248,7 @@ public class SettingsControlResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -327,7 +327,7 @@ public class SettingsControlResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -400,7 +400,7 @@ public class SettingsControlResponsiveUiTests
             {
                 Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -450,7 +450,7 @@ public class SettingsControlResponsiveUiTests
             finally
             {
                 window?.Close();
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -912,6 +912,8 @@ public class SettingsControlResponsiveUiTests
 
     private static async Task ClickControlAsync(Window window, Control control)
     {
+        control.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
         var point = control.TranslatePoint(
             new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
             window);
@@ -919,6 +921,11 @@ public class SettingsControlResponsiveUiTests
         if (!point.HasValue)
         {
             throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
+        }
+
+        if (!window.Bounds.Contains(point.Value))
+        {
+            throw new InvalidOperationException($"Control {control.GetType().Name} is outside the test window viewport.");
         }
 
         window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);

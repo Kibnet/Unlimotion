@@ -135,7 +135,7 @@ public class MainControlNewTaskDeadlineUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -191,7 +191,7 @@ public class MainControlNewTaskDeadlineUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }
@@ -328,7 +328,7 @@ public class MainControlNewTaskDeadlineUiTests
             finally
             {
                 CloseWindow(window);
-                fixture.CleanTasks();
+                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

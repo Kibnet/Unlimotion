@@ -72,7 +72,7 @@ public class TaskListRepeaterMarkerUiTests
                 finally
                 {
                     window?.Close();
-                    fixture.CleanTasks();
+                    await fixture.CleanTasksAsync();
                 }
             }, CancellationToken.None);
         }
