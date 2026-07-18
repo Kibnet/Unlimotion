@@ -124,9 +124,21 @@ public class MainControlTaskStatusIconUiTests
                     .Select(AutomationProperties.GetAutomationId)
                     .ToList();
 
-                await Assert.That(menuItems).IsNotEmpty();
-                await Assert.That(menuItems.All(item => item.IsEnabled)).IsTrue();
+                await Assert.That(menuItems.Count).IsEqualTo(Enum.GetValues<DomainTaskStatus>().Length - 1);
                 await Assert.That(automationIds).DoesNotContain($"TaskStatusOption{task!.Status}");
+                foreach (var option in task.StatusOptions.Where(option => option.Status != task.Status))
+                {
+                    var item = menuItems.Single(candidate =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(candidate),
+                            $"TaskStatusOption{option.Status}",
+                            StringComparison.Ordinal));
+
+                    await Assert.That(item.IsEnabled).IsEqualTo(option.IsEnabled);
+                    await Assert.That(AutomationProperties.GetHelpText(item))
+                        .IsEqualTo(option.AutomationHelpText);
+                }
+
                 await Assert.That(flyout.IsOpen).IsTrue();
             }
             finally
@@ -778,7 +790,7 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
-    public async Task TaskStatusPickerFlyout_ExposesOnlyAvailableTransitionOptions()
+    public async Task TaskStatusPickerFlyout_ExposesAllNonCurrentOptionsAndDisabledReasons()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -787,35 +799,41 @@ public class MainControlTaskStatusIconUiTests
                 new TaskItem
                 {
                     Id = "status-picker-task",
-                    Status = DomainTaskStatus.Prepared,
+                    Status = DomainTaskStatus.Completed,
                     IsCanBeCompleted = true
                 },
                 new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
                 () => false);
             var flyout = BuildStatusFlyout(task);
             var items = flyout.Items.OfType<MenuItem>().ToList();
-            var availableTransitionStatuses = task.StatusOptions
-                .Where(option => option.Status != task.Status && option.IsEnabled)
-                .Select(option => option.Status)
+            var transitionOptions = task.StatusOptions
+                .Where(option => option.Status != task.Status)
                 .ToList();
 
-            await Assert.That(items.Count).IsEqualTo(availableTransitionStatuses.Count);
-            foreach (var status in availableTransitionStatuses)
+            await Assert.That(items.Count).IsEqualTo(transitionOptions.Count);
+            foreach (var option in transitionOptions)
             {
                 var item = items.Single(candidate =>
                     string.Equals(
                         AutomationProperties.GetAutomationId(candidate),
-                        $"TaskStatusOption{status}",
+                        $"TaskStatusOption{option.Status}",
                         StringComparison.Ordinal));
                 var header = item.Header as StackPanel;
 
                 await Assert.That(header).IsNotNull();
                 var icon = header!.Children.OfType<TaskStatusIcon>().Single();
-                var text = header.Children.OfType<TextBlock>().Single();
+                var textBlocks = header.GetVisualDescendants().OfType<TextBlock>().ToList();
 
-                await Assert.That(icon.Status).IsEqualTo(status);
-                await Assert.That(text.Text).IsNotNull();
-                await Assert.That(text.Text).IsNotEmpty();
+                await Assert.That(icon.Status).IsEqualTo(option.Status);
+                await Assert.That(item.IsEnabled).IsEqualTo(option.IsEnabled);
+                await Assert.That(textBlocks.Select(static text => text.Text)).Contains(option.Title);
+                await Assert.That(AutomationProperties.GetHelpText(item))
+                    .IsEqualTo(option.AutomationHelpText);
+                if (!option.IsEnabled)
+                {
+                    await Assert.That(option.ReasonText).IsNotEmpty();
+                    await Assert.That(textBlocks.Select(static text => text.Text)).Contains(option.ReasonText);
+                }
             }
 
             await Assert.That(items.Select(AutomationProperties.GetAutomationId))
@@ -938,7 +956,9 @@ public class MainControlTaskStatusIconUiTests
                         "TaskStatusOptionCompleted",
                         StringComparison.Ordinal));
 
-            await Assert.That(completedItem).IsNull();
+            await Assert.That(completedItem).IsNotNull();
+            await Assert.That(completedItem!.IsEnabled).IsFalse();
+            await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsNotEmpty();
 
             task.CompletionCriteria.Single().IsSatisfied = true;
             Dispatcher.UIThread.RunJobs();
@@ -954,10 +974,7 @@ public class MainControlTaskStatusIconUiTests
                         "TaskStatusOptionCompleted",
                         StringComparison.Ordinal));
             await Assert.That(completedItem.IsEnabled).IsTrue();
-
-            InvokeMenuItemClick(completedItem);
-
-            await Assert.That(task.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsEmpty();
         }, CancellationToken.None);
     }
 
@@ -1344,6 +1361,12 @@ public class MainControlTaskStatusIconUiTests
         }
 
         public Task<TaskItemViewModel> Update(TaskItem change) =>
+            throw new NotSupportedException();
+
+        public Task<TaskOperationResult> TrySetStatusAsync(
+            string taskId,
+            Unlimotion.Domain.TaskStatus requestedStatus,
+            string? author = null) =>
             throw new NotSupportedException();
 
         public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents) =>

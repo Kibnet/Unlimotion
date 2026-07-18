@@ -12,6 +12,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using DynamicData;
@@ -19,6 +20,7 @@ using DynamicData.Binding;
 using PropertyChanged;
 using ReactiveUI;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
@@ -67,6 +69,8 @@ namespace Unlimotion.ViewModel
         private readonly SerialDisposable _completionCriteriaPropertyChangedSubscription = new();
         private readonly object _pendingSavesLock = new();
         private readonly HashSet<Task> _pendingSaves = [];
+        private readonly HashSet<Task> _pendingWriteProducers = [];
+        private readonly CancellationTokenSource _writeProducerLifetime = new();
         private bool _acceptingSaves = true;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
@@ -84,6 +88,7 @@ namespace Unlimotion.ViewModel
         {
             _repeaterPropertyChangedSubscription.AddToDispose(this);
             _completionCriteriaPropertyChangedSubscription.AddToDispose(this);
+            _writeProducerLifetime.AddToDispose(this);
             SetDurationCommands = new SetDurationCommands(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
@@ -157,38 +162,9 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
-            ArchiveCommand = ReactiveCommand.Create(() =>
-            {
-                var notificationManager = NotificationManager;
-
-                switch (Status)
-                {
-                    case DomainTaskStatus.Archived:
-                        {
-                            Status = Model.GetRestoreStatusAfterArchive();
-
-                            var archivedChildrenTasks = GetChildrenTasks(e => e.Status == DomainTaskStatus.Archived).ToList();
-
-                            ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, archivedChildrenTasks,
-                                ArchiveMethodType.Unarchive);
-
-                            break;
-                        }
-                    case DomainTaskStatus.NotReady:
-                    case DomainTaskStatus.Prepared:
-                    case DomainTaskStatus.InProgress:
-                        {
-                            Status = DomainTaskStatus.Archived;
-
-                            var activeChildrenTasks = GetChildrenTasks(e => e.Status.IsActive()).ToList();
-
-                            ShowModalAndChangeChildrenStatuses(notificationManager, Model.Title, activeChildrenTasks,
-                                ArchiveMethodType.Archive);
-
-                            break;
-                        }
-                }
-            }, this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed));
+            ArchiveCommand = ReactiveCommand.CreateFromTask(
+                ExecuteTrackedArchiveCommandAsync,
+                this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed));
 
             RemoveFunc = async parent =>
             {
@@ -583,6 +559,7 @@ namespace Unlimotion.ViewModel
             nameof(StatusOption),
             nameof(StatusTitle),
             nameof(StatusToolTip),
+            nameof(ArchiveCommandTitle),
             nameof(CanEditCompletionCriteria),
             nameof(CompletedDateTime),
             nameof(ArchiveDateTime),
@@ -597,30 +574,24 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<TaskStatusOption> StatusOptions { get; } =
             new(Enum.GetValues<DomainTaskStatus>().Select(TaskStatusOption.CreateTransitionOption));
         public IEnumerable<TaskStatusOption> AvailableStatusTransitionOptions =>
-            StatusOptions.Where(option => option.Status != Status && option.IsEnabled);
+            StatusOptions.Where(option => option.Status != Status);
         public TaskStatusOption StatusOption
         {
             get => StatusOptions.First(option => option.Status == Status);
             set
             {
-                if (value == null || value.Status == Status)
+                if (value is null || value.Status == Status)
                 {
                     return;
                 }
 
-                if (!CanTransitionToStatus(value.Status, out var reason))
-                {
-                    NotificationManager?.ErrorToast(reason);
-                    RefreshStatusOptions();
-                    OnPropertyChanged(nameof(StatusOption));
-                    return;
-                }
-
-                Status = value.Status;
+                _ = TryTransitionToStatusAsync(value.Status);
             }
         }
         public string StatusTitle => StatusOption.Title;
         public string StatusToolTip => StatusTitle;
+        public string ArchiveCommandTitle => L10n.Get(
+            Status == DomainTaskStatus.Archived ? "Unarchive" : "Archive");
         public bool CanEditCompletionCriteria => Status != DomainTaskStatus.Completed;
         public bool? IsCompleted
         {
@@ -832,31 +803,82 @@ namespace Unlimotion.ViewModel
                 });
         }
         
-        private void ShowModalAndChangeChildrenStatuses(INotificationManagerWrapper? notificationManager, string taskName,
-            List<TaskItemViewModel> childrenTasks, ArchiveMethodType methodType)
+        private Task ExecuteTrackedArchiveCommandAsync()
         {
-            if (childrenTasks.Count == 0 || notificationManager == null) return;
-
-            Action yesAction = methodType switch
+            var producerCompletion = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_pendingSavesLock)
             {
-                ArchiveMethodType.Archive => () =>
+                if (!_acceptingSaves)
                 {
-                    foreach (var task in childrenTasks)
-                    {
-                        task.Status = DomainTaskStatus.Archived;
-                    }
+                    return Task.CompletedTask;
                 }
-                ,
-                ArchiveMethodType.Unarchive => () =>
+
+                // Register a placeholder before running user or storage code. SealPendingSaves
+                // can therefore close the producer boundary without holding this lock while an
+                // async command starts.
+                _pendingWriteProducers.Add(producerCompletion.Task);
+            }
+
+            return RunTrackedArchiveCommandAsync(producerCompletion);
+        }
+
+        private async Task RunTrackedArchiveCommandAsync(TaskCompletionSource producerCompletion)
+        {
+            try
+            {
+                await ExecuteArchiveCommandAsync(_writeProducerLifetime.Token);
+                producerCompletion.TrySetResult();
+            }
+            catch (Exception exception)
+            {
+                producerCompletion.TrySetException(exception);
+                throw;
+            }
+            finally
+            {
+                lock (_pendingSavesLock)
                 {
-                    foreach (var task in childrenTasks)
-                    {
-                        task.Status = task.Model.GetRestoreStatusAfterArchive();
-                    }
+                    _pendingWriteProducers.Remove(producerCompletion.Task);
                 }
-                ,
-                _ => throw new Exception("Undefined ArchiveMethodType")
-            };
+            }
+        }
+
+        private async Task ExecuteArchiveCommandAsync(CancellationToken cancellationToken)
+        {
+            var sourceStatus = Status;
+            if (sourceStatus == DomainTaskStatus.Completed || cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var methodType = sourceStatus == DomainTaskStatus.Archived
+                ? ArchiveMethodType.Unarchive
+                : ArchiveMethodType.Archive;
+            var childrenTasks = methodType == ArchiveMethodType.Unarchive
+                ? GetChildrenTasks(static task => task.Status == DomainTaskStatus.Archived).ToList()
+                : GetChildrenTasks(static task => task.Status.IsActive()).ToList();
+            Task<TaskOperationResult> parentTransition;
+            lock (_pendingSavesLock)
+            {
+                if (!_acceptingSaves || cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                parentTransition = methodType == ArchiveMethodType.Unarchive
+                    ? TryUnarchiveAsync()
+                    : TryTransitionToStatusAsync(DomainTaskStatus.Archived);
+            }
+
+            var parentResult = await parentTransition;
+            if (!parentResult.Success ||
+                cancellationToken.IsCancellationRequested ||
+                childrenTasks.Count == 0 ||
+                NotificationManager == null)
+            {
+                return;
+            }
 
             var headerKey = methodType == ArchiveMethodType.Archive
                 ? "ArchiveContainedTasksHeader"
@@ -865,9 +887,100 @@ namespace Unlimotion.ViewModel
                 ? "ArchiveContainedTasksMessage"
                 : "UnarchiveContainedTasksMessage";
 
-            notificationManager.Ask(L10n.Get(headerKey),
-                L10n.Format(messageKey, childrenTasks.Count, taskName),
-                yesAction);
+            bool confirmed;
+            Task<bool>? confirmationTask = null;
+            try
+            {
+                confirmationTask = NotificationManager.ConfirmAsync(
+                    L10n.Get(headerKey),
+                    L10n.Format(messageKey, childrenTasks.Count, Title));
+                confirmed = await confirmationTask.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                if (confirmationTask is not null)
+                {
+                    _ = ObserveAbandonedConfirmationAsync(confirmationTask);
+                }
+
+                return;
+            }
+            catch (Exception exception)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    NotificationManager.ErrorToast(
+                        L10n.Format("TaskStatusCascadeConfirmationFailed", exception.Message));
+                }
+
+                return;
+            }
+
+            if (!confirmed || cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var successCount = 0;
+            var failureCount = 0;
+            foreach (var child in childrenTasks)
+            {
+                Task<TaskOperationResult> childTransition;
+                lock (_pendingSavesLock)
+                {
+                    if (!_acceptingSaves || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    childTransition = methodType == ArchiveMethodType.Unarchive
+                        ? child.TryUnarchiveAsync()
+                        : child.TryTransitionToStatusAsync(DomainTaskStatus.Archived);
+                }
+
+                var childResult = await childTransition;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                if (childResult.Success)
+                {
+                    successCount++;
+                }
+                else
+                {
+                    failureCount++;
+                }
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var summary = L10n.Format("TaskStatusCascadeSummary", successCount, failureCount);
+            if (failureCount == 0)
+            {
+                NotificationManager.SuccessToast(summary);
+            }
+            else
+            {
+                NotificationManager.ErrorToast(summary);
+            }
+        }
+
+        private static async Task ObserveAbandonedConfirmationAsync(Task confirmationTask)
+        {
+            try
+            {
+                await confirmationTask;
+            }
+            catch
+            {
+                // Lifecycle sealing won the race. Observe a later dialog failure without
+                // reviving the archived workflow or surfacing UI after teardown.
+            }
         }
 
         private enum ArchiveMethodType
@@ -1071,13 +1184,18 @@ namespace Unlimotion.ViewModel
 
         internal Task SealPendingSaves()
         {
+            Task sealedSnapshot;
             lock (_pendingSavesLock)
             {
                 _acceptingSaves = false;
-                return _sealedPendingSavesTask ??= _pendingSaves.Count == 0
+                sealedSnapshot = _sealedPendingSavesTask ??=
+                    _pendingSaves.Count == 0 && _pendingWriteProducers.Count == 0
                     ? Task.CompletedTask
-                    : Task.WhenAll(_pendingSaves.ToArray());
+                    : Task.WhenAll(_pendingSaves.Concat(_pendingWriteProducers).ToArray());
             }
+
+            _writeProducerLifetime.Cancel();
+            return sealedSnapshot;
         }
 
         public Task WaitForPendingSavesAsync()
@@ -1111,64 +1229,193 @@ namespace Unlimotion.ViewModel
 
         private void RefreshStatusOptions()
         {
+            var facts = CreateStatusTransitionFacts();
             foreach (var option in StatusOptions)
             {
-                var canSelect = CanTransitionToStatus(option.Status, out var reason);
-                option.IsEnabled = canSelect;
-                option.ToolTip = canSelect ? option.Title : reason;
+                if (option.Status == Status)
+                {
+                    option.IsEnabled = true;
+                    option.ToolTip = option.Title;
+                    continue;
+                }
+
+                var evaluation = TaskStatusTransitionPolicy.Evaluate(option.Status, facts);
+                option.IsEnabled = evaluation.IsAllowed;
+                option.ToolTip = evaluation.IsAllowed
+                    ? option.Title
+                    : GetStatusTransitionDenialMessage(evaluation.Reason);
             }
 
             OnPropertyChanged(nameof(AvailableStatusTransitionOptions));
         }
 
-        private bool CanTransitionToStatus(DomainTaskStatus targetStatus, out string reason)
+        internal void RefreshLocalization()
         {
-            reason = TaskStatusOption.Find(targetStatus).Title;
-
-            if (targetStatus == Status)
+            RefreshStatusOptions();
+            foreach (var option in StatusOptions)
             {
-                return true;
+                option.RefreshLocalization();
             }
 
-            switch (targetStatus)
+            OnPropertyChanged(nameof(StatusOption));
+            OnPropertyChanged(nameof(StatusTitle));
+            OnPropertyChanged(nameof(StatusToolTip));
+            OnPropertyChanged(nameof(ArchiveCommandTitle));
+        }
+
+        public Task<TaskOperationResult> TryTransitionToStatusAsync(
+            DomainTaskStatus targetStatus,
+            string? author = null) =>
+            StartStatusOperationAsync(
+                () => _taskStorage.TrySetStatusAsync(Id, targetStatus, author),
+                targetStatus);
+
+        private Task<TaskOperationResult> TryUnarchiveAsync(string? author = null) =>
+            StartStatusOperationAsync(
+                () => _taskStorage.TryUnarchiveAsync(Id, author),
+                requestedStatus: null);
+
+        private Task<TaskOperationResult> StartStatusOperationAsync(
+            Func<Task<TaskOperationResult>> execute,
+            DomainTaskStatus? requestedStatus)
+        {
+            Task<TaskOperationResult> transitionTask;
+            lock (_pendingSavesLock)
             {
-                case DomainTaskStatus.NotReady:
-                case DomainTaskStatus.Prepared:
-                    return true;
-                case DomainTaskStatus.Archived:
-                    if (Status == DomainTaskStatus.Completed)
-                    {
-                        reason = L10n.Get("TaskStatusArchiveCompletedBlocked");
-                        return false;
-                    }
+                if (!_acceptingSaves)
+                {
+                    return Task.FromResult(TaskOperationResult.Denied(
+                        TaskOperationDeniedReason.Create(
+                            TaskOperationDeniedKind.StorageFailed,
+                            "The task is no longer accepting status operations.",
+                            Id,
+                            requestedStatus)));
+                }
 
-                    return true;
-                case DomainTaskStatus.InProgress:
-                    if (HasFuturePlannedBegin())
-                    {
-                        reason = L10n.Get("TaskStatusStartFutureDateBlocked");
-                        return false;
-                    }
-
-                    return CanTransitionByAvailability(out reason);
-                case DomainTaskStatus.Completed:
-                    if (Status == DomainTaskStatus.Archived)
-                    {
-                        reason = L10n.Get("TaskStatusCompleteArchivedBlocked");
-                        return false;
-                    }
-
-                    if (CompletionCriteria.Any(static criterion => !criterion.IsSatisfied))
-                    {
-                        reason = L10n.Get("TaskStatusCompleteCriteriaBlocked");
-                        return false;
-                    }
-
-                    return CanTransitionByAvailability(out reason);
-                default:
-                    reason = L10n.Get("TaskStatusTransitionBlocked");
-                    return false;
+                transitionTask = ExecuteStatusOperationAsync(execute, requestedStatus);
+                _pendingSaves.Add(transitionTask);
             }
+
+            _ = ObserveSaveCompletionAsync(transitionTask);
+            return transitionTask;
+        }
+
+        private async Task<TaskOperationResult> ExecuteStatusOperationAsync(
+            Func<Task<TaskOperationResult>> execute,
+            DomainTaskStatus? requestedStatus)
+        {
+            TaskOperationResult result;
+            try
+            {
+                result = await execute();
+            }
+            catch (Exception exception)
+            {
+                result = TaskOperationResult.Denied(
+                    TaskOperationDeniedReason.Create(
+                        TaskOperationDeniedKind.StorageFailed,
+                        exception.Message,
+                        Id,
+                        requestedStatus));
+            }
+
+            if (result.AuthoritativeTask is { } authoritativeTask &&
+                string.Equals(authoritativeTask.Id, Id, StringComparison.Ordinal))
+            {
+                Update(authoritativeTask);
+            }
+
+            if (!result.Success)
+            {
+                NotificationManager?.ErrorToast(GetStatusOperationFailureMessage(result));
+            }
+
+            RefreshStatusOptions();
+            OnPropertyChanged(nameof(StatusOption));
+            return result;
+        }
+
+        private TaskStatusTransitionFacts CreateStatusTransitionFacts() => new(
+            Status,
+            IsCanBeCompleted,
+            HasFuturePlannedBegin(),
+            CompletionCriteria.All(static criterion => criterion.IsSatisfied));
+
+        private string GetStatusOperationFailureMessage(TaskOperationResult result)
+        {
+            if (result.DeniedReason?.StatusTransitionReason is { } reason)
+            {
+                return reason is TaskStatusTransitionDenialReason.GraphUnavailableForStart or
+                    TaskStatusTransitionDenialReason.GraphUnavailableForCompletion
+                    ? GetAuthoritativeGraphTransitionDenialMessage(result, reason)
+                    : GetStatusTransitionDenialMessage(reason);
+            }
+
+            return result.DeniedReason?.Kind switch
+            {
+                TaskOperationDeniedKind.OutcomeUnknown => L10n.Get("TaskStatusOutcomeUnknown"),
+                TaskOperationDeniedKind.StatusPreconditionFailed => L10n.Get("TaskStatusSourceChanged"),
+                _ => L10n.Get("TaskStatusSaveFailed")
+            };
+        }
+
+        private string GetAuthoritativeGraphTransitionDenialMessage(
+            TaskOperationResult result,
+            TaskStatusTransitionDenialReason reason)
+        {
+            var fallbackResourceKey = reason == TaskStatusTransitionDenialReason.GraphUnavailableForStart
+                ? "TaskStatusStartGraphBlocked"
+                : "TaskStatusCompleteGraphBlocked";
+            if (result.Before is null)
+            {
+                return GetGraphTransitionDenialMessage(fallbackResourceKey);
+            }
+
+            var hasContainedTask = result.Before.Reasons.Any(static item =>
+                item.Kind == TaskAvailabilityReasonKind.IncompleteContainedTask);
+            var hasDirectBlocker = result.Before.Reasons.Any(static item =>
+                item.Kind == TaskAvailabilityReasonKind.IncompleteDirectBlocker);
+            var hasInheritedBlocker = result.Before.Reasons.Any(static item =>
+                item.Kind == TaskAvailabilityReasonKind.IncompleteInheritedBlocker);
+
+            return (hasContainedTask, hasDirectBlocker, hasInheritedBlocker) switch
+            {
+                (true, _, _) => L10n.Get("TaskStatusContainedTasksBlocked"),
+                (false, true, _) => L10n.Get("TaskStatusDirectBlockersBlocked"),
+                (false, false, true) => L10n.Get("TaskStatusInheritedBlockersBlocked"),
+                _ => L10n.Get(fallbackResourceKey)
+            };
+        }
+
+        private string GetStatusTransitionDenialMessage(TaskStatusTransitionDenialReason reason)
+        {
+            return reason switch
+            {
+                TaskStatusTransitionDenialReason.TerminalCannotStart =>
+                    L10n.Get("TaskStatusStartTerminalBlocked"),
+                TaskStatusTransitionDenialReason.GraphUnavailableForStart =>
+                    GetGraphTransitionDenialMessage("TaskStatusStartGraphBlocked"),
+                TaskStatusTransitionDenialReason.FutureDatePreventsStart =>
+                    L10n.Get("TaskStatusStartFutureDateBlocked"),
+                TaskStatusTransitionDenialReason.TerminalCannotComplete =>
+                    L10n.Get("TaskStatusCompleteTerminalBlocked"),
+                TaskStatusTransitionDenialReason.GraphUnavailableForCompletion =>
+                    GetGraphTransitionDenialMessage("TaskStatusCompleteGraphBlocked"),
+                TaskStatusTransitionDenialReason.CompletionCriteriaIncomplete =>
+                    L10n.Get("TaskStatusCompleteCriteriaBlocked"),
+                TaskStatusTransitionDenialReason.CompletedCannotArchive =>
+                    L10n.Get("TaskStatusArchiveCompletedBlocked"),
+                TaskStatusTransitionDenialReason.InvalidTargetStatus =>
+                    L10n.Get("TaskStatusTransitionBlocked"),
+                _ => L10n.Get("TaskStatusTransitionBlocked")
+            };
+        }
+
+        private string GetGraphTransitionDenialMessage(string fallbackResourceKey)
+        {
+            return CanTransitionByAvailability(out var detailedReason)
+                ? L10n.Get(fallbackResourceKey)
+                : detailedReason;
         }
 
         private void RequestCompletionCriterionFocus(TaskCompletionCriterion criterion)
@@ -1188,9 +1435,22 @@ namespace Unlimotion.ViewModel
                 return false;
             }
 
-            if (HasIncompleteBlockerInTaskOrAncestors(new HashSet<string>(StringComparer.Ordinal)))
+            if (BlockedByTasks.Any(static task => task.Status.IsIncompleteForAvailability()))
             {
-                reason = L10n.Get("TaskStatusBlockersBlocked");
+                reason = L10n.Get("TaskStatusDirectBlockersBlocked");
+                return false;
+            }
+
+            var visitedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+            if (!string.IsNullOrWhiteSpace(Id))
+            {
+                visitedTaskIds.Add(Id);
+            }
+
+            if (ParentsTasks.Any(parent =>
+                    parent.HasIncompleteBlockerInTaskOrAncestors(visitedTaskIds)))
+            {
+                reason = L10n.Get("TaskStatusInheritedBlockersBlocked");
                 return false;
             }
 

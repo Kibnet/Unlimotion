@@ -447,7 +447,7 @@ public class TaskStatusTransitionTests
         await Assert.That(completedOption.IsEnabled).IsFalse();
         await Assert.That(inProgressOption.IsEnabled).IsTrue();
 
-        viewModel.StatusOption = completedOption;
+        await viewModel.TryTransitionToStatusAsync(completedOption.Status);
 
         await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Prepared);
     }
@@ -473,7 +473,7 @@ public class TaskStatusTransitionTests
         await Assert.That(completedOption.ToolTip).IsNotEqualTo(completedOption.Title);
         await Assert.That(preparedOption.IsEnabled).IsTrue();
 
-        viewModel.StatusOption = completedOption;
+        await viewModel.TryTransitionToStatusAsync(completedOption.Status);
 
         await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Archived);
     }
@@ -482,27 +482,32 @@ public class TaskStatusTransitionTests
     public async Task TaskItemViewModel_StatusOptions_EnablesCompletedWhenCriterionBecomesSatisfied()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var storage = new InMemoryStorage();
+        using var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(storage));
+        TaskItemViewModel viewModel = null!;
+        TaskStatusOption completedOption = null!;
         try
         {
             await session.DispatchAsync(async () =>
             {
-                var storage = new InMemoryStorage();
                 var criterion = new TaskCompletionCriterion
                 {
                     Text = "Проверить результат",
                     IsSatisfied = false
                 };
-                var viewModel = new TaskItemViewModel(
-                    new TaskItem
-                    {
-                        Id = "test-task",
-                        Status = DomainTaskStatus.Prepared,
-                        IsCanBeCompleted = true,
-                        CompletionCriteria = [criterion]
-                    },
-                    new UnifiedTaskStorage(new TaskTreeManager(storage)),
+                var task = new TaskItem
+                {
+                    Id = "test-task",
+                    Status = DomainTaskStatus.Prepared,
+                    IsCanBeCompleted = true,
+                    CompletionCriteria = [criterion]
+                };
+                await storage.Save(task);
+                viewModel = new TaskItemViewModel(
+                    task,
+                    taskStorage,
                     () => false);
-                var completedOption = viewModel.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
+                completedOption = viewModel.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed);
 
                 await Assert.That(completedOption.IsEnabled).IsFalse();
 
@@ -518,8 +523,13 @@ public class TaskStatusTransitionTests
                         TimeSpan.FromSeconds(2)))
                     .IsTrue();
 
-                viewModel.StatusOption = completedOption;
+                await storage.Save(viewModel.Model);
+            }, CancellationToken.None);
 
+            await viewModel.TryTransitionToStatusAsync(completedOption.Status);
+
+            await session.DispatchAsync(async () =>
+            {
                 await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
             }, CancellationToken.None);
         }

@@ -24,13 +24,51 @@ public class TaskStatusOption : ReactiveObject
     public bool IsEnabled
     {
         get => _isEnabled;
-        set => this.RaiseAndSetIfChanged(ref _isEnabled, value);
+        set
+        {
+            if (_isEnabled == value)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _isEnabled, value);
+            this.RaisePropertyChanged(nameof(ReasonText));
+            this.RaisePropertyChanged(nameof(HasReason));
+            this.RaisePropertyChanged(nameof(AutomationHelpText));
+        }
     }
 
     public string ToolTip
     {
         get => _toolTip ?? Title;
-        set => this.RaiseAndSetIfChanged(ref _toolTip, value);
+        set
+        {
+            if (string.Equals(_toolTip, value, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _toolTip, value);
+            this.RaisePropertyChanged(nameof(ReasonText));
+            this.RaisePropertyChanged(nameof(HasReason));
+            this.RaisePropertyChanged(nameof(AutomationHelpText));
+        }
+    }
+
+    public string ReasonText => IsEnabled ? string.Empty : ToolTip;
+
+    public bool HasReason => !string.IsNullOrWhiteSpace(ReasonText);
+
+    public string AutomationHelpText => IsEnabled ? string.Empty : ToolTip;
+
+    internal void RefreshLocalization()
+    {
+        this.RaisePropertyChanged(nameof(Title));
+        this.RaisePropertyChanged(nameof(DisplayText));
+        this.RaisePropertyChanged(nameof(ToolTip));
+        this.RaisePropertyChanged(nameof(ReasonText));
+        this.RaisePropertyChanged(nameof(HasReason));
+        this.RaisePropertyChanged(nameof(AutomationHelpText));
     }
 
     public override string ToString() => DisplayText;

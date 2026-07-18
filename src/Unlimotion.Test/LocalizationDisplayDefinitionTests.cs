@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.ComponentModel;
@@ -149,6 +151,83 @@ public class LocalizationDisplayDefinitionTests
             finally
             {
                 LocalizationService.Current = previousLocalization;
+            }
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task MainWindowViewModel_LanguageRefreshUpdatesExistingTaskStatusCopy()
+    {
+        var previousLocalization = LocalizationService.Current;
+        var previousCulture = CultureInfo.CurrentCulture;
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        var previousDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+        var previousDefaultUiCulture = CultureInfo.DefaultThreadCurrentUICulture;
+        MainWindowViewModelFixture? fixture = null;
+        try
+        {
+            var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+            LocalizationService.Current = localization;
+            localization.SetLanguage(LocalizationService.EnglishLanguage);
+            fixture = new MainWindowViewModelFixture();
+            var viewModel = fixture.MainWindowViewModelTest;
+            await viewModel.Connect();
+
+            var task = TestHelpers.GetTask(viewModel, MainWindowViewModelFixture.ArchivedTask1Id)
+                ?? throw new InvalidOperationException("Archived task was not found.");
+            var inProgress = task.StatusOptions.Single(
+                option => option.Status == Unlimotion.Domain.TaskStatus.InProgress);
+            var originalStatus = task.Status;
+            var originalHistoryCount = task.StatusHistory.Count;
+            var originalOptions = task.StatusOptions;
+            var taskChanges = new List<string?>();
+            var optionChanges = new List<string?>();
+            ((INotifyPropertyChanged)task).PropertyChanged += (_, args) =>
+                taskChanges.Add(args.PropertyName);
+            ((INotifyPropertyChanged)inProgress).PropertyChanged += (_, args) =>
+                optionChanges.Add(args.PropertyName);
+
+            await Assert.That(task.ArchiveCommandTitle).IsEqualTo("Unarchive");
+            await Assert.That(task.StatusTitle).IsEqualTo("Archived");
+            await Assert.That(inProgress.ReasonText)
+                .IsEqualTo("Completed or archived tasks cannot be started. Return the task to an active status first.");
+
+            localization.SetLanguage(LocalizationService.RussianLanguage);
+
+            await Assert.That(task.ArchiveCommandTitle).IsEqualTo("Разархивировать");
+            await Assert.That(task.StatusTitle).IsEqualTo("Архивировано");
+            await Assert.That(inProgress.ReasonText)
+                .IsEqualTo("Выполненную или архивную задачу нельзя запустить. Сначала верните задачу в активный статус.");
+            await Assert.That(task.Status).IsEqualTo(originalStatus);
+            await Assert.That(task.StatusHistory.Count).IsEqualTo(originalHistoryCount);
+            await Assert.That(task.StatusOptions).IsSameReferenceAs(originalOptions);
+            await Assert.That(task.StatusOptions.Single(option =>
+                    option.Status == Unlimotion.Domain.TaskStatus.InProgress))
+                .IsSameReferenceAs(inProgress);
+            await Assert.That(taskChanges).Contains(nameof(TaskItemViewModel.ArchiveCommandTitle));
+            await Assert.That(taskChanges).Contains(nameof(TaskItemViewModel.StatusTitle));
+            await Assert.That(taskChanges).Contains(nameof(TaskItemViewModel.StatusToolTip));
+            await Assert.That(taskChanges).Contains(nameof(TaskItemViewModel.AvailableStatusTransitionOptions));
+            await Assert.That(optionChanges).Contains(nameof(TaskStatusOption.Title));
+            await Assert.That(optionChanges).Contains(nameof(TaskStatusOption.ReasonText));
+            await Assert.That(optionChanges).Contains(nameof(TaskStatusOption.AutomationHelpText));
+        }
+        finally
+        {
+            try
+            {
+                if (fixture is not null)
+                {
+                    await fixture.CleanTasksAsync();
+                }
+            }
+            finally
+            {
+                LocalizationService.Current = previousLocalization;
+                CultureInfo.DefaultThreadCurrentCulture = previousDefaultCulture;
+                CultureInfo.DefaultThreadCurrentUICulture = previousDefaultUiCulture;
+                CultureInfo.CurrentCulture = previousCulture;
+                CultureInfo.CurrentUICulture = previousUiCulture;
             }
         }
     }

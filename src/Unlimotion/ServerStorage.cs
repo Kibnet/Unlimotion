@@ -22,7 +22,7 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion;
 
-public class ServerStorage : IStorage
+public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
 {
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
     public event Action<Exception?>? OnConnectionError;
@@ -45,6 +45,9 @@ public class ServerStorage : IStorage
 
     private HubConnection? _connection;
     private readonly IJsonServiceClient serviceClient;
+    private readonly Func<GetAllTasks, Task<TaskItemPage>> fetchAllTasks;
+    private readonly Func<TaskItem, Task<TaskItem>> saveTask;
+    private readonly Func<string, Task<TaskItem?>> loadTask;
     private IChatHub? _hub;
     private ClientSettings settings = new();
     private IConfiguration? configuration;
@@ -65,6 +68,9 @@ public class ServerStorage : IStorage
     {
         Url = url;
         serviceClient = new JsonServiceClient(Url);
+        fetchAllTasks = request => serviceClient.GetAsync(request);
+        saveTask = SaveCoreAsync;
+        loadTask = LoadCoreAsync;
         ServicePointManager.ServerCertificateValidationCallback +=
             (sender, cert, chain, sslPolicyErrors) => true;
         this.configuration = configuration;
@@ -90,6 +96,19 @@ public class ServerStorage : IStorage
 
         //Создание маппера
         mapper = AppModelMapping.ConfigureMapping();
+    }
+
+    internal ServerStorage(
+        string url,
+        IConfiguration configuration,
+        Func<GetAllTasks, Task<TaskItemPage>> fetchAllTasks,
+        Func<TaskItem, Task<TaskItem>>? saveTask = null,
+        Func<string, Task<TaskItem?>>? loadTask = null)
+        : this(url, configuration)
+    {
+        this.fetchAllTasks = fetchAllTasks ?? throw new ArgumentNullException(nameof(fetchAllTasks));
+        this.saveTask = saveTask ?? this.saveTask;
+        this.loadTask = loadTask ?? this.loadTask;
     }
 
     public async Task<bool> Connect()
@@ -263,7 +282,9 @@ public class ServerStorage : IStorage
         }
     }
 
-    public async Task<TaskItem> Save(TaskItem item)
+    public Task<TaskItem> Save(TaskItem item) => saveTask(item);
+
+    private async Task<TaskItem> SaveCoreAsync(TaskItem item)
     {
         while (IsActive)
         {
@@ -307,7 +328,9 @@ public class ServerStorage : IStorage
         return false;
     }
 
-    public async Task<TaskItem?> Load(string itemId)
+    public Task<TaskItem?> Load(string itemId) => loadTask(itemId);
+
+    private async Task<TaskItem?> LoadCoreAsync(string itemId)
     {
         try
         {
@@ -327,8 +350,7 @@ public class ServerStorage : IStorage
         TaskItemPage? tasks = null;
         try
         {
-            //var task = serviceClient.Get(new GetAllTasks());;
-            tasks = await serviceClient.GetAsync(new GetAllTasks());
+            tasks = await fetchAllTasks(new GetAllTasks());
         }
         catch (Exception)
         {
@@ -345,6 +367,69 @@ public class ServerStorage : IStorage
                     yield return mapped;
             }
         }
+    }
+
+    public async Task<TaskGraphReadResult> ReadGraphAsync()
+    {
+        var page = await fetchAllTasks(new GetAllTasks()).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Server GetAllTasks returned no response.");
+        var molds = page.Tasks
+            ?? throw new InvalidOperationException("Server GetAllTasks response did not contain a task collection.");
+        var tasks = new List<TaskItem>(molds.Count);
+        var loadErrors = new List<TaskGraphLoadError>();
+        for (var index = 0; index < molds.Count; index++)
+        {
+            var source = $"<server:GetAllTasks:{index}>";
+            var mold = molds[index];
+            if (mold is null)
+            {
+                loadErrors.Add(new TaskGraphLoadError(
+                    source,
+                    "Server GetAllTasks response contained a null task."));
+                continue;
+            }
+
+            try
+            {
+                var task = mapper?.Map<TaskItem>(mold);
+                if (task is null)
+                {
+                    loadErrors.Add(new TaskGraphLoadError(
+                        source,
+                        "Server GetAllTasks task could not be mapped."));
+                    continue;
+                }
+
+                tasks.Add(task);
+            }
+            catch (Exception exception)
+            {
+                loadErrors.Add(new TaskGraphLoadError(source, exception.Message));
+            }
+        }
+
+        var filesByTaskId = tasks
+            .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+            .GroupBy(static task => task.Id, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static _ => "<server:GetAllTasks>",
+                StringComparer.Ordinal);
+        var duplicateIdIssues = tasks
+            .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+            .Select(static (task, index) => (task.Id, Index: index))
+            .GroupBy(static item => item.Id, StringComparer.Ordinal)
+            .Where(static group => group.Count() > 1)
+            .Select(static group => new TaskGraphDuplicateIdIssue(
+                group.Key,
+                group.Select(static item => $"<server:GetAllTasks:{item.Index}>").ToArray()))
+            .ToArray();
+
+        return new TaskGraphReadResult(
+            tasks,
+            filesByTaskId,
+            loadErrors,
+            duplicateIdIssues);
     }
 
     public async Task BulkInsert(IEnumerable<TaskItem> taskItems)

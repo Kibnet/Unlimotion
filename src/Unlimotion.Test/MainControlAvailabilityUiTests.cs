@@ -7,6 +7,8 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion;
+using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
@@ -17,6 +19,54 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlAvailabilityUiTests
 {
+    [Test]
+    public async Task FuturePlannedBegin_DisablesOnlyStartWithoutDimmingTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var repository = new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage()));
+            using var task = new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = "future-status-contract-task",
+                    Title = "Future task",
+                    Status = DomainTaskStatus.Prepared,
+                    IsCanBeCompleted = true,
+                    PlannedBeginDateTime = DateTimeOffset.Now.AddDays(1)
+                },
+                repository,
+                () => false);
+            var picker = new TaskStatusPicker { Task = task };
+            var window = CreateWindow(picker);
+
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var inProgress = task.StatusOptions.Single(
+                    option => option.Status == DomainTaskStatus.InProgress);
+                var completed = task.StatusOptions.Single(
+                    option => option.Status == DomainTaskStatus.Completed);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(task.IsCanBeCompleted).IsTrue();
+                    await Assert.That(task.AvailabilityOpacity).IsEqualTo(1d);
+                    await Assert.That(picker.Opacity).IsEqualTo(1d);
+                    await Assert.That(inProgress.IsEnabled).IsFalse();
+                    await Assert.That(inProgress.ReasonText).IsNotEmpty();
+                    await Assert.That(completed.IsEnabled).IsTrue();
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task LastOpenedTaskTitle_ShouldBeDimmed_WhenTaskCannotBeCompleted()
     {

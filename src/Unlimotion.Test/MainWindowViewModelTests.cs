@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -11,6 +13,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using DynamicData;
 using KellermanSoftware.CompareNetObjects;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
@@ -1707,7 +1710,11 @@ namespace Unlimotion.Test
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask11Id);
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem!.ArchiveCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(
+                () => ((ReactiveCommand<Unit, Unit>)mainWindowVM.CurrentTaskItem!.ArchiveCommand)
+                    .Execute()
+                    .ToTask(),
+                taskRepository);
             
             var archived = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
             await Assert.That(archived.ArchiveDateTime).IsNotNull();
@@ -1724,7 +1731,11 @@ namespace Unlimotion.Test
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchiveTask1Id);
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem!.ArchiveCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(
+                () => ((ReactiveCommand<Unit, Unit>)mainWindowVM.CurrentTaskItem!.ArchiveCommand)
+                    .Execute()
+                    .ToTask(),
+                taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
             await Assert.That(taskItem.ArchiveDateTime).IsNotNull();
@@ -1746,7 +1757,11 @@ namespace Unlimotion.Test
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask11Id);
             
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.CurrentTaskItem!.ArchiveCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(
+                () => ((ReactiveCommand<Unit, Unit>)mainWindowVM.CurrentTaskItem!.ArchiveCommand)
+                    .Execute()
+                    .ToTask(),
+                taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
             await Assert.That(taskItem.ArchiveDateTime).IsNull();
@@ -1763,8 +1778,11 @@ namespace Unlimotion.Test
             var task = TestHelpers.SetCurrentTask(mainWindowVM, MainWindowViewModelFixture.ArchivedTask1Id);
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
-            await TestHelpers.ActionNotCreateItems(() => 
-                mainWindowVM.CurrentTaskItem!.ArchiveCommand.Execute(null), taskRepository);
+            await TestHelpers.ActionNotCreateItemsAsync(
+                () => ((ReactiveCommand<Unit, Unit>)mainWindowVM.CurrentTaskItem!.ArchiveCommand)
+                    .Execute()
+                    .ToTask(),
+                taskRepository);
 
             var taskItem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
             await Assert.That(taskItem.ArchiveDateTime).IsNull();
@@ -1773,6 +1791,31 @@ namespace Unlimotion.Test
             var subitem = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.ArchivedTask11Id)!;
             await Assert.That(subitem.ArchiveDateTime).IsNull();
             await Assert.That(subitem.IsCompleted).IsFalse();
+        }
+
+        [Test]
+        public async Task CompleteCurrentTaskCommand_PersistsThroughStatusCommand()
+        {
+            var task = TestHelpers.SetCurrentTask(
+                mainWindowVM,
+                MainWindowViewModelFixture.ArchiveTask11Id);
+            var before = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
+            var initialHistoryCount = before.StatusHistory.Count;
+
+            await ((ReactiveCommand<Unit, Unit>)mainWindowVM.CompleteCurrentTaskCommand)
+                .Execute()
+                .ToTask();
+            await TestHelpers.WaitForPendingSavesAsync(taskRepository);
+
+            var persisted = TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, task.Id)!;
+            using (Assert.Multiple())
+            {
+                await Assert.That(task.Status).IsEqualTo(DomainTaskStatus.Completed);
+                await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.Completed);
+                await Assert.That(persisted.StatusHistory.Count).IsEqualTo(initialHistoryCount + 1);
+                await Assert.That(persisted.StatusHistory[^1].Status)
+                    .IsEqualTo(DomainTaskStatus.Completed);
+            }
         }
 
         /// <summary>

@@ -7,7 +7,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Test;
 
-public class InMemoryStorage : IStorage
+public class InMemoryStorage : IStorage, ITaskGraphDiagnosticStorage
 {
     private readonly Dictionary<string, TaskItem> _tasks = new();
 
@@ -54,49 +54,26 @@ public class InMemoryStorage : IStorage
 
     public async Task<TaskItem> Save(TaskItem taskItem)
     {
-        var clone = new TaskItem
-        {
-            Id = taskItem.Id??Guid.NewGuid().ToString(),
-            UserId = taskItem.UserId,
-            Title = taskItem.Title,
-            Description = taskItem.Description,
-            Status = taskItem.Status,
-            StatusHistory = taskItem.StatusHistory?
-                .Select(entry => new TaskStatusHistoryEntry
-                {
-                    Status = entry.Status,
-                    ChangedAt = entry.ChangedAt,
-                    Author = entry.Author
-                })
-                .ToList() ?? new(),
-            CompletionCriteria = taskItem.CompletionCriteria?
-                .Select(criterion => new TaskCompletionCriterion
-                {
-                    Id = criterion.Id,
-                    Text = criterion.Text,
-                    IsSatisfied = criterion.IsSatisfied
-                })
-                .ToList() ?? new(),
-            IsCanBeCompleted = taskItem.IsCanBeCompleted,
-            CreatedDateTime = taskItem.CreatedDateTime,
-            UpdatedDateTime = taskItem.UpdatedDateTime,
-            UnlockedDateTime = taskItem.UnlockedDateTime,
-            PlannedBeginDateTime = taskItem.PlannedBeginDateTime,
-            PlannedEndDateTime = taskItem.PlannedEndDateTime,
-            PlannedDuration = taskItem.PlannedDuration,
-            ContainsTasks = taskItem.ContainsTasks?.ToList() ?? new(),
-            ParentTasks = taskItem.ParentTasks?.ToList() ?? new(),
-            BlocksTasks = taskItem.BlocksTasks?.ToList() ?? new(),
-            BlockedByTasks = taskItem.BlockedByTasks?.ToList() ?? new(),
-            Repeater = taskItem.Repeater,
-            Importance = taskItem.Importance,
-            Wanted = taskItem.Wanted,
-            Version = taskItem.Version,
-        };
+        var clone = CloneTask(taskItem);
+        clone.Id ??= Guid.NewGuid().ToString();
         taskItem.Id = clone.Id;
         _tasks[clone.Id] = clone;
 
         return taskItem;
+    }
+
+    public Task<TaskGraphReadResult> ReadGraphAsync()
+    {
+        var tasks = _tasks.Values.Select(CloneTask).ToArray();
+        var filesByTaskId = tasks.ToDictionary(
+            static task => task.Id,
+            static task => $"<memory:{task.Id}>",
+            StringComparer.Ordinal);
+        return Task.FromResult(new TaskGraphReadResult(
+            tasks,
+            filesByTaskId,
+            Array.Empty<TaskGraphLoadError>(),
+            Array.Empty<TaskGraphDuplicateIdIssue>()));
     }
 
     public Task<bool> Remove(string id)
@@ -106,4 +83,44 @@ public class InMemoryStorage : IStorage
     }
 
     public void Clear() => _tasks.Clear();
+
+    private static TaskItem CloneTask(TaskItem taskItem) => taskItem with
+    {
+        StatusHistory = taskItem.StatusHistory?
+            .Select(entry => entry == null
+                ? null!
+                : new TaskStatusHistoryEntry
+                {
+                    Status = entry.Status,
+                    ChangedAt = entry.ChangedAt,
+                    Author = entry.Author,
+                    ExtensionData = entry.ExtensionData
+                })
+            .ToList() ?? new(),
+        CompletionCriteria = taskItem.CompletionCriteria?
+            .Select(criterion => new TaskCompletionCriterion
+            {
+                Id = criterion.Id,
+                Text = criterion.Text,
+                IsSatisfied = criterion.IsSatisfied,
+                ExtensionData = criterion.ExtensionData
+            })
+            .ToList() ?? new(),
+        ContainsTasks = taskItem.ContainsTasks?.ToList() ?? new(),
+        ParentTasks = taskItem.ParentTasks?.ToList() ?? new(),
+        BlocksTasks = taskItem.BlocksTasks?.ToList() ?? new(),
+        BlockedByTasks = taskItem.BlockedByTasks?.ToList() ?? new(),
+        Repeater = taskItem.Repeater == null
+            ? null
+            : new RepeaterPattern
+            {
+                Type = taskItem.Repeater.Type,
+                Period = taskItem.Repeater.Period,
+                AfterComplete = taskItem.Repeater.AfterComplete,
+                Pattern = taskItem.Repeater.Pattern?.ToList()!,
+                ExtensionData = taskItem.Repeater.ExtensionData?.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => pair.Value.DeepClone())
+            }
+    };
 }

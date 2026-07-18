@@ -273,6 +273,11 @@ namespace Unlimotion.ViewModel
             {
                 filter.RefreshLocalization();
             }
+
+            foreach (var task in taskRepository?.Tasks.Items.ToArray() ?? Array.Empty<TaskItemViewModel>())
+            {
+                task.RefreshLocalization();
+            }
         }
 
         private IEnumerable<ReadOnlyObservableCollection<TaskStatusFilter>> GetStatusFilterCollections()
@@ -476,12 +481,7 @@ namespace Unlimotion.ViewModel
                     return;
                 }
 
-                CurrentTaskItem.Status = DomainTaskStatus.Completed;
-                await taskRepository!.Update(CurrentTaskItem);
-                if (CurrentTaskItem.Status != DomainTaskStatus.Completed)
-                {
-                    ManagerWrapper?.ErrorToast(L10n.Get("TaskStatusTransitionBlocked"));
-                }
+                await CurrentTaskItem.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
             }).AddToDisposeAndReturn(connectionDisposableList);
             ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))

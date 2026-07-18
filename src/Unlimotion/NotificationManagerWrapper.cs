@@ -36,6 +36,35 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
         askViewModel.CloseAction = () => DialogHost.GetDialogSession("Ask")?.Close(false);
     }
 
+    public Task<bool> ConfirmAsync(string header, string message)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                var askViewModel = new AskViewModel
+                {
+                    Header = header,
+                    Message = message,
+                    YesAction = () => completion.TrySetResult(true),
+                    NoAction = () => completion.TrySetResult(false),
+                };
+
+                var dialogTask = DialogHost.Show(askViewModel, "Ask");
+                askViewModel.CloseAction = () => DialogHost.GetDialogSession("Ask")?.Close(false);
+                _ = ObserveConfirmationDialogAsync(dialogTask, completion);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
+        });
+
+        return completion.Task;
+    }
+
     public Task<bool> ConfirmTaskOutlinePasteAsync(TaskOutlinePastePreview preview)
     {
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -79,6 +108,21 @@ public class NotificationManagerWrapper : INotificationManagerWrapper
         {
             _notificationManager?.SuccessToast(message);
         });
+    }
+
+    private static async Task ObserveConfirmationDialogAsync(
+        Task dialogTask,
+        TaskCompletionSource<bool> completion)
+    {
+        try
+        {
+            await dialogTask;
+            completion.TrySetResult(false);
+        }
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
     }
 }
 

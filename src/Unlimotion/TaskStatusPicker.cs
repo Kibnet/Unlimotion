@@ -203,12 +203,17 @@ public class TaskStatusPicker : Button
             {
                 Source = option
             });
+            menuItem.Bind(AutomationProperties.HelpTextProperty, new Binding(nameof(TaskStatusOption.AutomationHelpText))
+            {
+                Source = option
+            });
+            ToolTip.SetShowOnDisabled(menuItem, true);
             AutomationProperties.SetAutomationId(menuItem, $"TaskStatusOption{option.Status}");
-            menuItem.Click += (_, _) =>
+            menuItem.Click += async (_, _) =>
             {
                 if (option.IsEnabled)
                 {
-                    task.StatusOption = option;
+                    await task.TryTransitionToStatusAsync(option.Status);
                 }
             };
 
@@ -232,15 +237,44 @@ public class TaskStatusPicker : Button
             Source = option
         });
 
-        var text = new TextBlock
+        var title = new TextBlock
         {
-            Text = option.Title,
             VerticalAlignment = VerticalAlignment.Center
         };
-        text.Bind(InputElement.IsEnabledProperty, new Binding(nameof(TaskStatusOption.IsEnabled))
+        title.Bind(TextBlock.TextProperty, new Binding(nameof(TaskStatusOption.Title))
         {
             Source = option
         });
+        title.Bind(InputElement.IsEnabledProperty, new Binding(nameof(TaskStatusOption.IsEnabled))
+        {
+            Source = option
+        });
+
+        var reason = new TextBlock
+        {
+            FontSize = 11,
+            MaxWidth = 320,
+            Opacity = 0.9,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+        reason.Bind(TextBlock.TextProperty, new Binding(nameof(TaskStatusOption.ReasonText))
+        {
+            Source = option
+        });
+        reason.Bind(Visual.IsVisibleProperty, new Binding(nameof(TaskStatusOption.HasReason))
+        {
+            Source = option
+        });
+
+        var copy = new StackPanel
+        {
+            Spacing = 2,
+            Children =
+            {
+                title,
+                reason
+            }
+        };
 
         return new StackPanel
         {
@@ -249,7 +283,7 @@ public class TaskStatusPicker : Button
             Children =
             {
                 icon,
-                text
+                copy
             }
         };
     }

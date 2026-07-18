@@ -23,7 +23,7 @@ namespace Unlimotion.TelegramBot
         private const string Open = "open_";
         private const string CreateSub = "createSub_";
         private const string CreateSib = "createSib_";
-        private const string SetStatus = "status_";
+        private const string SetStatus = TelegramStatusContract.CallbackPrefix;
         private const string Delete = "delete_";
         private const string Parents = "parents_";
         private const string Blocking = "blocking_";
@@ -52,6 +52,7 @@ namespace Unlimotion.TelegramBot
             var fileStorage = new FileStorage(repoPath);
             var taskTreeManager = new TaskTreeManager(fileStorage);
             var unifiedStorage = new UnifiedTaskStorage(taskTreeManager);
+            TaskStorageInstance = unifiedStorage;
             _taskService = new TaskService(unifiedStorage);
             _gitService = new GitService(config);
 
@@ -325,26 +326,15 @@ namespace Unlimotion.TelegramBot
             long userId = chatId;
             _userStates[userId] = task.Id;
             string response = $"{(task.IsCanBeCompleted?"":"🔒")}{GetStatusEmoji(task.Status)} {(task.Wanted?"*":"")}{task.Title}{(task.Wanted?"*":"")}\n" +
-                              $"{GetStatusEmojiAndText(task.Status)}\n" +
+                              $"{BuildCurrentStatusText(task.Status)}\n" +
                               $"{GetStatusEmodji(task.Wanted)} Wanted | Importance {task.Importance}\nId {task.Id}\n" +
                               $"{task.Description}\n" +
                               $"Created {task.CreatedDateTime:yyyy.MM.dd HH:mm} Updated {task.UpdatedDateTime:yyyy.MM.dd HH:mm} Unlocked {task.UnlockedDateTime:yyyy.MM.dd HH:mm} Completed {task.CompletedDateTime:yyyy.MM.dd HH:mm} Archive {task.ArchiveDateTime:yyyy.MM.dd HH:mm}\n" +
                               $"Begin {task.PlannedBeginDateTime:yyyy.MM.dd} Duration {TimeSpanStringConverter.SpanToString(task.PlannedDuration)} End {task.PlannedEndDateTime:yyyy.MM.dd}\n"
                               ;
 
-            var inlineKeyboardButtons = new List<InlineKeyboardButton[]>
+            var inlineKeyboardButtons = new List<InlineKeyboardButton[]>(BuildStatusKeyboard(task))
             {
-                new[]
-                {
-                    CreateStatusButton(task, DomainTaskStatus.NotReady),
-                    CreateStatusButton(task, DomainTaskStatus.Prepared),
-                },
-                new[]
-                {
-                    CreateStatusButton(task, DomainTaskStatus.InProgress),
-                    CreateStatusButton(task, DomainTaskStatus.Completed),
-                    CreateStatusButton(task, DomainTaskStatus.Archived),
-                },
                 new[]
                 {
                     InlineKeyboardButton.WithCallbackData("Удалить задачу", $"{Delete}{task.Id}")
@@ -374,45 +364,42 @@ namespace Unlimotion.TelegramBot
             await _client.SendMessage(chatId, response, ParseMode.Markdown, replyMarkup: keyboard);
         }
 
-        private static InlineKeyboardButton CreateStatusButton(TaskItemViewModel task, DomainTaskStatus status)
+        internal static IReadOnlyList<InlineKeyboardButton[]> BuildStatusKeyboard(TaskItemViewModel task)
         {
-            var currentMarker = task.Status == status ? "• " : string.Empty;
-            return InlineKeyboardButton.WithCallbackData(
-                $"{currentMarker}{GetStatusEmoji(status)} {GetStatusText(status)}",
-                $"{SetStatus}{status}_{task.Id}");
+            var buttons = TelegramStatusContract.BuildAllowedButtons(task);
+            var firstRow = buttons
+                .Where(static button => button.Status is DomainTaskStatus.NotReady or DomainTaskStatus.Prepared)
+                .Select(CreateStatusButton)
+                .ToArray();
+            var secondRow = buttons
+                .Where(static button => button.Status is not (DomainTaskStatus.NotReady or DomainTaskStatus.Prepared))
+                .Select(CreateStatusButton)
+                .ToArray();
+
+            return new[] { firstRow, secondRow }
+                .Where(static row => row.Length > 0)
+                .ToArray();
         }
+
+        internal static string BuildCurrentStatusText(DomainTaskStatus status) =>
+            GetStatusEmojiAndText(status);
+
+        private static InlineKeyboardButton CreateStatusButton(TelegramStatusButtonDescriptor button) =>
+            InlineKeyboardButton.WithCallbackData(button.Text, button.CallbackData);
 
         private static string GetStatusEmojiAndText(DomainTaskStatus status)
         {
-            return $"{GetStatusEmoji(status)} {GetStatusText(status)}";
+            return TelegramStatusContract.FormatStatus(status);
         }
 
         private static string GetStatusText(DomainTaskStatus status)
         {
-            string text = status switch
-            {
-                DomainTaskStatus.NotReady => "Не готово",
-                DomainTaskStatus.Prepared => "Подготовлено",
-                DomainTaskStatus.InProgress => "Выполняется",
-                DomainTaskStatus.Completed => "Выполнено",
-                DomainTaskStatus.Archived => "Архивировано",
-                _ => status.ToString()
-            };
-            return text;
+            return TelegramStatusContract.GetStatusText(status);
         }
 
         private static string GetStatusEmoji(DomainTaskStatus status)
         {
-            string emoji = status switch
-            {
-                DomainTaskStatus.NotReady => "⬜",
-                DomainTaskStatus.Prepared => "❗",
-                DomainTaskStatus.InProgress => "▶️",
-                DomainTaskStatus.Completed => "✅",
-                DomainTaskStatus.Archived => "🗄️",
-                _ => "⬜"
-            };
-            return emoji;
+            return TelegramStatusContract.GetStatusEmoji(status);
         }
 
         private static string GetStatusEmodji(bool? value)
@@ -443,26 +430,23 @@ namespace Unlimotion.TelegramBot
             if (await CheckAccess(userId, callbackQuery.From.Username)) return;
             try
             {
-                if (callbackData.StartsWith(SetStatus))
+                if (callbackData.StartsWith(SetStatus, StringComparison.Ordinal))
                 {
-                    var payload = callbackData[SetStatus.Length..];
-                    var statusAndTaskId = payload.SplitOnFirst('_');
-                    if (!Enum.TryParse<DomainTaskStatus>(statusAndTaskId[0], out var status))
+                    var taskStorage = TaskStorageInstance;
+                    if (taskStorage is null)
                     {
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Неизвестный статус задачи");
+                        await _client.AnswerCallbackQuery(callbackQuery.Id, "Хранилище задач не инициализировано.");
                         return;
                     }
 
-                    string id = statusAndTaskId[1];
-                    var task = _taskService.GetTask(id);
-                    if (task != null)
+                    var outcome = await TelegramStatusContract.ExecuteCallbackAsync(
+                        taskStorage,
+                        callbackData,
+                        callbackQuery.From.Username);
+                    await _client.AnswerCallbackQuery(callbackQuery.Id, outcome.AnswerText);
+                    if (outcome.RefreshedTask is not null)
                     {
-                        task.Status = status;
-                        await task.SaveItemCommand.Execute();
-                        //_gitService.CommitAndPushChanges($"Изменен статус задачи {task.Title}");
-                        var refreshedTask = _taskService.GetTask(id) ?? task;
-                        await _client.AnswerCallbackQuery(callbackQuery.Id, $"Статус задачи: {GetStatusText(refreshedTask.Status)}");
-                        await ShowTask(chatId, refreshedTask);
+                        await ShowTask(chatId, outcome.RefreshedTask);
                     }
                 }
                 else if (callbackData.StartsWith(Delete))

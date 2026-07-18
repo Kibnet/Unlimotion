@@ -451,6 +451,19 @@ public class TaskTreeManager
         return result.Values.ToList(); // Явное преобразование в список
     }
 
+    internal async Task<List<TaskItem>> UpdateTaskWithinExistingMutationLockAsync(TaskItem change)
+    {
+        _mutationLockDepth.Value++;
+        try
+        {
+            return await UpdateTask(change);
+        }
+        finally
+        {
+            _mutationLockDepth.Value--;
+        }
+    }
+
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
         if (ShouldAcquireMutationLock)

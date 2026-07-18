@@ -21,6 +21,24 @@ public interface ITaskStorage
     public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent);
     public Task<TaskItemViewModel> Update(TaskItemViewModel change);
     public Task<TaskItemViewModel> Update(TaskItem change);
+    public Task<TaskOperationResult> TrySetStatusAsync(
+        string taskId,
+        Unlimotion.Domain.TaskStatus requestedStatus,
+        string? author = null) =>
+        Task.FromResult(TaskOperationResult.Denied(
+            TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.StorageFailed,
+                "This task storage does not implement status commands.",
+                taskId,
+                requestedStatus)));
+    public Task<TaskOperationResult> TryUnarchiveAsync(
+        string taskId,
+        string? author = null) =>
+        Task.FromResult(TaskOperationResult.Denied(
+            TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.StorageFailed,
+                "This task storage does not implement unarchive commands.",
+                taskId)));
     public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents);
     public Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents);
     public Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask);

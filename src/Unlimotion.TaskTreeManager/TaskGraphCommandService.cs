@@ -18,7 +18,20 @@ public sealed class TaskGraphCommandService
         string taskId,
         DomainTaskStatus requestedStatus,
         string? author = null) =>
-        ExecuteWriteAsync(() => TrySetStatusCoreAsync(taskId, requestedStatus, author));
+        ExecuteWriteAsync(() => TrySetStatusCoreAsync(
+            taskId,
+            requestedStatus,
+            isUnarchive: false,
+            author));
+
+    public Task<TaskOperationResult> TryUnarchiveAsync(
+        string taskId,
+        string? author = null) =>
+        ExecuteWriteAsync(() => TrySetStatusCoreAsync(
+            taskId,
+            requestedStatusHint: null,
+            isUnarchive: true,
+            author));
 
     public Task<TaskOperationResult> TrySetCriterionAsync(
         string taskId,
@@ -29,7 +42,8 @@ public sealed class TaskGraphCommandService
 
     private async Task<TaskOperationResult> TrySetStatusCoreAsync(
         string taskId,
-        DomainTaskStatus requestedStatus,
+        DomainTaskStatus? requestedStatusHint,
+        bool isUnarchive,
         string? author)
     {
         var readResult = await ReadGraphForWriteAsync();
@@ -47,7 +61,7 @@ public sealed class TaskGraphCommandService
                     TaskOperationDeniedKind.ValidationFailed,
                     validation.BuildWriteSafetyMessage(),
                     taskId,
-                    requestedStatus),
+                    requestedStatusHint),
                 validation: validation);
         }
 
@@ -58,27 +72,63 @@ public sealed class TaskGraphCommandService
                     TaskOperationDeniedKind.TaskNotFound,
                     $"Task '{taskId}' was not found.",
                     taskId,
-                    requestedStatus),
+                    requestedStatusHint),
                 validation: validation);
         }
 
         var rules = new TaskAvailabilityService(graph.Tasks);
         var before = rules.Analyze(task);
+        if (isUnarchive && task.Status != DomainTaskStatus.Archived)
+        {
+            return TaskOperationResult.DeniedWithAuthoritativeTask(
+                TaskOperationDeniedReason.Create(
+                    TaskOperationDeniedKind.StatusPreconditionFailed,
+                    $"Task '{task.Id}' cannot be unarchived because its authoritative status is {task.Status}.",
+                    task.Id),
+                authoritativeTask: CloneForUpdate(task),
+                before: before,
+                validation: validation);
+        }
+
+        var requestedStatus = isUnarchive
+            ? task.GetRestoreStatusAfterArchive(DateTimeOffset.UtcNow)
+            : requestedStatusHint!.Value;
+        if (!Enum.IsDefined(requestedStatus))
+        {
+            return TaskOperationResult.DeniedWithAuthoritativeTask(
+                TaskOperationDeniedReason.CreateWithStatusTransition(
+                    TaskOperationDeniedKind.StatusTransitionDenied,
+                    $"Task '{task.Id}' cannot move to invalid status value {(int)requestedStatus}.",
+                    statusTransitionReason: TaskStatusTransitionDenialReason.InvalidTargetStatus,
+                    taskId: task.Id,
+                    requestedStatus: requestedStatus),
+                authoritativeTask: CloneForUpdate(task),
+                before: before,
+                validation: validation);
+        }
+
         if (task.Status == requestedStatus)
         {
-            return TaskOperationResult.Succeeded(Array.Empty<TaskItem>(), before, before, validation);
+            return TaskOperationResult.Succeeded(
+                Array.Empty<TaskItem>(),
+                before,
+                before,
+                validation,
+                authoritativeTask: CloneForUpdate(task));
         }
 
         var transition = rules.EvaluateStatusTransition(task, requestedStatus);
         if (!transition.Allowed)
         {
-            return TaskOperationResult.Denied(
-                TaskOperationDeniedReason.Create(
+            return TaskOperationResult.DeniedWithAuthoritativeTask(
+                TaskOperationDeniedReason.CreateWithStatusTransition(
                     TaskOperationDeniedKind.StatusTransitionDenied,
                     transition.DenialMessage ?? $"Task '{task.Id}' cannot move to {requestedStatus}.",
-                    task.Id,
-                    requestedStatus),
-                before,
+                    statusTransitionReason: transition.Evaluation.Reason,
+                    taskId: task.Id,
+                    requestedStatus: requestedStatus),
+                authoritativeTask: CloneForUpdate(task),
+                before: before,
                 validation: validation);
         }
 
@@ -90,7 +140,7 @@ public sealed class TaskGraphCommandService
         try
         {
             var manager = CreateManager(author);
-            changedTasks = await manager.UpdateTask(change);
+            changedTasks = await UpdateTaskWithinCommandBoundaryAsync(manager, change);
             afterRead = await ReadGraphForWriteAsync();
         }
         catch (Exception ex)
@@ -129,7 +179,12 @@ public sealed class TaskGraphCommandService
         }
 
         var after = new TaskAvailabilityService(afterGraph.Tasks).Analyze(afterTask);
-        return TaskOperationResult.Succeeded(changedTasks, before, after, validation);
+        return TaskOperationResult.Succeeded(
+            changedTasks,
+            before,
+            after,
+            validation,
+            authoritativeTask: CloneForUpdate(afterTask));
     }
 
     private async Task<TaskOperationResult> TrySetCriterionCoreAsync(
@@ -209,7 +264,7 @@ public sealed class TaskGraphCommandService
         try
         {
             var manager = CreateManager(author);
-            changedTasks = await manager.UpdateTask(change);
+            changedTasks = await UpdateTaskWithinCommandBoundaryAsync(manager, change);
             afterRead = await ReadGraphForWriteAsync();
         }
         catch (Exception ex)
@@ -351,6 +406,13 @@ public sealed class TaskGraphCommandService
             TaskItem.NormalizeAuthor(author ?? StatusAuthorProvider?.Invoke(task) ?? task.UserId ?? "local-user")
     };
 
+    private Task<List<TaskItem>> UpdateTaskWithinCommandBoundaryAsync(
+        TaskTreeManager manager,
+        TaskItem change) =>
+        _storage is ITaskGraphWriteLock
+            ? manager.UpdateTaskWithinExistingMutationLockAsync(change)
+            : manager.UpdateTask(change);
+
     private static TaskItem CloneForUpdate(TaskItem task) => task with
     {
         StatusHistory = task.StatusHistory?.Select(CloneStatusHistoryEntry).ToList() ?? new List<TaskStatusHistoryEntry>(),
@@ -359,7 +421,10 @@ public sealed class TaskGraphCommandService
         ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
         BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
         BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>(),
-        Repeater = CloneRepeater(task.Repeater)
+        Repeater = CloneRepeater(task.Repeater),
+        ExtensionData = task.ExtensionData?.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value == null ? null! : pair.Value.DeepClone())
     };
 
     private static TaskCompletionCriterion CloneCriterion(TaskCompletionCriterion criterion) => new()
@@ -367,16 +432,23 @@ public sealed class TaskGraphCommandService
         Id = criterion.Id,
         Text = criterion.Text,
         IsSatisfied = criterion.IsSatisfied,
-        ExtensionData = criterion.ExtensionData
+        ExtensionData = criterion.ExtensionData?.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value == null ? null! : pair.Value.DeepClone())
     };
 
-    private static TaskStatusHistoryEntry CloneStatusHistoryEntry(TaskStatusHistoryEntry entry) => new()
-    {
-        Status = entry.Status,
-        ChangedAt = entry.ChangedAt,
-        Author = entry.Author,
-        ExtensionData = entry.ExtensionData
-    };
+    private static TaskStatusHistoryEntry CloneStatusHistoryEntry(TaskStatusHistoryEntry entry) =>
+        entry == null
+            ? null!
+            : new TaskStatusHistoryEntry
+            {
+                Status = entry.Status,
+                ChangedAt = entry.ChangedAt,
+                Author = entry.Author,
+                ExtensionData = entry.ExtensionData?.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => pair.Value == null ? null! : pair.Value.DeepClone())
+            };
 
     private static RepeaterPattern? CloneRepeater(RepeaterPattern? repeater) =>
         repeater == null
@@ -389,7 +461,7 @@ public sealed class TaskGraphCommandService
                 Pattern = repeater.Pattern?.ToList()!,
                 ExtensionData = repeater.ExtensionData?.ToDictionary(
                     static pair => pair.Key,
-                    static pair => pair.Value.DeepClone())
+                    static pair => pair.Value == null ? null! : pair.Value.DeepClone())
             };
 
     private sealed record TaskOperationReadResult(TaskGraphReadResult? Graph, TaskOperationResult? Result);

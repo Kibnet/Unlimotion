@@ -313,6 +313,12 @@ internal sealed class StubTaskStorage : ITaskStorage
     public Task<TaskItemViewModel> Update(TaskItem change) =>
         throw new NotSupportedException();
 
+    public Task<TaskOperationResult> TrySetStatusAsync(
+        string taskId,
+        Unlimotion.Domain.TaskStatus requestedStatus,
+        string? author = null) =>
+        throw new NotSupportedException();
+
     public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents) =>
         throw new NotSupportedException();
 

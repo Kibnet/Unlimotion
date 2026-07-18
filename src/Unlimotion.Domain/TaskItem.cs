@@ -113,8 +113,8 @@ namespace Unlimotion.Domain
                 return;
             }
 
-            var latest = StatusHistory.OrderBy(entry => entry.ChangedAt).Last();
-            if (latest.Status != Status)
+            var lastPhysicalEntry = StatusHistory.LastOrDefault(static entry => entry is not null);
+            if (lastPhysicalEntry?.Status != Status)
             {
                 StatusHistory.Add(new TaskStatusHistoryEntry
                 {
@@ -130,7 +130,8 @@ namespace Unlimotion.Domain
             StatusHistory ??= new List<TaskStatusHistoryEntry>();
             CompletionCriteria ??= new List<TaskCompletionCriterion>();
 
-            if (Status == status && StatusHistory.LastOrDefault()?.Status == status)
+            var lastPhysicalEntry = StatusHistory.LastOrDefault(static entry => entry is not null);
+            if (Status == status && lastPhysicalEntry?.Status == status)
             {
                 return;
             }
@@ -145,7 +146,10 @@ namespace Unlimotion.Domain
         }
 
         public TaskStatus GetRestoreStatusAfterArchive() =>
-            StatusHistory.LastNonArchivedStatus() ?? TaskStatus.NotReady;
+            GetRestoreStatusAfterArchive(DateTimeOffset.UtcNow);
+
+        public TaskStatus GetRestoreStatusAfterArchive(DateTimeOffset now) =>
+            TaskStatusTransitionPolicy.NormalizeRestoreStatusAfterArchive(StatusHistory, now);
 
         public static string NormalizeAuthor(string? author) =>
             string.IsNullOrWhiteSpace(author) ? "local-user" : author.Trim();
@@ -155,7 +159,7 @@ namespace Unlimotion.Domain
             StatusHistory ??= new List<TaskStatusHistoryEntry>();
 
             var existing = StatusHistory
-                .Where(entry => entry.Status == status)
+                .Where(entry => entry is not null && entry.Status == status)
                 .OrderBy(entry => entry.ChangedAt)
                 .LastOrDefault();
 

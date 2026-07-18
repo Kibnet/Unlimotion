@@ -115,26 +115,27 @@ public sealed class TaskAvailabilityService
         ArgumentNullException.ThrowIfNull(task);
 
         var analysis = Analyze(task);
-        return requestedStatus switch
+        var evaluation = TaskStatusTransitionPolicy.Evaluate(
+            requestedStatus,
+            new TaskStatusTransitionFacts(
+                task.Status,
+                analysis.IsCanBeCompleted,
+                analysis.PlannedBeginIsFuture,
+                analysis.CompletionCriteriaSatisfied));
+
+        if (evaluation.IsAllowed)
         {
-            DomainTaskStatus.NotReady => TaskStatusTransitionDecision.Allow(analysis),
-            DomainTaskStatus.Prepared => TaskStatusTransitionDecision.Allow(analysis),
-            DomainTaskStatus.Archived when task.Status != DomainTaskStatus.Completed => TaskStatusTransitionDecision.Allow(analysis),
-            DomainTaskStatus.Archived => TaskStatusTransitionDecision.Deny(
-                analysis,
-                $"Task '{task.Id}' cannot move to Archived from its current status."),
-            DomainTaskStatus.InProgress when analysis.CanStart => TaskStatusTransitionDecision.Allow(analysis),
-            DomainTaskStatus.InProgress => TaskStatusTransitionDecision.Deny(
-                analysis,
-                $"Task '{task.Id}' cannot move to InProgress because it is not startable."),
-            DomainTaskStatus.Completed when task.Status != DomainTaskStatus.Archived && analysis.CanComplete => TaskStatusTransitionDecision.Allow(analysis),
-            DomainTaskStatus.Completed => TaskStatusTransitionDecision.Deny(
-                analysis,
-                $"Task '{task.Id}' cannot move to Completed because it is not completable."),
-            _ => TaskStatusTransitionDecision.Deny(
-                analysis,
-                $"Task '{task.Id}' cannot move to {requestedStatus}.")
+            return TaskStatusTransitionDecision.Allow(analysis, evaluation);
+        }
+
+        var denialMessage = requestedStatus switch
+        {
+            DomainTaskStatus.Archived => $"Task '{task.Id}' cannot move to Archived from its current status.",
+            DomainTaskStatus.InProgress => $"Task '{task.Id}' cannot move to InProgress because it is not startable.",
+            DomainTaskStatus.Completed => $"Task '{task.Id}' cannot move to Completed because it is not completable.",
+            _ => $"Task '{task.Id}' cannot move to {requestedStatus}."
         };
+        return TaskStatusTransitionDecision.Deny(analysis, evaluation, denialMessage);
     }
 
     public TaskGraphValidationResult Validate()
@@ -378,17 +379,40 @@ public sealed record TaskStatusTransitionDecision
     public bool Allowed { get; init; }
     public string? DenialMessage { get; init; }
     public TaskAvailabilityAnalysis Analysis { get; init; } = new();
+    public TaskStatusTransitionEvaluation Evaluation { get; init; }
 
-    public static TaskStatusTransitionDecision Allow(TaskAvailabilityAnalysis analysis) => new()
+    public static TaskStatusTransitionDecision Allow(TaskAvailabilityAnalysis analysis) =>
+        Allow(
+            analysis,
+            new TaskStatusTransitionEvaluation(
+                IsAllowed: true,
+                TaskStatusTransitionDenialReason.None));
+
+    public static TaskStatusTransitionDecision Allow(
+        TaskAvailabilityAnalysis analysis,
+        TaskStatusTransitionEvaluation evaluation) => new()
     {
         Allowed = true,
-        Analysis = analysis
+        Analysis = analysis,
+        Evaluation = evaluation
     };
 
-    public static TaskStatusTransitionDecision Deny(TaskAvailabilityAnalysis analysis, string message) => new()
+    public static TaskStatusTransitionDecision Deny(TaskAvailabilityAnalysis analysis, string message) =>
+        Deny(
+            analysis,
+            new TaskStatusTransitionEvaluation(
+                IsAllowed: false,
+                TaskStatusTransitionDenialReason.None),
+            message);
+
+    public static TaskStatusTransitionDecision Deny(
+        TaskAvailabilityAnalysis analysis,
+        TaskStatusTransitionEvaluation evaluation,
+        string message) => new()
     {
         Allowed = false,
         DenialMessage = message,
-        Analysis = analysis
+        Analysis = analysis,
+        Evaluation = evaluation
     };
 }

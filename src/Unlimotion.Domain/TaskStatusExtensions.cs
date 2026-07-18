@@ -33,21 +33,21 @@ public static class TaskStatusExtensions
     };
 
     public static DateTimeOffset? LastChangedAt(
-        this IEnumerable<TaskStatusHistoryEntry>? history,
+        this IEnumerable<TaskStatusHistoryEntry?>? history,
         TaskStatus status)
     {
         return history?
-            .Where(entry => entry.Status == status)
-            .OrderBy(entry => entry.ChangedAt)
+            .Where(entry => entry is not null && entry.Status == status)
+            .OrderBy(entry => entry!.ChangedAt)
             .LastOrDefault()
             ?.ChangedAt;
     }
 
-    public static TaskStatus? LastNonArchivedStatus(this IEnumerable<TaskStatusHistoryEntry>? history)
+    public static TaskStatus? LastNonArchivedStatus(this IEnumerable<TaskStatusHistoryEntry?>? history)
     {
         return history?
-            .Where(entry => entry.Status != TaskStatus.Archived)
-            .OrderBy(entry => entry.ChangedAt)
+            .Where(entry => entry is not null && entry.Status != TaskStatus.Archived)
+            .OrderBy(entry => entry!.ChangedAt)
             .LastOrDefault()
             ?.Status;
     }
