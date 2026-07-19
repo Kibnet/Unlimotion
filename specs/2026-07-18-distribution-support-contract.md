@@ -217,13 +217,12 @@ Distribution truth сейчас выводится из наличия release a
 - `distribution/fixtures/release-1.27.0.json` — frozen local inventory всех 22 names/sizes/digests/roles и release target SHA; PR tests не зависят от GitHub API.
 - `distribution/support-matrix.json` — current release tag/source SHA, exact asset digests, evidence level/OS cells/caveats, durable evidence URLs и `lastPublishedAndroidVersionCode`; README validator и production-monotonic resolver используют этот source of truth.
 - `scripts/Resolve-ReleaseIdentity.ps1` — единственный parser raw tag -> normalized SemVer + filename plan; умеет писать JSON и GitHub outputs.
-- `scripts/Test-DistributionContract.ps1` — schema, unique ids, case-insensitive collisions, fixture completeness, naming, source/tag identity и forbidden-publication static gates.
+- `scripts/test-distribution-contract.ps1` — schema, unique ids, case-insensitive collisions, fixture completeness, naming, source/tag identity, workflow-security gates и deterministic positive/negative fixtures.
 - `scripts/Test-DistributionArtifact.ps1` — common artifact/evidence envelope, hashes, expected filename/version/arch/signature profile и native-validator dispatch.
 - `scripts/Build-LinuxDistribution.sh` — один clean publish payload, затем packaging-only `.deb`/AppImage из копий тех же bytes без второго `dotnet publish`.
 - `scripts/smoke-linux-artifacts.sh` — `.deb`/AppImage structural и Debian-container launch checks.
 - `scripts/Test-WindowsDistribution.ps1`, `scripts/test-macos-distribution.sh`, `scripts/test-android-distribution.sh` — named native validators/smokes.
 - `scripts/Test-ReadmeDistributionContract.ps1` — EN/RU rows -> durable support snapshot verifier.
-- `scripts/test-distribution-contract.ps1` — deterministic fixtures/failure cases без сети.
 - `scripts/test-run-entrypoints.ps1` — unrelated-CWD/arguments/exit regression с fake `dotnet`.
 - New candidate builders use script-relative paths, strict mode, quoted arguments, explicit output и single-build inputs; Windows/Linux/macOS publisher scripts остаются AS-IS до Stage 4.
 - `.github/workflows/distribution-validation.yml` — standalone PR/manual read-only orchestration и stable `distribution-verdict`; current release workflows не вызываются.
@@ -353,7 +352,9 @@ flowchart LR
 - manual input содержит только raw tag fixture, default `v1.28.0`; source всегда immutable `github.sha` выбранного run ref и не переопределяется input;
 - build jobs standalone и не вызывают existing publisher workflows;
 - external `owner/repo@...` references pinned to reviewed full commit SHA; local `./...` actions/workflows разрешены как same-commit references и не получают syntactically impossible `@SHA`;
-- deterministic artifact names включают platform, architecture и `sourceSha[0..11]`; upload uses `if-no-files-found: error`, `overwrite: false`, seven-day retention and records action `artifact-id`/`artifact-digest`;
+- deterministic artifact names включают platform, architecture, `sourceSha[0..11]` и `github.run_attempt`; upload uses `if-no-files-found: error`, `overwrite: false`, seven-day retention and records action `artifact-id`/`artifact-digest`;
+- each mandatory producer primary upload from `contract` through the Android API cells has a separately named `*-receipt` artifact; contract and Android API receipts use `distribution-evidence-transport-receipt` and bind the uploaded artifact name/id/digest to exact payload-file hashes;
+- Android API 23/API 36 candidate download and final aggregate download each emit `download-transport.json` with both bounded-attempt outcomes, selected attempt, cleanup and exhaustion before native/aggregate evidence is accepted;
 - Unix executable payloads передаются внутри tar archive, потому что artifact transport не сохраняет mode; extraction validates stored mode, restores it and re-hashes the unchanged file bytes;
 - build jobs upload exact candidates + JSON evidence as CI artifacts; failure-path evidence emitted under `if: always()` where runner is alive;
 - final job id/name = `distribution-verdict`, declares all producer jobs in `needs`, uses `if: ${{ always() }}`, inspects every `needs.<job>.result`, tolerates download-step absence only до aggregate script и затем fails on missing artifact/matrix cell;
@@ -444,7 +445,7 @@ AppImage uses an independent matrix and verdict:
 
 On `windows-2022`:
 
-- validate manifest names, exact hashes, PE x64 architecture and Product/File version;
+- validate manifest names, exact hashes and Product/File version; Velopack Setup.exe bootstrap may itself report PE `I386`, but its installed application payload and canonical portable executable must be PE x64;
 - inspect canonical Velopack portable layout and forbid accidental PDBs from user-facing portable artifacts;
 - extract portable asset into isolated directory, launch exact executable, wait for process/window, terminate tracked process;
 - exercise Setup.exe silent install in disposable runner context, locate installed app, launch/window-check, then uninstall/cleanup;
@@ -489,7 +490,8 @@ Every platform report uses one schema and includes:
 - target runtime/ELF closure, pre/post installed-package closure hash and external GUI-harness location/image/tool identity where applicable;
 - explicit skipped/metadata-only reason;
 - Android versionCode policy/source/last-published value, native input digest, API/NDK/toolchain/source/package SHA, requested/matched cache key, cache hit/save outcome and provenance where applicable;
-- CI transport artifact name/id/digest, retention and original/restored Unix mode where applicable;
+- CI transport artifact name/id/digest, retention, receipt payload closure and original/restored Unix mode where applicable;
+- client-level download-transport scope, both attempt outcomes, selected attempt, cleanup and exhausted state where applicable;
 - retry classification, attempt/maxAttempts, cleanup action and terminal error;
 - validator versions and UTC timestamps.
 
@@ -585,7 +587,7 @@ Failure classification:
 - deterministic product/package failures не повторяются;
 - APT mirror/network: до двух дополнительных попыток (3 total), каждый retry в новом container после удаления предыдущего; package install/launch failure после успешного network phase не retryable;
 - emulator boot infrastructure: одна полная перезагрузка (2 total) с kill emulator, delete AVD/data и новым port; install/activity/logcat failure на healthy emulator не retryable;
-- artifact upload/download service: одна дополнительная попытка (2 total) в clean extraction directory; source artifact hash остаётся тем же;
+- client-level artifact download: одна дополнительная попытка (2 total) после очистки extraction directory; source artifact hash остаётся тем же. Каждая `actions/upload-artifact` step выполняется одной fail-closed atomic invocation с `overwrite: false`; небезопасный повтор upload на уровне workflow запрещён, а отдельный receipt связывает успешный action output (`artifact-id`/`artifact-digest`) с exact evidence;
 - evidence обязательно записывает classification, attempt/maxAttempts, cleanup и exhausted result; retry exhaustion remains failure;
 - unknown outcome remains fail-closed.
 
@@ -596,22 +598,23 @@ Failure classification:
 - Windows/Linux/macOS `release.published` workflows remain byte-for-byte unchanged and are not invoked by Stage 3. Android workflow is not invoked by the new pipeline and changes only to enforce the approved least-privilege contract.
 - Stage-3 EXEC itself uses only PR/manual build-only triggers; no synthetic release event.
 - Repository branch-protection/ruleset не меняется; `distribution-verdict` обязан быть green на Stage-3 PR final head before merge.
+- Success, receipt, failure and final-verdict artifact names include `github.run_attempt`. Final aggregation downloads the exact sixteen primary/receipt artifact ids from producer outputs, not a name glob, so a partial rerun may safely combine successful producers from an earlier attempt with rerun producers from the current attempt without accepting stale failure artifacts.
 - Stage 4 later consumes the manifest/builders/evidence contract, rebuilds production candidates from the immutable tag, signs and validates exact Stage-4 bytes, then moves those bytes through draft-first publication.
 
-Planned job/check and evidence ids:
+Workflow-declared job/check and evidence ids; required state remains pending until green final-head native CI:
 
-| Job id | Candidate/evidence artifact | Required final-head state |
+| Job id / check name | Candidate/evidence artifact | Required final-head state |
 | --- | --- | --- |
-| `changes` | `distribution-changes-<sha12>` | success; relevant true for Stage-3 PR |
-| `contract` | `distribution-contract-<sha12>/contract-evidence.json` | success |
-| `windows_x64` | `distribution-windows-x64-<sha12>/evidence.json` | success |
-| `linux_x64` | `distribution-linux-x64-<sha12>.tar` + per-cell reports | success |
-| `macos_x64` | `distribution-macos-15-intel-x64-<sha12>/evidence.json` | success |
-| `macos_arm64` | `distribution-macos-15-arm64-<sha12>/evidence.json` | success |
-| `android_build` | `distribution-android-<sha12>/evidence.json` + both APKs | success |
-| `android_api23` | `distribution-android-api23-x64-<sha12>/evidence.json` | success |
-| `android_api36` | `distribution-android-api36-x64-<sha12>/evidence.json` | success |
-| `distribution-verdict` | `distribution-verdict-<sha12>/{distribution-evidence.json,SHA256SUMS.txt}` | success, never skipped |
+| `changes` / `distribution-scope` | No uploaded artifact; outputs `relevant`, `source_short`, `raw_tag` | success; relevant true for Stage-3 PR |
+| `contract` / `distribution-contract` | `distribution-contract-<sha12>-attempt-<runAttempt>/{identity.json,contract-evidence.json}`; separate `...-receipt/evidence-transport-receipt.json` | success; receipt binds both payload hashes to upload id/digest |
+| `windows_x64` / `windows-x64-native` | `distribution-windows-x64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,windows-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success |
+| `linux_x64` / `linux-x64-native` | `distribution-linux-x64-<sha12>-attempt-<runAttempt>/linux-candidate.tar` containing exact assets + per-cell evidence; separate `...-receipt/transport-receipt.json` | success |
+| `macos_x64` / `macos-15-intel-x64-native` | `distribution-macos-x64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,macos-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success on `macos-15-intel` |
+| `macos_arm64` / `macos-15-arm64-native` | `distribution-macos-arm64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,macos-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success on `macos-15` |
+| `android_build` / `android-api23-native-build` | `distribution-android-multi-<sha12>-attempt-<runAttempt>` with both APKs, artifact evidence and cache summary/raw input/raw provenance reports; separate `...-receipt/transport-receipt.json` | success |
+| `android_api23` / `android-api23-x64-native` | `distribution-android-api23-<sha12>-attempt-<runAttempt>/{evidence.json,download-transport.json,android-api23-emulator.log,android-api23-logcat.txt}`; separate `...-receipt/evidence-transport-receipt.json` | success; receipt binds all four payloads and embedded log refs |
+| `android_api36` / `android-api36-x64-native` | `distribution-android-api36-<sha12>-attempt-<runAttempt>/{evidence.json,download-transport.json,android-api36-emulator.log,android-api36-logcat.txt}`; separate `...-receipt/evidence-transport-receipt.json` | success; receipt binds all four payloads and embedded log refs |
+| `distribution-verdict` / `distribution-verdict` | `distribution-verdict-<sha12>-attempt-<runAttempt>/{producer-results.json,verdict.json,...}`; relevant PASS also includes identity/download/aggregate/checksum evidence, while irrelevant PRs upload machine-readable `notApplicable` evidence | success, never skipped; aggregate download retry evidence valid when applicable |
 
 ## 9. Изменения модели данных / состояния
 
@@ -624,6 +627,7 @@ Runtime model/state не меняется.
 - durable exact-digest support snapshot/schema for public README claims;
 - generated identity plan;
 - per-platform evidence JSON;
+- per-upload transport receipt artifacts and per-download bounded-retry evidence JSON;
 - aggregate evidence JSON;
 - CI-only `SHA256SUMS.txt`.
 
@@ -664,19 +668,19 @@ Rollback:
 - **S3-AC-03 — trigger/tag/source identity:** dual stable tag forms normalize identically while raw values remain distinct; invalid forms fail. PR/manual trigger rules produce exact `sourceSha`, `workflowSha` and tag-binding mode; checkout/build label/assembly metadata/window title match normalized identity, and no filename/package metadata contains raw `v`.
 - **S3-AC-04 — root entry points:** all three scripts work from unrelated CWD, quote paths, forward arguments after `--`, preserve injected exit code; shell files have shebang, strict mode, LF and git mode `100755`.
 - **S3-AC-05 — no publication / least privilege:** standalone validation имеет только `contents: read`, не получает production secrets и не содержит mutation commands. Windows/Linux/macOS publishers unchanged. Android publisher diff ограничен job-level least-privilege hardening: PR/push/manual paths read-only и secret-free; единственный write job — release-only upload после successful exact-artifact verification, а signing secrets существуют только в release-only build path и очищаются под `always()`. Existing release trigger, signing inputs and APK asset contract remain unchanged. External actions full-SHA pinned, local references same-commit; all PRs receive stable final verdict, irrelevant diff returns `notApplicable`, repository settings не меняются.
-- **S3-AC-06 — source/exact bytes/transport:** every report has matching source/workflow/manifest identity and artifact SHA before/after; Linux canonical publish occurs once and staged/`.deb`/AppImage executable hashes match. Unique artifact transport records id/digest, forbids overwrite/missing files, preserves Unix mode through tar and rejects source/hash/rebuild substitution.
+- **S3-AC-06 — source/exact bytes/transport:** every report has matching source/workflow/manifest identity and artifact SHA before/after; Linux canonical publish occurs once and staged/`.deb`/AppImage executable hashes match. Every mandatory producer primary upload from contract through the Android API cells has an attempt-scoped separately downloaded receipt that binds exact payload hashes to artifact name/id/digest, forbids overwrite/missing files, preserves Unix mode through tar where applicable and rejects source/hash/rebuild substitution. Final aggregation accepts exactly sixteen unique producer artifact ids and no glob-selected stale/failure directory.
 - **S3-AC-07 — Debian metadata/layout:** manually packaged candidate uses lowercase `unlimotion.desktop`, normalized version, amd64, valid maintainer/homepage/description/section/priority and Debian 12/13 dependencies; no `/usr/local`; `/usr/lib`/launcher/mode/desktop/icon/lint gates pass.
 - **S3-AC-08 — Debian clean install/launch:** one exact `.deb` passes `apt install`, `apt-get check`, `dpkg --audit`, full ELF loader-closure and non-root visible-window smoke on resolved Debian 12/13 target images with identical candidate SHA. Xvfb/xdotool execute only on runner/pinned sidecar; target receives no post-install test/runtime packages and its `dpkg-query` closure hash is unchanged. Missing-runtime-dependency fixture fails despite harness presence.
 - **S3-AC-09 — Debian upgrade continuity:** exact pinned-SHA 1.27.0 migration fixture upgrades to candidate on Debian 12/13 as the same dpkg identity; obsolete package-owned `/usr/local` disappears, new paths/version work, user-data sentinel remains unchanged and candidate launches. Forced baseline install is explicitly not 1.27 support evidence.
 - **S3-AC-10 — AppImage independent gate:** exact x64 AppImage passes structural/payload/mode checks and non-root extract-and-run Xvfb launch on Debian 12/13; Debian-only payload absent; executable parity proven; direct FUSE is not claimed without separate evidence.
-- **S3-AC-11 — Windows Server 2022 CI:** Setup and canonical portable pass filename/hash/PE x64/version/build-label/content gates, isolated install/extract/native launch and cleanup; Authenticode state is recorded; PDB leakage fails. Result is not generalized to all Windows versions.
+- **S3-AC-11 — Windows Server 2022 CI:** Setup and canonical portable pass filename/hash/version/build-label/content gates, isolated install/extract/native launch and cleanup; Setup bootstrap PE `I386` is allowed only when the installed application payload is PE x64, and the canonical portable executable must be PE x64. Authenticode state is recorded; PDB leakage fails. Result is not generalized to all Windows versions.
 - **S3-AC-12 — macOS 15 CI:** x64 on `macos-15-intel` and arm64 on `macos-15` pass bundle/pkg/version/executable/build-label/Mach-O/minOS/content/signature-state checks and native launch. Result is OS/version-specific; `minos=12` stays metadata-only.
-- **S3-AC-13 — Android artifact/provenance/signature:** resolver versionCode is bounded; `ci-test <= 353` разрешён только как non-promotable test profile, а `production-monotonic <= 353` отклоняется. Both ABI APKs pass normalized naming/build-label/application/min-target SDK/exact ABI/native symbol/zipalign/aapt/apksigner checks. Exact-input two-phase cache restore/save validates nativeInputDigest, requested/matched key, all provenance inputs and output hashes; API-24/missing/mutated/partial cache cannot satisfy API-23. Production profile requires expected fingerprint on both; test profile cannot be `productionReady`.
-- **S3-AC-14 — Android runtime:** exact x64 APK installs/launches on API 23 and API 36 emulators with live process and fatal-free logcat; arm64 remains metadata-only without device. API 23 failure blocks and never silently raises minSdk.
-- **S3-AC-15 — stable aggregate/checksums:** `distribution-verdict` runs with `always()` after every producer result, fails rather than skips on missing/failed mandatory cell, covers candidates exactly once, recomputes SHA and generates complete CI-only `SHA256SUMS.txt`; negative producer fixture proves behavior.
+- **S3-AC-13 — Android artifact/provenance/signature:** resolver versionCode is bounded; `ci-test <= 353` разрешён только как non-promotable test profile, а `production-monotonic <= 353` отклоняется. Both ABI APKs pass normalized naming/build-label/application/min-target SDK/exact ABI/native symbol/zipalign/aapt/apksigner checks. Exact-input two-phase cache restore/save cross-links cache summary, downloaded raw native inputs and raw provenance bytes, validates nativeInputDigest, requested/matched key, hit/save outcome and every output hash; API-24/missing/mutated/partial or mixed valid reports cannot satisfy API-23. Production profile requires expected fingerprint on both; test profile cannot be `productionReady`.
+- **S3-AC-14 — Android runtime:** exact x64 APK installs/launches on API 23 and API 36 emulators with live process and fatal-free logcat; each API job records bounded candidate-download transport and uploads a separate receipt binding `evidence.json`, `download-transport.json` and exact emulator/logcat sidecars, including embedded name/hash/size cross-links. Double boot failure records full-identity structured exhausted evidence and per-attempt logs. Arm64 remains metadata-only without device. API 23 failure blocks and never silently raises minSdk.
+- **S3-AC-15 — stable aggregate/checksums:** `distribution-verdict` runs with `always()` after every producer result, fails rather than skips on missing/failed mandatory cell, validates exact mixed-attempt producer ids/receipts and aggregate `download-transport.json`, rejects stale directories, covers every native sidecar/candidate exactly once, recomputes SHA and generates complete CI-only `SHA256SUMS.txt`; irrelevant PRs still upload machine-readable `notApplicable`, and negative producer fixtures prove behavior.
 - **S3-AC-16 — fail-closed public support:** successful build/candidate launch never promotes current release. `support-matrix.json` and README stay tied to exact 1.27.0 digests; illegal promotion and same-name/different-digest fixtures fail.
 - **S3-AC-17 — Velopack relations:** `RELEASES`/`releases.*.json` entries parse and match expected channel/version/name/size/hash algorithm/value of exact updater `.nupkg`; stale/wrong-channel/hash/size/version records fail.
-- **S3-AC-18 — retry contract:** deterministic failures run once; APT (3 total), emulator boot (2 total) and artifact transport (2 total) obey exact cleanup/evidence rules; exhausted retry fails and positive/negative classification fixtures pass.
+- **S3-AC-18 — retry contract:** deterministic failures and every artifact upload action run once; APT (3 total), emulator boot (2 total) and client-level artifact download (2 total) obey exact cleanup/evidence rules. First-attempt success records `classification: none`; only a recovered infrastructure failure records the transient class and completed cleanup. Attempt-scoped upload names make full/failed-job reruns collision-free; upload success is proven by exact receipt binding rather than a workflow-level re-upload. Exhausted retry fails with structured evidence and positive/negative classification fixtures pass.
 - **S3-AC-19 — README parity:** EN/RU source/install/support rows remain structurally/semantically paired and map to durable support snapshot; AppImage FUSE/fallback and `.deb` Preview scope accurate; no generic Windows/macOS or candidate-as-release overclaim.
 - **S3-AC-20 — validation quality:** local contract/run-script/README tests, JSON/YAML/shell syntax, `git diff --check`, solution build, full Unit and Headless suites pass; final-head native matrix and aggregate green. No UI behavior change means no new FlaUI/video; real packaged window smoke remains mandatory.
 - **S3-AC-21 — delivery/audit:** implementation is committed/pushed and draft PR opened before native CI; after every tracked fix the full required matrix reruns on final head. Independent platform/security/docs Post-EXEC reviews PASS, scope matches allowlist, PR records commands/runs/OS/arch/hashes/caveats/rollback; green final head before ready/merge. Roadmap AC-02 and platform portion AC-14/18 close only after merge; atomic AC-11 remains Stage 4.
@@ -689,20 +693,20 @@ Rollback:
 | S3-AC-02 | `pwsh -File scripts/test-distribution-contract.ps1 -Area InventorySupport`; `contract-evidence.json` | 22/22 exact; same-name/different-digest fails |
 | S3-AC-03 | same script `-Area IdentityTriggers`; `Resolve-ReleaseIdentity.ps1`; every cell `evidence.json` | Tag/source/workflow/build-label contract PASS |
 | S3-AC-04 | `pwsh -File scripts/test-run-entrypoints.ps1`; `git ls-files -s`; LF audit | PASS, shell mode 100755 |
-| S3-AC-05 | `WorkflowSecurity` parses event reachability, job permissions, env/secret references/external `uses:`; Windows/Linux/macOS byte guard; Android diff/output snapshot; all-PR `distribution-verdict` | PR/push/manual: zero write/production-secret paths; release/published: exactly one write upload job; Android release contract unchanged; negative fixtures fail |
-| S3-AC-06 | `Test-DistributionArtifact.ps1`; Linux builder parity report; transport fixtures; aggregate | Source/hash/mode/artifact id/digest PASS |
+| S3-AC-05 | `test-distribution-contract.ps1 -Area WorkflowSecurity` parses standalone validation triggers, permissions, env/secret references, external `uses:` and final-producer semantics; Windows/Linux/macOS byte guard; `test-android-build-scripts.ps1` checks Android event reachability/diff/output snapshot | Standalone PR/manual path: read-only, secret-free, no release mutation, stable fail-closed final; Android PR/push/manual: zero write/production-secret paths; release/published: exactly one write upload job; negative fixtures fail |
+| S3-AC-06 | `Test-DistributionArtifact.ps1`; Linux builder parity report; attempt-scoped candidate + `*-receipt` artifacts; mixed-attempt exact-id/stale-directory transport fixtures; aggregate | Source/hash/mode, exact 16 ids and receipt-bound name/id/digest/payload closure PASS |
 | S3-AC-07 | `linux_x64` -> `smoke-linux-artifacts.sh --mode metadata` | Raw control/deps/layout/modes/lint PASS |
 | S3-AC-08 | `linux_x64` reports `debian-12-clean.json`, `debian-13-clean.json`; missing-runtime-dependency fixture | Install/check/audit/ELF closure/external-X-window PASS on one SHA; target package closure unchanged; negative remains FAIL |
 | S3-AC-09 | same job reports `debian-12-upgrade.json`, `debian-13-upgrade.json` | Exact baseline -> candidate continuity PASS |
 | S3-AC-10 | same job reports `appimage-debian-{12,13}.json` | Structural/extract-and-run PASS; FUSE state explicit |
 | S3-AC-11 | `windows_x64` -> `Test-WindowsDistribution.ps1`; `evidence.json` | Setup/portable metadata/install/launch PASS |
 | S3-AC-12 | `macos_x64`/`macos_arm64` -> `test-macos-distribution.sh`; per-cell evidence | Native metadata/package/launch PASS on exact OS/arch |
-| S3-AC-13 | `android_build` -> `test-android-distribution.sh --mode artifact`; ci-test/production version fixtures; miss/save, exact-hit/reuse, cross-API, hash/key/provenance/partial cache fixtures | Both APKs, version policies, exact-key cache/provenance and signature profiles PASS |
-| S3-AC-14 | `android_api23`/`android_api36`; per-emulator `evidence.json` | x64 install/launch PASS |
-| S3-AC-15 | `distribution-verdict`; failed/missing producer fixtures | Final job runs and fails rather than skips; checksums complete |
+| S3-AC-13 | `android_build` -> `test-android-distribution.sh --mode artifact/provenance`; ci-test/production version fixtures; raw input/provenance/summary cross-link, miss/save, exact-hit/reuse, cross-API, mixed/hash/key/partial cache fixtures | Both APKs, version policies, exact-key cache/provenance byte closure and signature profiles PASS |
+| S3-AC-14 | `android_api23`/`android_api36`; emulator/download reports, emulator/logcat sidecars, separate generic receipt; exhausted fake-emulator fixture | Bounded exact-artifact download + x64 install/launch + log hash/size + structured exhaustion PASS |
+| S3-AC-15 | `distribution-verdict`; producer-results, aggregate download evidence, exact sixteen ids, producer receipts, mixed-attempt/stale/failed/missing/notApplicable fixtures | Final job always emits machine verdict; applicable failures fail, irrelevant succeeds as notApplicable; receipt/download/native/checksum closure complete |
 | S3-AC-16 | `Test-ReadmeDistributionContract.ps1`; support promotion/digest fixtures | No candidate-to-release promotion; exact mapping PASS |
 | S3-AC-17 | `test-distribution-contract.ps1 -Area VelopackFeeds` | All feed/package relations PASS; stale/wrong fixtures fail |
-| S3-AC-18 | same script `-Area Retry`; evidence schema fixtures | Exact budgets/cleanup/classification/exhaustion PASS |
+| S3-AC-18 | same script `-Area Retry`; `-Area WorkflowSecurity`; API 23/API 36/final download reports; exhausted emulator and mixed-attempt rerun fixtures | Exact budgets/cleanup/classification/exhaustion PASS; downloads bounded, uploads atomic/attempt-scoped, receipts exact |
 | S3-AC-19 | `Test-ReadmeDistributionContract.ps1 -English README.md -Russian README.RU.md` | EN/RU parity/caveat/snapshot PASS |
 | S3-AC-20 | local commands below + final-head jobs table | All static/full/native gates PASS |
 | S3-AC-21 | `gh pr checks`, independent reviews, final-head SHA and merge record | PASS / delivered |
@@ -715,7 +719,8 @@ pwsh -NoProfile -File scripts/test-run-entrypoints.ps1
 pwsh -NoProfile -File scripts/Test-ReadmeDistributionContract.ps1 `
   -English README.md -Russian README.RU.md `
   -SupportMatrix distribution/support-matrix.json
-pwsh -NoProfile -File scripts/Test-DistributionContract.ps1 `
+pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
+  -Area All `
   -Manifest distribution/release-assets.json `
   -Fixture distribution/fixtures/release-1.27.0.json `
   -SupportMatrix distribution/support-matrix.json
@@ -836,13 +841,13 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | Файл / группа | Планируемое изменение | Причина |
 | --- | --- | --- |
 | `distribution/release-assets.schema.json` | Новый strict schema | Machine-verifiable asset contract |
+| `distribution/evidence.schema.json` | Новый strict platform/aggregate evidence schema | Machine-verifiable exact-byte, native-cell и transport contract |
 | `distribution/support-matrix.schema.json` | Новый exact-claim schema | Durable README-to-digest contract |
 | `distribution/release-assets.json` | Новый canonical catalog | Roles/names/platform/evidence/signature policy |
 | `distribution/fixtures/release-1.27.0.json` | Frozen 22-asset audit fixture | Deterministic no-network regression |
 | `distribution/support-matrix.json` | Durable 1.27.0 asset/source/digest/evidence snapshot | Запрет candidate-to-release promotion |
 | `distribution/linux/{control.template,unlimotion.desktop,unlimotion-launcher,unlimotion.png}` | Новый explicit Debian integration payload | Policy-valid candidate без `/usr/local`/AppImage pollution |
 | `scripts/Resolve-ReleaseIdentity.ps1` | Новый strict identity resolver | Raw/normalized/source separation |
-| `scripts/Test-DistributionContract.ps1` | Новый manifest/evidence aggregate validator | Fail-closed contract |
 | `scripts/Test-DistributionArtifact.ps1` | Новый common artifact envelope/validator | Exact bytes and evidence |
 | `scripts/Build-LinuxDistribution.sh` | Один publish, packaging-only `.deb`/AppImage | Реализуемый inner-byte parity |
 | `scripts/smoke-linux-artifacts.sh` | Новый Debian/AppImage native smoke | Clean-image install/launch |
@@ -851,7 +856,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | `scripts/build-android-distribution.sh`, `scripts/test-android-distribution.sh` | New Android builder/validator | API/provenance/signature/emulator contract |
 | `scripts/test-android-build-scripts.ps1` | Extend workflow permission/secret/release-output assertions | Regression guard for current Android publisher hardening |
 | `scripts/Test-ReadmeDistributionContract.ps1` | New support snapshot/EN-RU verifier | Machine-readable docs trace |
-| `scripts/test-distribution-contract.ps1` | New positive/negative fixtures | Regression gate |
+| `scripts/test-distribution-contract.ps1` | New manifest/support/workflow-security positive/negative fixtures | Fail-closed regression gate |
 | `scripts/test-run-entrypoints.ps1` | New fake-dotnet regression | CWD/argv/exit/mode contract |
 | `run.windows.cmd` | Script-relative path/argv/exit | Reliable source run |
 | `run.linux.sh`, `run.macos.sh` | Shebang/strict/path/argv/exit + 100755 | Reliable source run |
@@ -1010,24 +1015,27 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 
 ### Post-EXEC Review
 
-- Статус: `Не выполнен до EXEC`; approval отсутствует.
-- Scope reviewed: не применимо до EXEC.
-- Decision: не выполнять production/workflow/run-script/README implementation edits.
-- Review passes: все `Не применимо до EXEC`.
-- Evidence inspected: spec-only diff; production evidence отсутствует.
-- Depth checklist: не применимо до EXEC; completion не заявляется.
-- No-findings justification: Post-EXEC review не выполнен и PASS не выставлен.
+- Статус: `EXEC in progress`; local implementation и pre-rebase validation выполнены, draft PR/native matrix/final Post-EXEC pending.
+- Scope reviewed: утверждённый Stage-3 allowlist — root run scripts, standalone read-only distribution workflow, Android publisher least-privilege hardening, candidate builders/validators, schemas/fixtures/evidence и paired README; Windows/Linux/macOS production publishers не менялись.
+- Decision: staged-mode gate пройден; продолжить к implementation commit, rebase, full final-head validation, draft PR и native matrix. Completion/PASS и переход к Stage 4 пока запрещены.
+- Review passes: local scope/security/contract/README/entrypoint/Android evidence и targeted staged re-review после fixes — PASS; final independent re-review должен быть повторён на green native final head.
+- Evidence inspected: 22 exact release assets, 15 native cells, 7 paired support claims, 99 negative fixtures, embedded workflow transport behaviors, Android provenance/emulator regressions, PowerShell/Bash/Python/YAML/JSON syntax, actionlint и solution restore/build.
+- Depth checklist: local data/schema/security/transport/retry/provenance/support boundaries проверены; native Windows/Debian/macOS/Android runtime evidence, PR checks и merge остаются незавершёнными.
+- No-findings justification: финальный no-findings/PASS не заявляется. Independent review выявил permanent transport-fixture gap, Git executable-mode gap и stale governance journal; все три исправления подтверждены targeted staged re-review без remaining findings.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| — | execution | Не применимо до EXEC | Получить child approval после Post-SPEC PASS | not-started |
+| MEDIUM | workflow transport fixtures | Mixed producer attempts, exact 16 ids, stale/failure directory и receipt/runtime sidecar mutation не были permanent fixtures | Извлекать и исполнять embedded workflow Python из named steps в `test-distribution-contract.ps1` | fixed; local PASS |
+| MEDIUM | root entrypoints | Git index хранил `run.linux.sh`/`run.macos.sh` как `100644` | Применить `git add --chmod=+x` и проверить staged `100755` | fixed; staged PASS |
+| MEDIUM | governance journal | Этот блок и master roadmap противоречили полученному approval и начатому EXEC | Зафиксировать честный in-progress state без преждевременного native/final PASS | fixed; targeted PASS |
+| INFO | native evidence | Windows/Linux/macOS/Android native matrix ещё не запускалась на draft PR final head | Выполнить обязательную matrix; API-23 incompatibility переводит задачу в ASK-HUMAN | pending |
 
-- Fixed before final report: не применимо.
-- Checks rerun: не применимо.
-- Validation evidence: отсутствует до EXEC.
-- Unrelated changes: production files не менялись.
-- Needs human: `Спеку подтверждаю` после Post-SPEC PASS.
-- Residual risks / follow-ups: native matrix и Stage-4/9 boundaries остаются будущим EXEC/follow-up.
+- Fixed before final report: raw Android types/output-count/setup-failure logging, attempt-scoped exact artifact transport, permanent embedded workflow behavioral fixtures и journal drift исправлены; root shell entrypoints staged как `100755`.
+- Checks rerun: `test-distribution-contract.ps1 -Area All` PASS (99 negative fixtures), `test-android-build-scripts.ps1` PASS, README positive/negative contract PASS, root entrypoints PASS, actionlint/parsers/embedded Python/JSON/diff checks PASS, `dotnet restore/build src/Unlimotion.sln` PASS с known warnings.
+- Validation evidence: local pre-rebase PASS; native/draft-PR/final-head evidence отсутствует и не подменяется локальными результатами.
+- Unrelated changes: Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff ограничен approved least-privilege/output-preserving surface; Stage-4 publication migration отсутствует.
+- Needs human: child approval уже получен. Новое решение человека требуется только при подтверждённом API-23 native failure или необходимости выйти за утверждённый support/scope contract.
+- Residual risks / follow-ups: native image/tool drift, current unsigned desktop artifacts и production release atomicity остаются соответственно final native gate, Stage 9 и Stage 4.
 
 ## Approval
 
@@ -1054,3 +1062,6 @@ EXEC разрешён только в утверждённых границах,
 | SPEC | Исправить Post-SPEC findings | 1.00 | Нет | Зафиксировать reviewed spec и запросить approval | Нет | Не применимо | Добавлены upgrade/single-publish/cache/feed, Android isolation, external Debian harness, exact trigger/transport/retry/support mapping и final-head sequence | Эта spec |
 | SPEC | Выполнить final independent re-review | 1.00 | Только user approval перед EXEC | Сделать spec-only commit и запросить `Спеку подтверждаю` | Да | Три reviewers вернули PASS | Platform/package, CI/security и QA/docs подтвердили SHA `0D68F964...`; 22 H2, 8 fences, 21/21 AC, scope/ancestry PASS | Reviewer verdicts, structural gates, эта spec |
 | EXEC | Принять Stage-3 child approval и открыть implementation phase | 1.00 | Native CI evidence появится после draft PR | Реализовать contract/builders/workflows/README в exact allowlist | Нет | Пользователь сообщил `Спеку подтверждаю` | Approval получен после final Post-SPEC PASS; release mutation по-прежнему запрещена | Эта spec, current branch |
+| EXEC | Реализовать Stage-3 local contract package | 1.00 | Native runner evidence появится после draft PR | Закрыть local positive/negative gates и independent review findings | Нет | Не применимо | Добавлены exact inventory/support/evidence schemas, candidate builders, read-only native matrix, Android least privilege/provenance, paired README и reliable entrypoints без release mutation | Approved implementation allowlist |
+| EXEC | Закрыть Android evidence и workflow transport gaps | 1.00 | Нет локальных | Повторить полный contract gate | Нет | Independent reviewers нашли deterministic MEDIUM/P2 gaps | Strict raw JSON types, exact provenance output count, setup-failure logs и исполнение embedded mixed-attempt/16-id/stale/receipt fixtures закрывают fail-closed boundary | Android/evidence scripts, workflow contract tests |
+| EXEC | Выполнить pre-rebase local validation | 0.99 | Native Windows/Linux/macOS/Android matrix и GitHub checks | Commit, rebase и повторить final-head full validation | Нет | Не применимо | Distribution All PASS с 99 negatives, Android/README/entrypoints/syntax/actionlint и solution restore/build PASS; root shell modes staged `100755`; known warnings не вызваны Stage-3 runtime change | Local validation outputs, эта spec |

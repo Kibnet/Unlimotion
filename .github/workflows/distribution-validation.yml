@@ -1,0 +1,2747 @@
+name: Distribution validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      raw_tag:
+        description: Synthetic stable tag used only for CI candidate naming
+        required: true
+        default: v1.28.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: distribution-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  VPK_VERSION: 0.0.1298
+
+jobs:
+  changes:
+    name: distribution-scope
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+      source_short: ${{ steps.scope.outputs.source_short }}
+      raw_tag: ${{ steps.scope.outputs.raw_tag }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify distribution scope
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MANUAL_RAW_TAG: ${{ inputs.raw_tag }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+          raw_tag="1.27.0"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            raw_tag="$MANUAL_RAW_TAG"
+          fi
+          if [[ ! "$raw_tag" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "${raw_tag#v}" == "0.0.0" ]]; then
+            echo "Invalid synthetic stable tag: $raw_tag" >&2
+            exit 1
+          fi
+
+          relevant=false
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            relevant=true
+          else
+            changed_files="$(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")"
+            if grep -Eq '^(distribution/|scripts/|src/|\.native/|\.gitmodules$|\.gitattributes$|\.github/workflows/(android-packaging|deb_packaging|distribution-validation|osx-packaging|windows-packaging)\.yml$|run\.(windows\.cmd|linux\.sh|macos\.sh)$|README(\.RU)?\.md$|global\.json$|Directory\.(Build|Packages)\.(props|targets)$|[Nn]u[Gg]et\.config$|specs/2026-07-1(7-readme-reliability-roadmap|8-distribution-support-contract)\.md$)' <<< "$changed_files"; then
+              relevant=true
+            fi
+          fi
+
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          echo "source_short=${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "raw_tag=$raw_tag" >> "$GITHUB_OUTPUT"
+
+  contract:
+    name: distribution-contract
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: distribution-contract-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-contract-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Assert immutable checkout
+        shell: pwsh
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -cne '${{ github.sha }}') { throw "HEAD $head does not match source SHA ${{ github.sha }}." }
+          if (git status --porcelain=v1 --untracked-files=all) { throw 'Contract checkout is not clean.' }
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/contract | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG `
+            -SourceSha $env:SOURCE_SHA `
+            -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable `
+            -AndroidVersionCode $env:ANDROID_VERSION_CODE `
+            -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json `
+            -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/contract/identity.json
+
+      - name: Validate schemas, inventory, identity, feeds and retry policy
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
+            -Area All `
+            -EvidencePath artifacts/contract/contract-evidence.json
+
+      - name: Validate root entry points
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/test-run-entrypoints.ps1
+
+      - name: Validate paired README support snapshot
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-ReadmeDistributionContract.ps1 `
+            -English README.md `
+            -Russian README.RU.md `
+            -SupportMatrix distribution/support-matrix.json `
+            -RunNegativeFixtures
+
+      - name: Validate Android scripts and publisher security
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/test-android-build-scripts.ps1
+
+      - name: Validate script syntax and unchanged desktop publishers
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          $scriptFiles = @(
+            'scripts/Resolve-ReleaseIdentity.ps1',
+            'scripts/test-distribution-contract.ps1',
+            'scripts/Test-DistributionArtifact.ps1',
+            'scripts/Build-WindowsDistribution.ps1',
+            'scripts/Test-WindowsDistribution.ps1',
+            'scripts/Test-ReadmeDistributionContract.ps1',
+            'scripts/test-run-entrypoints.ps1',
+            'scripts/test-android-build-scripts.ps1'
+          )
+          foreach ($file in $scriptFiles) {
+            $tokens = $null
+            $errors = $null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors) { throw "PowerShell parse failed for $file`: $($errors.Message -join '; ')" }
+          }
+          bash -n scripts/Build-LinuxDistribution.sh scripts/smoke-linux-artifacts.sh scripts/build-macos-distribution.sh scripts/test-macos-distribution.sh scripts/build-android-distribution.sh scripts/test-android-distribution.sh run.linux.sh run.macos.sh
+          if ($LASTEXITCODE -ne 0) { throw 'Bash syntax validation failed.' }
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            git diff --exit-code $env:BASE_SHA $env:GITHUB_SHA -- .github/workflows/windows-packaging.yml .github/workflows/deb_packaging.yml .github/workflows/osx-packaging.yml
+            if ($LASTEXITCODE -ne 0) { throw 'Windows/Linux/macOS production publishers changed in Stage 3.' }
+          }
+
+      - name: Stage contract evidence
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/upload/contract | Out-Null
+          Copy-Item artifacts/contract/identity.json,artifacts/contract/contract-evidence.json -Destination artifacts/upload/contract
+
+      - name: Upload contract evidence
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-contract-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/contract
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+
+      - name: Record contract evidence transport receipt
+        shell: pwsh
+        run: |
+          $identity = Get-Content -Raw artifacts/upload/contract/identity.json | ConvertFrom-Json
+          $artifactId = '${{ steps.upload.outputs.artifact-id }}'
+          $artifactDigest = '${{ steps.upload.outputs.artifact-digest }}'.ToLowerInvariant()
+          if ($artifactId -cnotmatch '^[1-9][0-9]*$') { throw 'Contract artifact id is not a positive decimal value.' }
+          if ($artifactDigest -cnotmatch '^[0-9a-f]{64}$') { throw 'Contract artifact digest is not a lowercase SHA-256 value.' }
+          $payloadRoot = 'artifacts/upload/contract'
+          $payloads = @('identity.json', 'contract-evidence.json') | ForEach-Object {
+            $path = Join-Path $payloadRoot $_
+            [ordered]@{
+              fileName = $_
+              sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          }
+          $receipt = [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-evidence-transport-receipt'
+            identity = [ordered]@{
+              rawTag = [string]$identity.rawTag
+              normalizedVersion = [string]$identity.normalizedVersion
+              sourceSha = [string]$identity.sourceSha
+              workflowSha = [string]$identity.workflowSha
+              tagBinding = [string]$identity.tagBinding
+              manifestSha256 = [string]$identity.manifestSha256
+              supportMatrixSha256 = [string]$identity.supportMatrixSha256
+              signatureProfile = [string]$identity.signatureProfile
+            }
+            artifact = [ordered]@{
+              name = 'distribution-contract-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}'
+              id = $artifactId
+              digest = $artifactDigest
+              retentionDays = 7
+            }
+            payloads = @($payloads)
+            productionReady = $false
+          }
+          $receipt | ConvertTo-Json -Depth 8 -Compress | Set-Content -LiteralPath artifacts/contract/evidence-transport-receipt.json -Encoding utf8NoBOM
+
+      - name: Upload contract evidence transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-contract-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/contract/evidence-transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  windows_x64:
+    name: windows-x64-native
+    needs: [changes, contract]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success'
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: distribution-windows-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-windows-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned Velopack CLI
+        shell: pwsh
+        run: dotnet tool install --tool-path "$env:RUNNER_TEMP/vpk" vpk --version "$env:VPK_VERSION" --ignore-failed-sources
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/distribution-validation/identity.json
+
+      - name: Build Windows candidate once
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Build-WindowsDistribution.ps1 `
+            -Identity artifacts/distribution-validation/identity.json `
+            -OutputDirectory artifacts/distribution-validation/windows-x64 `
+            -VpkPath "$env:RUNNER_TEMP/vpk/vpk.exe"
+
+      - name: Record exact Windows artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/windows-x64/assets `
+            -Evidence artifacts/distribution-validation/windows-x64/evidence/artifact-evidence.json `
+            -Platform windows -Architecture x64 -SignatureProfile unsigned `
+            -AssetId windows-feed-legacy,windows-feed-json,windows-updater-package-x64,windows-setup-x64,windows-portable-x64,windows-portable-x64-legacy
+
+      - name: Validate installer and portable native launch
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-WindowsDistribution.ps1 `
+            -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/windows-x64/assets `
+            -ExpectedRunnerImage windows-2022 `
+            -OutputEvidence artifacts/distribution-validation/windows-x64/evidence/windows-native.json
+
+      - name: Stage Windows evidence
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/upload/windows/assets,artifacts/upload/windows/evidence | Out-Null
+          Copy-Item artifacts/distribution-validation/windows-x64/assets/* artifacts/upload/windows/assets
+          Copy-Item artifacts/distribution-validation/windows-x64/evidence/* artifacts/upload/windows/evidence
+
+      - name: Upload exact Windows candidate
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-windows-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/windows
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record Windows transport receipt
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode TransportReceipt `
+            -Identity artifacts/distribution-validation/identity.json `
+            -EvidencePath artifacts/distribution-validation/windows-x64/evidence/artifact-evidence.json `
+            -Evidence artifacts/distribution-validation/windows-x64/evidence/transport-receipt.json `
+            -Platform windows -Architecture x64 `
+            -ArtifactTransportName 'distribution-windows-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}' `
+            -ArtifactTransportId '${{ steps.upload.outputs.artifact-id }}' `
+            -ArtifactTransportDigest '${{ steps.upload.outputs.artifact-digest }}' `
+            -ArtifactRetentionDays 7
+
+      - name: Upload Windows transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-windows-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/distribution-validation/windows-x64/evidence/transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Preserve Windows failure evidence without candidates
+        if: ${{ always() && failure() }}
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          $target = 'artifacts/failure/windows-x64'
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $source = 'artifacts/distribution-validation/windows-x64/evidence'
+          if (Test-Path -LiteralPath $source -PathType Container) {
+            Get-ChildItem -LiteralPath $source -File | Copy-Item -Destination $target -Force
+          }
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-producer-failure'
+            status = 'fail'
+            platform = 'windows'
+            architecture = 'x64'
+            rawTag = $env:RAW_TAG
+            sourceSha = $env:GITHUB_SHA
+            workflowSha = $env:WORKFLOW_SHA
+            runId = [long]$env:GITHUB_RUN_ID
+            runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            recordedAtUtc = [DateTime]::UtcNow.ToString('O')
+            error = 'A prior Windows producer step failed; inspect the retained reports and job log.'
+            productionReady = $false
+          } | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath "$target/failure.json" -Encoding utf8NoBOM
+
+      - name: Upload Windows failure evidence
+        if: ${{ always() && failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-windows-x64-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/failure/windows-x64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  linux_x64:
+    name: linux-x64-native
+    needs: [changes, contract]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: distribution-linux-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-linux-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Install Linux validation tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y desktop-file-utils lintian file binutils; then
+              exit 0
+            fi
+            sudo rm -rf /var/lib/apt/lists/*
+            if [[ "$attempt" -eq 3 ]]; then exit 1; fi
+          done
+
+      - name: Install pinned Velopack CLI
+        shell: bash
+        run: dotnet tool install --tool-path "$RUNNER_TEMP/vpk" vpk --version "$VPK_VERSION" --ignore-failed-sources
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/distribution-validation/identity.json
+
+      - name: Build Linux candidates from one publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          bash scripts/Build-LinuxDistribution.sh \
+            --identity artifacts/distribution-validation/identity.json \
+            --version "$version" \
+            --source-sha "${{ github.sha }}" \
+            --output-root artifacts/distribution-validation/linux-x64 \
+            --vpk "$RUNNER_TEMP/vpk/vpk"
+
+      - name: Record initial exact Linux artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/linux-x64/candidates `
+            -Evidence artifacts/distribution-validation/linux-x64/evidence/artifact-evidence.json `
+            -Platform linux -Architecture x64 -SignatureProfile unsigned `
+            -AssetId linux-feed-json,linux-updater-package-x64,linux-deb-x64,linux-appimage-x64
+
+      - name: Resolve immutable Debian images
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull debian:12-slim
+          docker pull debian:13-slim
+          image12="$(docker inspect --format '{{index .RepoDigests 0}}' debian:12-slim)"
+          image13="$(docker inspect --format '{{index .RepoDigests 0}}' debian:13-slim)"
+          test -n "$image12" -a -n "$image13"
+          echo "debian12=$image12" >> "$GITHUB_OUTPUT"
+          echo "debian13=$image13" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Linux metadata and package policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=artifacts/distribution-validation/linux-x64
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          bash scripts/smoke-linux-artifacts.sh --mode metadata --version "$version" \
+            --identity artifacts/distribution-validation/identity.json \
+            --deb "$root/candidates/Unlimotion-$version.deb" --appimage "$root/candidates/Unlimotion.AppImage" \
+            --report "$root/evidence/linux-metadata.json"
+
+      - name: Validate Debian 12 and 13 clean install
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=artifacts/distribution-validation/linux-x64
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          for cell in "12|${{ steps.images.outputs.debian12 }}" "13|${{ steps.images.outputs.debian13 }}"; do
+            release="${cell%%|*}"; image="${cell#*|}"
+            bash scripts/smoke-linux-artifacts.sh --mode clean --version "$version" \
+              --identity artifacts/distribution-validation/identity.json \
+              --deb "$root/candidates/Unlimotion-$version.deb" --image "$image" \
+              --harness-image '${{ steps.images.outputs.debian12 }}' --report "$root/evidence/debian-$release-clean.json"
+          done
+
+      - name: Validate Debian 12 and 13 upgrade continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=artifacts/distribution-validation/linux-x64
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          for cell in "12|${{ steps.images.outputs.debian12 }}" "13|${{ steps.images.outputs.debian13 }}"; do
+            release="${cell%%|*}"; image="${cell#*|}"
+            bash scripts/smoke-linux-artifacts.sh --mode upgrade --version "$version" \
+              --identity artifacts/distribution-validation/identity.json \
+              --deb "$root/candidates/Unlimotion-$version.deb" --image "$image" \
+              --harness-image '${{ steps.images.outputs.debian12 }}' --report "$root/evidence/debian-$release-upgrade.json"
+          done
+
+      - name: Validate AppImage on Debian 12 and 13
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=artifacts/distribution-validation/linux-x64
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          for cell in "12|${{ steps.images.outputs.debian12 }}" "13|${{ steps.images.outputs.debian13 }}"; do
+            release="${cell%%|*}"; image="${cell#*|}"
+            bash scripts/smoke-linux-artifacts.sh --mode appimage --version "$version" \
+              --identity artifacts/distribution-validation/identity.json \
+              --deb "$root/candidates/Unlimotion-$version.deb" --appimage "$root/candidates/Unlimotion.AppImage" \
+              --image "$image" --harness-image '${{ steps.images.outputs.debian12 }}' \
+              --report "$root/evidence/appimage-debian-$release.json"
+          done
+
+      - name: Prove missing runtime dependency remains a failure on Debian 12 and 13
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=artifacts/distribution-validation/linux-x64
+          version="$(jq -er '.normalizedVersion' artifacts/distribution-validation/identity.json)"
+          for cell in "12|${{ steps.images.outputs.debian12 }}" "13|${{ steps.images.outputs.debian13 }}"; do
+            release="${cell%%|*}"; image="${cell#*|}"
+            bash scripts/smoke-linux-artifacts.sh --mode missing-runtime-negative --version "$version" \
+              --identity artifacts/distribution-validation/identity.json \
+              --deb "$root/candidates/Unlimotion-$version.deb" --image "$image" \
+              --harness-image '${{ steps.images.outputs.debian12 }}' \
+              --report "$root/evidence/missing-runtime-dependency-debian-$release.json"
+          done
+
+      - name: Revalidate unchanged Linux artifact envelope after native smoke
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Validate -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/linux-x64/candidates `
+            -Evidence artifacts/distribution-validation/linux-x64/evidence/artifact-evidence.json `
+            -Platform linux -Architecture x64 `
+            -AssetId linux-feed-json,linux-updater-package-x64,linux-deb-x64,linux-appimage-x64
+
+      - name: Stage Linux tar transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/upload/linux/assets artifacts/upload/linux/evidence
+          cp artifacts/distribution-validation/linux-x64/candidates/* artifacts/upload/linux/assets/
+          cp artifacts/distribution-validation/linux-x64/evidence/* artifacts/upload/linux/evidence/
+          test "$(stat -c '%a' artifacts/upload/linux/assets/Unlimotion.AppImage)" = 755
+          tar --format=posix --numeric-owner --owner=0 --group=0 -cf artifacts/upload/linux-candidate.tar -C artifacts/upload/linux .
+          tar -tvf artifacts/upload/linux-candidate.tar | grep -F -- '-rwxr-xr-x' | grep -F -- 'assets/Unlimotion.AppImage'
+
+      - name: Upload exact Linux candidate as tar
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-linux-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/linux-candidate.tar
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record Linux transport receipt and executable mode
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode TransportReceipt `
+            -Identity artifacts/distribution-validation/identity.json `
+            -EvidencePath artifacts/distribution-validation/linux-x64/evidence/artifact-evidence.json `
+            -Evidence artifacts/distribution-validation/linux-x64/evidence/transport-receipt.json `
+            -Platform linux -Architecture x64 `
+            -ArtifactTransportName 'distribution-linux-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}' `
+            -ArtifactTransportId '${{ steps.upload.outputs.artifact-id }}' `
+            -ArtifactTransportDigest '${{ steps.upload.outputs.artifact-digest }}' `
+            -ArtifactRetentionDays 7 `
+            -TransportArchivePath artifacts/upload/linux-candidate.tar `
+            -UnixExecutablePath artifacts/distribution-validation/linux-x64/candidates/Unlimotion.AppImage `
+            -UnixAssetId linux-appimage-x64 `
+            -ExpectedUnixMode 0755
+
+      - name: Upload Linux transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-linux-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/distribution-validation/linux-x64/evidence/transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Preserve Linux failure evidence without candidates
+        if: ${{ always() && failure() }}
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          $target = 'artifacts/failure/linux-x64'
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $source = 'artifacts/distribution-validation/linux-x64/evidence'
+          if (Test-Path -LiteralPath $source -PathType Container) {
+            Get-ChildItem -LiteralPath $source -File | Copy-Item -Destination $target -Force
+          }
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-producer-failure'
+            status = 'fail'
+            platform = 'linux'
+            architecture = 'x64'
+            rawTag = $env:RAW_TAG
+            sourceSha = $env:GITHUB_SHA
+            workflowSha = $env:WORKFLOW_SHA
+            runId = [long]$env:GITHUB_RUN_ID
+            runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            recordedAtUtc = [DateTime]::UtcNow.ToString('O')
+            error = 'A prior Linux producer step failed; inspect the retained reports and job log.'
+            productionReady = $false
+          } | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath "$target/failure.json" -Encoding utf8NoBOM
+
+      - name: Upload Linux failure evidence
+        if: ${{ always() && failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-linux-x64-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/failure/linux-x64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  macos_x64:
+    name: macos-15-intel-x64-native
+    needs: [changes, contract]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success'
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: distribution-macos-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-macos-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned Velopack CLI
+        shell: bash
+        run: dotnet tool install --tool-path "$RUNNER_TEMP/vpk" vpk --version "$VPK_VERSION" --ignore-failed-sources
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/distribution-validation/identity.json
+
+      - name: Build macOS x64 candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-macos-distribution.sh \
+            --identity artifacts/distribution-validation/identity.json \
+            --architecture x64 \
+            --output-dir artifacts/distribution-validation/macos-x64 \
+            --vpk "$RUNNER_TEMP/vpk/vpk"
+
+      - name: Record exact macOS x64 artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/macos-x64/assets `
+            -Evidence artifacts/distribution-validation/macos-x64/evidence/artifact-evidence.json `
+            -Platform macos -Architecture x64 -SignatureProfile unsigned `
+            -AssetId macos-x64-feed-json,macos-x64-updater-package,macos-x64-setup,macos-x64-portable,macos-x64-pkg-legacy
+
+      - name: Validate macOS 15 Intel packages and native launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test-macos-distribution.sh \
+            --identity artifacts/distribution-validation/identity.json \
+            --architecture x64 \
+            --artifact-dir artifacts/distribution-validation/macos-x64/assets \
+            --expected-runner macos-15-intel \
+            --evidence artifacts/distribution-validation/macos-x64/evidence/macos-native.json
+
+      - name: Stage macOS x64 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/upload/macos-x64/assets artifacts/upload/macos-x64/evidence
+          ditto artifacts/distribution-validation/macos-x64/assets artifacts/upload/macos-x64/assets
+          ditto artifacts/distribution-validation/macos-x64/evidence artifacts/upload/macos-x64/evidence
+
+      - name: Upload exact macOS x64 candidate
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/macos-x64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record macOS x64 transport receipt
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode TransportReceipt `
+            -Identity artifacts/distribution-validation/identity.json `
+            -EvidencePath artifacts/distribution-validation/macos-x64/evidence/artifact-evidence.json `
+            -Evidence artifacts/distribution-validation/macos-x64/evidence/transport-receipt.json `
+            -Platform macos -Architecture x64 `
+            -ArtifactTransportName 'distribution-macos-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}' `
+            -ArtifactTransportId '${{ steps.upload.outputs.artifact-id }}' `
+            -ArtifactTransportDigest '${{ steps.upload.outputs.artifact-digest }}' `
+            -ArtifactRetentionDays 7
+
+      - name: Upload macOS x64 transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-x64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/distribution-validation/macos-x64/evidence/transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Preserve macOS x64 failure evidence without candidates
+        if: ${{ always() && failure() }}
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          $target = 'artifacts/failure/macos-x64'
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $source = 'artifacts/distribution-validation/macos-x64/evidence'
+          if (Test-Path -LiteralPath $source -PathType Container) {
+            Get-ChildItem -LiteralPath $source -File | Copy-Item -Destination $target -Force
+          }
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-producer-failure'
+            status = 'fail'
+            platform = 'macos'
+            architecture = 'x64'
+            rawTag = $env:RAW_TAG
+            sourceSha = $env:GITHUB_SHA
+            workflowSha = $env:WORKFLOW_SHA
+            runId = [long]$env:GITHUB_RUN_ID
+            runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            recordedAtUtc = [DateTime]::UtcNow.ToString('O')
+            error = 'A prior macOS x64 producer step failed; inspect the retained reports and job log.'
+            productionReady = $false
+          } | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath "$target/failure.json" -Encoding utf8NoBOM
+
+      - name: Upload macOS x64 failure evidence
+        if: ${{ always() && failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-x64-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/failure/macos-x64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  macos_arm64:
+    name: macos-15-arm64-native
+    needs: [changes, contract]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Install pinned Velopack CLI
+        shell: bash
+        run: dotnet tool install --tool-path "$RUNNER_TEMP/vpk" vpk --version "$VPK_VERSION" --ignore-failed-sources
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/distribution-validation/identity.json
+
+      - name: Build macOS arm64 candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-macos-distribution.sh \
+            --identity artifacts/distribution-validation/identity.json \
+            --architecture arm64 \
+            --output-dir artifacts/distribution-validation/macos-arm64 \
+            --vpk "$RUNNER_TEMP/vpk/vpk"
+
+      - name: Record exact macOS arm64 artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/macos-arm64/assets `
+            -Evidence artifacts/distribution-validation/macos-arm64/evidence/artifact-evidence.json `
+            -Platform macos -Architecture arm64 -SignatureProfile unsigned `
+            -AssetId macos-arm64-feed-json,macos-arm64-updater-package,macos-arm64-setup,macos-arm64-portable,macos-arm64-pkg-legacy
+
+      - name: Validate macOS 15 arm64 packages and native launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test-macos-distribution.sh \
+            --identity artifacts/distribution-validation/identity.json \
+            --architecture arm64 \
+            --artifact-dir artifacts/distribution-validation/macos-arm64/assets \
+            --expected-runner macos-15 \
+            --evidence artifacts/distribution-validation/macos-arm64/evidence/macos-native.json
+
+      - name: Stage macOS arm64 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/upload/macos-arm64/assets artifacts/upload/macos-arm64/evidence
+          ditto artifacts/distribution-validation/macos-arm64/assets artifacts/upload/macos-arm64/assets
+          ditto artifacts/distribution-validation/macos-arm64/evidence artifacts/upload/macos-arm64/evidence
+
+      - name: Upload exact macOS arm64 candidate
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/macos-arm64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record macOS arm64 transport receipt
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode TransportReceipt `
+            -Identity artifacts/distribution-validation/identity.json `
+            -EvidencePath artifacts/distribution-validation/macos-arm64/evidence/artifact-evidence.json `
+            -Evidence artifacts/distribution-validation/macos-arm64/evidence/transport-receipt.json `
+            -Platform macos -Architecture arm64 `
+            -ArtifactTransportName 'distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}' `
+            -ArtifactTransportId '${{ steps.upload.outputs.artifact-id }}' `
+            -ArtifactTransportDigest '${{ steps.upload.outputs.artifact-digest }}' `
+            -ArtifactRetentionDays 7
+
+      - name: Upload macOS arm64 transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/distribution-validation/macos-arm64/evidence/transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Preserve macOS arm64 failure evidence without candidates
+        if: ${{ always() && failure() }}
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          $target = 'artifacts/failure/macos-arm64'
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $source = 'artifacts/distribution-validation/macos-arm64/evidence'
+          if (Test-Path -LiteralPath $source -PathType Container) {
+            Get-ChildItem -LiteralPath $source -File | Copy-Item -Destination $target -Force
+          }
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-producer-failure'
+            status = 'fail'
+            platform = 'macos'
+            architecture = 'arm64'
+            rawTag = $env:RAW_TAG
+            sourceSha = $env:GITHUB_SHA
+            workflowSha = $env:WORKFLOW_SHA
+            runId = [long]$env:GITHUB_RUN_ID
+            runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            recordedAtUtc = [DateTime]::UtcNow.ToString('O')
+            error = 'A prior macOS arm64 producer step failed; inspect the retained reports and job log.'
+            productionReady = $false
+          } | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath "$target/failure.json" -Encoding utf8NoBOM
+
+      - name: Upload macOS arm64 failure evidence
+        if: ${{ always() && failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-macos-arm64-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/failure/macos-arm64
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  android_build:
+    name: android-api23-native-build
+    needs: [changes, contract]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      DOTNET_NUGET_SIGNATURE_VERIFICATION: "false"
+      ANDROID_API_LEVEL: 23
+      ANDROID_PLATFORM: android-36
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_NDK_VERSION: 27.2.12479018
+    outputs:
+      artifact_name: distribution-android-multi-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-android-multi-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source and native submodules
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Java 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platform-tools" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;${ANDROID_PLATFORM}" \
+            "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install Android native build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build perl zip unzip; then
+              exit 0
+            fi
+            sudo rm -rf /var/lib/apt/lists/*
+            if [[ "$attempt" -eq 3 ]]; then exit 1; fi
+          done
+
+      - name: Install .NET Android workload
+        shell: bash
+        run: dotnet workload install android --skip-manifest-update
+
+      - name: Assert immutable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C .native/libgit2-src rev-parse HEAD)" = "$(git ls-tree HEAD .native/libgit2-src | awk '{print $3}')"
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation/android-multi | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/distribution-validation/identity.json
+
+      - name: Prepare exact Android native cache key
+        id: prepare_cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-android-distribution.sh \
+            --mode prepare-cache \
+            --identity artifacts/distribution-validation/identity.json \
+            --output-dir artifacts/distribution-validation/android-multi \
+            --cache-dir artifacts/distribution-validation/android-native-cache \
+            --runner-os '${{ runner.os }}' \
+            --runner-arch '${{ runner.arch }}'
+
+      - name: Restore exact Android native cache
+        id: restore_cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.prepare_cache.outputs.cache_path }}
+          key: ${{ steps.prepare_cache.outputs.cache_key }}
+
+      - name: Build and validate both Android candidates
+        id: build_android
+        shell: bash
+        env:
+          RESTORE_CACHE_HIT: ${{ steps.restore_cache.outputs.cache-hit }}
+          RESTORE_MATCHED_KEY: ${{ steps.restore_cache.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+          cache_hit=false
+          matched_key=""
+          if [[ "$RESTORE_CACHE_HIT" == "true" ]]; then
+            cache_hit=true
+            matched_key="$RESTORE_MATCHED_KEY"
+          fi
+          bash scripts/build-android-distribution.sh \
+            --mode build \
+            --identity artifacts/distribution-validation/identity.json \
+            --output-dir artifacts/distribution-validation/android-multi \
+            --cache-dir artifacts/distribution-validation/android-native-cache \
+            --requested-cache-key '${{ steps.prepare_cache.outputs.cache_key }}' \
+            --matched-cache-key "$matched_key" \
+            --cache-hit "$cache_hit" \
+            --runner-os '${{ runner.os }}' \
+            --runner-arch '${{ runner.arch }}' \
+            --signature-profile test
+
+      - name: Record exact Android arm64 artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/android-multi/apks `
+            -Evidence artifacts/distribution-validation/android-multi/artifact-evidence-arm64.json `
+            -Platform android -Architecture arm64 -SignatureProfile test `
+            -AssetId android-arm64-apk
+
+      - name: Record exact Android x64 artifact envelope
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Record -Identity artifacts/distribution-validation/identity.json `
+            -ArtifactDirectory artifacts/distribution-validation/android-multi/apks `
+            -Evidence artifacts/distribution-validation/android-multi/artifact-evidence-x64.json `
+            -Platform android -Architecture x64 -SignatureProfile test `
+            -AssetId android-x64-apk
+
+      - name: Save validated Android native cache on exact miss
+        if: steps.build_android.outputs.cache_save == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.build_android.outputs.cache_path }}
+          key: ${{ steps.build_android.outputs.cache_key }}
+
+      - name: Stage Android candidates and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root=artifacts/distribution-validation/android-multi
+          mkdir -p artifacts/upload/android/assets artifacts/upload/android/evidence
+          cp "$source_root"/apks/*.apk artifacts/upload/android/assets/
+          cp "$source_root"/artifact-evidence-arm64.json artifacts/upload/android/evidence/
+          cp "$source_root"/artifact-evidence-x64.json artifacts/upload/android/evidence/
+          cp "$source_root"/evidence.json artifacts/upload/android/evidence/android-artifact.json
+          cp "$source_root"/native-cache-evidence.json artifacts/upload/android/evidence/
+          cp "$source_root"/native-inputs.json artifacts/upload/android/evidence/
+          cp '${{ steps.build_android.outputs.cache_path }}/native-provenance.json' artifacts/upload/android/evidence/
+
+      - name: Upload exact Android candidates
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-multi-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/upload/android
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record Android transport receipt
+        shell: pwsh
+        run: |
+          $evidencePaths = @(
+            'artifacts/distribution-validation/android-multi/artifact-evidence-arm64.json',
+            'artifacts/distribution-validation/android-multi/artifact-evidence-x64.json'
+          )
+          & ./scripts/Test-DistributionArtifact.ps1 `
+            -Mode TransportReceipt `
+            -Identity artifacts/distribution-validation/identity.json `
+            -EvidencePath $evidencePaths `
+            -Evidence artifacts/distribution-validation/android-multi/transport-receipt.json `
+            -Platform android -Architecture multi `
+            -ArtifactTransportName 'distribution-android-multi-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}' `
+            -ArtifactTransportId '${{ steps.upload.outputs.artifact-id }}' `
+            -ArtifactTransportDigest '${{ steps.upload.outputs.artifact-digest }}' `
+            -ArtifactRetentionDays 7
+
+      - name: Upload Android transport receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-multi-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/distribution-validation/android-multi/transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Preserve Android build failure evidence without APKs
+        if: ${{ always() && failure() }}
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          $target = 'artifacts/failure/android-multi'
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $source = 'artifacts/distribution-validation/android-multi'
+          if (Test-Path -LiteralPath $source -PathType Container) {
+            Get-ChildItem -LiteralPath $source -File -Filter '*.json' | Copy-Item -Destination $target -Force
+          }
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'distribution-producer-failure'
+            status = 'fail'
+            platform = 'android'
+            architecture = 'multi'
+            rawTag = $env:RAW_TAG
+            sourceSha = $env:GITHUB_SHA
+            workflowSha = $env:WORKFLOW_SHA
+            runId = [long]$env:GITHUB_RUN_ID
+            runAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            recordedAtUtc = [DateTime]::UtcNow.ToString('O')
+            error = 'A prior Android build step failed; inspect the retained reports and job log.'
+            productionReady = $false
+          } | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath "$target/failure.json" -Encoding utf8NoBOM
+
+      - name: Upload Android build failure evidence
+        if: ${{ always() && failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-multi-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/failure/android-multi
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  android_api23:
+    name: android-api23-x64-native
+    needs: [changes, contract, android_build]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success' && needs.android_build.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_API_LEVEL: 23
+    outputs:
+      artifact_name: distribution-android-api23-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-android-api23-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert immutable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install API 23 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "emulator" \
+            "platform-tools" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "system-images;android-${ANDROID_API_LEVEL};google_apis;x86_64"
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/emulator/api23 | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/emulator/identity.json
+
+      - name: Download exact Android candidate (attempt 1 of 2)
+        id: download_android_1
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.android_build.outputs.artifact_id }}
+          path: artifacts/download/android
+          merge-multiple: true
+
+      - name: Clean failed Android transport attempt
+        if: steps.download_android_1.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf -- artifacts/download/android
+          mkdir -p artifacts/download/android
+
+      - name: Download exact Android candidate (attempt 2 of 2)
+        id: download_android_2
+        if: steps.download_android_1.outcome != 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.android_build.outputs.artifact_id }}
+          path: artifacts/download/android
+          merge-multiple: true
+
+      - name: Require successful bounded Android transport
+        shell: bash
+        env:
+          FIRST_OUTCOME: ${{ steps.download_android_1.outcome }}
+          SECOND_OUTCOME: ${{ steps.download_android_2.outcome }}
+          CANDIDATE_ARTIFACT_NAME: ${{ needs.android_build.outputs.artifact_name }}
+          CANDIDATE_ARTIFACT_ID: ${{ needs.android_build.outputs.artifact_id }}
+          CANDIDATE_ARTIFACT_DIGEST: ${{ needs.android_build.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          python3 - \
+            artifacts/emulator/identity.json \
+            artifacts/emulator/api23/download-transport.json \
+            "$FIRST_OUTCOME" "$SECOND_OUTCOME" android-api23 <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          identity_path, output_path = map(pathlib.Path, sys.argv[1:3])
+          first, second, scope = sys.argv[3:]
+          passed = first == "success" or second == "success"
+          selected = 1 if first == "success" else (2 if second == "success" else 0)
+          source_artifact = {
+              "name": os.environ["CANDIDATE_ARTIFACT_NAME"],
+              "id": os.environ["CANDIDATE_ARTIFACT_ID"],
+              "digest": os.environ["CANDIDATE_ARTIFACT_DIGEST"].lower(),
+          }
+          if not re.fullmatch(r"[1-9][0-9]*", source_artifact["id"]):
+              raise SystemExit("Android source artifact id is invalid")
+          if not re.fullmatch(r"[0-9a-f]{64}", source_artifact["digest"]):
+              raise SystemExit("Android source artifact digest is invalid")
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          payload = {
+              "schemaVersion": 1,
+              "kind": "distribution-download-transport",
+              "status": "pass" if passed else "failure",
+              "scope": scope,
+              "identity": {
+                  key: identity[key]
+                  for key in (
+                      "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                      "manifestSha256", "supportMatrixSha256", "signatureProfile",
+                  )
+              },
+              "sourceArtifact": source_artifact,
+              "retry": {
+                  "rule": "bounded-clean-retry",
+                  "classification": "none" if first == "success" else "transient-transport",
+                  "maxAttempts": 2,
+                  "firstOutcome": first,
+                  "secondOutcome": second or "skipped",
+                  "selectedAttempt": selected,
+                  "cleanupBeforeAttempt2": "completed" if first != "success" else "notRequired",
+                  "exhausted": not passed,
+              },
+              "productionReady": False,
+          }
+          output_path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          if not passed:
+              raise SystemExit("Android candidate download failed after two clean attempts")
+          PY
+
+      - name: Revalidate downloaded Android x64 bytes
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Validate `
+            -Identity artifacts/emulator/identity.json `
+            -ArtifactDirectory artifacts/download/android/assets `
+            -Evidence artifacts/download/android/evidence/artifact-evidence-x64.json `
+            -Platform android -Architecture x64 `
+            -AssetId android-x64-apk
+
+      - name: Install and launch exact x64 APK on API 23
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test-android-distribution.sh \
+            --mode emulator \
+            --identity artifacts/emulator/identity.json \
+            --input-dir artifacts/download/android/assets \
+            --api-level 23 \
+            --evidence artifacts/emulator/api23/evidence.json
+
+      - name: Preserve API 23 failure evidence
+        if: always()
+        shell: bash
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/emulator/api23
+          if [[ ! -s artifacts/emulator/api23/evidence.json ]]; then
+            python3 - artifacts/emulator/api23/evidence.json <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          payload = {
+              "schemaVersion": 1,
+              "outcome": "failed",
+              "supportLevel": "notVerified",
+              "mode": "emulator",
+              "rawTag": os.environ["RAW_TAG"],
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowSha": os.environ["WORKFLOW_SHA"],
+              "runtime": {"apiLevel": 23, "maxBootAttempts": 2},
+              "error": "API 23 validation did not produce success evidence; inspect job logs.",
+          }
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          fi
+
+      - name: Upload API 23 native evidence
+        id: upload
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api23-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/emulator/api23
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload API 23 failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api23-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/emulator/api23
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record API 23 evidence transport receipt
+        if: success()
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          ARTIFACT_NAME: distribution-android-api23-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python3 - artifacts/emulator/identity.json artifacts/emulator/api23 artifacts/emulator/api23/evidence-transport-receipt.json <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          identity_path, payload_root, output_path = map(pathlib.Path, sys.argv[1:])
+          artifact_id = os.environ["ARTIFACT_ID"]
+          artifact_digest = os.environ["ARTIFACT_DIGEST"].lower()
+          if not re.fullmatch(r"[1-9][0-9]*", artifact_id):
+              raise SystemExit("API 23 artifact id is not a positive decimal value")
+          if not re.fullmatch(r"[0-9a-f]{64}", artifact_digest):
+              raise SystemExit("API 23 artifact digest is not a lowercase SHA-256 value")
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          payloads = []
+          for name in (
+              "evidence.json",
+              "download-transport.json",
+              "android-api23-emulator.log",
+              "android-api23-logcat.txt",
+          ):
+              path = payload_root / name
+              payloads.append({"fileName": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          receipt = {
+              "schemaVersion": 1,
+              "kind": "distribution-evidence-transport-receipt",
+              "identity": {
+                  key: identity[key]
+                  for key in (
+                      "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                      "manifestSha256", "supportMatrixSha256", "signatureProfile",
+                  )
+              },
+              "artifact": {
+                  "name": os.environ["ARTIFACT_NAME"],
+                  "id": artifact_id,
+                  "digest": artifact_digest,
+                  "retentionDays": 7,
+              },
+              "payloads": payloads,
+              "productionReady": False,
+          }
+          output_path.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload API 23 evidence transport receipt
+        if: success()
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api23-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/emulator/api23/evidence-transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  android_api36:
+    name: android-api36-x64-native
+    needs: [changes, contract, android_build]
+    if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success' && needs.android_build.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_API_LEVEL: 36
+    outputs:
+      artifact_name: distribution-android-api36-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      receipt_artifact_name: distribution-android-api36-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+      receipt_artifact_id: ${{ steps.upload_receipt.outputs.artifact-id }}
+      receipt_artifact_digest: ${{ steps.upload_receipt.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert immutable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install API 36 emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "emulator" \
+            "platform-tools" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "system-images;android-${ANDROID_API_LEVEL};google_apis;x86_64"
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+
+      - name: Resolve release identity
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/emulator/api36 | Out-Null
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/emulator/identity.json
+
+      - name: Download exact Android candidate (attempt 1 of 2)
+        id: download_android_1
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.android_build.outputs.artifact_id }}
+          path: artifacts/download/android
+          merge-multiple: true
+
+      - name: Clean failed Android transport attempt
+        if: steps.download_android_1.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf -- artifacts/download/android
+          mkdir -p artifacts/download/android
+
+      - name: Download exact Android candidate (attempt 2 of 2)
+        id: download_android_2
+        if: steps.download_android_1.outcome != 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.android_build.outputs.artifact_id }}
+          path: artifacts/download/android
+          merge-multiple: true
+
+      - name: Require successful bounded Android transport
+        shell: bash
+        env:
+          FIRST_OUTCOME: ${{ steps.download_android_1.outcome }}
+          SECOND_OUTCOME: ${{ steps.download_android_2.outcome }}
+          CANDIDATE_ARTIFACT_NAME: ${{ needs.android_build.outputs.artifact_name }}
+          CANDIDATE_ARTIFACT_ID: ${{ needs.android_build.outputs.artifact_id }}
+          CANDIDATE_ARTIFACT_DIGEST: ${{ needs.android_build.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          python3 - \
+            artifacts/emulator/identity.json \
+            artifacts/emulator/api36/download-transport.json \
+            "$FIRST_OUTCOME" "$SECOND_OUTCOME" android-api36 <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          identity_path, output_path = map(pathlib.Path, sys.argv[1:3])
+          first, second, scope = sys.argv[3:]
+          passed = first == "success" or second == "success"
+          selected = 1 if first == "success" else (2 if second == "success" else 0)
+          source_artifact = {
+              "name": os.environ["CANDIDATE_ARTIFACT_NAME"],
+              "id": os.environ["CANDIDATE_ARTIFACT_ID"],
+              "digest": os.environ["CANDIDATE_ARTIFACT_DIGEST"].lower(),
+          }
+          if not re.fullmatch(r"[1-9][0-9]*", source_artifact["id"]):
+              raise SystemExit("Android source artifact id is invalid")
+          if not re.fullmatch(r"[0-9a-f]{64}", source_artifact["digest"]):
+              raise SystemExit("Android source artifact digest is invalid")
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          payload = {
+              "schemaVersion": 1,
+              "kind": "distribution-download-transport",
+              "status": "pass" if passed else "failure",
+              "scope": scope,
+              "identity": {
+                  key: identity[key]
+                  for key in (
+                      "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                      "manifestSha256", "supportMatrixSha256", "signatureProfile",
+                  )
+              },
+              "sourceArtifact": source_artifact,
+              "retry": {
+                  "rule": "bounded-clean-retry",
+                  "classification": "none" if first == "success" else "transient-transport",
+                  "maxAttempts": 2,
+                  "firstOutcome": first,
+                  "secondOutcome": second or "skipped",
+                  "selectedAttempt": selected,
+                  "cleanupBeforeAttempt2": "completed" if first != "success" else "notRequired",
+                  "exhausted": not passed,
+              },
+              "productionReady": False,
+          }
+          output_path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          if not passed:
+              raise SystemExit("Android candidate download failed after two clean attempts")
+          PY
+
+      - name: Revalidate downloaded Android x64 bytes
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/Test-DistributionArtifact.ps1 `
+            -Mode Validate `
+            -Identity artifacts/emulator/identity.json `
+            -ArtifactDirectory artifacts/download/android/assets `
+            -Evidence artifacts/download/android/evidence/artifact-evidence-x64.json `
+            -Platform android -Architecture x64 `
+            -AssetId android-x64-apk
+
+      - name: Install and launch exact x64 APK on API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/test-android-distribution.sh \
+            --mode emulator \
+            --identity artifacts/emulator/identity.json \
+            --input-dir artifacts/download/android/assets \
+            --api-level 36 \
+            --evidence artifacts/emulator/api36/evidence.json
+
+      - name: Preserve API 36 failure evidence
+        if: always()
+        shell: bash
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/emulator/api36
+          if [[ ! -s artifacts/emulator/api36/evidence.json ]]; then
+            python3 - artifacts/emulator/api36/evidence.json <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          payload = {
+              "schemaVersion": 1,
+              "outcome": "failed",
+              "supportLevel": "notVerified",
+              "mode": "emulator",
+              "rawTag": os.environ["RAW_TAG"],
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowSha": os.environ["WORKFLOW_SHA"],
+              "runtime": {"apiLevel": 36, "maxBootAttempts": 2},
+              "error": "API 36 validation did not produce success evidence; inspect job logs.",
+          }
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          fi
+
+      - name: Upload API 36 native evidence
+        id: upload
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api36-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/emulator/api36
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload API 36 failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api36-${{ needs.changes.outputs.source_short }}-failure-attempt-${{ github.run_attempt }}
+          path: artifacts/emulator/api36
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record API 36 evidence transport receipt
+        if: success()
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          ARTIFACT_NAME: distribution-android-api36-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python3 - artifacts/emulator/identity.json artifacts/emulator/api36 artifacts/emulator/api36/evidence-transport-receipt.json <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          identity_path, payload_root, output_path = map(pathlib.Path, sys.argv[1:])
+          artifact_id = os.environ["ARTIFACT_ID"]
+          artifact_digest = os.environ["ARTIFACT_DIGEST"].lower()
+          if not re.fullmatch(r"[1-9][0-9]*", artifact_id):
+              raise SystemExit("API 36 artifact id is not a positive decimal value")
+          if not re.fullmatch(r"[0-9a-f]{64}", artifact_digest):
+              raise SystemExit("API 36 artifact digest is not a lowercase SHA-256 value")
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          payloads = []
+          for name in (
+              "evidence.json",
+              "download-transport.json",
+              "android-api36-emulator.log",
+              "android-api36-logcat.txt",
+          ):
+              path = payload_root / name
+              payloads.append({"fileName": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+          receipt = {
+              "schemaVersion": 1,
+              "kind": "distribution-evidence-transport-receipt",
+              "identity": {
+                  key: identity[key]
+                  for key in (
+                      "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                      "manifestSha256", "supportMatrixSha256", "signatureProfile",
+                  )
+              },
+              "artifact": {
+                  "name": os.environ["ARTIFACT_NAME"],
+                  "id": artifact_id,
+                  "digest": artifact_digest,
+                  "retentionDays": 7,
+              },
+              "payloads": payloads,
+              "productionReady": False,
+          }
+          output_path.write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload API 36 evidence transport receipt
+        if: success()
+        id: upload_receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-android-api36-${{ needs.changes.outputs.source_short }}-attempt-${{ github.run_attempt }}-receipt
+          path: artifacts/emulator/api36/evidence-transport-receipt.json
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+  distribution-verdict:
+    name: distribution-verdict
+    needs:
+      - changes
+      - contract
+      - windows_x64
+      - linux_x64
+      - macos_x64
+      - macos_arm64
+      - android_build
+      - android_api23
+      - android_api36
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Inspect every producer result
+        id: inspect
+        shell: bash
+        env:
+          RELEVANT: ${{ needs.changes.outputs.relevant }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CONTRACT_RESULT: ${{ needs.contract.result }}
+          WINDOWS_RESULT: ${{ needs.windows_x64.result }}
+          LINUX_RESULT: ${{ needs.linux_x64.result }}
+          MACOS_X64_RESULT: ${{ needs.macos_x64.result }}
+          MACOS_ARM64_RESULT: ${{ needs.macos_arm64.result }}
+          ANDROID_BUILD_RESULT: ${{ needs.android_build.result }}
+          ANDROID_API23_RESULT: ${{ needs.android_api23.result }}
+          ANDROID_API36_RESULT: ${{ needs.android_api36.result }}
+          CONTRACT_NAME: ${{ needs.contract.outputs.artifact_name }}
+          CONTRACT_ID: ${{ needs.contract.outputs.artifact_id }}
+          CONTRACT_DIGEST: ${{ needs.contract.outputs.artifact_digest }}
+          CONTRACT_RECEIPT_NAME: ${{ needs.contract.outputs.receipt_artifact_name }}
+          CONTRACT_RECEIPT_ID: ${{ needs.contract.outputs.receipt_artifact_id }}
+          CONTRACT_RECEIPT_DIGEST: ${{ needs.contract.outputs.receipt_artifact_digest }}
+          WINDOWS_NAME: ${{ needs.windows_x64.outputs.artifact_name }}
+          WINDOWS_ID: ${{ needs.windows_x64.outputs.artifact_id }}
+          WINDOWS_DIGEST: ${{ needs.windows_x64.outputs.artifact_digest }}
+          WINDOWS_RECEIPT_NAME: ${{ needs.windows_x64.outputs.receipt_artifact_name }}
+          WINDOWS_RECEIPT_ID: ${{ needs.windows_x64.outputs.receipt_artifact_id }}
+          WINDOWS_RECEIPT_DIGEST: ${{ needs.windows_x64.outputs.receipt_artifact_digest }}
+          LINUX_NAME: ${{ needs.linux_x64.outputs.artifact_name }}
+          LINUX_ID: ${{ needs.linux_x64.outputs.artifact_id }}
+          LINUX_DIGEST: ${{ needs.linux_x64.outputs.artifact_digest }}
+          LINUX_RECEIPT_NAME: ${{ needs.linux_x64.outputs.receipt_artifact_name }}
+          LINUX_RECEIPT_ID: ${{ needs.linux_x64.outputs.receipt_artifact_id }}
+          LINUX_RECEIPT_DIGEST: ${{ needs.linux_x64.outputs.receipt_artifact_digest }}
+          MACOS_X64_NAME: ${{ needs.macos_x64.outputs.artifact_name }}
+          MACOS_X64_ID: ${{ needs.macos_x64.outputs.artifact_id }}
+          MACOS_X64_DIGEST: ${{ needs.macos_x64.outputs.artifact_digest }}
+          MACOS_X64_RECEIPT_NAME: ${{ needs.macos_x64.outputs.receipt_artifact_name }}
+          MACOS_X64_RECEIPT_ID: ${{ needs.macos_x64.outputs.receipt_artifact_id }}
+          MACOS_X64_RECEIPT_DIGEST: ${{ needs.macos_x64.outputs.receipt_artifact_digest }}
+          MACOS_ARM64_NAME: ${{ needs.macos_arm64.outputs.artifact_name }}
+          MACOS_ARM64_ID: ${{ needs.macos_arm64.outputs.artifact_id }}
+          MACOS_ARM64_DIGEST: ${{ needs.macos_arm64.outputs.artifact_digest }}
+          MACOS_ARM64_RECEIPT_NAME: ${{ needs.macos_arm64.outputs.receipt_artifact_name }}
+          MACOS_ARM64_RECEIPT_ID: ${{ needs.macos_arm64.outputs.receipt_artifact_id }}
+          MACOS_ARM64_RECEIPT_DIGEST: ${{ needs.macos_arm64.outputs.receipt_artifact_digest }}
+          ANDROID_NAME: ${{ needs.android_build.outputs.artifact_name }}
+          ANDROID_ID: ${{ needs.android_build.outputs.artifact_id }}
+          ANDROID_DIGEST: ${{ needs.android_build.outputs.artifact_digest }}
+          ANDROID_RECEIPT_NAME: ${{ needs.android_build.outputs.receipt_artifact_name }}
+          ANDROID_RECEIPT_ID: ${{ needs.android_build.outputs.receipt_artifact_id }}
+          ANDROID_RECEIPT_DIGEST: ${{ needs.android_build.outputs.receipt_artifact_digest }}
+          ANDROID_API23_NAME: ${{ needs.android_api23.outputs.artifact_name }}
+          ANDROID_API23_ID: ${{ needs.android_api23.outputs.artifact_id }}
+          ANDROID_API23_DIGEST: ${{ needs.android_api23.outputs.artifact_digest }}
+          ANDROID_API23_RECEIPT_NAME: ${{ needs.android_api23.outputs.receipt_artifact_name }}
+          ANDROID_API23_RECEIPT_ID: ${{ needs.android_api23.outputs.receipt_artifact_id }}
+          ANDROID_API23_RECEIPT_DIGEST: ${{ needs.android_api23.outputs.receipt_artifact_digest }}
+          ANDROID_API36_NAME: ${{ needs.android_api36.outputs.artifact_name }}
+          ANDROID_API36_ID: ${{ needs.android_api36.outputs.artifact_id }}
+          ANDROID_API36_DIGEST: ${{ needs.android_api36.outputs.artifact_digest }}
+          ANDROID_API36_RECEIPT_NAME: ${{ needs.android_api36.outputs.receipt_artifact_name }}
+          ANDROID_API36_RECEIPT_ID: ${{ needs.android_api36.outputs.receipt_artifact_id }}
+          ANDROID_API36_RECEIPT_DIGEST: ${{ needs.android_api36.outputs.receipt_artifact_digest }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/distribution-producer-results.json" <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          results = {
+              "changes": os.environ["CHANGES_RESULT"],
+              "contract": os.environ["CONTRACT_RESULT"],
+              "windows_x64": os.environ["WINDOWS_RESULT"],
+              "linux_x64": os.environ["LINUX_RESULT"],
+              "macos_x64": os.environ["MACOS_X64_RESULT"],
+              "macos_arm64": os.environ["MACOS_ARM64_RESULT"],
+              "android_build": os.environ["ANDROID_BUILD_RESULT"],
+              "android_api23": os.environ["ANDROID_API23_RESULT"],
+              "android_api36": os.environ["ANDROID_API36_RESULT"],
+          }
+          relevant = os.environ.get("RELEVANT", "")
+          if results["changes"] != "success":
+              applicable = True
+              producers_ok = False
+              status = "failure"
+              reason = "distribution-scope did not complete successfully"
+          elif relevant == "false":
+              mandatory = {name: value for name, value in results.items() if name != "changes"}
+              unexpected = [f"{name}={value}" for name, value in mandatory.items() if value != "skipped"]
+              if unexpected:
+                  applicable = True
+                  producers_ok = False
+                  status = "failure"
+                  reason = "unexpected producer result for irrelevant change: " + "; ".join(unexpected)
+              else:
+                  applicable = False
+                  producers_ok = True
+                  status = "notApplicable"
+                  reason = "pull request does not change the distribution contract surface"
+          elif relevant == "true":
+              applicable = True
+              mandatory = {name: value for name, value in results.items() if name != "changes"}
+              producers_ok = all(value == "success" for value in mandatory.values())
+              status = "pendingAggregate" if producers_ok else "failure"
+              failed = [f"{name}={value}" for name, value in mandatory.items() if value != "success"]
+              reason = "all mandatory producers passed" if producers_ok else "; ".join(failed)
+          else:
+              applicable = True
+              producers_ok = False
+              status = "failure"
+              reason = f"invalid relevant output: {relevant!r}"
+
+          artifact_prefixes = (
+              ("contract", "CONTRACT"),
+              ("windows_x64", "WINDOWS"),
+              ("linux_x64", "LINUX"),
+              ("macos_x64", "MACOS_X64"),
+              ("macos_arm64", "MACOS_ARM64"),
+              ("android_build", "ANDROID"),
+              ("android_api23", "ANDROID_API23"),
+              ("android_api36", "ANDROID_API36"),
+          )
+          artifacts = {
+              name: {
+                  "main": {
+                      "name": os.environ.get(f"{prefix}_NAME", ""),
+                      "id": os.environ.get(f"{prefix}_ID", ""),
+                      "digest": os.environ.get(f"{prefix}_DIGEST", ""),
+                  },
+                  "receipt": {
+                      "name": os.environ.get(f"{prefix}_RECEIPT_NAME", ""),
+                      "id": os.environ.get(f"{prefix}_RECEIPT_ID", ""),
+                      "digest": os.environ.get(f"{prefix}_RECEIPT_DIGEST", ""),
+                  },
+              }
+              for name, prefix in artifact_prefixes
+          }
+          artifact_ids = []
+          if applicable and producers_ok:
+              transport_errors = []
+              seen_names = set()
+              seen_ids = set()
+              for producer_name, _ in artifact_prefixes:
+                  for transport_role in ("main", "receipt"):
+                      transport = artifacts[producer_name][transport_role]
+                      name = transport["name"]
+                      artifact_id = transport["id"]
+                      digest = transport["digest"]
+                      label = f"{producer_name}/{transport_role}"
+                      if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,254}", name):
+                          transport_errors.append(f"{label} invalid name={name!r}")
+                      elif name in seen_names:
+                          transport_errors.append(f"{label} duplicate name={name!r}")
+                      else:
+                          seen_names.add(name)
+                      if not re.fullmatch(r"[1-9][0-9]*", artifact_id):
+                          transport_errors.append(f"{label} invalid id={artifact_id!r}")
+                      elif artifact_id in seen_ids:
+                          transport_errors.append(f"{label} duplicate id={artifact_id!r}")
+                      else:
+                          seen_ids.add(artifact_id)
+                          artifact_ids.append(artifact_id)
+                      if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                          transport_errors.append(f"{label} invalid digest={digest!r}")
+              if transport_errors:
+                  producers_ok = False
+                  status = "failure"
+                  reason = "invalid producer artifact outputs: " + "; ".join(transport_errors)
+                  artifact_ids = []
+          payload = {
+              "schemaVersion": 1,
+              "kind": "distribution-producer-results",
+              "status": status,
+              "reason": reason,
+              "relevant": relevant,
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowSha": os.environ["WORKFLOW_SHA"],
+              "eventName": os.environ["EVENT_NAME"],
+              "pullRequest": {
+                  "headSha": os.environ.get("PR_HEAD_SHA", ""),
+                  "baseSha": os.environ.get("PR_BASE_SHA", ""),
+              },
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "results": results,
+              "artifacts": artifacts,
+              "productionReady": False,
+          }
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"applicable={str(applicable).lower()}\n")
+              stream.write(f"producers_ok={str(producers_ok).lower()}\n")
+              stream.write(f"status={status}\n")
+              stream.write(f"source_short={os.environ['GITHUB_SHA'][:12]}\n")
+              stream.write(f"artifact_ids={','.join(artifact_ids)}\n")
+          PY
+
+      - name: Report not-applicable verdict
+        if: steps.inspect.outputs.applicable == 'false'
+        shell: bash
+        run: |
+          {
+            echo "## Distribution validation"
+            echo
+            echo "Result: notApplicable (no distribution-relevant files changed)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout exact source for aggregate
+        if: steps.inspect.outputs.applicable == 'true'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Stage producer inspection evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/verdict
+          cp "$RUNNER_TEMP/distribution-producer-results.json" artifacts/verdict/producer-results.json
+
+      - name: Resolve aggregate release identity
+        if: steps.inspect.outputs.producers_ok == 'true'
+        shell: pwsh
+        env:
+          RAW_TAG: ${{ needs.changes.outputs.raw_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -cne '${{ github.sha }}') { throw "Aggregate HEAD $head does not match source SHA ${{ github.sha }}." }
+          pwsh -NoProfile -File scripts/Resolve-ReleaseIdentity.ps1 `
+            -RawTag $env:RAW_TAG -SourceSha $env:SOURCE_SHA -WorkflowSha $env:WORKFLOW_SHA `
+            -TagBinding notApplicable -AndroidVersionCode $env:ANDROID_VERSION_CODE -AndroidVersionCodePolicy ci-test `
+            -Manifest distribution/release-assets.json -SupportMatrix distribution/support-matrix.json `
+            -OutputPath artifacts/verdict/identity.json
+
+      - name: Download all exact producer artifacts (attempt 1 of 2)
+        id: download_all_1
+        if: steps.inspect.outputs.producers_ok == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ steps.inspect.outputs.artifact_ids }}
+          path: artifacts/download
+          merge-multiple: false
+
+      - name: Clean failed aggregate transport attempt
+        if: steps.inspect.outputs.producers_ok == 'true' && steps.download_all_1.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf -- artifacts/download
+          mkdir -p artifacts/download
+
+      - name: Download all exact producer artifacts (attempt 2 of 2)
+        id: download_all_2
+        if: steps.inspect.outputs.producers_ok == 'true' && steps.download_all_1.outcome != 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ steps.inspect.outputs.artifact_ids }}
+          path: artifacts/download
+          merge-multiple: false
+
+      - name: Require exact artifact set after bounded transport
+        if: steps.inspect.outputs.producers_ok == 'true'
+        shell: bash
+        env:
+          FIRST_OUTCOME: ${{ steps.download_all_1.outcome }}
+          SECOND_OUTCOME: ${{ steps.download_all_2.outcome }}
+        run: |
+          set -euo pipefail
+          python3 - \
+            artifacts/verdict/identity.json \
+            artifacts/verdict/download-transport.json \
+            "$FIRST_OUTCOME" "$SECOND_OUTCOME" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          identity_path, output_path = map(pathlib.Path, sys.argv[1:3])
+          first, second = sys.argv[3:]
+          second = second or "skipped"
+          passed = first == "success" or second == "success"
+          selected = 1 if first == "success" else (2 if second == "success" else 0)
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          payload = {
+              "schemaVersion": 1,
+              "kind": "distribution-download-transport",
+              "status": "pass" if passed else "failure",
+              "scope": "distribution-aggregate",
+              "identity": {
+                  key: identity[key]
+                  for key in (
+                      "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                      "manifestSha256", "supportMatrixSha256", "signatureProfile",
+                  )
+              },
+              "retry": {
+                  "rule": "bounded-clean-retry",
+                  "classification": "none" if first == "success" else "transient-transport",
+                  "maxAttempts": 2,
+                  "firstOutcome": first,
+                  "secondOutcome": second,
+                  "selectedAttempt": selected,
+                  "cleanupBeforeAttempt2": "completed" if first != "success" else "notRequired",
+                  "exhausted": not passed,
+              },
+              "productionReady": False,
+          }
+          output_path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+          if not passed:
+              raise SystemExit("Distribution artifact download failed after two clean attempts")
+          PY
+          python3 - artifacts/download artifacts/verdict/producer-results.json <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root, producer_path = map(pathlib.Path, sys.argv[1:])
+          producers = json.loads(producer_path.read_text(encoding="utf-8-sig"))
+          expected = {
+              transport["name"]
+              for producer in producers["artifacts"].values()
+              for transport in producer.values()
+          }
+          if len(expected) != 16:
+              raise SystemExit(f"Expected 16 unique producer artifact names, found {len(expected)}")
+          root_entries = list(root.iterdir())
+          non_directories = sorted(path.name for path in root_entries if not path.is_dir())
+          if non_directories:
+              raise SystemExit(f"Unexpected non-directory download entries: {non_directories}")
+          actual = {path.name for path in root_entries}
+          if actual != expected:
+              raise SystemExit(
+                  f"Downloaded artifact set mismatch; missing={sorted(expected - actual)}, "
+                  f"unexpected={sorted(actual - expected)}"
+              )
+          PY
+          python3 - \
+            "artifacts/download/${{ needs.contract.outputs.artifact_name }}/identity.json" \
+            artifacts/verdict/identity.json <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          contract = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
+          aggregate = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8-sig"))
+          if contract != aggregate:
+              raise SystemExit("Contract and aggregate release identities differ")
+          PY
+          python3 - \
+            artifacts/download \
+            artifacts/verdict/identity.json \
+            artifacts/verdict/producer-results.json <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import re
+          import sys
+
+          download, identity_path, producer_path = map(pathlib.Path, sys.argv[1:4])
+          identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+          producers = json.loads(producer_path.read_text(encoding="utf-8-sig"))
+          identity_keys = (
+              "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+              "manifestSha256", "supportMatrixSha256", "signatureProfile",
+          )
+          expected_identity = {key: identity[key] for key in identity_keys}
+          receipt_plan = {
+              "contract": {"identity.json", "contract-evidence.json"},
+              "android_api23": {
+                  "evidence.json", "download-transport.json",
+                  "android-api23-emulator.log", "android-api23-logcat.txt",
+              },
+              "android_api36": {
+                  "evidence.json", "download-transport.json",
+                  "android-api36-emulator.log", "android-api36-logcat.txt",
+              },
+          }
+          for producer_name, expected_payloads in receipt_plan.items():
+              producer_transport = producers["artifacts"][producer_name]
+              expected_transport = producer_transport["main"]
+              receipt_transport = producer_transport["receipt"]
+              artifact_name = expected_transport["name"]
+              receipt_root = download / receipt_transport["name"]
+              receipt_files = {
+                  path.relative_to(receipt_root).as_posix(): path
+                  for path in receipt_root.rglob("*")
+                  if path.is_file()
+              }
+              if set(receipt_files) != {"evidence-transport-receipt.json"}:
+                  raise SystemExit(f"Unexpected {producer_name} receipt closure: {sorted(receipt_files)}")
+              receipt = json.loads(receipt_files["evidence-transport-receipt.json"].read_text(encoding="utf-8-sig"))
+              if receipt.get("schemaVersion") != 1 or receipt.get("kind") != "distribution-evidence-transport-receipt":
+                  raise SystemExit(f"Invalid {producer_name} evidence receipt kind/schema")
+              if receipt.get("identity") != expected_identity:
+                  raise SystemExit(f"{producer_name} receipt identity does not match aggregate identity")
+              artifact = receipt.get("artifact", {})
+              if artifact != {
+                  "name": expected_transport["name"],
+                  "id": expected_transport["id"],
+                  "digest": expected_transport["digest"].lower(),
+                  "retentionDays": 7,
+              }:
+                  raise SystemExit(f"{producer_name} receipt does not bind exact workflow artifact outputs")
+              if artifact["name"] != artifact_name:
+                  raise SystemExit(f"Unexpected {producer_name} artifact name: {artifact['name']}")
+              if not re.fullmatch(r"[1-9][0-9]*", artifact["id"]):
+                  raise SystemExit(f"Invalid {producer_name} artifact id")
+              if not re.fullmatch(r"[0-9a-f]{64}", artifact["digest"]):
+                  raise SystemExit(f"Invalid {producer_name} artifact digest")
+              payload_root = download / artifact_name
+              actual_payloads = {
+                  path.relative_to(payload_root).as_posix()
+                  for path in payload_root.rglob("*")
+                  if path.is_file()
+              }
+              if actual_payloads != expected_payloads:
+                  raise SystemExit(
+                      f"Unexpected {producer_name} downloaded payload closure; "
+                      f"missing={sorted(expected_payloads - actual_payloads)}, "
+                      f"unexpected={sorted(actual_payloads - expected_payloads)}"
+                  )
+              payloads = receipt.get("payloads", [])
+              if {entry.get("fileName") for entry in payloads} != expected_payloads or len(payloads) != len(expected_payloads):
+                  raise SystemExit(f"Unexpected {producer_name} receipt payload closure")
+              payloads_by_name = {entry["fileName"]: entry for entry in payloads}
+              for entry in payloads:
+                  name = entry["fileName"]
+                  if pathlib.PurePath(name).name != name:
+                      raise SystemExit(f"Unsafe receipt payload name: {name!r}")
+                  digest = hashlib.sha256((payload_root / name).read_bytes()).hexdigest()
+                  if entry.get("sha256") != digest:
+                      raise SystemExit(f"Receipt payload hash mismatch: {producer_name}/{name}")
+              if producer_name in {"android_api23", "android_api36"}:
+                  api = "23" if producer_name == "android_api23" else "36"
+                  evidence = json.loads((payload_root / "evidence.json").read_text(encoding="utf-8-sig"))
+                  runtime = evidence.get("runtime", {})
+                  log_plan = {
+                      "logcat": f"android-api{api}-logcat.txt",
+                      "emulatorLog": f"android-api{api}-emulator.log",
+                  }
+                  for field, expected_name in log_plan.items():
+                      reference = runtime.get(field, {})
+                      if set(reference) != {"fileName", "sha256", "bytes"}:
+                          raise SystemExit(f"Invalid {producer_name} runtime.{field} reference shape")
+                      if reference.get("fileName") != expected_name:
+                          raise SystemExit(f"Invalid {producer_name} runtime.{field} file name")
+                      log_path = payload_root / expected_name
+                      actual_bytes = log_path.stat().st_size
+                      actual_digest = hashlib.sha256(log_path.read_bytes()).hexdigest()
+                      if reference.get("bytes") != actual_bytes or reference.get("sha256") != actual_digest:
+                          raise SystemExit(f"{producer_name} runtime.{field} does not bind the exact sidecar bytes")
+                      if payloads_by_name[expected_name].get("sha256") != actual_digest:
+                          raise SystemExit(f"{producer_name} runtime.{field} and receipt digest differ")
+              if receipt.get("productionReady") is not False:
+                  raise SystemExit(f"{producer_name} receipt must remain non-productionReady")
+          PY
+
+      - name: Restore Linux tar mode and re-hash exact AppImage
+        if: steps.inspect.outputs.producers_ok == 'true'
+        shell: bash
+        env:
+          LINUX_ARTIFACT_NAME: ${{ needs.linux_x64.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          archive="artifacts/download/${LINUX_ARTIFACT_NAME}/linux-candidate.tar"
+          restore_root=artifacts/restored/linux
+          test -s "$archive"
+          rm -rf -- "$restore_root"
+          mkdir -p "$restore_root"
+          python3 - "$archive" <<'PY'
+          import pathlib
+          import sys
+          import tarfile
+
+          archive = pathlib.Path(sys.argv[1])
+          appimage = []
+          seen = set()
+          with tarfile.open(archive, "r:*") as stream:
+              for member in stream.getmembers():
+                  relative = pathlib.PurePosixPath(member.name)
+                  if relative.is_absolute() or ".." in relative.parts:
+                      raise SystemExit(f"Unsafe tar member: {member.name}")
+                  normalized = relative.as_posix()
+                  if normalized in seen:
+                      raise SystemExit(f"Duplicate tar member: {member.name}")
+                  seen.add(normalized)
+                  if not (member.isdir() or member.isfile()):
+                      raise SystemExit(f"Unsupported tar member type: {member.name}")
+                  if normalized.lstrip("./") == "assets/Unlimotion.AppImage":
+                      appimage.append(member)
+          if len(appimage) != 1:
+              raise SystemExit(f"Expected one AppImage tar member, found {len(appimage)}")
+          if appimage[0].mode != 0o755:
+              raise SystemExit(f"Stored AppImage mode is {oct(appimage[0].mode)}, expected 0o755")
+          PY
+          tar -xf "$archive" -C "$restore_root"
+          restored_appimage="$restore_root/assets/Unlimotion.AppImage"
+          test "$(stat -c '%a' "$restored_appimage")" = 755
+          expected_sha="$(jq -er '.artifacts[] | select(.assetId == "linux-appimage-x64") | .sha256' "$restore_root/evidence/artifact-evidence.json")"
+          actual_sha="$(sha256sum "$restored_appimage" | awk '{print $1}')"
+          test "$actual_sha" = "$expected_sha"
+
+      - name: Merge platform evidence and aggregate 22 exact assets
+        id: aggregate
+        if: steps.inspect.outputs.producers_ok == 'true'
+        shell: pwsh
+        run: |
+          $download = 'artifacts/download'
+          $identity = 'artifacts/verdict/identity.json'
+          $envelopes = 'artifacts/verdict/envelopes'
+          New-Item -ItemType Directory -Force -Path $envelopes | Out-Null
+
+          $windowsName = '${{ needs.windows_x64.outputs.artifact_name }}'
+          $windowsReceiptName = '${{ needs.windows_x64.outputs.receipt_artifact_name }}'
+          $windowsRoot = Join-Path $download $windowsName
+          $windows = @{
+            Mode = 'MergePlatform'
+            Identity = $identity
+            EvidencePath = @(Join-Path $windowsRoot 'evidence/artifact-evidence.json')
+            NativeEvidencePath = @(Join-Path $windowsRoot 'evidence/windows-native.json')
+            TransportReceiptPath = Join-Path (Join-Path $download $windowsReceiptName) 'transport-receipt.json'
+            ArtifactTransportName = '${{ needs.windows_x64.outputs.artifact_name }}'
+            ArtifactTransportId = '${{ needs.windows_x64.outputs.artifact_id }}'
+            ArtifactTransportDigest = '${{ needs.windows_x64.outputs.artifact_digest }}'
+            Evidence = Join-Path $envelopes 'windows-x64.json'
+            Platform = 'windows'
+            Architecture = 'x64'
+          }
+          & ./scripts/Test-DistributionArtifact.ps1 @windows
+
+          $linuxName = '${{ needs.linux_x64.outputs.artifact_name }}'
+          $linuxReceiptName = '${{ needs.linux_x64.outputs.receipt_artifact_name }}'
+          $linuxRoot = 'artifacts/restored/linux'
+          $linuxNative = @(
+            'linux-build.json',
+            'linux-metadata.json',
+            'debian-12-clean.json',
+            'debian-13-clean.json',
+            'debian-12-upgrade.json',
+            'debian-13-upgrade.json',
+            'appimage-debian-12.json',
+            'appimage-debian-13.json',
+            'missing-runtime-dependency-debian-12.json',
+            'missing-runtime-dependency-debian-13.json'
+          ) | ForEach-Object { Join-Path $linuxRoot "evidence/$_" }
+          $linux = @{
+            Mode = 'MergePlatform'
+            Identity = $identity
+            EvidencePath = @(Join-Path $linuxRoot 'evidence/artifact-evidence.json')
+            NativeEvidencePath = $linuxNative
+            TransportReceiptPath = Join-Path (Join-Path $download $linuxReceiptName) 'transport-receipt.json'
+            TransportArchivePath = Join-Path (Join-Path $download $linuxName) 'linux-candidate.tar'
+            ArtifactTransportName = '${{ needs.linux_x64.outputs.artifact_name }}'
+            ArtifactTransportId = '${{ needs.linux_x64.outputs.artifact_id }}'
+            ArtifactTransportDigest = '${{ needs.linux_x64.outputs.artifact_digest }}'
+            Evidence = Join-Path $envelopes 'linux-x64.json'
+            Platform = 'linux'
+            Architecture = 'x64'
+          }
+          & ./scripts/Test-DistributionArtifact.ps1 @linux
+
+          foreach ($architecture in @('x64', 'arm64')) {
+            if ($architecture -ceq 'x64') {
+              $transportName = '${{ needs.macos_x64.outputs.artifact_name }}'
+              $receiptName = '${{ needs.macos_x64.outputs.receipt_artifact_name }}'
+              $transportId = '${{ needs.macos_x64.outputs.artifact_id }}'
+              $transportDigest = '${{ needs.macos_x64.outputs.artifact_digest }}'
+            }
+            else {
+              $transportName = '${{ needs.macos_arm64.outputs.artifact_name }}'
+              $receiptName = '${{ needs.macos_arm64.outputs.receipt_artifact_name }}'
+              $transportId = '${{ needs.macos_arm64.outputs.artifact_id }}'
+              $transportDigest = '${{ needs.macos_arm64.outputs.artifact_digest }}'
+            }
+            $macRoot = Join-Path $download $transportName
+            $mac = @{
+              Mode = 'MergePlatform'
+              Identity = $identity
+              EvidencePath = @(Join-Path $macRoot 'evidence/artifact-evidence.json')
+              NativeEvidencePath = @(Join-Path $macRoot 'evidence/macos-native.json')
+              TransportReceiptPath = Join-Path (Join-Path $download $receiptName) 'transport-receipt.json'
+              ArtifactTransportName = $transportName
+              ArtifactTransportId = $transportId
+              ArtifactTransportDigest = $transportDigest
+              Evidence = Join-Path $envelopes "macos-$architecture.json"
+              Platform = 'macos'
+              Architecture = $architecture
+            }
+            & ./scripts/Test-DistributionArtifact.ps1 @mac
+          }
+
+          $androidName = '${{ needs.android_build.outputs.artifact_name }}'
+          $androidReceiptName = '${{ needs.android_build.outputs.receipt_artifact_name }}'
+          $androidApi23Name = '${{ needs.android_api23.outputs.artifact_name }}'
+          $androidApi36Name = '${{ needs.android_api36.outputs.artifact_name }}'
+          $androidRoot = Join-Path $download $androidName
+          $androidSidecars = 'artifacts/verdict/android-native-sidecars'
+          New-Item -ItemType Directory -Force -Path $androidSidecars | Out-Null
+          Copy-Item (Join-Path (Join-Path $download $androidApi23Name) 'evidence.json') (Join-Path $androidSidecars 'android-api23-emulator.json')
+          Copy-Item (Join-Path (Join-Path $download $androidApi23Name) 'download-transport.json') (Join-Path $androidSidecars 'android-api23-download-transport.json')
+          Copy-Item (Join-Path (Join-Path $download $androidApi36Name) 'evidence.json') (Join-Path $androidSidecars 'android-api36-emulator.json')
+          Copy-Item (Join-Path (Join-Path $download $androidApi36Name) 'download-transport.json') (Join-Path $androidSidecars 'android-api36-download-transport.json')
+          $android = @{
+            Mode = 'MergePlatform'
+            Identity = $identity
+            EvidencePath = @(
+              (Join-Path $androidRoot 'evidence/artifact-evidence-arm64.json'),
+              (Join-Path $androidRoot 'evidence/artifact-evidence-x64.json')
+            )
+            NativeEvidencePath = @(
+              (Join-Path $androidRoot 'evidence/android-artifact.json'),
+              (Join-Path $androidRoot 'evidence/native-cache-evidence.json'),
+              (Join-Path $androidRoot 'evidence/native-inputs.json'),
+              (Join-Path $androidRoot 'evidence/native-provenance.json'),
+              (Join-Path $androidSidecars 'android-api23-emulator.json'),
+              (Join-Path $androidSidecars 'android-api23-download-transport.json'),
+              (Join-Path $androidSidecars 'android-api36-emulator.json'),
+              (Join-Path $androidSidecars 'android-api36-download-transport.json')
+            )
+            TransportReceiptPath = Join-Path (Join-Path $download $androidReceiptName) 'transport-receipt.json'
+            ArtifactTransportName = '${{ needs.android_build.outputs.artifact_name }}'
+            ArtifactTransportId = '${{ needs.android_build.outputs.artifact_id }}'
+            ArtifactTransportDigest = '${{ needs.android_build.outputs.artifact_digest }}'
+            Evidence = Join-Path $envelopes 'android-multi.json'
+            Platform = 'android'
+            Architecture = 'multi'
+          }
+          & ./scripts/Test-DistributionArtifact.ps1 @android
+
+          $allAssetIds = @(
+            'windows-feed-legacy',
+            'windows-feed-json',
+            'linux-feed-json',
+            'macos-x64-feed-json',
+            'macos-arm64-feed-json',
+            'windows-updater-package-x64',
+            'linux-updater-package-x64',
+            'macos-x64-updater-package',
+            'macos-arm64-updater-package',
+            'windows-setup-x64',
+            'windows-portable-x64',
+            'windows-portable-x64-legacy',
+            'linux-deb-x64',
+            'linux-appimage-x64',
+            'macos-x64-setup',
+            'macos-x64-portable',
+            'macos-x64-pkg-legacy',
+            'macos-arm64-setup',
+            'macos-arm64-portable',
+            'macos-arm64-pkg-legacy',
+            'android-arm64-apk',
+            'android-x64-apk'
+          )
+          $aggregate = @{
+            Mode = 'Aggregate'
+            Identity = $identity
+            EvidencePath = @(
+              (Join-Path $envelopes 'windows-x64.json'),
+              (Join-Path $envelopes 'linux-x64.json'),
+              (Join-Path $envelopes 'macos-x64.json'),
+              (Join-Path $envelopes 'macos-arm64.json'),
+              (Join-Path $envelopes 'android-multi.json')
+            )
+            AssetId = $allAssetIds
+            OutputChecksums = 'artifacts/verdict/SHA256SUMS.txt'
+            Evidence = 'artifacts/verdict/distribution-evidence.json'
+          }
+          & ./scripts/Test-DistributionArtifact.ps1 @aggregate
+
+      - name: Validate aggregate checksum closure
+        id: checksum_closure
+        if: steps.inspect.outputs.producers_ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - \
+            artifacts/verdict/identity.json \
+            artifacts/verdict/SHA256SUMS.txt \
+            artifacts/verdict/distribution-evidence.json \
+            artifacts/verdict/download-transport.json <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          identity_path, checksums_path, evidence_path, transport_path = map(pathlib.Path, sys.argv[1:])
+          identity = json.loads(identity_path.read_text(encoding="utf-8"))
+          evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+          transport = json.loads(transport_path.read_text(encoding="utf-8"))
+          expected_names = set(identity["filenamePlan"]["byAssetId"].values())
+          lines = checksums_path.read_text(encoding="utf-8").splitlines()
+          parsed = {}
+          for line in lines:
+              match = re.fullmatch(r"([0-9a-f]{64})  ([^/\\\x00-\x1f]+)", line)
+              if not match:
+                  raise SystemExit(f"Invalid SHA256SUMS line: {line!r}")
+              digest, name = match.groups()
+              if name in parsed:
+                  raise SystemExit(f"Duplicate SHA256SUMS filename: {name}")
+              parsed[name] = digest
+          if set(parsed) != expected_names or len(parsed) != 22:
+              raise SystemExit(
+                  f"SHA256SUMS closure mismatch; missing={sorted(expected_names - set(parsed))}, "
+                  f"unexpected={sorted(set(parsed) - expected_names)}"
+              )
+          if evidence.get("status") != "pass" or evidence.get("assetCount") != 22:
+              raise SystemExit("Aggregate evidence is not an exact 22-asset PASS")
+          if evidence.get("productionReady") is not False:
+              raise SystemExit("Stage-3 aggregate must remain non-productionReady")
+          expected_identity = {
+              key: identity[key]
+              for key in (
+                  "rawTag", "normalizedVersion", "sourceSha", "workflowSha", "tagBinding",
+                  "manifestSha256", "supportMatrixSha256", "signatureProfile",
+              )
+          }
+          if (
+              transport.get("schemaVersion") != 1
+              or transport.get("kind") != "distribution-download-transport"
+              or transport.get("status") != "pass"
+              or transport.get("scope") != "distribution-aggregate"
+              or transport.get("identity") != expected_identity
+              or transport.get("productionReady") is not False
+          ):
+              raise SystemExit("Aggregate download transport evidence is invalid")
+          retry = transport.get("retry", {})
+          valid_retry = (
+              retry.get("rule") == "bounded-clean-retry"
+              and retry.get("maxAttempts") == 2
+              and retry.get("exhausted") is False
+              and (
+                  (
+                      retry.get("firstOutcome") == "success"
+                      and retry.get("classification") == "none"
+                      and retry.get("secondOutcome") == "skipped"
+                      and retry.get("selectedAttempt") == 1
+                      and retry.get("cleanupBeforeAttempt2") == "notRequired"
+                  )
+                  or (
+                      retry.get("firstOutcome") == "failure"
+                      and retry.get("classification") == "transient-transport"
+                      and retry.get("secondOutcome") == "success"
+                      and retry.get("selectedAttempt") == 2
+                      and retry.get("cleanupBeforeAttempt2") == "completed"
+                  )
+              )
+          )
+          if not valid_retry:
+              raise SystemExit("Aggregate download retry evidence is invalid")
+          PY
+
+      - name: Write final machine-readable verdict
+        if: always()
+        shell: bash
+        env:
+          PRODUCERS_OK: ${{ steps.inspect.outputs.producers_ok }}
+          AGGREGATE_OUTCOME: ${{ steps.aggregate.outcome }}
+          CHECKSUM_OUTCOME: ${{ steps.checksum_closure.outcome }}
+        run: |
+          set -euo pipefail
+          python3 - artifacts/verdict/producer-results.json artifacts/verdict/verdict.json <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          producer_path, output_path = map(pathlib.Path, sys.argv[1:])
+          producers = json.loads(producer_path.read_text(encoding="utf-8"))
+          not_applicable = producers["status"] == "notApplicable"
+          passed = (
+              not not_applicable
+              and producers["status"] == "pendingAggregate"
+              and os.environ["PRODUCERS_OK"] == "true"
+              and os.environ["AGGREGATE_OUTCOME"] == "success"
+              and os.environ["CHECKSUM_OUTCOME"] == "success"
+          )
+          payload = {
+              "schemaVersion": 1,
+              "kind": "distribution-final-verdict",
+              "status": "notApplicable" if not_applicable else ("pass" if passed else "failure"),
+              "reason": producers["reason"],
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowSha": producers["workflowSha"],
+              "eventName": producers["eventName"],
+              "pullRequest": producers["pullRequest"],
+              "workflowRunId": int(os.environ["GITHUB_RUN_ID"]),
+              "workflowRunAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "producerResults": producers["results"],
+              "aggregateOutcome": os.environ["AGGREGATE_OUTCOME"],
+              "checksumClosureOutcome": os.environ["CHECKSUM_OUTCOME"],
+              "assetCount": 22 if passed else 0,
+              "productionReady": False,
+          }
+          output_path.write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload final verdict evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distribution-verdict-${{ steps.inspect.outputs.source_short }}-attempt-${{ github.run_attempt }}
+          path: artifacts/verdict
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
+          compression-level: 0
+
+      - name: Enforce stable fail-closed verdict
+        if: always()
+        shell: bash
+        env:
+          APPLICABLE: ${{ steps.inspect.outputs.applicable }}
+          PRODUCERS_OK: ${{ steps.inspect.outputs.producers_ok }}
+          AGGREGATE_OUTCOME: ${{ steps.aggregate.outcome }}
+          CHECKSUM_OUTCOME: ${{ steps.checksum_closure.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "$APPLICABLE" == "false" ]]; then
+            exit 0
+          fi
+          if [[ "$PRODUCERS_OK" != "true" ]]; then
+            echo "One or more mandatory distribution producers failed or were skipped." >&2
+            exit 1
+          fi
+          if [[ "$AGGREGATE_OUTCOME" != "success" ]]; then
+            echo "Distribution aggregate did not complete successfully." >&2
+            exit 1
+          fi
+          if [[ "$CHECKSUM_OUTCOME" != "success" ]]; then
+            echo "Distribution checksum closure did not complete successfully." >&2
+            exit 1
+          fi
+          {
+            echo "## Distribution validation"
+            echo
+            echo "Result: pass (22 exact CI-only candidate assets; productionReady=false)."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -487,21 +487,21 @@ Stop rules для validation:
 7. Независимый этап может быть помечен `approved-deferred` только явным решением пользователя с причиной и влиянием на program completion; агент не пропускает этап молча.
 
 ### Этап 1. Срочная достоверность install-раздела
-- Child spec: `specs/YYYY-MM-DD-readme-install-safety.md`, где дата соответствует фактическому созданию.
+- Child spec: `specs/2026-07-17-readme-install-safety.md`.
 - Удалить опасные/ложные инструкции.
 - Добавить `/releases/latest`, актуальный asset overview и caveats.
 - Удалить встроенный backlog и hardcoded release expectations.
 - Проверить EN/RU parity, links и GitHub rendering.
 
 ### Этап 2. Контракт статусов и доступности
-- Child spec: `specs/YYYY-MM-DD-status-availability-contract.md`.
+- Child spec: `specs/2026-07-17-status-availability-contract.md`.
 - Сначала добавить/уточнить regression и UI tests.
 - Выровнять shared engine, ViewModel picker, unarchive и old status spec.
 - Закрепить lifecycle/availability/guard separation.
 - Получить visual evidence и полный test pass.
 
 ### Этап 3. Проверяемая distribution support matrix
-- Child spec: `specs/YYYY-MM-DD-distribution-support-contract.md`.
+- Child spec: `specs/2026-07-18-distribution-support-contract.md`.
 - Исправить run scripts.
 - Добавить canonical asset manifest и package validators.
 - В manifest/validators явно разделить raw release tag и normalized SemVer: current workflows смешивают эти значения в filenames, поэтому future `vMAJOR.MINOR.PATCH` tag обязан пройти naming dry-run до публикации.
@@ -783,19 +783,19 @@ Stop rules для validation:
   - Debian support matrix требует native/package smoke evidence.
 
 ### Post-EXEC Review
-- Статус: В процессе; stage 1 доставлен merged PR #274 (`8e34408`), stage 2 доставлен merged PR #277 (`75efc049`); Stage-3 child SPEC подготовлена на ветке `docs/distribution-support-contract`, EXEC ожидает отдельного approval; stages 4-10 pending
-- Scope reviewed: выполненный child package stage 1, фактический Stage-2 code/test/docs/UI-evidence diff, связь обоих packages с roadmap AC/exit criteria и отсутствие преждевременных изменений из stages 3+
-- Decision: stages 1-2 завершены. Stage 2 прошёл dependency/ancestry, implementation, full local validation, visual evidence, independent Post-EXEC re-review и green GitHub checks; PR #277 merged. Следующий разрешённый шаг — только review/approval Stage-3 child spec, не production EXEC
+- Статус: В процессе; stage 1 доставлен merged PR #274 (`8e34408`), stage 2 доставлен merged PR #277 (`75efc049`) и factual closeout PR #278 (`ad90260b`); Stage-3 child SPEC approved 2026-07-19, EXEC и локальная валидация выполняются на ветке `docs/distribution-support-contract`; draft PR, native matrix и финальный Post-EXEC ещё pending; stages 4-10 pending
+- Scope reviewed: выполненные packages stages 1-2, текущий Stage-3 implementation в утверждённом allowlist, локальные distribution/workflow/README/entrypoint gates и отсутствие преждевременной migration production publishers из Stage 4
+- Decision: stages 1-2 завершены. Stage 3 разрешён и находится в EXEC; локальный implementation package ещё не считается доставленным до rebase, draft PR, native Windows/Linux/macOS/Android matrix, финального independent re-review и merge. Stage 4 начинать нельзя
 - Review passes:
   - Scope/Evidence pass: stage 1 PASS; docs-only diff и local/live evidence соответствуют child spec.
   - Contract pass: stage 1 PASS; release, support, signing, updater и source-build claims сужены до проверяемого AS-IS.
   - Adversarial risk pass: stage 1 PASS; проверены drift latest release, unsupported-platform overclaim, `v`-tag edge case, mobile overflow и unrelated changes.
   - Role-Based pass: stage 1 PASS после release, tester/diff, copy/UX и delivery reviews.
   - Re-review after fixes / Fix and re-review: stage 1 PASS; copy findings исправлены и полный gate повторён.
-  - Stop decision: Stage-2 delivery закрыт; Stage-3 implementation не начинать без отдельной child SPEC, Post-SPEC PASS и approval.
-- Evidence inspected: stage-1 child Post-EXEC review, merged PR #275 (`118c2dc`) и PR #274 (`8e34408`), release/parity/structural/GFM reports и actual EN/RU GitHub render; для Stage 2 — 47 tracked content diffs + 12 new, targeted/full TRX/HTML, solution/Telegram builds, before/after MP4, six FlaUI screenshots, `ffprobe`/SHA metadata, independent API/docs reviews, PR #277 green checks и merge `75efc049`
-- Depth checklist: stage ownership, exit criteria, dependency/ancestry boundaries, API/schema compatibility, UI/accessibility/video evidence, rollback и residual routing проверены; незавершённые stages не объявлены выполненными
-- No-findings justification: stage 1 PASS после fixes; Stage-2 local verdict PASS после полного gate/re-review, новых BLOCKER/HIGH/MEDIUM findings нет; внешний delivery verdict появится после PR checks/merge; по stages 3-10 выводов PASS нет
+  - Stop decision: Stage-2 delivery закрыт; Stage-3 EXEC разрешён отдельным child approval, но его completion закрыта до native evidence и delivery gate.
+- Evidence inspected: stage-1 child Post-EXEC review, merged PR #275 (`118c2dc`) и PR #274 (`8e34408`), release/parity/structural/GFM reports и actual EN/RU GitHub render; для Stage 2 — 47 tracked content diffs + 12 new, targeted/full TRX/HTML, solution/Telegram builds, before/after MP4, six FlaUI screenshots, `ffprobe`/SHA metadata, independent API/docs reviews, PR #277 green checks, merge `75efc049` и factual closeout `ad90260b`; для Stage 3 — local manifest/support/evidence schemas, 22-asset inventory, 15 native cells, 99 negative fixtures, README/entrypoint/Android regression, actionlint/syntax и solution build
+- Depth checklist: stage ownership, exit criteria, dependency/ancestry boundaries, API/schema compatibility, UI applicability, rollback и residual routing проверены; Stage-3 native evidence/delivery и stages 4-10 не объявлены выполненными
+- No-findings justification: stage 1 и Stage 2 PASS после fixes; Stage-3 final PASS не выставлен — independent review нашёл test-fixture, executable-mode и journal-drift findings, все три исправления подтверждены targeted staged re-review без remaining findings, а native matrix остаётся pending
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -804,17 +804,20 @@ Stop rules для validation:
 | MEDIUM | stage 2 / lifecycle | Прямой `UnifiedTaskStorage.Dispose()` не атомарно блокирует уже начавшийся confirmation producer | Вынести в отдельную production-storage-lifecycle child spec; не расширять утверждённый Stage-2 scope | follow-up |
 | LOW | stage 2 / server | Existing server transport не даёт cross-client compare-and-swap | Сохранять честный `OutcomeUnknown`; проектировать server-authoritative wire command отдельно | follow-up |
 | LOW | stage 2 / UI infra | Fake Headless drawing backend не является pixel oracle; real-Skia capture нестабилен | Семантика остаётся в Headless, реальные screenshot/tooltip evidence — во FlaUI; harden capture отдельно | follow-up |
-| INFO | program | Stages 1-2 delivered; Stage-3 child SPEC подготовлена, но implementation не начата | Выполнить Post-SPEC gate и получить отдельное approval Stage 3 | approval pending |
+| MEDIUM | stage 3 / transport tests | Mixed attempts, exact 16 IDs, stale directory и receipt/runtime sidecar mutation были проверены только вручную | Исполнять embedded workflow Python в permanent positive/negative fixtures | fixed; targeted PASS |
+| MEDIUM | stage 3 / entrypoints | `run.linux.sh` и `run.macos.sh` оставались `100644` в index при требовании `100755` | Применить `git add --chmod=+x` и проверить staged mode | fixed; staged `100755` PASS |
+| MEDIUM | stage 3 / governance | Master/child Post-EXEC журналы утверждали, что approval и EXEC отсутствуют | Зафиксировать approved EXEC-in-progress и не заявлять native/final PASS | fixed; targeted PASS |
+| INFO | program | Stages 1-2 delivered; Stage-3 child approved и implementation проходит local gate | Завершить rebase/draft PR/native matrix/final Post-EXEC/merge; не начинать Stage 4 | in progress |
 
 - Fixed before final report: stage-1 copy/scope findings исправлены; Stage-2 re-review исправил public setter/API/numeric compatibility, default-interface fallback, blocker-reason priority, authoritative stale-history unarchive/precondition, honest failure copy, real tooltip/evidence, row-scoped selection, deterministic confirmation, recorder FPS, runtime localization и README opacity overclaim; program-level final report ещё не наступил
-- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted suites PASS, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds с 0 errors, diff/schema/API/video evidence и required GitHub checks PASS
-- Validation evidence: stage 1 — PASS/merged; Stage 2 — PASS/merged PR #277; Stage 3 — SPEC/review only, implementation pending approval; stages 4-10 — pending и не оценены как выполненные
-- Unrelated changes: в stages 1-2 не обнаружены; ignored UI evidence не входит в commits; Stage-3 branch создана от merged `origin/main@75efc049`
-- Needs human: отдельное approval Stage 3 после Post-SPEC PASS; последующие stages сохраняют собственные child approval gates
+- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted suites PASS, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds с 0 errors, diff/schema/API/video evidence и required GitHub checks PASS; Stage 3 pre-rebase — distribution contract PASS с 99 negatives, README 7 paired claims + negatives, root entrypoints, Android scripts, parsers/actionlint/embedded Python и `src/Unlimotion.sln` restore/build PASS с known warnings
+- Validation evidence: stage 1 — PASS/merged; Stage 2 — PASS/merged PR #277 и closeout PR #278; Stage 3 — local EXEC in progress, native CI/final review/merge pending; stages 4-10 — pending и не оценены как выполненные
+- Unrelated changes: в stages 1-2 не обнаружены; ignored UI evidence не входит в commits; Stage-3 branch создана от merged `origin/main@ad90260b`, который остаётся ancestor актуального `origin/main@ec9b206d`; upstream relevant-path overlap отсутствует
+- Needs human: Stage-3 approval уже получен; ASK-HUMAN обязателен только если native API-23 gate подтвердит несовместимость, требующую изменения support policy. Последующие stages сохраняют собственные child approval gates
 - Residual risks / follow-ups: production-storage lifecycle, server CAS, Headless pixel-capture infrastructure и stages 3-10 сохраняются
 
 ## Approval
-Master roadmap подтверждена пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. Stage 1 child spec и Stage-2 child spec отдельно подтверждены 2026-07-17. Approvals stages 3+ остаются обязательными.
+Master roadmap подтверждена пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. Stage 1 child spec и Stage-2 child spec отдельно подтверждены 2026-07-17. Stage-3 child spec отдельно подтверждена 2026-07-19. Approvals stages 4+ остаются обязательными.
 
 ## 20. Журнал действий агента
 
@@ -843,3 +846,6 @@ Master roadmap подтверждена пользователем 2026-07-17 т
 | EXEC | Закрыть Stage-2 local Post-EXEC gate | 1.00 | PR number, required checks и merge commit | Commit/push, draft PR, дождаться checks и завершить delivery | Нет для Stage 2 | Не применимо | Independent code/API и docs-parity reviews PASS; scope 47 tracked content diffs + 12 new, unrelated changes отсутствуют, residuals вынесены в child Post-EXEC | `specs/2026-07-17-status-availability-contract.md`, этот roadmap, local validation evidence |
 | EXEC | Завершить Stage-2 delivery | 1.00 | Нет | Создать Stage-3 child SPEC от merged main | Нет | Не применимо | Commit `b7166d6`, PR #277 и все required GitHub checks PASS; merge commit `75efc049`, remote branch удалена | GitHub PR #277, `origin/main@75efc049`, Stage-2 child spec |
 | SPEC | Выполнить freshness/audit gate Stage 3 | 0.99 | Требуется Post-SPEC independent review и approval | Зафиксировать distribution contract, проверить rubric/linter и запросить approval | Да | Ещё не обращались за Stage-3 approval | Проверены 22 assets 1.27.0, четыре packaging workflows, run scripts и точные Windows/macOS/Linux/Android artifacts; implementation остаётся закрыта | `specs/2026-07-18-distribution-support-contract.md`, branch `docs/distribution-support-contract` |
+| EXEC | Принять Stage-3 child approval | 1.00 | Native evidence появится после draft PR | Выполнить implementation в approved allowlist | Нет | Пользователь отдельно сообщил `Спеку подтверждаю` 2026-07-19 | Post-SPEC reviews PASS; approval открыл Stage-3 EXEC, не отменяя no-publication/native gates | Stage-3 child spec, user approval |
+| EXEC | Реализовать Stage-3 distribution contract | 1.00 | Native runner evidence | Закрыть local gates и independent findings | Нет | Не применимо | Canonical inventory/support/evidence, builders, read-only workflow, Android least privilege/provenance, paired README и entrypoints реализованы без Stage-4 publication migration | Stage-3 approved allowlist |
+| EXEC | Выполнить Stage-3 pre-rebase validation | 0.99 | Draft PR, native matrix и final-head review | Commit, rebase и повторить полный gate | Нет | Не применимо | Contract PASS с 99 negatives, README/entrypoints/Android/syntax/actionlint и solution restore/build PASS; executable modes staged `100755` | Local validation outputs, Stage-3 child/master specs |

@@ -11,26 +11,50 @@
 
 ## Скачать и установить
 
-Готовые самодостаточные опубликованные сборки доступны на странице [последнего релиза GitHub](https://github.com/Kibnet/Unlimotion/releases/latest). Для них не требуется .NET SDK. Наличие опубликованного файла не гарантирует совместимость с каждой версией ОС: полная матрица smoke-тестов платформ ещё формируется.
+Готовые самодостаточные опубликованные сборки доступны на странице [последнего релиза GitHub](https://github.com/Kibnet/Unlimotion/releases/latest) и не требуют .NET SDK. Таблица ниже — зафиксированный snapshot опубликованной поддержки для релиза `1.27.0` из исходного коммита `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`. Точные digest артефактов и оговорки версионируются в [distribution/support-matrix.json](distribution/support-matrix.json). Само наличие опубликованного файла не доказывает совместимость с каждой версией ОС.
 
-| Доступная сборка | Какой файл выбрать | Текущий статус проверки |
-| --- | --- | --- |
-| Windows x64 | `Unlimotion-win-Setup.exe` или `Unlimotion-win-Portable.zip` | Опубликовано. Проект пока не публикует проверяемое подтверждение Authenticode-подписи. Microsoft Defender SmartScreen может показать предупреждение. |
-| Linux x64 (AppImage) | `Unlimotion.AppImage` | Опубликованный универсальный вариант для Linux; совместимость с дистрибутивами ещё не проверена полной smoke-матрицей. |
-| Linux x64 (.deb) | `Unlimotion-<version>.deb` | Предварительная сборка. Совместимость с актуальными выпусками Debian пока не подтверждена. |
-| macOS x64 | `Unlimotion-osx-Setup.pkg` или `Unlimotion-osx-Portable.zip` | Сборка для Intel. Проект пока не публикует проверяемое подтверждение Developer ID-подписи и notarization. |
-| macOS arm64 | `Unlimotion-osx-arm64-Setup.pkg` или `Unlimotion-osx-arm64-Portable.zip` | Сборка для Apple Silicon. Проект пока не публикует проверяемое подтверждение Developer ID-подписи и notarization. |
-| Android arm64 | `Unlimotion-<version>-android-arm64.apk` | APK для установки вручную. Проект декларирует минимум Android 6.0 / API 23, но это не гарантия совместимости со всеми устройствами. |
-| Android x64 | `Unlimotion-<version>-android-x64.apk` | APK для установки вручную, прежде всего для устройств и эмуляторов x86_64; действует та же оговорка о минимальной версии Android. |
+Результаты candidate CI хранятся отдельно и не могут повысить статус опубликованного snapshot (`candidateEvidenceAccepted: false`). Уровни evidence означают:
+
+- `present`: точный release-артефакт и его digest зафиксированы; native-совместимость из этого не следует.
+- `metadataVerified`: метаданные пакета и binary проверены на указанной платформе.
+- `launchVerified`: точный артефакт также прошёл native launch-cell на указанной ОС и архитектуре.
+- `productionReady`: для этих точных байтов пройдены все обязательные release-, signing- и native-gates.
+
+| Доступная сборка | Точный файл релиза `1.27.0` | Evidence / публичный статус | Границы и оговорки |
+| --- | --- | --- | --- |
+| <!-- distribution-claim:windows-x64;platform=windows;architecture=x64;distribution=desktop --> Windows x64 | `Unlimotion-win-Setup.exe` или `Unlimotion-win-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:windows-exact-consumer-matrix-not-verified --><!-- distribution-caveat:authenticode-not-verified --> Не опубликованы exact-artifact consumer matrix для Windows и проверяемое Authenticode evidence. Microsoft Defender SmartScreen может показать предупреждение. |
+| <!-- distribution-claim:linux-appimage-x64;platform=linux;architecture=x64;distribution=appimage --> Linux x64 (AppImage) | `Unlimotion.AppImage` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:direct-fuse-not-verified --><!-- distribution-caveat:distribution-compatibility-not-verified --> Для этих точных байтов ещё не подтверждены прямой FUSE-запуск и совместимость с дистрибутивами. |
+| <!-- distribution-claim:linux-deb-x64;platform=linux;architecture=x64;distribution=deb --> Linux x64 (.deb) | `Unlimotion-1.27.0.deb` | `present` / `preview` | <!-- distribution-caveat:debian-12-13-launch-not-verified --><!-- distribution-caveat:candidate-cannot-promote-release --> Только Preview: clean install и запуск на Debian 12 и Debian 13 для этого релиза не подтверждены. |
+| <!-- distribution-claim:macos-x64;platform=macos;architecture=x64;distribution=desktop --> macOS x64 | `Unlimotion-osx-Setup.pkg` или `Unlimotion-osx-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:macos15-x64-launch-not-verified --><!-- distribution-caveat:developer-id-notarization-not-verified --> Сборка для Intel; не опубликованы exact-artifact launch-cell на macOS 15 и проверяемое Developer ID/notarization evidence. |
+| <!-- distribution-claim:macos-arm64;platform=macos;architecture=arm64;distribution=desktop --> macOS arm64 | `Unlimotion-osx-arm64-Setup.pkg` или `Unlimotion-osx-arm64-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:macos15-arm64-launch-not-verified --><!-- distribution-caveat:developer-id-notarization-not-verified --> Сборка для Apple Silicon; не опубликованы exact-artifact launch-cell на macOS 15 и проверяемое Developer ID/notarization evidence. |
+| <!-- distribution-claim:android-arm64;platform=android;architecture=arm64;distribution=apk --> Android arm64 | `Unlimotion-1.27.0-android-arm64.apk` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:api23-arm64-runtime-not-verified --><!-- distribution-caveat:sideload-not-universal --> APK для ручной установки. Android 6.0 / API 23 — заявленный минимум, а не проверенная runtime-гарантия для всех устройств. |
+| <!-- distribution-claim:android-x64;platform=android;architecture=x64;distribution=apk --> Android x64 | `Unlimotion-1.27.0-android-x64.apk` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:api23-api36-x64-launch-not-verified --><!-- distribution-caveat:x64-not-universal --> APK x86_64 для ручной установки. Для этих точных байтов не опубликовано evidence запуска эмуляторов API 23 и API 36. |
 
 - Portable ZIP для Windows или macOS нужно распаковать перед запуском находящегося внутри приложения.
-- После загрузки AppImage выполните:
+- В минимальной установке Debian для AppImage в режиме extract-and-run нужен документированный набор нативных runtime-зависимостей. Установите его до запуска (для точного релиза `1.27.0` по-прежнему действует оговорка о совместимости выше):
+
+```bash
+# Debian 12
+sudo apt install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libstdc++6 tzdata zlib1g libx11-6 libice6 libsm6 libfontconfig1 libicu72 libssl3
+
+# Debian 13
+sudo apt install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libstdc++6 tzdata zlib1g libx11-6 libice6 libsm6 libfontconfig1 libicu76 libssl3t64
+```
+
+- Для прямого запуска AppImage дополнительно нужна библиотека совместимости FUSE 2: на Debian 12 установите `libfuse2`, а на Debian 13 — `libfuse2t64`, затем выполните:
 
 ```bash
 chmod +x Unlimotion.AppImage
 ./Unlimotion.AppImage
 ```
 
+  Если FUSE недоступен, [официальный fallback AppImage](https://docs.appimage.org/user-guide/troubleshooting/fuse.html) запускает вложенный payload без монтирования образа:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./Unlimotion.AppImage
+```
+
+  Этот fallback не доказывает совместимость прямого FUSE-запуска; snapshot остаётся `directFUSE: notVerified`.
 - В macOS проект пока не публикует проверяемое подтверждение подписи и notarization для этих пакетов. Gatekeeper может заблокировать их. Если вы доверяете загруженному файлу, следуйте официальной инструкции Apple [Open Anyway](https://support.apple.com/en-us/102445). Изменение прав файлов не подтверждает доверие или notarization.
 - Android устанавливается вне магазина приложений. ОС может запросить разрешение на установку из выбранного источника; точный сценарий зависит от версии Android и устройства. При обновлении из приложения Android скачивает подходящий APK и запрашивает системное подтверждение установки.
 - Встроенное обновление desktop-приложения доступно, только когда Velopack распознаёт текущую установку как управляемую. Portable-сборки и запуск из исходников не должны полагаться на этот механизм — для них используйте страницу Releases.
@@ -45,27 +69,25 @@ chmod +x Unlimotion.AppImage
 - [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), совместимый с `global.json`
 - Доступ к NuGet для первого восстановления зависимостей
 
-Выполняйте команды из корня репозитория.
+Корневые entry-point scripts сами находят репозиторий, поэтому их можно вызывать из любого рабочего каталога. Дополнительные аргументы передаются приложению, а exit code сохраняется.
 
 Windows PowerShell:
 
 ```powershell
 git clone https://github.com/Kibnet/Unlimotion.git
-Set-Location Unlimotion
-.\run.windows.cmd
+.\Unlimotion\run.windows.cmd
 ```
 
 Linux или macOS:
 
 ```bash
 git clone https://github.com/Kibnet/Unlimotion.git
-cd Unlimotion
 
 # Linux
-bash ./run.linux.sh
+./Unlimotion/run.linux.sh
 
 # macOS
-bash ./run.macos.sh
+./Unlimotion/run.macos.sh
 ```
 
 ## Концептуальное описание

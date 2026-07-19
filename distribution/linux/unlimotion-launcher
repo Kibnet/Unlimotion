@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+
+exec /usr/lib/unlimotion/Unlimotion.Desktop "$@"

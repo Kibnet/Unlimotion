@@ -9,6 +9,7 @@
 		<TrimMode>copyused</TrimMode>
 		<BuiltInComInteropSupport>true</BuiltInComInteropSupport>
 		<ApplicationIcon>Assets\Unlimotion.ico</ApplicationIcon>
+		<DistributionBuild Condition="'$(DistributionBuild)' == ''">false</DistributionBuild>
 	</PropertyGroup>
 	<ItemGroup>
 		<!--This helps with theme dll-s trimming.
@@ -19,7 +20,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
-		<PackageReference Include="Packaging.Targets" PrivateAssets="all" />
+		<PackageReference Include="Packaging.Targets" PrivateAssets="all" Condition="'$(DistributionBuild)' != 'true'" />
 		<PackageReference Include="Velopack" />
 	</ItemGroup>
 	<ItemGroup>
@@ -30,7 +31,9 @@
 		<None Remove=".gitignore" />
 		<None Remove="Assets\Unlimotion.ico" />
 	</ItemGroup>
-	<ItemGroup>
+	<!-- Keep the current release publisher unchanged by default. The Stage-3 candidate
+	     builder supplies its Debian integration files from distribution/linux instead. -->
+	<ItemGroup Condition="'$(DistributionBuild)' != 'true'">
 		<DebDotNetDependencies Include="libc6, libgcc1, libgssapi-krb5-2, libstdc++6, zlib1g, libssl3 | libssl1.1 | libssl1.0.2 | libssl1.0.1 | libssl1.0.0 | libssl0.9.8, libicu70 | libicu69 | libicu68 | libicu67 | libicu66 | libicu65 | libicu64 | libicu63 | libicu62 | libicu61 | libicu60 | libicu59 | libicu58 | libicu57 | libicu56 | libicu55 | libicu54 | libicu53 | libicu52" />
 		<Content Include="Assets\Unlimotion.ico" CopyToPublishDirectory="Always" LinuxFileMode="744">
 			<LinuxPath>/usr/share/icons/hicolor/48x48/apps/Unlimotion.ico</LinuxPath>
