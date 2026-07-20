@@ -10,8 +10,8 @@
 - Effective runtime: фактический model ID/tier, reasoning level и версия клиента не являются validation input этой немодельной delivery-задачи и не влияют на acceptance verdict; repository outcome подтверждается deterministic local/native evidence, fallback — `Не применимо`.
 - Execution / evidence runtime: локальный Windows/PowerShell workspace; native verification выполняется на Windows Server 2022, macOS 15 Intel/arm64, Android API 23/36 emulator и чистых Debian 12/13 x64 images.
 - Eval baseline / evidence: model eval — `Не применимо`; product/evidence baseline — release `1.27.0` и текущие production `release.published` workflows; runtime UI/data/update behavior не меняется.
-- Целевой релиз / ветка: `docs/distribution-support-contract`; prerequisite closeout PR #278 merged as `ad90260b62be899d9f9946e81ce710ed88c2f87a`; SPEC/EXEC base = `origin/main@ad90260b62be899d9f9946e81ce710ed88c2f87a`; future dry-run fixture = `v1.28.0`, публикация запрещена.
-- Текущая фаза: `EXEC`; пользователь подтвердил child spec точной фразой `Спеку подтверждаю` 2026-07-19.
+- Целевой релиз / ветка: `docs/distribution-support-contract`; approved SPEC/EXEC base = `origin/main@ad90260b62be899d9f9946e81ce710ed88c2f87a`, previous post-rebase base = `origin/main@ec9b206db6930ef296313a14e2a440236807ba03`, merged prerequisite base = `origin/main@e11cae9a086ddd4fd97105f00b67bedf05f92700`; future dry-run fixture = `v1.28.0`, публикация запрещена.
+- Текущая фаза: `EXEC resumed`; пользователь 2026-07-20 одним явным сообщением подтвердил LF amendment и Headless prerequisite, prerequisite доставлен merged PR #279 (`e11cae9a086ddd4fd97105f00b67bedf05f92700`), следующий обязательный шаг — rebase Stage 3, LF/blob-parity implementation и полный local gate.
 - Freshness baseline от 2026-07-18:
   - latest published release = `1.27.0`, target `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`, 22 assets;
   - Stage 2 доставлен merged PR #277, merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`;
@@ -34,6 +34,7 @@
 - Связанные артефакты:
   - master roadmap: `specs/2026-07-17-readme-reliability-roadmap.md`;
   - Stage-2 child spec: `specs/2026-07-17-status-availability-contract.md`;
+  - Headless prerequisite child spec: `specs/2026-07-19-headless-appautomation-storage-lifecycle.md`;
   - `README.md`, `README.RU.md`;
   - `run.windows.cmd`, `run.linux.sh`, `run.macos.sh`;
   - `.github/workflows/windows-packaging.yml`;
@@ -502,6 +503,7 @@ Aggregate fails on missing/duplicate/unexpected asset, source/workflow mismatch,
 | Scenario | User action / trigger | Expected visible result / output | Evidence required | Covered by AC |
 | --- | --- | --- | --- | --- |
 | Source entry point | Запустить любой `run.*` из другой папки с `--config=...` | Правильный project/argument/exit code, без зависимости от CWD | fake-dotnet argv/exit report | S3-AC-04 |
+| Cross-OS canonical checkout | Checkout candidate на Windows, Linux и macOS | Все tracked JSON из двух approved patterns содержат LF; physical worktree SHA-256 совпадает с raw committed Git blob на каждой OS | Три retained `blob-parity.json` в `contract`/`linux_x64`/`macos_x64` artifacts и receipts | S3-AC-02 |
 | Future-tag dry-run | Запустить manual candidate validation для `v1.28.0` | Filenames/build label = `1.28.0`, raw tag сохранён только в identity; GitHub Release не меняется | identity/evidence JSON + no-mutation contract | S3-AC-03, S3-AC-05 |
 | Debian clean install | Проверить один `.deb` на Debian 12/13 | Package устанавливается в target без test-tool libraries, loader closure полна, окно открывается через external Xvfb socket | two clean-install/closure reports, one candidate SHA | S3-AC-08 |
 | Debian upgrade | Обновить exact migration-only 1.27.0 до candidate | Одна dpkg identity, старый `/usr/local` исчез, user sentinel сохранён, candidate запускается | two upgrade reports + pinned baseline SHA | S3-AC-09 |
@@ -549,6 +551,8 @@ Aggregate fails on missing/duplicate/unexpected asset, source/workflow mismatch,
 | Android PR signing | agent | Ephemeral key, `signatureProfile=test` | 0.99 | Test key mistaken for production | Нет |
 | Android API 23 failure | user if condition occurs | Stop; do not raise minimum automatically | 1.00 | User-visible compatibility change | Нет до EXEC; если trigger сработает — отдельный ASK-HUMAN |
 | UI evidence | agent | Native package window smoke; no new FlaUI/video | 0.99 | Excess test scope or weak package evidence | Нет |
+| Canonical JSON line endings | agent; accepted only by amendment approval | Repository rules `distribution/*.json text eol=lf` и `distribution/fixtures/*.json text eol=lf`; validators continue hashing physical bytes | 1.00 | Windows/Linux/macOS producers получают разные identity SHA | Да; `.gitattributes` отсутствует в исходном allowlist |
+| Headless prerequisite sequencing | agent; accepted by approval of separate child spec | Отдельный clean-worktree PR/merge до Stage-3 rebase; HSL completion не зависит от downstream Stage-3 gate | 1.00 | Mixed scope или циклический prerequisite | Да; отдельный child approval gate |
 
 ### 6.6 Runtime / Config / Data Contract Matrix
 
@@ -606,10 +610,10 @@ Workflow-declared job/check and evidence ids; required state remains pending unt
 | Job id / check name | Candidate/evidence artifact | Required final-head state |
 | --- | --- | --- |
 | `changes` / `distribution-scope` | No uploaded artifact; outputs `relevant`, `source_short`, `raw_tag` | success; relevant true for Stage-3 PR |
-| `contract` / `distribution-contract` | `distribution-contract-<sha12>-attempt-<runAttempt>/{identity.json,contract-evidence.json}`; separate `...-receipt/evidence-transport-receipt.json` | success; receipt binds both payload hashes to upload id/digest |
+| `contract` / `distribution-contract` | `distribution-contract-<sha12>-attempt-<runAttempt>/{identity.json,contract-evidence.json,blob-parity.json}`; separate `...-receipt/evidence-transport-receipt.json` | success; Windows report lists every matched tracked path/raw worktree/blob SHA and receipt binds all three payload hashes to upload id/digest |
 | `windows_x64` / `windows-x64-native` | `distribution-windows-x64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,windows-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success |
-| `linux_x64` / `linux-x64-native` | `distribution-linux-x64-<sha12>-attempt-<runAttempt>/linux-candidate.tar` containing exact assets + per-cell evidence; separate `...-receipt/transport-receipt.json` | success |
-| `macos_x64` / `macos-15-intel-x64-native` | `distribution-macos-x64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,macos-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success on `macos-15-intel` |
+| `linux_x64` / `linux-x64-native` | `distribution-linux-x64-<sha12>-attempt-<runAttempt>/linux-candidate.tar` containing exact assets + per-cell evidence including `blob-parity.json`; separate `...-receipt/transport-receipt.json` | success; Linux parity report is receipt-bound before package work |
+| `macos_x64` / `macos-15-intel-x64-native` | `distribution-macos-x64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,macos-native.json,blob-parity.json}` + assets; separate `...-receipt/transport-receipt.json` | success on `macos-15-intel`; macOS parity report is receipt-bound before package work |
 | `macos_arm64` / `macos-15-arm64-native` | `distribution-macos-arm64-<sha12>-attempt-<runAttempt>/evidence/{artifact-evidence.json,macos-native.json}` + assets; separate `...-receipt/transport-receipt.json` | success on `macos-15` |
 | `android_build` / `android-api23-native-build` | `distribution-android-multi-<sha12>-attempt-<runAttempt>` with both APKs, artifact evidence and cache summary/raw input/raw provenance reports; separate `...-receipt/transport-receipt.json` | success |
 | `android_api23` / `android-api23-x64-native` | `distribution-android-api23-<sha12>-attempt-<runAttempt>/{evidence.json,download-transport.json,android-api23-emulator.log,android-api23-logcat.txt}`; separate `...-receipt/evidence-transport-receipt.json` | success; receipt binds all four payloads and embedded log refs |
@@ -626,6 +630,7 @@ Runtime model/state не меняется.
 - frozen release fixture;
 - durable exact-digest support snapshot/schema for public README claims;
 - generated identity plan;
+- per-OS `blob-parity.json` with checker/schema version, OS, source/workflow SHA, approved patterns and every tracked path's attribute/raw-byte size/worktree SHA/blob SHA/LF verdict;
 - per-platform evidence JSON;
 - per-upload transport receipt artifacts and per-download bounded-retry evidence JSON;
 - aggregate evidence JSON;
@@ -664,7 +669,7 @@ Rollback:
 ### Acceptance Criteria
 
 - **S3-AC-01 — freshness/sequencing:** Stage 2 PR #277 и отдельный closeout PR #278 merged; `ad90260b62be899d9f9946e81ce710ed88c2f87a` является ancestor актуального `origin/main` и Stage-3 HEAD; SPEC/EXEC base зафиксирован тем же SHA. До child approval совокупность committed branch diff относительно `origin/main` и working-tree changes содержит только `specs/2026-07-18-distribution-support-contract.md`; production files, master roadmap и Stage-2 spec отсутствуют.
-- **S3-AC-02 — canonical inventory/support snapshot:** asset/support schemas validate; ids/names are unique case-insensitively; local fixture classifies all 22 release `1.27.0` assets exactly once and maps every public support cell to exact tag/source/name/digest/evidence. Missing, duplicate, unexpected, zero-byte, stale-version, same-name/different-digest and hash mismatch fail.
+- **S3-AC-02 — canonical inventory/support snapshot:** asset/support schemas validate; checker enumerates every tracked file matched by `distribution/*.json` and `distribution/fixtures/*.json` (currently six), rejects any raw `0x0D`, hashes physical worktree bytes via `File.ReadAllBytes`/`Get-FileHash`, and hashes raw committed blob bytes obtained binary-safely from `git cat-file blob HEAD:<path>` through a redirected byte stream without text decoding, line splitting or clean filters. Every worktree/blob SHA-256 pair matches directly on Windows/Linux/macOS and is retained in `blob-parity.json`; filtered `git hash-object` or script-side normalization is not acceptable evidence. Ids/names are unique case-insensitively; local fixture classifies all 22 release `1.27.0` assets exactly once and maps every public support cell to exact tag/source/name/digest/evidence. A valid-JSON CRLF mutation must fail specifically on raw-byte/LF parity; missing, duplicate, unexpected, zero-byte, stale-version, same-name/different-digest and hash mismatch fail.
 - **S3-AC-03 — trigger/tag/source identity:** dual stable tag forms normalize identically while raw values remain distinct; invalid forms fail. PR/manual trigger rules produce exact `sourceSha`, `workflowSha` and tag-binding mode; checkout/build label/assembly metadata/window title match normalized identity, and no filename/package metadata contains raw `v`.
 - **S3-AC-04 — root entry points:** all three scripts work from unrelated CWD, quote paths, forward arguments after `--`, preserve injected exit code; shell files have shebang, strict mode, LF and git mode `100755`.
 - **S3-AC-05 — no publication / least privilege:** standalone validation имеет только `contents: read`, не получает production secrets и не содержит mutation commands. Windows/Linux/macOS publishers unchanged. Android publisher diff ограничен job-level least-privilege hardening: PR/push/manual paths read-only и secret-free; единственный write job — release-only upload после successful exact-artifact verification, а signing secrets существуют только в release-only build path и очищаются под `always()`. Existing release trigger, signing inputs and APK asset contract remain unchanged. External actions full-SHA pinned, local references same-commit; all PRs receive stable final verdict, irrelevant diff returns `notApplicable`, repository settings не меняются.
@@ -677,20 +682,20 @@ Rollback:
 - **S3-AC-12 — macOS 15 CI:** x64 on `macos-15-intel` and arm64 on `macos-15` pass bundle/pkg/version/executable/build-label/Mach-O/minOS/content/signature-state checks and native launch. Result is OS/version-specific; `minos=12` stays metadata-only.
 - **S3-AC-13 — Android artifact/provenance/signature:** resolver versionCode is bounded; `ci-test <= 353` разрешён только как non-promotable test profile, а `production-monotonic <= 353` отклоняется. Both ABI APKs pass normalized naming/build-label/application/min-target SDK/exact ABI/native symbol/zipalign/aapt/apksigner checks. Exact-input two-phase cache restore/save cross-links cache summary, downloaded raw native inputs and raw provenance bytes, validates nativeInputDigest, requested/matched key, hit/save outcome and every output hash; API-24/missing/mutated/partial or mixed valid reports cannot satisfy API-23. Production profile requires expected fingerprint on both; test profile cannot be `productionReady`.
 - **S3-AC-14 — Android runtime:** exact x64 APK installs/launches on API 23 and API 36 emulators with live process and fatal-free logcat; each API job records bounded candidate-download transport and uploads a separate receipt binding `evidence.json`, `download-transport.json` and exact emulator/logcat sidecars, including embedded name/hash/size cross-links. Double boot failure records full-identity structured exhausted evidence and per-attempt logs. Arm64 remains metadata-only without device. API 23 failure blocks and never silently raises minSdk.
-- **S3-AC-15 — stable aggregate/checksums:** `distribution-verdict` runs with `always()` after every producer result, fails rather than skips on missing/failed mandatory cell, validates exact mixed-attempt producer ids/receipts and aggregate `download-transport.json`, rejects stale directories, covers every native sidecar/candidate exactly once, recomputes SHA and generates complete CI-only `SHA256SUMS.txt`; irrelevant PRs still upload machine-readable `notApplicable`, and negative producer fixtures prove behavior.
+- **S3-AC-15 — stable aggregate/checksums:** `distribution-verdict` runs with `always()` after every producer result, fails rather than skips on missing/failed mandatory cell, validates exact mixed-attempt producer ids/receipts and aggregate `download-transport.json`, validates receipt-bound Windows/Linux/macOS `blob-parity.json` reports with identical complete path set/blob SHA fields and OS-specific worktree equality, rejects stale directories, covers every native sidecar/candidate exactly once, recomputes SHA and generates complete CI-only `SHA256SUMS.txt`; irrelevant PRs still upload machine-readable `notApplicable`, and negative producer fixtures prove behavior.
 - **S3-AC-16 — fail-closed public support:** successful build/candidate launch never promotes current release. `support-matrix.json` and README stay tied to exact 1.27.0 digests; illegal promotion and same-name/different-digest fixtures fail.
 - **S3-AC-17 — Velopack relations:** `RELEASES`/`releases.*.json` entries parse and match expected channel/version/name/size/hash algorithm/value of exact updater `.nupkg`; stale/wrong-channel/hash/size/version records fail.
 - **S3-AC-18 — retry contract:** deterministic failures and every artifact upload action run once; APT (3 total), emulator boot (2 total) and client-level artifact download (2 total) obey exact cleanup/evidence rules. First-attempt success records `classification: none`; only a recovered infrastructure failure records the transient class and completed cleanup. Attempt-scoped upload names make full/failed-job reruns collision-free; upload success is proven by exact receipt binding rather than a workflow-level re-upload. Exhausted retry fails with structured evidence and positive/negative classification fixtures pass.
 - **S3-AC-19 — README parity:** EN/RU source/install/support rows remain structurally/semantically paired and map to durable support snapshot; AppImage FUSE/fallback and `.deb` Preview scope accurate; no generic Windows/macOS or candidate-as-release overclaim.
-- **S3-AC-20 — validation quality:** local contract/run-script/README tests, JSON/YAML/shell syntax, `git diff --check`, solution build, full Unit and Headless suites pass; final-head native matrix and aggregate green. No UI behavior change means no new FlaUI/video; real packaged window smoke remains mandatory.
-- **S3-AC-21 — delivery/audit:** implementation is committed/pushed and draft PR opened before native CI; after every tracked fix the full required matrix reruns on final head. Independent platform/security/docs Post-EXEC reviews PASS, scope matches allowlist, PR records commands/runs/OS/arch/hashes/caveats/rollback; green final head before ready/merge. Roadmap AC-02 and platform portion AC-14/18 close only after merge; atomic AC-11 remains Stage 4.
+- **S3-AC-20 — validation quality:** local contract/run-script/README tests, JSON/YAML/shell syntax, `git diff --check`, solution build and full Unit suite pass; full Headless suite passes twice consecutively with separate retained reports; final-head native matrix and aggregate green. Any tracked fix resets both Headless runs. No UI behavior change means no new FlaUI/video; real packaged window smoke remains mandatory.
+- **S3-AC-21 — delivery/audit:** implementation is committed/pushed and draft PR opened before native CI; after every tracked fix both local Headless runs and the complete required native matrix/aggregate rerun on final head. Independent platform/security/docs Post-EXEC reviews PASS, scope matches allowlist, PR records commands/runs/OS/arch/hashes/caveats/rollback; green final head before ready/merge. Roadmap AC-02 and platform portion AC-14/18 close only after merge; atomic AC-11 remains Stage 4.
 
 ### Acceptance-to-Test Matrix
 
 | AC | Test / command / evidence | Required result |
 | --- | --- | --- |
 | S3-AC-01 | `gh pr view 278 --json state,mergedAt,mergeCommit`; `git fetch origin`; `git merge-base --is-ancestor ad90260b62be899d9f9946e81ce710ed88c2f87a origin/main`; same check for `HEAD`; `git diff --name-status origin/main...HEAD`; `git status --short` | PR #278 merged; branch основана на post-merge main; только текущая child spec отличается до approval |
-| S3-AC-02 | `pwsh -File scripts/test-distribution-contract.ps1 -Area InventorySupport`; `contract-evidence.json` | 22/22 exact; same-name/different-digest fails |
+| S3-AC-02 | `contract` (Windows), `linux_x64` и `macos_x64` jobs выполняют checker до package work; он enumerates all tracked matches, uses raw `File.ReadAllBytes`/`Get-FileHash` and binary-safe `git cat-file ...` byte stream, forbids filtered/text paths, emits receipt-bound `blob-parity.json`; `git check-attr`; valid-JSON CRLF negative | Три retained reports содержат одинаковый полный path set и LF/raw worktree/blob SHA parity на Windows/Linux/macOS; currently 6/6 exact; CRLF и same-name/different-digest fail |
 | S3-AC-03 | same script `-Area IdentityTriggers`; `Resolve-ReleaseIdentity.ps1`; every cell `evidence.json` | Tag/source/workflow/build-label contract PASS |
 | S3-AC-04 | `pwsh -File scripts/test-run-entrypoints.ps1`; `git ls-files -s`; LF audit | PASS, shell mode 100755 |
 | S3-AC-05 | `test-distribution-contract.ps1 -Area WorkflowSecurity` parses standalone validation triggers, permissions, env/secret references, external `uses:` and final-producer semantics; Windows/Linux/macOS byte guard; `test-android-build-scripts.ps1` checks Android event reachability/diff/output snapshot | Standalone PR/manual path: read-only, secret-free, no release mutation, stable fail-closed final; Android PR/push/manual: zero write/production-secret paths; release/published: exactly one write upload job; negative fixtures fail |
@@ -703,7 +708,7 @@ Rollback:
 | S3-AC-12 | `macos_x64`/`macos_arm64` -> `test-macos-distribution.sh`; per-cell evidence | Native metadata/package/launch PASS on exact OS/arch |
 | S3-AC-13 | `android_build` -> `test-android-distribution.sh --mode artifact/provenance`; ci-test/production version fixtures; raw input/provenance/summary cross-link, miss/save, exact-hit/reuse, cross-API, mixed/hash/key/partial cache fixtures | Both APKs, version policies, exact-key cache/provenance byte closure and signature profiles PASS |
 | S3-AC-14 | `android_api23`/`android_api36`; emulator/download reports, emulator/logcat sidecars, separate generic receipt; exhausted fake-emulator fixture | Bounded exact-artifact download + x64 install/launch + log hash/size + structured exhaustion PASS |
-| S3-AC-15 | `distribution-verdict`; producer-results, aggregate download evidence, exact sixteen ids, producer receipts, mixed-attempt/stale/failed/missing/notApplicable fixtures | Final job always emits machine verdict; applicable failures fail, irrelevant succeeds as notApplicable; receipt/download/native/checksum closure complete |
+| S3-AC-15 | `distribution-verdict`; producer-results, aggregate download evidence, exact sixteen ids, producer receipts, three blob-parity reports, mixed-attempt/stale/failed/missing/notApplicable fixtures | Final job always emits machine verdict; applicable failures fail, irrelevant succeeds as notApplicable; parity path/blob fields agree across OS; receipt/download/native/checksum closure complete |
 | S3-AC-16 | `Test-ReadmeDistributionContract.ps1`; support promotion/digest fixtures | No candidate-to-release promotion; exact mapping PASS |
 | S3-AC-17 | `test-distribution-contract.ps1 -Area VelopackFeeds` | All feed/package relations PASS; stale/wrong fixtures fail |
 | S3-AC-18 | same script `-Area Retry`; `-Area WorkflowSecurity`; API 23/API 36/final download reports; exhausted emulator and mixed-attempt rerun fixtures | Exact budgets/cleanup/classification/exhaustion PASS; downloads bounded, uploads atomic/attempt-scoped, receipts exact |
@@ -730,9 +735,15 @@ dotnet build src/Unlimotion.sln -c Debug --no-restore -p:UseSharedCompilation=fa
 dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj `
   -c Debug --no-restore -p:UseSharedCompilation=false -- `
   --maximum-parallel-tests 1 --output Detailed
+$stage3HeadlessRoot = Join-Path (Get-Location) 'artifacts/test-results/stage3-headless-final'
 dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj `
   -c Debug --no-restore -p:UseSharedCompilation=false -- `
-  --maximum-parallel-tests 1 --output Detailed
+  --maximum-parallel-tests 1 --output Detailed --report-trx --report-html `
+  --results-directory "$stage3HeadlessRoot/full-1"
+dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj `
+  -c Debug --no-restore -p:UseSharedCompilation=false -- `
+  --maximum-parallel-tests 1 --output Detailed --report-trx --report-html `
+  --results-directory "$stage3HeadlessRoot/full-2"
 
 git diff --check
 ```
@@ -745,6 +756,7 @@ Additional syntax/tool gates:
 - YAML parse + `actionlint` when available; CI is authoritative if local binary is absent;
 - static scan: every external `owner/repo@...` in new workflow uses full commit SHA; local `./...` references are accepted as same-commit; permissions/read-only contract checked;
 - Android workflow security negatives: missing release condition, write build job, production secret in non-release-reachable step, global token, changed release trigger/APK filename/signer input, wrong same-run artifact SHA/id/digest and floating external action ref each fail;
+- after every tracked fix, delete/reset both `stage3-headless-final/full-{1,2}` directories, rerun both Headless commands consecutively and rerun the complete native matrix/aggregate on the same final HEAD;
 - no production secret names available to PR/build-only jobs.
 
 Native validation cannot be replaced by local Windows-only emulation. Docker daemon is unavailable in the current local environment, so Debian matrix must pass in GitHub CI before merge; this is an expected external gate, not a waiver.
@@ -784,6 +796,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 - «Почему unsigned Windows/macOS не блокируют Stage 3?» — Stage 3 проверяет честную packaging/runtime readiness; end-user trust signing требует credentials и выделен в Stage 9.
 - «Почему Android signature уже здесь?» — production certificate fingerprint является обязательной целостностью существующего platform release; private-key management не входит в Stage 3.
 - «Почему AppImage проверяется отдельно?» — `.deb` dependency/install success ничего не доказывает о AppImage runtime/FUSE path.
+- «Почему не canonicalize newline внутри PowerShell?» — identity contract хеширует exact physical bytes; script-side normalization скроет checkout drift и потребует согласованного rewrite всех producers/validators. Repository-level LF attributes сохраняют один physical-byte contract.
 
 ### Rework Prevention Checklist
 
@@ -804,8 +817,10 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 - [x] Velopack feed-to-package relations заданы.
 - [x] README support promotion fail-closed.
 - [x] Rollback не мутирует published release.
-- [x] Independent Post-SPEC review выполнен, три роли PASS, findings закрыты.
-- [x] Пользователь явно утвердил child spec точной фразой `Спеку подтверждаю`.
+- [x] Independent Post-SPEC review исходной child spec выполнен, три роли PASS, findings закрыты.
+- [x] Пользователь явно утвердил исходную child spec точной фразой `Спеку подтверждаю`.
+- [x] LF amendment scenario/Decision Ledger/allowlist прошли отдельный architecture/QA/governance Post-SPEC re-review.
+- [x] Пользователь 2026-07-20 повторно утвердил LF amendment и явно подтвердил отдельную Headless prerequisite child spec точной фразой `Спеку подтверждаю` с указанием обоих документов.
 
 ## 13. План выполнения
 
@@ -868,8 +883,9 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | `.github/workflows/android-packaging.yml` | Only job-level least-privilege hardening, cleanup, pinned actions and exact artifact handoff; release asset contract unchanged | Exclude write token and production secrets from PR/push/manual execution |
 | `README.md`, `README.RU.md` | Paired source/AppImage/support/evidence corrections | User-facing truth |
 | `specs/2026-07-18-distribution-support-contract.md`, master roadmap during approved EXEC | Approval/Post-EXEC/roadmap journal | Audit trail |
+| `.gitattributes` | **APPROVED AMENDMENT:** `distribution/*.json text eol=lf` и `distribution/fixtures/*.json text eol=lf` | Одинаковые exact identity bytes/SHA на Windows/Linux/macOS |
 
-Таблица выше является exact path-family allowlist. Новое имя внутри перечисленной family допускается только для названной роли. Любое Android workflow изменение вне permissions, token/secret reachability, release-only job split, cleanup, action pinning и exact artifact handoff требует остановки и повторного approval. Любое изменение Windows/Linux/macOS publishers, runtime status/storage/UI/data/update contract или иной path также требует остановки и обновления/повторного approval spec.
+Таблица выше является exact path-family allowlist. Строка `.gitattributes` имеет статус `APPROVED` по подтверждению пользователя от 2026-07-20. Новое имя внутри перечисленной family допускается только для названной роли. Любое Android workflow изменение вне permissions, token/secret reachability, release-only job split, cleanup, action pinning и exact artifact handoff требует остановки и повторного approval. Любое изменение Windows/Linux/macOS publishers, runtime status/storage/UI/data/update contract или иной path также требует остановки и обновления/повторного approval spec.
 
 `specs/2026-07-17-status-availability-contract.md` уже доставлена отдельным PR #278 и не входит в Stage-3 allowlist: любое её отличие от `origin/main` останавливает EXEC. Master roadmap разрешено обновлять только во время approved EXEC для Stage-3 delivery journal.
 
@@ -975,7 +991,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
   - [GitHub workflow/job permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions);
   - [Desktop category registry](https://specifications.freedesktop.org/menu/latest/category-registry.html).
 - No-findings justification: final independent reviews охватили current scope/base, canonical template, all AC/matrix links, package/native architecture, workflow contexts/permissions/secrets, README evidence boundary and structural gates; residual delivery work находится только в EXEC/follow-up stages.
-- Needs human: final explicit child approval перед EXEC.
+- Needs human: исходный child approval был получен 2026-07-19; отдельные amendment/prerequisite gates позднее закрыты 2026-07-20.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -1013,29 +1029,91 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 - Checks rerun: `gh pr view 278`, ancestry `ad90260b -> origin/main -> HEAD`, `git diff --name-status origin/main...HEAD`, working-tree scope, 22 H2 sections, balanced fences, 21 AC definitions/matrix coverage and Decision Ledger fields.
 - Residual risks / follow-ups: production publishers/atomicity remain Stage 4; desktop trust signing remains Stage 9; API-23 failure retains conditional ASK-HUMAN.
 
+### LF Amendment Post-SPEC Review
+
+- Статус: `PASS`; architecture, QA и governance final re-reviews подтвердили amendment без remaining findings.
+- Scope reviewed: proposed `.gitattributes` row, amended S3-AC-02/scenario/matrix, existing allowlisted `test-distribution-contract.ps1` and `distribution-validation.yml`, approval boundary, master roadmap и separate Headless prerequisite relationship.
+- Decision: amendment готова к repeat approval; implementation `.gitattributes`/workflow новых steps запрещена до явного подтверждения пользователя.
+- Review passes:
+  - Scope/Evidence pass: proposed production change ограничен `.gitattributes`; direct checker планируется на Windows/Linux/macOS jobs.
+  - Contract pass: physical-byte SHA semantics сохраняются; script canonicalization отвергнута.
+  - Adversarial risk pass: проверены Windows CRLF checkout, workflow-only `autocrlf` insufficiency, mixed producer hashes и accidental scope carryover.
+  - Role-Based pass: architecture/physical-byte, QA/evidence-trace и governance/delivery = PASS.
+  - Re-review after fixes / Fix and re-review: PASS; all-file binary-safe comparison, retained three-OS receipts, aggregate closure и two-run Headless reset подтверждены.
+  - Stop decision: запросить repeat approval; не менять `.gitattributes`, workflow или Headless code до его получения.
+- Evidence inspected: all six current tracked matches under the two patterns, four originally sampled worktree/Git-blob SHA pairs, current `.gitattributes`, raw `git cat-file` capability, job topology/artifact receipts `contract`/`linux_x64`/`macos_x64`, original exact allowlist и Headless failure triage.
+- Depth checklist:
+  - Scope drift / unrelated changes: working tree содержит только два previously allowlisted verifier fixes и три plan/spec files; proposed implementation paths не изменены.
+  - Acceptance criteria: S3-AC-02 теперь имеет direct Windows/Linux/macOS raw-byte check, retained reports/receipts и all-tracked enumeration; S3-AC-20/21 требуют два reset Headless runs.
+  - User-observable scenarios / Decision ledger / Expected objections: cross-OS checkout, LF choice и script-canonicalization objection добавлены.
+  - Validation evidence: native EXEC evidence не заявляется.
+  - Hidden contract change: physical-byte SHA contract сохранён.
+  - Manual-review challenge: проверить, что checker реально запускается на трёх OS и сравнивает worktree с Git blob, а не только между producers.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| HIGH | sequencing | Headless HSL completion циклически зависела от downstream Stage-3 rebase/full gate | Ограничить HSL completion собственным merge; Stage-3 gate оставить downstream | fixed; PASS |
+| HIGH | amendment review | Исходный Post-SPEC PASS не покрывал новый AC/allowlist/approval boundary | Добавить scenario, decision, objection и отдельный amendment review | fixed; PASS |
+| MEDIUM | OS evidence | AC обещал direct parity на каждой OS, workflow планировал checker только в Windows contract job | Добавить lightweight check в Windows/Linux/macOS jobs | fixed; PASS |
+| MEDIUM | approval wording | «Отдельное approval» конфликтовало с допустимым одним сообщением для двух docs | Разделить approval gates и message count | fixed; PASS |
+| MEDIUM | branch isolation | Dirty Stage-3 changes могли перейти в prerequisite branch | Требовать отдельный clean worktree от свежего main | fixed; PASS |
+| HIGH | raw blob comparison | Способ чтения Git blob мог пройти через text decoding/filter и скрыть CRLF | Требовать binary-safe `git cat-file` byte stream и physical worktree bytes; запретить filtered/text evidence | fixed; PASS |
+| MEDIUM | path coverage | Checker мог hardcode четыре найденных файла вместо всех шести/current future matches | Enumerate every tracked file under both approved patterns; valid-JSON CRLF fails raw parity | fixed; PASS |
+| MEDIUM | retained OS evidence | Linux/macOS direct checks не имели exact retained `blob-parity.json`/receipt mapping | Добавить report во все три job artifacts/receipts и aggregate closure | fixed; PASS |
+| MEDIUM | Headless evidence | Amendment sequence требовала два runs, но S3-AC-20/local commands сохраняли один | Добавить two consecutive separate-result commands и reset-after-fix rule | fixed; PASS |
+
+- Fixed before continuing: cross-doc sequence, binary-safe all-file comparison, retained direct OS evidence, two-run Headless reset, amendment-specific governance trace, approval semantics и clean-worktree requirement.
+- Checks rerun: 22 canonical H2 sections, balanced fences, 21/21 AC mappings, S3-AC-02 scenario/job/artifact/receipt/matrix links, S3-AC-20 two-command trace, `git diff --check`.
+- No-findings justification: final technical review подтвердил raw worktree/blob comparison, all 6 tracked matches и exact scope; QA подтвердил retained three-OS evidence, CRLF negative, two Headless reports/reset и native rerun; governance подтвердил non-cyclic sequencing и approval boundaries.
+- Needs human: approval LF amendment и отдельной Headless child spec получен 2026-07-20; следующий условный human gate остаётся только при подтверждённой несовместимости Android API 23.
+- Residual risks / follow-ups: native runner image drift остаётся final matrix risk; LF/blob-parity implementation ещё не прошёл полный local/native gate.
+
 ### Post-EXEC Review
 
-- Статус: `EXEC in progress`; local implementation и pre-rebase validation выполнены, draft PR/native matrix/final Post-EXEC pending.
-- Scope reviewed: утверждённый Stage-3 allowlist — root run scripts, standalone read-only distribution workflow, Android publisher least-privilege hardening, candidate builders/validators, schemas/fixtures/evidence и paired README; Windows/Linux/macOS production publishers не менялись.
-- Decision: staged-mode gate пройден; продолжить к implementation commit, rebase, full final-head validation, draft PR и native matrix. Completion/PASS и переход к Stage 4 пока запрещены.
-- Review passes: local scope/security/contract/README/entrypoint/Android evidence и targeted staged re-review после fixes — PASS; final independent re-review должен быть повторён на green native final head.
-- Evidence inspected: 22 exact release assets, 15 native cells, 7 paired support claims, 99 negative fixtures, embedded workflow transport behaviors, Android provenance/emulator regressions, PowerShell/Bash/Python/YAML/JSON syntax, actionlint и solution restore/build.
-- Depth checklist: local data/schema/security/transport/retry/provenance/support boundaries проверены; native Windows/Debian/macOS/Android runtime evidence, PR checks и merge остаются незавершёнными.
-- No-findings justification: финальный no-findings/PASS не заявляется. Independent review выявил permanent transport-fixture gap, Git executable-mode gap и stale governance journal; все три исправления подтверждены targeted staged re-review без remaining findings.
+- Статус: `EXEC resumed`; amendment approval получен, Headless prerequisite доставлен merged PR #279 (`e11cae9a`), Stage-3 rebase/LF implementation/full final-head gate выполняются; draft PR/native matrix/final Post-EXEC ещё не запускались.
+- Scope reviewed: утверждённый Stage-3 allowlist — root run scripts, standalone read-only distribution workflow, Android publisher least-privilege hardening, candidate builders/validators, schemas/fixtures/evidence и paired README; Windows/Linux/macOS production publishers не менялись. Два verifier fixes зафиксированы отдельным commit `9c6ec96`; утверждённая `.gitattributes` amendment ещё не реализована, Headless runtime/test-host fix остаётся только в merged prerequisite.
+- Decision: продолжить строго по утверждённой последовательности — rebase на merged prerequisite, LF/blob-parity implementation, полный local gate, затем draft PR/native matrix. Случайный Headless green не принимается как evidence; нужны два последовательных полных pass.
+- Review passes: final-head local distribution/README/entrypoint/Android/static/build gates и independent allowed-scope re-review — PASS. Live integration targeted rerun — PASS. Full Unit/Headless acceptance и native delivery — не закрыты.
+- Evidence inspected: previous post-rebase `origin/main@ec9b206d`, Stage-3 implementation HEAD `4fd84161`, merged prerequisite `e11cae9a`, 22 exact release assets, 15 native cells, 7 paired support claims, 99 negative fixtures, embedded workflow transport behaviors, Android provenance/emulator regressions, worktree/Git-blob SHA pairs, prior full Unit/Headless output и fixed crash-path source.
+- Depth checklist: local schema/security/transport/retry/provenance/support boundaries проверены; cross-OS checkout bytes и delayed test-host teardown были дополнительными adversarial gates. Native Windows/Debian/macOS/Android runtime evidence, PR checks и merge остаются незавершёнными.
+- No-findings justification: финальный no-findings/PASS не заявляется. Headless blocker закрыт отдельным merge; LF finding и полный local/native gate остаются в работе.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
 | MEDIUM | workflow transport fixtures | Mixed producer attempts, exact 16 ids, stale/failure directory и receipt/runtime sidecar mutation не были permanent fixtures | Извлекать и исполнять embedded workflow Python из named steps в `test-distribution-contract.ps1` | fixed; local PASS |
 | MEDIUM | root entrypoints | Git index хранил `run.linux.sh`/`run.macos.sh` как `100644` | Применить `git add --chmod=+x` и проверить staged `100755` | fixed; staged PASS |
 | MEDIUM | governance journal | Этот блок и master roadmap противоречили полученному approval и начатому EXEC | Зафиксировать честный in-progress state без преждевременного native/final PASS | fixed; targeted PASS |
+| HIGH | cross-platform identity | Windows checkout превращает canonical JSON в CRLF, поэтому worktree SHA отличается от LF Git blob и Linux/macOS/Android evidence | Добавить утверждённые узкие LF rules в `.gitattributes` и worktree-vs-blob/CRLF regression | approved; implementation in progress |
+| BLOCKER | Headless acceptance | Full suite дважды завершил сами тесты, затем process упал на delayed watcher callback к удалённому `Tasks/.unlimotion.lock` | Отдельно approve/merge `headless-appautomation-storage-lifecycle`, rebase Stage 3 и повторить full gate | fixed and merged in PR #279; full Stage-3 rerun pending |
+| LOW | full Unit flake | Один из 830 live RavenDB tests упал на immediate stale-index `FirstAsync`; exact targeted rerun прошёл 1/1 | Не расширять Stage 3; получить full green rerun после prerequisite/rebase, вынести deterministic consistency fix отдельно | follow-up; targeted PASS |
 | INFO | native evidence | Windows/Linux/macOS/Android native matrix ещё не запускалась на draft PR final head | Выполнить обязательную matrix; API-23 incompatibility переводит задачу в ASK-HUMAN | pending |
 
-- Fixed before final report: raw Android types/output-count/setup-failure logging, attempt-scoped exact artifact transport, permanent embedded workflow behavioral fixtures и journal drift исправлены; root shell entrypoints staged как `100755`.
-- Checks rerun: `test-distribution-contract.ps1 -Area All` PASS (99 negative fixtures), `test-android-build-scripts.ps1` PASS, README positive/negative contract PASS, root entrypoints PASS, actionlint/parsers/embedded Python/JSON/diff checks PASS, `dotnet restore/build src/Unlimotion.sln` PASS с known warnings.
-- Validation evidence: local pre-rebase PASS; native/draft-PR/final-head evidence отсутствует и не подменяется локальными результатами.
+- Fixed before final report: raw Android types/output-count/setup-failure logging, attempt-scoped exact artifact transport, permanent embedded workflow behavioral fixtures, journal drift и два Windows CRLF-sensitive verifier bugs исправлены внутри approved scripts; root shell entrypoints committed как `100755`; Headless blocker исправлен и слит отдельным PR #279 после approval.
+- Checks rerun: final-head `test-distribution-contract.ps1 -Area All` PASS (99 negative fixtures), Android/README positive+negative contracts PASS, root entrypoints PASS, actionlint/parsers/embedded Python/JSON/diff checks PASS, solution restore/build PASS. Full Unit = `829/830`, затем exact failed method = `1/1` PASS. Full Headless = tests `12/12` и `4/4`, но оба process exit non-zero после `.unlimotion.lock` timeout.
+- Validation evidence: прежний local distribution gate PASS; прежний `S3-AC-20` blocker закрыт merged prerequisite, но новый full Unit + два full Headless rerun после rebase ещё не выполнены. Native/draft-PR/final review/merge evidence отсутствует и не подменяется локальными результатами.
 - Unrelated changes: Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff ограничен approved least-privilege/output-preserving surface; Stage-4 publication migration отсутствует.
-- Needs human: child approval уже получен. Новое решение человека требуется только при подтверждённом API-23 native failure или необходимости выйти за утверждённый support/scope contract.
-- Residual risks / follow-ups: native image/tool drift, current unsigned desktop artifacts и production release atomicity остаются соответственно final native gate, Stage 9 и Stage 4.
+- Needs human: оба approval gates закрыты сообщением пользователя от 2026-07-20; следующий условный ASK-HUMAN — только Android API 23 product decision, если native gate подтвердит несовместимость.
+- Residual risks / follow-ups: RavenDB stale-index flake, native image/tool drift, current unsigned desktop artifacts и production release atomicity остаются соответственно separate follow-up, final native gate, Stage 9 и Stage 4.
+
+### EXEC stop и approved amendment от 2026-07-19
+
+Новые факты после rebase/final-head gate:
+
+1. Git blobs четырёх canonical distribution JSON используют LF, но Windows checkout без attributes содержит CRLF. Например, `distribution/release-assets.json` имеет worktree SHA-256 `eaa7bdec27cfe89038fba047605c4dc5049b297cf43adb557be45e2e798a2b1d`, а committed blob — `317df3e04e62fc59b90789e16e0cc651100e16bee1fd7e111ee5ac7f94543f17`. Тот же drift подтверждён для release fixture, support matrix и evidence schema.
+2. Identity contract сознательно хеширует exact physical bytes. Script-side newline canonicalization изменила бы смысл exact-byte contract и потребовала бы широкого validator rewrite; workflow-local `autocrlf=false` не защищает локальный Windows gate. Узкие `.gitattributes` rules являются минимальным repository-level fix.
+3. Full Headless gate обнаружил отдельный baseline ownership defect AppAutomation test host. Он не связан со Stage-3 diff и не должен попадать в distribution PR; подготовлена отдельная child spec с exact 3-file allowlist.
+
+Утверждённая последовательность:
+
+1. Одним явным сообщением закрыть два отдельных approval gates — эту LF amendment и Headless prerequisite child spec — точной фразой `Спеку подтверждаю` с указанием обоих документов.
+2. Сначала в отдельном clean worktree выполнить и доставить `fix/headless-appautomation-storage-lifecycle` PR; dirty Stage-3 scripts/specs туда не переносить, Stage-3 implementation branch в это время не расширять.
+3. Rebase Stage 3 на merged prerequisite.
+4. В Stage 3 добавить только `distribution/*.json text eol=lf` и `distribution/fixtures/*.json text eol=lf`; нормализовать checkout и добавить в уже allowlisted `test-distribution-contract.ps1` regression, который enumerates все tracked matches, хеширует physical worktree bytes, получает raw blob через binary-safe `git cat-file` byte stream и запрещает text/filter normalization. Valid-JSON CRLF fixture обязана падать именно на LF/raw parity.
+5. В allowlisted `distribution-validation.yml` запустить checker напрямую в `contract` (Windows), `linux_x64` и `macos_x64` до package work; каждый job сохраняет receipt-bound `blob-parity.json`, а aggregate проверяет одинаковый полный path set и SHA fields.
+6. Повторить весь final-head local gate, включая full Unit и два consecutive full Headless passes в отдельных reset result directories. Любой tracked fix сбрасывает оба Headless evidence sets и требует полного local/native rerun.
+7. Только после local green выполнить commit/push/draft PR, native matrix, final independent Post-EXEC review и merge. Stage 4 остаётся закрыт.
+
+Repeat approval получен 2026-07-20. `.gitattributes` и allowlisted Stage-3 verifier/workflow changes разрешены; AppAutomation host и Headless test code уже доставлены отдельно и не входят в Stage-3 diff.
 
 ## Approval
 
@@ -1043,7 +1121,11 @@ Master roadmap подтверждена ранее. Это approval не рас�
 
 Stage-3 child approval: `APPROVED` 2026-07-19 точной фразой `Спеку подтверждаю`.
 
-EXEC разрешён только в утверждённых границах, allowlist, non-goals и stop rules этой child spec.
+Stage-3 LF identity amendment: `APPROVED` 2026-07-20 точной фразой `Спеку подтверждаю` с явным указанием этого документа.
+
+Headless prerequisite child approval gate: `APPROVED` 2026-07-20 той же точной фразой с явным указанием `specs/2026-07-19-headless-appautomation-storage-lifecycle.md`; implementation доставлен PR #279, merge `e11cae9a086ddd4fd97105f00b67bedf05f92700`.
+
+EXEC возобновлён в границах исходного allowlist и утверждённой LF amendment. Stage-3 delivery по-прежнему требует rebase на merged prerequisite, полного local/native gate, draft PR, final review и merge.
 
 ## 20. Журнал действий агента
 
@@ -1065,3 +1147,9 @@ EXEC разрешён только в утверждённых границах,
 | EXEC | Реализовать Stage-3 local contract package | 1.00 | Native runner evidence появится после draft PR | Закрыть local positive/negative gates и independent review findings | Нет | Не применимо | Добавлены exact inventory/support/evidence schemas, candidate builders, read-only native matrix, Android least privilege/provenance, paired README и reliable entrypoints без release mutation | Approved implementation allowlist |
 | EXEC | Закрыть Android evidence и workflow transport gaps | 1.00 | Нет локальных | Повторить полный contract gate | Нет | Independent reviewers нашли deterministic MEDIUM/P2 gaps | Strict raw JSON types, exact provenance output count, setup-failure logs и исполнение embedded mixed-attempt/16-id/stale/receipt fixtures закрывают fail-closed boundary | Android/evidence scripts, workflow contract tests |
 | EXEC | Выполнить pre-rebase local validation | 0.99 | Native Windows/Linux/macOS/Android matrix и GitHub checks | Commit, rebase и повторить final-head full validation | Нет | Не применимо | Distribution All PASS с 99 negatives, Android/README/entrypoints/syntax/actionlint и solution restore/build PASS; root shell modes staged `100755`; known warnings не вызваны Stage-3 runtime change | Local validation outputs, эта spec |
+| EXEC | Rebase на актуальный main и повторить final-head static/build gate | 1.00 | Full/native evidence | Выполнить full Unit/Headless | Нет | Не применимо | HEAD `4fd84161` основан на `origin/main@ec9b206d`; distribution/README/Android/entrypoints/static gates, restore/build и independent scope review PASS | Git history, local outputs, два allowlisted verifier fixes |
+| EXEC | Обнаружить cross-platform exact-byte drift | 1.00 | Repeat approval | Остановить push и добавить proposed amendment | Да | Фактический запрос будет после Post-SPEC review обоих документов | Windows CRLF worktree SHA гарантированно расходится с LF producer SHA; `.gitattributes` отсутствует в approved allowlist | Canonical JSON SHA pairs, эта spec |
+| EXEC | Классифицировать full validation failures | 1.00 | Approval prerequisite spec | Сначала доставить отдельный lifecycle prerequisite | Да | Фактический запрос будет после review | Live RavenDB method targeted PASS 1/1; Headless дважды crash после successful tests из-за lost storage ownership | Full/targeted output, Headless prerequisite spec |
+| SPEC | Подготовить последовательный unblock plan | 0.99 | Independent Post-SPEC reviews и user approval | Review обоих документов, затем запросить одно явное подтверждение | Да | Ещё не обращались по amendment | Prerequisite merge предшествует Stage-3 LF fix/rebase/full/native delivery | Эта spec, master roadmap, Headless child spec |
+| EXEC | Принять repeat approval двух unblock-документов | 1.00 | Нет | Доставить Headless prerequisite отдельно | Нет | Пользователь 2026-07-20 сообщил `Спеку подтверждаю` и явно назвал обе specs | Одно сообщение закрыло два самостоятельных approval gate без смешивания implementation scope | Эта spec, Headless child spec, user approval |
+| EXEC | Закрыть Headless prerequisite delivery | 1.00 | Нет | Rebase Stage 3 на merged main | Нет | Не применимо | PR #279 прошёл local RED/GREEN/full/build gates, independent review и все GitHub checks; merge `e11cae9a086ddd4fd97105f00b67bedf05f92700` | Headless child spec, PR #279, `origin/main` |

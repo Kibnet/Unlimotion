@@ -502,8 +502,10 @@ Stop rules для validation:
 
 ### Этап 3. Проверяемая distribution support matrix
 - Child spec: `specs/2026-07-18-distribution-support-contract.md`.
+- Blocking prerequisite child spec: `specs/2026-07-19-headless-appautomation-storage-lifecycle.md`; отдельный PR/merge до возобновления Stage-3 delivery.
 - Исправить run scripts.
 - Добавить canonical asset manifest и package validators.
+- Закрепить LF для canonical distribution JSON и проверять равенство worktree/Git-blob SHA на каждой OS; exact-byte identity не должна зависеть от checkout line endings.
 - В manifest/validators явно разделить raw release tag и normalized SemVer: current workflows смешивают эти значения в filenames, поэтому future `vMAJOR.MINOR.PATCH` tag обязан пройти naming dry-run до публикации.
 - Добавить Debian 12/13 x64 clean-image install/launch smoke именно для publish-candidate `.deb`; evidence включает OS version, architecture и artifact SHA-256.
 - Проверить `dpkg` metadata, dependency resolution/ICU и запуск через Xvfb либо специальный non-GUI smoke mode; AppImage проверять отдельно.
@@ -576,7 +578,7 @@ Stop rules для validation:
 | --- | --- | --- | --- | --- |
 | 1. README install safety | AC-01, AC-12, часть AC-16/18 | Roadmap approval + freshness gate | docs diff, local link check, EN/RU render, release check report | Нет |
 | 2. Status/availability | AC-03, AC-04, AC-17, AC-14/18 | Stage 1 не обязателен для code, но должен быть доставлен первым по sequence | domain/headless/FlaUI evidence, storyboard/video or fallback, full tests | Нет |
-| 3. Distribution support | AC-02, AC-14/18 | Fresh release/workflow baseline | platform smoke logs with OS/arch/artifact SHA | Нет |
+| 3. Distribution support | AC-02, AC-14/18 | Fresh release/workflow baseline + merged `headless-appautomation-storage-lifecycle` prerequisite | platform smoke logs with OS/arch/artifact SHA | Нет |
 | 4. Atomic release | AC-11, AC-18 | Stage 3 canonical manifest | draft verifier, SHA manifest, Android release certificate, action/tag/permission policy report, idempotency/concurrency and rollback evidence | Нет |
 | 5. Desktop data path | AC-07, AC-14/18 | Independent child spec | migration matrix, rollback and platform tests | Только явный `approved-deferred`; блокирует hardening completion, не docs truth |
 | 6. Credential storage | AC-08, AC-14/18 | Independent child spec | secure-store migration/redaction/security evidence | Только явный `approved-deferred`; блокирует hardening completion, не docs truth |
@@ -783,19 +785,19 @@ Stop rules для validation:
   - Debian support matrix требует native/package smoke evidence.
 
 ### Post-EXEC Review
-- Статус: В процессе; stage 1 доставлен merged PR #274 (`8e34408`), stage 2 доставлен merged PR #277 (`75efc049`) и factual closeout PR #278 (`ad90260b`); Stage-3 child SPEC approved 2026-07-19, EXEC и локальная валидация выполняются на ветке `docs/distribution-support-contract`; draft PR, native matrix и финальный Post-EXEC ещё pending; stages 4-10 pending
-- Scope reviewed: выполненные packages stages 1-2, текущий Stage-3 implementation в утверждённом allowlist, локальные distribution/workflow/README/entrypoint gates и отсутствие преждевременной migration production publishers из Stage 4
-- Decision: stages 1-2 завершены. Stage 3 разрешён и находится в EXEC; локальный implementation package ещё не считается доставленным до rebase, draft PR, native Windows/Linux/macOS/Android matrix, финального independent re-review и merge. Stage 4 начинать нельзя
+- Статус: В процессе; stages 1-2 доставлены. LF amendment и Headless prerequisite подтверждены пользователем 2026-07-20, prerequisite доставлен merged PR #279 (`e11cae9a`), Stage-3 EXEC возобновлён с rebase/LF/full-local gate; draft PR/native matrix/final Post-EXEC ещё не начаты; stages 4-10 pending
+- Scope reviewed: выполненные packages stages 1-2, Stage-3 implementation в исходном allowlist, post-rebase local gates, canonical worktree/Git-blob SHA и full Unit/Headless regression; production publishers Stage 4 не мигрировали
+- Decision: stages 1-2 завершены, Headless prerequisite отдельно слит. Rebase Stage 3 на `origin/main@e11cae9a`, применить утверждённую LF amendment, получить полный local green и только после этого запускать draft PR/native matrix. Stage 4 начинать нельзя
 - Review passes:
   - Scope/Evidence pass: stage 1 PASS; docs-only diff и local/live evidence соответствуют child spec.
   - Contract pass: stage 1 PASS; release, support, signing, updater и source-build claims сужены до проверяемого AS-IS.
   - Adversarial risk pass: stage 1 PASS; проверены drift latest release, unsupported-platform overclaim, `v`-tag edge case, mobile overflow и unrelated changes.
   - Role-Based pass: stage 1 PASS после release, tester/diff, copy/UX и delivery reviews.
   - Re-review after fixes / Fix and re-review: stage 1 PASS; copy findings исправлены и полный gate повторён.
-  - Stop decision: Stage-2 delivery закрыт; Stage-3 EXEC разрешён отдельным child approval, но его completion закрыта до native evidence и delivery gate.
-- Evidence inspected: stage-1 child Post-EXEC review, merged PR #275 (`118c2dc`) и PR #274 (`8e34408`), release/parity/structural/GFM reports и actual EN/RU GitHub render; для Stage 2 — 47 tracked content diffs + 12 new, targeted/full TRX/HTML, solution/Telegram builds, before/after MP4, six FlaUI screenshots, `ffprobe`/SHA metadata, independent API/docs reviews, PR #277 green checks, merge `75efc049` и factual closeout `ad90260b`; для Stage 3 — local manifest/support/evidence schemas, 22-asset inventory, 15 native cells, 99 negative fixtures, README/entrypoint/Android regression, actionlint/syntax и solution build
-- Depth checklist: stage ownership, exit criteria, dependency/ancestry boundaries, API/schema compatibility, UI applicability, rollback и residual routing проверены; Stage-3 native evidence/delivery и stages 4-10 не объявлены выполненными
-- No-findings justification: stage 1 и Stage 2 PASS после fixes; Stage-3 final PASS не выставлен — independent review нашёл test-fixture, executable-mode и journal-drift findings, все три исправления подтверждены targeted staged re-review без remaining findings, а native matrix остаётся pending
+  - Stop decision: Stage-2 delivery закрыт; Stage-3 stop rule был корректно закрыт repeat approval и отдельным merge prerequisite. Новый stop возможен только при failed full/native gate либо Android API 23 product incompatibility.
+- Evidence inspected: stage-1/stage-2 merged evidence; для Stage 3 — implementation/rebase commits, local manifest/support/evidence schemas, 22-asset inventory, 15 native cells, 99 negative fixtures, README/entrypoint/Android regression, actionlint/syntax, solution build, canonical CRLF/LF SHA pairs, Unit `829/830` + targeted `1/1`, Headless successful test totals followed by two identical host crashes
+- Depth checklist: stage ownership, exit criteria, dependency/ancestry boundaries, cross-OS exact bytes, API/schema compatibility, UI applicability, teardown ownership, rollback и residual routing проверены; Stage-3 full/native evidence/delivery и stages 4-10 не объявлены выполненными
+- No-findings justification: stage 1 и Stage 2 PASS после fixes; Headless blocker Stage 3 закрыт merged PR #279, LF remediation и полный local/native gate остаются pending, поэтому Stage-3 final PASS ещё не выставлен
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -807,17 +809,20 @@ Stop rules для validation:
 | MEDIUM | stage 3 / transport tests | Mixed attempts, exact 16 IDs, stale directory и receipt/runtime sidecar mutation были проверены только вручную | Исполнять embedded workflow Python в permanent positive/negative fixtures | fixed; targeted PASS |
 | MEDIUM | stage 3 / entrypoints | `run.linux.sh` и `run.macos.sh` оставались `100644` в index при требовании `100755` | Применить `git add --chmod=+x` и проверить staged mode | fixed; staged `100755` PASS |
 | MEDIUM | stage 3 / governance | Master/child Post-EXEC журналы утверждали, что approval и EXEC отсутствуют | Зафиксировать approved EXEC-in-progress и не заявлять native/final PASS | fixed; targeted PASS |
-| INFO | program | Stages 1-2 delivered; Stage-3 child approved и implementation проходит local gate | Завершить rebase/draft PR/native matrix/final Post-EXEC/merge; не начинать Stage 4 | in progress |
+| HIGH | stage 3 / identity | Canonical JSON получает CRLF в Windows checkout, из-за чего worktree SHA расходится с LF Git blob/native producers | Реализовать утверждённую `.gitattributes` LF amendment и worktree-vs-blob regression | approved; in progress |
+| BLOCKER | stage 3 / Headless prerequisite | AppAutomation host удалял temp root до dispose storage/watcher; full suite падал после успешных тестов | Отдельно approve/merge `headless-appautomation-storage-lifecycle`, затем rebase/rerun Stage 3 | fixed; merged PR #279, rerun pending |
+| LOW | test infra / RavenDB | Один full Unit live test попал в stale auto-index window; exact targeted run PASS | Не смешивать со Stage 3; потребовать full green rerun и отдельный follow-up consistency fix | follow-up |
+| INFO | program | Stages 1-2 delivered; amendment approved, prerequisite merged, Stage 3 resumed | Stage-3 rebase/LF fix/full gate -> draft/native/final/merge; не начинать Stage 4 | in progress |
 
 - Fixed before final report: stage-1 copy/scope findings исправлены; Stage-2 re-review исправил public setter/API/numeric compatibility, default-interface fallback, blocker-reason priority, authoritative stale-history unarchive/precondition, honest failure copy, real tooltip/evidence, row-scoped selection, deterministic confirmation, recorder FPS, runtime localization и README opacity overclaim; program-level final report ещё не наступил
-- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted suites PASS, full Unit 755/755, full Headless 33/33, focused FlaUI 3/3, solution/Telegram builds с 0 errors, diff/schema/API/video evidence и required GitHub checks PASS; Stage 3 pre-rebase — distribution contract PASS с 99 negatives, README 7 paired claims + negatives, root entrypoints, Android scripts, parsers/actionlint/embedded Python и `src/Unlimotion.sln` restore/build PASS с known warnings
-- Validation evidence: stage 1 — PASS/merged; Stage 2 — PASS/merged PR #277 и closeout PR #278; Stage 3 — local EXEC in progress, native CI/final review/merge pending; stages 4-10 — pending и не оценены как выполненные
-- Unrelated changes: в stages 1-2 не обнаружены; ignored UI evidence не входит в commits; Stage-3 branch создана от merged `origin/main@ad90260b`, который остаётся ancestor актуального `origin/main@ec9b206d`; upstream relevant-path overlap отсутствует
-- Needs human: Stage-3 approval уже получен; ASK-HUMAN обязателен только если native API-23 gate подтвердит несовместимость, требующую изменения support policy. Последующие stages сохраняют собственные child approval gates
-- Residual risks / follow-ups: production-storage lifecycle, server CAS, Headless pixel-capture infrastructure и stages 3-10 сохраняются
+- Checks rerun: stage 1 — полный local/live gate и merged GitHub checks; Stage 2 — final targeted/full/UI/build gates PASS; Stage 3 final-head distribution contract PASS с 99 negatives, README/entrypoint/Android/parsers/actionlint/build PASS; full Unit `829/830`, failed exact method targeted `1/1` PASS; full Headless дважды crash после успешных test totals на delayed `.unlimotion.lock`
+- Validation evidence: stage 1 — PASS/merged; Stage 2 — PASS/merged; Headless prerequisite — local/CI/review PASS и merged PR #279; Stage 3 — прежний static/build package PASS, новый `S3-AC-20` full rerun и native CI/final review/merge pending; stages 4-10 — pending
+- Unrelated changes: в stages 1-2 и prerequisite PR #279 не обнаружены; ignored evidence не входит в commits; Stage-3 branch готовится к rebase на актуальный `origin/main@e11cae9a`
+- Needs human: repeat approval обоих документов получен 2026-07-20; API-23 conditional gate остаётся позже
+- Residual risks / follow-ups: RavenDB stale-index flake, production-storage lifecycle, server CAS, Headless pixel-capture infrastructure и stages 3-10 сохраняются
 
 ## Approval
-Master roadmap подтверждена пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. Stage 1 child spec и Stage-2 child spec отдельно подтверждены 2026-07-17. Stage-3 child spec отдельно подтверждена 2026-07-19. Approvals stages 4+ остаются обязательными.
+Master roadmap подтверждена пользователем 2026-07-17 точной фразой `Спеку подтверждаю`. Stage 1 child spec и Stage-2 child spec отдельно подтверждены 2026-07-17. Исходная Stage-3 child spec подтверждена 2026-07-19; её LF amendment и Headless prerequisite child spec отдельно подтверждены одним явным сообщением 2026-07-20. Approvals stages 4+ остаются обязательными.
 
 ## 20. Журнал действий агента
 
@@ -849,3 +854,8 @@ Master roadmap подтверждена пользователем 2026-07-17 т
 | EXEC | Принять Stage-3 child approval | 1.00 | Native evidence появится после draft PR | Выполнить implementation в approved allowlist | Нет | Пользователь отдельно сообщил `Спеку подтверждаю` 2026-07-19 | Post-SPEC reviews PASS; approval открыл Stage-3 EXEC, не отменяя no-publication/native gates | Stage-3 child spec, user approval |
 | EXEC | Реализовать Stage-3 distribution contract | 1.00 | Native runner evidence | Закрыть local gates и independent findings | Нет | Не применимо | Canonical inventory/support/evidence, builders, read-only workflow, Android least privilege/provenance, paired README и entrypoints реализованы без Stage-4 publication migration | Stage-3 approved allowlist |
 | EXEC | Выполнить Stage-3 pre-rebase validation | 0.99 | Draft PR, native matrix и final-head review | Commit, rebase и повторить полный gate | Нет | Не применимо | Contract PASS с 99 negatives, README/entrypoints/Android/syntax/actionlint и solution restore/build PASS; executable modes staged `100755` | Local validation outputs, Stage-3 child/master specs |
+| EXEC | Выполнить Stage-3 rebase/final-head gate | 1.00 | Approved remediation двух blockers | Остановить delivery и обновить plans | Да | Ещё не обращались по amendment/prerequisite | Static/build gates PASS; CRLF/LF SHA drift гарантирует native mismatch, Headless teardown crash воспроизведён дважды | Stage-3 spec, full test output, SHA evidence |
+| SPEC | Зафиксировать последовательный unblock | 0.99 | Independent reviews и approval обоих документов | Сначала prerequisite PR, затем Stage-3 LF/full/native delivery | Да | Ещё не обращались | Отдельный lifecycle package сохраняет distribution scope и rollback; одно явное approval может подтвердить оба плана | Stage-3 amendment, `specs/2026-07-19-headless-appautomation-storage-lifecycle.md`, этот roadmap |
+| SPEC | Завершить independent re-review unblock plans | 1.00 | Только user approval | Запросить явное подтверждение обоих документов | Да | Architecture/QA/governance reviewers вернули PASS | Stage-3 amendment: 21/21 AC, raw 6-file/3-OS evidence; Headless child: 5/5 AC, exact 3-file RED/GREEN plan; structural/diff checks PASS | Обе child specs, этот roadmap, reviewer verdicts |
+| EXEC | Принять repeat approval LF amendment и Headless child spec | 1.00 | Нет | Сначала доставить prerequisite отдельным PR | Нет | Пользователь 2026-07-20 сообщил `Спеку подтверждаю` и явно назвал оба документа | Два approval gate закрыты одним сообщением, execution sequence сохранён | Обе child specs, этот roadmap, user approval |
+| EXEC | Завершить Headless prerequisite delivery | 1.00 | Нет | Rebase Stage 3 и реализовать LF/blob parity | Нет | Не применимо | Commit `666a989`, PR #279, local RED/GREEN/full/build evidence, independent PASS и все CI checks завершились merge `e11cae9a086ddd4fd97105f00b67bedf05f92700` | PR #279, Headless child spec, `origin/main` |
