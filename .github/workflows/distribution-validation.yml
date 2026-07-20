@@ -127,9 +127,15 @@ jobs:
 
       - name: Validate schemas, inventory, identity, feeds and retry policy
         shell: pwsh
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
             -Area All `
+            -SourceSha $env:SOURCE_SHA `
+            -WorkflowSha $env:WORKFLOW_SHA `
+            -BlobParityEvidencePath artifacts/contract/blob-parity.json `
             -EvidencePath artifacts/contract/contract-evidence.json
 
       - name: Validate root entry points
@@ -181,7 +187,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/upload/contract | Out-Null
-          Copy-Item artifacts/contract/identity.json,artifacts/contract/contract-evidence.json -Destination artifacts/upload/contract
+          Copy-Item artifacts/contract/identity.json,artifacts/contract/contract-evidence.json,artifacts/contract/blob-parity.json -Destination artifacts/upload/contract
 
       - name: Upload contract evidence
         id: upload
@@ -202,7 +208,7 @@ jobs:
           if ($artifactId -cnotmatch '^[1-9][0-9]*$') { throw 'Contract artifact id is not a positive decimal value.' }
           if ($artifactDigest -cnotmatch '^[0-9a-f]{64}$') { throw 'Contract artifact digest is not a lowercase SHA-256 value.' }
           $payloadRoot = 'artifacts/upload/contract'
-          $payloads = @('identity.json', 'contract-evidence.json') | ForEach-Object {
+          $payloads = @('identity.json', 'contract-evidence.json', 'blob-parity.json') | ForEach-Object {
             $path = Join-Path $payloadRoot $_
             [ordered]@{
               fileName = $_
@@ -422,6 +428,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate canonical JSON byte identity on Linux
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
+            -Area BlobParity `
+            -SourceSha $env:SOURCE_SHA `
+            -WorkflowSha $env:WORKFLOW_SHA `
+            -BlobParityEvidencePath artifacts/distribution-validation/blob-parity-linux-x64.json
+
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
@@ -469,6 +488,12 @@ jobs:
             --source-sha "${{ github.sha }}" \
             --output-root artifacts/distribution-validation/linux-x64 \
             --vpk "$RUNNER_TEMP/vpk/vpk"
+
+      - name: Retain Linux blob parity evidence
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath artifacts/distribution-validation/blob-parity-linux-x64.json `
+            -Destination artifacts/distribution-validation/linux-x64/evidence/blob-parity.json
 
       - name: Record initial exact Linux artifact envelope
         shell: pwsh
@@ -685,6 +710,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate canonical JSON byte identity on macOS
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/distribution-validation | Out-Null
+          pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
+            -Area BlobParity `
+            -SourceSha $env:SOURCE_SHA `
+            -WorkflowSha $env:WORKFLOW_SHA `
+            -BlobParityEvidencePath artifacts/distribution-validation/blob-parity-macos-x64.json
+
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
@@ -718,6 +756,12 @@ jobs:
             --architecture x64 \
             --output-dir artifacts/distribution-validation/macos-x64 \
             --vpk "$RUNNER_TEMP/vpk/vpk"
+
+      - name: Retain macOS blob parity evidence
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath artifacts/distribution-validation/blob-parity-macos-x64.json `
+            -Destination artifacts/distribution-validation/macos-x64/evidence/blob-parity.json
 
       - name: Record exact macOS x64 artifact envelope
         shell: pwsh
@@ -2272,7 +2316,7 @@ jobs:
           )
           expected_identity = {key: identity[key] for key in identity_keys}
           receipt_plan = {
-              "contract": {"identity.json", "contract-evidence.json"},
+              "contract": {"identity.json", "contract-evidence.json", "blob-parity.json"},
               "android_api23": {
                   "evidence.json", "download-transport.json",
                   "android-api23-emulator.log", "android-api23-logcat.txt",
@@ -2411,6 +2455,9 @@ jobs:
         id: aggregate
         if: steps.inspect.outputs.producers_ok == 'true'
         shell: pwsh
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           $download = 'artifacts/download'
           $identity = 'artifacts/verdict/identity.json'
@@ -2533,6 +2580,18 @@ jobs:
             Architecture = 'multi'
           }
           & ./scripts/Test-DistributionArtifact.ps1 @android
+
+          $blobParityInputs = @(
+            (Join-Path (Join-Path $download '${{ needs.contract.outputs.artifact_name }}') 'blob-parity.json'),
+            (Join-Path $linuxRoot 'evidence/blob-parity.json'),
+            (Join-Path (Join-Path $download '${{ needs.macos_x64.outputs.artifact_name }}') 'evidence/blob-parity.json')
+          )
+          & ./scripts/test-distribution-contract.ps1 `
+            -Area BlobParityAggregate `
+            -BlobParityInputPath ($blobParityInputs -join ',') `
+            -SourceSha $env:SOURCE_SHA `
+            -WorkflowSha $env:WORKFLOW_SHA `
+            -BlobParityEvidencePath artifacts/verdict/blob-parity.json
 
           $allAssetIds = @(
             'windows-feed-legacy',

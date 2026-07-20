@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('All', 'InventorySupport', 'IdentityTriggers', 'VelopackFeeds', 'Retry', 'Evidence', 'WorkflowSecurity')]
+    [ValidateSet('All', 'BlobParity', 'BlobParityAggregate', 'InventorySupport', 'IdentityTriggers', 'VelopackFeeds', 'Retry', 'Evidence', 'WorkflowSecurity')]
     [string]$Area = 'All',
 
     [string]$Manifest = (Join-Path $PSScriptRoot '..\distribution\release-assets.json'),
@@ -20,6 +20,14 @@ param(
 
     [string]$Workflow = (Join-Path $PSScriptRoot '..\.github\workflows\distribution-validation.yml'),
 
+    [string]$BlobParityEvidencePath,
+
+    [string[]]$BlobParityInputPath,
+
+    [string]$SourceSha,
+
+    [string]$WorkflowSha,
+
     [string]$EvidencePath
 )
 
@@ -29,6 +37,12 @@ $ErrorActionPreference = 'Stop'
 $script:checks = [System.Collections.Generic.List[string]]::new()
 $script:negativeFixtureCount = 0
 $script:pythonExecutable = $null
+$BlobParityInputPath = @(
+    $BlobParityInputPath |
+        ForEach-Object { $_ -split ',' } |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
 
 function Resolve-ExistingFile {
     param(
@@ -83,7 +97,8 @@ function Add-Check {
 function Assert-Throws {
     param(
         [Parameter(Mandatory = $true)][scriptblock]$Action,
-        [Parameter(Mandatory = $true)][string]$Name
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$MessagePattern
     )
 
     $failedAsExpected = $false
@@ -92,6 +107,9 @@ function Assert-Throws {
     }
     catch {
         $failedAsExpected = $true
+        if (-not [string]::IsNullOrWhiteSpace($MessagePattern) -and $_.Exception.Message -cnotmatch $MessagePattern) {
+            throw "Negative fixture '$Name' failed for an unexpected reason: $($_.Exception.Message)"
+        }
     }
 
     if (-not $failedAsExpected) {
@@ -151,6 +169,692 @@ function Get-BytesSha256 {
     param([Parameter(Mandatory = $true)][byte[]]$Bytes)
 
     return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
+}
+
+function Invoke-GitBytes {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.WorkingDirectory = $RepositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $Arguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $output = [System.IO.MemoryStream]::new()
+    try {
+        if (-not $process.Start()) {
+            throw "Unable to start Git for: $($Arguments -join ' ')"
+        }
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
+        $process.StandardOutput.BaseStream.CopyTo($output)
+        $process.WaitForExit()
+        $standardError = $standardErrorTask.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) {
+            throw "Git command failed with exit code $($process.ExitCode): git $($Arguments -join ' ')`n$standardError"
+        }
+        return ,$output.ToArray()
+    }
+    finally {
+        $output.Dispose()
+        $process.Dispose()
+    }
+}
+
+function ConvertFrom-NulSeparatedUtf8 {
+    param([Parameter(Mandatory = $true)][byte[]]$Bytes)
+
+    if ($Bytes.Count -eq 0) {
+        return @()
+    }
+    $text = [System.Text.UTF8Encoding]::new($false, $true).GetString($Bytes)
+    Assert-Condition ($text[$text.Length - 1] -eq [char]0) 'NUL-delimited Git output is not terminated.'
+    return @($text.Split([char]0, [System.StringSplitOptions]::RemoveEmptyEntries))
+}
+
+function Get-TrackedDistributionJsonPaths {
+    param([Parameter(Mandatory = $true)][string]$RepositoryRoot)
+
+    $pathspecs = @(
+        ':(glob)distribution/*.json',
+        ':(glob)distribution/fixtures/*.json'
+    )
+    [byte[]]$rawPaths = Invoke-GitBytes -RepositoryRoot $RepositoryRoot -Arguments (@('ls-files', '-z', '--') + $pathspecs)
+    [string[]]$paths = @(ConvertFrom-NulSeparatedUtf8 -Bytes $rawPaths)
+    Assert-Condition ($paths.Count -gt 0) 'No tracked distribution JSON files match the approved patterns.'
+
+    $caseInsensitivePaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($path in $paths) {
+        Assert-Condition (
+            $path -cmatch '^distribution/(?:[^/]+|fixtures/[^/]+)\.json$') `
+            "Tracked path '$path' escaped the approved distribution JSON patterns."
+        Assert-Condition ($caseInsensitivePaths.Add($path)) "Tracked distribution JSON path collision: '$path'."
+    }
+    [Array]::Sort($paths, [System.StringComparer]::Ordinal)
+    return $paths
+}
+
+function Get-GitPathAttributes {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$GitPath,
+        [string]$Source
+    )
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    $arguments.Add('check-attr')
+    if (-not [string]::IsNullOrWhiteSpace($Source)) {
+        $arguments.Add("--source=$Source")
+    }
+    foreach ($argument in @('-z', 'text', 'eol', '--', $GitPath)) {
+        $arguments.Add($argument)
+    }
+    [byte[]]$rawAttributes = Invoke-GitBytes -RepositoryRoot $RepositoryRoot `
+        -Arguments @($arguments)
+    $tokens = @(ConvertFrom-NulSeparatedUtf8 -Bytes $rawAttributes)
+    Assert-Condition ($tokens.Count -eq 6) "Git returned an unexpected attribute record for '$GitPath'."
+
+    $attributes = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::Ordinal)
+    for ($index = 0; $index -lt $tokens.Count; $index += 3) {
+        Assert-Condition ($tokens[$index] -ceq $GitPath) "Git attribute record path differs from '$GitPath'."
+        Assert-Condition (-not $attributes.ContainsKey($tokens[$index + 1])) "Duplicate Git attribute '$($tokens[$index + 1])' for '$GitPath'."
+        $attributes.Add($tokens[$index + 1], $tokens[$index + 2])
+    }
+    Assert-Condition ($attributes.ContainsKey('text') -and $attributes.ContainsKey('eol')) "Git attribute record for '$GitPath' is incomplete."
+    return [pscustomobject][ordered]@{
+        text = $attributes['text']
+        eol = $attributes['eol']
+    }
+}
+
+function Get-SourceBoundGitPathAttributes {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$GitPath
+    )
+
+    $headAttributes = Get-GitPathAttributes -RepositoryRoot $RepositoryRoot -GitPath $GitPath -Source 'HEAD'
+    $effectiveAttributes = Get-GitPathAttributes -RepositoryRoot $RepositoryRoot -GitPath $GitPath
+    Assert-Condition (
+        $headAttributes.text -ceq 'set' -and $headAttributes.eol -ceq 'lf') `
+        "Tracked distribution JSON '$GitPath' committed HEAD attributes must be text=set/eol=lf; actual text=$($headAttributes.text), eol=$($headAttributes.eol)."
+    Assert-Condition (
+        $effectiveAttributes.text -ceq 'set' -and $effectiveAttributes.eol -ceq 'lf') `
+        "Tracked distribution JSON '$GitPath' effective worktree attributes must be text=set/eol=lf; actual text=$($effectiveAttributes.text), eol=$($effectiveAttributes.eol)."
+    Assert-Condition (
+        $effectiveAttributes.text -ceq $headAttributes.text -and
+        $effectiveAttributes.eol -ceq $headAttributes.eol) `
+        "Tracked distribution JSON '$GitPath' effective worktree attributes differ from committed HEAD attributes."
+    return $headAttributes
+}
+
+function Resolve-RepositoryWorktreePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$WorktreeRoot,
+        [Parameter(Mandatory = $true)][string]$GitPath
+    )
+
+    $resolvedRoot = [System.IO.Path]::GetFullPath($WorktreeRoot).TrimEnd([char[]]'\/')
+    $relativePath = $GitPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+    $resolvedPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($resolvedRoot, $relativePath))
+    $comparison = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Windows)) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    $rootPrefix = $resolvedRoot + [System.IO.Path]::DirectorySeparatorChar
+    Assert-Condition ($resolvedPath.StartsWith($rootPrefix, $comparison)) "Tracked path '$GitPath' escaped the worktree root."
+    return $resolvedPath
+}
+
+function Test-ContainsCarriageReturn {
+    param([Parameter(Mandatory = $true)][byte[]]$Bytes)
+
+    foreach ($value in $Bytes) {
+        if ($value -eq 0x0D) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Get-CurrentRunnerOs {
+    if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Windows)) {
+        return 'windows'
+    }
+    if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Linux)) {
+        return 'linux'
+    }
+    if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::OSX)) {
+        return 'macos'
+    }
+    throw 'Blob parity checker does not recognize the current operating system.'
+}
+
+function Resolve-BlobParityIdentity {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [string]$ExpectedSourceSha,
+        [string]$ExpectedWorkflowSha
+    )
+
+    [byte[]]$rawHead = Invoke-GitBytes -RepositoryRoot $RepositoryRoot -Arguments @('rev-parse', 'HEAD')
+    $headSha = [System.Text.UTF8Encoding]::new($false, $true).GetString($rawHead).Trim()
+    Assert-Condition ($headSha -cmatch '^[0-9a-f]{40}$') "Current HEAD '$headSha' is not a lowercase SHA-1 value."
+
+    $source = if ([string]::IsNullOrWhiteSpace($ExpectedSourceSha)) { $headSha } else { $ExpectedSourceSha }
+    $workflow = if ([string]::IsNullOrWhiteSpace($ExpectedWorkflowSha)) { $headSha } else { $ExpectedWorkflowSha }
+    Assert-Condition ($source -cmatch '^[0-9a-f]{40}$') "Blob parity source SHA '$source' is not a lowercase SHA-1 value."
+    Assert-Condition ($workflow -cmatch '^[0-9a-f]{40}$') "Blob parity workflow SHA '$workflow' is not a lowercase SHA-1 value."
+    Assert-Condition ($source -ceq $headSha) "Blob parity source SHA '$source' does not match current HEAD '$headSha'."
+    return [pscustomobject][ordered]@{
+        sourceSha = $source
+        workflowSha = $workflow
+    }
+}
+
+function New-DistributionBlobParityEntry {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$WorktreeRoot,
+        [Parameter(Mandatory = $true)][string]$GitPath
+    )
+
+    $attributes = Get-SourceBoundGitPathAttributes -RepositoryRoot $RepositoryRoot -GitPath $GitPath
+
+    $worktreePath = Resolve-RepositoryWorktreePath -WorktreeRoot $WorktreeRoot -GitPath $GitPath
+    Assert-Condition ([System.IO.File]::Exists($worktreePath)) "Tracked distribution JSON '$GitPath' is missing from the physical worktree."
+    [byte[]]$worktreeBytes = [System.IO.File]::ReadAllBytes($worktreePath)
+    [byte[]]$blobBytes = Invoke-GitBytes -RepositoryRoot $RepositoryRoot -Arguments @('cat-file', 'blob', "HEAD:$GitPath")
+
+    $worktreeHasCarriageReturn = Test-ContainsCarriageReturn -Bytes $worktreeBytes
+    $blobHasCarriageReturn = Test-ContainsCarriageReturn -Bytes $blobBytes
+    Assert-Condition (-not $worktreeHasCarriageReturn) "Tracked distribution JSON '$GitPath' worktree contains raw 0x0D; LF-only bytes are required."
+    Assert-Condition (-not $blobHasCarriageReturn) "Tracked distribution JSON '$GitPath' committed blob contains raw 0x0D; LF-only bytes are required."
+
+    $worktreeSha256 = Get-BytesSha256 -Bytes $worktreeBytes
+    $blobSha256 = Get-BytesSha256 -Bytes $blobBytes
+    Assert-Condition ($worktreeBytes.Count -eq $blobBytes.Count) "Tracked distribution JSON '$GitPath' worktree/blob raw byte sizes differ."
+    Assert-Condition ($worktreeSha256 -ceq $blobSha256) "Tracked distribution JSON '$GitPath' worktree SHA-256 differs from the raw HEAD blob."
+
+    return [pscustomobject][ordered]@{
+        path = $GitPath
+        attributes = [pscustomobject][ordered]@{
+            text = [string]$attributes.text
+            eol = [string]$attributes.eol
+        }
+        worktreeBytes = [long]$worktreeBytes.Count
+        blobBytes = [long]$blobBytes.Count
+        worktreeSha256 = $worktreeSha256
+        blobSha256 = $blobSha256
+        worktreeHasCarriageReturn = $worktreeHasCarriageReturn
+        blobHasCarriageReturn = $blobHasCarriageReturn
+        sha256Match = $true
+        lfVerdict = 'pass'
+    }
+}
+
+function New-DistributionBlobParityReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$ExpectedSourceSha,
+        [Parameter(Mandatory = $true)][string]$ExpectedWorkflowSha
+    )
+
+    $paths = @(Get-TrackedDistributionJsonPaths -RepositoryRoot $RepositoryRoot)
+    $files = @(
+        foreach ($path in $paths) {
+            New-DistributionBlobParityEntry -RepositoryRoot $RepositoryRoot -WorktreeRoot $RepositoryRoot -GitPath $path
+        }
+    )
+    return [pscustomobject][ordered]@{
+        schemaVersion = 1
+        kind = 'distribution-blob-parity'
+        checkerVersion = 1
+        status = 'pass'
+        os = Get-CurrentRunnerOs
+        sourceSha = $ExpectedSourceSha
+        workflowSha = $ExpectedWorkflowSha
+        patterns = @('distribution/*.json', 'distribution/fixtures/*.json')
+        fileCount = $files.Count
+        files = $files
+        productionReady = $false
+    }
+}
+
+function Test-IsIntegerValue {
+    param([AllowNull()][object]$Value)
+
+    return (
+        $Value -is [byte] -or $Value -is [sbyte] -or
+        $Value -is [short] -or $Value -is [ushort] -or
+        $Value -is [int] -or $Value -is [uint] -or
+        $Value -is [long] -or $Value -is [ulong])
+}
+
+function Assert-ExactPropertySet {
+    param(
+        [Parameter(Mandatory = $true)][object]$Document,
+        [Parameter(Mandatory = $true)][string[]]$Expected,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    [string[]]$actualNames = @($Document.PSObject.Properties.Name)
+    [string[]]$expectedNames = @($Expected)
+    [Array]::Sort($actualNames, [System.StringComparer]::Ordinal)
+    [Array]::Sort($expectedNames, [System.StringComparer]::Ordinal)
+    Assert-Condition (
+        (($actualNames | ConvertTo-Json -Compress) -ceq ($expectedNames | ConvertTo-Json -Compress))) `
+        "$Label property set differs; actual=$($actualNames -join ',')."
+}
+
+function Assert-DirectBlobParityReport {
+    param(
+        [Parameter(Mandatory = $true)][object]$Document,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedPaths,
+        [Parameter(Mandatory = $true)][string]$ExpectedSourceSha,
+        [Parameter(Mandatory = $true)][string]$ExpectedWorkflowSha
+    )
+
+    Assert-ExactPropertySet -Document $Document `
+        -Expected @('schemaVersion', 'kind', 'checkerVersion', 'status', 'os', 'sourceSha', 'workflowSha', 'patterns', 'fileCount', 'files', 'productionReady') `
+        -Label $Label
+    Assert-Condition ((Test-IsIntegerValue $Document.schemaVersion) -and [long]$Document.schemaVersion -eq 1) "$Label schemaVersion must equal integer 1."
+    Assert-Condition ([string]$Document.kind -ceq 'distribution-blob-parity') "$Label kind is invalid."
+    Assert-Condition ((Test-IsIntegerValue $Document.checkerVersion) -and [long]$Document.checkerVersion -eq 1) "$Label checkerVersion must equal integer 1."
+    Assert-Condition ([string]$Document.status -ceq 'pass') "$Label status must equal pass."
+    Assert-Condition ([string]$Document.os -cin @('windows', 'linux', 'macos')) "$Label runner OS is invalid."
+    Assert-Condition ([string]$Document.sourceSha -ceq $ExpectedSourceSha) "$Label source SHA differs from current HEAD."
+    Assert-Condition ([string]$Document.workflowSha -ceq $ExpectedWorkflowSha) "$Label workflow SHA differs from the expected workflow SHA."
+    Assert-Condition (
+        ((@($Document.patterns) | ConvertTo-Json -Compress) -ceq (@('distribution/*.json', 'distribution/fixtures/*.json') | ConvertTo-Json -Compress))) `
+        "$Label approved pattern set or order differs."
+    Assert-Condition ($Document.productionReady -is [bool] -and -not $Document.productionReady) "$Label must remain non-productionReady."
+
+    $files = @($Document.files)
+    Assert-Condition ((Test-IsIntegerValue $Document.fileCount) -and [long]$Document.fileCount -eq $files.Count) "$Label fileCount does not match files."
+    Assert-Condition ($files.Count -eq $ExpectedPaths.Count) "$Label tracked path count differs from the current repository."
+    $reportedPaths = @($files | ForEach-Object { [string]$_.path })
+    Assert-Condition (
+        (($reportedPaths | ConvertTo-Json -Compress) -ceq ($ExpectedPaths | ConvertTo-Json -Compress))) `
+        "$Label tracked paths must use the exact ordinal repository order."
+    $filesByPath = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+    foreach ($file in $files) {
+        Assert-ExactPropertySet -Document $file `
+            -Expected @('path', 'attributes', 'worktreeBytes', 'blobBytes', 'worktreeSha256', 'blobSha256', 'worktreeHasCarriageReturn', 'blobHasCarriageReturn', 'sha256Match', 'lfVerdict') `
+            -Label "$Label file entry"
+        $path = [string]$file.path
+        Assert-Condition (-not [string]::IsNullOrWhiteSpace($path)) "$Label has an empty tracked path."
+        Assert-Condition (-not $filesByPath.ContainsKey($path)) "$Label has duplicate tracked path '$path'."
+        $filesByPath.Add($path, $file)
+
+        Assert-ExactPropertySet -Document $file.attributes -Expected @('text', 'eol') -Label "$Label attributes for '$path'"
+        Assert-Condition ([string]$file.attributes.text -ceq 'set' -and [string]$file.attributes.eol -ceq 'lf') "$Label attributes for '$path' are not text=set/eol=lf."
+        Assert-Condition ((Test-IsIntegerValue $file.worktreeBytes) -and [long]$file.worktreeBytes -gt 0) "$Label worktree byte size for '$path' is invalid."
+        Assert-Condition ((Test-IsIntegerValue $file.blobBytes) -and [long]$file.blobBytes -eq [long]$file.worktreeBytes) "$Label worktree/blob byte sizes for '$path' differ."
+        Assert-Condition ([string]$file.worktreeSha256 -cmatch '^[0-9a-f]{64}$') "$Label worktree SHA-256 for '$path' is invalid."
+        Assert-Condition ([string]$file.blobSha256 -cmatch '^[0-9a-f]{64}$') "$Label blob SHA-256 for '$path' is invalid."
+        Assert-Condition ([string]$file.worktreeSha256 -ceq [string]$file.blobSha256) "$Label worktree/blob SHA-256 values for '$path' differ."
+        Assert-Condition ($file.worktreeHasCarriageReturn -is [bool] -and -not $file.worktreeHasCarriageReturn) "$Label worktree CR verdict for '$path' is invalid."
+        Assert-Condition ($file.blobHasCarriageReturn -is [bool] -and -not $file.blobHasCarriageReturn) "$Label blob CR verdict for '$path' is invalid."
+        Assert-Condition ($file.sha256Match -is [bool] -and $file.sha256Match) "$Label SHA parity verdict for '$path' is invalid."
+        Assert-Condition ([string]$file.lfVerdict -ceq 'pass') "$Label LF verdict for '$path' is invalid."
+    }
+
+    foreach ($path in $ExpectedPaths) {
+        Assert-Condition ($filesByPath.ContainsKey($path)) "$Label tracked path set is missing '$path'."
+        $reported = $filesByPath[$path]
+        $attributes = Get-SourceBoundGitPathAttributes -RepositoryRoot $RepositoryRoot -GitPath $path
+        Assert-Condition (
+            [string]$reported.attributes.text -ceq [string]$attributes.text -and
+            [string]$reported.attributes.eol -ceq [string]$attributes.eol) `
+            "$Label reported attributes for '$path' differ from committed HEAD attributes."
+        [byte[]]$blobBytes = Invoke-GitBytes -RepositoryRoot $RepositoryRoot -Arguments @('cat-file', 'blob', "HEAD:$path")
+        $blobSha256 = Get-BytesSha256 -Bytes $blobBytes
+        Assert-Condition (
+            [long]$reported.blobBytes -eq $blobBytes.Count -and [string]$reported.blobSha256 -ceq $blobSha256) `
+            "$Label committed blob fields for '$path' do not match the current HEAD blob."
+    }
+    return $filesByPath
+}
+
+function New-DistributionBlobParityAggregateReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$InputPaths,
+        [Parameter(Mandatory = $true)][string]$ExpectedSourceSha,
+        [Parameter(Mandatory = $true)][string]$ExpectedWorkflowSha
+    )
+
+    Assert-Condition ($InputPaths.Count -eq 3) 'Blob parity aggregate requires exactly three direct reports.'
+    [string[]]$expectedPaths = @(Get-TrackedDistributionJsonPaths -RepositoryRoot $RepositoryRoot)
+    $reportsByOs = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+    $reportReferences = [System.Collections.Generic.List[object]]::new()
+    foreach ($inputPath in $InputPaths) {
+        $resolvedPath = Resolve-ExistingFile -Path $inputPath -DisplayName 'Blob parity input report'
+        $document = Read-JsonFile -Path $resolvedPath -DisplayName "Blob parity input report '$resolvedPath'"
+        $label = "Blob parity input report '$resolvedPath'"
+        $filesByPath = Assert-DirectBlobParityReport -Document $document -Label $label `
+            -RepositoryRoot $RepositoryRoot -ExpectedPaths $expectedPaths `
+            -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        $os = [string]$document.os
+        Assert-Condition (-not $reportsByOs.ContainsKey($os)) "Blob parity aggregate has duplicate runner OS '$os'."
+        $reportsByOs.Add($os, [pscustomobject][ordered]@{
+            document = $document
+            filesByPath = $filesByPath
+        })
+        $reportReferences.Add([pscustomobject][ordered]@{
+            os = $os
+            fileName = [System.IO.Path]::GetFileName($resolvedPath)
+            sha256 = Get-LowerFileSha256 -Path $resolvedPath
+        })
+    }
+
+    Assert-Condition (
+        (($reportsByOs.Keys | Sort-Object) -join ',') -ceq 'linux,macos,windows') `
+        'Blob parity aggregate runner OS set must be exactly windows, linux and macos.'
+
+    $canonicalFiles = @(
+        foreach ($path in $expectedPaths) {
+            $reference = $reportsByOs['windows'].filesByPath[$path]
+            foreach ($os in @('linux', 'macos')) {
+                $candidate = $reportsByOs[$os].filesByPath[$path]
+                Assert-Condition (
+                    [long]$candidate.blobBytes -eq [long]$reference.blobBytes -and
+                    [string]$candidate.blobSha256 -ceq [string]$reference.blobSha256) `
+                    "Blob parity aggregate committed blob fields drifted for '$path' on '$os'."
+            }
+            [pscustomobject][ordered]@{
+                path = $path
+                blobBytes = [long]$reference.blobBytes
+                blobSha256 = [string]$reference.blobSha256
+            }
+        }
+    )
+    $sortedReferences = @($reportReferences | Sort-Object -Property os)
+    return [pscustomobject][ordered]@{
+        schemaVersion = 1
+        kind = 'distribution-blob-parity-aggregate'
+        checkerVersion = 1
+        status = 'pass'
+        sourceSha = $ExpectedSourceSha
+        workflowSha = $ExpectedWorkflowSha
+        patterns = @('distribution/*.json', 'distribution/fixtures/*.json')
+        reportRefs = $sortedReferences
+        fileCount = $canonicalFiles.Count
+        files = $canonicalFiles
+        productionReady = $false
+    }
+}
+
+function New-CrlfBlobParityFixtureBytes {
+    param([Parameter(Mandatory = $true)][byte[]]$BlobBytes)
+
+    $output = [System.IO.MemoryStream]::new()
+    try {
+        foreach ($value in $BlobBytes) {
+            if ($value -eq 0x0A) {
+                $output.WriteByte(0x0D)
+            }
+            $output.WriteByte($value)
+        }
+        return ,$output.ToArray()
+    }
+    finally {
+        $output.Dispose()
+    }
+}
+
+function Get-BlobParityMutationFixture {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$GitPaths
+    )
+
+    Assert-Condition ($GitPaths.Count -gt 0) 'Blob parity mutation fixture setup requires at least one tracked JSON path.'
+    foreach ($gitPath in $GitPaths) {
+        [byte[]]$blobBytes = Invoke-GitBytes -RepositoryRoot $RepositoryRoot -Arguments @('cat-file', 'blob', "HEAD:$gitPath")
+        if (Test-ContainsCarriageReturn -Bytes $blobBytes) {
+            continue
+        }
+        for ($index = 1; $index -lt $blobBytes.Count; $index++) {
+            if ($blobBytes[$index - 1] -eq 0x0A -and $blobBytes[$index] -eq 0x20) {
+                return [pscustomobject][ordered]@{
+                    gitPath = $gitPath
+                    blobBytes = $blobBytes
+                    indentationIndex = $index
+                }
+            }
+        }
+    }
+
+    throw (
+        'Blob parity mutation fixture setup requires at least one LF-only tracked JSON blob with an indentation space immediately after LF; ' +
+        "inspected paths: $($GitPaths -join ', ').")
+}
+
+function Test-BlobParityByteMutationNegativeFixtures {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string[]]$GitPaths
+    )
+
+    $mutationFixture = Get-BlobParityMutationFixture -RepositoryRoot $RepositoryRoot -GitPaths $GitPaths
+    $gitPath = [string]$mutationFixture.gitPath
+    [byte[]]$blobBytes = $mutationFixture.blobBytes
+    [byte[]]$crlfBytes = New-CrlfBlobParityFixtureBytes -BlobBytes $blobBytes
+    Assert-Condition (Test-ContainsCarriageReturn -Bytes $crlfBytes) 'CRLF negative fixture does not contain raw 0x0D.'
+    $fixtureText = [System.Text.UTF8Encoding]::new($false, $true).GetString($crlfBytes)
+    try {
+        $fixtureText | ConvertFrom-Json -Depth 100 -ErrorAction Stop | Out-Null
+    }
+    catch {
+        throw "CRLF negative fixture must remain valid JSON: $($_.Exception.Message)"
+    }
+
+    [byte[]]$validLfMutation = [byte[]]$blobBytes.Clone()
+    $validLfMutation[[int]$mutationFixture.indentationIndex] = 0x09
+    Assert-Condition ($validLfMutation.Count -eq $blobBytes.Count) `
+        'Valid-LF byte mutation fixture must preserve the raw blob byte size.'
+    Assert-Condition (-not (Test-ContainsCarriageReturn -Bytes $validLfMutation)) `
+        'Valid-LF byte mutation fixture unexpectedly contains raw 0x0D.'
+    Assert-Condition (
+        (Get-BytesSha256 -Bytes $validLfMutation) -cne (Get-BytesSha256 -Bytes $blobBytes)) `
+        'Valid-LF byte mutation fixture must change the raw SHA-256 value.'
+    $validLfMutationText = [System.Text.UTF8Encoding]::new($false, $true).GetString($validLfMutation)
+    try {
+        $validLfMutationText | ConvertFrom-Json -Depth 100 -ErrorAction Stop | Out-Null
+    }
+    catch {
+        throw "Valid-LF byte mutation fixture must remain valid JSON: $($_.Exception.Message)"
+    }
+
+    $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('unlimotion-blob-parity-crlf-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        $fixturePath = Resolve-RepositoryWorktreePath -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($fixturePath)) | Out-Null
+        [System.IO.File]::WriteAllBytes($fixturePath, $crlfBytes)
+        Assert-Throws -Name 'blob-parity-valid-json-crlf' -MessagePattern 'worktree contains raw 0x0D' -Action {
+            New-DistributionBlobParityEntry -RepositoryRoot $RepositoryRoot -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        }
+        [System.IO.File]::WriteAllBytes($fixturePath, $validLfMutation)
+        Assert-Throws -Name 'blob-parity-valid-json-lf-byte-mutation' -MessagePattern 'worktree SHA-256 differs from the raw HEAD blob' -Action {
+            New-DistributionBlobParityEntry -RepositoryRoot $RepositoryRoot -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        }
+    }
+    finally {
+        if ([System.IO.Directory]::Exists($temporaryRoot)) {
+            [System.IO.Directory]::Delete($temporaryRoot, $true)
+        }
+    }
+}
+
+function Test-BlobParityAttributeSourceFixtures {
+    $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('unlimotion-blob-parity-attributes-' + [Guid]::NewGuid().ToString('N'))
+    [System.IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
+    try {
+        [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments @('init', '--quiet'))
+        $emptyHooks = Join-Path $temporaryRoot 'empty-hooks'
+        [System.IO.Directory]::CreateDirectory($emptyHooks) | Out-Null
+        foreach ($configuration in @(
+                @('user.name', 'Unlimotion Contract Tests'),
+                @('user.email', 'tests@unlimotion.invalid'),
+                @('commit.gpgSign', 'false'),
+                @('core.hooksPath', $emptyHooks),
+                @('core.autocrlf', 'false'))) {
+            [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments (@('config') + $configuration))
+        }
+
+        $gitPath = 'distribution/source-binding-fixture.json'
+        $jsonPath = Resolve-RepositoryWorktreePath -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($jsonPath)) | Out-Null
+        [System.IO.File]::WriteAllText(
+            $jsonPath,
+            "{`n  `"value`": true`n}`n",
+            [System.Text.UTF8Encoding]::new($false))
+        [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments @('add', '--', $gitPath))
+        [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments @('commit', '--quiet', '-m', 'Add JSON fixture without attributes'))
+
+        $attributesPath = Join-Path $temporaryRoot '.gitattributes'
+        [System.IO.File]::WriteAllText(
+            $attributesPath,
+            "distribution/*.json text eol=lf`n",
+            [System.Text.UTF8Encoding]::new($false))
+        [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments @('add', '--', '.gitattributes'))
+
+        $effectiveAttributes = Get-GitPathAttributes -RepositoryRoot $temporaryRoot -GitPath $gitPath
+        $headAttributes = Get-GitPathAttributes -RepositoryRoot $temporaryRoot -GitPath $gitPath -Source 'HEAD'
+        Assert-Condition (
+            $effectiveAttributes.text -ceq 'set' -and $effectiveAttributes.eol -ceq 'lf') `
+            'Source-binding negative fixture must expose staged/worktree text=set/eol=lf attributes.'
+        Assert-Condition (
+            $headAttributes.text -ceq 'unspecified' -and $headAttributes.eol -ceq 'unspecified') `
+            'Source-binding negative fixture HEAD must not contain the staged/worktree attributes.'
+        Assert-Throws -Name 'blob-parity-attributes-not-committed-in-head' `
+            -MessagePattern 'committed HEAD attributes must be text=set/eol=lf' -Action {
+            New-DistributionBlobParityEntry -RepositoryRoot $temporaryRoot -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        }
+
+        [void](Invoke-GitBytes -RepositoryRoot $temporaryRoot -Arguments @('commit', '--quiet', '-m', 'Commit LF attributes'))
+        $positive = New-DistributionBlobParityEntry `
+            -RepositoryRoot $temporaryRoot -WorktreeRoot $temporaryRoot -GitPath $gitPath
+        Assert-Condition (
+            $positive.attributes.text -ceq 'set' -and
+            $positive.attributes.eol -ceq 'lf' -and
+            $positive.sha256Match -and
+            $positive.lfVerdict -ceq 'pass') `
+            'Source-binding positive fixture must pass after LF attributes are committed in HEAD.'
+        Add-Check -Name 'blob-parity:committed-head-and-effective-attributes-match'
+    }
+    finally {
+        Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Assert-Condition (-not [System.IO.Directory]::Exists($temporaryRoot)) `
+            "Blob parity attribute-source fixture failed to remove temporary Git repository '$temporaryRoot'."
+    }
+}
+
+function Test-BlobParityAggregateFixtures {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][object]$DirectReport,
+        [Parameter(Mandatory = $true)][string]$ExpectedSourceSha,
+        [Parameter(Mandatory = $true)][string]$ExpectedWorkflowSha
+    )
+
+    $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('unlimotion-blob-parity-aggregate-' + [Guid]::NewGuid().ToString('N'))
+    [System.IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
+    try {
+        $paths = [System.Collections.Generic.List[string]]::new()
+        foreach ($os in @('windows', 'linux', 'macos')) {
+            $document = Copy-JsonObject $DirectReport
+            $document.os = $os
+            $path = Join-Path $temporaryRoot "$os.json"
+            Write-JsonUtf8NoBom -Path $path -Document $document
+            $paths.Add($path)
+        }
+
+        $positive = New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+            -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        Assert-Condition ($positive.status -ceq 'pass' -and $positive.fileCount -eq @($DirectReport.files).Count) `
+            'Blob parity aggregate positive fixture did not preserve the complete canonical path set.'
+        Add-Check -Name 'blob-parity-aggregate:three-os-canonical-closure'
+
+        $missingOs = Copy-JsonObject $DirectReport
+        $missingOs.os = 'linux'
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $missingOs
+        Assert-Throws -Name 'blob-parity-aggregate-missing-os' -MessagePattern 'runner OS' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+
+        $macos = Copy-JsonObject $DirectReport
+        $macos.os = 'macos'
+        $macos.files = @($macos.files | Select-Object -Skip 1)
+        $macos.fileCount = @($macos.files).Count
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $macos
+        Assert-Throws -Name 'blob-parity-aggregate-missing-path' -MessagePattern 'tracked path' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+
+        $macos = Copy-JsonObject $DirectReport
+        $macos.os = 'macos'
+        $macos.files = @($macos.files | Sort-Object -Property path -Descending)
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $macos
+        Assert-Throws -Name 'blob-parity-aggregate-path-order' -MessagePattern 'exact ordinal repository order' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+
+        $macos = Copy-JsonObject $DirectReport
+        $macos.os = 'macos'
+        $macos.sourceSha = '0' * 40
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $macos
+        Assert-Throws -Name 'blob-parity-aggregate-source-sha-mismatch' -MessagePattern 'source SHA differs from current HEAD' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+
+        $macos = Copy-JsonObject $DirectReport
+        $macos.os = 'macos'
+        $macos.workflowSha = '0' * 40
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $macos
+        Assert-Throws -Name 'blob-parity-aggregate-workflow-sha-mismatch' -MessagePattern 'workflow SHA differs from the expected workflow SHA' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+
+        $macos = Copy-JsonObject $DirectReport
+        $macos.os = 'macos'
+        $macos.files[0].worktreeSha256 = '0' * 64
+        $macos.files[0].blobSha256 = '0' * 64
+        Write-JsonUtf8NoBom -Path $paths[2] -Document $macos
+        Assert-Throws -Name 'blob-parity-aggregate-hash-drift' -MessagePattern 'current HEAD blob' -Action {
+            New-DistributionBlobParityAggregateReport -RepositoryRoot $RepositoryRoot -InputPaths @($paths) `
+                -ExpectedSourceSha $ExpectedSourceSha -ExpectedWorkflowSha $ExpectedWorkflowSha
+        }
+    }
+    finally {
+        if ([System.IO.Directory]::Exists($temporaryRoot)) {
+            [System.IO.Directory]::Delete($temporaryRoot, $true)
+        }
+    }
 }
 
 function New-OrdinalIgnoreCaseMap {
@@ -267,6 +971,45 @@ function Get-WorkflowNamedStepBlock {
     $nextStep = $normalized.IndexOf("`n      - name:", $start + $matches[0].Length, [StringComparison]::Ordinal)
     if ($nextStep -lt 0) { $nextStep = $normalized.Length }
     return $normalized.Substring($start, $nextStep - $start)
+}
+
+function Replace-WorkflowNamedStepFixtureOnce {
+    param(
+        [Parameter(Mandatory = $true)][string]$WorkflowText,
+        [Parameter(Mandatory = $true)][string]$StepName,
+        [Parameter(Mandatory = $true)][string]$Pattern,
+        [Parameter(Mandatory = $true)][string]$Replacement,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $normalized = $WorkflowText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $stepBlock = Get-WorkflowNamedStepBlock -WorkflowText $normalized -StepName $StepName
+    $mutatedStep = Replace-WorkflowFixtureOnce -Text $stepBlock -Pattern $Pattern -Replacement $Replacement -Name $Name
+    $stepStart = $normalized.IndexOf($stepBlock, [StringComparison]::Ordinal)
+    Assert-Condition ($stepStart -ge 0) "Workflow fixture '$Name' could not locate the exact named step block."
+    return $normalized.Substring(0, $stepStart) + $mutatedStep + $normalized.Substring($stepStart + $stepBlock.Length)
+}
+
+function Assert-WorkflowStepShaBindings {
+    param(
+        [Parameter(Mandatory = $true)][string]$StepBlock,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $normalized = $StepBlock.Replace("`r`n", "`n").Replace("`r", "`n")
+    $envMatches = [regex]::Matches($normalized, '(?m)^        env:\s*$')
+    $runMatches = [regex]::Matches($normalized, '(?m)^        run:\s*\|\s*$')
+    Assert-Condition ($envMatches.Count -eq 1 -and $runMatches.Count -eq 1 -and $runMatches[0].Index -gt $envMatches[0].Index) `
+        "$Label must have one step-local env block before its run block."
+    $envBlock = $normalized.Substring(
+        $envMatches[0].Index,
+        $runMatches[0].Index - $envMatches[0].Index)
+    Assert-Condition (
+        [regex]::Matches($envBlock, '(?m)^          SOURCE_SHA: \$\{\{ github\.sha \}\}\s*$').Count -eq 1) `
+        "$Label must bind exact step-local SOURCE_SHA: `${{ github.sha }}."
+    Assert-Condition (
+        [regex]::Matches($envBlock, '(?m)^          WORKFLOW_SHA: \$\{\{ job\.workflow_sha \}\}\s*$').Count -eq 1) `
+        "$Label must bind exact step-local WORKFLOW_SHA: `${{ job.workflow_sha }}."
 }
 
 function Get-EmbeddedWorkflowPythonBlock {
@@ -418,6 +1161,19 @@ function Write-JsonUtf8NoBom {
     [System.IO.File]::WriteAllText($Path, $json + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
+function Write-BlobParityEvidence {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][object]$Document
+    )
+
+    $fullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    $directory = [System.IO.Path]::GetDirectoryName($fullPath)
+    Assert-Condition (-not [string]::IsNullOrWhiteSpace($directory)) "Blob parity evidence path must have a parent directory: $Path"
+    [System.IO.Directory]::CreateDirectory($directory) | Out-Null
+    Write-JsonUtf8NoBom -Path $fullPath -Document $Document
+}
+
 function Read-GitHubOutputMap {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -560,6 +1316,11 @@ function New-EmbeddedReceiptValidationFixture {
         if ($producerName -ceq 'contract') {
             Write-JsonUtf8NoBom -Path (Join-Path $payloadRoot 'identity.json') -Document $IdentityDocument
             Write-JsonUtf8NoBom -Path (Join-Path $payloadRoot 'contract-evidence.json') -Document ([ordered]@{ status = 'pass' })
+            $blobParityReport = New-DistributionBlobParityReport -RepositoryRoot $script:repositoryRoot `
+                -ExpectedSourceSha ([string]$IdentityDocument.sourceSha) `
+                -ExpectedWorkflowSha ([string]$IdentityDocument.workflowSha)
+            $blobParityReport.os = 'windows'
+            Write-JsonUtf8NoBom -Path (Join-Path $payloadRoot 'blob-parity.json') -Document $blobParityReport
         }
         else {
             $api = if ($producerName -ceq 'android_api23') { '23' } else { '36' }
@@ -719,7 +1480,7 @@ function Test-EmbeddedWorkflowBehaviorFixtures {
             -ProducerDocument $positiveInspection.Document -IdentityDocument $identityDocument
         $receiptPositiveResult = Invoke-EmbeddedReceiptValidator -Script $receiptScript -Fixture $receiptPositive
         Assert-EmbeddedPythonSucceeded -Result $receiptPositiveResult -Name 'receipt and Android runtime sidecar validation'
-        Add-Check -Name 'workflow-behavior:embedded-receipt-runtime-sidecar-positive'
+        Add-Check -Name 'workflow-behavior:embedded-receipt-blob-parity-runtime-sidecar-positive'
 
         $receiptMismatch = New-EmbeddedReceiptValidationFixture `
             -Root (Join-Path $temporaryRoot 'receipt-payload-mismatch') `
@@ -731,6 +1492,25 @@ function Test-EmbeddedWorkflowBehaviorFixtures {
         Assert-EmbeddedPythonRejected -Result $receiptMismatchResult `
             -Name 'workflow-embedded-receipt-payload-hash-mismatch' `
             -ExpectedMessage 'Receipt payload hash mismatch: contract/identity.json'
+
+        $blobParityMismatch = New-EmbeddedReceiptValidationFixture `
+            -Root (Join-Path $temporaryRoot 'receipt-blob-parity-mismatch') `
+            -ProducerDocument $positiveInspection.Document -IdentityDocument $identityDocument
+        $blobParityPath = Join-Path $blobParityMismatch.PayloadRoots.contract 'blob-parity.json'
+        [System.IO.File]::AppendAllText($blobParityPath, "mutated-blob-parity`n", [System.Text.UTF8Encoding]::new($false))
+        $blobParityMismatchResult = Invoke-EmbeddedReceiptValidator -Script $receiptScript -Fixture $blobParityMismatch
+        Assert-EmbeddedPythonRejected -Result $blobParityMismatchResult `
+            -Name 'workflow-embedded-contract-blob-parity-hash-mismatch' `
+            -ExpectedMessage 'Receipt payload hash mismatch: contract/blob-parity.json'
+
+        $missingBlobParity = New-EmbeddedReceiptValidationFixture `
+            -Root (Join-Path $temporaryRoot 'receipt-blob-parity-missing') `
+            -ProducerDocument $positiveInspection.Document -IdentityDocument $identityDocument
+        [System.IO.File]::Delete((Join-Path $missingBlobParity.PayloadRoots.contract 'blob-parity.json'))
+        $missingBlobParityResult = Invoke-EmbeddedReceiptValidator -Script $receiptScript -Fixture $missingBlobParity
+        Assert-EmbeddedPythonRejected -Result $missingBlobParityResult `
+            -Name 'workflow-embedded-contract-blob-parity-missing' `
+            -ExpectedMessage 'Unexpected contract downloaded payload closure'
 
         $runtimeMismatch = New-EmbeddedReceiptValidationFixture `
             -Root (Join-Path $temporaryRoot 'runtime-sidecar-mismatch') `
@@ -748,6 +1528,162 @@ function Test-EmbeddedWorkflowBehaviorFixtures {
     finally {
         Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Test-WorkflowBlobParityWiring {
+    param(
+        [Parameter(Mandatory = $true)][string]$WorkflowText,
+        [Parameter(Mandatory = $true)][object]$JobBlocks
+    )
+
+    foreach ($jobId in @('contract', 'linux_x64', 'macos_x64', 'distribution-verdict')) {
+        Assert-Condition ($JobBlocks.Contains($jobId)) "Blob parity workflow is missing required job '$jobId'."
+    }
+
+    $contractBlock = [string]$JobBlocks['contract']
+    $contractValidation = Get-WorkflowNamedStepBlock -WorkflowText $contractBlock `
+        -StepName 'Validate schemas, inventory, identity, feeds and retry policy'
+    Assert-WorkflowStepShaBindings -StepBlock $contractValidation -Label 'Contract blob parity validation'
+    Assert-Condition (
+        $contractValidation.Contains('-Area All `', [StringComparison]::Ordinal) -and
+        $contractValidation.Contains('-SourceSha $env:SOURCE_SHA `', [StringComparison]::Ordinal) -and
+        $contractValidation.Contains('-WorkflowSha $env:WORKFLOW_SHA `', [StringComparison]::Ordinal) -and
+        $contractValidation.Contains('-BlobParityEvidencePath artifacts/contract/blob-parity.json `', [StringComparison]::Ordinal)) `
+        'Contract validation must run Area All and emit the exact source-bound artifacts/contract/blob-parity.json report.'
+    $contractStage = Get-WorkflowNamedStepBlock -WorkflowText $contractBlock -StepName 'Stage contract evidence'
+    Assert-Condition (
+        $contractStage.Contains(
+            'Copy-Item artifacts/contract/identity.json,artifacts/contract/contract-evidence.json,artifacts/contract/blob-parity.json -Destination artifacts/upload/contract',
+            [StringComparison]::Ordinal)) `
+        'Contract staging must copy identity.json, contract-evidence.json and blob-parity.json as one exact closure.'
+    $contractReceipt = Get-WorkflowNamedStepBlock -WorkflowText $contractBlock -StepName 'Record contract evidence transport receipt'
+    Assert-Condition (
+        $contractReceipt.Contains(
+            "`$payloads = @('identity.json', 'contract-evidence.json', 'blob-parity.json') | ForEach-Object {",
+            [StringComparison]::Ordinal)) `
+        'Contract receipt must bind identity.json, contract-evidence.json and blob-parity.json.'
+
+    $producerPlans = @(
+        [pscustomobject][ordered]@{
+            JobId = 'linux_x64'
+            OsLabel = 'Linux'
+            CheckerStep = 'Validate canonical JSON byte identity on Linux'
+            BuildStep = 'Build Linux candidates from one publish'
+            RetainStep = 'Retain Linux blob parity evidence'
+            StageStep = 'Stage Linux tar transport'
+            UploadStep = 'Upload exact Linux candidate as tar'
+            ScratchPath = 'artifacts/distribution-validation/blob-parity-linux-x64.json'
+            BuilderArgument = '--output-root'
+            BuilderRoot = 'artifacts/distribution-validation/linux-x64'
+            RetainedPath = 'artifacts/distribution-validation/linux-x64/evidence/blob-parity.json'
+        },
+        [pscustomobject][ordered]@{
+            JobId = 'macos_x64'
+            OsLabel = 'macOS x64'
+            CheckerStep = 'Validate canonical JSON byte identity on macOS'
+            BuildStep = 'Build macOS x64 candidates'
+            RetainStep = 'Retain macOS blob parity evidence'
+            StageStep = 'Stage macOS x64 evidence'
+            UploadStep = 'Upload exact macOS x64 candidate'
+            ScratchPath = 'artifacts/distribution-validation/blob-parity-macos-x64.json'
+            BuilderArgument = '--output-dir'
+            BuilderRoot = 'artifacts/distribution-validation/macos-x64'
+            RetainedPath = 'artifacts/distribution-validation/macos-x64/evidence/blob-parity.json'
+        }
+    )
+    foreach ($plan in $producerPlans) {
+        $jobBlock = [string]$JobBlocks[$plan.JobId]
+        $checkoutMarker = '      - name: Checkout exact source'
+        $checkerMarker = "      - name: $($plan.CheckerStep)"
+        $buildMarker = "      - name: $($plan.BuildStep)"
+        $retainMarker = "      - name: $($plan.RetainStep)"
+        $stageMarker = "      - name: $($plan.StageStep)"
+        $uploadMarker = "      - name: $($plan.UploadStep)"
+        Assert-Condition ([regex]::Matches($jobBlock, "(?m)^$([regex]::Escape($checkerMarker))`$").Count -eq 1) `
+            "$($plan.OsLabel) blob parity checker step must exist exactly once."
+        Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName 'Checkout exact source' | Out-Null
+        Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName $plan.StageStep | Out-Null
+        Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName $plan.UploadStep | Out-Null
+        $checkoutIndex = $jobBlock.IndexOf($checkoutMarker, [StringComparison]::Ordinal)
+        $checkerIndex = $jobBlock.IndexOf($checkerMarker, [StringComparison]::Ordinal)
+        $buildIndex = $jobBlock.IndexOf($buildMarker, [StringComparison]::Ordinal)
+        $retainIndex = $jobBlock.IndexOf($retainMarker, [StringComparison]::Ordinal)
+        $stageIndex = $jobBlock.IndexOf($stageMarker, [StringComparison]::Ordinal)
+        $uploadIndex = $jobBlock.IndexOf($uploadMarker, [StringComparison]::Ordinal)
+        Assert-Condition (
+            $checkoutIndex -ge 0 -and
+            $checkerIndex -gt $checkoutIndex -and
+            $buildIndex -gt $checkerIndex -and
+            $retainIndex -gt $buildIndex -and
+            $stageIndex -gt $retainIndex -and
+            $uploadIndex -gt $stageIndex) `
+            "$($plan.OsLabel) blob parity order must be checkout < checker < build < retain < stage < upload."
+
+        $checkerStep = Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName $plan.CheckerStep
+        Assert-WorkflowStepShaBindings -StepBlock $checkerStep -Label "$($plan.OsLabel) blob parity validation"
+        Assert-Condition (
+            $checkerStep.Contains('-Area BlobParity `', [StringComparison]::Ordinal) -and
+            $checkerStep.Contains('-SourceSha $env:SOURCE_SHA `', [StringComparison]::Ordinal) -and
+            $checkerStep.Contains('-WorkflowSha $env:WORKFLOW_SHA `', [StringComparison]::Ordinal) -and
+            $checkerStep.Contains("-BlobParityEvidencePath $($plan.ScratchPath)", [StringComparison]::Ordinal)) `
+            "$($plan.OsLabel) blob parity checker must use the exact Area/source/workflow/scratch wiring."
+
+        $buildStep = Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName $plan.BuildStep
+        $builderArgumentPattern = "(?m)^\s*$([regex]::Escape($plan.BuilderArgument))\s+$([regex]::Escape($plan.BuilderRoot))\s+\\\s*`$"
+        Assert-Condition ([regex]::Matches($buildStep, $builderArgumentPattern).Count -eq 1) `
+            "$($plan.OsLabel) build step must use exact $($plan.BuilderArgument) $($plan.BuilderRoot)."
+        $builderRootPrefix = $plan.BuilderRoot.TrimEnd('/') + '/'
+        Assert-Condition (
+            $plan.ScratchPath -cne $plan.BuilderRoot -and
+            -not $plan.ScratchPath.StartsWith($builderRootPrefix, [StringComparison]::Ordinal)) `
+            "$($plan.OsLabel) blob parity scratch report must remain outside the actual builder-owned output root."
+
+        $retainStep = Get-WorkflowNamedStepBlock -WorkflowText $jobBlock -StepName $plan.RetainStep
+        $retainSource = "Copy-Item -LiteralPath $($plan.ScratchPath) " + [char]0x60
+        Assert-Condition (
+            $retainStep.Contains($retainSource, [StringComparison]::Ordinal) -and
+            $retainStep.Contains("-Destination $($plan.RetainedPath)", [StringComparison]::Ordinal)) `
+            "$($plan.OsLabel) blob parity retain step must copy the scratch report into evidence/blob-parity.json."
+    }
+
+    $finalBlock = [string]$JobBlocks['distribution-verdict']
+    Assert-Condition (
+        $finalBlock.Contains('"contract": {"identity.json", "contract-evidence.json", "blob-parity.json"},', [StringComparison]::Ordinal)) `
+        'Aggregate receipt validation must require blob-parity.json in the exact contract payload closure.'
+    $aggregateStep = Get-WorkflowNamedStepBlock -WorkflowText $finalBlock `
+        -StepName 'Merge platform evidence and aggregate 22 exact assets'
+    Assert-WorkflowStepShaBindings -StepBlock $aggregateStep -Label 'Final blob parity aggregate'
+    Assert-Condition ([regex]::Matches($aggregateStep, '(?m)^        id:\s*aggregate\s*$').Count -eq 1) `
+        'Blob parity aggregate must execute inside the exact step id aggregate.'
+    Assert-Condition ($aggregateStep -cnotmatch '(?m)^        continue-on-error:') `
+        'Blob parity aggregate step id aggregate must remain fail-closed without continue-on-error.'
+    foreach ($requiredInput in @(
+            '(Join-Path (Join-Path $download ''${{ needs.contract.outputs.artifact_name }}'') ''blob-parity.json''),',
+            '(Join-Path $linuxRoot ''evidence/blob-parity.json''),',
+            '(Join-Path (Join-Path $download ''${{ needs.macos_x64.outputs.artifact_name }}'') ''evidence/blob-parity.json'')')) {
+        Assert-Condition ($aggregateStep.Contains($requiredInput, [StringComparison]::Ordinal)) `
+            "Blob parity aggregate is missing exact input '$requiredInput'."
+    }
+    $aggregateInputWiring = '-BlobParityInputPath ($blobParityInputs -join '','') ' + [char]0x60
+    Assert-Condition (
+        $aggregateStep.Contains('-Area BlobParityAggregate `', [StringComparison]::Ordinal) -and
+        $aggregateStep.Contains($aggregateInputWiring, [StringComparison]::Ordinal) -and
+        $aggregateStep.Contains('-SourceSha $env:SOURCE_SHA `', [StringComparison]::Ordinal) -and
+        $aggregateStep.Contains('-WorkflowSha $env:WORKFLOW_SHA `', [StringComparison]::Ordinal) -and
+        $aggregateStep.Contains('-BlobParityEvidencePath artifacts/verdict/blob-parity.json', [StringComparison]::Ordinal)) `
+        'Step id aggregate must validate the exact three reports and emit artifacts/verdict/blob-parity.json.'
+
+    $machineVerdictStep = Get-WorkflowNamedStepBlock -WorkflowText $finalBlock -StepName 'Write final machine-readable verdict'
+    Assert-Condition (
+        $machineVerdictStep.Contains('AGGREGATE_OUTCOME: ${{ steps.aggregate.outcome }}', [StringComparison]::Ordinal) -and
+        $machineVerdictStep.Contains('and os.environ["AGGREGATE_OUTCOME"] == "success"', [StringComparison]::Ordinal)) `
+        'Final machine verdict must require successful step id aggregate outcome.'
+    $enforceVerdictStep = Get-WorkflowNamedStepBlock -WorkflowText $finalBlock -StepName 'Enforce stable fail-closed verdict'
+    Assert-Condition (
+        $enforceVerdictStep.Contains('AGGREGATE_OUTCOME: ${{ steps.aggregate.outcome }}', [StringComparison]::Ordinal) -and
+        $enforceVerdictStep.Contains('if [[ "$AGGREGATE_OUTCOME" != "success" ]]; then', [StringComparison]::Ordinal) -and
+        $enforceVerdictStep.Contains('exit 1', [StringComparison]::Ordinal)) `
+        'Stable final enforcement must fail when step id aggregate does not succeed.'
 }
 
 function Test-WorkflowSecurityContract {
@@ -797,6 +1733,7 @@ function Test-WorkflowSecurityContract {
             "Job '$jobId' must explicitly use contents: read."
     }
     Assert-Condition ($jobBlocks.Contains('distribution-verdict')) "Workflow is missing stable job 'distribution-verdict'."
+    Test-WorkflowBlobParityWiring -WorkflowText $normalized -JobBlocks $jobBlocks
     $finalBlock = [string]$jobBlocks['distribution-verdict']
     Assert-Condition ($finalBlock -cmatch '(?m)^    name:\s*distribution-verdict\s*$') 'Stable final job name must remain distribution-verdict.'
     Assert-Condition ($finalBlock -cmatch '(?m)^    if:\s*\$\{\{\s*always\(\)\s*\}\}\s*$') 'Stable final job must run under always().'
@@ -2302,6 +3239,7 @@ function Test-AndroidNativeEvidenceConverters {
     }
 }
 
+$script:repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..') -ErrorAction Stop).Path
 $script:manifestPath = Resolve-ExistingFile -Path $Manifest -DisplayName 'Manifest'
 $script:manifestSchemaPath = Resolve-ExistingFile -Path $ManifestSchema -DisplayName 'ManifestSchema'
 $script:fixturePath = Resolve-ExistingFile -Path $Fixture -DisplayName 'Fixture'
@@ -2320,6 +3258,49 @@ Assert-JsonFileSchema -JsonPath $script:manifestPath -SchemaPath $script:manifes
 Assert-JsonFileSchema -JsonPath $script:supportMatrixPath -SchemaPath $script:supportMatrixSchemaPath -Name 'support-matrix.json'
 
 $areasRun = [System.Collections.Generic.List[string]]::new()
+$blobParityIdentity = $null
+$blobParityDirectReport = $null
+if ($Area -in @('All', 'BlobParity', 'BlobParityAggregate')) {
+    $blobParityIdentity = Resolve-BlobParityIdentity -RepositoryRoot $script:repositoryRoot `
+        -ExpectedSourceSha $SourceSha -ExpectedWorkflowSha $WorkflowSha
+}
+
+if ($Area -in @('All', 'BlobParity')) {
+    $blobParityDirectReport = New-DistributionBlobParityReport -RepositoryRoot $script:repositoryRoot `
+        -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha
+    Assert-DirectBlobParityReport -Document $blobParityDirectReport -Label 'Generated blob parity report' `
+        -RepositoryRoot $script:repositoryRoot `
+        -ExpectedPaths @(Get-TrackedDistributionJsonPaths -RepositoryRoot $script:repositoryRoot) `
+        -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha | Out-Null
+    if (-not [string]::IsNullOrWhiteSpace($BlobParityEvidencePath)) {
+        Write-BlobParityEvidence -Path $BlobParityEvidencePath -Document $blobParityDirectReport
+    }
+    Test-BlobParityByteMutationNegativeFixtures -RepositoryRoot $script:repositoryRoot `
+        -GitPaths @($blobParityDirectReport.files | ForEach-Object { [string]$_.path })
+    Test-BlobParityAttributeSourceFixtures
+    Add-Check -Name 'blob-parity:tracked-json-physical-bytes-match-raw-head-blobs'
+    $areasRun.Add('BlobParity')
+}
+
+if ($Area -ceq 'BlobParityAggregate') {
+    Assert-Condition ($BlobParityInputPath.Count -eq 3) 'BlobParityAggregate area requires exactly three -BlobParityInputPath values.'
+    Assert-Condition (-not [string]::IsNullOrWhiteSpace($BlobParityEvidencePath)) 'BlobParityAggregate area requires -BlobParityEvidencePath.'
+    $blobParityAggregateReport = New-DistributionBlobParityAggregateReport -RepositoryRoot $script:repositoryRoot `
+        -InputPaths $BlobParityInputPath `
+        -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha
+    $aggregateFixtureSource = Read-JsonFile -Path $BlobParityInputPath[0] -DisplayName 'Blob parity aggregate fixture source'
+    Test-BlobParityAggregateFixtures -RepositoryRoot $script:repositoryRoot -DirectReport $aggregateFixtureSource `
+        -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha
+    Write-BlobParityEvidence -Path $BlobParityEvidencePath -Document $blobParityAggregateReport
+    Add-Check -Name 'blob-parity-aggregate:input-reports-match-current-head'
+    $areasRun.Add('BlobParityAggregate')
+}
+elseif ($Area -ceq 'All') {
+    Test-BlobParityAggregateFixtures -RepositoryRoot $script:repositoryRoot -DirectReport $blobParityDirectReport `
+        -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha
+    $areasRun.Add('BlobParityAggregate')
+}
+
 if ($Area -in @('All', 'InventorySupport')) {
     Test-InventoryContract -ManifestDocument $manifestDocument -FixtureDocument $fixtureDocument
     Test-SupportContract -ManifestDocument $manifestDocument -FixtureDocument $fixtureDocument -SupportDocument $supportDocument
@@ -2538,6 +3519,143 @@ if ($Area -in @('All', 'WorkflowSecurity')) {
 
     $withoutAttributesScope = Replace-WorkflowFixtureOnce -Text $workflowText -Pattern '\\\.gitattributes\$' -Replacement '\.editorconfig$' -Name 'gitattributes-scope'
     Assert-Throws -Name 'workflow-gitattributes-scope-missing' -Action { Test-WorkflowSecurityContract $withoutAttributesScope }
+
+    $linuxCheckerLine = '      - name: Validate canonical JSON byte identity on Linux'
+    $withoutLinuxChecker = Replace-WorkflowFixtureOnce -Text $workflowText `
+        -Pattern ([regex]::Escape($linuxCheckerLine)) `
+        -Replacement '      - name: Linux blob parity checker removed by negative fixture' `
+        -Name 'linux-blob-parity-checker-missing'
+    Assert-Throws -Name 'workflow-linux-blob-parity-checker-missing' `
+        -MessagePattern 'Linux blob parity checker step must exist exactly once' -Action {
+        Test-WorkflowSecurityContract $withoutLinuxChecker
+    }
+
+    $linuxBuildLine = '      - name: Build Linux candidates from one publish'
+    $linuxCheckerTemporaryLine = '      - name: __blob_parity_checker_order_fixture__'
+    Assert-Condition (
+        $workflowText.Contains($linuxCheckerLine, [StringComparison]::Ordinal) -and
+        $workflowText.Contains($linuxBuildLine, [StringComparison]::Ordinal)) `
+        'Workflow fixture is missing Linux checker/build step names.'
+    $misorderedLinuxChecker = $workflowText.Replace($linuxCheckerLine, $linuxCheckerTemporaryLine)
+    $misorderedLinuxChecker = $misorderedLinuxChecker.Replace($linuxBuildLine, $linuxCheckerLine)
+    $misorderedLinuxChecker = $misorderedLinuxChecker.Replace($linuxCheckerTemporaryLine, $linuxBuildLine)
+    Assert-Throws -Name 'workflow-linux-blob-parity-checker-after-build' `
+        -MessagePattern 'Linux blob parity order must be checkout < checker < build < retain < stage < upload' -Action {
+        Test-WorkflowSecurityContract $misorderedLinuxChecker
+    }
+
+    $linuxBuilderRootLine = '            --output-root artifacts/distribution-validation/linux-x64 \'
+    $linuxBuilderRootCollision = Replace-WorkflowFixtureOnce -Text $workflowText `
+        -Pattern ([regex]::Escape($linuxBuilderRootLine)) `
+        -Replacement '            --output-root artifacts/distribution-validation \' `
+        -Name 'linux-blob-parity-builder-root-collision'
+    Assert-Throws -Name 'workflow-linux-blob-parity-builder-root-collision' `
+        -MessagePattern 'Linux build step must use exact --output-root artifacts/distribution-validation/linux-x64' -Action {
+        Test-WorkflowSecurityContract $linuxBuilderRootCollision
+    }
+
+    $macosBuilderRootLine = '            --output-dir artifacts/distribution-validation/macos-x64 \'
+    $macosBuilderRootCollision = Replace-WorkflowFixtureOnce -Text $workflowText `
+        -Pattern ([regex]::Escape($macosBuilderRootLine)) `
+        -Replacement '            --output-dir artifacts/distribution-validation \' `
+        -Name 'macos-blob-parity-builder-root-collision'
+    Assert-Throws -Name 'workflow-macos-blob-parity-builder-root-collision' `
+        -MessagePattern 'macOS x64 build step must use exact --output-dir artifacts/distribution-validation/macos-x64' -Action {
+        Test-WorkflowSecurityContract $macosBuilderRootCollision
+    }
+
+    foreach ($orderPlan in @(
+            [pscustomobject]@{
+                Slug = 'linux'
+                Label = 'Linux'
+                Retain = '      - name: Retain Linux blob parity evidence'
+                Stage = '      - name: Stage Linux tar transport'
+            },
+            [pscustomobject]@{
+                Slug = 'macos'
+                Label = 'macOS x64'
+                Retain = '      - name: Retain macOS blob parity evidence'
+                Stage = '      - name: Stage macOS x64 evidence'
+            })) {
+        $temporaryLine = "      - name: __blob_parity_$($orderPlan.Slug)_retain_order_fixture__"
+        Assert-Condition (
+            $workflowText.Contains($orderPlan.Retain, [StringComparison]::Ordinal) -and
+            $workflowText.Contains($orderPlan.Stage, [StringComparison]::Ordinal)) `
+            "Workflow fixture is missing $($orderPlan.Label) retain/stage step names."
+        $misorderedRetain = $workflowText.Replace($orderPlan.Retain, $temporaryLine)
+        $misorderedRetain = $misorderedRetain.Replace($orderPlan.Stage, $orderPlan.Retain)
+        $misorderedRetain = $misorderedRetain.Replace($temporaryLine, $orderPlan.Stage)
+        Assert-Throws -Name "workflow-$($orderPlan.Slug)-blob-parity-retain-after-stage" `
+            -MessagePattern "$($orderPlan.Label) blob parity order must be checkout < checker < build < retain < stage < upload" -Action {
+            Test-WorkflowSecurityContract $misorderedRetain
+        }
+    }
+
+    $shaBindingPlans = @(
+        [pscustomobject]@{ Slug = 'contract'; Step = 'Validate schemas, inventory, identity, feeds and retry policy' },
+        [pscustomobject]@{ Slug = 'linux'; Step = 'Validate canonical JSON byte identity on Linux' },
+        [pscustomobject]@{ Slug = 'macos'; Step = 'Validate canonical JSON byte identity on macOS' },
+        [pscustomobject]@{ Slug = 'aggregate'; Step = 'Merge platform evidence and aggregate 22 exact assets' }
+    )
+    foreach ($bindingPlan in $shaBindingPlans) {
+        foreach ($binding in @(
+                [pscustomobject]@{
+                    Variable = 'SOURCE_SHA'
+                    Pattern = '(?m)^          SOURCE_SHA: \$\{\{ github\.sha \}\}\s*$'
+                },
+                [pscustomobject]@{
+                    Variable = 'WORKFLOW_SHA'
+                    Pattern = '(?m)^          WORKFLOW_SHA: \$\{\{ job\.workflow_sha \}\}\s*$'
+                })) {
+            $withoutBinding = Replace-WorkflowNamedStepFixtureOnce -WorkflowText $workflowText `
+                -StepName $bindingPlan.Step -Pattern $binding.Pattern `
+                -Replacement "          # $($binding.Variable) removed by negative fixture" `
+                -Name "$($bindingPlan.Slug)-$($binding.Variable.ToLowerInvariant())-binding"
+            Assert-Throws -Name "workflow-$($bindingPlan.Slug)-$($binding.Variable.ToLowerInvariant())-binding-missing" `
+                -MessagePattern "must bind exact step-local $($binding.Variable)" -Action {
+                Test-WorkflowSecurityContract $withoutBinding
+            }
+        }
+    }
+
+    $aggregateAreaLine = '            -Area BlobParityAggregate `'
+    $withoutBlobParityAggregate = Replace-WorkflowFixtureOnce -Text $workflowText `
+        -Pattern ([regex]::Escape($aggregateAreaLine)) -Replacement '            -Area Evidence `' `
+        -Name 'blob-parity-aggregate-call-missing'
+    Assert-Throws -Name 'workflow-blob-parity-aggregate-call-missing' `
+        -MessagePattern 'Step id aggregate must validate the exact three reports' -Action {
+        Test-WorkflowSecurityContract $withoutBlobParityAggregate
+    }
+
+    $aggregateContinueOnError = Replace-WorkflowNamedStepFixtureOnce -WorkflowText $workflowText `
+        -StepName 'Merge platform evidence and aggregate 22 exact assets' `
+        -Pattern '(?m)^        id:\s*aggregate\s*$' `
+        -Replacement "        id: aggregate`n        continue-on-error: true" `
+        -Name 'blob-parity-aggregate-continue-on-error'
+    Assert-Throws -Name 'workflow-blob-parity-aggregate-continue-on-error' `
+        -MessagePattern 'step id aggregate must remain fail-closed without continue-on-error' -Action {
+        Test-WorkflowSecurityContract $aggregateContinueOnError
+    }
+
+    $finalOutcomeDrift = Replace-WorkflowNamedStepFixtureOnce -WorkflowText $workflowText `
+        -StepName 'Enforce stable fail-closed verdict' `
+        -Pattern 'AGGREGATE_OUTCOME: \$\{\{ steps\.aggregate\.outcome \}\}' `
+        -Replacement 'AGGREGATE_OUTCOME: ${{ steps.inspect.outcome }}' `
+        -Name 'blob-parity-final-outcome-binding'
+    Assert-Throws -Name 'workflow-blob-parity-final-outcome-binding-missing' `
+        -MessagePattern 'Stable final enforcement must fail when step id aggregate does not succeed' -Action {
+        Test-WorkflowSecurityContract $finalOutcomeDrift
+    }
+
+    $contractPayloadLine = "          `$payloads = @('identity.json', 'contract-evidence.json', 'blob-parity.json') | ForEach-Object {"
+    $withoutContractBlobParityReceipt = Replace-WorkflowFixtureOnce -Text $workflowText `
+        -Pattern ([regex]::Escape($contractPayloadLine)) `
+        -Replacement "          `$payloads = @('identity.json', 'contract-evidence.json') | ForEach-Object {" `
+        -Name 'contract-blob-parity-receipt-payload-missing'
+    Assert-Throws -Name 'workflow-contract-blob-parity-receipt-payload-missing' `
+        -MessagePattern 'Contract receipt must bind identity.json, contract-evidence.json and blob-parity.json' -Action {
+        Test-WorkflowSecurityContract $withoutContractBlobParityReceipt
+    }
 
     $withoutWorkflowSha = $workflowText.Replace('${{ job.workflow_sha }}', '${{ github.sha }}')
     Assert-Throws -Name 'workflow-job-workflow-sha-missing' -Action { Test-WorkflowSecurityContract $withoutWorkflowSha }
