@@ -11,7 +11,7 @@
 - Execution / evidence runtime: локальный Windows/PowerShell workspace; native verification выполняется на Windows Server 2022, macOS 15 Intel/arm64, Android API 23/36 emulator и чистых Debian 12/13 x64 images.
 - Eval baseline / evidence: model eval — `Не применимо`; product/evidence baseline — release `1.27.0` и текущие production `release.published` workflows; runtime UI/data/update behavior не меняется.
 - Целевой релиз / ветка: `docs/distribution-support-contract`; approved SPEC/EXEC base = `origin/main@ad90260b62be899d9f9946e81ce710ed88c2f87a`, previous post-rebase base = `origin/main@ec9b206db6930ef296313a14e2a440236807ba03`, merged prerequisite base = `origin/main@e11cae9a086ddd4fd97105f00b67bedf05f92700`; future dry-run fixture = `v1.28.0`, публикация запрещена.
-- Текущая фаза: `EXEC resumed / build-isolation remediation`; пользователь 2026-07-20 одним явным сообщением подтвердил LF amendment и Headless prerequisite, prerequisite доставлен merged PR #279 (`e11cae9a086ddd4fd97105f00b67bedf05f92700`), Stage 3 rebased, LF/blob-parity implementation зафиксирована commit `494695365f08af191a3e70e81fb7bfcf8cd546fa`. Static/contract/README gate на docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655` PASS, но clean solution restore/build выявил воспроизводимый baseline-конфликт sibling Desktop `obj/bin` и отсутствующий Debian Debug diagnostics reference. Desktop build-isolation amendment подтверждена пользователем 2026-07-21; EXEC возобновлён в её узком allowlist, push/draft PR остаются закрыты до полного reset local gate.
+- Текущая фаза: `EXEC / build-isolation final-candidate preparation`; пользователь 2026-07-20 одним явным сообщением подтвердил LF amendment и Headless prerequisite, prerequisite доставлен merged PR #279 (`e11cae9a086ddd4fd97105f00b67bedf05f92700`), Stage 3 rebased, LF/blob-parity implementation зафиксирована commit `494695365f08af191a3e70e81fb7bfcf8cd546fa`. Desktop build-isolation amendment подтверждена 2026-07-21 и реализована commit `12d0bba92d000d6e26c5e2ba16a6570cf034d7fc`: валидный TDD RED воспроизвёл shared intermediate path, focused gate PASS с 19 checks / 11 negative fixtures, полный static contract PASS с 173 checks / 139 negative fixtures, forced restore и serial non-incremental working-checkout build PASS с 0 errors. Push/draft PR остаются закрыты до docs final-candidate commit и полного reset local gate на неизменном HEAD.
 - Freshness baseline от 2026-07-18:
   - latest published release = `1.27.0`, target `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`, 22 assets;
   - Stage 2 доставлен merged PR #277, merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`;
@@ -721,77 +721,287 @@ Rollback:
 | S3-AC-20 | `test-distribution-contract.ps1 -Area BuildIsolation`; evaluated properties/package graphs/Compile items for all three Desktop projects and four direct RIDs; forced restore + non-incremental local commands below + final-head jobs table | Три project-bound assets paths, три solution-only output roots, exact unchanged win/linux/osx-x64/osx-arm64 PublishDir, sibling obj/bin sentinels excluded, Debian Debug-only diagnostics и все static/full/native gates PASS |
 | S3-AC-21 | `gh pr checks`, independent reviews, final-head SHA and merge record | PASS / delivered |
 
-Planned local commands (exact paths/results фиксируются в Post-EXEC):
+Planned local commands (exact paths/results фиксируются в Post-EXEC; `origin/main` должен быть fetched непосредственно перед запуском):
 
 ```powershell
-pwsh -NoProfile -File scripts/test-distribution-contract.ps1
-pwsh -NoProfile -File scripts/test-run-entrypoints.ps1
-pwsh -NoProfile -File scripts/Test-ReadmeDistributionContract.ps1 `
-  -English README.md -Russian README.RU.md `
-  -SupportMatrix distribution/support-matrix.json
-pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
-  -Area All `
-  -Manifest distribution/release-assets.json `
-  -Fixture distribution/fixtures/release-1.27.0.json `
-  -SupportMatrix distribution/support-matrix.json
-pwsh -NoProfile -File scripts/test-distribution-contract.ps1 `
-  -Area BuildIsolation
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference = $false
 
-# Clean-build evidence uses committed HEAD only; no tracked/index/untracked delta may exist.
-$stage3Status = @(git status --short)
-if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect worktree status.' }
-if ($stage3Status.Count -ne 0) { throw 'Clean archive build requires a clean worktree/index.' }
-$stage3SourceSha = (git rev-parse HEAD).Trim()
+$stage3RepositoryRoot = ([string](& git rev-parse --show-toplevel)).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $stage3RepositoryRoot) { throw 'Cannot resolve repository root.' }
+Set-Location -LiteralPath $stage3RepositoryRoot
+$stage3Status = @(& git status --porcelain=v1 --untracked-files=all)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect initial worktree status.' }
+if ($stage3Status.Count -ne 0) { throw 'Final gate requires a clean worktree/index.' }
+$stage3SourceSha = ([string](& git rev-parse HEAD)).Trim()
 if ($LASTEXITCODE -ne 0 -or $stage3SourceSha -notmatch '^[0-9a-f]{40}$') { throw 'Cannot resolve final HEAD.' }
+$stage3SourceTree = ([string](& git rev-parse "$stage3SourceSha^{tree}")).Trim()
+if ($LASTEXITCODE -ne 0 -or $stage3SourceTree -notmatch '^[0-9a-f]{40}$') { throw 'Cannot resolve final source tree.' }
+$stage3Branch = ([string](& git branch --show-current)).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $stage3Branch) { throw 'Cannot resolve current branch.' }
+$stage3OriginMainSha = ([string](& git rev-parse origin/main)).Trim()
+if ($LASTEXITCODE -ne 0 -or $stage3OriginMainSha -notmatch '^[0-9a-f]{40}$') { throw 'Cannot resolve origin/main.' }
+$stage3DiffRange = "$stage3OriginMainSha...$stage3SourceSha"
+& git check-ignore -q 'artifacts/test-results/probe'
+if ($LASTEXITCODE -ne 0) { throw 'Evidence root must be ignored by Git.' }
+
 $stage3RunId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
-$stage3CleanBundle = Join-Path (Get-Location) "artifacts/test-results/stage3-build-isolation-clean-$($stage3SourceSha.Substring(0, 12))-$stage3RunId"
+$stage3CleanBundle = Join-Path $stage3RepositoryRoot "artifacts/test-results/stage3-final-$($stage3SourceSha.Substring(0, 12))-$stage3RunId"
 $stage3CleanSource = Join-Path $stage3CleanBundle 'source'
 $stage3CleanEvidence = Join-Path $stage3CleanBundle 'evidence'
 $stage3Archive = Join-Path $stage3CleanBundle 'source.zip'
-if (Test-Path -LiteralPath $stage3CleanBundle) { throw "Clean-build bundle already exists: $stage3CleanBundle" }
+if (Test-Path -LiteralPath $stage3CleanBundle) { throw "Evidence bundle already exists: $stage3CleanBundle" }
 New-Item -ItemType Directory -Path $stage3CleanSource, $stage3CleanEvidence | Out-Null
-git archive --format=zip --output=$stage3Archive HEAD
-if ($LASTEXITCODE -ne 0) { throw 'git archive failed.' }
+$stage3ExitCodes = [ordered]@{}
+
+function Invoke-Stage3Native {
+  param(
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter(Mandatory)][string[]]$ArgumentList,
+    [string]$WorkingDirectory = $stage3RepositoryRoot
+  )
+  $log = Join-Path $stage3CleanEvidence "$Name.log"
+  $exitCode = $null
+  Push-Location -LiteralPath $WorkingDirectory
+  try {
+    $output = @(& $FilePath @ArgumentList 2>&1 | Tee-Object -FilePath $log)
+    $exitCode = $LASTEXITCODE
+  }
+  finally { Pop-Location }
+  if ($null -eq $exitCode) { throw "$Name did not expose a native exit code. Evidence: $log" }
+  $stage3ExitCodes[$Name] = [int]$exitCode
+  if ($exitCode -ne 0) { throw "$Name failed with exit code $exitCode. Evidence: $log" }
+  $output
+}
+
+$stage3Outcome = 'fail'
+$stage3Failure = $null
+$stage3CaughtError = $null
+$stage3SdkVersion = $null
+$stage3Counters = $null
+$stage3ShellEvidence = @()
+$stage3DesktopOutputs = @()
+$stage3EvaluationSummary = @()
+$stage3FinalSha = $null
+try {
+Invoke-Stage3Native 'base-ancestry' 'git' @('merge-base','--is-ancestor',$stage3OriginMainSha,$stage3SourceSha)
+Invoke-Stage3Native 'contract-default' 'pwsh' @('-NoProfile','-File','scripts/test-distribution-contract.ps1')
+Invoke-Stage3Native 'contract-all' 'pwsh' @('-NoProfile','-File','scripts/test-distribution-contract.ps1','-Area','All','-Manifest','distribution/release-assets.json','-Fixture','distribution/fixtures/release-1.27.0.json','-SupportMatrix','distribution/support-matrix.json')
+Invoke-Stage3Native 'contract-build-isolation' 'pwsh' @('-NoProfile','-File','scripts/test-distribution-contract.ps1','-Area','BuildIsolation')
+Invoke-Stage3Native 'entrypoints' 'pwsh' @('-NoProfile','-File','scripts/test-run-entrypoints.ps1')
+Invoke-Stage3Native 'readme' 'pwsh' @('-NoProfile','-File','scripts/Test-ReadmeDistributionContract.ps1','-English','README.md','-Russian','README.RU.md','-SupportMatrix','distribution/support-matrix.json','-RunNegativeFixtures')
+Invoke-Stage3Native 'android-scripts' 'pwsh' @('-NoProfile','-File','scripts/test-android-build-scripts.ps1')
+Invoke-Stage3Native 'branch-diff-check' 'git' @('diff','--check',$stage3DiffRange)
+
+$stage3ChangedFiles = @(& git diff --name-only --diff-filter=ACMR $stage3DiffRange)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate changed files.' }
+foreach ($relativePath in @($stage3ChangedFiles | Where-Object { $_ -like '*.ps1' })) {
+  $tokens = $null; $errors = $null
+  [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $stage3RepositoryRoot $relativePath), [ref]$tokens, [ref]$errors)
+  if ($errors.Count -ne 0) { throw "PowerShell parse failed: $relativePath :: $($errors.Message -join '; ')" }
+}
+foreach ($relativePath in @($stage3ChangedFiles | Where-Object { $_ -like '*.json' })) {
+  Get-Content -LiteralPath (Join-Path $stage3RepositoryRoot $relativePath) -Raw | ConvertFrom-Json -Depth 100 | Out-Null
+}
+$stage3ShellFiles = @($stage3ChangedFiles | Where-Object { $_ -like '*.sh' })
+if ($stage3ShellFiles.Count -ne 0) {
+  $stage3GitBash = 'C:\Program Files\Git\bin\bash.exe'
+  if (-not (Test-Path -LiteralPath $stage3GitBash -PathType Leaf)) { throw "Git Bash is required: $stage3GitBash" }
+  for ($i = 0; $i -lt $stage3ShellFiles.Count; $i++) {
+    $relativePath = $stage3ShellFiles[$i]
+    $fullPath = Join-Path $stage3RepositoryRoot $relativePath
+    Invoke-Stage3Native "bash-n-$i" $stage3GitBash @('-n',$fullPath)
+    $bytes = [IO.File]::ReadAllBytes($fullPath)
+    if ([Array]::IndexOf($bytes,[byte]0x0D) -ge 0) { throw "Shell script contains CR bytes: $relativePath" }
+    $modeOutput = @((Invoke-Stage3Native "git-mode-$i" 'git' @('ls-tree',$stage3SourceSha,'--',$relativePath)) | ForEach-Object { [string]$_ })
+    if ($modeOutput.Count -ne 1 -or $modeOutput[0] -notmatch '^(?<mode>\d{6}) blob [0-9a-f]{40}\t') { throw "Cannot resolve committed mode for $relativePath." }
+    $expectedMode = if ($relativePath -in @('run.linux.sh','run.macos.sh')) { '100755' } else { '100644' }
+    if ($Matches.mode -cne $expectedMode) { throw "Unexpected committed mode for ${relativePath}: $($Matches.mode), expected $expectedMode." }
+    $stage3ShellEvidence += [ordered]@{ path=$relativePath; mode=$Matches.mode; size=$bytes.Length; sha256=(Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant(); containsCr=$false }
+  }
+}
+$stage3Actionlint = Get-Command actionlint -ErrorAction SilentlyContinue
+if ($null -ne $stage3Actionlint) { Invoke-Stage3Native 'actionlint' $stage3Actionlint.Source @() }
+else { 'actionlint unavailable locally; CI is authoritative.' | Set-Content -LiteralPath (Join-Path $stage3CleanEvidence 'actionlint-unavailable.txt') -Encoding utf8NoBOM }
+
+Invoke-Stage3Native 'git-archive' 'git' @('archive','--format=zip',"--output=$stage3Archive",$stage3SourceSha)
 Expand-Archive -LiteralPath $stage3Archive -DestinationPath $stage3CleanSource
 $stage3DesktopRoot = Join-Path $stage3CleanSource 'src/Unlimotion.Desktop'
-if ((Test-Path -LiteralPath (Join-Path $stage3DesktopRoot 'obj')) -or
-    (Test-Path -LiteralPath (Join-Path $stage3DesktopRoot 'bin'))) {
-  throw 'Committed archive unexpectedly contains Desktop obj/bin.'
-}
-Push-Location $stage3CleanSource
+if ((Test-Path -LiteralPath (Join-Path $stage3DesktopRoot 'obj')) -or (Test-Path -LiteralPath (Join-Path $stage3DesktopRoot 'bin'))) { throw 'Committed archive unexpectedly contains Desktop obj/bin.' }
+$null = Invoke-Stage3Native 'dotnet-info' 'dotnet' @('--info')
+$stage3SdkVersion = ([string]((Invoke-Stage3Native 'dotnet-version' 'dotnet' @('--version') | Select-Object -Last 1))).Trim()
+$stage3PreviousGitCeiling = [Environment]::GetEnvironmentVariable('GIT_CEILING_DIRECTORIES','Process')
+$env:GIT_CEILING_DIRECTORIES = $stage3CleanBundle
 try {
-  dotnet restore src/Unlimotion.sln --force -p:Configuration=Debug 2>&1 |
-    Tee-Object -FilePath (Join-Path $stage3CleanEvidence 'restore.log')
-  $restoreExit = $LASTEXITCODE
-  dotnet build src/Unlimotion.sln -c Debug --no-restore --no-incremental -m:1 -p:UseSharedCompilation=false 2>&1 |
-    Tee-Object -FilePath (Join-Path $stage3CleanEvidence 'build.log')
-  $buildExit = $LASTEXITCODE
+  Invoke-Stage3Native 'archive-restore' 'dotnet' @('restore','src/Unlimotion.sln','--force','-p:Configuration=Debug') $stage3CleanSource
+  Invoke-Stage3Native 'archive-build' 'dotnet' @('build','src/Unlimotion.sln','-c','Debug','--no-restore','--no-incremental','-m:1','-p:UseSharedCompilation=false','/nodeReuse:false') $stage3CleanSource
+
+  $stage3DesktopProjects = @(
+    [ordered]@{ name='Unlimotion.Desktop'; path='src/Unlimotion.Desktop/Unlimotion.Desktop.csproj'; assets='src/Unlimotion.Desktop/obj/Unlimotion.Desktop/project.assets.json'; target='src/Unlimotion.Desktop/bin/Unlimotion.Desktop/Debug/net10.0/Unlimotion.Desktop.dll' },
+    [ordered]@{ name='Unlimotion.Desktop.ForDebianBuild'; path='src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj'; assets='src/Unlimotion.Desktop/obj/Unlimotion.Desktop.ForDebianBuild/project.assets.json'; target='src/Unlimotion.Desktop/bin/Unlimotion.Desktop.ForDebianBuild/Debug/net10.0/Unlimotion.Desktop.dll' },
+    [ordered]@{ name='Unlimotion.Desktop.ForMacBuild'; path='src/Unlimotion.Desktop/Unlimotion.Desktop.ForMacBuild.csproj'; assets='src/Unlimotion.Desktop/obj/Unlimotion.Desktop.ForMacBuild/project.assets.json'; target='src/Unlimotion.Desktop/bin/Unlimotion.Desktop.ForMacBuild/Debug/net10.0/Unlimotion.Desktop.ForMacBuild.dll' }
+  )
+  $stage3EvaluationPlans = @()
+  foreach ($project in $stage3DesktopProjects) {
+    foreach ($configuration in @('Debug','Release')) {
+      foreach ($invocation in @('direct','solution')) {
+        $stage3EvaluationPlans += [ordered]@{ name="$($project.name)-$configuration-$invocation"; project=$project; configuration=$configuration; solution=($invocation -eq 'solution'); rid='' }
+      }
+    }
+  }
+  $stage3EvaluationPlans += @(
+    [ordered]@{ name='Unlimotion.Desktop-Release-direct-win-x64'; project=$stage3DesktopProjects[0]; configuration='Release'; solution=$false; rid='win-x64' },
+    [ordered]@{ name='Unlimotion.Desktop.ForDebianBuild-Release-direct-linux-x64'; project=$stage3DesktopProjects[1]; configuration='Release'; solution=$false; rid='linux-x64' },
+    [ordered]@{ name='Unlimotion.Desktop.ForMacBuild-Release-direct-osx-x64'; project=$stage3DesktopProjects[2]; configuration='Release'; solution=$false; rid='osx-x64' },
+    [ordered]@{ name='Unlimotion.Desktop.ForMacBuild-Release-direct-osx-arm64'; project=$stage3DesktopProjects[2]; configuration='Release'; solution=$false; rid='osx-arm64' }
+  )
+  $stage3Evaluations = @()
+  foreach ($plan in $stage3EvaluationPlans) {
+    $arguments = @('msbuild',$plan.project.path,'-nologo','-verbosity:quiet',"-p:Configuration=$($plan.configuration)")
+    if ($plan.solution) { $arguments += '-p:BuildingSolutionFile=true' }
+    if ($plan.rid) { $arguments += "-p:RuntimeIdentifier=$($plan.rid)" }
+    $arguments += '-getProperty:MSBuildProjectFullPath,MSBuildProjectName,BuildingSolutionFile,BaseIntermediateOutputPath,MSBuildProjectExtensionsPath,ProjectAssetsFile,DefaultItemExcludes,BaseOutputPath,OutputPath,PublishDir,TargetPath'
+    $arguments += '-getItem:PackageReference,Compile'
+    $raw = @(Invoke-Stage3Native "msbuild-$($plan.name)" 'dotnet' $arguments $stage3CleanSource)
+    $stage3Evaluations += [ordered]@{ plan=$plan; document=(($raw -join [Environment]::NewLine) | ConvertFrom-Json -Depth 100) }
+  }
+  $stage3SolutionDebug = @($stage3Evaluations | Where-Object { $_.plan.configuration -eq 'Debug' -and $_.plan.solution })
+  $stage3Assets = @($stage3SolutionDebug | ForEach-Object { [IO.Path]::GetFullPath([string]$_.document.Properties.ProjectAssetsFile) })
+  $stage3Targets = @($stage3SolutionDebug | ForEach-Object { [IO.Path]::GetFullPath([string]$_.document.Properties.TargetPath) })
+  if (@($stage3Assets | Sort-Object -Unique).Count -ne 3 -or @($stage3Targets | Sort-Object -Unique).Count -ne 3) { throw 'Archive build did not produce three unique assets and target paths.' }
+  $stage3DesktopOutputs = @()
+  foreach ($evaluation in $stage3SolutionDebug) {
+    $projectPath = [IO.Path]::GetFullPath((Join-Path $stage3CleanSource $evaluation.plan.project.path))
+    $assetsPath = [IO.Path]::GetFullPath([string]$evaluation.document.Properties.ProjectAssetsFile)
+    $targetPath = [IO.Path]::GetFullPath([string]$evaluation.document.Properties.TargetPath)
+    $expectedAssetsPath = [IO.Path]::GetFullPath((Join-Path $stage3CleanSource $evaluation.plan.project.assets))
+    $expectedTargetPath = [IO.Path]::GetFullPath((Join-Path $stage3CleanSource $evaluation.plan.project.target))
+    if (-not $assetsPath.Equals($expectedAssetsPath,[StringComparison]::OrdinalIgnoreCase) -or -not $targetPath.Equals($expectedTargetPath,[StringComparison]::OrdinalIgnoreCase)) { throw "Unexpected assets or target path for $($evaluation.plan.project.name)." }
+    if (-not (Test-Path -LiteralPath $assetsPath -PathType Leaf) -or -not (Test-Path -LiteralPath $targetPath -PathType Leaf)) { throw "Missing assets or target output for $($evaluation.plan.project.name)." }
+    $assets = Get-Content -LiteralPath $assetsPath -Raw | ConvertFrom-Json -Depth 100
+    $restoreProjectPath = [IO.Path]::GetFullPath([string]$assets.project.restore.projectPath)
+    if (-not $restoreProjectPath.Equals($projectPath,[StringComparison]::OrdinalIgnoreCase)) { throw "Assets graph belongs to another project: $assetsPath" }
+    $stage3DesktopOutputs += [ordered]@{
+      project = $evaluation.plan.project.name
+      assetsPath = [IO.Path]::GetRelativePath($stage3CleanSource,$assetsPath)
+      assetsSha256 = (Get-FileHash -LiteralPath $assetsPath -Algorithm SHA256).Hash.ToLowerInvariant()
+      targetPath = [IO.Path]::GetRelativePath($stage3CleanSource,$targetPath)
+      targetSha256 = (Get-FileHash -LiteralPath $targetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+  }
+  $stage3EvaluationSummary = @($stage3Evaluations | ForEach-Object {
+    [ordered]@{
+      name = $_.plan.name
+      project = $_.plan.project.name
+      configuration = $_.plan.configuration
+      solution = $_.plan.solution
+      rid = $_.plan.rid
+      baseIntermediateOutputPath = [string]$_.document.Properties.BaseIntermediateOutputPath
+      projectAssetsFile = [string]$_.document.Properties.ProjectAssetsFile
+      baseOutputPath = [string]$_.document.Properties.BaseOutputPath
+      outputPath = [string]$_.document.Properties.OutputPath
+      publishDir = [string]$_.document.Properties.PublishDir
+      targetPath = [string]$_.document.Properties.TargetPath
+      packageReferences = @($_.document.Items.PackageReference | ForEach-Object Identity)
+      compileItemCount = @($_.document.Items.Compile).Count
+    }
+  })
 }
 finally {
-  Pop-Location
+  [Environment]::SetEnvironmentVariable('GIT_CEILING_DIRECTORIES',$stage3PreviousGitCeiling,'Process')
 }
-[pscustomobject]@{
-  sourceSha = $stage3SourceSha
-  archiveSha256 = (Get-FileHash -LiteralPath $stage3Archive -Algorithm SHA256).Hash.ToLowerInvariant()
-  cleanSource = $stage3CleanSource
-  restoreExitCode = $restoreExit
-  buildExitCode = $buildExit
-} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage3CleanEvidence 'receipt.json') -Encoding utf8NoBOM
-if ($restoreExit -ne 0 -or $buildExit -ne 0) { throw 'Clean archive restore/build failed.' }
-dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj `
-  -c Debug --no-restore -p:UseSharedCompilation=false -- `
-  --maximum-parallel-tests 1 --output Detailed
-$stage3HeadlessRoot = Join-Path (Get-Location) 'artifacts/test-results/stage3-headless-final'
-dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj `
-  -c Debug --no-restore -p:UseSharedCompilation=false -- `
-  --maximum-parallel-tests 1 --output Detailed --report-trx --report-html `
-  --results-directory "$stage3HeadlessRoot/full-1"
-dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj `
-  -c Debug --no-restore -p:UseSharedCompilation=false -- `
-  --maximum-parallel-tests 1 --output Detailed --report-trx --report-html `
-  --results-directory "$stage3HeadlessRoot/full-2"
 
-git diff --check
+# Archive restore does not prepare the main checkout used by the test commands.
+Invoke-Stage3Native 'unit-restore' 'dotnet' @('restore','src/Unlimotion.Test/Unlimotion.Test.csproj','--force','-p:Configuration=Debug')
+Invoke-Stage3Native 'headless-restore' 'dotnet' @('restore','tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj','--force','-p:Configuration=Debug')
+Invoke-Stage3Native 'unit-build' 'dotnet' @('build','src/Unlimotion.Test/Unlimotion.Test.csproj','-c','Debug','--no-restore','--no-incremental','-p:UseSharedCompilation=false','/nodeReuse:false')
+Invoke-Stage3Native 'headless-build' 'dotnet' @('build','tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj','-c','Debug','--no-restore','--no-incremental','-p:UseSharedCompilation=false','/nodeReuse:false')
+$stage3UnitResults = Join-Path $stage3CleanEvidence 'unit'
+$stage3Headless1Results = Join-Path $stage3CleanEvidence 'headless/full-1'
+$stage3Headless2Results = Join-Path $stage3CleanEvidence 'headless/full-2'
+foreach ($resultDirectory in @($stage3UnitResults,$stage3Headless1Results,$stage3Headless2Results)) {
+  if (Test-Path -LiteralPath $resultDirectory) { throw "Result directory already exists: $resultDirectory" }
+}
+Invoke-Stage3Native 'unit' 'dotnet' @('test','src/Unlimotion.Test/Unlimotion.Test.csproj','-c','Debug','--no-build','--no-restore','--','--maximum-parallel-tests','1','--output','Detailed','--report-trx','--report-html','--results-directory',$stage3UnitResults)
+Invoke-Stage3Native 'headless-full-1' 'dotnet' @('test','tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj','-c','Debug','--no-build','--no-restore','--','--maximum-parallel-tests','1','--output','Detailed','--report-trx','--report-html','--results-directory',$stage3Headless1Results)
+Invoke-Stage3Native 'headless-full-2' 'dotnet' @('test','tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj','-c','Debug','--no-build','--no-restore','--','--maximum-parallel-tests','1','--output','Detailed','--report-trx','--report-html','--results-directory',$stage3Headless2Results)
+
+function Assert-Stage3Trx {
+  param([string]$Name,[string]$ResultDirectory,[int]$ExpectedTotal)
+  $trx = @(Get-ChildItem -LiteralPath $ResultDirectory -Filter '*.trx' -File -Recurse)
+  if ($trx.Count -ne 1) { throw "$Name must retain exactly one TRX report." }
+  $html = @(Get-ChildItem -LiteralPath $trx[0].DirectoryName -Filter '*.html' -File)
+  if ($html.Count -ne 1) { throw "$Name must retain exactly one primary HTML report beside the TRX." }
+  [xml]$trxXml = Get-Content -LiteralPath $trx[0].FullName -Raw
+  $counters = $trxXml.SelectSingleNode("//*[local-name()='Counters']")
+  $results = @($trxXml.SelectNodes("//*[local-name()='UnitTestResult']"))
+  if ($null -eq $counters -or [int]$counters.total -ne $ExpectedTotal -or [int]$counters.executed -ne $ExpectedTotal -or [int]$counters.passed -ne $ExpectedTotal -or $results.Count -ne $ExpectedTotal) { throw "$Name cardinality is invalid." }
+  foreach ($counter in @('failed','error','timeout','aborted','inconclusive','passedButRunAborted','notRunnable','notExecuted','disconnected','warning','completed','inProgress','pending')) {
+    if ([int]$counters.GetAttribute($counter) -ne 0) { throw "$Name counter '$counter' is non-zero." }
+  }
+  $nonPassed = @($results | Where-Object { [string]$_.outcome -cne 'Passed' })
+  if ($nonPassed.Count -ne 0) { throw "$Name TRX contains non-passing results: $($nonPassed.testName -join ', ')" }
+  [ordered]@{ total = [int]$counters.total; passed = [int]$counters.passed; failed = [int]$counters.failed; trx = $trx[0].FullName; html = $html[0].FullName }
+}
+$stage3Counters = [ordered]@{
+  unit = Assert-Stage3Trx 'Unit' $stage3UnitResults 830
+  headlessFull1 = Assert-Stage3Trx 'Headless full-1' $stage3Headless1Results 36
+  headlessFull2 = Assert-Stage3Trx 'Headless full-2' $stage3Headless2Results 36
+}
+
+Invoke-Stage3Native 'final-branch-diff-check' 'git' @('diff','--check',$stage3DiffRange)
+$stage3FinalSha = ([string](& git rev-parse HEAD)).Trim()
+if ($LASTEXITCODE -ne 0 -or $stage3FinalSha -ne $stage3SourceSha) { throw 'HEAD changed during final gate.' }
+$stage3FinalStatus = @(& git status --porcelain=v1 --untracked-files=all)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect final worktree status.' }
+if ($stage3FinalStatus.Count -ne 0) { throw 'Worktree/index changed during final gate.' }
+$stage3Outcome = 'pass'
+}
+catch {
+  $stage3CaughtError = $_
+  $stage3Failure = [ordered]@{ message=$_.Exception.Message; type=$_.Exception.GetType().FullName; scriptStackTrace=$_.ScriptStackTrace }
+}
+finally {
+  $stage3ReceiptPath = Join-Path $stage3CleanEvidence 'receipt.json'
+  $stage3ChecksumsPath = Join-Path $stage3CleanEvidence 'checksums.sha256'
+  $stage3FileHashTargets = @()
+  if (Test-Path -LiteralPath $stage3Archive -PathType Leaf) { $stage3FileHashTargets += $stage3Archive }
+  if (Test-Path -LiteralPath $stage3CleanEvidence -PathType Container) {
+    $stage3FileHashTargets += @(Get-ChildItem -LiteralPath $stage3CleanEvidence -Recurse -File | Where-Object { $_.FullName -notin @($stage3ReceiptPath,$stage3ChecksumsPath) } | ForEach-Object FullName)
+  }
+  $stage3FileHashes = @($stage3FileHashTargets | Sort-Object -Unique | ForEach-Object {
+    [ordered]@{ path = [IO.Path]::GetRelativePath($stage3CleanBundle,$_).Replace('\','/'); sha256 = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() }
+  })
+  $stage3ArchiveSha256 = if (Test-Path -LiteralPath $stage3Archive -PathType Leaf) { (Get-FileHash -LiteralPath $stage3Archive -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
+  [ordered]@{
+    outcome = $stage3Outcome
+    failure = $stage3Failure
+    sourceSha = $stage3SourceSha
+    sourceTree = $stage3SourceTree
+    finalSha = $stage3FinalSha
+    branch = $stage3Branch
+    originMainSha = $stage3OriginMainSha
+    diffRange = $stage3DiffRange
+    archiveSha256 = $stage3ArchiveSha256
+    sdkVersion = $stage3SdkVersion
+    powershellVersion = $PSVersionTable.PSVersion.ToString()
+    osVersion = [Environment]::OSVersion.VersionString
+    exitCodes = $stage3ExitCodes
+    counters = $stage3Counters
+    shellFiles = $stage3ShellEvidence
+    desktopOutputs = $stage3DesktopOutputs
+    desktopEvaluations = $stage3EvaluationSummary
+    files = $stage3FileHashes
+  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $stage3ReceiptPath -Encoding utf8NoBOM
+  $stage3ChecksumTargets = @($stage3FileHashTargets) + $stage3ReceiptPath
+  $stage3ChecksumLines = @($stage3ChecksumTargets | Sort-Object -Unique | ForEach-Object {
+    '{0} *{1}' -f (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant(), [IO.Path]::GetRelativePath($stage3CleanBundle,$_).Replace('\','/')
+  })
+  [IO.File]::WriteAllLines($stage3ChecksumsPath,$stage3ChecksumLines,[Text.UTF8Encoding]::new($false))
+}
+if ($null -ne $stage3CaughtError) { throw $stage3CaughtError }
 ```
 
 Additional syntax/tool gates:
@@ -802,7 +1012,7 @@ Additional syntax/tool gates:
 - YAML parse + `actionlint` when available; CI is authoritative if local binary is absent;
 - static scan: every external `owner/repo@...` in new workflow uses full commit SHA; local `./...` references are accepted as same-commit; permissions/read-only contract checked;
 - Android workflow security negatives: missing release condition, write build job, production secret in non-release-reachable step, global token, changed release trigger/APK filename/signer input, wrong same-run artifact SHA/id/digest and floating external action ref each fail;
-- after every tracked fix, delete/reset both `stage3-headless-final/full-{1,2}` directories, rerun both Headless commands consecutively and rerun the complete native matrix/aggregate on the same final HEAD;
+- after every tracked fix, create a new SHA+timestamp evidence bundle; never reuse/delete prior Unit/Headless result directories; rerun Unit and both consecutive Headless runs plus the complete native matrix/aggregate on the unchanged final HEAD;
 - no production secret names available to PR/build-only jobs.
 
 Native validation cannot be replaced by local Windows-only emulation. Docker daemon is unavailable in the current local environment, so Debian matrix must pass in GitHub CI before merge; this is an expected external gate, not a waiver.
@@ -1153,19 +1363,19 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | MEDIUM | default-item exclusion | Compatibility alias и узкое исключение могли пропустить sibling generated files | Выбрать canonical `DefaultItemExcludes` с absolute whole-`obj/bin` patterns и sentinel check | fixed; PASS |
 
 - Checks rerun: 22 canonical H2 sections, 8 balanced fences, 21/21 unique AC definitions/matrix rows, exact two-spec diff и `git diff --check` PASS; локально показаны только LF -> CRLF warnings.
-- No-findings justification: финальные три роли подтвердили exact property/package/path contract и approval boundary без remaining P0-P3 findings; текущая ветка не содержит build-isolation implementation и PASS реализации не заявляется.
+- No-findings justification: финальные три Post-SPEC роли подтвердили exact property/package/path contract и approval boundary без remaining P0-P3 findings. Реализация теперь присутствует в commit `12d0bba9`; её focused/static/build evidence и два независимых implementation review PASS, но final-head reset/native PASS ещё не заявляется.
 - Needs human: закрыто 2026-07-21 фразой `Спеку подтверждаю` в непосредственном ответе на точный запрос по `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)`.
-- Residual gates: fourth direct RID evaluation, native Unix compatibility, полный reset local gate, draft PR/native matrix, final Post-EXEC review и merge выполняются только после approval и implementation.
+- Residual gates: полный reset local gate на final candidate, native Unix/Windows/Android compatibility, draft PR/native matrix, final Post-EXEC review и merge.
 
 ### Post-EXEC Review
 
-- Статус: `NEEDS-FIX`; implementation commit `494695365f08af191a3e70e81fb7bfcf8cd546fa` имел полный local PASS, а docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655` прошёл повторный static gate, но clean restore/build на final tracked HEAD выявил pre-existing Desktop build-isolation blocker. Draft PR, native matrix, final Post-EXEC и merge не начаты.
+- Статус: `NEEDS-FIX`; Desktop build-isolation реализована commit `12d0bba92d000d6e26c5e2ba16a6570cf034d7fc`. Focused regression, полный static contract и affected working-checkout restore/build PASS; final-candidate clean archive, full Unit, два последовательных full Headless, draft PR, native matrix, final Post-EXEC и merge ещё не выполнены.
 - Scope reviewed: утверждённый Stage-3 allowlist — root run scripts, standalone read-only distribution workflow, Android publisher least-privilege hardening, candidate builders/validators, schemas/fixtures/evidence и paired README; Windows/Linux/macOS production publishers не менялись. Windows fixture fixes rebased как `88be75ff`; LF amendment затронула только `.gitattributes`, allowlisted verifier и standalone workflow. Headless runtime/test-host fix остаётся только в merged prerequisite.
-- Decision: build-isolation amendment подтверждено 2026-07-21; выполнить implementation и полный reset local gate, только затем draft PR/native matrix. Stage 4 начинать нельзя. Android API 23 incompatibility остаётся последующим условным ASK-HUMAN gate.
-- Review passes: parser и focused LF gates PASS; два независимых adversarial review нашли source-binding и workflow-regression gaps, все исправлены до commit. Implementation HEAD имел full local distribution/README/entrypoint/Android/static/build/Unit/Headless PASS; docs HEAD static rerun PASS, clean build RED и открыл новое amendment. Native delivery ещё не закрыта.
-- Evidence inspected: `origin/main@e11cae9a`, implementation HEAD `494695365f08af191a3e70e81fb7bfcf8cd546fa`, docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655`, 22 exact release assets, 15 native cells, 7 paired support claims, 156 contract checks / 128 negative fixtures, 6 canonical JSON с `HEAD` и effective `text=set/eol=lf`, local synthetic three-report aggregate fixture и statically validated receipt wiring, Unit `830/830`, Headless `36/36` два последовательных раза; baseline/final-head restore-order reproductions и isolated uncommitted/disposable canonical design prototype под `artifacts/test-results/stage3-build-collision-diagnostic/origin-main-authoritative`. Current-branch production implementation отсутствует; direct prototype PublishDir evidence ограничена тремя sampled RID.
-- Depth checklist: local schema/security/transport/retry/provenance/support boundaries, source-bound attributes, same-length byte mutation, builder scratch survival/order, exact step-local SHA bindings, fail-closed final aggregate и delayed test-host teardown проверены. Desktop build-isolation amendment, реальные Windows/Linux/macOS/Android native cells, PR checks и merge остаются незавершёнными.
-- No-findings justification: для прежнего implementation scope deterministic findings закрыты; build-isolation BLOCKER имеет approved remediation, но не считается исправленным до implementation/reset gate. Финальный Stage-3 PASS не заявляется.
+- Decision: implementation выполнена в exact allowlist; обновить журналы/команды, закоммитить final candidate и полностью повторить local gate. Только затем разрешены draft PR/native matrix. Stage 4 начинать нельзя. Android API 23 incompatibility остаётся последующим условным ASK-HUMAN gate.
+- Review passes: parser и focused LF gates PASS; прежние source-binding/workflow-regression gaps закрыты. Build-isolation code review обнаружил три MEDIUM/P2 gaps — exact four-RID cardinality, direct Release item/exclusion coverage и независимую матрицу `Debug/Release × direct/solution`; все исправлены до commit `12d0bba9`, повторный code review и scope/compatibility review вернули PASS. Отдельный final-gate audit затем обнаружил exit/provenance/report/mode gaps ниже; они исправлены в validation contract до final-candidate commit и должны пройти фактический reset run.
+- Evidence inspected: `origin/main@e11cae9a`, прежние implementation/docs HEAD `49469536`/`c795cc82`, build-isolation commit `12d0bba92d000d6e26c5e2ba16a6570cf034d7fc`, 22 exact release assets, 15 native cells, 7 paired support claims, 6 canonical LF JSON, local synthetic aggregate и validated receipt wiring. Build-isolation valid RED: `artifacts/test-results/stage3-build-isolation-tdd-red-5ae964aa-attempt-2`, exact reason — `Unlimotion.Desktop` не использовал `obj/Unlimotion.Desktop/`; первый RED-каталог отклонён как harness error. Current focused GREEN: `stage3-build-isolation-focused-green-working-attempt-4`, 19 checks / 11 negatives. Current static All: `stage3-static-build-isolation-working-final`, 173 checks / 139 negatives. Affected forced restore/serial non-incremental build: `stage3-build-isolation-working-build`, exit 0/0, 112 warnings, 0 errors, SDK `10.0.400-preview.0.26322.102`; это pre-final working-checkout build, не clean-archive evidence.
+- Depth checklist: local schema/security/transport/retry/provenance/support boundaries, source-bound attributes, four exact direct RID paths, 2×2 configuration/invocation matrix, sibling sentinels, package graph, builder scratch survival/order, exact step-local SHA bindings, fail-closed final aggregate и delayed test-host teardown проверены. Fresh clean-archive/full-test gate, реальные Windows/Linux/macOS/Android native cells, PR checks и merge остаются незавершёнными.
+- No-findings justification: deterministic implementation findings закрыты и независимые implementation reviews PASS; build-isolation BLOCKER считается исправленным на focused/static/affected-build уровне, но `S3-AC-20` и финальный Stage-3 PASS не закрываются до reset full local gate, native matrix, final review и merge.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -1178,13 +1388,21 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | MEDIUM | workflow fail-closed wiring | Static contract видел aggregate call во всём job, но не доказывал выполнение внутри `id: aggregate` и связь с final verdict | Закрепить named step/id, запретить `continue-on-error`, проверить оба final outcome consumers и negative fixtures | fixed; 47 workflow negatives PASS |
 | MEDIUM | workflow scratch/SHA binding | Test constants не доказывали actual builder root/order и step-local SHA env mappings | Проверять exact output root, `checkout < checker < build < retain < stage < upload` и четыре пары SHA bindings | fixed; 47 workflow negatives PASS |
 | BLOCKER | Headless acceptance | Full suite дважды завершал сами тесты, затем process падал на delayed watcher callback к удалённому `Tasks/.unlimotion.lock` | Отдельно approve/merge `headless-appautomation-storage-lifecycle`, rebase Stage 3 и повторить full gate | fixed; merged PR #279, Stage-3 rerun `36/36` twice |
-| BLOCKER | Desktop build isolation | Три sibling `.csproj` делят `obj/project.assets.json`; Debian Debug не содержит diagnostics package, а main/Debian делят один `TargetPath`. Clean build на `origin/main` и final HEAD падает либо ложно проходит в зависимости от restore order | Реализовать approved amendment: изолировать intermediate/solution output paths, добавить Debug-only Debian diagnostics и evaluated-path regressions; затем reset full gate | approved; implementation pending |
-| LOW | full Unit flake | Один из 830 live RavenDB tests ранее попал в immediate stale-index `FirstAsync`; exact targeted rerun прошёл 1/1 | Не расширять Stage 3; потребовать новый full green и вынести deterministic consistency fix отдельно | follow-up; new full `830/830` PASS |
+| BLOCKER | Desktop build isolation | Три sibling `.csproj` делили `obj/project.assets.json`; Debian Debug не содержал diagnostics package, а main/Debian делили один `TargetPath`. Clean build на baseline падал либо ложно проходил в зависимости от restore order | Изолировать intermediate/solution output paths, добавить Debug-only Debian diagnostics и evaluated-path regressions; затем reset full gate | fixed in `12d0bba9`; focused/static/affected build PASS, reset pending |
+| MEDIUM | build-isolation RID cardinality | Direct compatibility check мог принять дубликат RID и пропустить обязательный RID | Требовать case-sensitive exact set `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64` и negative fixture duplicate/missing | fixed before `12d0bba9`; review PASS |
+| MEDIUM | direct graph coverage | Direct Release evaluation не проверяла assets path, whole `obj/bin` exclusions и Compile sentinels | Проверять все direct graphs и добавить missing-exclusion/sentinel-leak negatives | fixed before `12d0bba9`; review PASS |
+| MEDIUM | condition-axis independence | Только Debug/solution и Release/direct могли скрыть перепутанные `Configuration`/`BuildingSolutionFile` conditions | Проверять полную матрицу `Debug/Release × direct/solution` и две confounding mutations | fixed before `12d0bba9`; review PASS |
+| MEDIUM | final-gate provenance | Planned commands могли скрыть native exit, использовать `--no-restore` в другом checkout, переиспользовать Headless dirs и пропустить Android static gate | Сделать команды fail-closed; явно restore test projects в main checkout; сохранить Unit TRX/HTML и unique Headless dirs; добавить Android checker и branch diff | fixed in validation contract; execution pending |
+| BLOCKER | TUnit report cardinality | Recursive HTML enumeration видела canonical report и attachment copy, поэтому отклоняла green Unit/Headless run | Требовать один recursive TRX и один primary HTML рядом с ним; все attachment files всё равно хешировать | fixed in validation contract; parser/layout review PASS |
+| MEDIUM | immutable source range | Длинный gate использовал moving `origin/main...HEAD`, поэтому concurrent fetch мог изменить audited range относительно receipt | Заморозить exact base/source SHA, проверить ancestry, использовать один range и архивировать source SHA | fixed in validation contract; execution pending |
+| MEDIUM | archive output identity | Unique/existing TargetPath не доказывал exact project-to-assets/target mapping; success-only receipt терял failure provenance | Проверить три exact mappings и assets owner; писать success/failure receipt в `finally`, затем checksum sidecar | fixed in validation contract; execution pending |
+| MEDIUM | shell byte/mode evidence | `bash -n` не доказывал отсутствие CR во всех changed shell scripts и committed `100755` root entrypoints | Проверить raw bytes всех changed `.sh`, exact Git modes и сохранить hashes/modes | fixed in validation contract; execution pending |
+| LOW | full Unit flake | Один из 830 live RavenDB tests ранее попал в immediate stale-index `FirstAsync`; exact targeted rerun прошёл 1/1 | Не расширять Stage 3; потребовать новый full green и вынести deterministic consistency fix отдельно | follow-up; previous `49469536` full `830/830` PASS, final-candidate rerun pending |
 
 - Fixed before final report: raw Android types/output-count/setup-failure logging, attempt-scoped exact artifact transport, permanent embedded workflow behavioral fixtures, source-bound LF/blob parity и fail-closed workflow regressions исправлены внутри approved scripts; root shell entrypoints committed как `100755`; Headless blocker исправлен и слит отдельным PR #279 после approval.
-- Checks rerun: implementation HEAD `49469536` — default и explicit `test-distribution-contract.ps1 -Area All` PASS (156 checks, 128 negative fixtures); Android/README positive+negative contracts и root entrypoints PASS; 10 PowerShell, 6 JSON и 8 shell syntax checks PASS; local `actionlint` unavailable, CI authoritative. Restore PASS; первый build получил `Access to the path is denied` при WebAssembly conversion, немедленный exact retry на том же HEAD PASS с 0 errors. Full Unit clean run `830/830`, exit 0. Full Headless `36/36`, exit 0, два последовательных раза в отдельных result directories.
-- Validation evidence: implementation evidence сохранена под `artifacts/test-results/stage3-*-49469536`; static docs-HEAD evidence — `artifacts/test-results/stage3-static-final-c795cc82`. `S3-AC-20` снова открыт из-за clean-build blocker; прежние Unit/Headless результаты остаются диагностическим baseline и после любого approved tracked fix не закрывают final-head gate.
-- Unrelated changes: Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff ограничен approved least-privilege/output-preserving surface; Stage-4 publication migration отсутствует; approval bookkeeping зафиксирован отдельно, production implementation ещё не начата.
+- Checks rerun: прежний HEAD `49469536` — full local gate `156/128`, Unit `830/830`, Headless `36/36` twice. На build-isolation implementation: valid TDD RED; focused GREEN 19 checks / 11 negatives; current full static All 173 checks / 139 negatives; PowerShell parser и branch `git diff --check` PASS; affected forced restore/build exit 0/0, 112 warnings, 0 errors. Эти прогоны предшествуют финальному docs commit и не заменяют reset final-head gate.
+- Validation evidence: прежняя implementation evidence — `artifacts/test-results/stage3-*-49469536`; build-isolation TDD/static/build evidence — `artifacts/test-results/stage3-build-isolation-*` и `stage3-static-build-isolation-working-final`. `S3-AC-20` остаётся открыт только на clean-archive/full-test/native/delivery части; прежние Unit/Headless результаты являются baseline и не закрывают новый final-head gate.
+- Unrelated changes: build-isolation commit меняет только три утверждённых файла — `Directory.Build.props`, Debian csproj и verifier. Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff остаётся approved least-privilege/output-preserving surface; Stage-4 publication migration, runtime/UI/data changes отсутствуют.
 - Needs human: исходные approval gates закрыты сообщением пользователя от 2026-07-20; узкое build-isolation amendment отдельно подтверждено 2026-07-21. Следующий условный ASK-HUMAN — Android API 23 product decision, если native gate подтвердит несовместимость.
 - Residual risks / follow-ups: RavenDB stale-index flake, native image/tool drift, current unsigned desktop artifacts и production release atomicity остаются соответственно separate follow-up, final native gate, Stage 9 и Stage 4.
 
@@ -1216,15 +1434,15 @@ Repeat approval получен 2026-07-20. `.gitattributes` и allowlisted Stage
 2. Изолированная копия baseline `origin/main@e11cae9a086ddd4fd97105f00b67bedf05f92700` воспроизводит тот же результат: clean restore/build — exit 1, три `CS1061`; individual main/Mac restore+build — PASS, Debian — одна `CS1061`; после Debian restore main `--no-restore` тоже падает. Альтернативный clean restore order оставляет main graph и даёт ложный solution PASS, поэтому это доказанная order-dependent baseline nondeterminism, а не Stage-3 regression.
 3. Main и Debian проекты имеют одинаковые `AssemblyName` и `TargetPath=bin/Debug/net10.0/Unlimotion.Desktop.dll`. Даже после исправления restore graph parallel solution build сохранял бы output clobber; менять постоянный direct-project output нельзя, потому что production publishers читают существующие `bin/Release/net10.0/...` paths.
 4. Release-конфигурация не является допустимым обходом Debug gate. Exploratory Release run остановлен после unrelated Android AOT error и не получил gate verdict; acceptance command не ослабляется, этот результат не смешивается с remediation.
-5. Isolated uncommitted/disposable authoritative prototype от source `e11cae9a086ddd4fd97105f00b67bedf05f92700` подтвердил feasibility canonical `DefaultItemExcludes` design: fresh restore/full Debug build exit 0; созданы три unique assets paths и три solution-only output roots; Compile sentinel leakage = 0. Direct legacy PublishDir equality доказана для sampled `win-x64`, `linux-x64`, `osx-x64`; `osx-arm64` остаётся обязательным implementation AC, но prototype-proven не заявляется. Ignored/local-only evidence сохранена в `artifacts/test-results/stage3-build-collision-diagnostic/origin-main-authoritative/{Directory.Build.props.snapshot.txt,restore.log,build.log,compile-items.log,solution-properties.log,direct-properties.log}`. Это design evidence; current-branch implementation отсутствует и PASS не заявляется.
+5. Isolated uncommitted/disposable authoritative prototype от source `e11cae9a086ddd4fd97105f00b67bedf05f92700` подтвердил feasibility canonical `DefaultItemExcludes` design: fresh restore/full Debug build exit 0; созданы три unique assets paths и три solution-only output roots; Compile sentinel leakage = 0. Direct legacy PublishDir equality была доказана для sampled `win-x64`, `linux-x64`, `osx-x64`; `osx-arm64` оставался обязательным implementation AC. Ignored/local-only design evidence сохранена в `artifacts/test-results/stage3-build-collision-diagnostic/origin-main-authoritative/{Directory.Build.props.snapshot.txt,restore.log,build.log,compile-items.log,solution-properties.log,direct-properties.log}`. Current implementation commit `12d0bba9` отдельно закрыл все четыре RID и не подменяется этим прототипом.
 
-Предлагаемое минимальное изменение:
+Утверждённое и реализованное минимальное изменение:
 
 1. В `src/Unlimotion.Desktop/Directory.Build.props` задать portable project-specific `BaseIntermediateOutputPath=obj/$(MSBuildProjectName)/`; дополнить canonical `DefaultItemExcludes` exact absolute patterns `$(MSBuildProjectDirectory)/obj/**` и `$(MSBuildProjectDirectory)/bin/**`; задавать `BaseOutputPath=bin/$(MSBuildProjectName)/` только когда `BuildingSolutionFile=true`.
 2. В уже затронутом `Unlimotion.Desktop.ForDebianBuild.csproj` добавить `AvaloniaUI.DiagnosticsSupport` только при `Configuration=Debug`, поскольку общий `Program.cs` вызывает `.WithDeveloperTools()` только под `#if DEBUG`. Release package graph и binary contract не меняются.
 3. В allowlisted `test-distribution-contract.ps1` добавить `BuildIsolation` positive/negative contract: три unique project-bound assets paths и три unique solution output roots; exact direct PublishDir для main `win-x64`, Debian `linux-x64`, Mac `osx-x64`/`osx-arm64` остаются legacy `bin/Release/net10.0/<rid>/publish`; Debian diagnostics присутствует в Debug и отсутствует в Release. Shared-obj, missing whole-`obj/bin` exclusion, unconditional-output-relocation, missing-diagnostics и diagnostics-unconditional/Release-leak mutations fail; foreign generated-source sentinels под sibling `obj/bin` не входят в `Compile`.
 4. Не менять `Unlimotion.Desktop.csproj`, `Unlimotion.Desktop.ForMacBuild.csproj`, Windows/Linux/macOS publisher workflows или их expected direct output paths. Runtime/UI/data contract не меняется; новые UI tests/video не применимы.
-5. После implementation выполнить forced restore, serial non-incremental full Debug solution build, focused `BuildIsolation`, весь static gate, full Unit и два reset full Headless runs. Любой tracked fix снова сбрасывает эту evidence; draft PR/native matrix разрешены только на окончательном green HEAD.
+5. После final-candidate docs commit выполнить clean-archive forced restore, serial non-incremental full Debug solution build, focused `BuildIsolation`, весь static gate, full Unit и два reset full Headless runs. Любой tracked fix снова сбрасывает эту evidence; draft PR/native matrix разрешены только на окончательном green HEAD.
 
 Approval boundary: этот блок, Decision Ledger, S3-AC-20 и три `PROPOSED AMENDMENT` строки расширяют specification. Отдельное явное approval получено 2026-07-21 фразой `Спеку подтверждаю` в непосредственном ответе на точный запрос по `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)`; разрешён только названный production allowlist.
 
@@ -1240,7 +1458,7 @@ Headless prerequisite child approval gate: `APPROVED` 2026-07-20 той же т�
 
 Desktop build-isolation amendment: `APPROVED` 2026-07-21 точной фразой `Спеку подтверждаю` в непосредственном ответе на запрос по этой amendment.
 
-EXEC возобновлён только для build-isolation allowlist. Stage-3 delivery всё ещё требует полный reset local gate, draft PR, native matrix, final review и merge.
+Build-isolation EXEC выполнен в exact allowlist commit `12d0bba9`. Stage-3 delivery всё ещё требует final-candidate docs commit, полный reset local gate, draft PR, native matrix, final review и merge.
 
 ## 20. Журнал действий агента
 
@@ -1272,3 +1490,4 @@ EXEC возобновлён только для build-isolation allowlist. Stage
 | EXEC | Повторить static/build gate на docs HEAD | 1.00 | Clean-build cause | Остановить push и воспроизвести на baseline | Нет | Не применимо | Static gate на `c795cc82` PASS 156/128; clean solution build получил три `CS1061` из Debian-owned shared assets | `stage3-static-final-c795cc82`, clean build logs, evaluated MSBuild properties |
 | SPEC | Зафиксировать Desktop build-isolation amendment | 0.99 | Independent Post-SPEC review и user approval | Проверить exact scope/negative fixtures, затем запросить отдельное подтверждение | Да | Ещё не обращались | Baseline `e11cae9a` подтверждает shared `obj/bin`, missing Debian Debug diagnostics и restore-order nondeterminism; production publisher paths должны остаться неизменны | Эта spec, roadmap, baseline/final-head diagnostic evidence |
 | EXEC | Принять Desktop build-isolation amendment approval | 1.00 | Нет | Реализовать TDD regression и exact props/package fix, затем полностью reset local gate | Нет | Пользователь 2026-07-21 сообщил `Спеку подтверждаю` в непосредственном ответе на точный запрос amendment | Разрешены только `Directory.Build.props`, Debug-only Debian package-reference role и `BuildIsolation` verifier; publishers/runtime/UI/data остаются вне scope | Эта spec, roadmap, user approval |
+| EXEC | Реализовать Desktop build isolation и пройти pre-final review | 1.00 | Final-candidate reset/native evidence | Обновить журналы, закоммитить final candidate и полностью повторить gate | Нет | Не применимо | Valid TDD RED; commit `12d0bba9`; focused 19 checks / 11 negatives, full static 173 checks / 139 negatives, affected restore/build 0/0; три review findings исправлены, code/scope reviews PASS | Три утверждённых implementation файла, `artifacts/test-results/stage3-build-isolation-*`, эта spec, roadmap |
