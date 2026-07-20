@@ -11,7 +11,7 @@
 - Execution / evidence runtime: локальный Windows/PowerShell workspace; native verification выполняется на Windows Server 2022, macOS 15 Intel/arm64, Android API 23/36 emulator и чистых Debian 12/13 x64 images.
 - Eval baseline / evidence: model eval — `Не применимо`; product/evidence baseline — release `1.27.0` и текущие production `release.published` workflows; runtime UI/data/update behavior не меняется.
 - Целевой релиз / ветка: `docs/distribution-support-contract`; approved SPEC/EXEC base = `origin/main@ad90260b62be899d9f9946e81ce710ed88c2f87a`, previous post-rebase base = `origin/main@ec9b206db6930ef296313a14e2a440236807ba03`, merged prerequisite base = `origin/main@e11cae9a086ddd4fd97105f00b67bedf05f92700`; future dry-run fixture = `v1.28.0`, публикация запрещена.
-- Текущая фаза: `EXEC stopped / build-isolation amendment pending`; пользователь 2026-07-20 одним явным сообщением подтвердил LF amendment и Headless prerequisite, prerequisite доставлен merged PR #279 (`e11cae9a086ddd4fd97105f00b67bedf05f92700`), Stage 3 rebased, LF/blob-parity implementation зафиксирована commit `494695365f08af191a3e70e81fb7bfcf8cd546fa`. Static/contract/README gate на docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655` PASS, но clean solution restore/build выявил воспроизводимый baseline-конфликт sibling Desktop `obj/bin` и отсутствующий Debian Debug diagnostics reference. Push/draft PR остановлены до отдельного approval amendment ниже.
+- Текущая фаза: `EXEC resumed / build-isolation remediation`; пользователь 2026-07-20 одним явным сообщением подтвердил LF amendment и Headless prerequisite, prerequisite доставлен merged PR #279 (`e11cae9a086ddd4fd97105f00b67bedf05f92700`), Stage 3 rebased, LF/blob-parity implementation зафиксирована commit `494695365f08af191a3e70e81fb7bfcf8cd546fa`. Static/contract/README gate на docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655` PASS, но clean solution restore/build выявил воспроизводимый baseline-конфликт sibling Desktop `obj/bin` и отсутствующий Debian Debug diagnostics reference. Desktop build-isolation amendment подтверждена пользователем 2026-07-21; EXEC возобновлён в её узком allowlist, push/draft PR остаются закрыты до полного reset local gate.
 - Freshness baseline от 2026-07-18:
   - latest published release = `1.27.0`, target `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`, 22 assets;
   - Stage 2 доставлен merged PR #277, merge commit `75efc0497af0a1b4678372b67112a8f606ce28c9`;
@@ -555,7 +555,7 @@ Aggregate fails on missing/duplicate/unexpected asset, source/workflow mismatch,
 | UI evidence | agent | Native package window smoke; no new FlaUI/video | 0.99 | Excess test scope or weak package evidence | Нет |
 | Canonical JSON line endings | agent; accepted only by amendment approval | Repository rules `distribution/*.json text eol=lf` и `distribution/fixtures/*.json text eol=lf`; validators continue hashing physical bytes | 1.00 | Windows/Linux/macOS producers получают разные identity SHA | Да; `.gitattributes` отсутствует в исходном allowlist |
 | Headless prerequisite sequencing | agent; accepted by approval of separate child spec | Отдельный clean-worktree PR/merge до Stage-3 rebase; HSL completion не зависит от downstream Stage-3 gate | 1.00 | Mixed scope или циклический prerequisite | Да; отдельный child approval gate |
-| Desktop sibling build isolation | agent; proposed amendment | Project-specific `obj/<MSBuildProjectName>/`; project-specific `bin/<MSBuildProjectName>/` только при solution build; direct single-project publisher paths неизменны; Debian подключает `AvaloniaUI.DiagnosticsSupport` только в Debug | 0.99 | Restore graph зависит от порядка, main/Debian перезаписывают один output, clean Debug build недетерминированно падает | Да; новая роль `Directory.Build.props` и Debian package-reference role отсутствуют в approved allowlist |
+| Desktop sibling build isolation | agent; amendment approved 2026-07-21 | Project-specific `obj/<MSBuildProjectName>/`; project-specific `bin/<MSBuildProjectName>/` только при solution build; direct single-project publisher paths неизменны; Debian подключает `AvaloniaUI.DiagnosticsSupport` только в Debug | 1.00 | Restore graph зависит от порядка, main/Debian перезаписывают один output, clean Debug build недетерминированно падает | Нет; отдельный amendment approval получен |
 
 ### 6.6 Runtime / Config / Data Contract Matrix
 
@@ -871,18 +871,18 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 - [x] LF amendment scenario/Decision Ledger/allowlist прошли отдельный architecture/QA/governance Post-SPEC re-review.
 - [x] Пользователь 2026-07-20 повторно утвердил LF amendment и явно подтвердил отдельную Headless prerequisite child spec точной фразой `Спеку подтверждаю` с указанием обоих документов.
 - [x] Desktop build-isolation amendment прошла отдельный architecture/QA/governance Post-SPEC re-review.
-- [ ] Пользователь отдельно утвердил Desktop build-isolation amendment с явным указанием этой spec.
+- [x] Пользователь 2026-07-21 отдельно утвердил Desktop build-isolation amendment точной фразой `Спеку подтверждаю` в непосредственном ответе на запрос по этой spec.
 
 ## 13. План выполнения
 
-1. Зафиксировать прошедшую Post-SPEC review child spec отдельным spec-only commit и получить отдельный approval.
+1. Зафиксировать прошедшую Post-SPEC review child spec отдельным spec-only commit и получить отдельный approval — выполнено, включая Desktop amendment approval 2026-07-21.
 2. Реализовать asset/support schemas, manifest, exact 1.27.0 fixture/snapshot, identity resolver и negative contract tests.
 3. Добавить standalone platform builders/native validators; harden Android publisher по exact least-privilege contract, Windows/Linux/macOS publishers не менять.
 4. Исправить root entry points и unrelated-CWD regression.
 5. Добавить read-only all-PR/manual workflow, transport contract и stable `distribution-verdict`.
 6. Обновить README EN/RU без public support promotion; пройти snapshot/parity/link checks.
 7. Выполнить local static/build/full Unit/Headless gates.
-8. При обнаруженном build-isolation blocker остановить push, получить отдельный approval amendment, реализовать exact props/package/verifier contract, локально commit final-head candidate и полностью reset local gate из одноразового `git archive HEAD` без старых `obj/bin`.
+8. Для подтверждённого 2026-07-21 build-isolation amendment реализовать exact props/package/verifier contract, локально commit final-head candidate и полностью reset local gate из одноразового `git archive HEAD` без старых `obj/bin`.
 9. Commit implementation, push, открыть draft PR; только теперь новый workflow доступен GitHub.
 10. Выполнить native Windows/Debian/macOS/Android matrix; исправлять findings с bounded retry classification.
 11. После любых tracked fixes повторить local affected gates и полную matrix/aggregate на окончательном PR head.
@@ -891,7 +891,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 
 ## 14. Открытые вопросы
 
-Блокирующих вопросов до approval нет: recommended decisions зафиксированы в Decision Ledger.
+Блокирующих вопросов до EXEC нет: approval gates закрыты, recommended decisions зафиксированы в Decision Ledger.
 
 Условный stop during EXEC: если exact Android API 23 build/install/launch невозможен, агент не выбирает между lowering native requirements и raising minSdk самостоятельно. Он фиксирует evidence и запрашивает отдельное product решение до изменения public minimum.
 
@@ -923,13 +923,13 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | `scripts/build-android-distribution.sh`, `scripts/test-android-distribution.sh` | New Android builder/validator | API/provenance/signature/emulator contract |
 | `scripts/test-android-build-scripts.ps1` | Extend workflow permission/secret/release-output assertions | Regression guard for current Android publisher hardening |
 | `scripts/Test-ReadmeDistributionContract.ps1` | New support snapshot/EN-RU verifier | Machine-readable docs trace |
-| `scripts/test-distribution-contract.ps1` | New manifest/support/workflow-security positive/negative fixtures; **PROPOSED AMENDMENT:** `BuildIsolation` evaluated-path/package-graph regressions | Fail-closed regression gate, включая sibling Desktop restore/output contract |
+| `scripts/test-distribution-contract.ps1` | New manifest/support/workflow-security positive/negative fixtures; **APPROVED AMENDMENT:** `BuildIsolation` evaluated-path/package-graph regressions | Fail-closed regression gate, включая sibling Desktop restore/output contract |
 | `scripts/test-run-entrypoints.ps1` | New fake-dotnet regression | CWD/argv/exit/mode contract |
 | `run.windows.cmd` | Script-relative path/argv/exit | Reliable source run |
 | `run.linux.sh`, `run.macos.sh` | Shebang/strict/path/argv/exit + 100755 | Reliable source run |
 | `src/Unlimotion/Unlimotion.csproj` | Distribution-build identity/provenance guard; default source-run behavior preserved | Prevent raw tag in generated title/metadata |
-| `src/Unlimotion.Desktop/Directory.Build.props` | **PROPOSED AMENDMENT:** unique project-specific intermediate path; solution-only unique output path; broad sibling `obj/bin` item exclusion | Исключить restore/output clobber без изменения direct publisher paths |
-| `src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj` | Candidate-only clean-payload condition; **PROPOSED AMENDMENT:** Debug-only `AvaloniaUI.DiagnosticsSupport`; current Release path/default unchanged | Exclude Debian integration files from candidate AppImage; compile shared Debug entrypoint deterministically |
+| `src/Unlimotion.Desktop/Directory.Build.props` | **APPROVED AMENDMENT:** unique project-specific intermediate path; solution-only unique output path; broad sibling `obj/bin` item exclusion | Исключить restore/output clobber без изменения direct publisher paths |
+| `src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj` | Candidate-only clean-payload condition; **APPROVED AMENDMENT:** Debug-only `AvaloniaUI.DiagnosticsSupport`; current Release path/default unchanged | Exclude Debian integration files from candidate AppImage; compile shared Debug entrypoint deterministically |
 | `src/Unlimotion.Desktop/Unlimotion.Desktop.ForMacBuild.csproj` | Align stale executable metadata | Metadata source consistency |
 | `.github/workflows/distribution-validation.yml` | New read-only native matrix/aggregate | Pre-publication evidence |
 | `.github/workflows/{windows,deb,osx}-packaging.yml` | **No change**; byte-for-byte guard | Keep publication migration outside Stage 3 |
@@ -938,7 +938,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | `specs/2026-07-18-distribution-support-contract.md`, master roadmap during approved EXEC | Approval/Post-EXEC/roadmap journal | Audit trail |
 | `.gitattributes` | **APPROVED AMENDMENT:** `distribution/*.json text eol=lf` и `distribution/fixtures/*.json text eol=lf` | Одинаковые exact identity bytes/SHA на Windows/Linux/macOS |
 
-Таблица выше является exact path-family allowlist. Строка `.gitattributes` имеет статус `APPROVED` по подтверждению пользователя от 2026-07-20. Строки `Directory.Build.props` и новой Debian package-reference role имеют статус `PROPOSED`: до отдельного approval разрешены только spec/review changes, production implementation запрещена. Новое имя внутри перечисленной family допускается только для названной роли. Любое Android workflow изменение вне permissions, token/secret reachability, release-only job split, cleanup, action pinning и exact artifact handoff требует остановки и повторного approval. Любое изменение Windows/Linux/macOS publishers, runtime status/storage/UI/data/update contract или иной path также требует остановки и обновления/повторного approval spec.
+Таблица выше является exact path-family allowlist. Строка `.gitattributes` имеет статус `APPROVED` по подтверждению пользователя от 2026-07-20. Строки `Directory.Build.props`, новой Debian package-reference role и `BuildIsolation` verifier имеют статус `APPROVED` по отдельному подтверждению от 2026-07-21. Новое имя внутри перечисленной family допускается только для названной роли. Любое Android workflow изменение вне permissions, token/secret reachability, release-only job split, cleanup, action pinning и exact artifact handoff требует остановки и повторного approval. Любое изменение Windows/Linux/macOS publishers, runtime status/storage/UI/data/update contract или иной path также требует остановки и обновления/повторного approval spec.
 
 `specs/2026-07-17-status-availability-contract.md` уже доставлена отдельным PR #278 и не входит в Stage-3 allowlist: любое её отличие от `origin/main` останавливает EXEC. Master roadmap разрешено обновлять только во время approved EXEC для Stage-3 delivery journal.
 
@@ -1129,16 +1129,16 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 ### Desktop Build-Isolation Amendment Post-SPEC Review
 
 - Статус: `PASS`; architecture/compatibility, QA/test и governance/delivery final re-reviews не оставили actionable findings. UX review = `N/A`, поскольку runtime/UI/data contract не меняется; real packaged window smoke остаётся обязательным downstream gate.
-- Reviewed contract snapshot: SHA-256 `850d181c453eccce9611217942d0f0a10b0e06df2aea2fe60160a435f814ac12` для текущего contract content до добавления этого bookkeeping block; source HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655`, baseline/prerequisite base `e11cae9a086ddd4fd97105f00b67bedf05f92700`.
+- Reviewed contract snapshot: SHA-256 `850d181c453eccce9611217942d0f0a10b0e06df2aea2fe60160a435f814ac12` для pre-approval contract content до добавления этого bookkeeping block; source HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655`, baseline/prerequisite base `e11cae9a086ddd4fd97105f00b67bedf05f92700`. Последующая approval-only journal update не меняет reviewed implementation contract.
 - Scope reviewed: только Desktop build-isolation amendment в этой Stage-3 spec и синхронизация master roadmap. Proposed production allowlist ограничен `src/Unlimotion.Desktop/Directory.Build.props`, новой Debug-only package-reference role в уже затронутом Debian csproj и `BuildIsolation` area в уже allowlisted verifier; production files в reviewed diff отсутствуют.
-- Decision: amendment готова к отдельному user approval. До него production edits запрещены, Stage-3 push/draft PR остаются остановлены, Stage 4 закрыт.
+- Decision: amendment получила отдельный user approval 2026-07-21; разрешён только exact production allowlist. Stage-3 push/draft PR остаются остановлены до полного reset local gate, Stage 4 закрыт.
 - Review passes:
   - Scope/Evidence pass: Windows/Linux/macOS publishers, direct Release paths, runtime/UI/data и Stage-4 publication migration не затрагиваются.
   - Contract pass: три project-bound assets paths, три solution-only output roots, четыре неизменных direct RID paths, canonical absolute `DefaultItemExcludes`, Debug-only Debian diagnostics, sibling `obj/bin` sentinels и fresh `git archive HEAD` receipt заданы явно.
   - Adversarial risk pass: restore-order false green, sibling generated-source leak, unconditional output relocation, missing diagnostics, Release diagnostics leak и prototype/current-implementation confusion покрыты stop rules или negative fixtures.
   - Role-Based pass: architecture/compatibility = PASS; QA/test = PASS; governance/delivery = PASS; UX = N/A.
   - Re-review after fixes / Fix and re-review: PASS; все first-cycle HIGH/MEDIUM gaps ниже исправлены.
-  - Stop decision: запросить отдельное точное approval; не менять props/csproj/verifier до него.
+  - Stop decision: approval gate закрыт 2026-07-21; перейти к TDD implementation, не расширяя props/csproj/verifier scope.
 - Evidence inspected: baseline clean restore/build RED, restore-order false-green, shared `TargetPath`, current two-spec diff и design-only authoritative prototype `artifacts/test-results/stage3-build-collision-diagnostic/origin-main-authoritative`. Prototype доказал три sampled RID, а `osx-arm64` честно оставлен обязательным implementation AC.
 - Depth checklist: scope drift, before/after runtime matrix, output/intermediate semantics, direct-publisher compatibility, Debug/Release package graphs, generated-source exclusion, disposable clean-build provenance, rollback и approval boundary проверены.
 
@@ -1154,18 +1154,18 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 
 - Checks rerun: 22 canonical H2 sections, 8 balanced fences, 21/21 unique AC definitions/matrix rows, exact two-spec diff и `git diff --check` PASS; локально показаны только LF -> CRLF warnings.
 - No-findings justification: финальные три роли подтвердили exact property/package/path contract и approval boundary без remaining P0-P3 findings; текущая ветка не содержит build-isolation implementation и PASS реализации не заявляется.
-- Needs human: отдельное approval формулировкой `Спеку подтверждаю` с указанием `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)`.
+- Needs human: закрыто 2026-07-21 фразой `Спеку подтверждаю` в непосредственном ответе на точный запрос по `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)`.
 - Residual gates: fourth direct RID evaluation, native Unix compatibility, полный reset local gate, draft PR/native matrix, final Post-EXEC review и merge выполняются только после approval и implementation.
 
 ### Post-EXEC Review
 
 - Статус: `NEEDS-FIX`; implementation commit `494695365f08af191a3e70e81fb7bfcf8cd546fa` имел полный local PASS, а docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655` прошёл повторный static gate, но clean restore/build на final tracked HEAD выявил pre-existing Desktop build-isolation blocker. Draft PR, native matrix, final Post-EXEC и merge не начаты.
 - Scope reviewed: утверждённый Stage-3 allowlist — root run scripts, standalone read-only distribution workflow, Android publisher least-privilege hardening, candidate builders/validators, schemas/fixtures/evidence и paired README; Windows/Linux/macOS production publishers не менялись. Windows fixture fixes rebased как `88be75ff`; LF amendment затронула только `.gitattributes`, allowlisted verifier и standalone workflow. Headless runtime/test-host fix остаётся только в merged prerequisite.
-- Decision: push остановлен. Сначала separate approval build-isolation amendment, implementation и полный reset local gate; только затем draft PR/native matrix. Stage 4 начинать нельзя. Android API 23 incompatibility остаётся последующим условным ASK-HUMAN gate.
+- Decision: build-isolation amendment подтверждено 2026-07-21; выполнить implementation и полный reset local gate, только затем draft PR/native matrix. Stage 4 начинать нельзя. Android API 23 incompatibility остаётся последующим условным ASK-HUMAN gate.
 - Review passes: parser и focused LF gates PASS; два независимых adversarial review нашли source-binding и workflow-regression gaps, все исправлены до commit. Implementation HEAD имел full local distribution/README/entrypoint/Android/static/build/Unit/Headless PASS; docs HEAD static rerun PASS, clean build RED и открыл новое amendment. Native delivery ещё не закрыта.
 - Evidence inspected: `origin/main@e11cae9a`, implementation HEAD `494695365f08af191a3e70e81fb7bfcf8cd546fa`, docs HEAD `c795cc827bdf5489045e33f888bc604e1eaf4655`, 22 exact release assets, 15 native cells, 7 paired support claims, 156 contract checks / 128 negative fixtures, 6 canonical JSON с `HEAD` и effective `text=set/eol=lf`, local synthetic three-report aggregate fixture и statically validated receipt wiring, Unit `830/830`, Headless `36/36` два последовательных раза; baseline/final-head restore-order reproductions и isolated uncommitted/disposable canonical design prototype под `artifacts/test-results/stage3-build-collision-diagnostic/origin-main-authoritative`. Current-branch production implementation отсутствует; direct prototype PublishDir evidence ограничена тремя sampled RID.
 - Depth checklist: local schema/security/transport/retry/provenance/support boundaries, source-bound attributes, same-length byte mutation, builder scratch survival/order, exact step-local SHA bindings, fail-closed final aggregate и delayed test-host teardown проверены. Desktop build-isolation amendment, реальные Windows/Linux/macOS/Android native cells, PR checks и merge остаются незавершёнными.
-- No-findings justification: для прежнего implementation scope deterministic findings закрыты; новый build-isolation BLOCKER зафиксирован как proposed amendment и не считается исправленным до approval/implementation/reset gate. Финальный Stage-3 PASS не заявляется.
+- No-findings justification: для прежнего implementation scope deterministic findings закрыты; build-isolation BLOCKER имеет approved remediation, но не считается исправленным до implementation/reset gate. Финальный Stage-3 PASS не заявляется.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
@@ -1178,14 +1178,14 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 | MEDIUM | workflow fail-closed wiring | Static contract видел aggregate call во всём job, но не доказывал выполнение внутри `id: aggregate` и связь с final verdict | Закрепить named step/id, запретить `continue-on-error`, проверить оба final outcome consumers и negative fixtures | fixed; 47 workflow negatives PASS |
 | MEDIUM | workflow scratch/SHA binding | Test constants не доказывали actual builder root/order и step-local SHA env mappings | Проверять exact output root, `checkout < checker < build < retain < stage < upload` и четыре пары SHA bindings | fixed; 47 workflow negatives PASS |
 | BLOCKER | Headless acceptance | Full suite дважды завершал сами тесты, затем process падал на delayed watcher callback к удалённому `Tasks/.unlimotion.lock` | Отдельно approve/merge `headless-appautomation-storage-lifecycle`, rebase Stage 3 и повторить full gate | fixed; merged PR #279, Stage-3 rerun `36/36` twice |
-| BLOCKER | Desktop build isolation | Три sibling `.csproj` делят `obj/project.assets.json`; Debian Debug не содержит diagnostics package, а main/Debian делят один `TargetPath`. Clean build на `origin/main` и final HEAD падает либо ложно проходит в зависимости от restore order | Отдельно утвердить amendment; изолировать intermediate/solution output paths, добавить Debug-only Debian diagnostics и evaluated-path regressions; затем reset full gate | proposed; approval pending |
+| BLOCKER | Desktop build isolation | Три sibling `.csproj` делят `obj/project.assets.json`; Debian Debug не содержит diagnostics package, а main/Debian делят один `TargetPath`. Clean build на `origin/main` и final HEAD падает либо ложно проходит в зависимости от restore order | Реализовать approved amendment: изолировать intermediate/solution output paths, добавить Debug-only Debian diagnostics и evaluated-path regressions; затем reset full gate | approved; implementation pending |
 | LOW | full Unit flake | Один из 830 live RavenDB tests ранее попал в immediate stale-index `FirstAsync`; exact targeted rerun прошёл 1/1 | Не расширять Stage 3; потребовать новый full green и вынести deterministic consistency fix отдельно | follow-up; new full `830/830` PASS |
 
 - Fixed before final report: raw Android types/output-count/setup-failure logging, attempt-scoped exact artifact transport, permanent embedded workflow behavioral fixtures, source-bound LF/blob parity и fail-closed workflow regressions исправлены внутри approved scripts; root shell entrypoints committed как `100755`; Headless blocker исправлен и слит отдельным PR #279 после approval.
 - Checks rerun: implementation HEAD `49469536` — default и explicit `test-distribution-contract.ps1 -Area All` PASS (156 checks, 128 negative fixtures); Android/README positive+negative contracts и root entrypoints PASS; 10 PowerShell, 6 JSON и 8 shell syntax checks PASS; local `actionlint` unavailable, CI authoritative. Restore PASS; первый build получил `Access to the path is denied` при WebAssembly conversion, немедленный exact retry на том же HEAD PASS с 0 errors. Full Unit clean run `830/830`, exit 0. Full Headless `36/36`, exit 0, два последовательных раза в отдельных result directories.
 - Validation evidence: implementation evidence сохранена под `artifacts/test-results/stage3-*-49469536`; static docs-HEAD evidence — `artifacts/test-results/stage3-static-final-c795cc82`. `S3-AC-20` снова открыт из-за clean-build blocker; прежние Unit/Headless результаты остаются диагностическим baseline и после любого approved tracked fix не закрывают final-head gate.
-- Unrelated changes: Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff ограничен approved least-privilege/output-preserving surface; Stage-4 publication migration отсутствует; текущие uncommitted changes ограничены этой spec и master roadmap, proposed production files до approval не изменены.
-- Needs human: исходные approval gates закрыты сообщением пользователя от 2026-07-20; новое узкое build-isolation amendment требует отдельного явного approval до production edits. После него следующий условный ASK-HUMAN — Android API 23 product decision, если native gate подтвердит несовместимость.
+- Unrelated changes: Windows/Linux/macOS production publisher workflows unchanged; Android publisher diff ограничен approved least-privilege/output-preserving surface; Stage-4 publication migration отсутствует; approval bookkeeping зафиксирован отдельно, production implementation ещё не начата.
+- Needs human: исходные approval gates закрыты сообщением пользователя от 2026-07-20; узкое build-isolation amendment отдельно подтверждено 2026-07-21. Следующий условный ASK-HUMAN — Android API 23 product decision, если native gate подтвердит несовместимость.
 - Residual risks / follow-ups: RavenDB stale-index flake, native image/tool drift, current unsigned desktop artifacts и production release atomicity остаются соответственно separate follow-up, final native gate, Stage 9 и Stage 4.
 
 ### EXEC stop от 2026-07-19 и amendment, approved 2026-07-20
@@ -1208,7 +1208,7 @@ Native validation cannot be replaced by local Windows-only emulation. Docker dae
 
 Repeat approval получен 2026-07-20. `.gitattributes` и allowlisted Stage-3 verifier/workflow changes разрешены; AppAutomation host и Headless test code уже доставлены отдельно и не входят в Stage-3 diff.
 
-### EXEC stop от 2026-07-20: Desktop build-isolation amendment, approval pending
+### EXEC stop от 2026-07-20: Desktop build-isolation amendment, approved 2026-07-21
 
 Новые факты финального clean-build gate:
 
@@ -1226,7 +1226,7 @@ Repeat approval получен 2026-07-20. `.gitattributes` и allowlisted Stage
 4. Не менять `Unlimotion.Desktop.csproj`, `Unlimotion.Desktop.ForMacBuild.csproj`, Windows/Linux/macOS publisher workflows или их expected direct output paths. Runtime/UI/data contract не меняется; новые UI tests/video не применимы.
 5. После implementation выполнить forced restore, serial non-incremental full Debug solution build, focused `BuildIsolation`, весь static gate, full Unit и два reset full Headless runs. Любой tracked fix снова сбрасывает эту evidence; draft PR/native matrix разрешены только на окончательном green HEAD.
 
-Approval boundary: этот блок, Decision Ledger, S3-AC-20 и три `PROPOSED AMENDMENT` строки расширяют specification, но не разрешают production edits. Требуется отдельное явное `Спеку подтверждаю` с указанием `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)` после independent Post-SPEC PASS.
+Approval boundary: этот блок, Decision Ledger, S3-AC-20 и три `PROPOSED AMENDMENT` строки расширяют specification. Отдельное явное approval получено 2026-07-21 фразой `Спеку подтверждаю` в непосредственном ответе на точный запрос по `specs/2026-07-18-distribution-support-contract.md (Desktop build-isolation amendment)`; разрешён только названный production allowlist.
 
 ## Approval
 
@@ -1238,9 +1238,9 @@ Stage-3 LF identity amendment: `APPROVED` 2026-07-20 точной фразой `
 
 Headless prerequisite child approval gate: `APPROVED` 2026-07-20 той же точной фразой с явным указанием `specs/2026-07-19-headless-appautomation-storage-lifecycle.md`; implementation доставлен PR #279, merge `e11cae9a086ddd4fd97105f00b67bedf05f92700`.
 
-Desktop build-isolation amendment: `PENDING`; до отдельного approval production edits в `Directory.Build.props`, новая Debian package-reference role и `BuildIsolation` verifier запрещены.
+Desktop build-isolation amendment: `APPROVED` 2026-07-21 точной фразой `Спеку подтверждаю` в непосредственном ответе на запрос по этой amendment.
 
-EXEC остановлен на build-isolation approval gate. После approval Stage-3 delivery всё ещё требует полный reset local gate, draft PR, native matrix, final review и merge.
+EXEC возобновлён только для build-isolation allowlist. Stage-3 delivery всё ещё требует полный reset local gate, draft PR, native matrix, final review и merge.
 
 ## 20. Журнал действий агента
 
@@ -1271,3 +1271,4 @@ EXEC остановлен на build-isolation approval gate. После approva
 | EXEC | Завершить Stage-3 rebase, LF amendment и local final-head gate | 1.00 | Native runner evidence и PR checks | Push branch, открыть draft PR и пройти native matrix | Нет | Не применимо | Rebase на `e11cae9a`; LF/source-bound/workflow findings закрыты commit `49469536`; contract 156/128, Unit 830/830 и Headless 36/36 дважды PASS | Эта spec, roadmap, `artifacts/test-results/stage3-*-49469536` |
 | EXEC | Повторить static/build gate на docs HEAD | 1.00 | Clean-build cause | Остановить push и воспроизвести на baseline | Нет | Не применимо | Static gate на `c795cc82` PASS 156/128; clean solution build получил три `CS1061` из Debian-owned shared assets | `stage3-static-final-c795cc82`, clean build logs, evaluated MSBuild properties |
 | SPEC | Зафиксировать Desktop build-isolation amendment | 0.99 | Independent Post-SPEC review и user approval | Проверить exact scope/negative fixtures, затем запросить отдельное подтверждение | Да | Ещё не обращались | Baseline `e11cae9a` подтверждает shared `obj/bin`, missing Debian Debug diagnostics и restore-order nondeterminism; production publisher paths должны остаться неизменны | Эта spec, roadmap, baseline/final-head diagnostic evidence |
+| EXEC | Принять Desktop build-isolation amendment approval | 1.00 | Нет | Реализовать TDD regression и exact props/package fix, затем полностью reset local gate | Нет | Пользователь 2026-07-21 сообщил `Спеку подтверждаю` в непосредственном ответе на точный запрос amendment | Разрешены только `Directory.Build.props`, Debug-only Debian package-reference role и `BuildIsolation` verifier; publishers/runtime/UI/data остаются вне scope | Эта spec, roadmap, user approval |
