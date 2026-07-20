@@ -37,6 +37,11 @@ function Read-Json {
     catch { throw "$Label is not valid JSON: $($_.Exception.Message)" }
 }
 
+function ConvertTo-LfText {
+    param([Parameter(Mandatory)] [string]$Content)
+    return $Content.Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
 function Get-ContractRows {
     param([Parameter(Mandatory)] [string]$Content)
     return @($Content -split "`n" | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ -match '^\|.*\|$' })
@@ -159,6 +164,7 @@ function Assert-Readme {
         [Parameter(Mandatory)] [ValidateSet('English', 'Russian')] [string]$Language
     )
 
+    $Content = ConvertTo-LfText -Content $Content
     $rows = Get-ContractRows -Content $Content
     $releaseTag = [string]$Matrix.release.rawTag
     $sourceSha = [string]$Matrix.release.sourceSha
@@ -268,8 +274,8 @@ $englishPath = Resolve-File -Path $English -Label 'English README'
 $russianPath = Resolve-File -Path $Russian -Label 'Russian README'
 $supportPath = Resolve-File -Path $SupportMatrix -Label 'Support matrix'
 $manifestPath = Resolve-File -Path $Manifest -Label 'Distribution manifest'
-$englishContent = Get-Content -LiteralPath $englishPath -Raw -Encoding utf8
-$russianContent = Get-Content -LiteralPath $russianPath -Raw -Encoding utf8
+$englishContent = ConvertTo-LfText (Get-Content -LiteralPath $englishPath -Raw -Encoding utf8)
+$russianContent = ConvertTo-LfText (Get-Content -LiteralPath $russianPath -Raw -Encoding utf8)
 $matrixObject = Read-Json -Path $supportPath -Label 'Support matrix'
 $manifestObject = Read-Json -Path $manifestPath -Label 'Distribution manifest'
 
@@ -305,6 +311,9 @@ foreach ($claim in $matrixObject.claims) {
 }
 
 if ($RunNegativeFixtures) {
+    Assert-Readme -Content ($englishContent.Replace("`n", "`r`n")) -Path $englishPath -Matrix $matrixObject -ManifestObject $manifestObject -Language English
+    Assert-Readme -Content ($russianContent.Replace("`n", "`r`n")) -Path $russianPath -Matrix $matrixObject -ManifestObject $manifestObject -Language Russian
+
     $firstClaim = @($matrixObject.claims)[0]
     $secondClaim = @($matrixObject.claims)[1]
     $firstMarker = Get-ClaimMarker -Claim $firstClaim

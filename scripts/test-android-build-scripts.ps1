@@ -13,9 +13,9 @@ $nugetConfig = Get-Content -Raw (Join-Path $rootDir 'src\nuget.config')
 $androidProject = Get-Content -Raw (Join-Path $rootDir 'src\Unlimotion.Android\Unlimotion.Android.csproj')
 $gitattributes = Get-Content -Raw (Join-Path $rootDir '.gitattributes')
 $workflowPath = Join-Path $rootDir '.github\workflows\android-packaging.yml'
-$workflow = Get-Content -Raw $workflowPath
+$workflow = (Get-Content -Raw $workflowPath).Replace("`r`n", "`n").Replace("`r", "`n")
 $distributionValidationWorkflowPath = Join-Path $rootDir '.github\workflows\distribution-validation.yml'
-$distributionValidationWorkflow = Get-Content -Raw $distributionValidationWorkflowPath
+$distributionValidationWorkflow = (Get-Content -Raw $distributionValidationWorkflowPath).Replace("`r`n", "`n").Replace("`r", "`n")
 $shellScripts = @(
     @{
         Name = 'android-native-common.sh'
@@ -479,6 +479,9 @@ $workflowNegativeFixtures = @(
     @{ Name = 'changed release APK filename'; Content = $releaseNameFixture }
 )
 foreach ($fixture in $workflowNegativeFixtures) {
+    if ([string]::Equals($workflow, [string]$fixture.Content, [StringComparison]::Ordinal)) {
+        throw "Workflow negative fixture did not mutate source: $($fixture.Name)"
+    }
     Assert-Throws {
         Assert-AndroidWorkflowSecurity $fixture.Content
     } "Workflow security validator accepted negative fixture: $($fixture.Name)"
