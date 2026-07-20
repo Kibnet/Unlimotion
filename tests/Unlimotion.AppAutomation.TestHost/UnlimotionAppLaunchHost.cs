@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
 using ReactiveUI.Builder;
+using System.Runtime.ExceptionServices;
 using Unlimotion;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
@@ -92,8 +93,9 @@ public static class UnlimotionAppLaunchHost
         string? theme = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
-        MainWindowViewModel? vm = null;
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
+        var lifetime = new HeadlessSessionLifetime(launchData, previousDefaultIsExpanded);
+        MainWindowViewModel? vm = null;
 
         return new HeadlessAppLaunchOptions
         {
@@ -106,7 +108,7 @@ public static class UnlimotionAppLaunchHost
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = CreateHeadlessViewModel(launchData);
+                    vm = CreateHeadlessViewModel(launchData, lifetime);
                     await vm.Connect();
 
                     SelectAutomationTask(vm, launchData);
@@ -138,12 +140,7 @@ public static class UnlimotionAppLaunchHost
                 window.Opened += (_, __) => ApplyAutomationTreeExpansion(vm, launchData);
                 return window;
             },
-            DisposeCallback = () =>
-            {
-                (vm as IDisposable)?.Dispose();
-                TaskWrapperViewModel.DefaultIsExpanded = previousDefaultIsExpanded;
-                launchData.Dispose();
-            }
+            DisposeCallback = lifetime.Dispose
         };
     }
 
@@ -220,11 +217,14 @@ public static class UnlimotionAppLaunchHost
         };
     }
 
-    private static MainWindowViewModel CreateHeadlessViewModel(UnlimotionAutomationLaunchData launchData)
+    private static MainWindowViewModel CreateHeadlessViewModel(
+        UnlimotionAutomationLaunchData launchData,
+        HeadlessSessionLifetime lifetime)
     {
         EnsureReactiveUiInitialized();
 
-        IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false);
+        var configuration = lifetime.RegisterConfiguration(
+            WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false));
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = new AutomationNotificationManager();
         var storageFactory = new TaskStorageFactory(
@@ -232,20 +232,21 @@ public static class UnlimotionAppLaunchHost
             mapper,
             notificationManager,
             () => launchData.TasksPath);
-        storageFactory.CreateFileStorage(launchData.TasksPath);
+        lifetime.RegisterStorage(storageFactory.CreateFileStorage(launchData.TasksPath));
 
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
         var settingsViewModel = new SettingsViewModel(configuration, backupService);
         settingsViewModel.RefreshGitMetadataCommand = ReactiveCommand.Create(settingsViewModel.ReloadGitMetadata);
         SettingsRemoteConnectionTypeCommands.Configure(settingsViewModel, backupService, notificationManager);
-        var vm = new MainWindowViewModel(
-            new AppNameDefinitionService(),
-            notificationManager,
-            configuration,
-            () => storageFactory.SourceManager.ActiveStorage,
-            settingsViewModel,
-            new GraphViewModel(),
-            TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath));
+        var vm = lifetime.RegisterViewModel(
+            new MainWindowViewModel(
+                new AppNameDefinitionService(),
+                notificationManager,
+                configuration,
+                () => storageFactory.SourceManager.ActiveStorage,
+                settingsViewModel,
+                new GraphViewModel(),
+                TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath)));
 
         var activeSource = storageFactory.SourceManager.ActiveSource;
         if (activeSource != null)
@@ -409,6 +410,93 @@ public static class UnlimotionAppLaunchHost
 
         vm.CurrentTaskItem = lookup.Value.Value;
         vm.SelectCurrentTask();
+    }
+
+    private sealed class HeadlessSessionLifetime : IDisposable
+    {
+        private readonly bool _previousDefaultIsExpanded;
+        private IConfigurationRoot? _configuration;
+        private ITaskStorage? _storage;
+        private MainWindowViewModel? _viewModel;
+        private UnlimotionAutomationLaunchData? _launchData;
+        private int _disposed;
+
+        public HeadlessSessionLifetime(
+            UnlimotionAutomationLaunchData launchData,
+            bool previousDefaultIsExpanded)
+        {
+            _launchData = launchData;
+            _previousDefaultIsExpanded = previousDefaultIsExpanded;
+        }
+
+        public IConfigurationRoot RegisterConfiguration(IConfigurationRoot configuration)
+        {
+            _configuration = configuration;
+            return configuration;
+        }
+
+        public ITaskStorage RegisterStorage(ITaskStorage storage)
+        {
+            _storage = storage;
+            return storage;
+        }
+
+        public MainWindowViewModel RegisterViewModel(MainWindowViewModel viewModel)
+        {
+            _viewModel = viewModel;
+            return viewModel;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            var failures = new List<Exception>();
+
+            CaptureDispose(failures, _viewModel);
+            _viewModel = null;
+
+            CaptureDispose(failures, _storage);
+            _storage = null;
+
+            CaptureDispose(failures, _configuration);
+            _configuration = null;
+
+            TaskWrapperViewModel.DefaultIsExpanded = _previousDefaultIsExpanded;
+
+            CaptureDispose(failures, _launchData);
+            _launchData = null;
+
+            if (failures.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+
+            if (failures.Count > 1)
+            {
+                throw new AggregateException("Headless session cleanup failed.", failures);
+            }
+        }
+
+        private static void CaptureDispose(List<Exception> failures, object? resource)
+        {
+            if (resource is not IDisposable disposable)
+            {
+                return;
+            }
+
+            try
+            {
+                disposable.Dispose();
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
     }
 
     private sealed class UnlimotionAutomationLaunchData : IDisposable
