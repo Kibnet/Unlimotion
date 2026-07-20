@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('All', 'BlobParity', 'BlobParityAggregate', 'InventorySupport', 'IdentityTriggers', 'VelopackFeeds', 'Retry', 'Evidence', 'WorkflowSecurity')]
+    [ValidateSet('All', 'BlobParity', 'BlobParityAggregate', 'BuildIsolation', 'InventorySupport', 'IdentityTriggers', 'VelopackFeeds', 'Retry', 'Evidence', 'WorkflowSecurity')]
     [string]$Area = 'All',
 
     [string]$Manifest = (Join-Path $PSScriptRoot '..\distribution\release-assets.json'),
@@ -3239,6 +3239,541 @@ function Test-AndroidNativeEvidenceConverters {
     }
 }
 
+function ConvertTo-NormalizedMsBuildPath {
+    param([AllowEmptyString()][string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ''
+    }
+    return ($Value.Trim() -replace '\\', '/').TrimEnd('/')
+}
+
+function Test-NormalizedMsBuildPathEqual {
+    param(
+        [AllowEmptyString()][string]$Actual,
+        [AllowEmptyString()][string]$Expected
+    )
+
+    $comparison = if ($IsWindows) {
+        [StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [StringComparison]::Ordinal
+    }
+    return (ConvertTo-NormalizedMsBuildPath $Actual).Equals(
+        (ConvertTo-NormalizedMsBuildPath $Expected),
+        $comparison)
+}
+
+function Invoke-MsBuildEvaluation {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectPath,
+        [Parameter(Mandatory = $true)][string]$Configuration,
+        [string]$RuntimeIdentifier,
+        [switch]$BuildingSolution,
+        [switch]$IncludeCompile
+    )
+
+    $properties = @(
+        'MSBuildProjectName',
+        'BuildingSolutionFile',
+        'BaseIntermediateOutputPath',
+        'MSBuildProjectExtensionsPath',
+        'ProjectAssetsFile',
+        'DefaultItemExcludes',
+        'BaseOutputPath',
+        'OutputPath',
+        'PublishDir'
+    )
+    $items = @('PackageReference')
+    if ($IncludeCompile) {
+        $items += 'Compile'
+    }
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    foreach ($argument in @(
+            'msbuild',
+            $ProjectPath,
+            '-nologo',
+            '-verbosity:quiet',
+            "-p:Configuration=$Configuration")) {
+        $arguments.Add($argument)
+    }
+    if ($BuildingSolution) {
+        $arguments.Add('-p:BuildingSolutionFile=true')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RuntimeIdentifier)) {
+        $arguments.Add("-p:RuntimeIdentifier=$RuntimeIdentifier")
+    }
+    $arguments.Add("-getProperty:$($properties -join ',')")
+    $arguments.Add("-getItem:$($items -join ',')")
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'dotnet'
+    $startInfo.WorkingDirectory = $script:repositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $arguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw "Unable to start dotnet msbuild for '$ProjectPath'."
+        }
+        $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $standardOutput = $standardOutputTask.GetAwaiter().GetResult()
+        $standardError = $standardErrorTask.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) {
+            throw "dotnet msbuild evaluation failed with exit code $($process.ExitCode) for '$ProjectPath':`n$standardError`n$standardOutput"
+        }
+        try {
+            $document = $standardOutput | ConvertFrom-Json -Depth 100 -ErrorAction Stop
+        }
+        catch {
+            throw "dotnet msbuild evaluation did not return JSON for '$ProjectPath': $($_.Exception.Message)`n$standardError`n$standardOutput"
+        }
+
+        $packageReferences = @()
+        if ($null -ne $document.Items -and
+            $null -ne $document.Items.PSObject.Properties['PackageReference']) {
+            $packageReferences = @($document.Items.PackageReference | ForEach-Object { [string]$_.Identity })
+        }
+        $compilePaths = @()
+        if ($null -ne $document.Items -and
+            $null -ne $document.Items.PSObject.Properties['Compile']) {
+            $compilePaths = @($document.Items.Compile | ForEach-Object { [string]$_.FullPath })
+        }
+
+        return [pscustomobject][ordered]@{
+            projectPath = [System.IO.Path]::GetFullPath($ProjectPath)
+            projectName = [string]$document.Properties.MSBuildProjectName
+            configuration = $Configuration
+            runtimeIdentifier = $RuntimeIdentifier
+            buildingSolutionFile = [string]$document.Properties.BuildingSolutionFile
+            baseIntermediateOutputPath = [string]$document.Properties.BaseIntermediateOutputPath
+            msBuildProjectExtensionsPath = [string]$document.Properties.MSBuildProjectExtensionsPath
+            projectAssetsFile = [string]$document.Properties.ProjectAssetsFile
+            defaultItemExcludes = [string]$document.Properties.DefaultItemExcludes
+            baseOutputPath = [string]$document.Properties.BaseOutputPath
+            outputPath = [string]$document.Properties.OutputPath
+            publishDir = [string]$document.Properties.PublishDir
+            packageReferences = $packageReferences
+            compilePaths = $compilePaths
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
+function New-DesktopBuildIsolationObservation {
+    param([Parameter(Mandatory = $true)][string]$RepositoryRoot)
+
+    $desktopRoot = [System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'src/Unlimotion.Desktop'))
+    $projects = @(
+        [pscustomobject]@{
+            name = 'Unlimotion.Desktop'
+            path = Join-Path $desktopRoot 'Unlimotion.Desktop.csproj'
+        },
+        [pscustomobject]@{
+            name = 'Unlimotion.Desktop.ForDebianBuild'
+            path = Join-Path $desktopRoot 'Unlimotion.Desktop.ForDebianBuild.csproj'
+        },
+        [pscustomobject]@{
+            name = 'Unlimotion.Desktop.ForMacBuild'
+            path = Join-Path $desktopRoot 'Unlimotion.Desktop.ForMacBuild.csproj'
+        }
+    )
+    $directPlans = @(
+        [pscustomobject]@{ name = 'Unlimotion.Desktop'; rid = 'win-x64' },
+        [pscustomobject]@{ name = 'Unlimotion.Desktop.ForDebianBuild'; rid = 'linux-x64' },
+        [pscustomobject]@{ name = 'Unlimotion.Desktop.ForMacBuild'; rid = 'osx-x64' },
+        [pscustomobject]@{ name = 'Unlimotion.Desktop.ForMacBuild'; rid = 'osx-arm64' }
+    )
+
+    $sentinelId = [Guid]::NewGuid().ToString('N')
+    $sentinelDirectories = @(
+        (Join-Path $desktopRoot "obj/build-isolation-sentinel-$sentinelId"),
+        (Join-Path $desktopRoot "bin/build-isolation-sentinel-$sentinelId")
+    )
+    $sentinelPaths = @(
+        (Join-Path $sentinelDirectories[0] 'ForeignObj.g.cs'),
+        (Join-Path $sentinelDirectories[1] 'ForeignBin.g.cs')
+    )
+    $solution = @()
+    $solutionRelease = @()
+    $directDebug = @()
+    $direct = @()
+    try {
+        foreach ($directory in $sentinelDirectories) {
+            [System.IO.Directory]::CreateDirectory($directory) | Out-Null
+        }
+        foreach ($path in $sentinelPaths) {
+            [System.IO.File]::WriteAllText(
+                $path,
+                '#error Foreign generated source sentinel must not enter Compile.' + [Environment]::NewLine,
+                [System.Text.UTF8Encoding]::new($false))
+        }
+
+        $solution = @(
+            foreach ($project in $projects) {
+                Invoke-MsBuildEvaluation -ProjectPath $project.path -Configuration Debug -BuildingSolution -IncludeCompile
+            }
+        )
+        $solutionRelease = @(
+            foreach ($project in $projects) {
+                Invoke-MsBuildEvaluation -ProjectPath $project.path -Configuration Release -BuildingSolution -IncludeCompile
+            }
+        )
+        $directDebug = @(
+            foreach ($project in $projects) {
+                Invoke-MsBuildEvaluation -ProjectPath $project.path -Configuration Debug -IncludeCompile
+            }
+        )
+        $direct = @(
+            foreach ($plan in $directPlans) {
+                $project = @($projects | Where-Object name -CEQ $plan.name)[0]
+                Invoke-MsBuildEvaluation -ProjectPath $project.path -Configuration Release -RuntimeIdentifier $plan.rid -IncludeCompile
+            }
+        )
+    }
+    finally {
+        foreach ($path in $sentinelPaths) {
+            if ([System.IO.File]::Exists($path)) {
+                [System.IO.File]::Delete($path)
+            }
+        }
+        foreach ($directory in $sentinelDirectories) {
+            if ([System.IO.Directory]::Exists($directory) -and
+                [System.IO.Directory]::GetFileSystemEntries($directory).Count -eq 0) {
+                [System.IO.Directory]::Delete($directory, $false)
+            }
+        }
+    }
+
+    return [pscustomobject][ordered]@{
+        desktopRoot = $desktopRoot
+        sentinelPaths = @($sentinelPaths | ForEach-Object { [System.IO.Path]::GetFullPath($_) })
+        solution = $solution
+        solutionRelease = $solutionRelease
+        directDebug = $directDebug
+        direct = $direct
+    }
+}
+
+function Assert-DesktopBuildIsolationContract {
+    param([Parameter(Mandatory = $true)][object]$Observation)
+
+    $solution = @($Observation.solution)
+    $solutionRelease = @($Observation.solutionRelease)
+    $directDebug = @($Observation.directDebug)
+    $direct = @($Observation.direct)
+    $expectedProjectNames = @(
+        'Unlimotion.Desktop',
+        'Unlimotion.Desktop.ForDebianBuild',
+        'Unlimotion.Desktop.ForMacBuild'
+    )
+    Assert-Condition ($solution.Count -eq 3) 'Build isolation must evaluate exactly three solution Desktop projects.'
+    Assert-Condition (
+        (@($solution.projectName | Sort-Object) -join '|') -ceq (@($expectedProjectNames | Sort-Object) -join '|')) `
+        'Build isolation must evaluate the exact three Desktop project names.'
+
+    $pathComparer = if ($IsWindows) {
+        [StringComparer]::OrdinalIgnoreCase
+    }
+    else {
+        [StringComparer]::Ordinal
+    }
+    $assetsPaths = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+    $outputRoots = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+    $desktopRoot = ConvertTo-NormalizedMsBuildPath ([string]$Observation.desktopRoot)
+    $expectedWholeObjExclusion = "$desktopRoot/obj/**"
+    $expectedWholeBinExclusion = "$desktopRoot/bin/**"
+    $sentinelPaths = @($Observation.sentinelPaths | ForEach-Object { ConvertTo-NormalizedMsBuildPath ([string]$_) })
+
+    foreach ($row in $solution) {
+        $name = [string]$row.projectName
+        Assert-Condition ([string]$row.buildingSolutionFile -ceq 'true') `
+            "Project '$name' must evaluate BuildingSolutionFile=true for solution output isolation."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseIntermediateOutputPath "obj/$name") `
+            "Project '$name' must use project-bound BaseIntermediateOutputPath 'obj/$name/'."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.msBuildProjectExtensionsPath "$desktopRoot/obj/$name") `
+            "Project '$name' must use project-bound MSBuildProjectExtensionsPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.projectAssetsFile "$desktopRoot/obj/$name/project.assets.json") `
+            "Project '$name' must use project-bound ProjectAssetsFile."
+        $assetsPaths.Add((ConvertTo-NormalizedMsBuildPath ([string]$row.projectAssetsFile))) | Out-Null
+
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseOutputPath "bin/$name") `
+            "Project '$name' must use solution-only BaseOutputPath 'bin/$name/'."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.outputPath "bin/$name/Debug/net10.0") `
+            "Project '$name' must use solution-only Debug OutputPath."
+        $outputRoots.Add((ConvertTo-NormalizedMsBuildPath ([string]$row.baseOutputPath))) | Out-Null
+
+        $excludeEntries = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        ([string]$row.defaultItemExcludes -split ';') |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath $_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $excludeEntries.Add($_) | Out-Null }
+        Assert-Condition (
+            $excludeEntries.Contains($expectedWholeObjExclusion) -and
+            $excludeEntries.Contains($expectedWholeBinExclusion)) `
+            "Project '$name' must preserve whole Desktop obj/bin exclusions."
+
+        $compilePaths = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        $row.compilePaths |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath ([string]$_) } |
+            ForEach-Object { $compilePaths.Add($_) | Out-Null }
+        foreach ($sentinelPath in $sentinelPaths) {
+            Assert-Condition (-not $compilePaths.Contains($sentinelPath)) `
+                "Project '$name' must exclude every foreign generated-source sentinel from Compile."
+        }
+    }
+    Assert-Condition ($assetsPaths.Count -eq 3) 'Build isolation must produce three unique project-bound assets paths.'
+    Assert-Condition ($outputRoots.Count -eq 3) 'Build isolation must produce three unique solution-only output roots.'
+
+    Assert-Condition ($solutionRelease.Count -eq 3) `
+        'Build isolation must evaluate exactly three Release solution Desktop projects.'
+    Assert-Condition (
+        (@($solutionRelease.projectName | Sort-Object) -join '|') -ceq (@($expectedProjectNames | Sort-Object) -join '|')) `
+        'Build isolation must evaluate the exact three Release solution project names.'
+    foreach ($row in $solutionRelease) {
+        $name = [string]$row.projectName
+        Assert-Condition ([string]$row.buildingSolutionFile -ceq 'true') `
+            "Release solution project '$name' must evaluate BuildingSolutionFile=true."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseIntermediateOutputPath "obj/$name") `
+            "Release solution project '$name' must retain project-bound BaseIntermediateOutputPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.msBuildProjectExtensionsPath "$desktopRoot/obj/$name") `
+            "Release solution project '$name' must retain project-bound MSBuildProjectExtensionsPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.projectAssetsFile "$desktopRoot/obj/$name/project.assets.json") `
+            "Release solution project '$name' must retain project-bound ProjectAssetsFile."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseOutputPath "bin/$name") `
+            "Release solution project '$name' must use solution-only Release BaseOutputPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.outputPath "bin/$name/Release/net10.0") `
+            "Release solution project '$name' must use solution-only Release OutputPath."
+
+        $releaseSolutionExcludes = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        ([string]$row.defaultItemExcludes -split ';') |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath $_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $releaseSolutionExcludes.Add($_) | Out-Null }
+        Assert-Condition (
+            $releaseSolutionExcludes.Contains($expectedWholeObjExclusion) -and
+            $releaseSolutionExcludes.Contains($expectedWholeBinExclusion)) `
+            "Release solution project '$name' must preserve whole Desktop obj/bin exclusions."
+        $releaseSolutionCompile = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        $row.compilePaths |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath ([string]$_) } |
+            ForEach-Object { $releaseSolutionCompile.Add($_) | Out-Null }
+        foreach ($sentinelPath in $sentinelPaths) {
+            Assert-Condition (-not $releaseSolutionCompile.Contains($sentinelPath)) `
+                "Release solution project '$name' must exclude every foreign generated-source sentinel from Compile."
+        }
+    }
+
+    Assert-Condition ($directDebug.Count -eq 3) `
+        'Build isolation must evaluate exactly three direct Debug Desktop projects.'
+    Assert-Condition (
+        (@($directDebug.projectName | Sort-Object) -join '|') -ceq (@($expectedProjectNames | Sort-Object) -join '|')) `
+        'Build isolation must evaluate the exact three direct Debug project names.'
+    foreach ($row in $directDebug) {
+        $name = [string]$row.projectName
+        Assert-Condition ([string]$row.buildingSolutionFile -cne 'true') `
+            "Direct Debug project '$name' must not set BuildingSolutionFile=true."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseIntermediateOutputPath "obj/$name") `
+            "Direct Debug project '$name' must retain project-bound BaseIntermediateOutputPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.msBuildProjectExtensionsPath "$desktopRoot/obj/$name") `
+            "Direct Debug project '$name' must retain project-bound MSBuildProjectExtensionsPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.projectAssetsFile "$desktopRoot/obj/$name/project.assets.json") `
+            "Direct Debug project '$name' must retain project-bound ProjectAssetsFile."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseOutputPath 'bin') `
+            "Direct Debug project '$name' must preserve legacy direct BaseOutputPath 'bin/'."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.outputPath 'bin/Debug/net10.0') `
+            "Direct Debug project '$name' must preserve legacy direct Debug OutputPath."
+
+        $directDebugExcludes = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        ([string]$row.defaultItemExcludes -split ';') |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath $_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $directDebugExcludes.Add($_) | Out-Null }
+        Assert-Condition (
+            $directDebugExcludes.Contains($expectedWholeObjExclusion) -and
+            $directDebugExcludes.Contains($expectedWholeBinExclusion)) `
+            "Direct Debug project '$name' must preserve whole Desktop obj/bin exclusions."
+        $directDebugCompile = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        $row.compilePaths |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath ([string]$_) } |
+            ForEach-Object { $directDebugCompile.Add($_) | Out-Null }
+        foreach ($sentinelPath in $sentinelPaths) {
+            Assert-Condition (-not $directDebugCompile.Contains($sentinelPath)) `
+                "Direct Debug project '$name' must exclude every foreign generated-source sentinel from Compile."
+        }
+    }
+
+    Assert-Condition ($direct.Count -eq 4) 'Build isolation must evaluate exactly four direct Release RID paths.'
+    $expectedDirect = @{
+        'Unlimotion.Desktop|win-x64' = 'bin/Release/net10.0/win-x64'
+        'Unlimotion.Desktop.ForDebianBuild|linux-x64' = 'bin/Release/net10.0/linux-x64'
+        'Unlimotion.Desktop.ForMacBuild|osx-x64' = 'bin/Release/net10.0/osx-x64'
+        'Unlimotion.Desktop.ForMacBuild|osx-arm64' = 'bin/Release/net10.0/osx-arm64'
+    }
+    $directKeys = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($row in $direct) {
+        $name = [string]$row.projectName
+        $rid = [string]$row.runtimeIdentifier
+        $key = "$name|$rid"
+        Assert-Condition $expectedDirect.ContainsKey($key) "Unexpected direct Release evaluation '$key'."
+        Assert-Condition ($directKeys.Add($key)) `
+            "Build isolation must cover each exact direct Release project/RID pair exactly once; duplicate '$key'."
+        Assert-Condition ([string]$row.buildingSolutionFile -cne 'true') `
+            "Direct Release evaluation '$key' must not set BuildingSolutionFile=true."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseIntermediateOutputPath "obj/$name") `
+            "Direct Release evaluation '$key' must retain project-bound BaseIntermediateOutputPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.msBuildProjectExtensionsPath "$desktopRoot/obj/$name") `
+            "Direct Release evaluation '$key' must retain project-bound MSBuildProjectExtensionsPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.projectAssetsFile "$desktopRoot/obj/$name/project.assets.json") `
+            "Direct Release evaluation '$key' must retain project-bound ProjectAssetsFile."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.baseOutputPath 'bin') `
+            "Direct Release evaluation '$key' must preserve legacy direct BaseOutputPath 'bin/'."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.outputPath $expectedDirect[$key]) `
+            "Direct Release evaluation '$key' must preserve legacy direct OutputPath."
+        Assert-Condition (Test-NormalizedMsBuildPathEqual $row.publishDir "$($expectedDirect[$key])/publish") `
+            "Direct Release evaluation '$key' must preserve legacy direct PublishDir."
+
+        $directExcludeEntries = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        ([string]$row.defaultItemExcludes -split ';') |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath $_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $directExcludeEntries.Add($_) | Out-Null }
+        Assert-Condition (
+            $directExcludeEntries.Contains($expectedWholeObjExclusion) -and
+            $directExcludeEntries.Contains($expectedWholeBinExclusion)) `
+            "Direct Release evaluation '$key' must preserve whole Desktop obj/bin exclusions."
+
+        $directCompilePaths = [System.Collections.Generic.HashSet[string]]::new($pathComparer)
+        $row.compilePaths |
+            ForEach-Object { ConvertTo-NormalizedMsBuildPath ([string]$_) } |
+            ForEach-Object { $directCompilePaths.Add($_) | Out-Null }
+        foreach ($sentinelPath in $sentinelPaths) {
+            Assert-Condition (-not $directCompilePaths.Contains($sentinelPath)) `
+                "Direct Release evaluation '$key' must exclude every foreign generated-source sentinel from Compile."
+        }
+    }
+    Assert-Condition (
+        $directKeys.Count -eq $expectedDirect.Count -and
+        @($expectedDirect.Keys | Where-Object { -not $directKeys.Contains($_) }).Count -eq 0) `
+        'Build isolation must cover the exact four direct Release project/RID pairs.'
+
+    foreach ($debugRow in @(
+            @($solution | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0],
+            @($directDebug | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0])) {
+        $debugDiagnostics = @($debugRow.packageReferences | Where-Object { $_ -ceq 'AvaloniaUI.DiagnosticsSupport' })
+        Assert-Condition ($debugDiagnostics.Count -eq 1) `
+            'Every Debian Debug package graph must contain exactly one AvaloniaUI.DiagnosticsSupport reference.'
+    }
+    foreach ($releaseRow in @(
+            @($solutionRelease | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0],
+            @($direct | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0])) {
+        $releaseDiagnostics = @($releaseRow.packageReferences | Where-Object { $_ -ceq 'AvaloniaUI.DiagnosticsSupport' })
+        Assert-Condition ($releaseDiagnostics.Count -eq 0) `
+            'Every Debian Release package graph must not contain AvaloniaUI.DiagnosticsSupport.'
+    }
+}
+
+function Test-DesktopBuildIsolationNegativeFixtures {
+    param([Parameter(Mandatory = $true)][object]$Observation)
+
+    $sharedObj = Copy-JsonObject $Observation
+    $sharedObj.solution[0].baseIntermediateOutputPath = 'obj/'
+    $sharedObj.solution[0].msBuildProjectExtensionsPath = Join-Path $Observation.desktopRoot 'obj'
+    $sharedObj.solution[0].projectAssetsFile = Join-Path $Observation.desktopRoot 'obj/project.assets.json'
+    Assert-Throws -Name 'build-isolation-shared-obj' -MessagePattern 'project-bound BaseIntermediateOutputPath' -Action {
+        Assert-DesktopBuildIsolationContract $sharedObj
+    }
+
+    $missingWholeExclusions = Copy-JsonObject $Observation
+    $name = [string]$missingWholeExclusions.solution[0].projectName
+    $missingWholeExclusions.solution[0].defaultItemExcludes = "obj/$name/**;bin/$name/**"
+    Assert-Throws -Name 'build-isolation-missing-whole-obj-bin-exclusion' -MessagePattern 'whole Desktop obj/bin exclusions' -Action {
+        Assert-DesktopBuildIsolationContract $missingWholeExclusions
+    }
+
+    $unconditionalOutput = Copy-JsonObject $Observation
+    $directName = [string]$unconditionalOutput.direct[0].projectName
+    $directRid = [string]$unconditionalOutput.direct[0].runtimeIdentifier
+    $unconditionalOutput.direct[0].baseOutputPath = "bin/$directName/"
+    $unconditionalOutput.direct[0].outputPath = "bin/$directName/Release/net10.0/$directRid/"
+    $unconditionalOutput.direct[0].publishDir = "bin/$directName/Release/net10.0/$directRid/publish/"
+    Assert-Throws -Name 'build-isolation-unconditional-output-relocation' -MessagePattern 'legacy direct BaseOutputPath' -Action {
+        Assert-DesktopBuildIsolationContract $unconditionalOutput
+    }
+
+    $duplicateMissingDirectRid = Copy-JsonObject $Observation
+    $duplicateMissingDirectRid.direct[3].projectName = $duplicateMissingDirectRid.direct[2].projectName
+    $duplicateMissingDirectRid.direct[3].runtimeIdentifier = $duplicateMissingDirectRid.direct[2].runtimeIdentifier
+    Assert-Throws -Name 'build-isolation-duplicate-missing-direct-rid' -MessagePattern 'exact direct Release project/RID pair' -Action {
+        Assert-DesktopBuildIsolationContract $duplicateMissingDirectRid
+    }
+
+    $directMissingWholeExclusions = Copy-JsonObject $Observation
+    $directName = [string]$directMissingWholeExclusions.direct[0].projectName
+    $directMissingWholeExclusions.direct[0].defaultItemExcludes = "obj/$directName/**;bin/$directName/**"
+    Assert-Throws -Name 'build-isolation-direct-missing-whole-obj-bin-exclusion' -MessagePattern 'Direct Release.*whole Desktop obj/bin exclusions' -Action {
+        Assert-DesktopBuildIsolationContract $directMissingWholeExclusions
+    }
+
+    $directCompileSentinelLeak = Copy-JsonObject $Observation
+    $directCompileSentinelLeak.direct[0].compilePaths = @($directCompileSentinelLeak.direct[0].compilePaths) + @($Observation.sentinelPaths[0])
+    Assert-Throws -Name 'build-isolation-direct-compile-sentinel-leak' -MessagePattern 'Direct Release.*foreign generated-source sentinel' -Action {
+        Assert-DesktopBuildIsolationContract $directCompileSentinelLeak
+    }
+
+    $outputBoundToConfiguration = Copy-JsonObject $Observation
+    $releaseSolutionName = [string]$outputBoundToConfiguration.solutionRelease[0].projectName
+    $outputBoundToConfiguration.solutionRelease[0].baseOutputPath = 'bin/'
+    $outputBoundToConfiguration.solutionRelease[0].outputPath = 'bin/Release/net10.0/'
+    $outputBoundToConfiguration.directDebug[0].baseOutputPath = "bin/$releaseSolutionName/"
+    $outputBoundToConfiguration.directDebug[0].outputPath = "bin/$releaseSolutionName/Debug/net10.0/"
+    Assert-Throws -Name 'build-isolation-output-bound-to-configuration' -MessagePattern 'solution-only Release BaseOutputPath' -Action {
+        Assert-DesktopBuildIsolationContract $outputBoundToConfiguration
+    }
+
+    $diagnosticsBoundToSolution = Copy-JsonObject $Observation
+    $debugDirectDebian = @($diagnosticsBoundToSolution.directDebug | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0]
+    $debugDirectDebian.packageReferences = @($debugDirectDebian.packageReferences | Where-Object { $_ -cne 'AvaloniaUI.DiagnosticsSupport' })
+    $releaseSolutionDebian = @($diagnosticsBoundToSolution.solutionRelease | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0]
+    $releaseSolutionDebian.packageReferences = @($releaseSolutionDebian.packageReferences) + @('AvaloniaUI.DiagnosticsSupport')
+    Assert-Throws -Name 'build-isolation-diagnostics-bound-to-solution' -MessagePattern 'Debian Debug.*AvaloniaUI.DiagnosticsSupport' -Action {
+        Assert-DesktopBuildIsolationContract $diagnosticsBoundToSolution
+    }
+
+    $missingDebugDiagnostics = Copy-JsonObject $Observation
+    $debianDebug = @($missingDebugDiagnostics.solution | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0]
+    $debianDebug.packageReferences = @($debianDebug.packageReferences | Where-Object { $_ -cne 'AvaloniaUI.DiagnosticsSupport' })
+    Assert-Throws -Name 'build-isolation-missing-debug-diagnostics' -MessagePattern 'Debian Debug.*AvaloniaUI.DiagnosticsSupport' -Action {
+        Assert-DesktopBuildIsolationContract $missingDebugDiagnostics
+    }
+
+    $releaseDiagnosticsLeak = Copy-JsonObject $Observation
+    $debianRelease = @($releaseDiagnosticsLeak.direct | Where-Object projectName -CEQ 'Unlimotion.Desktop.ForDebianBuild')[0]
+    $debianRelease.packageReferences = @($debianRelease.packageReferences) + @('AvaloniaUI.DiagnosticsSupport')
+    Assert-Throws -Name 'build-isolation-diagnostics-release-leak' -MessagePattern 'Debian Release.*AvaloniaUI.DiagnosticsSupport' -Action {
+        Assert-DesktopBuildIsolationContract $releaseDiagnosticsLeak
+    }
+
+    $compileSentinelLeak = Copy-JsonObject $Observation
+    $compileSentinelLeak.solution[0].compilePaths = @($compileSentinelLeak.solution[0].compilePaths) + @($Observation.sentinelPaths[0])
+    Assert-Throws -Name 'build-isolation-compile-sentinel-leak' -MessagePattern 'foreign generated-source sentinel' -Action {
+        Assert-DesktopBuildIsolationContract $compileSentinelLeak
+    }
+}
+
 $script:repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..') -ErrorAction Stop).Path
 $script:manifestPath = Resolve-ExistingFile -Path $Manifest -DisplayName 'Manifest'
 $script:manifestSchemaPath = Resolve-ExistingFile -Path $ManifestSchema -DisplayName 'ManifestSchema'
@@ -3299,6 +3834,22 @@ elseif ($Area -ceq 'All') {
     Test-BlobParityAggregateFixtures -RepositoryRoot $script:repositoryRoot -DirectReport $blobParityDirectReport `
         -ExpectedSourceSha $blobParityIdentity.sourceSha -ExpectedWorkflowSha $blobParityIdentity.workflowSha
     $areasRun.Add('BlobParityAggregate')
+}
+
+if ($Area -in @('All', 'BuildIsolation')) {
+    $buildIsolationObservation = New-DesktopBuildIsolationObservation -RepositoryRoot $script:repositoryRoot
+    Assert-DesktopBuildIsolationContract -Observation $buildIsolationObservation
+    foreach ($checkName in @(
+            'build-isolation:three-project-assets-paths',
+            'build-isolation:three-solution-output-roots',
+            'build-isolation:whole-obj-bin-exclusions',
+            'build-isolation:foreign-compile-sentinels-excluded',
+            'build-isolation:four-legacy-direct-publish-paths',
+            'build-isolation:debian-debug-only-diagnostics')) {
+        Add-Check -Name $checkName
+    }
+    Test-DesktopBuildIsolationNegativeFixtures -Observation $buildIsolationObservation
+    $areasRun.Add('BuildIsolation')
 }
 
 if ($Area -in @('All', 'InventorySupport')) {

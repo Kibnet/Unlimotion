@@ -3,5 +3,8 @@
     <Company>Kibnet</Company>
     <Authors>Kibnet</Authors>
     <Product>Unlimotion</Product>
+    <BaseIntermediateOutputPath>obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**</DefaultItemExcludes>
+    <BaseOutputPath Condition="'$(BuildingSolutionFile)' == 'true'">bin/$(MSBuildProjectName)/</BaseOutputPath>
   </PropertyGroup>
 </Project>

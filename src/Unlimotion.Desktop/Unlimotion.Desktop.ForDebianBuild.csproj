@@ -20,6 +20,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
+		<PackageReference Include="AvaloniaUI.DiagnosticsSupport" Condition="'$(Configuration)' == 'Debug'" />
 		<PackageReference Include="Packaging.Targets" PrivateAssets="all" Condition="'$(DistributionBuild)' != 'true'" />
 		<PackageReference Include="Velopack" />
 	</ItemGroup>
