@@ -196,6 +196,22 @@ function Assert-BashFails {
     }
 }
 
+function Assert-BashFailsWith {
+    param(
+        [string]$Command,
+        [string]$ExpectedPattern,
+        [string]$Message
+    )
+
+    $output = @(& $bashCommand -lc $Command 2>&1)
+    if ($LASTEXITCODE -eq 0) {
+        throw $Message
+    }
+    if (($output -join "`n") -notmatch $ExpectedPattern) {
+        throw "$Message`nExpected failure pattern: $ExpectedPattern`n$($output -join [Environment]::NewLine)"
+    }
+}
+
 function Write-Utf8Text {
     param(
         [string]$Path,
@@ -555,7 +571,11 @@ function Assert-AndroidLocalFeedIsolationContract {
     }
     Assert-Match $Content 'cp "\$NUGET_LOCAL_DIR/\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" "\$CACHE_PATH/bundle/nuget-local/"' 'Distribution Android builder must preserve the pinned upstream package in the native cache.'
     Assert-Match $Content '(?ms)^assert_exact_flat_package_directory \\\r?\n  "\$NUGET_LOCAL_DIR" \\\r?\n  "\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \\\r?\n  "\$LIBGIT2_NATIVE_PACKAGE_NAME" \\\r?\n  "\$NODIFY_PACKAGE_NAME"$' 'Distribution Android builder must require exactly the three top-level local-feed nupkgs.'
-    Assert-Match $Content 'verify_restored_local_package[\s\S]*metadata\.get\("contentHash"\) != expected_hash[\s\S]*pathlib\.Path\(source\)\.resolve\(\) != local_feed' 'Distribution Android builder must prove restored local packages by exact content hash and source path.'
+    Assert-Match $Content 'nupkg_bytes = nupkg\.read_bytes\(\)[\s\S]*expected_raw_sha512 = base64\.b64encode\(hashlib\.sha512\(nupkg_bytes\)' 'Distribution Android builder must calculate the raw SHA-512 from the exact local-feed nupkg bytes.'
+    Assert-Match $Content 'installed_nupkg\.read_bytes\(\) != nupkg_bytes' 'Distribution Android builder must bind the installed nupkg bytes to the exact local-feed package.'
+    Assert-Match $Content 'assets_content_hash = normalize_content_hash[\s\S]*metadata_content_hash = normalize_content_hash[\s\S]*assets_content_hash != metadata_content_hash' 'Distribution Android builder must compare NuGet logical content hashes only with each other.'
+    Assert-Match $Content 'sha_path\.read_text\(encoding="utf-8-sig"\)\.strip\(\) != expected_raw_sha512' 'Distribution Android builder must bind the installed SHA-512 sidecar to the raw local-feed package hash.'
+    Assert-Match $Content 'pathlib\.Path\(source\)\.resolve\(\) != local_feed' 'Distribution Android builder must prove the exact isolated local-feed source path.'
     Assert-Match $Content 'package_library_keys != \[library_key\]' 'Distribution Android builder must reject extra restored versions of each private package ID.'
     Assert-Match $Content 'UNLIMOTION_ASSETS_PATH="\$ROOT_DIR/src/Unlimotion/obj/project\.assets\.json"' 'Distribution Android builder must inspect the core project restore graph.'
     Assert-Match $Content 'rm -f --[\s\S]*"\$UNLIMOTION_ASSETS_PATH"[\s\S]*src/Unlimotion/obj/project\.nuget\.cache[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.dgspec\.json[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.g\.props[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.g\.targets[\s\S]*"\$ANDROID_ASSETS_PATH"' 'Distribution Android builder must remove stale core and Android restore metadata before proving package sources.'
@@ -767,6 +787,114 @@ Assert-Match $distributionArtifactScript "'transport/android-api23', 'transport/
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("unlimotion-android-contract-{0}" -f [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
+    $restoredPackageVerifierMatch = [regex]::Match(
+        $distributionBuildScript,
+        "(?ms)^verify_restored_local_package\(\) \{.*?<<'PY'\r?\n(?<python>.*?)\r?\nPY\r?\n\}"
+    )
+    if (-not $restoredPackageVerifierMatch.Success) {
+        throw 'Unable to extract the restored local-package Python verifier.'
+    }
+    $restoredPackageVerifierPath = Join-Path $tempRoot 'verify-restored-local-package.py'
+    Write-Utf8Text $restoredPackageVerifierPath ($restoredPackageVerifierMatch.Groups['python'].Value + "`n")
+
+    $hashFixtureRoot = Join-Path $tempRoot 'restored-package-hash-fixture'
+    $hashFixtureFeed = Join-Path $hashFixtureRoot 'feed'
+    $hashFixturePackages = Join-Path $hashFixtureRoot 'packages'
+    $hashFixtureAssetsPath = Join-Path $hashFixtureRoot 'project.assets.json'
+    $hashFixturePackageId = 'Example.Package'
+    $hashFixtureVersion = '1.2.3'
+    $hashFixtureLibraryKey = "$hashFixturePackageId/$hashFixtureVersion"
+    $hashFixtureInstalled = Join-Path $hashFixturePackages 'example.package/1.2.3'
+    $hashFixtureFeedPackage = Join-Path $hashFixtureFeed 'Example.Package.1.2.3.nupkg'
+    $hashFixtureInstalledPackage = Join-Path $hashFixtureInstalled 'example.package.1.2.3.nupkg'
+    $hashFixtureMetadataPath = Join-Path $hashFixtureInstalled '.nupkg.metadata'
+    $hashFixtureSidecarPath = Join-Path $hashFixtureInstalled 'example.package.1.2.3.nupkg.sha512'
+    New-Item -ItemType Directory -Force -Path $hashFixtureFeed, $hashFixtureInstalled | Out-Null
+
+    $hashFixturePackageBytes = [System.Text.Encoding]::UTF8.GetBytes('signed nupkg byte fixture')
+    [System.IO.File]::WriteAllBytes($hashFixtureFeedPackage, $hashFixturePackageBytes)
+    [System.IO.File]::WriteAllBytes($hashFixtureInstalledPackage, $hashFixturePackageBytes)
+    $sha512 = [System.Security.Cryptography.SHA512]::Create()
+    try {
+        $hashFixtureRawSha512 = [Convert]::ToBase64String($sha512.ComputeHash($hashFixturePackageBytes))
+        $hashFixtureLogicalSha512 = [Convert]::ToBase64String(
+            $sha512.ComputeHash([System.Text.Encoding]::UTF8.GetBytes('logical NuGet content hash fixture'))
+        )
+        $hashFixtureOtherLogicalSha512 = [Convert]::ToBase64String(
+            $sha512.ComputeHash([System.Text.Encoding]::UTF8.GetBytes('different logical content hash fixture'))
+        )
+    }
+    finally {
+        $sha512.Dispose()
+    }
+    if ($hashFixtureRawSha512 -ceq $hashFixtureLogicalSha512) {
+        throw 'Restored package fixture did not separate raw and logical SHA-512 domains.'
+    }
+    Write-Utf8Text $hashFixtureSidecarPath ($hashFixtureRawSha512 + "`n")
+
+    $hashFixtureFeedBash = Convert-ToBashPath $hashFixtureFeed
+    $hashFixturePackagesBash = Convert-ToBashPath $hashFixturePackages
+    $writeHashFixtureAssets = {
+        param([string]$ContentHash)
+
+        $libraries = [ordered]@{}
+        $libraries[$hashFixtureLibraryKey] = [ordered]@{
+            type = 'package'
+            sha512 = "sha512-$ContentHash"
+            path = 'example.package/1.2.3'
+        }
+        $packageFolders = [ordered]@{}
+        $packageFolders[($hashFixturePackagesBash.TrimEnd('/') + '/')] = [ordered]@{}
+        Write-Utf8Text $hashFixtureAssetsPath (([ordered]@{
+            libraries = $libraries
+            packageFolders = $packageFolders
+        } | ConvertTo-Json -Depth 10 -Compress) + "`n")
+    }
+    $writeHashFixtureMetadata = {
+        param(
+            [AllowEmptyString()][string]$ContentHash,
+            [string]$Source
+        )
+
+        Write-Utf8Text $hashFixtureMetadataPath (([ordered]@{
+            contentHash = $ContentHash
+            source = $Source
+        } | ConvertTo-Json -Compress) + "`n")
+    }
+    & $writeHashFixtureAssets $hashFixtureLogicalSha512
+    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedBash
+
+    $restoredPackageVerifierCommand = 'python3 {0} {1} {2} {3} {4} {5} {6}' -f @(
+        (Quote-Bash (Convert-ToBashPath $restoredPackageVerifierPath)),
+        (Quote-Bash (Convert-ToBashPath $hashFixtureAssetsPath)),
+        (Quote-Bash $hashFixturePackagesBash),
+        (Quote-Bash $hashFixtureFeedBash),
+        (Quote-Bash $hashFixturePackageId),
+        (Quote-Bash $hashFixtureVersion),
+        (Quote-Bash (Convert-ToBashPath $hashFixtureFeedPackage))
+    )
+    Invoke-BashChecked $restoredPackageVerifierCommand 'Restored local-package verifier rejected distinct valid raw and logical SHA-512 domains.' | Out-Null
+
+    Write-Utf8Text $hashFixtureInstalledPackage 'different installed nupkg bytes'
+    Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package nupkg bytes do not match the exact local-feed package' 'Restored local-package verifier accepted installed bytes that differ from the feed.'
+    [System.IO.File]::WriteAllBytes($hashFixtureInstalledPackage, $hashFixturePackageBytes)
+
+    Write-Utf8Text $hashFixtureSidecarPath ($hashFixtureLogicalSha512 + "`n")
+    Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package SHA-512 sidecar does not match local nupkg' 'Restored local-package verifier accepted a sidecar that differs from raw package SHA-512.'
+    Write-Utf8Text $hashFixtureSidecarPath ($hashFixtureRawSha512 + "`n")
+
+    & $writeHashFixtureAssets $hashFixtureOtherLogicalSha512
+    Assert-BashFailsWith $restoredPackageVerifierCommand 'Restore assets logical content hash does not match installed package metadata' 'Restored local-package verifier accepted different assets and metadata logical content hashes.'
+    & $writeHashFixtureAssets $hashFixtureLogicalSha512
+
+    foreach ($invalidContentHash in @('', 'not-base64!', [Convert]::ToBase64String([byte[]](1..32)))) {
+        & $writeHashFixtureMetadata $invalidContentHash $hashFixtureFeedBash
+        Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package metadata contentHash' 'Restored local-package verifier accepted an invalid metadata contentHash.'
+    }
+    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 (Convert-ToBashPath $hashFixtureRoot)
+    Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package source is not the exact isolated local feed' 'Restored local-package verifier accepted a different installed package source.'
+    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedBash
+
     $sourceFixtureRoot = Join-Path $tempRoot 'source-fixture'
     $fixtureFiles = @(
         'artifacts/nuget-local/NodifyAvalonia.6.6.0-unlimotion.a12.1.nupkg',

@@ -173,7 +173,23 @@ local_feed = pathlib.Path(local_feed_text).resolve()
 nupkg = pathlib.Path(nupkg_text)
 if nupkg.is_symlink() or not nupkg.is_file() or nupkg.parent.resolve() != local_feed:
     raise SystemExit(f"Verified local package is not an exact top-level feed file: {nupkg}")
-expected_hash = base64.b64encode(hashlib.sha512(nupkg.read_bytes()).digest()).decode("ascii")
+nupkg_bytes = nupkg.read_bytes()
+expected_raw_sha512 = base64.b64encode(hashlib.sha512(nupkg_bytes).digest()).decode("ascii")
+
+
+def normalize_content_hash(value, label):
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"{label} must be a non-empty SHA-512 content hash")
+    normalized = value.removeprefix("sha512-")
+    if not normalized or normalized != normalized.strip():
+        raise SystemExit(f"{label} must be canonical SHA-512 Base64")
+    try:
+        decoded = base64.b64decode(normalized, validate=True)
+    except ValueError as error:
+        raise SystemExit(f"{label} must be canonical SHA-512 Base64") from error
+    if len(decoded) != 64 or base64.b64encode(decoded).decode("ascii") != normalized:
+        raise SystemExit(f"{label} must be canonical SHA-512 Base64")
+    return normalized
 
 assets = json.loads(assets_file.read_text(encoding="utf-8"))
 library_key = f"{package_id}/{version}"
@@ -194,8 +210,9 @@ if package_library_keys != [library_key]:
 library = libraries.get(library_key)
 if not isinstance(library, dict) or library.get("type") != "package":
     raise SystemExit(f"Restore assets do not contain exact package identity {library_key}")
-if library.get("sha512") not in (expected_hash, "sha512-" + expected_hash):
-    raise SystemExit(f"Restore assets content hash does not match verified local nupkg {library_key}")
+assets_content_hash = normalize_content_hash(
+    library.get("sha512"), "Restore assets sha512"
+)
 expected_library_path = f"{package_id.lower()}/{version.lower()}"
 if str(library.get("path", "")).lower() != expected_library_path:
     raise SystemExit(f"Restore assets path does not match exact package identity {library_key}")
@@ -210,17 +227,29 @@ if resolved_package_folders != {packages_root}:
 installed = packages_root / package_id.lower() / version.lower()
 metadata_path = installed / ".nupkg.metadata"
 sha_path = installed / f"{package_id.lower()}.{version.lower()}.nupkg.sha512"
+installed_nupkg = installed / f"{package_id.lower()}.{version.lower()}.nupkg"
 if metadata_path.is_symlink() or not metadata_path.is_file():
     raise SystemExit(f"Installed package metadata is missing for {library_key}")
 if sha_path.is_symlink() or not sha_path.is_file():
     raise SystemExit(f"Installed package SHA-512 sidecar is missing for {library_key}")
+if installed_nupkg.is_symlink() or not installed_nupkg.is_file():
+    raise SystemExit(f"Installed package nupkg is missing for {library_key}")
+if installed_nupkg.read_bytes() != nupkg_bytes:
+    raise SystemExit(
+        f"Installed package nupkg bytes do not match the exact local-feed package: {library_key}"
+    )
 metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
-if metadata.get("contentHash") != expected_hash:
-    raise SystemExit(f"Installed package metadata hash does not match local nupkg {library_key}")
+metadata_content_hash = normalize_content_hash(
+    metadata.get("contentHash"), "Installed package metadata contentHash"
+)
+if assets_content_hash != metadata_content_hash:
+    raise SystemExit(
+        f"Restore assets logical content hash does not match installed package metadata: {library_key}"
+    )
 source = metadata.get("source")
 if not isinstance(source, str) or pathlib.Path(source).resolve() != local_feed:
     raise SystemExit(f"Installed package source is not the exact isolated local feed: {library_key}")
-if sha_path.read_text(encoding="utf-8-sig").strip() != expected_hash:
+if sha_path.read_text(encoding="utf-8-sig").strip() != expected_raw_sha512:
     raise SystemExit(f"Installed package SHA-512 sidecar does not match local nupkg {library_key}")
 PY
 }
