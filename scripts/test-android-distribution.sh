@@ -48,6 +48,27 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
+resolve_tool_version() {
+  local label="$1"
+  shift
+  local output
+  local status
+  local first_line
+
+  if output="$("$@" 2>&1)"; then
+    :
+  else
+    status=$?
+    first_line="$(printf '%s\n' "$output" | sed -n '1p' | tr -d '\r')"
+    [ -n "$first_line" ] || first_line="no diagnostic output"
+    fail "$label version probe failed (exit $status): $first_line"
+  fi
+
+  first_line="$(printf '%s\n' "$output" | sed -n '1p' | tr -d '\r')"
+  [ -n "$first_line" ] || fail "Unable to resolve $label version"
+  printf '%s\n' "$first_line"
+}
+
 require_file() {
   [ -f "$1" ] || fail "Required file not found: $1"
 }
@@ -762,12 +783,9 @@ if not parts:
 print(".".join(parts))
 PY
 )"
-EMULATOR_VERSION="$(emulator -version 2>&1 | sed -n '1p' | tr -d '\r')"
-ADB_VERSION="$(adb version 2>&1 | sed -n '1p' | tr -d '\r')"
-AAPT_VERSION="$("$AAPT" version 2>&1 | sed -n '1p' | tr -d '\r')"
-[ -n "$EMULATOR_VERSION" ] || fail "Unable to resolve Android emulator version"
-[ -n "$ADB_VERSION" ] || fail "Unable to resolve adb version"
-[ -n "$AAPT_VERSION" ] || fail "Unable to resolve aapt version"
+EMULATOR_VERSION="$(resolve_tool_version "Android emulator" emulator -version)"
+ADB_VERSION="$(resolve_tool_version "adb" adb version)"
+AAPT_VERSION="$(resolve_tool_version "aapt" "$AAPT" version)"
 RUNNER_IMAGE_OS="${ImageOS:-local-$(uname -s)}"
 RUNNER_IMAGE_VERSION="${ImageVersion:-notApplicable-local}"
 RUNNER_UNAME="$(uname -a)"

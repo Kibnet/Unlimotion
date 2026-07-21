@@ -355,8 +355,11 @@ function Assert-EmulatorToolPathContract {
             throw "Distribution workflow is missing the $jobName job."
         }
 
+        $job = $jobMatch.Groups['job'].Value
+        Assert-Match $job '(?m)^    runs-on: ubuntu-22\.04\s*$' "Distribution workflow $jobName must use the supported Ubuntu 22.04 host that provides the Android Emulator libtiff.so.5 runtime ABI."
+
         $installStep = [regex]::Match(
-            $jobMatch.Groups['job'].Value,
+            $job,
             '(?ms)^      - name: Install API \d+ emulator image\s*\r?\n(?<step>.*?)(?=^      - name:|\z)'
         )
         if (-not $installStep.Success) {
@@ -382,6 +385,24 @@ function Assert-EmulatorToolPathContract {
 
         Assert-Match $step '(?ms)sdkmanager --install\s+.*?"emulator".*?test -x "\$\{ANDROID_SDK_ROOT\}/emulator/emulator".*?echo "\$\{ANDROID_SDK_ROOT\}/emulator" >> "\$GITHUB_PATH"' "Distribution workflow $jobName emulator install, executable guard, and GITHUB_PATH export must stay ordered in one step."
     }
+}
+
+function Assert-EmulatorVersionProbeContract {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    $helperMatch = [regex]::Match($Content, '(?ms)^resolve_tool_version\(\) \{\r?\n(?<body>.*?)^\}')
+    if (-not $helperMatch.Success) {
+        throw 'Android distribution validator must define resolve_tool_version.'
+    }
+
+    $helper = $helperMatch.Groups['body'].Value
+    Assert-Match $helper 'if output="\$\("\$@" 2>&1\)"; then' 'Android tool version probe must capture stderr without triggering errexit.'
+    Assert-Match $helper '(?m)^\s*status=\$\?\s*$' 'Android tool version probe must preserve the failed command exit code.'
+    Assert-Match $helper 'version probe failed \(exit \$status\): \$first_line' 'Android tool version probe must expose the first diagnostic line and exit code.'
+
+    Assert-Match $Content 'EMULATOR_VERSION="\$\(resolve_tool_version "Android emulator" emulator -version\)"' 'Android emulator version must use the diagnostic-preserving probe.'
+    Assert-Match $Content 'ADB_VERSION="\$\(resolve_tool_version "adb" adb version\)"' 'adb version must use the diagnostic-preserving probe.'
+    Assert-Match $Content 'AAPT_VERSION="\$\(resolve_tool_version "aapt" "\$AAPT" version\)"' 'aapt version must use the diagnostic-preserving probe.'
 }
 
 $gitLink = (& git -C $rootDir ls-tree HEAD .native/libgit2-src) -join "`n"
@@ -512,6 +533,7 @@ Assert-AndroidWorkflowSecurity $workflow
 Assert-SingleArtifactDownloadsAreFlat -Content $workflow -Label 'android-packaging workflow'
 Assert-SingleArtifactDownloadsAreFlat -Content $distributionValidationWorkflow -Label 'distribution-validation workflow'
 Assert-EmulatorToolPathContract -Content $distributionValidationWorkflow
+Assert-EmulatorVersionProbeContract -Content $distributionTestScript
 
 $missingEmulatorPathFixture = [regex]::Replace(
     $distributionValidationWorkflow,
@@ -522,6 +544,24 @@ $missingEmulatorPathFixture = [regex]::Replace(
 Assert-Throws {
     Assert-EmulatorToolPathContract -Content $missingEmulatorPathFixture
 } 'Distribution Android workflow accepted a missing emulator GITHUB_PATH export.'
+
+$incompatibleEmulatorHostFixture = [regex]::Replace(
+    $distributionValidationWorkflow,
+    '(?ms)(^  android_api23:.*?^    runs-on: )ubuntu-22\.04\s*$',
+    '${1}ubuntu-24.04',
+    1
+)
+Assert-Throws {
+    Assert-EmulatorToolPathContract -Content $incompatibleEmulatorHostFixture
+} 'Distribution Android workflow accepted the Ubuntu 24.04 host without the emulator libtiff.so.5 runtime ABI.'
+
+$opaqueEmulatorVersionFixture = $distributionTestScript.Replace(
+    'EMULATOR_VERSION="$(resolve_tool_version "Android emulator" emulator -version)"',
+    'EMULATOR_VERSION="$(emulator -version 2>&1 | sed -n ''1p'' | tr -d ''\r'')"'
+)
+Assert-Throws {
+    Assert-EmulatorVersionProbeContract -Content $opaqueEmulatorVersionFixture
+} 'Android validator accepted an emulator version probe that hides loader diagnostics behind command substitution.'
 
 $nonFlatSingleArtifactFixture = [regex]::Replace(
     $distributionValidationWorkflow,

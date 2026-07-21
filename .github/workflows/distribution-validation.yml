@@ -1293,7 +1293,7 @@ jobs:
     name: android-api23-x64-native
     needs: [changes, contract, android_build]
     if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success' && needs.android_build.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
     env:
@@ -1609,7 +1609,7 @@ jobs:
     name: android-api36-x64-native
     needs: [changes, contract, android_build]
     if: needs.changes.outputs.relevant == 'true' && needs.contract.result == 'success' && needs.android_build.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
     env:
