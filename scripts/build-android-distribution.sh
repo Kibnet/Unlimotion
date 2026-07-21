@@ -177,7 +177,21 @@ expected_hash = base64.b64encode(hashlib.sha512(nupkg.read_bytes()).digest()).de
 
 assets = json.loads(assets_file.read_text(encoding="utf-8"))
 library_key = f"{package_id}/{version}"
-library = (assets.get("libraries") or {}).get(library_key)
+libraries = assets.get("libraries") or {}
+package_library_keys = sorted(
+    key
+    for key, value in libraries.items()
+    if isinstance(key, str)
+    and key.lower().startswith(package_id.lower() + "/")
+    and isinstance(value, dict)
+    and value.get("type") == "package"
+)
+if package_library_keys != [library_key]:
+    raise SystemExit(
+        f"Restore assets must contain only exact package identity {library_key}; "
+        f"actual identities are {package_library_keys}"
+    )
+library = libraries.get(library_key)
 if not isinstance(library, dict) or library.get("type") != "package":
     raise SystemExit(f"Restore assets do not contain exact package identity {library_key}")
 if library.get("sha512") not in (expected_hash, "sha512-" + expected_hash):
@@ -578,6 +592,8 @@ fi
 NATIVE_ARTIFACTS_DIR="$ROOT_DIR/artifacts/android-native"
 NUGET_LOCAL_DIR="$OUTPUT_DIR/nuget-local"
 NUGET_CONFIG_PATH="$OUTPUT_DIR/nuget.config"
+LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME="LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_UPSTREAM_VERSION}.nupkg"
+LIBGIT2_NATIVE_PACKAGE_NAME="LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
 NODIFY_PACKAGE_RELATIVE_PATH="artifacts/nuget-local/NodifyAvalonia.6.6.0-unlimotion.a12.1.nupkg"
 NODIFY_PACKAGE_SOURCE="$ROOT_DIR/$NODIFY_PACKAGE_RELATIVE_PATH"
 NODIFY_PACKAGE_NAME="$(basename "$NODIFY_PACKAGE_RELATIVE_PATH")"
@@ -660,7 +676,8 @@ if [ "$CACHE_HIT" = "true" ]; then
 
   assert_exact_flat_package_directory \
     "$CACHE_PATH/bundle/nuget-local" \
-    "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
+    "$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \
+    "$LIBGIT2_NATIVE_PACKAGE_NAME"
   cp -a "$CACHE_PATH/bundle/android-native/." "$NATIVE_ARTIFACTS_DIR/"
   cp -a "$CACHE_PATH/bundle/nuget-local/." "$NUGET_LOCAL_DIR/"
   CACHE_SAVE="false"
@@ -724,10 +741,11 @@ PY
     "$upstream_package"
   bash "$ROOT_DIR/scripts/pack-libgit2sharp-nativebinaries-android.sh"
 
-  native_package="$NUGET_LOCAL_DIR/LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
+  native_package="$NUGET_LOCAL_DIR/$LIBGIT2_NATIVE_PACKAGE_NAME"
   require_file "$upstream_package"
   require_file "$native_package"
   [ "$(sha256_file "$upstream_package")" = "$LIBGIT2_NATIVE_UPSTREAM_SHA256" ] || fail "Upstream LibGit2Sharp.NativeBinaries package hash mismatch"
+  cp "$upstream_package" "$NUGET_LOCAL_DIR/$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME"
 
   rm -rf -- "$CACHE_PATH"
   mkdir -p "$CACHE_PATH/bundle/android-native" "$CACHE_PATH/bundle/nuget-local"
@@ -737,6 +755,7 @@ PY
     mkdir -p "$CACHE_PATH/bundle/android-native/libgit2-$rid"
     cp "$NATIVE_ARTIFACTS_DIR/libgit2-$rid/libgit2-3f4182d.so" "$CACHE_PATH/bundle/android-native/libgit2-$rid/"
   done
+  cp "$NUGET_LOCAL_DIR/$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" "$CACHE_PATH/bundle/nuget-local/"
   cp "$native_package" "$CACHE_PATH/bundle/nuget-local/"
   cp "$NATIVE_INPUTS_PATH" "$CACHE_PATH/native-inputs.json"
 
@@ -789,13 +808,15 @@ PY
     --evidence "$OUTPUT_DIR/native-cache-evidence.json"
   assert_exact_flat_package_directory \
     "$CACHE_PATH/bundle/nuget-local" \
-    "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
+    "$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \
+    "$LIBGIT2_NATIVE_PACKAGE_NAME"
   CACHE_SAVE="true"
 fi
 
 assert_exact_flat_package_directory \
   "$NUGET_LOCAL_DIR" \
-  "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg" \
+  "$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \
+  "$LIBGIT2_NATIVE_PACKAGE_NAME" \
   "$NODIFY_PACKAGE_NAME"
 
 require_command keytool
@@ -834,12 +855,18 @@ APK_OUTPUT_DIR="$OUTPUT_DIR/apks"
 rm -rf -- "$APK_OUTPUT_DIR" "$OUTPUT_DIR/nuget-packages"
 mkdir -p "$APK_OUTPUT_DIR" "$OUTPUT_DIR/nuget-packages"
 export NUGET_PACKAGES="$OUTPUT_DIR/nuget-packages"
+UNLIMOTION_ASSETS_PATH="$ROOT_DIR/src/Unlimotion/obj/project.assets.json"
 ANDROID_ASSETS_PATH="$ROOT_DIR/src/Unlimotion.Android/obj/project.assets.json"
 
 rm -rf -- \
   "$ROOT_DIR/src/Unlimotion.Android/bin/Release/net10.0-android" \
   "$ROOT_DIR/src/Unlimotion.Android/obj/Release/net10.0-android"
 rm -f -- \
+  "$UNLIMOTION_ASSETS_PATH" \
+  "$ROOT_DIR/src/Unlimotion/obj/project.nuget.cache" \
+  "$ROOT_DIR/src/Unlimotion/obj/Unlimotion.csproj.nuget.dgspec.json" \
+  "$ROOT_DIR/src/Unlimotion/obj/Unlimotion.csproj.nuget.g.props" \
+  "$ROOT_DIR/src/Unlimotion/obj/Unlimotion.csproj.nuget.g.targets" \
   "$ANDROID_ASSETS_PATH" \
   "$ROOT_DIR/src/Unlimotion.Android/obj/project.nuget.cache" \
   "$ROOT_DIR/src/Unlimotion.Android/obj/Unlimotion.Android.csproj.nuget.dgspec.json" \
@@ -872,7 +899,13 @@ for rid in android-arm64 android-x64; do
     -p:AndroidSigningKeyAlias="$ANDROID_SIGNING_KEY_ALIAS" \
     -p:AndroidSigningKeyPass=env:ANDROID_SIGNING_KEY_PASS
 
+  require_file "$UNLIMOTION_ASSETS_PATH"
   require_file "$ANDROID_ASSETS_PATH"
+  verify_restored_local_package \
+    "$UNLIMOTION_ASSETS_PATH" \
+    "LibGit2Sharp.NativeBinaries" \
+    "$LIBGIT2_NATIVE_UPSTREAM_VERSION" \
+    "$NUGET_LOCAL_DIR/$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME"
   verify_restored_local_package \
     "$ANDROID_ASSETS_PATH" \
     "NodifyAvalonia" \
@@ -882,7 +915,7 @@ for rid in android-arm64 android-x64; do
     "$ANDROID_ASSETS_PATH" \
     "LibGit2Sharp.NativeBinaries" \
     "$LIBGIT2_NATIVE_PACKAGE_VERSION" \
-    "$NUGET_LOCAL_DIR/LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
+    "$NUGET_LOCAL_DIR/$LIBGIT2_NATIVE_PACKAGE_NAME"
 
   apk_search_root="$ROOT_DIR/src/Unlimotion.Android/bin/Release/net10.0-android/$rid"
   mapfile -t signed_apks < <(find "$apk_search_root" -type f -name '*-Signed.apk' -print)

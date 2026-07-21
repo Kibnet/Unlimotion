@@ -313,11 +313,29 @@ if non_regular:
 sources = inputs.get("sources") or {}
 openssl_version = str((sources.get("openssl") or {}).get("version", ""))
 libssh2_version = str((sources.get("libssh2") or {}).get("version", ""))
+upstream_native_package = sources.get("upstreamNativePackage") or {}
+upstream_native_package_version = str(upstream_native_package.get("version", ""))
+upstream_native_package_sha256 = str(upstream_native_package.get("sha256", ""))
 native_package_version = str(inputs.get("nativePackageVersion", ""))
-if not openssl_version or not libssh2_version or not native_package_version:
+if (
+    not openssl_version
+    or not libssh2_version
+    or not upstream_native_package_version
+    or not re.fullmatch(r"[0-9a-f]{64}", upstream_native_package_sha256)
+    or not native_package_version
+):
     raise SystemExit("Native inputs are missing exact output version identities")
+upstream_native_package_path = (
+    f"nuget-local/LibGit2Sharp.NativeBinaries.{upstream_native_package_version}.nupkg"
+)
+custom_native_package_path = (
+    f"nuget-local/LibGit2Sharp.NativeBinaries.{native_package_version}.nupkg"
+)
+if upstream_native_package_path == custom_native_package_path:
+    raise SystemExit("Upstream and custom native package identities must be distinct")
 required_paths = {
-    f"nuget-local/LibGit2Sharp.NativeBinaries.{native_package_version}.nupkg",
+    upstream_native_package_path,
+    custom_native_package_path,
     "android-native/libgit2-android-arm64/libgit2-3f4182d.so",
     "android-native/libgit2-android-x64/libgit2-3f4182d.so",
     f"android-native/openssl-{openssl_version}-android-arm64-prefix/lib/libssl.so.3",
@@ -346,6 +364,15 @@ actual_paths = {
     for candidate in bundle.rglob("*")
     if candidate.is_file()
 }
+actual_nuget_paths = {
+    relative for relative in actual_paths if relative.startswith("nuget-local/")
+}
+expected_nuget_paths = {upstream_native_package_path, custom_native_package_path}
+if actual_nuget_paths != expected_nuget_paths:
+    raise SystemExit(
+        "Native cache must contain exactly the pinned upstream and generated local packages; "
+        f"actual package paths are {sorted(actual_nuget_paths)}"
+    )
 if actual_paths != set(declared_by_path):
     missing = sorted(set(declared_by_path) - actual_paths)
     unexpected = sorted(actual_paths - set(declared_by_path))
@@ -363,6 +390,9 @@ for relative, entry in declared_by_path.items():
         raise SystemExit(f"Native cache size mismatch for {relative}")
     if entry.get("sha256") != actual_sha:
         raise SystemExit(f"Native cache SHA-256 mismatch for {relative}")
+
+if declared_by_path[upstream_native_package_path].get("sha256") != upstream_native_package_sha256:
+    raise SystemExit("Cached upstream LibGit2Sharp.NativeBinaries package does not match its pinned SHA-256")
 
 closure = [
     {

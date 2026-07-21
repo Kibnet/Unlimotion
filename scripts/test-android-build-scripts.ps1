@@ -529,6 +529,8 @@ function Assert-AndroidLocalFeedIsolationContract {
 
     Assert-Match $Content 'NUGET_LOCAL_DIR="\$OUTPUT_DIR/nuget-local"' 'Distribution Android builder must use an output-scoped isolated local NuGet feed.'
     Assert-NotMatch $Content 'NUGET_LOCAL_DIR="\$ROOT_DIR/artifacts/nuget-local"' 'Distribution Android builder must not restore directly from the ignored repository-local feed.'
+    Assert-Match $Content 'LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME="LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_UPSTREAM_VERSION\}\.nupkg"' 'Distribution Android builder must name the exact upstream native package.'
+    Assert-Match $Content 'LIBGIT2_NATIVE_PACKAGE_NAME="LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"' 'Distribution Android builder must name the exact generated native package.'
     Assert-Match $Content 'NODIFY_PACKAGE_RELATIVE_PATH="artifacts/nuget-local/NodifyAvalonia\.6\.6\.0-unlimotion\.a12\.1\.nupkg"' 'Distribution Android builder must name the exact reviewed tracked NodifyAvalonia package.'
     Assert-Match $Content 'git -C "\$ROOT_DIR" ls-files -- ''artifacts/nuget-local/NodifyAvalonia\.\*\.nupkg''' 'Distribution Android builder must prove the unique NodifyAvalonia package is tracked.'
     Assert-Match $Content 'git -C "\$ROOT_DIR" cat-file -e "HEAD:\$NODIFY_PACKAGE_RELATIVE_PATH"' 'Distribution Android builder must bind NodifyAvalonia to a blob in HEAD.'
@@ -546,10 +548,18 @@ function Assert-AndroidLocalFeedIsolationContract {
         throw 'Generated Android NuGet config source must have exactly two mapping owners and one local mapping per private package ID.'
     }
     Assert-Match $Content '(?m)^if descendants != expected:$' 'Distribution Android builder must recursively reject nested local-feed content.'
-    Assert-Match $Content '"\$CACHE_PATH/bundle/nuget-local"[\s\S]*"LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"' 'Android cache-hit path must validate the exact generated package closure before copying it.'
-    Assert-Match $Content '"\$NUGET_LOCAL_DIR"[\s\S]*"LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"[\s\S]*"\$NODIFY_PACKAGE_NAME"' 'Distribution Android builder must require exactly the two top-level local-feed nupkgs.'
+    Assert-Match $Content 'cp "\$upstream_package" "\$NUGET_LOCAL_DIR/\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME"' 'Distribution Android builder must copy the SHA-verified upstream package into the isolated local feed.'
+    $exactCacheClosurePattern = '(?ms)^  assert_exact_flat_package_directory \\\r?\n    "\$CACHE_PATH/bundle/nuget-local" \\\r?\n    "\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \\\r?\n    "\$LIBGIT2_NATIVE_PACKAGE_NAME"$'
+    if ([regex]::Matches($Content, $exactCacheClosurePattern).Count -ne 2) {
+        throw 'Android builder must validate the exact two-package cache closure on both cache hit and cache miss.'
+    }
+    Assert-Match $Content 'cp "\$NUGET_LOCAL_DIR/\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" "\$CACHE_PATH/bundle/nuget-local/"' 'Distribution Android builder must preserve the pinned upstream package in the native cache.'
+    Assert-Match $Content '(?ms)^assert_exact_flat_package_directory \\\r?\n  "\$NUGET_LOCAL_DIR" \\\r?\n  "\$LIBGIT2_NATIVE_UPSTREAM_PACKAGE_NAME" \\\r?\n  "\$LIBGIT2_NATIVE_PACKAGE_NAME" \\\r?\n  "\$NODIFY_PACKAGE_NAME"$' 'Distribution Android builder must require exactly the three top-level local-feed nupkgs.'
     Assert-Match $Content 'verify_restored_local_package[\s\S]*metadata\.get\("contentHash"\) != expected_hash[\s\S]*pathlib\.Path\(source\)\.resolve\(\) != local_feed' 'Distribution Android builder must prove restored local packages by exact content hash and source path.'
-    Assert-Match $Content '"NodifyAvalonia"[\s\S]*"6\.6\.0-unlimotion\.a12\.1"[\s\S]*"LibGit2Sharp\.NativeBinaries"[\s\S]*"\$LIBGIT2_NATIVE_PACKAGE_VERSION"' 'Distribution Android builder must verify both exact restored private package identities.'
+    Assert-Match $Content 'package_library_keys != \[library_key\]' 'Distribution Android builder must reject extra restored versions of each private package ID.'
+    Assert-Match $Content 'UNLIMOTION_ASSETS_PATH="\$ROOT_DIR/src/Unlimotion/obj/project\.assets\.json"' 'Distribution Android builder must inspect the core project restore graph.'
+    Assert-Match $Content 'rm -f --[\s\S]*"\$UNLIMOTION_ASSETS_PATH"[\s\S]*src/Unlimotion/obj/project\.nuget\.cache[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.dgspec\.json[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.g\.props[\s\S]*src/Unlimotion/obj/Unlimotion\.csproj\.nuget\.g\.targets[\s\S]*"\$ANDROID_ASSETS_PATH"' 'Distribution Android builder must remove stale core and Android restore metadata before proving package sources.'
+    Assert-Match $Content '"\$UNLIMOTION_ASSETS_PATH"[\s\S]*"LibGit2Sharp\.NativeBinaries"[\s\S]*"\$LIBGIT2_NATIVE_UPSTREAM_VERSION"[\s\S]*"\$ANDROID_ASSETS_PATH"[\s\S]*"NodifyAvalonia"[\s\S]*"6\.6\.0-unlimotion\.a12\.1"[\s\S]*"\$ANDROID_ASSETS_PATH"[\s\S]*"LibGit2Sharp\.NativeBinaries"[\s\S]*"\$LIBGIT2_NATIVE_PACKAGE_VERSION"' 'Distribution Android builder must prove upstream restore for the core graph and generated-package restore for the Android graph.'
     Assert-Match $Content '-p:RestoreConfigFile="\$NUGET_CONFIG_PATH"' 'Distribution Android build must restore through the generated isolated-feed config.'
     Assert-NotMatch $Content '-p:RestoreConfigFile="\$ROOT_DIR/src/nuget\.config"' 'Distribution Android build must not restore through the repository config that points at the ignored feed.'
 }
@@ -724,6 +734,8 @@ Assert-Match $distributionTestScript 'EXPECTED_PRODUCTION_FINGERPRINT="1cca6de2b
 Assert-Match $distributionTestScript 'if api_level != 23' 'Distribution Android provenance validator must reject non-API-23 caches.'
 Assert-Match $distributionTestScript 'Matched cache key must equal the exact requested key' 'Distribution Android provenance validator must reject partial/prefix cache matches.'
 Assert-Match $distributionTestScript 'actual_paths != set\(declared_by_path\)' 'Distribution Android provenance validator must reject missing or unexpected outputs.'
+Assert-Match $distributionTestScript 'actual_nuget_paths != expected_nuget_paths' 'Distribution Android provenance validator must reject extra local-feed package paths.'
+Assert-Match $distributionTestScript 'declared_by_path\[upstream_native_package_path\]\.get\("sha256"\) != upstream_native_package_sha256' 'Distribution Android provenance validator must bind the cached upstream package to its pinned input SHA-256.'
 Assert-Match $distributionTestScript 'Native cache bundle must not contain symbolic links' 'Distribution Android provenance validator must reject symlink-based cache substitutions.'
 Assert-Match $distributionTestScript '"nativeInputsSha256": digest' 'Android provenance evidence must bind the exact native-input bytes.'
 Assert-Match $distributionTestScript '"nativeProvenanceSha256": hashlib\.sha256\(provenance_bytes\)\.hexdigest\(\)' 'Android provenance evidence must bind the exact native-provenance bytes.'
@@ -938,13 +950,23 @@ try {
     }
     if ($nativeInputs.sources.openssl.sha256 -ne 'eeca035d4dd4e84fc25846d952da6297484afa0650a6f84c682e39df3a4123ca' -or
         $nativeInputs.sources.libssh2.sha256 -ne 'd9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7' -or
-        $nativeInputs.sources.upstreamNativePackage.sha256 -ne 'd2a16ac8d0b4bb4e5417e0c9fcb36f9e0e52babd6bc9c8bec0810685553feeb1') {
-        throw 'prepare-cache did not record the reviewed source/package hashes.'
+        $nativeInputs.sources.upstreamNativePackage.version -ne '2.0.323' -or
+        $nativeInputs.sources.upstreamNativePackage.sha256 -ne 'd2a16ac8d0b4bb4e5417e0c9fcb36f9e0e52babd6bc9c8bec0810685553feeb1' -or
+        $nativeInputs.nativePackageVersion -ne '2.0.324-android.7') {
+        throw 'prepare-cache did not record the reviewed source/package identities and hashes.'
     }
 
+    $upstreamPackageRelativePath = 'nuget-local/LibGit2Sharp.NativeBinaries.2.0.323.nupkg'
+    $upstreamFixturePath = Join-Path $tempRoot 'LibGit2Sharp.NativeBinaries.2.0.323.fixture.nupkg'
+    Write-Utf8Text $upstreamFixturePath 'synthetic upstream native package fixture'
+    $nativeInputs.sources.upstreamNativePackage.sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $upstreamFixturePath).Hash.ToLowerInvariant()
+    Write-Utf8Text $nativeInputsPath (($nativeInputs | ConvertTo-Json -Depth 20 -Compress) + "`n")
+    $nativeInputDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $nativeInputsPath).Hash.ToLowerInvariant()
+    $cacheKey = "android-native-v2-linux-x64-$nativeInputDigest"
     $cachePath = Join-Path $cacheRoot $nativeInputDigest
     $bundlePath = Join-Path $cachePath 'bundle'
     $fixtureOutputs = @(
+        $upstreamPackageRelativePath,
         'nuget-local/LibGit2Sharp.NativeBinaries.2.0.324-android.7.nupkg',
         'android-native/libgit2-android-arm64/libgit2-3f4182d.so',
         'android-native/libgit2-android-x64/libgit2-3f4182d.so',
@@ -958,7 +980,12 @@ try {
     foreach ($relative in $fixtureOutputs) {
         $fixturePath = Join-Path $bundlePath $relative.Replace('/', [string][System.IO.Path]::DirectorySeparatorChar)
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fixturePath) | Out-Null
-        Write-Utf8Text $fixturePath "fixture:$relative"
+        if ($relative -ceq $upstreamPackageRelativePath) {
+            Copy-Item -LiteralPath $upstreamFixturePath -Destination $fixturePath
+        }
+        else {
+            Write-Utf8Text $fixturePath "fixture:$relative"
+        }
     }
     Copy-Item -LiteralPath $nativeInputsPath -Destination (Join-Path $cachePath 'native-inputs.json') -Force
 
@@ -1097,6 +1124,44 @@ try {
     [System.IO.File]::AppendAllText($nupkgPath, 'mutated', [System.Text.UTF8Encoding]::new($false))
     Assert-BashFails $validProvenanceCommand 'Android provenance validator accepted mutated nupkg bytes.'
     [System.IO.File]::WriteAllBytes($nupkgPath, $nupkgBytes)
+
+    $upstreamNupkgPath = Join-Path $bundlePath $upstreamPackageRelativePath.Replace('/', [string][System.IO.Path]::DirectorySeparatorChar)
+    $upstreamNupkgBytes = [System.IO.File]::ReadAllBytes($upstreamNupkgPath)
+    $provenanceBytes = [System.IO.File]::ReadAllBytes($provenancePath)
+    try {
+        [System.IO.File]::AppendAllText($upstreamNupkgPath, 'pin-mismatch', [System.Text.UTF8Encoding]::new($false))
+        $pinMismatchProvenance = $provenance | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $pinMismatchEntry = @($pinMismatchProvenance.outputs | Where-Object { $_.path -ceq $upstreamPackageRelativePath })
+        if ($pinMismatchEntry.Count -ne 1) {
+            throw 'Unable to locate the synthetic upstream package in Android provenance.'
+        }
+        $pinMismatchEntry[0].size = (Get-Item -LiteralPath $upstreamNupkgPath).Length
+        $pinMismatchEntry[0].sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $upstreamNupkgPath).Hash.ToLowerInvariant()
+        Write-Utf8Text $provenancePath (($pinMismatchProvenance | ConvertTo-Json -Depth 20 -Compress) + "`n")
+        Assert-BashFails $validProvenanceCommand 'Android provenance validator accepted an upstream nupkg whose declared bytes differ from the pinned input SHA-256.'
+    }
+    finally {
+        [System.IO.File]::WriteAllBytes($upstreamNupkgPath, $upstreamNupkgBytes)
+        [System.IO.File]::WriteAllBytes($provenancePath, $provenanceBytes)
+    }
+
+    $extraPackageRelativePath = 'nuget-local/LibGit2Sharp.NativeBinaries.2.0.999.nupkg'
+    $extraPackagePath = Join-Path $bundlePath $extraPackageRelativePath.Replace('/', [string][System.IO.Path]::DirectorySeparatorChar)
+    try {
+        Write-Utf8Text $extraPackagePath 'unexpected local-feed package fixture'
+        $extraPackageProvenance = $provenance | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $extraPackageProvenance.outputs = @($extraPackageProvenance.outputs) + [pscustomobject][ordered]@{
+            path = $extraPackageRelativePath
+            size = (Get-Item -LiteralPath $extraPackagePath).Length
+            sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $extraPackagePath).Hash.ToLowerInvariant()
+        }
+        Write-Utf8Text $provenancePath (($extraPackageProvenance | ConvertTo-Json -Depth 20 -Compress) + "`n")
+        Assert-BashFails $validProvenanceCommand 'Android provenance validator accepted an extra declared local-feed package.'
+    }
+    finally {
+        Remove-Item -LiteralPath $extraPackagePath -ErrorAction SilentlyContinue
+        [System.IO.File]::WriteAllBytes($provenancePath, $provenanceBytes)
+    }
 
     $provenanceBackup = "$provenancePath.missing"
     Move-Item -LiteralPath $provenancePath -Destination $provenanceBackup
