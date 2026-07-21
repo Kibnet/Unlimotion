@@ -73,7 +73,13 @@ emit_output() {
 }
 
 sha256_file() {
-  sha256sum "$1" | awk '{print $1}'
+  local checksum_output
+  local digest
+  checksum_output="$(sha256sum -- "$1")"
+  checksum_output="${checksum_output#\\}"
+  digest="${checksum_output%% *}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail "Unable to parse SHA-256 for $1"
+  printf '%s\n' "$digest"
 }
 
 fetch_verified_source() {

@@ -1,6 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
 $rootDir = Split-Path -Parent $PSScriptRoot
+$bashCommand = (Get-Command bash -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+if ([string]::IsNullOrWhiteSpace($bashCommand)) {
+    throw 'Unable to resolve the Bash executable used by Android contract fixtures.'
+}
 $commonScript = Get-Content -Raw (Join-Path $PSScriptRoot 'android-native-common.sh')
 $buildLibgit2Script = Get-Content -Raw (Join-Path $PSScriptRoot 'build-libgit2-android.sh')
 $buildLibssh2Script = Get-Content -Raw (Join-Path $PSScriptRoot 'build-libssh2-android.sh')
@@ -108,20 +112,39 @@ function Assert-Throws {
     }
 }
 
-function Convert-ToWslPath {
+function Convert-ToBashPath {
     param([string]$Path)
 
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     if ([System.IO.Path]::DirectorySeparatorChar -eq '/') {
         return $fullPath
     }
-    if ($fullPath -notmatch '^([A-Za-z]):[\\/](.*)$') {
-        throw "Cannot convert path to WSL form: $fullPath"
+
+    $quotedPath = Quote-Bash $fullPath
+    $conversionCommand = @"
+case "`$(uname -s)" in
+  CYGWIN*|MINGW*|MSYS*)
+    command -v cygpath >/dev/null 2>&1 || exit 64
+    cygpath -u -- $quotedPath
+    ;;
+  Linux)
+    command -v wslpath >/dev/null 2>&1 || exit 64
+    wslpath -a -u -- $quotedPath
+    ;;
+  *)
+    exit 64
+    ;;
+esac
+"@
+    $output = @(& $bashCommand --noprofile --norc -c $conversionCommand 2>&1)
+    $exitCode = $LASTEXITCODE
+    $convertedPath = ($output -join "`n").Trim()
+    if ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($convertedPath) -or
+        $convertedPath -notmatch '^/' -or $convertedPath.Contains("`n")) {
+        throw "Cannot convert path for Bash '$bashCommand': $fullPath`n$($output -join [Environment]::NewLine)"
     }
 
-    $drive = $Matches[1].ToLowerInvariant()
-    $tail = $Matches[2].Replace('\', '/')
-    return "/mnt/$drive/$tail"
+    return $convertedPath
 }
 
 function Quote-Bash {
@@ -139,7 +162,7 @@ function Invoke-BashChecked {
         [string]$Message
     )
 
-    $output = & bash -lc $Command 2>&1
+    $output = & $bashCommand -lc $Command 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "$Message`n$($output -join [Environment]::NewLine)"
     }
@@ -153,7 +176,7 @@ function Assert-BashFails {
         [string]$Message
     )
 
-    & bash -lc $Command *> $null
+    & $bashCommand -lc $Command *> $null
     if ($LASTEXITCODE -eq 0) {
         throw $Message
     }
@@ -575,16 +598,27 @@ try {
     New-Item -ItemType Directory -Path $outputDir, $cacheRoot | Out-Null
     Write-Utf8Text $identityPath (($identity | ConvertTo-Json -Depth 10 -Compress) + "`n")
 
-    $rootBash = Convert-ToWslPath $rootDir
+    $rootBash = Convert-ToBashPath $rootDir
+    $quotedPathDirectory = Join-Path $tempRoot "bash path's fixture"
+    $quotedPathFile = Join-Path $quotedPathDirectory "present file's marker.txt"
+    New-Item -ItemType Directory -Path $quotedPathDirectory | Out-Null
+    Write-Utf8Text $quotedPathFile 'fixture'
+    Invoke-BashChecked (
+        'test -f {0}' -f (Quote-Bash (Convert-ToBashPath $quotedPathFile))
+    ) 'Bash path conversion did not preserve spaces and single quotes.' | Out-Null
+    Assert-BashFails (
+        'test -e {0}' -f (Quote-Bash (Convert-ToBashPath (Join-Path $quotedPathDirectory 'missing.txt')))
+    ) 'Bash path conversion mapped a missing fixture to an existing path.'
+
     $gitDir = (& git -C $rootDir rev-parse --absolute-git-dir) -join ''
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitDir)) {
         throw 'Unable to resolve the worktree Git directory for Bash fixtures.'
     }
-    $gitDirBash = Convert-ToWslPath $gitDir.Trim()
-    $identityBash = Convert-ToWslPath $identityPath
-    $outputBash = Convert-ToWslPath $outputDir
-    $cacheRootBash = Convert-ToWslPath $cacheRoot
-    $prepareCommand = 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} bash scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
+    $gitDirBash = Convert-ToBashPath $gitDir.Trim()
+    $identityBash = Convert-ToBashPath $identityPath
+    $outputBash = Convert-ToBashPath $outputDir
+    $cacheRootBash = Convert-ToBashPath $cacheRoot
+    $prepareCommand = 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
         (Quote-Bash $rootBash),
         (Quote-Bash $gitDirBash),
         (Quote-Bash $identityBash),
@@ -609,7 +643,7 @@ try {
     $nativeInputDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $nativeInputsPath).Hash.ToLowerInvariant()
     $cacheKey = "android-native-v2-linux-x64-$nativeInputDigest"
     if ($prepareValues.native_input_digest -ne $nativeInputDigest -or $prepareValues.cache_key -ne $cacheKey) {
-        throw 'prepare-cache outputs are not bound to the exact native-input bytes.'
+        throw "prepare-cache outputs are not bound to the exact native-input bytes: digest='$($prepareValues.native_input_digest)' expected='$nativeInputDigest'; cacheKey='$($prepareValues.cache_key)' expected='$cacheKey'."
     }
 
     $nativeInputs = Get-Content -Raw -LiteralPath $nativeInputsPath | ConvertFrom-Json
@@ -675,14 +709,14 @@ try {
             [string]$EvidencePath
         )
 
-        return 'cd {0} && bash scripts/test-android-distribution.sh --mode provenance --identity {1} --native-inputs {2} --cache-path {3} --requested-cache-key {4} --matched-cache-key {5} --cache-hit true --cache-save false --evidence {6}' -f @(
+        return 'cd {0} && "$BASH" scripts/test-android-distribution.sh --mode provenance --identity {1} --native-inputs {2} --cache-path {3} --requested-cache-key {4} --matched-cache-key {5} --cache-hit true --cache-save false --evidence {6}' -f @(
             (Quote-Bash $rootBash),
             (Quote-Bash $identityBash),
-            (Quote-Bash (Convert-ToWslPath $InputsPath)),
-            (Quote-Bash (Convert-ToWslPath $CandidateCachePath)),
+            (Quote-Bash (Convert-ToBashPath $InputsPath)),
+            (Quote-Bash (Convert-ToBashPath $CandidateCachePath)),
             (Quote-Bash $RequestedKey),
             (Quote-Bash $MatchedKey),
-            (Quote-Bash (Convert-ToWslPath $EvidencePath))
+            (Quote-Bash (Convert-ToBashPath $EvidencePath))
         )
     }
 
@@ -781,9 +815,11 @@ try {
     New-Item -ItemType Directory -Path $symlinkCachePath | Out-Null
     Copy-Item -LiteralPath $cachedInputsPath -Destination (Join-Path $symlinkCachePath 'native-inputs.json')
     Copy-Item -LiteralPath $provenancePath -Destination (Join-Path $symlinkCachePath 'native-provenance.json')
-    $createBundleSymlink = 'ln -s -- {0} {1}' -f @(
-        (Quote-Bash (Convert-ToWslPath $symlinkTargetPath)),
-        (Quote-Bash (Convert-ToWslPath (Join-Path $symlinkCachePath 'bundle')))
+    $symlinkTargetBash = Quote-Bash (Convert-ToBashPath $symlinkTargetPath)
+    $symlinkBundleBash = Quote-Bash (Convert-ToBashPath (Join-Path $symlinkCachePath 'bundle'))
+    $createBundleSymlink = 'MSYS=winsymlinks:nativestrict ln -s -- {0} {1} && test -L {1}' -f @(
+        $symlinkTargetBash,
+        $symlinkBundleBash
     )
     Invoke-BashChecked $createBundleSymlink 'Unable to create the Android bundle-root symlink negative fixture.' | Out-Null
     Assert-BashFails (
@@ -797,9 +833,10 @@ try {
     $emulatorInput = Join-Path $tempRoot 'emulator-input'
     $emulatorFailureRoot = Join-Path $tempRoot 'emulator-failure'
     $emulatorSetupFailureRoot = Join-Path $tempRoot 'emulator-setup-failure'
-    New-Item -ItemType Directory -Path $fakeBin, $fakeBuildTools, $fakeSystemImage, $emulatorInput, $emulatorFailureRoot, $emulatorSetupFailureRoot | Out-Null
+    $fakeAvdHome = Join-Path $tempRoot 'fake-android-avd-home'
+    New-Item -ItemType Directory -Path $fakeBin, $fakeBuildTools, $fakeSystemImage, $emulatorInput, $emulatorFailureRoot, $emulatorSetupFailureRoot, $fakeAvdHome | Out-Null
     Write-Utf8Text (Join-Path $fakeBin 'adb') (@'
-#!/usr/bin/env bash
+#!/bin/bash
 if [ "${1:-}" = "version" ]; then
   echo "Android Debug Bridge version 1.0.41"
 elif [[ "$*" == *"getprop sys.boot_completed"* ]]; then
@@ -809,7 +846,7 @@ elif [[ "$*" == *"getprop init.svc.bootanim"* ]]; then
 fi
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBin 'emulator') (@'
-#!/usr/bin/env bash
+#!/bin/bash
 if [ "${1:-}" = "-version" ]; then
   echo "Android emulator version fixture"
   exit 0
@@ -818,11 +855,11 @@ echo "fixture emulator boot attempt: $*"
 exec sleep 60
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBin 'sdkmanager') (@'
-#!/usr/bin/env bash
+#!/bin/bash
 exit 0
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBin 'avdmanager') (@'
-#!/usr/bin/env bash
+#!/bin/bash
 if [ "${1:-}" = "create" ]; then
   attempt=1
   if [ -n "${FAKE_AVDMANAGER_STATE_FILE:-}" ]; then
@@ -840,7 +877,7 @@ fi
 exit 0
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBuildTools 'aapt') (@'
-#!/usr/bin/env bash
+#!/bin/bash
 if [ "${1:-}" = "version" ]; then
   echo "Android Asset Packaging Tool, v0.2"
 elif [ "${1:-}" = "dump" ] && [ "${2:-}" = "badging" ]; then
@@ -851,22 +888,32 @@ fi
     $emulatorApkPath = Join-Path $emulatorInput $identity.filenamePlan.android.x64Apk
     Write-Utf8Text $emulatorApkPath 'fixture-apk'
     $chmodFixtureTools = 'chmod +x -- {0}/* {1}' -f @(
-        (Quote-Bash (Convert-ToWslPath $fakeBin)),
-        (Quote-Bash (Convert-ToWslPath (Join-Path $fakeBuildTools 'aapt')))
+        (Quote-Bash (Convert-ToBashPath $fakeBin)),
+        (Quote-Bash (Convert-ToBashPath (Join-Path $fakeBuildTools 'aapt')))
     )
     Invoke-BashChecked $chmodFixtureTools 'Unable to make fake Android fixture tools executable.' | Out-Null
 
     $emulatorFailureEvidencePath = Join-Path $emulatorFailureRoot 'evidence.json'
-    $fixturePosixPath = (Convert-ToWslPath $fakeBin) + ':/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
-    $emulatorFailureCommand = 'cd {0} && env PATH={1} ANDROID_SDK_ROOT={2} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 bash scripts/test-android-distribution.sh --mode emulator --identity {3} --input-dir {4} --api-level 23 --evidence {5}' -f @(
+    $pythonDirectoryOutput = @(
+        & $bashCommand --noprofile --norc -c 'command -v python3 >/dev/null 2>&1 && dirname -- "$(command -v python3)"' 2>&1
+    )
+    $pythonDirectoryExitCode = $LASTEXITCODE
+    $pythonDirectory = ($pythonDirectoryOutput -join "`n").Trim()
+    if ($pythonDirectoryExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($pythonDirectory) -or
+        $pythonDirectory -notmatch '^/' -or $pythonDirectory.Contains("`n")) {
+        throw "Unable to resolve the Python 3 directory from Bash '$bashCommand'.`n$($pythonDirectoryOutput -join [Environment]::NewLine)"
+    }
+    $fixturePosixPath = (Convert-ToBashPath $fakeBin) + ":${pythonDirectory}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    $emulatorFailureCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
         (Quote-Bash $rootBash),
         (Quote-Bash $fixturePosixPath),
-        (Quote-Bash (Convert-ToWslPath $fakeSdk)),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
         (Quote-Bash $identityBash),
-        (Quote-Bash (Convert-ToWslPath $emulatorInput)),
-        (Quote-Bash (Convert-ToWslPath $emulatorFailureEvidencePath))
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorFailureEvidencePath))
     )
-    $emulatorFailureOutput = & bash -lc $emulatorFailureCommand 2>&1
+    $emulatorFailureOutput = & $bashCommand -lc $emulatorFailureCommand 2>&1
     if ($LASTEXITCODE -eq 0) {
         throw 'Fake Android emulator exhaustion unexpectedly succeeded.'
     }
@@ -906,16 +953,17 @@ fi
 
     $emulatorSetupFailureEvidencePath = Join-Path $emulatorSetupFailureRoot 'evidence.json'
     $avdmanagerStatePath = Join-Path $emulatorSetupFailureRoot 'avdmanager-state.txt'
-    $emulatorSetupFailureCommand = 'cd {0} && env PATH={1} ANDROID_SDK_ROOT={2} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_AVDMANAGER_STATE_FILE={3} FAKE_AVDMANAGER_FAIL_CREATE_ATTEMPT=2 UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 bash scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+    $emulatorSetupFailureCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_AVDMANAGER_STATE_FILE={4} FAKE_AVDMANAGER_FAIL_CREATE_ATTEMPT=2 UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {5} --input-dir {6} --api-level 23 --evidence {7}' -f @(
         (Quote-Bash $rootBash),
         (Quote-Bash $fixturePosixPath),
-        (Quote-Bash (Convert-ToWslPath $fakeSdk)),
-        (Quote-Bash (Convert-ToWslPath $avdmanagerStatePath)),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash (Convert-ToBashPath $avdmanagerStatePath)),
         (Quote-Bash $identityBash),
-        (Quote-Bash (Convert-ToWslPath $emulatorInput)),
-        (Quote-Bash (Convert-ToWslPath $emulatorSetupFailureEvidencePath))
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorSetupFailureEvidencePath))
     )
-    $emulatorSetupFailureOutput = & bash -lc $emulatorSetupFailureCommand 2>&1
+    $emulatorSetupFailureOutput = & $bashCommand -lc $emulatorSetupFailureCommand 2>&1
     if ($LASTEXITCODE -eq 0) {
         throw 'Fake Android emulator setup failure unexpectedly succeeded.'
     }
@@ -952,12 +1000,12 @@ fi
         $candidateOutput = Join-Path $tempRoot "identity-$Label-output"
         $candidateCache = Join-Path $tempRoot "identity-$Label-cache"
         New-Item -ItemType Directory -Path $candidateOutput, $candidateCache | Out-Null
-        return 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} bash scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
+        return 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
             (Quote-Bash $rootBash),
             (Quote-Bash $gitDirBash),
-            (Quote-Bash (Convert-ToWslPath $CandidateIdentityPath)),
-            (Quote-Bash (Convert-ToWslPath $candidateOutput)),
-            (Quote-Bash (Convert-ToWslPath $candidateCache))
+            (Quote-Bash (Convert-ToBashPath $CandidateIdentityPath)),
+            (Quote-Bash (Convert-ToBashPath $candidateOutput)),
+            (Quote-Bash (Convert-ToBashPath $candidateCache))
         )
     }
 
