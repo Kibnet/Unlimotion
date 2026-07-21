@@ -358,6 +358,19 @@ function Assert-EmulatorToolPathContract {
         $job = $jobMatch.Groups['job'].Value
         Assert-Match $job '(?m)^    runs-on: ubuntu-22\.04\s*$' "Distribution workflow $jobName must use the supported Ubuntu 22.04 host that provides the Android Emulator libtiff.so.5 runtime ABI."
 
+        $hostRuntimeStep = [regex]::Match(
+            $job,
+            '(?ms)^      - name: Install emulator host runtime\s*\r?\n(?<step>.*?)(?=^      - name:|\z)'
+        )
+        if (-not $hostRuntimeStep.Success) {
+            throw "Distribution workflow $jobName job is missing its emulator host-runtime step."
+        }
+        $hostRuntime = $hostRuntimeStep.Groups['step'].Value
+        Assert-Match $hostRuntime 'for attempt in 1 2 3; do' "Distribution workflow $jobName emulator host-runtime install must use the bounded APT retry contract."
+        Assert-Match $hostRuntime 'sudo apt-get install -y --no-install-recommends libpulse0' "Distribution workflow $jobName must install the native libpulse.so.0 provider without recommendations."
+        Assert-Match $hostRuntime 'dpkg-query -W -f=''\$\{Status\}\\n'' libpulse0' "Distribution workflow $jobName must verify the installed libpulse0 package state."
+        Assert-Match $hostRuntime 'test -e /usr/lib/x86_64-linux-gnu/libpulse\.so\.0' "Distribution workflow $jobName must verify the exact emulator libpulse.so.0 runtime path."
+
         $installStep = [regex]::Match(
             $job,
             '(?ms)^      - name: Install API \d+ emulator image\s*\r?\n(?<step>.*?)(?=^      - name:|\z)'
@@ -554,6 +567,16 @@ $incompatibleEmulatorHostFixture = [regex]::Replace(
 Assert-Throws {
     Assert-EmulatorToolPathContract -Content $incompatibleEmulatorHostFixture
 } 'Distribution Android workflow accepted the Ubuntu 24.04 host without the emulator libtiff.so.5 runtime ABI.'
+
+$missingPulseRuntimeFixture = [regex]::Replace(
+    $distributionValidationWorkflow,
+    'sudo apt-get install -y --no-install-recommends libpulse0',
+    'sudo apt-get install -y --no-install-recommends',
+    1
+)
+Assert-Throws {
+    Assert-EmulatorToolPathContract -Content $missingPulseRuntimeFixture
+} 'Distribution Android workflow accepted an emulator job without the libpulse.so.0 provider.'
 
 $opaqueEmulatorVersionFixture = $distributionTestScript.Replace(
     'EMULATOR_VERSION="$(resolve_tool_version "Android emulator" emulator -version)"',

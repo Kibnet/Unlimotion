@@ -1330,6 +1330,20 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
+      - name: Install emulator host runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends libpulse0; then
+              dpkg-query -W -f='${Status}\n' libpulse0 | grep -Fx 'install ok installed'
+              test -e /usr/lib/x86_64-linux-gnu/libpulse.so.0
+              exit 0
+            fi
+            sudo rm -rf /var/lib/apt/lists/*
+            if [[ "$attempt" -eq 3 ]]; then exit 1; fi
+          done
+
       - name: Install API 23 emulator image
         shell: bash
         run: |
@@ -1645,6 +1659,20 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install emulator host runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends libpulse0; then
+              dpkg-query -W -f='${Status}\n' libpulse0 | grep -Fx 'install ok installed'
+              test -e /usr/lib/x86_64-linux-gnu/libpulse.so.0
+              exit 0
+            fi
+            sudo rm -rf /var/lib/apt/lists/*
+            if [[ "$attempt" -eq 3 ]]; then exit 1; fi
+          done
 
       - name: Install API 36 emulator image
         shell: bash
