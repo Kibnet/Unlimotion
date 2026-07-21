@@ -1062,6 +1062,66 @@ function Test-MacosLaunchIsolationContract {
         'macOS smoke evidence must disclose seeded isolated storage and deny unconfigured first-run coverage.'
 }
 
+function Test-MacosTrapSafeProbeContract {
+    param([Parameter(Mandatory = $true)][string]$ValidatorText)
+
+    $normalized = $ValidatorText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $trapLifecycle = [regex]::Matches(
+        $normalized,
+        '(?ms)\A#!/usr/bin/env bash\nset -euo pipefail\n(?<protected>.*?)^trap - ERR$'
+    )
+    Assert-Condition ($trapLifecycle.Count -eq 1 -and
+        [regex]::Matches($normalized, '(?m)^trap - ERR$').Count -eq 1 -and
+        [regex]::Matches($normalized, '(?m)^\s*set(?:\s|$)').Count -eq 1) `
+        'macOS validator must keep one exact strict-mode preamble until one final ERR-trap removal.'
+    $protectedRegion = $trapLifecycle[0].Groups['protected'].Value
+    $errHandlerLine = 'trap ''exit_code=$?; write_failure "$exit_code" "$BASH_COMMAND"; exit "$exit_code"'' ERR'
+    $errHandlerPattern = "(?m)^$([regex]::Escape($errHandlerLine))$"
+    $errHandlerMatches = [regex]::Matches($protectedRegion, $errHandlerPattern)
+    Assert-Condition ($errHandlerMatches.Count -eq 1 -and
+        [regex]::Matches($normalized, '(?m)^\s*trap\b[^\n]*\bERR\b[^\n]*$').Count -eq 2) `
+        'macOS validator must install one exact ERR evidence handler and remove it only once at the end.'
+    $errHandlerEnd = $errHandlerMatches[0].Index + $errHandlerMatches[0].Length
+
+    $requiredProbeBlocks = [ordered]@{
+        codesign = @(
+            '  if codesign_output="$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1)"; then'
+            '    codesign_exit=0'
+            '  else'
+            '    codesign_exit=$?'
+            '  fi'
+        ) -join "`n"
+        osascript = @(
+            '    if title="$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to if (count windows) > 0 then return name of window 1" 2>"$automation_stderr")"; then'
+            '      osascript_exit=0'
+            '    else'
+            '      osascript_exit=$?'
+            '    fi'
+        ) -join "`n"
+        setupPackage = @(
+            'if setup_signature_output="$(pkgutil --check-signature "$artifact_directory/$setup_name" 2>&1)"; then'
+            '  setup_signature_exit=0'
+            'else'
+            '  setup_signature_exit=$?'
+            'fi'
+        ) -join "`n"
+        legacyPackage = @(
+            'if legacy_signature_output="$(pkgutil --check-signature "$artifact_directory/$legacy_pkg_name" 2>&1)"; then'
+            '  legacy_signature_exit=0'
+            'else'
+            '  legacy_signature_exit=$?'
+            'fi'
+        ) -join "`n"
+    }
+    foreach ($probe in $requiredProbeBlocks.GetEnumerator()) {
+        $probeMatches = [regex]::Matches($protectedRegion, [regex]::Escape($probe.Value))
+        Assert-Condition ($probeMatches.Count -eq 1 -and $probeMatches[0].Index -gt $errHandlerEnd) `
+            "macOS $($probe.Key) probe must capture an expected non-zero exit inside an if condition."
+    }
+    Assert-Condition ([regex]::Matches($protectedRegion, 'pkgutil --check-signature').Count -eq 2) `
+        'macOS validator must classify exactly the canonical and legacy package signatures.'
+}
+
 function Test-WindowsLaunchIsolationContract {
     param([Parameter(Mandatory = $true)][string]$ValidatorText)
 
@@ -4356,6 +4416,8 @@ if ($Area -in @('All', 'WorkflowSecurity')) {
     $macosValidatorText = Get-Content -LiteralPath $macosValidatorPath -Raw -Encoding utf8
     Test-MacosLaunchIsolationContract -ValidatorText $macosValidatorText
     Add-Check -Name 'macos-launch:isolated-writable-task-storage'
+    Test-MacosTrapSafeProbeContract -ValidatorText $macosValidatorText
+    Add-Check -Name 'macos-probes:err-trap-safe-exit-capture'
 
     $windowsValidatorPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\Test-WindowsDistribution.ps1') `
         -DisplayName 'Windows distribution validator'
@@ -4397,6 +4459,96 @@ if ($Area -in @('All', 'WorkflowSecurity')) {
     foreach ($macosLaunchIsolationFixture in $macosLaunchIsolationFixtures) {
         Assert-Throws -Name $macosLaunchIsolationFixture.Name -Action {
             Test-MacosLaunchIsolationContract -ValidatorText $macosLaunchIsolationFixture.Text
+        }
+    }
+
+    $macosOsascriptProbeLine = '    if title="$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to if (count windows) > 0 then return name of window 1" 2>"$automation_stderr")"; then'
+    $macosOsascriptControlOperatorLine = '    if title="$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to if (count windows) > 0 then return name of window 1" 2>"$automation_stderr" || printf ''Unlimotion %s'' "$version")"; then'
+    $macosOsascriptControlOperatorText = $macosValidatorText.Replace(
+        $macosOsascriptProbeLine,
+        $macosOsascriptControlOperatorLine
+    )
+    Assert-Condition (-not [string]::Equals($macosOsascriptControlOperatorText, $macosValidatorText, [StringComparison]::Ordinal)) `
+        'macOS osascript control-operator fixture could not find its mutation target.'
+    $macosErrHandlerLine = 'trap ''exit_code=$?; write_failure "$exit_code" "$BASH_COMMAND"; exit "$exit_code"'' ERR'
+    $macosMissingErrHandlerText = $macosValidatorText.Replace(
+        $macosErrHandlerLine,
+        '# ERR evidence handler removed by fixture'
+    )
+    $macosEarlyErrDisableText = $macosValidatorText.Replace(
+        $macosErrHandlerLine,
+        "$macosErrHandlerLine`ntrap - ERR # early-disable fixture"
+    )
+    Assert-Condition (-not [string]::Equals($macosMissingErrHandlerText, $macosValidatorText, [StringComparison]::Ordinal) -and
+        -not [string]::Equals($macosEarlyErrDisableText, $macosValidatorText, [StringComparison]::Ordinal)) `
+        'macOS ERR lifecycle fixtures could not find their mutation target.'
+
+    $macosProbeFixtures = @(
+        [pscustomobject]@{
+            Name = 'macos-probe-err-handler-missing'
+            Text = $macosMissingErrHandlerText
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-err-handler-disabled-early'
+            Text = $macosEarlyErrDisableText
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-strict-mode-set-plus-e-comment'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^set -euo pipefail$' `
+                -Replacement "set -euo pipefail`nset +e # fail-open fixture" `
+                -Name 'macos-probe-strict-mode-set-plus-e-comment'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-strict-mode-set-plus-e-semicolon'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^set -euo pipefail$' `
+                -Replacement "set -euo pipefail`nset +e;" `
+                -Name 'macos-probe-strict-mode-set-plus-e-semicolon'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-strict-mode-set-plus-o-errexit'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^set -euo pipefail$' `
+                -Replacement "set -euo pipefail`nset +o errexit;" `
+                -Name 'macos-probe-strict-mode-set-plus-o-errexit'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-osascript-control-operator-injection'
+            Text = $macosOsascriptControlOperatorText
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-codesign-status-capture-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^    codesign_exit=\$\?$' `
+                -Replacement '    codesign_exit=1' `
+                -Name 'macos-probe-codesign-status-capture-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-osascript-status-capture-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^      osascript_exit=\$\?$' `
+                -Replacement '      osascript_exit=1' `
+                -Name 'macos-probe-osascript-status-capture-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-setup-signature-status-capture-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^  setup_signature_exit=\$\?$' `
+                -Replacement '  setup_signature_exit=1' `
+                -Name 'macos-probe-setup-signature-status-capture-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-probe-legacy-signature-status-capture-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^  legacy_signature_exit=\$\?$' `
+                -Replacement '  legacy_signature_exit=1' `
+                -Name 'macos-probe-legacy-signature-status-capture-missing'
+        }
+    )
+    foreach ($macosProbeFixture in $macosProbeFixtures) {
+        Assert-Throws -Name $macosProbeFixture.Name -Action {
+            Test-MacosTrapSafeProbeContract -ValidatorText $macosProbeFixture.Text
         }
     }
 

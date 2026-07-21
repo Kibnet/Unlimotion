@@ -186,10 +186,11 @@ inspect_app() {
   [[ "$min_os" == '12.0' || "$min_os" == '12.0.0' ]] || { printf '%s minimum macOS is %s, expected 12.0.\n' "$label" "$min_os" >&2; return 1; }
 
   local codesign_output codesign_state codesign_details codesign_exit
-  set +e
-  codesign_output="$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1)"
-  codesign_exit=$?
-  set -e
+  if codesign_output="$(codesign --verify --deep --strict --verbose=2 "$app" 2>&1)"; then
+    codesign_exit=0
+  else
+    codesign_exit=$?
+  fi
   if [[ "$codesign_exit" -eq 0 ]]; then
     codesign_details="$(codesign --display --verbose=4 "$app" 2>&1)"
     if grep -Eqi 'Signature=adhoc|flags=.*\(adhoc\)' <<<"$codesign_details"; then
@@ -297,10 +298,11 @@ launch_app() {
       printf '%s exited before a window appeared. stderr: %s\n' "$label" "$(tr '\n' ' ' < "$stderr")" >&2
       return 1
     fi
-    set +e
-    title="$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to if (count windows) > 0 then return name of window 1" 2>"$automation_stderr")"
-    osascript_exit=$?
-    set -e
+    if title="$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to if (count windows) > 0 then return name of window 1" 2>"$automation_stderr")"; then
+      osascript_exit=0
+    else
+      osascript_exit=$?
+    fi
     if [[ "$osascript_exit" -eq 0 && "$title" == "Unlimotion $version" ]]; then success=true; break; fi
     sleep 0.5
   done
@@ -354,12 +356,16 @@ setup_install="$(jq -cn \
   --arg installerLog "$(cat "$setup_install_log")" \
   '{target:$target,appPath:$appPath,receiptIdentifier:$receiptIdentifier,receipt:$receipt,installerLog:$installerLog,status:"pass"}')"
 
-set +e
-setup_signature_output="$(pkgutil --check-signature "$artifact_directory/$setup_name" 2>&1)"
-setup_signature_exit=$?
-legacy_signature_output="$(pkgutil --check-signature "$artifact_directory/$legacy_pkg_name" 2>&1)"
-legacy_signature_exit=$?
-set -e
+if setup_signature_output="$(pkgutil --check-signature "$artifact_directory/$setup_name" 2>&1)"; then
+  setup_signature_exit=0
+else
+  setup_signature_exit=$?
+fi
+if legacy_signature_output="$(pkgutil --check-signature "$artifact_directory/$legacy_pkg_name" 2>&1)"; then
+  legacy_signature_exit=0
+else
+  legacy_signature_exit=$?
+fi
 
 classify_package_signature() {
   local label="$1"
