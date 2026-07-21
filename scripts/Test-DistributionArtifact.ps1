@@ -722,6 +722,7 @@ function Assert-NativeCellSemantics {
         '^windows-server-2022-x64$' {
             if ([string]$Cell.platform -cne 'windows' -or [string]$Cell.architecture -cne 'x64' -or
                 [string]$Cell.osName -cne 'Windows Server' -or [string]$Cell.osVersion -cne '2022' -or
+                [string]$Cell.mode -cne 'setup-and-portable-install-launch-with-seeded-isolated-task-storage' -or
                 [string]$Cell.metadata -cne 'pass' -or [string]$Cell.install -cne 'pass' -or [string]$Cell.launch -cne 'pass' -or
                 [string]$Cell.signature -cne 'stateRecorded') { throw "Native cell '$id' has the wrong Windows OS/arch/outcome contract." }
         }
@@ -729,9 +730,11 @@ function Assert-NativeCellSemantics {
             $match = [regex]::Match($id, '^debian-(12|13)-x64-(clean|upgrade|appimage|missing-runtime-negative)$')
             $version = $match.Groups[1].Value
             $mode = $match.Groups[2].Value
+            $configuredMode = "$mode-with-seeded-isolated-task-storage"
             if ([string]$Cell.platform -cne 'linux' -or [string]$Cell.architecture -cne 'x64' -or
-                [string]$Cell.osName -cne 'debian' -or [string]$Cell.osVersion -cne $version -or [string]$Cell.mode -cne $mode -or
-                [string]$Cell.metadata -cne 'pass' -or [string]$Cell.signature -cne 'notApplicable') {
+                [string]$Cell.osName -cne 'debian' -or [string]$Cell.osVersion -cne $version -or [string]$Cell.mode -cne $configuredMode -or
+                [string]$Cell.metadata -cne 'pass' -or
+                [string]$Cell.signature -cne 'notApplicable') {
                 throw "Native cell '$id' has the wrong Debian OS/arch/mode contract."
             }
             if ($mode -ceq 'appimage') {
@@ -755,6 +758,7 @@ function Assert-NativeCellSemantics {
             $architecture = [regex]::Match($id, '^macos-15-(x64|arm64)$').Groups[1].Value
             if ([string]$Cell.platform -cne 'macos' -or [string]$Cell.architecture -cne $architecture -or
                 [string]$Cell.osName -cne 'macOS' -or [string]$Cell.osVersion -cne '15' -or
+                [string]$Cell.mode -cne 'package-and-portable-native-launch-with-seeded-isolated-task-storage' -or
                 [string]$Cell.metadata -cne 'pass' -or [string]$Cell.install -cne 'pass' -or [string]$Cell.launch -cne 'pass' -or
                 [string]$Cell.signature -cne 'stateRecorded') { throw "Native cell '$id' has the wrong macOS OS/arch/outcome contract." }
         }
@@ -775,6 +779,108 @@ function Assert-NativeCellSemantics {
                 [string]$Cell.signature -cne 'coveredByArtifactCell') { throw "Native cell '$id' has the wrong Android emulator contract." }
         }
         default { throw "Unknown mandatory native cell '$id'." }
+    }
+}
+
+function Assert-SeededTaskStorageEvidence {
+    param(
+        [Parameter(Mandatory)] [object]$Evidence,
+        [Parameter(Mandatory)] [string]$Label
+    )
+
+    $launchConfiguration = Get-StrictStringProperty -Object $Evidence -Name 'launchConfiguration' -Label $Label
+    $unconfiguredFirstRunVerified = Get-StrictBooleanProperty -Object $Evidence -Name 'unconfiguredFirstRunVerified' -Label $Label
+    if ($launchConfiguration -cne 'seeded-isolated-task-storage' -or $unconfiguredFirstRunVerified) {
+        throw "$Label must identify seeded isolated task storage and must not claim unconfigured first-run verification."
+    }
+    $configPath = Get-StrictStringProperty -Object $Evidence -Name 'configPath' -Label $Label
+    $taskStoragePath = Get-StrictStringProperty -Object $Evidence -Name 'taskStoragePath' -Label $Label
+    Assert-CanonicalTaskStoragePathPair -ConfigPath $configPath -TaskStoragePath $taskStoragePath -Label $Label
+}
+
+function Assert-NotApplicableTaskStorageEvidence {
+    param(
+        [Parameter(Mandatory)] [object]$Evidence,
+        [Parameter(Mandatory)] [string]$Label
+    )
+
+    $launchConfiguration = Get-StrictStringProperty -Object $Evidence -Name 'launchConfiguration' -Label $Label
+    $unconfiguredFirstRunVerified = Get-StrictBooleanProperty -Object $Evidence -Name 'unconfiguredFirstRunVerified' -Label $Label
+    $configPath = Get-StrictStringProperty -Object $Evidence -Name 'configPath' -Label $Label
+    $taskStoragePath = Get-StrictStringProperty -Object $Evidence -Name 'taskStoragePath' -Label $Label
+    if ($launchConfiguration -cne 'notApplicable' -or $unconfiguredFirstRunVerified -or
+        $configPath.Length -ne 0 -or $taskStoragePath.Length -ne 0) {
+        throw "$Label must report task-storage launch configuration as notApplicable without invented paths or first-run coverage."
+    }
+}
+
+function Get-CanonicalEvidencePathParts {
+    param(
+        [Parameter(Mandatory)] [string]$Value,
+        [Parameter(Mandatory)] [string]$Label
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value -match '[\x00-\x1f]') {
+        throw "$Label must be a non-empty canonical absolute path."
+    }
+
+    $style = $null
+    $separator = $null
+    $tail = $null
+    if ($Value -cmatch '^[A-Za-z]:\\') {
+        if ($Value.Contains('/')) { throw "$Label must not mix Windows and POSIX separators." }
+        $style = 'windows'
+        $separator = '\'
+        $tail = $Value.Substring(3)
+    }
+    elseif ($Value.StartsWith('/', [StringComparison]::Ordinal)) {
+        if ($Value.Contains('\')) { throw "$Label must not mix POSIX and Windows separators." }
+        $style = 'posix'
+        $separator = '/'
+        $tail = $Value.Substring(1)
+    }
+    else {
+        throw "$Label must be an absolute drive-qualified Windows path or an absolute POSIX path."
+    }
+
+    $segments = @($tail -split [regex]::Escape($separator))
+    if ($segments.Count -lt 2 -or @($segments | Where-Object {
+                [string]::IsNullOrEmpty($_) -or $_ -in @('.', '..') -or $_ -match '[\x00-\x1f]'
+            }).Count -gt 0) {
+        throw "$Label must be canonical, below a non-root directory, and contain no empty/dot segments."
+    }
+    if ($style -ceq 'windows' -and @($segments | Where-Object { $_ -match '[<>:"|?*]' }).Count -gt 0) {
+        throw "$Label contains a character forbidden in a canonical Windows path."
+    }
+
+    $lastSeparator = $Value.LastIndexOf($separator, [StringComparison]::Ordinal)
+    return [pscustomobject]@{
+        Style = $style
+        Parent = $Value.Substring(0, $lastSeparator)
+        Leaf = $segments[-1]
+    }
+}
+
+function Assert-CanonicalTaskStoragePathPair {
+    param(
+        [Parameter(Mandatory)] [string]$ConfigPath,
+        [Parameter(Mandatory)] [string]$TaskStoragePath,
+        [Parameter(Mandatory)] [string]$Label
+    )
+
+    $config = Get-CanonicalEvidencePathParts -Value $ConfigPath -Label "$Label configPath"
+    $storage = Get-CanonicalEvidencePathParts -Value $TaskStoragePath -Label "$Label taskStoragePath"
+    if ($config.Leaf -cnotin @('settings.json', 'config.json') -or $storage.Leaf -cne 'Tasks') {
+        throw "$Label must use settings.json/config.json and Tasks as exact leaf names."
+    }
+    $comparison = if ($config.Style -ceq 'windows') {
+        [StringComparison]::OrdinalIgnoreCase
+    } else {
+        [StringComparison]::Ordinal
+    }
+    if ($config.Style -cne $storage.Style -or
+        -not [string]::Equals($config.Parent, $storage.Parent, $comparison)) {
+        throw "$Label configPath and taskStoragePath must share one canonical isolated parent directory."
     }
 }
 
@@ -843,12 +949,14 @@ function Convert-WindowsNativeEvidence {
     if ([string]$portable.smoke.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)" -or
         [string]$setup.smoke.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)" -or
         $setup.uninstallVerified -ne $true) { throw 'Windows native evidence lacks exact portable/setup launch or uninstall proof.' }
+    Assert-SeededTaskStorageEvidence -Evidence $portable.smoke -Label 'Windows portable smoke evidence'
+    Assert-SeededTaskStorageEvidence -Evidence $setup.smoke -Label 'Windows setup smoke evidence'
     $retry = Get-PropertyValue -Object $report -Name 'retry' -Required
     if ([string]$retry.classification -cne 'deterministic' -or [int]$retry.attempt -ne 1 -or [int]$retry.maxAttempts -ne 1) {
         throw 'Windows native evidence violates the deterministic retry contract.'
     }
     return New-NativeCell -Id 'windows-server-2022-x64' -Platform windows -Architecture x64 -OsName 'Windows Server' -OsVersion '2022' `
-        -NativeMode 'setup-and-portable-install-launch' -Metadata pass -Install pass -Launch pass -Signature stateRecorded `
+        -NativeMode 'setup-and-portable-install-launch-with-seeded-isolated-task-storage' -Metadata pass -Install pass -Launch pass -Signature stateRecorded `
         -NegativeControl notApplicable -DirectFuse notApplicable -EvidenceFile ([IO.Path]::GetFileName($Path)) `
         -EvidenceSha256 $InputEvidence.sha256 -CellAssetIds $assetIds
 }
@@ -919,12 +1027,14 @@ function Convert-MacNativeEvidence {
     }
     if ([string]$report.portable.smoke.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)" -or
         [string]$report.setup.smoke.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)") { throw "macOS $architecture launch evidence is incomplete." }
+    Assert-SeededTaskStorageEvidence -Evidence $report.portable.smoke -Label "macOS $architecture portable smoke evidence"
+    Assert-SeededTaskStorageEvidence -Evidence $report.setup.smoke -Label "macOS $architecture setup smoke evidence"
     $retry = Get-PropertyValue -Object $report -Name 'retry' -Required
     if ([string]$retry.classification -cne 'deterministic' -or [int]$retry.attempt -ne 1 -or [int]$retry.maxAttempts -ne 1) {
         throw "macOS $architecture native evidence violates the deterministic retry contract."
     }
     return New-NativeCell -Id "macos-15-$architecture" -Platform macos -Architecture $architecture -OsName macOS -OsVersion 15 `
-        -NativeMode 'package-and-portable-native-launch' -Metadata pass -Install pass -Launch pass -Signature stateRecorded `
+        -NativeMode 'package-and-portable-native-launch-with-seeded-isolated-task-storage' -Metadata pass -Install pass -Launch pass -Signature stateRecorded `
         -NegativeControl notApplicable -DirectFuse notApplicable -EvidenceFile ([IO.Path]::GetFileName($Path)) `
         -EvidenceSha256 $InputEvidence.sha256 -CellAssetIds @($assetIds)
 }
@@ -975,6 +1085,7 @@ function Convert-LinuxNativeEvidence {
         if ([string]$report.retryRule -cne 'deterministic' -or [string]$report.retryClassification -cne 'never' -or
             [string]$report.retryCleanup -cne 'none' -or [int]$report.attempt -ne 1 -or [int]$report.maxAttempts -ne 1 -or
             $report.retryExhausted -ne $false) { throw 'Linux metadata evidence violates deterministic retry semantics.' }
+        Assert-NotApplicableTaskStorageEvidence -Evidence $report -Label 'Linux metadata evidence'
         return $null
     }
     if ($mode -notin @('clean', 'upgrade', 'appimage', 'missing-runtime-negative')) { throw "Unknown Linux native mode '$mode'." }
@@ -1004,6 +1115,7 @@ function Convert-LinuxNativeEvidence {
     if ([string]$report.installedPackageClosureBeforeLaunch -cne [string]$report.installedPackageClosureAfterLaunch) {
         throw "Linux $mode report changed the target package closure during launch."
     }
+    Assert-SeededTaskStorageEvidence -Evidence $report -Label "Linux $mode launch evidence"
     $applicationLogFile = [string](Get-PropertyValue -Object $report -Name 'applicationLogFile' -Required)
     $applicationLogSha = [string](Get-PropertyValue -Object $report -Name 'applicationLogSha256' -Required)
     Assert-SafeFileName -Value $applicationLogFile -Label "Linux $mode application log file"
@@ -1029,7 +1141,7 @@ function Convert-LinuxNativeEvidence {
         if ([string]$report.appImageSha256 -cne [string]$appImage.sha256 -or
             [string]$report.appImageExecutableSha256 -cne [string]$report.debExecutableSha256) { throw 'AppImage report hash or inner executable parity is invalid.' }
         if ($report.windowVerified -ne $true -or [string]$report.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)" -or
-            [string]$report.launchMode -cne 'appimage-extract-and-run' -or [string]$report.directFuse -cne 'notVerified') {
+            [string]$report.launchMode -cne 'appimage-extract-and-run-with-seeded-isolated-task-storage' -or [string]$report.directFuse -cne 'notVerified') {
             throw 'AppImage report lacks extract-and-run proof or overstates direct FUSE.'
         }
         $expectedRuntimePackages = if ([string]$report.osVersion -ceq '12') {
@@ -1041,14 +1153,14 @@ function Convert-LinuxNativeEvidence {
     }
     elseif ($mode -ceq 'missing-runtime-negative') {
         if ($report.windowVerified -ne $false -or -not [string]::IsNullOrEmpty([string]$report.windowTitle) -or
-            [string]$report.launchMode -cne 'negative-missing-runtime-external-x11' -or
+            [string]$report.launchMode -cne 'negative-missing-runtime-external-x11-with-seeded-isolated-task-storage' -or
             [string]$report.elfClosureStatus -cne 'expectedFailure') {
             throw 'Missing-runtime negative must prove the expected loader/launch failure without a window.'
         }
     }
     else {
         if ($report.windowVerified -ne $true -or [string]$report.windowTitle -cne "Unlimotion $($IdentityProjection.normalizedVersion)" -or
-            [string]$report.launchMode -cne 'debian-package-external-x11') { throw "Linux $mode report lacks installed launch proof." }
+            [string]$report.launchMode -cne 'debian-package-external-x11-with-seeded-isolated-task-storage') { throw "Linux $mode report lacks installed launch proof." }
         if ([string]$report.elfClosureStatus -cne 'pass') { throw "Linux $mode report lacks a passing ELF closure." }
     }
     if ($mode -ceq 'upgrade') {
@@ -1056,7 +1168,7 @@ function Convert-LinuxNativeEvidence {
     }
     $suffix = if ($mode -ceq 'missing-runtime-negative') { 'missing-runtime-negative' } else { $mode }
     return New-NativeCell -Id "debian-$($report.osVersion)-x64-$suffix" -Platform linux -Architecture x64 -OsName debian -OsVersion ([string]$report.osVersion) `
-        -NativeMode $mode -Metadata pass -Install $(if ($mode -ceq 'appimage') { 'extractPassed' } else { 'pass' }) `
+        -NativeMode "$mode-with-seeded-isolated-task-storage" -Metadata pass -Install $(if ($mode -ceq 'appimage') { 'extractPassed' } else { 'pass' }) `
         -Launch $(if ($mode -ceq 'missing-runtime-negative') { 'expectedFailureObserved' } else { 'pass' }) -Signature notApplicable `
         -NegativeControl $(if ($mode -ceq 'missing-runtime-negative') { 'pass' } else { 'notApplicable' }) `
         -DirectFuse $(if ($mode -ceq 'appimage') { 'notVerified' } else { 'notApplicable' }) `

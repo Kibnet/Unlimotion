@@ -280,9 +280,12 @@ launch_app() {
   mkdir -p -- "$run_directory"
   local binary="$app/Contents/MacOS/Unlimotion.Desktop.ForMacBuild"
   local config="$run_directory/settings.json"
+  local task_storage="$run_directory/Tasks"
   local stdout="$run_directory/stdout.log"
   local stderr="$run_directory/stderr.log"
   local automation_stderr="$run_directory/osascript.stderr.log"
+  mkdir -p -- "$task_storage"
+  jq -cn --arg path "$task_storage" '{TaskStorage:{Path:$path,IsServerMode:"False"}}' >"$config"
   "$binary" "--config=$config" >"$stdout" 2>"$stderr" &
   local pid=$!
   local deadline=$((SECONDS + launch_timeout_seconds))
@@ -309,7 +312,15 @@ launch_app() {
     printf '%s did not show exact window title Unlimotion %s; observed %s; automation error: %s.\n' "$label" "$version" "$title" "$(tr '\n' ' ' < "$automation_stderr")" >&2
     return 1
   }
-  jq -cn --arg label "$label" --arg windowTitle "$title" --arg stdout "$stdout" --arg stderr "$stderr" --arg automationStderr "$automation_stderr" '{label:$label,windowTitle:$windowTitle,stdout:$stdout,stderr:$stderr,automationStderr:$automationStderr}'
+  jq -cn \
+    --arg label "$label" \
+    --arg windowTitle "$title" \
+    --arg configPath "$config" \
+    --arg taskStoragePath "$task_storage" \
+    --arg stdout "$stdout" \
+    --arg stderr "$stderr" \
+    --arg automationStderr "$automation_stderr" \
+    '{label:$label,windowTitle:$windowTitle,configPath:$configPath,taskStoragePath:$taskStoragePath,launchConfiguration:"seeded-isolated-task-storage",unconfiguredFirstRunVerified:false,stdout:$stdout,stderr:$stderr,automationStderr:$automationStderr}'
 }
 
 portable_metadata="$(inspect_app "$portable_app" 'portable')"

@@ -1021,6 +1021,181 @@ function Test-MacosCandidateSigningContract {
     }
 }
 
+function Test-MacosLaunchIsolationContract {
+    param([Parameter(Mandatory = $true)][string]$ValidatorText)
+
+    $normalized = $ValidatorText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $launchMatches = [regex]::Matches($normalized, '(?ms)^launch_app\(\) \{\n(?<body>.*?)^\}\n')
+    Assert-Condition ($launchMatches.Count -eq 1) 'macOS validator must contain exactly one launch_app function.'
+    $launchBody = $launchMatches[0].Groups['body'].Value
+
+    $requiredLines = @(
+        '  local config="$run_directory/settings.json"',
+        '  local task_storage="$run_directory/Tasks"',
+        '  mkdir -p -- "$task_storage"',
+        '  jq -cn --arg path "$task_storage" ''{TaskStorage:{Path:$path,IsServerMode:"False"}}'' >"$config"',
+        '  "$binary" "--config=$config" >"$stdout" 2>"$stderr" &'
+    )
+    foreach ($requiredLine in $requiredLines) {
+        Assert-Condition ([regex]::Matches($launchBody, "(?m)^$([regex]::Escape($requiredLine))$").Count -eq 1) `
+            "macOS launch isolation must contain exactly one required line: $requiredLine"
+    }
+
+    $previousIndex = -1
+    foreach ($requiredLine in $requiredLines) {
+        $currentIndex = $launchBody.IndexOf($requiredLine, [StringComparison]::Ordinal)
+        Assert-Condition ($currentIndex -gt $previousIndex) `
+            'macOS launch isolation order must be config path < task storage path < storage creation < config write < process launch.'
+        $previousIndex = $currentIndex
+    }
+    Assert-Condition ([regex]::Matches($launchBody, '(?m)^\s*(?:local\s+)?task_storage=').Count -eq 1) `
+        'macOS native smoke must assign task_storage exactly once.'
+    Assert-Condition ([regex]::Matches($launchBody, '(?m)>\s*"\$config"\s*$').Count -eq 1) `
+        'macOS native smoke must write the seeded config exactly once.'
+    Assert-Condition ($launchBody -cnotmatch '(?m)(?:task_storage=|--arg\s+path\s+)["'']/Tasks["'']') `
+        'macOS native smoke must not assign or write root-level /Tasks storage.'
+    Assert-Condition ([regex]::Matches($launchBody, '--arg configPath "\$config"').Count -eq 1 -and
+        [regex]::Matches($launchBody, '--arg taskStoragePath "\$task_storage"').Count -eq 1 -and
+        [regex]::Matches($launchBody, 'launchConfiguration:"seeded-isolated-task-storage"').Count -eq 1 -and
+        [regex]::Matches($launchBody, 'unconfiguredFirstRunVerified:false').Count -eq 1) `
+        'macOS smoke evidence must disclose seeded isolated storage and deny unconfigured first-run coverage.'
+}
+
+function Test-WindowsLaunchIsolationContract {
+    param([Parameter(Mandatory = $true)][string]$ValidatorText)
+
+    $normalized = $ValidatorText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $launchMatches = [regex]::Matches($normalized, '(?ms)^function Invoke-WindowSmoke \{\n(?<body>.*?)^\}\n')
+    Assert-Condition ($launchMatches.Count -eq 1) 'Windows validator must contain exactly one Invoke-WindowSmoke function.'
+    $launchBody = $launchMatches[0].Groups['body'].Value
+
+    $requiredLines = @(
+        "    `$runDirectory = Join-Path `$WorkDirectory ('window smoke ' + [Guid]::NewGuid().ToString('N'))",
+        "    `$config = Join-Path `$runDirectory 'settings.json'",
+        "    `$taskStorage = Join-Path `$runDirectory 'Tasks'",
+        '    New-Item -ItemType Directory -Force -Path $taskStorage | Out-Null',
+        "    @{ TaskStorage = @{ Path = `$taskStorage; IsServerMode = 'False' } } | ConvertTo-Json -Compress | Set-Content -LiteralPath `$config -Encoding utf8NoBOM",
+        '    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()',
+        '    $startInfo.UseShellExecute = $false',
+        '    $startInfo.ArgumentList.Add("--config=$config")',
+        '    $process = [System.Diagnostics.Process]::new()',
+        '    $process.StartInfo = $startInfo',
+        '        $started = $process.Start()'
+    )
+    $previousIndex = -1
+    foreach ($requiredLine in $requiredLines) {
+        Assert-Condition ([regex]::Matches($launchBody, "(?m)^$([regex]::Escape($requiredLine))$").Count -eq 1) `
+            "Windows launch isolation must contain exactly one required line: $requiredLine"
+        $currentIndex = $launchBody.IndexOf($requiredLine, [StringComparison]::Ordinal)
+        Assert-Condition ($currentIndex -gt $previousIndex) `
+            'Windows launch isolation order must be spaced run directory < config path < task storage path < storage creation < config write < ProcessStartInfo < ArgumentList binding < process launch.'
+        $previousIndex = $currentIndex
+    }
+    Assert-Condition ([regex]::Matches($launchBody, '(?m)^\s*\$taskStorage\s*=').Count -eq 1) `
+        'Windows native smoke must assign taskStorage exactly once.'
+    Assert-Condition ([regex]::Matches($launchBody, '(?m)Set-Content -LiteralPath \$config\b').Count -eq 1) `
+        'Windows native smoke must write the seeded config exactly once.'
+    Assert-Condition ([regex]::Matches($launchBody, '(?m)^    \$startInfo\.ArgumentList\.Add\("--config=\$config"\)$').Count -eq 1 -and
+        [regex]::Matches($launchBody, '(?i)(?<!-)--?config=').Count -eq 1 -and
+        $launchBody -cnotmatch '(?m)Start-Process\b|\.Arguments\s*=') `
+        'Windows native smoke must preserve the spaced config path through ProcessStartInfo.ArgumentList.'
+    Assert-Condition ($launchBody -cnotmatch '(?im)(?:=|Path\s*=)\s*[''"](?:[A-Z]:\\Tasks|/Tasks)[''"]') `
+        'Windows native smoke must not assign or write root-level Tasks storage.'
+    foreach ($evidenceLine in @(
+            '            taskStoragePath = $taskStorage',
+            "            launchConfiguration = 'seeded-isolated-task-storage'",
+            '            unconfiguredFirstRunVerified = $false')) {
+        Assert-Condition ([regex]::Matches($launchBody, "(?m)^$([regex]::Escape($evidenceLine))$").Count -eq 1) `
+            "Windows smoke evidence must contain exactly one disclosure line: $evidenceLine"
+    }
+}
+
+function Test-ProcessArgumentListPreservesSpacedConfigPath {
+    $expected = '--config=C:\temporary path\settings.json'
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = Resolve-PythonExecutable
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in @(
+            '-c',
+            'import sys; assert len(sys.argv) == 2; sys.stdout.write(sys.argv[1])',
+            $expected)) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { throw 'ProcessStartInfo spaced-path probe did not start.' }
+        $actual = $process.StandardOutput.ReadToEnd()
+        $errorText = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0 -or $actual -cne $expected) {
+            throw "ProcessStartInfo.ArgumentList did not preserve the exact spaced config argument. Exit=$($process.ExitCode); Actual='$actual'; Error='$errorText'."
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
+function Test-LinuxLaunchIsolationContract {
+    param([Parameter(Mandatory = $true)][string]$ValidatorText)
+
+    $normalized = $ValidatorText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $userMatches = [regex]::Matches($normalized, '(?ms)^ensure_test_user\(\) \{\n(?<body>.*?)^\}\n')
+    Assert-Condition ($userMatches.Count -eq 1) 'Linux validator must contain exactly one ensure_test_user function.'
+    $userBody = $userMatches[0].Groups['body'].Value
+    $requiredLines = @(
+        '    install -d -o 10001 -g 10001 /home/unlimotion-test/unlimotion-data/Tasks',
+        '    printf ''%s\n'' ''{"TaskStorage":{"Path":"/home/unlimotion-test/unlimotion-data/Tasks","IsServerMode":"False"}}'' > /home/unlimotion-test/unlimotion-data/config.json',
+        '    chown 10001:10001 /home/unlimotion-test/unlimotion-data/config.json',
+        '  CONFIG_PATH=''/home/unlimotion-test/unlimotion-data/config.json''',
+        '  TASK_STORAGE_PATH=''/home/unlimotion-test/unlimotion-data/Tasks''',
+        '  LAUNCH_CONFIGURATION=''seeded-isolated-task-storage'''
+    )
+    $previousIndex = -1
+    foreach ($requiredLine in $requiredLines) {
+        Assert-Condition ([regex]::Matches($userBody, "(?m)^$([regex]::Escape($requiredLine))$").Count -eq 1) `
+            "Linux launch isolation must contain exactly one required line: $requiredLine"
+        $currentIndex = $userBody.IndexOf($requiredLine, [StringComparison]::Ordinal)
+        Assert-Condition ($currentIndex -gt $previousIndex) `
+            'Linux launch isolation order must be task storage creation < config write < config ownership < evidence state transition.'
+        $previousIndex = $currentIndex
+    }
+    Assert-Condition ([regex]::Matches($userBody, '(?m)>\s*/home/unlimotion-test/unlimotion-data/config\.json\s*$').Count -eq 1) `
+        'Linux native smoke must write the seeded config exactly once.'
+    Assert-Condition ($userBody -cnotmatch '"Path":"/Tasks"') `
+        'Linux native smoke must not overwrite the seeded config with root-level /Tasks storage.'
+    Assert-Condition ([regex]::Matches($normalized, '--config=/home/unlimotion-test/unlimotion-data/config\.json').Count -eq 1) `
+        'Linux missing-runtime launch must use the seeded isolated config exactly once.'
+    Assert-Condition ([regex]::Matches($normalized, 'local config_path=''/home/unlimotion-test/unlimotion-data/config\.json''').Count -eq 1) `
+        'Linux positive launch must bind the seeded isolated config exactly once.'
+    Assert-Condition ([regex]::Matches($normalized, '(?m)^    "\$executable" "--config=\$config_path" > "\$app_log" 2>&1 &$').Count -eq 1 -and
+        [regex]::Matches($normalized, '(?i)(?<!-)--?config=').Count -eq 2) `
+        'Linux positive and negative launches must each pass exactly one seeded config argument.'
+    foreach ($evidencePattern in @(
+            'CONFIG_PATH=""',
+            'TASK_STORAGE_PATH=""',
+            'LAUNCH_CONFIGURATION="notApplicable"',
+            'UNCONFIGURED_FIRST_RUN_VERIFIED=false',
+            '"launchConfiguration": %s,\n'' "$(json_string "$LAUNCH_CONFIGURATION")"',
+            '"unconfiguredFirstRunVerified": %s,\n'' "$UNCONFIGURED_FIRST_RUN_VERIFIED"',
+            'appimage-extract-and-run-with-seeded-isolated-task-storage',
+            'debian-package-external-x11-with-seeded-isolated-task-storage',
+            'negative-missing-runtime-external-x11-with-seeded-isolated-task-storage')) {
+        Assert-Condition ([regex]::Matches($normalized, [regex]::Escape($evidencePattern)).Count -eq 1) `
+            "Linux smoke evidence must contain exactly one configured-launch disclosure: $evidencePattern"
+    }
+    $executionCaseMatches = [regex]::Matches(
+        $normalized,
+        '(?ms)^CURRENT_STEP="artifact-metadata"\ncase "\$MODE" in\n(?<body>.*?)^esac$')
+    Assert-Condition ($executionCaseMatches.Count -eq 1) 'Linux validator must contain exactly one final mode execution case.'
+    $metadataMatches = [regex]::Matches($executionCaseMatches[0].Groups['body'].Value, '(?ms)^  metadata\)\n(?<body>.*?)^    ;;$')
+    Assert-Condition ($metadataMatches.Count -eq 1 -and $metadataMatches[0].Groups['body'].Value -cnotmatch 'ensure_test_user|LAUNCH_CONFIGURATION=') `
+        'Linux metadata mode must not seed or claim launch configuration.'
+}
+
 function Get-WorkflowNamedStepBlock {
     param(
         [Parameter(Mandatory = $true)][string]$WorkflowText,
@@ -2405,15 +2580,16 @@ function New-NativeCellFixture {
     }
     if ($Id -ceq 'windows-server-2022-x64') {
         $common.platform = 'windows'; $common.architecture = 'x64'; $common.osName = 'Windows Server'; $common.osVersion = '2022'
-        $common.mode = 'setup-and-portable-install-launch'; $common.signature = 'stateRecorded'; $common.assetIds = @('windows-setup-x64', 'windows-portable-x64')
+        $common.mode = 'setup-and-portable-install-launch-with-seeded-isolated-task-storage'; $common.signature = 'stateRecorded'; $common.assetIds = @('windows-setup-x64', 'windows-portable-x64')
     }
     elseif ($Id -match '^debian-(12|13)-x64-(clean|upgrade|appimage|missing-runtime-negative)$') {
-        $common.platform = 'linux'; $common.architecture = 'x64'; $common.osName = 'debian'; $common.osVersion = $Matches[1]; $common.mode = $Matches[2]
-        if ($common.mode -ceq 'appimage') {
+        $linuxMode = $Matches[2]
+        $common.platform = 'linux'; $common.architecture = 'x64'; $common.osName = 'debian'; $common.osVersion = $Matches[1]; $common.mode = "$linuxMode-with-seeded-isolated-task-storage"
+        if ($linuxMode -ceq 'appimage') {
             $common.assetIds = [string[]]@('linux-deb-x64', 'linux-appimage-x64')
             $common.install = 'extractPassed'; $common.directFuse = 'notVerified'
         }
-        elseif ($common.mode -ceq 'missing-runtime-negative') {
+        elseif ($linuxMode -ceq 'missing-runtime-negative') {
             $common.assetIds = [string[]]@('linux-deb-x64')
             $common.launch = 'expectedFailureObserved'; $common.negativeControl = 'pass'
         }
@@ -2421,7 +2597,7 @@ function New-NativeCellFixture {
     }
     elseif ($Id -match '^macos-15-(x64|arm64)$') {
         $common.platform = 'macos'; $common.architecture = $Matches[1]; $common.osName = 'macOS'; $common.osVersion = '15'
-        $common.mode = 'package-and-portable-native-launch'; $common.signature = 'stateRecorded'; $common.assetIds = @("macos-$($Matches[1])-setup", "macos-$($Matches[1])-portable")
+        $common.mode = 'package-and-portable-native-launch-with-seeded-isolated-task-storage'; $common.signature = 'stateRecorded'; $common.assetIds = @("macos-$($Matches[1])-setup", "macos-$($Matches[1])-portable")
     }
     elseif ($Id -match '^android-(arm64|x64)-apk-metadata$') {
         $common.platform = 'android'; $common.architecture = $Matches[1]; $common.osName = 'android'; $common.osVersion = 'notApplicable'
@@ -3304,6 +3480,103 @@ function Test-AndroidNativeEvidenceConverters {
     }
 }
 
+function Test-TaskStorageEvidenceContracts {
+    try {
+        . $script:artifactValidatorPath `
+            -Mode Validate `
+            -Manifest $script:manifestPath `
+            -SupportMatrix $script:supportMatrixPath `
+            -EvidenceSchema $script:evidenceSchemaPath
+    }
+    catch {
+        if ($_.Exception.Message -notlike 'Validate mode requires*') { throw }
+    }
+
+    $seeded = [pscustomobject][ordered]@{
+        launchConfiguration = 'seeded-isolated-task-storage'
+        unconfiguredFirstRunVerified = $false
+        configPath = '/tmp/window smoke/settings.json'
+        taskStoragePath = '/tmp/window smoke/Tasks'
+    }
+    Assert-SeededTaskStorageEvidence -Evidence $seeded -Label 'positive seeded task-storage fixture'
+    Assert-SeededTaskStorageEvidence -Evidence ([pscustomobject][ordered]@{
+            launchConfiguration = 'seeded-isolated-task-storage'
+            unconfiguredFirstRunVerified = $false
+            configPath = 'D:\runner work\window smoke\settings.json'
+            taskStoragePath = 'D:\runner work\window smoke\Tasks'
+        }) -Label 'positive Windows seeded task-storage fixture'
+
+    foreach ($variant in @(
+            [pscustomobject]@{ Name = 'seeded-first-run-string-false'; Value = 'false'; Pattern = 'must be a JSON boolean' },
+            [pscustomobject]@{ Name = 'seeded-first-run-number-zero'; Value = 0; Pattern = 'must be a JSON boolean' },
+            [pscustomobject]@{ Name = 'seeded-first-run-true'; Value = $true; Pattern = 'must identify seeded isolated task storage' })) {
+        $badBoolean = Copy-JsonObject $seeded
+        $badBoolean.unconfiguredFirstRunVerified = $variant.Value
+        Assert-Throws -Name $variant.Name -MessagePattern $variant.Pattern -Action {
+            Assert-SeededTaskStorageEvidence -Evidence $badBoolean -Label $variant.Name
+        }
+    }
+
+    $missingBoolean = Copy-JsonObject $seeded
+    $missingBoolean.PSObject.Properties.Remove('unconfiguredFirstRunVerified')
+    Assert-Throws -Name 'seeded-first-run-boolean-missing' -MessagePattern 'Required property.*is missing' -Action {
+        Assert-SeededTaskStorageEvidence -Evidence $missingBoolean -Label 'missing seeded boolean'
+    }
+
+    $metadata = [pscustomobject][ordered]@{
+        launchConfiguration = 'notApplicable'
+        unconfiguredFirstRunVerified = $false
+        configPath = ''
+        taskStoragePath = ''
+    }
+    Assert-NotApplicableTaskStorageEvidence -Evidence $metadata -Label 'positive Linux metadata fixture'
+
+    $metadataOverclaim = Copy-JsonObject $seeded
+    Assert-Throws -Name 'linux-metadata-configured-storage-overclaim' -MessagePattern 'notApplicable' -Action {
+        Assert-NotApplicableTaskStorageEvidence -Evidence $metadataOverclaim -Label 'Linux metadata overclaim fixture'
+    }
+
+    $metadataNullPaths = Copy-JsonObject $metadata
+    $metadataNullPaths.configPath = $null
+    $metadataNullPaths.taskStoragePath = $null
+    Assert-Throws -Name 'linux-metadata-null-storage-paths' -MessagePattern 'must be a JSON string' -Action {
+        Assert-NotApplicableTaskStorageEvidence -Evidence $metadataNullPaths -Label 'Linux metadata null-path fixture'
+    }
+
+    foreach ($fixture in @(
+            [pscustomobject]@{
+                Name = 'seeded-relative-storage-paths'
+                ConfigPath = 'relative/settings.json'
+                TaskStoragePath = 'relative/Tasks'
+                Pattern = 'must be an absolute'
+            },
+            [pscustomobject]@{
+                Name = 'seeded-traversal-storage-path'
+                ConfigPath = '/tmp/window/settings.json'
+                TaskStoragePath = '/tmp/window/../../Tasks'
+                Pattern = 'no empty/dot segments'
+            },
+            [pscustomobject]@{
+                Name = 'seeded-mismatched-storage-parent'
+                ConfigPath = '/tmp/window-one/settings.json'
+                TaskStoragePath = '/tmp/window-two/Tasks'
+                Pattern = 'share one canonical isolated parent'
+            },
+            [pscustomobject]@{
+                Name = 'seeded-root-storage-path'
+                ConfigPath = '/settings.json'
+                TaskStoragePath = '/Tasks'
+                Pattern = 'below a non-root directory'
+            })) {
+        $badPaths = Copy-JsonObject $seeded
+        $badPaths.configPath = $fixture.ConfigPath
+        $badPaths.taskStoragePath = $fixture.TaskStoragePath
+        Assert-Throws -Name $fixture.Name -MessagePattern $fixture.Pattern -Action {
+            Assert-SeededTaskStorageEvidence -Evidence $badPaths -Label $fixture.Name
+        }
+    }
+}
+
 function ConvertTo-NormalizedMsBuildPath {
     param([AllowEmptyString()][string]$Value)
 
@@ -4068,6 +4341,145 @@ if ($Area -in @('All', 'WorkflowSecurity')) {
     Test-MacosCandidateSigningContract -BuilderText $macosBuilderText
     Add-Check -Name 'macos-signing:velopack-and-legacy-bundles-adhoc-sealed'
 
+    $macosValidatorPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\test-macos-distribution.sh') `
+        -DisplayName 'macOS distribution validator'
+    $macosValidatorText = Get-Content -LiteralPath $macosValidatorPath -Raw -Encoding utf8
+    Test-MacosLaunchIsolationContract -ValidatorText $macosValidatorText
+    Add-Check -Name 'macos-launch:isolated-writable-task-storage'
+
+    $windowsValidatorPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\Test-WindowsDistribution.ps1') `
+        -DisplayName 'Windows distribution validator'
+    $windowsValidatorText = Get-Content -LiteralPath $windowsValidatorPath -Raw -Encoding utf8
+    Test-WindowsLaunchIsolationContract -ValidatorText $windowsValidatorText
+    Add-Check -Name 'windows-launch:isolated-writable-task-storage'
+    Test-ProcessArgumentListPreservesSpacedConfigPath
+    Add-Check -Name 'windows-launch:argument-list-preserves-spaced-config-path'
+
+    $linuxValidatorPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\smoke-linux-artifacts.sh') `
+        -DisplayName 'Linux distribution validator'
+    $linuxValidatorText = Get-Content -LiteralPath $linuxValidatorPath -Raw -Encoding utf8
+    Test-LinuxLaunchIsolationContract -ValidatorText $linuxValidatorText
+    Add-Check -Name 'linux-launch:isolated-writable-task-storage'
+
+    $macosLaunchIsolationFixtures = @(
+        [pscustomobject]@{
+            Name = 'macos-launch-task-storage-config-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^  jq -cn --arg path "\$task_storage" .+$' `
+                -Replacement '  # isolated TaskStorage config removed by fixture' `
+                -Name 'macos-launch-task-storage-config-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-launch-root-task-storage-forbidden'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^  local task_storage="\$run_directory/Tasks"$' `
+                -Replacement '  local task_storage="/Tasks"' `
+                -Name 'macos-launch-root-task-storage-forbidden'
+        },
+        [pscustomobject]@{
+            Name = 'macos-launch-late-root-task-storage-reassignment'
+            Text = Replace-WorkflowFixtureOnce -Text $macosValidatorText `
+                -Pattern '(?m)^  local task_storage="\$run_directory/Tasks"$' `
+                -Replacement "  local task_storage=`"`$run_directory/Tasks`"`n  task_storage=`"/Tasks`"" `
+                -Name 'macos-launch-late-root-task-storage-reassignment'
+        }
+    )
+    foreach ($macosLaunchIsolationFixture in $macosLaunchIsolationFixtures) {
+        Assert-Throws -Name $macosLaunchIsolationFixture.Name -Action {
+            Test-MacosLaunchIsolationContract -ValidatorText $macosLaunchIsolationFixture.Text
+        }
+    }
+
+    $windowsLaunchIsolationFixtures = @(
+        [pscustomobject]@{
+            Name = 'windows-launch-task-storage-config-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $windowsValidatorText `
+                -Pattern '(?m)^    @\{ TaskStorage = .+$' `
+                -Replacement '    # isolated TaskStorage config removed by fixture' `
+                -Name 'windows-launch-task-storage-config-missing'
+        },
+        [pscustomobject]@{
+            Name = 'windows-launch-root-task-storage-forbidden'
+            Text = Replace-WorkflowFixtureOnce -Text $windowsValidatorText `
+                -Pattern '(?m)^    \$taskStorage = Join-Path \$runDirectory ''Tasks''$' `
+                -Replacement "    `$taskStorage = 'C:\Tasks'" `
+                -Name 'windows-launch-root-task-storage-forbidden'
+        },
+        [pscustomobject]@{
+            Name = 'windows-launch-late-root-task-storage-reassignment'
+            Text = Replace-WorkflowFixtureOnce -Text $windowsValidatorText `
+                -Pattern '(?m)^    \$taskStorage = Join-Path \$runDirectory ''Tasks''$' `
+                -Replacement "    `$taskStorage = Join-Path `$runDirectory 'Tasks'`n    `$taskStorage = 'C:\Tasks'" `
+                -Name 'windows-launch-late-root-task-storage-reassignment'
+        },
+        [pscustomobject]@{
+            Name = 'windows-launch-flattened-config-argument'
+            Text = Replace-WorkflowFixtureOnce -Text $windowsValidatorText `
+                -Pattern '(?m)^    \$startInfo\.ArgumentList\.Add\("--config=\$config"\)$' `
+                -Replacement '    $process = Start-Process -FilePath $Executable -ArgumentList "--config=$config" -PassThru' `
+                -Name 'windows-launch-flattened-config-argument'
+        },
+        [pscustomobject]@{
+            Name = 'windows-launch-competing-single-dash-config-argument'
+            Text = Replace-WorkflowFixtureOnce -Text $windowsValidatorText `
+                -Pattern '(?m)^    \$startInfo\.ArgumentList\.Add\("--config=\$config"\)$' `
+                -Replacement "    `$startInfo.ArgumentList.Add(`"-config=C:\Tasks\settings.json`")`n    `$startInfo.ArgumentList.Add(`"--config=`$config`")" `
+                -Name 'windows-launch-competing-single-dash-config-argument'
+        }
+    )
+    foreach ($windowsLaunchIsolationFixture in $windowsLaunchIsolationFixtures) {
+        Assert-Throws -Name $windowsLaunchIsolationFixture.Name -Action {
+            Test-WindowsLaunchIsolationContract -ValidatorText $windowsLaunchIsolationFixture.Text
+        }
+    }
+
+    $linuxLateRootRewrite = @'
+    printf '%s\n' '{"TaskStorage":{"Path":"/home/unlimotion-test/unlimotion-data/Tasks","IsServerMode":"False"}}' > /home/unlimotion-test/unlimotion-data/config.json
+    printf '%s\n' '{"TaskStorage":{"Path":"/Tasks","IsServerMode":"False"}}' > /home/unlimotion-test/unlimotion-data/config.json
+'@.TrimEnd()
+    $linuxLaunchIsolationFixtures = @(
+        [pscustomobject]@{
+            Name = 'linux-launch-task-storage-config-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $linuxValidatorText `
+                -Pattern '(?m)^    printf ''%s\\n'' ''\{"TaskStorage".+$' `
+                -Replacement '    # isolated TaskStorage config removed by fixture' `
+                -Name 'linux-launch-task-storage-config-missing'
+        },
+        [pscustomobject]@{
+            Name = 'linux-launch-root-task-storage-forbidden'
+            Text = Replace-WorkflowFixtureOnce -Text $linuxValidatorText `
+                -Pattern '"Path":"/home/unlimotion-test/unlimotion-data/Tasks"' `
+                -Replacement '"Path":"/Tasks"' `
+                -Name 'linux-launch-root-task-storage-forbidden'
+        },
+        [pscustomobject]@{
+            Name = 'linux-launch-late-root-task-storage-rewrite'
+            Text = Replace-WorkflowFixtureOnce -Text $linuxValidatorText `
+                -Pattern '(?m)^    printf ''%s\\n'' ''\{"TaskStorage".+$' `
+                -Replacement $linuxLateRootRewrite `
+                -Name 'linux-launch-late-root-task-storage-rewrite'
+        },
+        [pscustomobject]@{
+            Name = 'linux-metadata-seeded-storage-overclaim'
+            Text = Replace-WorkflowFixtureOnce -Text $linuxValidatorText `
+                -Pattern '(?m)^LAUNCH_CONFIGURATION="notApplicable"$' `
+                -Replacement 'LAUNCH_CONFIGURATION="seeded-isolated-task-storage"' `
+                -Name 'linux-metadata-seeded-storage-overclaim'
+        },
+        [pscustomobject]@{
+            Name = 'linux-launch-competing-single-dash-config-argument'
+            Text = Replace-WorkflowFixtureOnce -Text $linuxValidatorText `
+                -Pattern '(?m)^    "\$executable" "--config=\$config_path" > "\$app_log" 2>&1 &$' `
+                -Replacement '    "$executable" "-config=/Tasks/settings.json" "--config=$config_path" > "$app_log" 2>&1 &' `
+                -Name 'linux-launch-competing-single-dash-config-argument'
+        }
+    )
+    foreach ($linuxLaunchIsolationFixture in $linuxLaunchIsolationFixtures) {
+        Assert-Throws -Name $linuxLaunchIsolationFixture.Name -Action {
+            Test-LinuxLaunchIsolationContract -ValidatorText $linuxLaunchIsolationFixture.Text
+        }
+    }
+
     $macosSigningFixtures = @(
         [pscustomobject]@{
             Name = 'macos-vpk-adhoc-signing-missing'
@@ -4366,6 +4778,7 @@ if ($Area -in @('All', 'WorkflowSecurity')) {
 if ($Area -in @('All', 'Evidence')) {
     $identity = Invoke-ResolverDocument -RawTag 'v1.2.3' -IncludeSupportMatrix
     Test-AndroidNativeEvidenceConverters -IdentityDocument $identity
+    Test-TaskStorageEvidenceContracts
     $platformFixtures = @(New-PlatformEvidenceFixtures -ManifestDocument $manifestDocument -IdentityDocument $identity)
     foreach ($platformFixture in $platformFixtures) {
         Assert-JsonObjectSchema -Document $platformFixture -SchemaPath $script:evidenceSchemaPath -Name "platform-$($platformFixture.platform)-$($platformFixture.architecture)"
@@ -4430,6 +4843,12 @@ if ($Area -in @('All', 'Evidence')) {
             Invoke-AggregateFixture -Root (Join-Path $temporaryRoot 'failed-cell') -IdentityDocument $identity -Platforms $failedCell
         }
 
+        $unconfiguredLaunchClaim = Copy-JsonObject $platformFixtures
+        @($unconfiguredLaunchClaim | Where-Object platform -CEQ 'windows')[0].nativeCells[0].mode = 'setup-and-portable-install-launch'
+        Assert-Throws -Name 'aggregate-unconfigured-first-run-overclaim' -Action {
+            Invoke-AggregateFixture -Root (Join-Path $temporaryRoot 'unconfigured-first-run-overclaim') -IdentityDocument $identity -Platforms $unconfiguredLaunchClaim
+        }
+
         $wrongMode = Copy-JsonObject $platformFixtures
         @($wrongMode | Where-Object platform -CEQ 'linux')[0].transport.unixMode.tarStoredMode = '0644'
         Assert-Throws -Name 'transport-wrong-tar-mode' -Action {
@@ -4470,6 +4889,7 @@ if ($Area -in @('All', 'Evidence')) {
     }
     Add-Check -Name 'evidence:transport-receipt-explicit-na-and-unix-mode'
     Add-Check -Name 'evidence:missing-failed-wrong-os-arch-fail-closed'
+    Add-Check -Name 'evidence:task-storage-launch-state-strictly-typed'
     $areasRun.Add('Evidence')
 }
 

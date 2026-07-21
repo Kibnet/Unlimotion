@@ -130,20 +130,38 @@ function Invoke-WindowSmoke {
         [Parameter(Mandatory)] [string]$WorkDirectory
     )
 
-    $runDirectory = Join-Path $WorkDirectory ([Guid]::NewGuid().ToString('N'))
+    $runDirectory = Join-Path $WorkDirectory ('window smoke ' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $runDirectory | Out-Null
     $config = Join-Path $runDirectory 'settings.json'
+    $taskStorage = Join-Path $runDirectory 'Tasks'
     $stdout = Join-Path $runDirectory 'stdout.log'
     $stderr = Join-Path $runDirectory 'stderr.log'
-    $process = Start-Process -FilePath $Executable -ArgumentList "--config=$config" -WorkingDirectory $runDirectory -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    New-Item -ItemType Directory -Force -Path $taskStorage | Out-Null
+    @{ TaskStorage = @{ Path = $taskStorage; IsServerMode = 'False' } } | ConvertTo-Json -Compress | Set-Content -LiteralPath $config -Encoding utf8NoBOM
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.WorkingDirectory = $runDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.ArgumentList.Add("--config=$config")
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $started = $false
+    $stdoutTask = $null
+    $stderrTask = $null
     try {
+        $started = $process.Start()
+        if (-not $started) { throw "$Label process did not start." }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
         $deadline = [DateTime]::UtcNow.AddSeconds($LaunchTimeoutSeconds)
         $windowTitle = ''
         do {
             Start-Sleep -Milliseconds 500
             $process.Refresh()
             if ($process.HasExited) {
-                $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { '' }
+                $errorText = $stderrTask.GetAwaiter().GetResult()
                 throw "$Label exited before a window appeared (exit $($process.ExitCode)). $errorText"
             }
             $windowTitle = [string]$process.MainWindowTitle
@@ -157,14 +175,23 @@ function Invoke-WindowSmoke {
             processId = $process.Id
             windowTitle = $windowTitle
             configPath = $config
+            taskStoragePath = $taskStorage
+            launchConfiguration = 'seeded-isolated-task-storage'
+            unconfiguredFirstRunVerified = $false
             stdout = $stdout
             stderr = $stderr
         }
     }
     finally {
-        if (-not $process.HasExited) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            $process.WaitForExit(10000) | Out-Null
+        if ($started) {
+            if (-not $process.HasExited) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                $process.WaitForExit(10000) | Out-Null
+            }
+            $stdoutText = if ($null -eq $stdoutTask) { '' } else { $stdoutTask.GetAwaiter().GetResult() }
+            $stderrText = if ($null -eq $stderrTask) { '' } else { $stderrTask.GetAwaiter().GetResult() }
+            [System.IO.File]::WriteAllText($stdout, $stdoutText, [System.Text.UTF8Encoding]::new($false))
+            [System.IO.File]::WriteAllText($stderr, $stderrText, [System.Text.UTF8Encoding]::new($false))
         }
         $process.Dispose()
     }

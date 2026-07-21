@@ -37,6 +37,10 @@ POST_CLOSURE_SHA=""
 ELF_CLOSURE_STATUS="notRun"
 WINDOW_VERIFIED=false
 LAUNCH_MODE="notRun"
+CONFIG_PATH=""
+TASK_STORAGE_PATH=""
+LAUNCH_CONFIGURATION="notApplicable"
+UNCONFIGURED_FIRST_RUN_VERIFIED=false
 APT_ATTEMPT=0
 DEB_SHA256=""
 APPIMAGE_SHA256=""
@@ -155,6 +159,10 @@ write_report() {
     printf '  "installedPackageClosureAfterLaunch": %s,\n' "$(json_string "$POST_CLOSURE_SHA")"
     printf '  "guiHarnessLocation": "external-sidecar",\n'
     printf '  "launchMode": %s,\n' "$(json_string "$LAUNCH_MODE")"
+    printf '  "configPath": %s,\n' "$(json_string "$CONFIG_PATH")"
+    printf '  "taskStoragePath": %s,\n' "$(json_string "$TASK_STORAGE_PATH")"
+    printf '  "launchConfiguration": %s,\n' "$(json_string "$LAUNCH_CONFIGURATION")"
+    printf '  "unconfiguredFirstRunVerified": %s,\n' "$UNCONFIGURED_FIRST_RUN_VERIFIED"
     printf '  "windowTitle": %s,\n' "$(json_string "$WINDOW_TITLE")"
     printf '  "windowVerified": %s,\n' "$WINDOW_VERIFIED"
     printf '  "directFuse": "notVerified",\n'
@@ -699,7 +707,13 @@ ensure_test_user() {
       useradd --create-home --uid 10001 --shell /bin/sh unlimotion-test
     fi
     install -d -o 10001 -g 10001 /home/unlimotion-test/unlimotion-data
+    install -d -o 10001 -g 10001 /home/unlimotion-test/unlimotion-data/Tasks
+    printf '%s\n' '{"TaskStorage":{"Path":"/home/unlimotion-test/unlimotion-data/Tasks","IsServerMode":"False"}}' > /home/unlimotion-test/unlimotion-data/config.json
+    chown 10001:10001 /home/unlimotion-test/unlimotion-data/config.json
   '
+  CONFIG_PATH='/home/unlimotion-test/unlimotion-data/config.json'
+  TASK_STORAGE_PATH='/home/unlimotion-test/unlimotion-data/Tasks'
+  LAUNCH_CONFIGURATION='seeded-isolated-task-storage'
 }
 
 discover_target_app_pid() {
@@ -752,10 +766,10 @@ launch_and_verify_window() {
   if [[ "$artifact_kind" == appimage ]]; then
     environment_args+=(-e APPIMAGE_EXTRACT_AND_RUN=1)
     executable='/candidates/candidate.AppImage'
-    LAUNCH_MODE='appimage-extract-and-run'
+    LAUNCH_MODE='appimage-extract-and-run-with-seeded-isolated-task-storage'
   else
     executable='/usr/bin/Unlimotion'
-    LAUNCH_MODE='debian-package-external-x11'
+    LAUNCH_MODE='debian-package-external-x11-with-seeded-isolated-task-storage'
   fi
 
   "$CONTAINER_CLI" exec "${environment_args[@]}" "$TARGET_NAME" \
@@ -868,7 +882,7 @@ run_missing_runtime_negative() {
   ensure_test_user
   start_external_harness
   PRE_CLOSURE_SHA="$(package_closure_hash)"
-  LAUNCH_MODE='negative-missing-runtime-external-x11'
+  LAUNCH_MODE='negative-missing-runtime-external-x11-with-seeded-isolated-task-storage'
 
   "$CONTAINER_CLI" exec --user 10001:10001 -e HOME=/home/unlimotion-test -e DISPLAY=:99 "$TARGET_NAME" \
     /usr/bin/Unlimotion --config=/home/unlimotion-test/unlimotion-data/config.json > "$app_log" 2>&1 &
