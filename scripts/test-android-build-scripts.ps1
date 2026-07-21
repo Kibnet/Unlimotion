@@ -343,6 +343,47 @@ function Assert-SingleArtifactDownloadsAreFlat {
     }
 }
 
+function Assert-EmulatorToolPathContract {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    foreach ($jobName in @('android_api23', 'android_api36')) {
+        $jobMatch = [regex]::Match(
+            $Content,
+            "(?ms)^  $([regex]::Escape($jobName)):\r?\n(?<job>.*?)(?=^  [a-z][a-z0-9_]*:\r?$|\z)"
+        )
+        if (-not $jobMatch.Success) {
+            throw "Distribution workflow is missing the $jobName job."
+        }
+
+        $installStep = [regex]::Match(
+            $jobMatch.Groups['job'].Value,
+            '(?ms)^      - name: Install API \d+ emulator image\s*\r?\n(?<step>.*?)(?=^      - name:|\z)'
+        )
+        if (-not $installStep.Success) {
+            throw "Distribution workflow $jobName job is missing its emulator install step."
+        }
+
+        $step = $installStep.Groups['step'].Value
+        $executableGuards = [regex]::Matches(
+            $step,
+            '(?m)^\s*test -x "\$\{ANDROID_SDK_ROOT\}/emulator/emulator"\s*$'
+        )
+        if ($executableGuards.Count -ne 1) {
+            throw "Distribution workflow $jobName job must verify its installed emulator executable exactly once; found $($executableGuards.Count)."
+        }
+
+        $pathExports = [regex]::Matches(
+            $step,
+            '(?m)^\s*echo "\$\{ANDROID_SDK_ROOT\}/emulator" >> "\$GITHUB_PATH"\s*$'
+        )
+        if ($pathExports.Count -ne 1) {
+            throw "Distribution workflow $jobName job must export its installed emulator directory through GITHUB_PATH exactly once; found $($pathExports.Count)."
+        }
+
+        Assert-Match $step '(?ms)sdkmanager --install\s+.*?"emulator".*?test -x "\$\{ANDROID_SDK_ROOT\}/emulator/emulator".*?echo "\$\{ANDROID_SDK_ROOT\}/emulator" >> "\$GITHUB_PATH"' "Distribution workflow $jobName emulator install, executable guard, and GITHUB_PATH export must stay ordered in one step."
+    }
+}
+
 $gitLink = (& git -C $rootDir ls-tree HEAD .native/libgit2-src) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $gitLink -notmatch '^160000\s+commit\s+[0-9a-f]{40}\s+\.native/libgit2-src$') {
     throw 'Expected .native/libgit2-src to be a committed gitlink; local static checks do not require an initialized submodule.'
@@ -470,6 +511,17 @@ Assert-NotMatch $workflow '/storage/emulated/0/nuget-local' 'android-packaging w
 Assert-AndroidWorkflowSecurity $workflow
 Assert-SingleArtifactDownloadsAreFlat -Content $workflow -Label 'android-packaging workflow'
 Assert-SingleArtifactDownloadsAreFlat -Content $distributionValidationWorkflow -Label 'distribution-validation workflow'
+Assert-EmulatorToolPathContract -Content $distributionValidationWorkflow
+
+$missingEmulatorPathFixture = [regex]::Replace(
+    $distributionValidationWorkflow,
+    '(?m)^\s*echo "\$\{ANDROID_SDK_ROOT\}/emulator" >> "\$GITHUB_PATH"\s*\n',
+    '',
+    1
+)
+Assert-Throws {
+    Assert-EmulatorToolPathContract -Content $missingEmulatorPathFixture
+} 'Distribution Android workflow accepted a missing emulator GITHUB_PATH export.'
 
 $nonFlatSingleArtifactFixture = [regex]::Replace(
     $distributionValidationWorkflow,

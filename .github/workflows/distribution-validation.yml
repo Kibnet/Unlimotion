@@ -1341,6 +1341,8 @@ jobs:
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platforms;android-${ANDROID_API_LEVEL}" \
             "system-images;android-${ANDROID_API_LEVEL};google_apis;x86_64"
+          test -x "${ANDROID_SDK_ROOT}/emulator/emulator"
+          echo "${ANDROID_SDK_ROOT}/emulator" >> "$GITHUB_PATH"
 
       - name: Enable KVM access
         shell: bash
@@ -1655,6 +1657,8 @@ jobs:
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platforms;android-${ANDROID_API_LEVEL}" \
             "system-images;android-${ANDROID_API_LEVEL};google_apis;x86_64"
+          test -x "${ANDROID_SDK_ROOT}/emulator/emulator"
+          echo "${ANDROID_SDK_ROOT}/emulator" >> "$GITHUB_PATH"
 
       - name: Enable KVM access
         shell: bash
