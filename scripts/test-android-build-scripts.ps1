@@ -534,6 +534,14 @@ Assert-Match $distributionBuildScript 'AndroidSigningStorePass=env:ANDROID_SIGNI
 Assert-Match $distributionBuildScript 'cleanup_signing' 'Distribution Android builder must clean ephemeral signing material.'
 Assert-Match $distributionBuildScript '--mode provenance[\s\S]*--identity "\$IDENTITY_PATH"[\s\S]*--cache-hit true[\s\S]*--cache-save false' 'Android cache-hit provenance must carry the full identity and exact hit/save outcome.'
 Assert-Match $distributionBuildScript '--mode provenance[\s\S]*--identity "\$IDENTITY_PATH"[\s\S]*--cache-hit false[\s\S]*--cache-save true' 'Android cache-miss provenance must carry the full identity and exact hit/save outcome.'
+$validatorViaBashMatches = [regex]::Matches(
+    $distributionBuildScript,
+    '(?m)^\s*"\$BASH"\s+"\$ROOT_DIR/scripts/test-android-distribution\.sh"\s*\\$'
+)
+if ($validatorViaBashMatches.Count -ne 3) {
+    throw "Distribution Android builder must invoke all three validator paths through Bash; found $($validatorViaBashMatches.Count)."
+}
+Assert-NotMatch $distributionBuildScript '(?m)^\s*"\$ROOT_DIR/scripts/test-android-distribution\.sh"\s*\\$' 'Distribution Android builder must not execute the non-executable validator directly.'
 
 Assert-Match $distributionTestScript 'EXPECTED_MIN_SDK="23"' 'Distribution Android validator must require minSdk 23.'
 Assert-Match $distributionTestScript 'EXPECTED_TARGET_SDK="36"' 'Distribution Android validator must require targetSdk 36.'

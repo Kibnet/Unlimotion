@@ -450,7 +450,7 @@ rm -rf -- "$NATIVE_ARTIFACTS_DIR" "$NUGET_LOCAL_DIR"
 mkdir -p "$NATIVE_ARTIFACTS_DIR" "$NUGET_LOCAL_DIR" "$CACHE_PATH"
 
 if [ "$CACHE_HIT" = "true" ]; then
-  "$ROOT_DIR/scripts/test-android-distribution.sh" \
+  "$BASH" "$ROOT_DIR/scripts/test-android-distribution.sh" \
     --mode provenance \
     --identity "$IDENTITY_PATH" \
     --native-inputs "$NATIVE_INPUTS_PATH" \
@@ -577,7 +577,7 @@ payload = {
 )
 PY
 
-  "$ROOT_DIR/scripts/test-android-distribution.sh" \
+  "$BASH" "$ROOT_DIR/scripts/test-android-distribution.sh" \
     --mode provenance \
     --identity "$IDENTITY_PATH" \
     --native-inputs "$NATIVE_INPUTS_PATH" \
@@ -668,7 +668,7 @@ for rid in android-arm64 android-x64; do
 done
 
 EVIDENCE_PATH="$OUTPUT_DIR/evidence.json"
-"$ROOT_DIR/scripts/test-android-distribution.sh" \
+"$BASH" "$ROOT_DIR/scripts/test-android-distribution.sh" \
   --mode artifact \
   --identity "$IDENTITY_PATH" \
   --input-dir "$APK_OUTPUT_DIR" \
