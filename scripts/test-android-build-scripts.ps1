@@ -764,6 +764,11 @@ Assert-Match $distributionTestScript '"productionReady": False' 'Distribution An
 Assert-Match $distributionTestScript '"assetId": f"android-\{rid\.removeprefix\(''android-''\)\}-apk"' 'Android metadata evidence must use the exact manifest APK asset identifiers.'
 Assert-Match $distributionTestScript '"\$ZIPALIGN" -c -P 16 4' 'Distribution Android validator must verify zip alignment.'
 Assert-Match $distributionTestScript '"\$APKSIGNER" verify --verbose --print-certs' 'Distribution Android validator must verify APK signatures and certificates.'
+$portableDynamicSymbolReads = [regex]::Matches($distributionTestScript, '"\$READELF" --dyn-syms ')
+if ($portableDynamicSymbolReads.Count -ne 2) {
+    throw "Distribution Android validator must use the GNU/LLVM-compatible --dyn-syms spelling exactly twice; found $($portableDynamicSymbolReads.Count)."
+}
+Assert-NotMatch $distributionTestScript '--dyn-symbols' 'Distribution Android validator must not use the LLVM-only --dyn-symbols spelling.'
 Assert-Match $distributionTestScript '23\|36\)' 'Distribution Android emulator validator must allow only API 23 and API 36.'
 Assert-Match $distributionTestScript 'for port in 5554 5556' 'Distribution Android emulator validator must perform at most two clean boot attempts.'
 Assert-Match $distributionTestScript 'ro\.build\.fingerprint' 'Android emulator evidence must record the exact device build fingerprint.'

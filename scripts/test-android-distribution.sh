@@ -597,8 +597,8 @@ if [ "$MODE" = "artifact" ]; then
 
     unzip -p "$apk_path" "lib/$abi/libmonodroid.so" > "$TMP_DIR/$rid-libmonodroid.so"
     unzip -p "$apk_path" "lib/$abi/libxamarin-app.so" > "$TMP_DIR/$rid-libxamarin-app.so"
-    "$READELF" --dyn-symbols "$TMP_DIR/$rid-libmonodroid.so" > "$TMP_DIR/$rid-libmonodroid.symbols"
-    "$READELF" --dyn-symbols "$TMP_DIR/$rid-libxamarin-app.so" > "$TMP_DIR/$rid-libxamarin-app.symbols"
+    "$READELF" --dyn-syms "$TMP_DIR/$rid-libmonodroid.so" > "$TMP_DIR/$rid-libmonodroid.symbols"
+    "$READELF" --dyn-syms "$TMP_DIR/$rid-libxamarin-app.so" > "$TMP_DIR/$rid-libxamarin-app.symbols"
     for symbol in compressed_assembly_count compressed_assembly_descriptors uncompressed_assemblies_data_size uncompressed_assemblies_data_buffer; do
       if grep -Eq "[[:space:]]UND[[:space:]]+${symbol}$" "$TMP_DIR/$rid-libmonodroid.symbols" &&
          ! grep -Eq "[[:space:]]GLOBAL[[:space:]]+DEFAULT[[:space:]]+[0-9]+[[:space:]]+${symbol}$" "$TMP_DIR/$rid-libxamarin-app.symbols"; then
