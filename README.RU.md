@@ -212,7 +212,26 @@ git clone https://github.com/Kibnet/Unlimotion.git
 ### Settings
 Окно настроек - позволяет изменять параметры, влияющие на работу программы.
 - **TaskStorage Path** - Путь к каталогу(папке) с задачами. Именно по этому пути будут сохраняться файлы задач в формате JSON. Путь может быть указан в абсолютном или относительном формате.
-Если путь не указан, то задачи сохраняются в каталоге "Tasks", который создаётся в рабочем каталоге из которого была запущена программа.
+Если значение не задано, desktop Release-сборки для Windows, Linux и macOS имеют известный дефект первого запуска: путь по умолчанию разрешается в корне файловой системы (`/Tasks` в Linux/macOS или в корне текущего диска, например `C:\Tasks`, в Windows), а не в рабочем каталоге запуска. Android использует app-private хранилище задач и не затронут.
+
+Пока исправление data path не войдёт в релиз, до первого запуска desktop-приложения создайте файл настроек и задайте в точном ключе `TaskStorage.Path` явный абсолютный путь к доступному для записи каталогу. Например, для Linux/macOS:
+
+```json
+{
+  "TaskStorage": {
+    "Path": "/home/me/UnlimotionTasks",
+    "IsServerMode": "False"
+  }
+}
+```
+
+В Windows экранируйте обратные слеши в JSON, например `"Path": "C:\\Users\\me\\UnlimotionTasks"`. Передайте файл настроек одним цельным аргументом, заменив пример на его абсолютный путь:
+
+```text
+--config=/home/me/unlimotion-settings.json
+```
+
+Если путь к файлу настроек содержит пробелы, заключите весь аргумент `--config=...` в кавычки по правилам вашего shell; пробелы в `TaskStorage.Path` требуют только корректного JSON-экранирования. Distribution smoke-тесты используют этот workaround и не подтверждают desktop-сценарий первого запуска с пустым/default path. <!-- task-storage-default-caveat;workaround=explicit-writable-path;unconfigured-first-run=not-verified -->
 - **SSH Key Storage Path** - Папка, где Git-бэкап хранит SSH-ключи и отдельный файл `known_hosts`, если используется SSH remote.
 ![Settings](media/readme/ru/settings.png)
 

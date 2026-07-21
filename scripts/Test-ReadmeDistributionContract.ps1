@@ -155,6 +155,79 @@ function Assert-RelativeLinks {
     }
 }
 
+function Assert-TaskStorageDefaultCaveat {
+    param(
+        [Parameter(Mandatory)] [string]$Content,
+        [Parameter(Mandatory)] [ValidateSet('English', 'Russian')] [string]$Language
+    )
+
+    $marker = '<!-- task-storage-default-caveat;workaround=explicit-writable-path;unconfigured-first-run=not-verified -->'
+    $markerMatches = [regex]::Matches($Content, [regex]::Escape($marker))
+    if ($markerMatches.Count -ne 1) {
+        throw "$Language README must contain exactly one fail-closed TaskStorage default caveat marker."
+    }
+
+    $markerIndex = $markerMatches[0].Index
+    $sectionStart = $Content.LastIndexOf('### Settings', $markerIndex, [StringComparison]::Ordinal)
+    $sectionEnd = $Content.IndexOf("`n## ", $markerIndex, [StringComparison]::Ordinal)
+    if ($sectionStart -lt 0 -or $sectionEnd -le $sectionStart) {
+        throw "$Language README TaskStorage caveat must be inside the Settings section."
+    }
+    $section = $Content.Substring($sectionStart, $sectionEnd - $sectionStart)
+
+    foreach ($token in @(
+            '`/Tasks`',
+            '`C:\Tasks`',
+            '`TaskStorage.Path`',
+            '"Path": "/home/me/UnlimotionTasks"',
+            '"IsServerMode": "False"',
+            '`"Path": "C:\\Users\\me\\UnlimotionTasks"`',
+            '--config=/home/me/unlimotion-settings.json',
+            '**TaskStorage Path**')) {
+        if (-not $section.Contains($token, [StringComparison]::Ordinal)) {
+            throw "$Language README TaskStorage caveat is missing '$token'."
+        }
+    }
+
+    $requiredStatement = if ($Language -ceq 'English') {
+        'Distribution smoke tests use this workaround and do not verify blank/default desktop first-run behavior.'
+    }
+    else {
+        'Distribution smoke-тесты используют этот workaround и не подтверждают desktop-сценарий первого запуска с пустым/default path.'
+    }
+    if (-not $section.Contains($requiredStatement, [StringComparison]::Ordinal)) {
+        throw "$Language README must deny blank/default first-run smoke coverage explicitly."
+    }
+
+    $scopeStatements = if ($Language -ceq 'English') {
+        @(
+            'desktop Release builds on Windows, Linux, and macOS',
+            'Android uses app-private task storage and is not affected.',
+            'If the settings-file path contains spaces, quote the whole `--config=...` argument for your shell; spaces in `TaskStorage.Path` need only valid JSON quoting.')
+    }
+    else {
+        @(
+            'desktop Release-сборки для Windows, Linux и macOS',
+            'Android использует app-private хранилище задач и не затронут.',
+            'Если путь к файлу настроек содержит пробелы, заключите весь аргумент `--config=...` в кавычки по правилам вашего shell; пробелы в `TaskStorage.Path` требуют только корректного JSON-экранирования.')
+    }
+    foreach ($statement in $scopeStatements) {
+        if (-not $section.Contains($statement, [StringComparison]::Ordinal)) {
+            throw "$Language README TaskStorage caveat is not desktop-scoped or actionable: missing '$statement'."
+        }
+    }
+
+    $obsoleteClaim = if ($Language -ceq 'English') {
+        'If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.'
+    }
+    else {
+        'Если путь не указан, то задачи сохраняются в каталоге "Tasks", который создаётся в рабочем каталоге из которого была запущена программа.'
+    }
+    if ($Content.Contains($obsoleteClaim, [StringComparison]::Ordinal)) {
+        throw "$Language README still promises the disproven working-directory TaskStorage default."
+    }
+}
+
 function Assert-Readme {
     param(
         [Parameter(Mandatory)] [string]$Content,
@@ -267,6 +340,7 @@ function Assert-Readme {
             throw "$Language README does not name source entry point '$script'."
         }
     }
+    Assert-TaskStorageDefaultCaveat -Content $Content -Language $Language
     Assert-RelativeLinks -Content $Content -ReadmePath $Path
 }
 
@@ -332,6 +406,30 @@ if ($RunNegativeFixtures) {
     $overclaim = "$englishContent`nFully supports all Windows versions."
     Assert-Rejected -Label 'broad-overclaim' -Action {
         Assert-Readme -Content $overclaim -Path $englishPath -Matrix $matrixObject -ManifestObject $manifestObject -Language English
+    }
+
+    $missingTaskStorageCaveat = $englishContent.Replace(
+        '<!-- task-storage-default-caveat;workaround=explicit-writable-path;unconfigured-first-run=not-verified -->',
+        '')
+    Assert-Rejected -Label 'missing-task-storage-default-caveat' -Action {
+        Assert-Readme -Content $missingTaskStorageCaveat -Path $englishPath -Matrix $matrixObject -ManifestObject $manifestObject -Language English
+    }
+
+    $unscopedAndroidCaveat = $englishContent.Replace(
+        'Android uses app-private task storage and is not affected.',
+        'Android storage is not documented here.')
+    Assert-Rejected -Label 'task-storage-caveat-missing-android-scope' -Action {
+        Assert-Readme -Content $unscopedAndroidCaveat -Path $englishPath -Matrix $matrixObject -ManifestObject $manifestObject -Language English
+    }
+
+    $missingTaskStorageJsonPath = Remove-FirstLiteralToken -Content $russianContent -Token '"Path": "/home/me/UnlimotionTasks"'
+    Assert-Rejected -Label 'task-storage-workaround-missing-json-path' -Action {
+        Assert-Readme -Content $missingTaskStorageJsonPath -Path $russianPath -Matrix $matrixObject -ManifestObject $manifestObject -Language Russian
+    }
+
+    $obsoleteTaskStorageClaim = "$russianContent`nЕсли путь не указан, то задачи сохраняются в каталоге `"Tasks`", который создаётся в рабочем каталоге из которого была запущена программа."
+    Assert-Rejected -Label 'obsolete-task-storage-working-directory-claim' -Action {
+        Assert-Readme -Content $obsoleteTaskStorageClaim -Path $russianPath -Matrix $matrixObject -ManifestObject $manifestObject -Language Russian
     }
 
     $debian12Packages = @($manifestObject.linuxRuntimePrerequisites.appImageExtractAndRun.debian12 | ForEach-Object { [string]$_ })

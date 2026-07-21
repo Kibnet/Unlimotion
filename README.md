@@ -214,7 +214,26 @@ Red arrows - the ratio of the blocking task to the blocked one
 ### Settings
 Settings window - allows you to change the parameters that affect the operation of the program.
 - **TaskStorage Path** - Path to the directory(folder) with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
-If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.
+When this value is blank, desktop Release builds on Windows, Linux, and macOS have a known first-run defect: the default resolves to a filesystem root (`/Tasks` on Linux/macOS or the root of the current drive, for example `C:\Tasks`, on Windows), not to the launch working directory. Android uses app-private task storage and is not affected.
+
+Until the data-path fix is released, create a settings file before the first desktop launch and set the exact `TaskStorage.Path` key to an explicit writable absolute directory. For example, on Linux/macOS:
+
+```json
+{
+  "TaskStorage": {
+    "Path": "/home/me/UnlimotionTasks",
+    "IsServerMode": "False"
+  }
+}
+```
+
+On Windows, escape backslashes in JSON, for example `"Path": "C:\\Users\\me\\UnlimotionTasks"`. Pass the settings file with one complete argument, replacing the example path with its absolute location:
+
+```text
+--config=/home/me/unlimotion-settings.json
+```
+
+If the settings-file path contains spaces, quote the whole `--config=...` argument for your shell; spaces in `TaskStorage.Path` need only valid JSON quoting. Distribution smoke tests use this workaround and do not verify blank/default desktop first-run behavior. <!-- task-storage-default-caveat;workaround=explicit-writable-path;unconfigured-first-run=not-verified -->
 - **SSH Key Storage Path** - Folder where Git backup keeps SSH keys and the dedicated `known_hosts` file when an SSH remote is used.
 
 ![Settings](media/readme/en/settings.png)
