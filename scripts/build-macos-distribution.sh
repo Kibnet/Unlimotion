@@ -30,7 +30,7 @@ done
 [[ -n "$identity" && -f "$identity" ]] || { printf 'A readable --identity file is required.\n' >&2; exit 2; }
 [[ "$architecture" == "x64" || "$architecture" == "arm64" ]] || { printf '%s\n' '--architecture must be x64 or arm64.' >&2; exit 2; }
 
-for command_name in dotnet jq plutil productbuild shasum git ditto python3; do
+for command_name in dotnet jq plutil productbuild shasum git ditto python3 codesign; do
   command -v "$command_name" >/dev/null 2>&1 || { printf 'Required command is unavailable: %s\n' "$command_name" >&2; exit 1; }
 done
 command -v "$vpk_path" >/dev/null 2>&1 || [[ -x "$vpk_path" ]] || { printf 'Velopack CLI is unavailable: %s\n' "$vpk_path" >&2; exit 1; }
@@ -139,6 +139,7 @@ chmod 0755 "$app_path/Contents/MacOS/Unlimotion.Desktop.ForMacBuild"
   --mainExe Unlimotion.Desktop.ForMacBuild \
   --packTitle Unlimotion \
   --packAuthors Kibnet \
+  --signAppIdentity - \
   --yes \
   --skip-updates
 
@@ -160,6 +161,10 @@ canonical_name() {
 legacy_asset_id="macos-x64-pkg-legacy"
 if [[ "$architecture" == 'arm64' ]]; then legacy_asset_id="macos-arm64-pkg-legacy"; fi
 legacy_pkg_name="$(canonical_name legacyPkg "$legacy_asset_id")"
+
+codesign --force --deep --sign - "$app_path"
+codesign --verify --deep --strict --verbose=2 "$app_path"
+
 productbuild --component "$app_path" /Applications "$asset_directory/$legacy_pkg_name"
 
 if [[ "$architecture" == 'x64' ]]; then

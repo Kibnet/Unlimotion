@@ -956,6 +956,71 @@ function Replace-WorkflowFixtureOnce {
     return $expression.Replace($Text, $Replacement, 1)
 }
 
+function Test-MacosCandidateSigningContract {
+    param([Parameter(Mandatory = $true)][string]$BuilderText)
+
+    $normalized = $BuilderText.Replace("`r`n", "`n").Replace("`r", "`n")
+    $preflightMatches = [regex]::Matches($normalized, '(?m)^for command_name in ([^;\r\n]+); do$')
+    Assert-Condition ($preflightMatches.Count -eq 1) 'macOS builder must have exactly one command preflight loop.'
+    $preflightCommands = @($preflightMatches[0].Groups[1].Value.Trim() -split '\s+')
+    Assert-Condition (@($preflightCommands | Where-Object { $_ -ceq 'codesign' }).Count -eq 1) `
+        'macOS builder command preflight must require codesign exactly once.'
+
+    $vpkPackLine = '"$vpk_path" pack \'
+    $vpkAdHocLine = '  --signAppIdentity - \'
+    $vpkEndLine = '  --skip-updates'
+    $legacySignLine = 'codesign --force --deep --sign - "$app_path"'
+    $legacyVerifyLine = 'codesign --verify --deep --strict --verbose=2 "$app_path"'
+    $legacyPackageLine = 'productbuild --component "$app_path" /Applications "$asset_directory/$legacy_pkg_name"'
+
+    foreach ($requiredLine in @($vpkPackLine, $vpkAdHocLine, $vpkEndLine, $legacySignLine, $legacyVerifyLine, $legacyPackageLine)) {
+        Assert-Condition ([regex]::Matches($normalized, "(?m)^$([regex]::Escape($requiredLine))$").Count -eq 1) `
+            "macOS builder must contain exactly one required signing-contract line: $requiredLine"
+    }
+    Assert-Condition ([regex]::Matches($normalized, '(?m)^\s*--signAppIdentity\b[^\r\n]*$').Count -eq 1) `
+        'macOS builder must use only the one literal Velopack ad-hoc signing identity.'
+    Assert-Condition ($normalized -cnotmatch '(?im)--signInstallIdentity|--notaryProfile|--keychain|security\s+import') `
+        'macOS candidate builder must not import or reference production signing credentials.'
+    Assert-Condition ([regex]::Matches($normalized, '\bcodesign\b').Count -eq 3) `
+        'macOS candidate builder must mention codesign only in preflight and the two exact legacy bundle commands.'
+
+    $builderLines = @($normalized -split "`n")
+    $vpkStartIndexes = @(
+        for ($index = 0; $index -lt $builderLines.Count; $index++) {
+            if ($builderLines[$index] -ceq $vpkPackLine) { $index }
+        }
+    )
+    $vpkEndIndexes = @(
+        for ($index = 0; $index -lt $builderLines.Count; $index++) {
+            if ($builderLines[$index] -ceq $vpkEndLine) { $index }
+        }
+    )
+    Assert-Condition ($vpkStartIndexes.Count -eq 1 -and $vpkEndIndexes.Count -eq 1) `
+        'macOS builder must have one unambiguous Velopack command block.'
+    $vpkStartIndex = $vpkStartIndexes[0]
+    $vpkEndIndex = $vpkEndIndexes[0]
+    Assert-Condition ($vpkEndIndex -gt $vpkStartIndex) 'macOS Velopack command terminator must follow its start.'
+    for ($index = $vpkStartIndex; $index -lt $vpkEndIndex; $index++) {
+        Assert-Condition ($builderLines[$index].EndsWith('\', [StringComparison]::Ordinal)) `
+            'Every macOS Velopack command line before --skip-updates must continue with a backslash.'
+    }
+    $vpkSigningIndex = -1
+    for ($index = $vpkStartIndex + 1; $index -lt $vpkEndIndex; $index++) {
+        if ($builderLines[$index] -ceq $vpkAdHocLine) { $vpkSigningIndex = $index }
+    }
+    Assert-Condition ($vpkSigningIndex -gt $vpkStartIndex -and $vpkSigningIndex -lt $vpkEndIndex) `
+        'Velopack ad-hoc signing must be part of the one continuous vpk pack command block.'
+
+    $orderedLines = @($vpkPackLine, $vpkAdHocLine, $vpkEndLine, $legacySignLine, $legacyVerifyLine, $legacyPackageLine)
+    $previousIndex = -1
+    foreach ($line in $orderedLines) {
+        $currentIndex = $normalized.IndexOf($line, [StringComparison]::Ordinal)
+        Assert-Condition ($currentIndex -gt $previousIndex) `
+            'macOS signing order must be vpk pack < Velopack ad-hoc seal < pack completion < legacy sign < strict verify < productbuild.'
+        $previousIndex = $currentIndex
+    }
+}
+
 function Get-WorkflowNamedStepBlock {
     param(
         [Parameter(Mandatory = $true)][string]$WorkflowText,
@@ -3997,6 +4062,75 @@ if ($Area -in @('All', 'Retry')) {
 
 if ($Area -in @('All', 'WorkflowSecurity')) {
     $workflowText = Get-Content -LiteralPath $script:workflowPath -Raw -Encoding utf8
+    $macosBuilderPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\build-macos-distribution.sh') `
+        -DisplayName 'macOS distribution builder'
+    $macosBuilderText = Get-Content -LiteralPath $macosBuilderPath -Raw -Encoding utf8
+    Test-MacosCandidateSigningContract -BuilderText $macosBuilderText
+    Add-Check -Name 'macos-signing:velopack-and-legacy-bundles-adhoc-sealed'
+
+    $macosSigningFixtures = @(
+        [pscustomobject]@{
+            Name = 'macos-vpk-adhoc-signing-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^  --signAppIdentity - \\$' -Replacement '  # Velopack ad-hoc signing removed by fixture' `
+                -Name 'macos-vpk-adhoc-signing-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-legacy-adhoc-signing-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^codesign --force --deep --sign - "\$app_path"$' `
+                -Replacement '# Legacy bundle signing removed by fixture' -Name 'macos-legacy-adhoc-signing-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-legacy-signature-verification-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^codesign --verify --deep --strict --verbose=2 "\$app_path"$' `
+                -Replacement '# Legacy bundle verification removed by fixture' -Name 'macos-legacy-signature-verification-missing'
+        },
+        [pscustomobject]@{
+            Name = 'macos-dynamic-signing-identity-forbidden'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^  --signAppIdentity - \\$' -Replacement '  --signAppIdentity "$MACOS_SIGNING_IDENTITY" \' `
+                -Name 'macos-dynamic-signing-identity-forbidden'
+        },
+        [pscustomobject]@{
+            Name = 'macos-signing-credentials-forbidden'
+            Text = $macosBuilderText + "`nsecurity import fixture.p12 -P secret -A`n"
+        },
+        [pscustomobject]@{
+            Name = 'macos-vpk-signing-outside-command-block'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^  --packAuthors Kibnet \\$' -Replacement '  --packAuthors Kibnet' `
+                -Name 'macos-vpk-signing-outside-command-block'
+        },
+        [pscustomobject]@{
+            Name = 'macos-extra-dynamic-codesign-forbidden'
+            Text = $macosBuilderText + "`ncodesign --sign `"`$MACOS_SIGNING_IDENTITY`" `"`$app_path`"`n"
+        },
+        [pscustomobject]@{
+            Name = 'macos-codesign-preflight-missing'
+            Text = Replace-WorkflowFixtureOnce -Text $macosBuilderText `
+                -Pattern '(?m)^(for command_name in [^;\r\n]*) codesign(; do)$' -Replacement '$1$2' `
+                -Name 'macos-codesign-preflight-missing'
+        }
+    )
+    $legacySignLine = 'codesign --force --deep --sign - "$app_path"'
+    $legacyPackageLine = 'productbuild --component "$app_path" /Applications "$asset_directory/$legacy_pkg_name"'
+    $misorderedMacosSigning = $macosBuilderText.Replace($legacySignLine, '__legacy_sign_order_fixture__')
+    $misorderedMacosSigning = $misorderedMacosSigning.Replace(
+        $legacyPackageLine,
+        $legacyPackageLine + "`n" + $legacySignLine)
+    $misorderedMacosSigning = $misorderedMacosSigning.Replace('__legacy_sign_order_fixture__', '# Legacy signing moved by fixture')
+    $macosSigningFixtures += [pscustomobject]@{
+        Name = 'macos-legacy-signing-after-productbuild'
+        Text = $misorderedMacosSigning
+    }
+    foreach ($macosSigningFixture in $macosSigningFixtures) {
+        Assert-Throws -Name $macosSigningFixture.Name -Action {
+            Test-MacosCandidateSigningContract -BuilderText $macosSigningFixture.Text
+        }
+    }
+
     Test-WorkflowSecurityContract -WorkflowText $workflowText
     Test-EmbeddedWorkflowBehaviorFixtures -WorkflowText $workflowText
     Add-Check -Name 'workflow-security:pr-manual-read-only-pinned-no-mutation'
