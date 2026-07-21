@@ -951,9 +951,10 @@ function Replace-WorkflowFixtureOnce {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
+    $normalizedText = $Text.Replace("`r`n", "`n").Replace("`r", "`n")
     $expression = [regex]::new($Pattern)
-    Assert-Condition ($expression.IsMatch($Text)) "Workflow fixture '$Name' could not find its mutation target."
-    return $expression.Replace($Text, $Replacement, 1)
+    Assert-Condition ($expression.IsMatch($normalizedText)) "Workflow fixture '$Name' could not find its mutation target."
+    return $expression.Replace($normalizedText, $Replacement, 1)
 }
 
 function Test-MacosCandidateSigningContract {
@@ -4334,6 +4335,15 @@ if ($Area -in @('All', 'Retry')) {
 }
 
 if ($Area -in @('All', 'WorkflowSecurity')) {
+    $crlfMutationProof = Replace-WorkflowFixtureOnce `
+        -Text "before`r`nTARGET`r`nafter`r`n" `
+        -Pattern '(?m)^TARGET$' `
+        -Replacement 'MUTATED' `
+        -Name 'workflow-fixture-crlf-normalization'
+    Assert-Condition ($crlfMutationProof -ceq "before`nMUTATED`nafter`n") `
+        'Workflow fixture mutation must normalize CRLF before line-anchored matching.'
+    Add-Check -Name 'workflow-fixture:crlf-normalized-mutation'
+
     $workflowText = Get-Content -LiteralPath $script:workflowPath -Raw -Encoding utf8
     $macosBuilderPath = Resolve-ExistingFile -Path (Join-Path $script:repositoryRoot 'scripts\build-macos-distribution.sh') `
         -DisplayName 'macOS distribution builder'
