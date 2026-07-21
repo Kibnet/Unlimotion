@@ -834,6 +834,19 @@ try {
 
     $hashFixtureFeedBash = Convert-ToBashPath $hashFixtureFeed
     $hashFixturePackagesBash = Convert-ToBashPath $hashFixturePackages
+    $pythonPathProbe = Quote-Bash 'import pathlib, sys; print(pathlib.Path(sys.argv[1]).resolve())'
+    $hashFixtureFeedPythonPath = (@(Invoke-BashChecked `
+        ('python3 -c {0} {1}' -f $pythonPathProbe, (Quote-Bash $hashFixtureFeedBash)) `
+        'Unable to resolve the fixture feed path in the verifier Python runtime.') -join "`n").Trim()
+    $hashFixturePackagesPythonPath = (@(Invoke-BashChecked `
+        ('python3 -c {0} {1}' -f $pythonPathProbe, (Quote-Bash $hashFixturePackagesBash)) `
+        'Unable to resolve the fixture package path in the verifier Python runtime.') -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($hashFixtureFeedPythonPath) -or
+        [string]::IsNullOrWhiteSpace($hashFixturePackagesPythonPath) -or
+        $hashFixtureFeedPythonPath.Contains("`n") -or
+        $hashFixturePackagesPythonPath.Contains("`n")) {
+        throw 'Verifier Python runtime returned an invalid canonical fixture path.'
+    }
     $writeHashFixtureAssets = {
         param([string]$ContentHash)
 
@@ -844,7 +857,7 @@ try {
             path = 'example.package/1.2.3'
         }
         $packageFolders = [ordered]@{}
-        $packageFolders[($hashFixturePackagesBash.TrimEnd('/') + '/')] = [ordered]@{}
+        $packageFolders[$hashFixturePackagesPythonPath] = [ordered]@{}
         Write-Utf8Text $hashFixtureAssetsPath (([ordered]@{
             libraries = $libraries
             packageFolders = $packageFolders
@@ -862,7 +875,7 @@ try {
         } | ConvertTo-Json -Compress) + "`n")
     }
     & $writeHashFixtureAssets $hashFixtureLogicalSha512
-    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedBash
+    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedPythonPath
 
     $restoredPackageVerifierCommand = 'python3 {0} {1} {2} {3} {4} {5} {6}' -f @(
         (Quote-Bash (Convert-ToBashPath $restoredPackageVerifierPath)),
@@ -888,12 +901,12 @@ try {
     & $writeHashFixtureAssets $hashFixtureLogicalSha512
 
     foreach ($invalidContentHash in @('', 'not-base64!', [Convert]::ToBase64String([byte[]](1..32)))) {
-        & $writeHashFixtureMetadata $invalidContentHash $hashFixtureFeedBash
+        & $writeHashFixtureMetadata $invalidContentHash $hashFixtureFeedPythonPath
         Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package metadata contentHash' 'Restored local-package verifier accepted an invalid metadata contentHash.'
     }
     & $writeHashFixtureMetadata $hashFixtureLogicalSha512 (Convert-ToBashPath $hashFixtureRoot)
     Assert-BashFailsWith $restoredPackageVerifierCommand 'Installed package source is not the exact isolated local feed' 'Restored local-package verifier accepted a different installed package source.'
-    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedBash
+    & $writeHashFixtureMetadata $hashFixtureLogicalSha512 $hashFixtureFeedPythonPath
 
     $sourceFixtureRoot = Join-Path $tempRoot 'source-fixture'
     $fixtureFiles = @(
