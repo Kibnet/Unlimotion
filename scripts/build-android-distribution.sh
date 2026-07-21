@@ -82,6 +82,135 @@ sha256_file() {
   printf '%s\n' "$digest"
 }
 
+assert_source_tree_contract() {
+  local actual_source_sha
+  local tracked_status
+  local submodule_status_file
+
+  require_command git
+  actual_source_sha="$(git -C "$ROOT_DIR" rev-parse --verify HEAD)"
+  [[ "$actual_source_sha" =~ ^[0-9a-f]{40}$ ]] || fail "Git HEAD must be an exact 40-character lowercase SHA"
+  [ "$SOURCE_SHA" = "$actual_source_sha" ] || \
+    fail "Identity sourceSha must equal the exact current Git HEAD"
+
+  tracked_status="$(git -C "$ROOT_DIR" status --porcelain=v1 --untracked-files=no --ignore-submodules=untracked)"
+  [ -z "$tracked_status" ] || \
+    fail "Distribution source has tracked, index, or submodule changes"
+
+  submodule_status_file="$(mktemp "${TMPDIR:-/tmp}/unlimotion-android-submodules.XXXXXX")"
+  if ! git -C "$ROOT_DIR" submodule status --recursive >"$submodule_status_file"; then
+    rm -f -- "$submodule_status_file"
+    fail "Unable to inspect recursive Git submodule state"
+  fi
+  while IFS= read -r submodule_status; do
+    case "$submodule_status" in
+      " "*) ;;
+      *)
+        rm -f -- "$submodule_status_file"
+        fail "Distribution source contains an uninitialized, modified, or conflicted submodule: $submodule_status"
+        ;;
+    esac
+  done <"$submodule_status_file"
+  rm -f -- "$submodule_status_file"
+}
+
+assert_exact_flat_package_directory() {
+  local directory="$1"
+  shift
+  python3 - "$directory" "$@" <<'PY'
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+expected = sorted(sys.argv[2:])
+if root.is_symlink() or not root.is_dir():
+    raise SystemExit(f"Package directory must be a real non-symlink directory: {root}")
+entries = sorted(root.iterdir(), key=lambda candidate: candidate.name)
+actual = [candidate.name for candidate in entries]
+if actual != expected:
+    raise SystemExit(
+        f"Package directory must contain exactly {expected}; actual entries are {actual}"
+    )
+for candidate in entries:
+    if candidate.is_symlink() or not candidate.is_file() or candidate.suffix != ".nupkg":
+        raise SystemExit(
+            f"Package directory entries must be top-level regular .nupkg files: {candidate}"
+        )
+descendants = sorted(
+    candidate.relative_to(root).as_posix() for candidate in root.rglob("*")
+)
+if descendants != expected:
+    raise SystemExit(
+        "Package directory must not contain nested files or directories; "
+        f"recursive entries are {descendants}"
+    )
+PY
+}
+
+verify_restored_local_package() {
+  local assets_path="$1"
+  local package_id="$2"
+  local package_version="$3"
+  local nupkg_path="$4"
+
+  python3 - \
+    "$assets_path" \
+    "$NUGET_PACKAGES" \
+    "$NUGET_LOCAL_DIR" \
+    "$package_id" \
+    "$package_version" \
+    "$nupkg_path" <<'PY'
+import base64
+import hashlib
+import json
+import pathlib
+import sys
+
+assets_path, packages_root_text, local_feed_text, package_id, version, nupkg_text = sys.argv[1:]
+assets_file = pathlib.Path(assets_path)
+packages_root = pathlib.Path(packages_root_text).resolve()
+local_feed = pathlib.Path(local_feed_text).resolve()
+nupkg = pathlib.Path(nupkg_text)
+if nupkg.is_symlink() or not nupkg.is_file() or nupkg.parent.resolve() != local_feed:
+    raise SystemExit(f"Verified local package is not an exact top-level feed file: {nupkg}")
+expected_hash = base64.b64encode(hashlib.sha512(nupkg.read_bytes()).digest()).decode("ascii")
+
+assets = json.loads(assets_file.read_text(encoding="utf-8"))
+library_key = f"{package_id}/{version}"
+library = (assets.get("libraries") or {}).get(library_key)
+if not isinstance(library, dict) or library.get("type") != "package":
+    raise SystemExit(f"Restore assets do not contain exact package identity {library_key}")
+if library.get("sha512") not in (expected_hash, "sha512-" + expected_hash):
+    raise SystemExit(f"Restore assets content hash does not match verified local nupkg {library_key}")
+expected_library_path = f"{package_id.lower()}/{version.lower()}"
+if str(library.get("path", "")).lower() != expected_library_path:
+    raise SystemExit(f"Restore assets path does not match exact package identity {library_key}")
+
+package_folders = assets.get("packageFolders") or {}
+resolved_package_folders = {pathlib.Path(path).resolve() for path in package_folders}
+if resolved_package_folders != {packages_root}:
+    raise SystemExit(
+        f"Restore assets must use only the isolated global package root: {packages_root}"
+    )
+
+installed = packages_root / package_id.lower() / version.lower()
+metadata_path = installed / ".nupkg.metadata"
+sha_path = installed / f"{package_id.lower()}.{version.lower()}.nupkg.sha512"
+if metadata_path.is_symlink() or not metadata_path.is_file():
+    raise SystemExit(f"Installed package metadata is missing for {library_key}")
+if sha_path.is_symlink() or not sha_path.is_file():
+    raise SystemExit(f"Installed package SHA-512 sidecar is missing for {library_key}")
+metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
+if metadata.get("contentHash") != expected_hash:
+    raise SystemExit(f"Installed package metadata hash does not match local nupkg {library_key}")
+source = metadata.get("source")
+if not isinstance(source, str) or pathlib.Path(source).resolve() != local_feed:
+    raise SystemExit(f"Installed package source is not the exact isolated local feed: {library_key}")
+if sha_path.read_text(encoding="utf-8-sig").strip() != expected_hash:
+    raise SystemExit(f"Installed package SHA-512 sidecar does not match local nupkg {library_key}")
+PY
+}
+
 fetch_verified_source() {
   local url="$1"
   local expected_sha256="$2"
@@ -296,6 +425,8 @@ PY
 )"
 IFS=$'\t' read -r NORMALIZED_VERSION SOURCE_SHA WORKFLOW_SHA ANDROID_VERSION_CODE ANDROID_VERSION_CODE_POLICY SIGNATURE_PROFILE LAST_PUBLISHED_ANDROID_VERSION_CODE ARM64_APK_NAME X64_APK_NAME <<< "$identity_values"
 
+assert_source_tree_contract
+
 NATIVE_INPUTS_PATH="$OUTPUT_DIR/native-inputs.json"
 
 write_native_inputs() {
@@ -445,9 +576,75 @@ else
 fi
 
 NATIVE_ARTIFACTS_DIR="$ROOT_DIR/artifacts/android-native"
-NUGET_LOCAL_DIR="$ROOT_DIR/artifacts/nuget-local"
+NUGET_LOCAL_DIR="$OUTPUT_DIR/nuget-local"
+NUGET_CONFIG_PATH="$OUTPUT_DIR/nuget.config"
+NODIFY_PACKAGE_RELATIVE_PATH="artifacts/nuget-local/NodifyAvalonia.6.6.0-unlimotion.a12.1.nupkg"
+NODIFY_PACKAGE_SOURCE="$ROOT_DIR/$NODIFY_PACKAGE_RELATIVE_PATH"
+NODIFY_PACKAGE_NAME="$(basename "$NODIFY_PACKAGE_RELATIVE_PATH")"
+NODIFY_HEAD_COPY="$OUTPUT_DIR/.${NODIFY_PACKAGE_NAME}.head"
+
+require_command git
+require_file "$NODIFY_PACKAGE_SOURCE"
+mapfile -t tracked_nodify_packages < <(git -C "$ROOT_DIR" ls-files -- 'artifacts/nuget-local/NodifyAvalonia.*.nupkg')
+[ "${#tracked_nodify_packages[@]}" -eq 1 ] && [ "${tracked_nodify_packages[0]}" = "$NODIFY_PACKAGE_RELATIVE_PATH" ] || \
+  fail "Exactly one expected NodifyAvalonia package must be tracked by Git"
+git -C "$ROOT_DIR" cat-file -e "HEAD:$NODIFY_PACKAGE_RELATIVE_PATH" || fail "Tracked NodifyAvalonia package is missing from HEAD"
+rm -f -- "$NODIFY_HEAD_COPY"
+if ! git -C "$ROOT_DIR" show "HEAD:$NODIFY_PACKAGE_RELATIVE_PATH" >"$NODIFY_HEAD_COPY"; then
+  rm -f -- "$NODIFY_HEAD_COPY"
+  fail "Unable to extract the tracked NodifyAvalonia package from HEAD"
+fi
+if [ "$(sha256_file "$NODIFY_PACKAGE_SOURCE")" != "$(sha256_file "$NODIFY_HEAD_COPY")" ]; then
+  rm -f -- "$NODIFY_HEAD_COPY"
+  fail "Working-tree NodifyAvalonia package bytes differ from HEAD"
+fi
+
 rm -rf -- "$NATIVE_ARTIFACTS_DIR" "$NUGET_LOCAL_DIR"
 mkdir -p "$NATIVE_ARTIFACTS_DIR" "$NUGET_LOCAL_DIR" "$CACHE_PATH"
+mv -- "$NODIFY_HEAD_COPY" "$NUGET_LOCAL_DIR/$NODIFY_PACKAGE_NAME"
+
+python3 - "$ROOT_DIR/src/nuget.config" "$NUGET_CONFIG_PATH" "$NUGET_LOCAL_DIR" <<'PY'
+import pathlib
+import sys
+import xml.etree.ElementTree as ET
+
+source_path = pathlib.Path(sys.argv[1])
+output_path = pathlib.Path(sys.argv[2])
+isolated_feed = sys.argv[3]
+source_root = ET.parse(source_path).getroot()
+package_sources = source_root.find("packageSources")
+if package_sources is None:
+    raise SystemExit("Repository NuGet config has no packageSources")
+actual_sources = {
+    node.attrib.get("key"): node.attrib.get("value")
+    for node in package_sources.findall("add")
+}
+expected_sources = {
+    "local": "../artifacts/nuget-local",
+    "nuget.org": "https://api.nuget.org/v3/index.json",
+}
+if actual_sources != expected_sources or len(package_sources.findall("add")) != 2:
+    raise SystemExit("Repository NuGet sources differ from the reviewed two-source contract")
+
+root = ET.Element("configuration")
+sources = ET.SubElement(root, "packageSources")
+ET.SubElement(sources, "clear")
+ET.SubElement(sources, "add", {"key": "local", "value": isolated_feed})
+ET.SubElement(
+    sources,
+    "add",
+    {"key": "nuget.org", "value": expected_sources["nuget.org"], "protocolVersion": "3"},
+)
+mappings = ET.SubElement(root, "packageSourceMapping")
+ET.SubElement(mappings, "clear")
+local_mapping = ET.SubElement(mappings, "packageSource", {"key": "local"})
+ET.SubElement(local_mapping, "package", {"pattern": "NodifyAvalonia"})
+ET.SubElement(local_mapping, "package", {"pattern": "LibGit2Sharp.NativeBinaries"})
+public_mapping = ET.SubElement(mappings, "packageSource", {"key": "nuget.org"})
+ET.SubElement(public_mapping, "package", {"pattern": "*"})
+output_path.parent.mkdir(parents=True, exist_ok=True)
+ET.ElementTree(root).write(output_path, encoding="utf-8", xml_declaration=True)
+PY
 
 if [ "$CACHE_HIT" = "true" ]; then
   "$BASH" "$ROOT_DIR/scripts/test-android-distribution.sh" \
@@ -461,6 +658,9 @@ if [ "$CACHE_HIT" = "true" ]; then
     --cache-save false \
     --evidence "$OUTPUT_DIR/native-cache-evidence.json"
 
+  assert_exact_flat_package_directory \
+    "$CACHE_PATH/bundle/nuget-local" \
+    "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
   cp -a "$CACHE_PATH/bundle/android-native/." "$NATIVE_ARTIFACTS_DIR/"
   cp -a "$CACHE_PATH/bundle/nuget-local/." "$NUGET_LOCAL_DIR/"
   CACHE_SAVE="false"
@@ -587,8 +787,16 @@ PY
     --cache-hit false \
     --cache-save true \
     --evidence "$OUTPUT_DIR/native-cache-evidence.json"
+  assert_exact_flat_package_directory \
+    "$CACHE_PATH/bundle/nuget-local" \
+    "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
   CACHE_SAVE="true"
 fi
+
+assert_exact_flat_package_directory \
+  "$NUGET_LOCAL_DIR" \
+  "LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg" \
+  "$NODIFY_PACKAGE_NAME"
 
 require_command keytool
 SIGNING_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/unlimotion-android-signing.XXXXXX")"
@@ -626,15 +834,23 @@ APK_OUTPUT_DIR="$OUTPUT_DIR/apks"
 rm -rf -- "$APK_OUTPUT_DIR" "$OUTPUT_DIR/nuget-packages"
 mkdir -p "$APK_OUTPUT_DIR" "$OUTPUT_DIR/nuget-packages"
 export NUGET_PACKAGES="$OUTPUT_DIR/nuget-packages"
+ANDROID_ASSETS_PATH="$ROOT_DIR/src/Unlimotion.Android/obj/project.assets.json"
 
 rm -rf -- \
   "$ROOT_DIR/src/Unlimotion.Android/bin/Release/net10.0-android" \
   "$ROOT_DIR/src/Unlimotion.Android/obj/Release/net10.0-android"
+rm -f -- \
+  "$ANDROID_ASSETS_PATH" \
+  "$ROOT_DIR/src/Unlimotion.Android/obj/project.nuget.cache" \
+  "$ROOT_DIR/src/Unlimotion.Android/obj/Unlimotion.Android.csproj.nuget.dgspec.json" \
+  "$ROOT_DIR/src/Unlimotion.Android/obj/Unlimotion.Android.csproj.nuget.g.props" \
+  "$ROOT_DIR/src/Unlimotion.Android/obj/Unlimotion.Android.csproj.nuget.g.targets"
 
 for rid in android-arm64 android-x64; do
   dotnet build "$ROOT_DIR/src/Unlimotion.Android/Unlimotion.Android.csproj" \
     -c Release \
     -t:Package \
+    -p:WarningsAsErrors=NU1603 \
     -p:RuntimeIdentifier="$rid" \
     -p:RuntimeIdentifiers="$rid" \
     -p:ContinuousIntegrationBuild=true \
@@ -647,7 +863,7 @@ for rid in android-arm64 android-x64; do
     -p:ApplicationDisplayVersion="$NORMALIZED_VERSION" \
     -p:ApplicationVersion="$ANDROID_VERSION_CODE" \
     -p:Version="$NORMALIZED_VERSION" \
-    -p:RestoreConfigFile="$ROOT_DIR/src/nuget.config" \
+    -p:RestoreConfigFile="$NUGET_CONFIG_PATH" \
     -p:AndroidSdkDirectory="${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is required}" \
     -p:JavaSdkDirectory="${JAVA_HOME:?JAVA_HOME is required}" \
     -p:AndroidKeyStore=true \
@@ -655,6 +871,18 @@ for rid in android-arm64 android-x64; do
     -p:AndroidSigningStorePass=env:ANDROID_SIGNING_STORE_PASS \
     -p:AndroidSigningKeyAlias="$ANDROID_SIGNING_KEY_ALIAS" \
     -p:AndroidSigningKeyPass=env:ANDROID_SIGNING_KEY_PASS
+
+  require_file "$ANDROID_ASSETS_PATH"
+  verify_restored_local_package \
+    "$ANDROID_ASSETS_PATH" \
+    "NodifyAvalonia" \
+    "6.6.0-unlimotion.a12.1" \
+    "$NUGET_LOCAL_DIR/$NODIFY_PACKAGE_NAME"
+  verify_restored_local_package \
+    "$ANDROID_ASSETS_PATH" \
+    "LibGit2Sharp.NativeBinaries" \
+    "$LIBGIT2_NATIVE_PACKAGE_VERSION" \
+    "$NUGET_LOCAL_DIR/LibGit2Sharp.NativeBinaries.${LIBGIT2_NATIVE_PACKAGE_VERSION}.nupkg"
 
   apk_search_root="$ROOT_DIR/src/Unlimotion.Android/bin/Release/net10.0-android/$rid"
   mapfile -t signed_apks < <(find "$apk_search_root" -type f -name '*-Signed.apk' -print)

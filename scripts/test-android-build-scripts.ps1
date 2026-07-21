@@ -170,6 +170,20 @@ function Invoke-BashChecked {
     return $output
 }
 
+function Invoke-GitChecked {
+    param(
+        [string[]]$Arguments,
+        [string]$Message
+    )
+
+    $output = @(& git @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Message`n$($output -join [Environment]::NewLine)"
+    }
+
+    return $output
+}
+
 function Assert-BashFails {
     param(
         [string]$Command,
@@ -510,9 +524,171 @@ foreach ($fixture in $workflowNegativeFixtures) {
     } "Workflow security validator accepted negative fixture: $($fixture.Name)"
 }
 
+function Assert-AndroidLocalFeedIsolationContract {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    Assert-Match $Content 'NUGET_LOCAL_DIR="\$OUTPUT_DIR/nuget-local"' 'Distribution Android builder must use an output-scoped isolated local NuGet feed.'
+    Assert-NotMatch $Content 'NUGET_LOCAL_DIR="\$ROOT_DIR/artifacts/nuget-local"' 'Distribution Android builder must not restore directly from the ignored repository-local feed.'
+    Assert-Match $Content 'NODIFY_PACKAGE_RELATIVE_PATH="artifacts/nuget-local/NodifyAvalonia\.6\.6\.0-unlimotion\.a12\.1\.nupkg"' 'Distribution Android builder must name the exact reviewed tracked NodifyAvalonia package.'
+    Assert-Match $Content 'git -C "\$ROOT_DIR" ls-files -- ''artifacts/nuget-local/NodifyAvalonia\.\*\.nupkg''' 'Distribution Android builder must prove the unique NodifyAvalonia package is tracked.'
+    Assert-Match $Content 'git -C "\$ROOT_DIR" cat-file -e "HEAD:\$NODIFY_PACKAGE_RELATIVE_PATH"' 'Distribution Android builder must bind NodifyAvalonia to a blob in HEAD.'
+    Assert-Match $Content 'git -C "\$ROOT_DIR" show "HEAD:\$NODIFY_PACKAGE_RELATIVE_PATH" >"\$NODIFY_HEAD_COPY"' 'Distribution Android builder must populate the isolated feed from the HEAD blob.'
+    Assert-Match $Content 'sha256_file "\$NODIFY_PACKAGE_SOURCE"\)" != "\$\(sha256_file "\$NODIFY_HEAD_COPY"' 'Distribution Android builder must reject mutated worktree NodifyAvalonia bytes.'
+    Assert-Match $Content 'rm -rf -- "\$NATIVE_ARTIFACTS_DIR" "\$NUGET_LOCAL_DIR"' 'Distribution Android builder must recreate the isolated local NuGet feed for every build.'
+    Assert-Match $Content 'ET\.SubElement\(sources, "clear"\)' 'Generated Android NuGet config must clear inherited package sources.'
+    Assert-Match $Content 'actual_sources != expected_sources or len\(package_sources\.findall\("add"\)\) != 2' 'Generated Android NuGet config must reject source drift.'
+    Assert-Match $Content 'mappings = ET\.SubElement\(root, "packageSourceMapping"\)[\s\S]*ET\.SubElement\(mappings, "clear"\)' 'Generated Android NuGet config must clear inherited source mappings.'
+    Assert-Match $Content 'local_mapping = ET\.SubElement\(mappings, "packageSource", \{"key": "local"\}\)[\s\S]*"pattern": "NodifyAvalonia"[\s\S]*"pattern": "LibGit2Sharp\.NativeBinaries"' 'Generated Android NuGet config must map both exact private package IDs only to the isolated local feed.'
+    Assert-Match $Content 'public_mapping = ET\.SubElement\(mappings, "packageSource", \{"key": "nuget\.org"\}\)[\s\S]*"pattern": "\*"' 'Generated Android NuGet config must map all remaining packages to nuget.org.'
+    if ([regex]::Matches($Content, 'ET\.SubElement\(mappings, "packageSource",').Count -ne 2 -or
+        [regex]::Matches($Content, '"pattern": "NodifyAvalonia"').Count -ne 1 -or
+        [regex]::Matches($Content, '"pattern": "LibGit2Sharp\.NativeBinaries"').Count -ne 1) {
+        throw 'Generated Android NuGet config source must have exactly two mapping owners and one local mapping per private package ID.'
+    }
+    Assert-Match $Content '(?m)^if descendants != expected:$' 'Distribution Android builder must recursively reject nested local-feed content.'
+    Assert-Match $Content '"\$CACHE_PATH/bundle/nuget-local"[\s\S]*"LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"' 'Android cache-hit path must validate the exact generated package closure before copying it.'
+    Assert-Match $Content '"\$NUGET_LOCAL_DIR"[\s\S]*"LibGit2Sharp\.NativeBinaries\.\$\{LIBGIT2_NATIVE_PACKAGE_VERSION\}\.nupkg"[\s\S]*"\$NODIFY_PACKAGE_NAME"' 'Distribution Android builder must require exactly the two top-level local-feed nupkgs.'
+    Assert-Match $Content 'verify_restored_local_package[\s\S]*metadata\.get\("contentHash"\) != expected_hash[\s\S]*pathlib\.Path\(source\)\.resolve\(\) != local_feed' 'Distribution Android builder must prove restored local packages by exact content hash and source path.'
+    Assert-Match $Content '"NodifyAvalonia"[\s\S]*"6\.6\.0-unlimotion\.a12\.1"[\s\S]*"LibGit2Sharp\.NativeBinaries"[\s\S]*"\$LIBGIT2_NATIVE_PACKAGE_VERSION"' 'Distribution Android builder must verify both exact restored private package identities.'
+    Assert-Match $Content '-p:RestoreConfigFile="\$NUGET_CONFIG_PATH"' 'Distribution Android build must restore through the generated isolated-feed config.'
+    Assert-NotMatch $Content '-p:RestoreConfigFile="\$ROOT_DIR/src/nuget\.config"' 'Distribution Android build must not restore through the repository config that points at the ignored feed.'
+}
+
+function Assert-GeneratedAndroidNuGetConfig {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    [xml]$document = $Content
+    $sourceClear = @($document.SelectNodes('/configuration/packageSources/clear'))
+    $sourceNodes = @($document.SelectNodes('/configuration/packageSources/add'))
+    if ($sourceClear.Count -ne 1 -or $sourceNodes.Count -ne 2 -or
+        @($sourceNodes | Where-Object { $_.key -ceq 'local' }).Count -ne 1 -or
+        @($sourceNodes | Where-Object { $_.key -ceq 'nuget.org' -and $_.value -ceq 'https://api.nuget.org/v3/index.json' }).Count -ne 1) {
+        throw 'Generated Android NuGet config has unexpected package sources.'
+    }
+
+    $mappingClear = @($document.SelectNodes('/configuration/packageSourceMapping/clear'))
+    $mappingNodes = @($document.SelectNodes('/configuration/packageSourceMapping/packageSource'))
+    $localMappings = @($mappingNodes | Where-Object { $_.key -ceq 'local' })
+    $publicMappings = @($mappingNodes | Where-Object { $_.key -ceq 'nuget.org' })
+    if ($mappingClear.Count -ne 1 -or $mappingNodes.Count -ne 2 -or
+        $localMappings.Count -ne 1 -or $publicMappings.Count -ne 1) {
+        throw 'Generated Android NuGet config has unexpected source-mapping owners.'
+    }
+    $localPatterns = @($localMappings[0].package | ForEach-Object { [string]$_.pattern } | Sort-Object -CaseSensitive)
+    $publicPatterns = @($publicMappings[0].package | ForEach-Object { [string]$_.pattern } | Sort-Object -CaseSensitive)
+    if (($localPatterns -join '|') -cne 'LibGit2Sharp.NativeBinaries|NodifyAvalonia' -or
+        ($publicPatterns -join '|') -cne '*') {
+        throw 'Generated Android NuGet config does not map the exact private IDs only to local.'
+    }
+}
+
+Assert-AndroidLocalFeedIsolationContract $distributionBuildScript
+
+$ignoredFeedFixture = $distributionBuildScript.Replace(
+    'NUGET_LOCAL_DIR="$OUTPUT_DIR/nuget-local"',
+    'NUGET_LOCAL_DIR="$ROOT_DIR/artifacts/nuget-local"'
+)
+if ([string]::Equals($ignoredFeedFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android ignored-feed negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $ignoredFeedFixture
+} 'Android local-feed validator accepted an ignored feed that can contain extra packages.'
+
+$mutatedNodifyFixture = $distributionBuildScript.Replace(
+    '[ "$(sha256_file "$NODIFY_PACKAGE_SOURCE")" != "$(sha256_file "$NODIFY_HEAD_COPY")" ]',
+    '[ "trusted-without-comparison" != "trusted-without-comparison" ]'
+)
+if ([string]::Equals($mutatedNodifyFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android mutated-Nodify negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $mutatedNodifyFixture
+} 'Android local-feed validator accepted NodifyAvalonia without a worktree-to-HEAD hash check.'
+
+$publicPrivateIdFixture = $distributionBuildScript.Replace(
+    'local_mapping = ET.SubElement(mappings, "packageSource", {"key": "local"})',
+    'local_mapping = ET.SubElement(mappings, "packageSource", {"key": "nuget.org"})'
+)
+if ([string]::Equals($publicPrivateIdFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android public private-ID source-mapping negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $publicPrivateIdFixture
+} 'Android local-feed validator accepted private package IDs mapped to nuget.org.'
+
+$missingPrivateIdMappingFixture = $distributionBuildScript.Replace(
+    'ET.SubElement(local_mapping, "package", {"pattern": "NodifyAvalonia"})',
+    'ET.SubElement(local_mapping, "package", {"pattern": "NotNodifyAvalonia"})'
+)
+if ([string]::Equals($missingPrivateIdMappingFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android exact private-ID mapping negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $missingPrivateIdMappingFixture
+} 'Android local-feed validator accepted a non-exact NodifyAvalonia source mapping.'
+
+$duplicatePublicPrivateIdFixture = $distributionBuildScript.Replace(
+    'ET.SubElement(public_mapping, "package", {"pattern": "*"})',
+    "ET.SubElement(public_mapping, `"package`", {`"pattern`": `"*`"})`nET.SubElement(public_mapping, `"package`", {`"pattern`": `"NodifyAvalonia`"})"
+)
+if ([string]::Equals($duplicatePublicPrivateIdFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android duplicate public private-ID mapping negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $duplicatePublicPrivateIdFixture
+} 'Android local-feed validator accepted a private package ID mapped to both local and nuget.org.'
+
+$hierarchicalFeedFixture = $distributionBuildScript.Replace(
+    'if descendants != expected:',
+    'if False and descendants != expected:'
+)
+if ([string]::Equals($hierarchicalFeedFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android hierarchical-feed negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidLocalFeedIsolationContract $hierarchicalFeedFixture
+} 'Android local-feed validator accepted a helper without recursive path closure.'
+
+function Assert-AndroidSourceIdentityContract {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    Assert-Match $Content 'actual_source_sha="\$\(git -C "\$ROOT_DIR" rev-parse --verify HEAD\)"' 'Distribution Android builder must resolve exact Git HEAD.'
+    Assert-Match $Content '\[ "\$SOURCE_SHA" = "\$actual_source_sha" \]' 'Distribution Android builder must bind identity sourceSha to exact Git HEAD.'
+    Assert-Match $Content 'status --porcelain=v1 --untracked-files=no --ignore-submodules=untracked' 'Distribution Android builder must reject tracked, index, and submodule dirt while ignoring untracked artifacts.'
+    Assert-Match $Content 'submodule status --recursive' 'Distribution Android builder must inspect recursive submodule commit state.'
+    Assert-Match $Content '" "\*\) ;;[\s\S]*uninitialized, modified, or conflicted submodule' 'Distribution Android builder must accept only initialized submodules at their exact committed SHAs.'
+    Assert-Match $Content 'IFS=\$''\\t'' read -r NORMALIZED_VERSION[\s\S]*\nassert_source_tree_contract\n\nNATIVE_INPUTS_PATH=' 'Distribution Android builder must enforce source identity before both prepare and build modes.'
+}
+
+Assert-AndroidSourceIdentityContract $distributionBuildScript
+
+$headMismatchContractFixture = $distributionBuildScript.Replace(
+    '[ "$SOURCE_SHA" = "$actual_source_sha" ]',
+    '[ -n "$actual_source_sha" ]'
+)
+if ([string]::Equals($headMismatchContractFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android HEAD-mismatch contract negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidSourceIdentityContract $headMismatchContractFixture
+} 'Android source validator accepted a builder without exact identity-to-HEAD binding.'
+
+$dirtyTreeContractFixture = $distributionBuildScript.Replace(
+    'status --porcelain=v1 --untracked-files=no --ignore-submodules=untracked',
+    'status --porcelain=v1 --untracked-files=all --ignore-submodules=all'
+)
+if ([string]::Equals($dirtyTreeContractFixture, $distributionBuildScript, [StringComparison]::Ordinal)) {
+    throw 'Android dirty-tree contract negative fixture did not mutate source.'
+}
+Assert-Throws {
+    Assert-AndroidSourceIdentityContract $dirtyTreeContractFixture
+} 'Android source validator accepted a builder that does not enforce tracked/index/submodule cleanliness.'
+
 Assert-Match $distributionBuildScript 'ANDROID_API_LEVEL="\$\{ANDROID_API_LEVEL:-23\}"' 'Distribution Android native builds must default to API 23.'
 Assert-Match $distributionBuildScript 'android-native-v2-\$\{runner_os_part\}-\$\{runner_arch_part\}-\$\{NATIVE_INPUT_DIGEST\}' 'Distribution Android cache key must bind runner identity to the exact native-input digest.'
 Assert-Match $distributionBuildScript 'rm -rf -- "\$CACHE_PATH"[\s\S]*mkdir -p "\$CACHE_PATH"' 'Distribution Android builder must clear the exact cache path before restore.'
+Assert-Match $distributionBuildScript '-p:WarningsAsErrors=NU1603' 'Distribution Android builds must reject local-feed fallback as NU1603.'
 Assert-Match $distributionBuildScript '"inputFileSha256": input_hashes' 'Distribution Android cache inputs must include all declared input file hashes.'
 Assert-Match $distributionBuildScript 'git -C "\$ROOT_DIR" ls-tree HEAD \.native/libgit2-src' 'Distribution Android cache inputs must bind the committed libgit2 gitlink SHA.'
 Assert-Match $distributionBuildScript 'OPENSSL_SOURCE_SHA256="[0-9a-f]{64}"' 'OpenSSL source archive hash must be fixed in the distribution builder.'
@@ -529,7 +705,6 @@ Assert-Match $distributionBuildScript 'cp -aL "\$NATIVE_ARTIFACTS_DIR/openssl-' 
 Assert-Match $distributionBuildScript '-p:DistributionBuild=true' 'Distribution Android builder must enable the common immutable distribution identity guard.'
 Assert-Match $distributionBuildScript '-p:DistributionVersion="\$NORMALIZED_VERSION"' 'Distribution Android builder must pass the normalized distribution version.'
 Assert-Match $distributionBuildScript '-p:DistributionSourceSha="\$SOURCE_SHA"' 'Distribution Android builder must pass the exact distribution source SHA.'
-Assert-Match $distributionBuildScript '-p:RestoreConfigFile="\$ROOT_DIR/src/nuget\.config"' 'Distribution Android builder must use the repository-local native package feed from any caller CWD.'
 Assert-Match $distributionBuildScript 'AndroidSigningStorePass=env:ANDROID_SIGNING_STORE_PASS' 'Distribution Android builder must keep signing passwords out of MSBuild argv values.'
 Assert-Match $distributionBuildScript 'cleanup_signing' 'Distribution Android builder must clean ephemeral signing material.'
 Assert-Match $distributionBuildScript '--mode provenance[\s\S]*--identity "\$IDENTITY_PATH"[\s\S]*--cache-hit true[\s\S]*--cache-save false' 'Android cache-hit provenance must carry the full identity and exact hit/save outcome.'
@@ -580,10 +755,60 @@ Assert-Match $distributionArtifactScript "'transport/android-api23', 'transport/
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("unlimotion-android-contract-{0}" -f [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 try {
+    $sourceFixtureRoot = Join-Path $tempRoot 'source-fixture'
+    $fixtureFiles = @(
+        'artifacts/nuget-local/NodifyAvalonia.6.6.0-unlimotion.a12.1.nupkg',
+        'scripts/android-native-common.sh',
+        'scripts/build-android-distribution.sh',
+        'scripts/build-libgit2-android.sh',
+        'scripts/build-libssh2-android.sh',
+        'scripts/build-openssl-android.sh',
+        'scripts/pack-libgit2sharp-nativebinaries-android.sh',
+        'scripts/test-android-distribution.sh',
+        'src/Directory.Packages.props',
+        'src/Unlimotion.Android/Unlimotion.Android.csproj',
+        'src/nuget.config'
+    )
+    foreach ($relative in $fixtureFiles) {
+        $source = Join-Path $rootDir $relative.Replace('/', [string][System.IO.Path]::DirectorySeparatorChar)
+        $destination = Join-Path $sourceFixtureRoot $relative.Replace('/', [string][System.IO.Path]::DirectorySeparatorChar)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
+    $submoduleSeedRoot = Join-Path $tempRoot 'submodule-seed'
+    New-Item -ItemType Directory -Force -Path $submoduleSeedRoot | Out-Null
+    Invoke-GitChecked @('-C', $submoduleSeedRoot, 'init', '--initial-branch=fixture') 'Unable to initialize the Android submodule fixture.' | Out-Null
+    Invoke-GitChecked @('-C', $submoduleSeedRoot, 'config', 'user.name', 'Unlimotion Android Fixture') 'Unable to configure the Android submodule fixture author.' | Out-Null
+    Invoke-GitChecked @('-C', $submoduleSeedRoot, 'config', 'user.email', 'android-fixture@example.invalid') 'Unable to configure the Android submodule fixture email.' | Out-Null
+    Write-Utf8Text (Join-Path $submoduleSeedRoot 'fixture.txt') 'initialized clean submodule fixture'
+    Invoke-GitChecked @('-C', $submoduleSeedRoot, 'add', '--all') 'Unable to stage the Android submodule fixture.' | Out-Null
+    Invoke-GitChecked @('-C', $submoduleSeedRoot, 'commit', '-m', 'fixture(android): initialize native source') 'Unable to commit the Android submodule fixture.' | Out-Null
+    $gitLinkSha = ((Invoke-GitChecked @('-C', $submoduleSeedRoot, 'rev-parse', '--verify', 'HEAD') 'Unable to resolve the Android submodule fixture HEAD.') -join '').Trim()
+    if ($gitLinkSha -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'Android submodule fixture HEAD is not an exact lowercase SHA.'
+    }
+
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'init', '--initial-branch=fixture') 'Unable to initialize the clean Android source fixture.' | Out-Null
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'config', 'user.name', 'Unlimotion Android Fixture') 'Unable to configure the Android source fixture author.' | Out-Null
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'config', 'user.email', 'android-fixture@example.invalid') 'Unable to configure the Android source fixture email.' | Out-Null
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'config', 'core.autocrlf', 'false') 'Unable to disable line-ending conversion in the Android source fixture.' | Out-Null
+    Invoke-GitChecked @(
+        '-C', $sourceFixtureRoot,
+        '-c', 'protocol.file.allow=always',
+        'submodule', 'add', '--name', '.native/libgit2-src',
+        $submoduleSeedRoot, '.native/libgit2-src'
+    ) 'Unable to register the initialized Android submodule fixture.' | Out-Null
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'add', '--all') 'Unable to stage the clean Android source fixture.' | Out-Null
+    Invoke-GitChecked @('-C', $sourceFixtureRoot, 'commit', '-m', 'fixture(android): snapshot source contract') 'Unable to commit the clean Android source fixture.' | Out-Null
+    $fixtureHead = ((Invoke-GitChecked @('-C', $sourceFixtureRoot, 'rev-parse', '--verify', 'HEAD') 'Unable to resolve the Android source fixture HEAD.') -join '').Trim()
+    if ($fixtureHead -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'Android source fixture HEAD is not an exact lowercase SHA.'
+    }
+
     $identity = [ordered]@{
         rawTag = 'v1.28.0'
         normalizedVersion = '1.28.0'
-        sourceSha = '0000000000000000000000000000000000000000'
+        sourceSha = $fixtureHead
         workflowSha = '1111111111111111111111111111111111111111'
         tagBinding = 'notApplicable'
         manifestSha256 = '2222222222222222222222222222222222222222222222222222222222222222'
@@ -606,7 +831,7 @@ try {
     New-Item -ItemType Directory -Path $outputDir, $cacheRoot | Out-Null
     Write-Utf8Text $identityPath (($identity | ConvertTo-Json -Depth 10 -Compress) + "`n")
 
-    $rootBash = Convert-ToBashPath $rootDir
+    $rootBash = Convert-ToBashPath $sourceFixtureRoot
     $quotedPathDirectory = Join-Path $tempRoot "bash path's fixture"
     $quotedPathFile = Join-Path $quotedPathDirectory "present file's marker.txt"
     New-Item -ItemType Directory -Path $quotedPathDirectory | Out-Null
@@ -618,7 +843,7 @@ try {
         'test -e {0}' -f (Quote-Bash (Convert-ToBashPath (Join-Path $quotedPathDirectory 'missing.txt')))
     ) 'Bash path conversion mapped a missing fixture to an existing path.'
 
-    $gitDir = (& git -C $rootDir rev-parse --absolute-git-dir) -join ''
+    $gitDir = (& git -C $sourceFixtureRoot rev-parse --absolute-git-dir) -join ''
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitDir)) {
         throw 'Unable to resolve the worktree Git directory for Bash fixtures.'
     }
@@ -626,14 +851,64 @@ try {
     $identityBash = Convert-ToBashPath $identityPath
     $outputBash = Convert-ToBashPath $outputDir
     $cacheRootBash = Convert-ToBashPath $cacheRoot
-    $prepareCommand = 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
+    Write-Utf8Text (Join-Path $sourceFixtureRoot 'artifacts/untracked-build-note.txt') 'untracked Android build artifact'
+    $prepareCommand = 'cd {0} && "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {1} --output-dir {2} --cache-dir {3} --runner-os Linux --runner-arch X64' -f @(
         (Quote-Bash $rootBash),
-        (Quote-Bash $gitDirBash),
         (Quote-Bash $identityBash),
         (Quote-Bash $outputBash),
         (Quote-Bash $cacheRootBash)
     )
     $prepareOutput = Invoke-BashChecked $prepareCommand 'Android prepare-cache positive fixture failed.'
+
+    $headMismatchIdentity = $identity | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+    $headMismatchIdentity.sourceSha = '0000000000000000000000000000000000000000'
+    $headMismatchIdentityPath = Join-Path $tempRoot 'identity-head-mismatch.json'
+    Write-Utf8Text $headMismatchIdentityPath (($headMismatchIdentity | ConvertTo-Json -Depth 10 -Compress) + "`n")
+    $headMismatchCommand = 'cd {0} && "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {1} --output-dir {2} --cache-dir {3} --runner-os Linux --runner-arch X64' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash (Convert-ToBashPath $headMismatchIdentityPath)),
+        (Quote-Bash (Convert-ToBashPath (Join-Path $tempRoot 'head-mismatch-output'))),
+        (Quote-Bash (Convert-ToBashPath (Join-Path $tempRoot 'head-mismatch-cache')))
+    )
+    Assert-BashFails $headMismatchCommand 'Android prepare-cache accepted identity sourceSha that differs from exact Git HEAD.'
+
+    $dirtyFixturePath = Join-Path $sourceFixtureRoot 'src/nuget.config'
+    $dirtyFixtureBytes = [System.IO.File]::ReadAllBytes($dirtyFixturePath)
+    try {
+        [System.IO.File]::AppendAllText($dirtyFixturePath, "`n<!-- tracked dirty fixture -->`n", [System.Text.UTF8Encoding]::new($false))
+        $dirtyTreeCommand = 'cd {0} && "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {1} --output-dir {2} --cache-dir {3} --runner-os Linux --runner-arch X64' -f @(
+            (Quote-Bash $rootBash),
+            (Quote-Bash $identityBash),
+            (Quote-Bash (Convert-ToBashPath (Join-Path $tempRoot 'dirty-tree-output'))),
+            (Quote-Bash (Convert-ToBashPath (Join-Path $tempRoot 'dirty-tree-cache')))
+        )
+        Assert-BashFails $dirtyTreeCommand 'Android prepare-cache accepted a tracked dirty source tree.'
+    }
+    finally {
+        [System.IO.File]::WriteAllBytes($dirtyFixturePath, $dirtyFixtureBytes)
+    }
+
+    try {
+        [System.IO.File]::AppendAllText($dirtyFixturePath, "`n<!-- staged dirty fixture -->`n", [System.Text.UTF8Encoding]::new($false))
+        Invoke-GitChecked @('-C', $sourceFixtureRoot, 'add', '--', 'src/nuget.config') 'Unable to stage the Android index-dirty fixture.' | Out-Null
+        [System.IO.File]::WriteAllBytes($dirtyFixturePath, $dirtyFixtureBytes)
+        Assert-BashFails $dirtyTreeCommand 'Android prepare-cache accepted a dirty Git index.'
+    }
+    finally {
+        Invoke-GitChecked @('-C', $sourceFixtureRoot, 'reset', '--quiet', 'HEAD', '--', 'src/nuget.config') 'Unable to reset the Android index-dirty fixture.' | Out-Null
+        [System.IO.File]::WriteAllBytes($dirtyFixturePath, $dirtyFixtureBytes)
+    }
+
+    $dirtySubmodulePath = Join-Path $sourceFixtureRoot '.native/libgit2-src/fixture.txt'
+    $dirtySubmoduleBytes = [System.IO.File]::ReadAllBytes($dirtySubmodulePath)
+    try {
+        [System.IO.File]::AppendAllText($dirtySubmodulePath, "`ntracked submodule dirty fixture`n", [System.Text.UTF8Encoding]::new($false))
+        Assert-BashFails $dirtyTreeCommand 'Android prepare-cache accepted a tracked dirty submodule.'
+    }
+    finally {
+        [System.IO.File]::WriteAllBytes($dirtySubmodulePath, $dirtySubmoduleBytes)
+    }
+
     $prepareValues = @{}
     foreach ($line in $prepareOutput) {
         $lineText = [string]$line
@@ -741,6 +1016,54 @@ try {
         [string]$provenanceEvidence.outputClosureSha256 -notmatch '^[0-9a-f]{64}$') {
         throw 'Exact Android native provenance evidence is incomplete.'
     }
+
+    $hierarchicalOutput = Join-Path $tempRoot 'hierarchical-cache-output'
+    $hierarchicalCacheRoot = Join-Path $tempRoot 'hierarchical-cache-root'
+    $hierarchicalCachePath = Join-Path $hierarchicalCacheRoot $nativeInputDigest
+    New-Item -ItemType Directory -Force -Path $hierarchicalOutput, $hierarchicalCacheRoot | Out-Null
+    Copy-Item -LiteralPath $nativeInputsPath -Destination (Join-Path $hierarchicalOutput 'native-inputs.json')
+    Copy-Item -LiteralPath $cachePath -Destination $hierarchicalCachePath -Recurse
+    $nestedPackagePath = Join-Path $hierarchicalCachePath 'bundle/nuget-local/nested/public-substitute.nupkg'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $nestedPackagePath) | Out-Null
+    Write-Utf8Text $nestedPackagePath 'hierarchical cache package fixture'
+    $hierarchicalProvenancePath = Join-Path $hierarchicalCachePath 'native-provenance.json'
+    $hierarchicalProvenance = Get-Content -Raw -LiteralPath $hierarchicalProvenancePath | ConvertFrom-Json
+    $hierarchicalProvenance.outputs = @($hierarchicalProvenance.outputs) + [pscustomobject][ordered]@{
+        path = 'nuget-local/nested/public-substitute.nupkg'
+        size = (Get-Item -LiteralPath $nestedPackagePath).Length
+        sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $nestedPackagePath).Hash.ToLowerInvariant()
+    }
+    Write-Utf8Text $hierarchicalProvenancePath (($hierarchicalProvenance | ConvertTo-Json -Depth 20 -Compress) + "`n")
+    $hierarchicalBuildCommand = 'cd {0} && "$BASH" scripts/build-android-distribution.sh --mode build --identity {1} --output-dir {2} --cache-dir {3} --requested-cache-key {4} --matched-cache-key {4} --cache-hit true --runner-os Linux --runner-arch X64' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $hierarchicalOutput)),
+        (Quote-Bash (Convert-ToBashPath $hierarchicalCacheRoot)),
+        (Quote-Bash $cacheKey)
+    )
+    Assert-BashFails $hierarchicalBuildCommand 'Android cache-hit build accepted a declared nested local-feed package.'
+    $generatedNuGetConfigPath = Join-Path $hierarchicalOutput 'nuget.config'
+    if (-not (Test-Path -LiteralPath $generatedNuGetConfigPath -PathType Leaf)) {
+        throw 'Android cache-hit fixture did not generate the isolated NuGet config before rejecting the hierarchical feed.'
+    }
+    $generatedNuGetConfig = Get-Content -Raw -LiteralPath $generatedNuGetConfigPath
+    Assert-GeneratedAndroidNuGetConfig $generatedNuGetConfig
+    $nugetConfigParseOutput = @(& dotnet nuget list source --configfile $generatedNuGetConfigPath 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet rejected the generated Android NuGet config.`n$($nugetConfigParseOutput -join [Environment]::NewLine)"
+    }
+
+    [xml]$publicSubstitutionConfig = $generatedNuGetConfig
+    $publicSubstitutionConfig.SelectSingleNode('/configuration/packageSourceMapping/packageSource[@key="local"]').SetAttribute('key', 'nuget.org')
+    Assert-Throws {
+        Assert-GeneratedAndroidNuGetConfig $publicSubstitutionConfig.OuterXml
+    } 'Generated Android NuGet config validator accepted private package IDs remapped to nuget.org.'
+
+    [xml]$inexactPrivateIdConfig = $generatedNuGetConfig
+    $inexactPrivateIdConfig.SelectSingleNode('/configuration/packageSourceMapping/packageSource[@key="local"]/package[@pattern="NodifyAvalonia"]').SetAttribute('pattern', 'NodifyAvalonia.*')
+    Assert-Throws {
+        Assert-GeneratedAndroidNuGetConfig $inexactPrivateIdConfig.OuterXml
+    } 'Generated Android NuGet config validator accepted an inexact private package ID mapping.'
 
     $cacheMissEvidencePath = Join-Path $outputDir 'provenance-cache-miss-evidence.json'
     $cacheMissCommand = (& $provenanceCommandFor $nativeInputsPath $cachePath $cacheKey $cacheKey $cacheMissEvidencePath).
@@ -1008,9 +1331,8 @@ fi
         $candidateOutput = Join-Path $tempRoot "identity-$Label-output"
         $candidateCache = Join-Path $tempRoot "identity-$Label-cache"
         New-Item -ItemType Directory -Path $candidateOutput, $candidateCache | Out-Null
-        return 'cd {0} && GIT_DIR={1} GIT_WORK_TREE={0} "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {2} --output-dir {3} --cache-dir {4} --runner-os Linux --runner-arch X64' -f @(
+        return 'cd {0} && "$BASH" scripts/build-android-distribution.sh --mode prepare-cache --identity {1} --output-dir {2} --cache-dir {3} --runner-os Linux --runner-arch X64' -f @(
             (Quote-Bash $rootBash),
-            (Quote-Bash $gitDirBash),
             (Quote-Bash (Convert-ToBashPath $CandidateIdentityPath)),
             (Quote-Bash (Convert-ToBashPath $candidateOutput)),
             (Quote-Bash (Convert-ToBashPath $candidateCache))
