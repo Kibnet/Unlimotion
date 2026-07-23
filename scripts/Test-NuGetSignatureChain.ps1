@@ -1049,6 +1049,111 @@ function Write-AttemptReceipt(
     [IO.File]::WriteAllText((Join-Path $Root 'attempt.json'), $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 }
 
+function ConvertTo-CanonicalPublicationPhases([object[]]$Phases, [string]$DefaultFailureCode) {
+    Assert-True (-not [string]::IsNullOrWhiteSpace($DefaultFailureCode)) 'Default publication failure code is invalid.'
+    $canonical = [System.Collections.Generic.List[object]]::new()
+    foreach ($phase in $Phases) {
+        Assert-True ($phase -is [System.Collections.IDictionary]) 'Signature phase cannot be converted to a publication tuple.'
+        $name = [string]$phase['name']
+        $status = [string]$phase['status']
+        $exitCode = [int]$phase['exitCode']
+        Assert-True ($name -cmatch '^signature:' -and $status -cin @('success', 'failure')) 'Signature phase cannot be converted to a publication tuple.'
+        $failureCode = $null
+        if ($status -ceq 'success') {
+            Assert-True ($exitCode -eq 0) 'Successful signature phase has a nonzero exit code.'
+        } else {
+            Assert-True ($exitCode -ne 0) 'Failed signature phase has a zero exit code.'
+            if ($phase.Contains('failureCode') -and $phase['failureCode'] -is [string] -and -not [string]::IsNullOrWhiteSpace($phase['failureCode'])) {
+                $failureCode = [string]$phase['failureCode']
+            } else {
+                $failureCode = $DefaultFailureCode
+            }
+        }
+        $canonical.Add([ordered]@{ name = $name; status = $status; exitCode = $exitCode; failureCode = $failureCode })
+    }
+    Assert-True ($canonical.Count -ge 1) 'Signature publication phases cannot be empty.'
+    return ,$canonical.ToArray()
+}
+
+function Get-CompletedSignatureProjects([hashtable[]]$Projects, [object[]]$Phases) {
+    $completed = [System.Collections.Generic.List[object]]::new()
+    foreach ($project in $Projects) {
+        $assetsPhase = "signature:assets:$($project.id)"
+        $succeeded = @($Phases | Where-Object { $_ -is [System.Collections.IDictionary] -and $_['name'] -ceq $assetsPhase -and $_['status'] -ceq 'success' })
+        if ($succeeded.Count -eq 1) {
+            $completed.Add([ordered]@{ id = $project.id })
+        }
+    }
+    return ,$completed.ToArray()
+}
+
+function Get-AttemptedSignaturePackages([object[]]$Packages) {
+    $attempted = [System.Collections.Generic.List[object]]::new()
+    foreach ($package in $Packages) {
+        Assert-True ($package -is [System.Collections.IDictionary]) 'Signature package cannot be converted to a failure projection.'
+        $attempted.Add([ordered]@{
+                id = [string]$package['id']
+                version = [string]$package['version']
+                nupkgSha512 = [string]$package['nupkgSha512']
+                verifyExitCode = 0
+            })
+    }
+    return ,$attempted.ToArray()
+}
+
+function Publish-SignatureFailureEvidence(
+    [string]$CandidateEvidencePath,
+    [string]$EvidencePath,
+    [string]$SourceSha,
+    [int]$Attempt,
+    [object[]]$Phases,
+    [object[]]$CompletedProjects,
+    [object[]]$AttemptedPackages,
+    [object[]]$SecretSeeds,
+    [string]$DefaultFailureCode
+) {
+    $publicationPhases = [System.Collections.Generic.List[object]]::new()
+    foreach ($phase in (ConvertTo-CanonicalPublicationPhases -Phases $Phases -DefaultFailureCode $DefaultFailureCode)) {
+        $publicationPhases.Add($phase)
+    }
+    $failedPhases = @($publicationPhases | Where-Object { $_.status -ceq 'failure' })
+    Assert-True ($failedPhases.Count -ge 1) 'Signature failure publication requires a failed phase.'
+    if (Test-Path -LiteralPath $CandidateEvidencePath) {
+        Remove-Item -LiteralPath $CandidateEvidencePath -Recurse -Force -ErrorAction Stop
+    }
+
+    $sanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureSanitize' -Payload ([ordered]@{
+            candidateEvidenceRoot = $CandidateEvidencePath
+            sourceSha = $SourceSha
+            runAttempt = [string]$Attempt
+            failurePhase = $failedPhases[0].name
+            completedProjects = $CompletedProjects
+            attemptedPackages = $AttemptedPackages
+            diagnostics = @([ordered]@{ phase = $failedPhases[0].name; code = $failedPhases[0].failureCode })
+            phaseResults = $publicationPhases.ToArray()
+        }) -SecretSeeds $SecretSeeds -TimeoutSeconds 300
+    if ($sanitizerResult.Success -eq $true -and $sanitizerResult.ExitCode -eq 0 -and $sanitizerResult.TerminationProven -eq $true) {
+        $publicationPhases.Add([ordered]@{ name = 'signature:sanitize'; status = 'success'; exitCode = 0; failureCode = $null })
+    } else {
+        if (Test-Path -LiteralPath $CandidateEvidencePath) {
+            Remove-Item -LiteralPath $CandidateEvidencePath -Recurse -Force -ErrorAction Stop
+        }
+        $sanitizerExitCode = if ($sanitizerResult.ExitCode -eq 0) { 2 } else { [int]$sanitizerResult.ExitCode }
+        $sanitizerFailureCode = if ($sanitizerResult.FailureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($sanitizerResult.FailureCode)) { $sanitizerResult.FailureCode } else { 'signature-sanitizer-failed' }
+        $publicationPhases.Add([ordered]@{ name = 'signature:sanitize'; status = 'failure'; exitCode = $sanitizerExitCode; failureCode = $sanitizerFailureCode })
+    }
+
+    $finalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+            candidateEvidenceRoot = $CandidateEvidencePath
+            finalEvidenceRoot = $EvidencePath
+            sourceSha = $SourceSha
+            runAttempt = [string]$Attempt
+            lane = 'Signature'
+            phaseResults = $publicationPhases.ToArray()
+        }) -SecretSeeds $SecretSeeds -TimeoutSeconds 300
+    Assert-True ($finalizerResult.Success -eq $true -and $finalizerResult.ExitCode -eq 0 -and $finalizerResult.TerminationProven -eq $true -and (Test-Path -LiteralPath $EvidencePath -PathType Container)) 'Closed signature failure finalizer failed.'
+}
+
 function Invoke-SignatureAttempt {
     Assert-True ($Lane -ceq 'Signature') 'RunAttempt currently accepts only the Signature lane.'
     Assert-True ($env:DOTNET_NUGET_SIGNATURE_VERIFICATION -ceq 'true') 'DOTNET_NUGET_SIGNATURE_VERIFICATION must be exactly true.'
@@ -1147,8 +1252,17 @@ function Invoke-SignatureAttempt {
         Assert-True ($finalizerResult.Success -eq $true -and $finalizerResult.ExitCode -eq 0 -and $finalizerResult.TerminationProven -eq $true -and (Test-Path -LiteralPath $evidencePath -PathType Container)) 'Closed publication finalizer failed.'
         Write-Output "NuGet signature evidence: $evidencePath"
     } catch {
-        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
-        throw
+        $attemptFailure = $_
+        $failedPhases = @($phases | Where-Object { $_ -is [System.Collections.IDictionary] -and $_['status'] -ceq 'failure' })
+        if ($failedPhases.Count -eq 0) {
+            $phases.Add([ordered]@{ name = 'signature:orchestration'; status = 'failure'; exitCode = 2; failureCode = 'attempt-failed' })
+        }
+        try {
+            Publish-SignatureFailureEvidence -CandidateEvidencePath ($evidencePath + '.candidate') -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -Phases $phases.ToArray() -CompletedProjects (Get-CompletedSignatureProjects -Projects $projects -Phases $phases.ToArray()) -AttemptedPackages (Get-AttemptedSignaturePackages -Packages $packages.ToArray()) -SecretSeeds $secretSeeds -DefaultFailureCode 'attempt-failed'
+        } catch {
+            # A finalizer failure is deliberately not replaced by a mutable legacy receipt.
+        }
+        throw $attemptFailure
     } finally {
         if (Test-Path -LiteralPath $stagedAssetsRoot) {
             Remove-Item -LiteralPath $stagedAssetsRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -1458,6 +1572,13 @@ function Invoke-SelfTest {
             Assert-True ($failurePrimaryReceipt.outcome -ceq 'failure' -and $failurePrimaryReceipt.failurePhase -ceq 'signature:verify:ReactiveUI.Avalonia' -and $failurePrimaryReceipt.failureCode -ceq 'signature-verification-failed') 'Publication finalizer signature failure receipt is invalid.'
             Remove-Item -LiteralPath $failurePrimaryRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $failureSanitizerRoot -Recurse -Force -ErrorAction Stop
+            $integratedFailureRoot = $sanitizerRoot + '-integrated-failure-final'
+            $integratedFailureCandidate = $integratedFailureRoot + '.candidate'
+            Publish-SignatureFailureEvidence -CandidateEvidencePath $integratedFailureCandidate -EvidencePath $integratedFailureRoot -SourceSha ('a' * 40) -Attempt 1 -Phases @([ordered]@{ name = 'signature:verify:worker'; status = 'failure'; exitCode = -2; failureCode = 'native-command-threw' }) -CompletedProjects @() -AttemptedPackages @() -SecretSeeds $syntheticSeeds -DefaultFailureCode 'attempt-failed'
+            $integratedFailureReceipt = [IO.File]::ReadAllText((Join-Path $integratedFailureRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($integratedFailureReceipt.receiptKind -ceq 'primary' -and $integratedFailureReceipt.outcome -ceq 'failure' -and $integratedFailureReceipt.failurePhase -ceq 'signature:verify:worker' -and $integratedFailureReceipt.failureCode -ceq 'native-command-threw') 'Signature attempt failure publication did not preserve the failed worker phase.'
+            Remove-Item -LiteralPath $integratedFailureRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $integratedFailureCandidate -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }

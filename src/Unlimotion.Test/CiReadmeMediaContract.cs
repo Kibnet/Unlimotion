@@ -64,6 +64,7 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("Test-SecretEnvironmentName");
         await Assert.That(nugetSignatureScript).Contains("Invoke-SignatureSanitizeWorker");
         await Assert.That(nugetSignatureScript).Contains("Invoke-SignatureFailureSanitizeWorker");
+        await Assert.That(nugetSignatureScript).Contains("Publish-SignatureFailureEvidence");
         await Assert.That(nugetSignatureScript).Contains("Get-CandidateEvidenceManifest");
         await Assert.That(nugetSignatureScript).Contains("Invoke-PublicationFinalizeWorker");
         await Assert.That(nugetSignatureScript).Contains("attempt-receipt.json");
