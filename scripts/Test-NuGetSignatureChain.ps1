@@ -142,15 +142,13 @@ function Invoke-GenerateBaseline {
     Assert-True (-not (Test-Path -LiteralPath $output)) 'GenerateBaseline OutputPath must not exist.'
 
     $projectsToStage = @(
-        @{ path = 'tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj'; assets = 'headless.project.assets.json' },
-        @{ path = 'src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj'; assets = 'desktop.project.assets.json' },
-        @{ path = 'src\\Unlimotion.Desktop\\Unlimotion.Desktop.ForDebianBuild.csproj'; assets = 'debian.project.assets.json' }
+        @{ path = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; assets = 'headless.project.assets.json' },
+        @{ path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.csproj'; assets = 'desktop.project.assets.json' },
+        @{ path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj'; assets = 'debian.project.assets.json' }
     )
     $projectPaths = @($projectsToStage | ForEach-Object { $_.path })
     $manifestPaths = @('src/Directory.Packages.props', 'src/nuget.config')
-    foreach ($projectPath in $projectPaths) {
-        $manifestPaths += $projectPath.Replace('\\', '/')
-    }
+    $manifestPaths += $projectPaths
     $inputManifest = [System.Collections.Generic.List[object]]::new()
     foreach ($path in @($manifestPaths | Sort-Object -Unique)) {
         $absolute = Join-Path $root $path
@@ -165,8 +163,16 @@ function Invoke-GenerateBaseline {
     }
     $sdk = (& $DotNetExecutable --version).Trim()
     Assert-True ($LASTEXITCODE -eq 0 -and $sdk -cmatch '^10\.0\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') 'GenerateBaseline requires a .NET 10 SDK.'
-    $fixture = [ordered]@{ schemaVersion = 1; sourceSha = $head; gitObjectFormat = 'sha1'; dotnetSdkVersion = $sdk; inputManifest = @($inputManifest); projects = @($projects) }
+    $fixtureProjects = $projects.ToArray()
+    Assert-True ($fixtureProjects.Count -eq $projectsToStage.Count) 'Baseline fixture must contain all staged projects.'
+    $fixture = [ordered]@{ schemaVersion = 1; sourceSha = $head; gitObjectFormat = 'sha1'; dotnetSdkVersion = $sdk; inputManifest = $inputManifest.ToArray(); projects = $fixtureProjects }
     $json = $fixture | ConvertTo-Json -Depth 16
+    $roundTrip = $json | ConvertFrom-Json -AsHashtable -Depth 32
+    $roundTripProjects = @($roundTrip.projects)
+    Assert-True ($roundTripProjects.Count -eq $projectsToStage.Count) 'Baseline fixture serialization lost a staged project.'
+    for ($index = 0; $index -lt $projectsToStage.Count; $index++) {
+        Assert-True ($roundTripProjects[$index].projectPath -ceq $projectsToStage[$index].path) 'Baseline fixture project order or path changed during serialization.'
+    }
     New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Null
     [IO.File]::WriteAllText($output, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
     Write-Output "NuGet baseline fixture: $output"
@@ -353,6 +359,14 @@ function Invoke-SelfTest {
         $script:RunAttempt = $originalRunAttempt
     }
     Assert-True $invalidAttemptRejected 'Non-canonical run attempt was accepted.'
+
+    $fixtureProjects = @(
+        [ordered]@{ projectPath = 'one'; packageSet = @(); graphSha256 = '1' },
+        [ordered]@{ projectPath = 'two'; packageSet = @(); graphSha256 = '2' },
+        [ordered]@{ projectPath = 'three'; packageSet = @(); graphSha256 = '3' }
+    )
+    $roundTrip = ([ordered]@{ projects = $fixtureProjects } | ConvertTo-Json -Depth 8) | ConvertFrom-Json -AsHashtable -Depth 16
+    Assert-True (@($roundTrip.projects).Count -eq 3) 'Baseline project serialization must preserve all projects.'
 }
 
 if ($Mode -eq 'GenerateBaseline') {
