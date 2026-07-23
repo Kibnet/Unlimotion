@@ -14,6 +14,7 @@ param(
     [AllowEmptyString()]
     [string]$ExpectedParentSha,
     [string]$OutputPath,
+    [string]$BaselineAssetsRoot,
     [string]$DotNetExecutable = 'dotnet'
 )
 
@@ -102,10 +103,9 @@ function Get-CanonicalGraphHash([object[]]$Packages) {
     return ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant()
 }
 
-function Get-BaselineProjectPackageSet([string]$Root, [string]$ProjectPath, [string]$PackagesPath) {
-    $assetsPath = Join-Path $Root ((Split-Path -Parent $ProjectPath) + '\\obj\\project.assets.json')
-    Assert-True (Test-Path -LiteralPath $assetsPath -PathType Leaf) "Missing restored assets file: $ProjectPath."
-    $assets = Get-Content -Raw -LiteralPath $assetsPath | ConvertFrom-Json -AsHashtable -Depth 32
+function Get-BaselineProjectPackageSet([string]$Root, [string]$ProjectPath, [string]$PackagesPath, [string]$AssetsPath) {
+    Assert-True (Test-Path -LiteralPath $AssetsPath -PathType Leaf) "Missing staged assets file: $ProjectPath."
+    $assets = Get-Content -Raw -LiteralPath $AssetsPath | ConvertFrom-Json -AsHashtable -Depth 32
     $packages = [System.Collections.Generic.List[object]]::new()
     foreach ($libraryKey in @($assets.libraries.Keys | Sort-Object)) {
         $separator = $libraryKey.LastIndexOf('/')
@@ -134,16 +134,19 @@ function Invoke-GenerateBaseline {
     Assert-True ($LASTEXITCODE -eq 0 -and $head -ceq $ExpectedParentSha) 'GenerateBaseline requires exact parent HEAD.'
     Assert-True (-not [string]::IsNullOrWhiteSpace($PackagesRoot)) 'GenerateBaseline requires PackagesRoot.'
     Assert-True (-not [string]::IsNullOrWhiteSpace($OutputPath)) 'GenerateBaseline requires OutputPath.'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($BaselineAssetsRoot)) 'GenerateBaseline requires BaselineAssetsRoot.'
     $packagesPath = [IO.Path]::GetFullPath($PackagesRoot)
     Assert-True (Test-Path -LiteralPath $packagesPath -PathType Container) 'GenerateBaseline PackagesRoot must exist.'
     $output = [IO.Path]::GetFullPath($OutputPath)
+    $assetsRoot = [IO.Path]::GetFullPath($BaselineAssetsRoot)
     Assert-True (-not (Test-Path -LiteralPath $output)) 'GenerateBaseline OutputPath must not exist.'
 
-    $projectPaths = @(
-        'tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj',
-        'src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj',
-        'src\\Unlimotion.Desktop\\Unlimotion.Desktop.ForDebianBuild.csproj'
+    $projectsToStage = @(
+        @{ path = 'tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj'; assets = 'headless.project.assets.json' },
+        @{ path = 'src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj'; assets = 'desktop.project.assets.json' },
+        @{ path = 'src\\Unlimotion.Desktop\\Unlimotion.Desktop.ForDebianBuild.csproj'; assets = 'debian.project.assets.json' }
     )
+    $projectPaths = @($projectsToStage | ForEach-Object { $_.path })
     $manifestPaths = @('src/Directory.Packages.props', 'src/nuget.config')
     foreach ($projectPath in $projectPaths) {
         $manifestPaths += $projectPath.Replace('\\', '/')
@@ -157,7 +160,9 @@ function Invoke-GenerateBaseline {
         $inputManifest.Add([ordered]@{ path = $path; mode = $Matches[1]; gitObjectId = $Matches[2]; byteLength = [long](Get-Item -LiteralPath $absolute).Length; sha256 = Get-Sha256 -Path $absolute })
     }
     $projects = [System.Collections.Generic.List[object]]::new()
-    foreach ($projectPath in $projectPaths) { $projects.Add((Get-BaselineProjectPackageSet -Root $root -ProjectPath $projectPath -PackagesPath $packagesPath)) }
+    foreach ($project in $projectsToStage) {
+        $projects.Add((Get-BaselineProjectPackageSet -Root $root -ProjectPath $project.path -PackagesPath $packagesPath -AssetsPath (Join-Path $assetsRoot $project.assets)))
+    }
     $sdk = (& $DotNetExecutable --version).Trim()
     Assert-True ($LASTEXITCODE -eq 0 -and $sdk -cmatch '^10\.0\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') 'GenerateBaseline requires a .NET 10 SDK.'
     $fixture = [ordered]@{ schemaVersion = 1; sourceSha = $head; gitObjectFormat = 'sha1'; dotnetSdkVersion = $sdk; inputManifest = @($inputManifest); projects = @($projects) }
