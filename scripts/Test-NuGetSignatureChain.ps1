@@ -1632,6 +1632,8 @@ function Invoke-SelfTest {
             Publish-SignatureFailureEvidence -CandidateEvidencePath $integratedFailureCandidate -EvidencePath $integratedFailureRoot -SourceSha ('a' * 40) -Attempt 1 -Phases @([ordered]@{ name = 'signature:verify:worker'; status = 'failure'; exitCode = -2; failureCode = 'native-command-threw' }) -CompletedProjects @() -AttemptedPackages @() -SecretSeeds $syntheticSeeds -DefaultFailureCode 'attempt-failed'
             $integratedFailureReceipt = [IO.File]::ReadAllText((Join-Path $integratedFailureRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($integratedFailureReceipt.receiptKind -ceq 'primary' -and $integratedFailureReceipt.outcome -ceq 'failure' -and $integratedFailureReceipt.failurePhase -ceq 'signature:verify:worker' -and $integratedFailureReceipt.failureCode -ceq 'native-command-threw') 'Signature attempt failure publication did not preserve the failed worker phase.'
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $integratedFailureRoot -ExpectedLane Signature -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected the published Signature failure evidence.'
             Remove-Item -LiteralPath $integratedFailureRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $integratedFailureCandidate -Recurse -Force -ErrorAction Stop
             $regressionCandidateRoot = $sanitizerRoot + '-regression-candidate'

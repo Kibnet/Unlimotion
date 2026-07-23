@@ -28,6 +28,30 @@ function Assert-ExactKeys([hashtable]$Object, [string[]]$Expected, [string]$Name
     }
 }
 
+function Test-PublicationPhases([object[]]$Phases, [hashtable]$Receipt) {
+    Assert-True ($Phases.Count -ge 1) 'Published primary phases cannot be empty.'
+    $expectedPrefix = $Receipt.lane.ToLowerInvariant() + ':'
+    $failed = [System.Collections.Generic.List[hashtable]]::new()
+    foreach ($phase in $Phases) {
+        Assert-True ($phase -is [hashtable]) 'Published primary phase is invalid.'
+        Assert-ExactKeys -Object $phase -Expected @('name', 'status', 'exitCode', 'failureCode') -Name 'published primary phase'
+        Assert-True ($phase.name -is [string] -and $phase.name.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) 'Published primary phase name is invalid.'
+        Assert-True ($phase.status -is [string] -and $phase.status -cin @('success', 'failure')) 'Published primary phase status is invalid.'
+        Assert-True ($phase.exitCode -is [long]) 'Published primary phase exit code is invalid.'
+        if ($phase.status -ceq 'success') {
+            Assert-True ($phase.exitCode -eq 0 -and $phase.failureCode -eq $null) 'Published successful phase tuple is invalid.'
+        } else {
+            Assert-True ($phase.exitCode -ne 0 -and $phase.failureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($phase.failureCode)) 'Published failed phase tuple is invalid.'
+            $failed.Add($phase)
+        }
+    }
+    if ($Receipt.outcome -ceq 'success') {
+        Assert-True ($failed.Count -eq 0) 'Published successful receipt contains a failed phase.'
+    } else {
+        Assert-True ($failed.Count -ge 1 -and $Receipt.failurePhase -ceq $failed[0].name -and $Receipt.failureCode -ceq $failed[0].failureCode) 'Published failure receipt does not bind its first failed phase.'
+    }
+}
+
 function Test-PublicationReceipt([string]$Root) {
     $receiptPath = Join-Path $Root 'attempt-receipt.json'
     Assert-True (Test-Path -LiteralPath $receiptPath -PathType Leaf) 'Published evidence receipt is missing.'
@@ -52,6 +76,7 @@ function Test-PublicationReceipt([string]$Root) {
     }
     Assert-True ($receipt.outcome -is [string] -and $receipt.outcome -cin @('success', 'failure')) 'Published primary outcome is invalid.'
     Assert-True (($receipt.outcome -ceq 'success' -and $receipt.failurePhase -eq $null -and $receipt.failureCode -eq $null) -or ($receipt.outcome -ceq 'failure' -and $receipt.failurePhase -is [string] -and $receipt.failureCode -is [string])) 'Published primary failure tuple is invalid.'
+    Test-PublicationPhases -Phases @($receipt.phases) -Receipt $receipt
     $manifest = @($receipt.evidenceManifest)
     Assert-True ($manifest.Count -eq $allFiles.Count - 1) 'Published primary manifest cardinality is invalid.'
     $manifestPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
