@@ -7,7 +7,9 @@ param(
     [Parameter(Mandatory)]
     [string]$ExpectedSourceSha,
     [Parameter(Mandatory)]
-    [string]$ExpectedRunAttempt
+    [string]$ExpectedRunAttempt,
+    [AllowEmptyString()]
+    [string]$ExpectedExecutionContext
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +27,25 @@ function Assert-ExactKeys([hashtable]$Object, [string[]]$Expected, [string]$Name
     Assert-True ($actual.Count -eq $expectedSorted.Count) "$Name has an unexpected property count."
     for ($index = 0; $index -lt $expectedSorted.Count; $index++) {
         Assert-True ($actual[$index] -ceq $expectedSorted[$index]) "$Name has an unexpected property."
+    }
+}
+
+function Test-EvidenceRuntime([hashtable]$Runtime, [bool]$SignatureLane) {
+    Assert-ExactKeys -Object $Runtime -Expected @('os', 'architecture', 'dotnetSdkVersion', 'executionContext', 'signatureVerification', 'revocationMode', 'signatureAuthoritative') -Name 'published evidence runtime'
+    Assert-True ($Runtime.os -is [string] -and $Runtime.os -cin @('windows', 'linux')) 'Published evidence runtime operating system is invalid.'
+    Assert-True ($Runtime.architecture -is [string] -and $Runtime.architecture -cin @('x64', 'arm64')) 'Published evidence runtime architecture is invalid.'
+    Assert-True ($Runtime.dotnetSdkVersion -is [string] -and $Runtime.dotnetSdkVersion -cmatch '^10\.0\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') 'Published evidence runtime SDK is invalid.'
+    Assert-True ($Runtime.executionContext -is [string] -and $Runtime.executionContext -cin @('github-actions', 'local', 'full-child')) 'Published evidence execution context is invalid.'
+    if (-not [string]::IsNullOrEmpty($ExpectedExecutionContext)) {
+        Assert-True ($Runtime.executionContext -ceq $ExpectedExecutionContext) 'Published evidence execution context does not match its expected value.'
+    } elseif ($Runtime.executionContext -ceq 'full-child') {
+        throw 'Full child evidence requires an explicit full-child validator context.'
+    }
+    Assert-True ($Runtime.signatureVerification -eq $true -and $Runtime.revocationMode -eq $null -and $Runtime.signatureAuthoritative -is [bool]) 'Published evidence runtime security tuple is invalid.'
+    if ($SignatureLane) {
+        Assert-True ($Runtime.signatureAuthoritative -eq ($Runtime.executionContext -ceq 'github-actions')) 'Published Signature authority does not match its execution context.'
+    } else {
+        Assert-True ($Runtime.signatureAuthoritative -eq $false) 'Published Regression authority must be false.'
     }
 }
 
@@ -72,8 +93,7 @@ function Test-RegressionSanitizedReports([hashtable]$Run, [string]$Root) {
 function Test-RegressionEvidence([hashtable]$Evidence, [hashtable]$Receipt, [string]$Root) {
     Assert-ExactKeys -Object $Evidence -Expected @('schemaVersion', 'evidenceKind', 'sourceSha', 'runAttempt', 'lane', 'runtime', 'runs') -Name 'published regression evidence'
     Assert-True ($Evidence.schemaVersion -is [long] -and $Evidence.schemaVersion -eq 1 -and $Evidence.sourceSha -ceq $Receipt.sourceSha -and $Evidence.runAttempt -eq $Receipt.runAttempt -and $Evidence.lane -ceq 'Regression') 'Published regression evidence identity is invalid.'
-    Assert-ExactKeys -Object $Evidence.runtime -Expected @('os', 'architecture', 'dotnetSdkVersion', 'executionContext', 'signatureVerification', 'revocationMode', 'signatureAuthoritative') -Name 'published regression runtime'
-    Assert-True ($Evidence.runtime.executionContext -ceq 'local' -and $Evidence.runtime.signatureVerification -eq $true -and $Evidence.runtime.signatureAuthoritative -eq $false -and $Evidence.runtime.revocationMode -eq $null) 'Published regression runtime authority is invalid.'
+    Test-EvidenceRuntime -Runtime $Evidence.runtime -SignatureLane $false
     $expectedRuns = @(
         @{ runId = 'unit'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; minimumDiscovered = 830 },
         @{ runId = 'headless-1'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; minimumDiscovered = 36 },
@@ -112,6 +132,63 @@ function Test-RegressionEvidence([hashtable]$Evidence, [hashtable]$Receipt, [str
     Assert-True ($Evidence.evidenceKind -ceq $expectedKind -and $Evidence.evidenceKind -ceq $receiptExpectedKind) 'Published regression evidence outcome is invalid.'
 }
 
+function Test-FullPublicationReceipt([string]$Root, [hashtable]$Receipt, [object[]]$AllFiles) {
+    Assert-ExactKeys -Object $Receipt -Expected @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'runtime', 'outcome', 'failureCode', 'childAttempts', 'evidenceManifest') -Name 'published Full receipt'
+    Assert-True ($Receipt.schemaVersion -is [long] -and $Receipt.schemaVersion -eq 1 -and $Receipt.receiptKind -ceq 'full-primary' -and $Receipt.sourceSha -ceq $ExpectedSourceSha -and $Receipt.runAttempt -eq [long]$ExpectedRunAttempt -and $Receipt.lane -ceq 'Full') 'Published Full receipt identity is invalid.'
+    Test-EvidenceRuntime -Runtime $Receipt.runtime -SignatureLane $false
+    Assert-True ($Receipt.runtime.executionContext -ceq 'local' -and $Receipt.runtime.os -ceq 'windows') 'Published Full runtime must be local Windows diagnostic evidence.'
+    Assert-True ($Receipt.outcome -is [string] -and $Receipt.outcome -cin @('success', 'failure')) 'Published Full outcome is invalid.'
+
+    $directDirectories = @(Get-ChildItem -LiteralPath $Root -Directory -Force | Sort-Object -Property Name)
+    $directFiles = @(Get-ChildItem -LiteralPath $Root -File -Force | Sort-Object -Property Name)
+    Assert-True ($directDirectories.Count -eq 2 -and $directDirectories[0].Name -ceq 'regression' -and $directDirectories[1].Name -ceq 'signature' -and $directFiles.Count -eq 1 -and $directFiles[0].Name -ceq 'attempt-receipt.json') 'Published Full tree has an unexpected direct layout.'
+
+    $children = @($Receipt.childAttempts)
+    $expectedChildren = @(
+        @{ lane = 'Signature'; relativeRoot = 'signature' },
+        @{ lane = 'Regression'; relativeRoot = 'regression' }
+    )
+    Assert-True ($children.Count -eq $expectedChildren.Count) 'Published Full child attempt count is invalid.'
+    $childReceipts = [System.Collections.Generic.List[hashtable]]::new()
+    for ($index = 0; $index -lt $expectedChildren.Count; $index++) {
+        $child = $children[$index]
+        $expected = $expectedChildren[$index]
+        Assert-True ($child -is [hashtable]) 'Published Full child attempt is invalid.'
+        Assert-ExactKeys -Object $child -Expected @('lane', 'relativeRoot', 'receiptSha256', 'outcome', 'failureCode') -Name 'published Full child attempt'
+        Assert-True ($child.lane -ceq $expected.lane -and $child.relativeRoot -ceq $expected.relativeRoot -and $child.receiptSha256 -is [string] -and $child.receiptSha256 -cmatch '^[0-9a-f]{64}$' -and $child.outcome -is [string] -and $child.outcome -cin @('success', 'failure')) 'Published Full child attempt identity is invalid.'
+        $childRoot = [IO.Path]::GetFullPath((Join-Path $Root $child.relativeRoot))
+        Assert-True ([IO.Path]::GetRelativePath($Root, $childRoot).Replace('\', '/') -ceq $child.relativeRoot -and (Test-Path -LiteralPath $childRoot -PathType Container) -and -not (Get-Item -LiteralPath $childRoot -Force).LinkType) 'Published Full child root escaped its outer root.'
+        $childReceiptPath = Join-Path $childRoot 'attempt-receipt.json'
+        Assert-True ((Test-Path -LiteralPath $childReceiptPath -PathType Leaf) -and (Get-FileHash -LiteralPath $childReceiptPath -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $child.receiptSha256) 'Published Full child receipt hash is invalid.'
+        $validatorShell = (@(Get-Command pwsh -CommandType Application -ErrorAction Stop) | Select-Object -First 1).Source
+        & $validatorShell -NoLogo -NoProfile -NonInteractive -File $PSCommandPath -EvidenceRoot $childRoot -ExpectedLane $child.lane -ExpectedSourceSha $ExpectedSourceSha -ExpectedRunAttempt $ExpectedRunAttempt -ExpectedExecutionContext 'full-child' | Out-Null
+        Assert-True ($LASTEXITCODE -eq 0) 'Published Full child receipt failed independent recursive validation.'
+        $childReceipt = [IO.File]::ReadAllText($childReceiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+        Assert-True ($childReceipt.receiptKind -ceq 'primary' -and $childReceipt.outcome -ceq $child.outcome -and $childReceipt.failureCode -eq $child.failureCode) 'Published Full child outcome does not match its nested receipt.'
+        $childReceipts.Add($childReceipt)
+    }
+
+    $manifest = @($Receipt.evidenceManifest)
+    Assert-True ($manifest.Count -eq $AllFiles.Count - 1) 'Published Full manifest cardinality is invalid.'
+    $manifestPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $manifest) {
+        Assert-True ($entry -is [hashtable]) 'Published Full manifest entry is invalid.'
+        Assert-ExactKeys -Object $entry -Expected @('path', 'sha256', 'byteLength') -Name 'published Full manifest entry'
+        Assert-True ($entry.path -is [string] -and $entry.path -cmatch '^(signature|regression)/[A-Za-z0-9][A-Za-z0-9./_-]*$' -and $manifestPaths.Add($entry.path) -and $entry.sha256 -is [string] -and $entry.sha256 -cmatch '^[0-9a-f]{64}$' -and $entry.byteLength -is [long] -and $entry.byteLength -ge 0) 'Published Full manifest entry shape is invalid.'
+        $path = [IO.Path]::GetFullPath((Join-Path $Root ($entry.path -replace '/', [IO.Path]::DirectorySeparatorChar)))
+        Assert-True ([IO.Path]::GetRelativePath($Root, $path).Replace('\', '/') -ceq $entry.path -and (Test-Path -LiteralPath $path -PathType Leaf)) 'Published Full manifest path escaped its root.'
+        $file = Get-Item -LiteralPath $path -Force
+        Assert-True (-not $file.LinkType -and $file.Length -eq $entry.byteLength -and (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $entry.sha256) 'Published Full manifest file hash is invalid.'
+    }
+
+    $firstFailedChild = @($childReceipts | Where-Object { $_.outcome -ceq 'failure' } | Select-Object -First 1)
+    if ($firstFailedChild.Count -eq 0) {
+        Assert-True ($Receipt.outcome -ceq 'success' -and $Receipt.failureCode -eq $null) 'Published Full success receipt has an invalid failure tuple.'
+    } else {
+        Assert-True ($Receipt.outcome -ceq 'failure' -and $Receipt.failureCode -ceq $firstFailedChild[0].failureCode) 'Published Full failure receipt does not bind its first failed child.'
+    }
+}
+
 function Test-PublicationReceipt([string]$Root) {
     $receiptPath = Join-Path $Root 'attempt-receipt.json'
     Assert-True (Test-Path -LiteralPath $receiptPath -PathType Leaf) 'Published evidence receipt is missing.'
@@ -121,6 +198,17 @@ function Test-PublicationReceipt([string]$Root) {
     $receiptFile = Get-Item -LiteralPath $receiptPath -Force
     Assert-True (-not $receiptFile.LinkType -and $receiptFile.Length -gt 0 -and $receiptFile.Length -le 1MB) 'Published evidence receipt is invalid.'
     $receipt = [IO.File]::ReadAllText($receiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+    $allFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force)
+    foreach ($file in $allFiles) { Assert-True (-not $file.LinkType) 'Published evidence file cannot be a link.' }
+    if ($ExpectedLane -ceq 'Full') {
+        if ($receipt.receiptKind -ceq 'safe-fallback') {
+            Assert-ExactKeys -Object $receipt -Expected @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'outcome', 'failureCode', 'evidenceManifest') -Name 'published Full fallback receipt'
+            Assert-True ($receipt.schemaVersion -eq 1 -and $receipt.sourceSha -ceq $ExpectedSourceSha -and $receipt.runAttempt -eq [long]$ExpectedRunAttempt -and $receipt.lane -ceq 'Full' -and $receipt.outcome -ceq 'failure' -and $receipt.failureCode -ceq 'publication-integrity-failed' -and (@($receipt.evidenceManifest)).Count -eq 0 -and $allFiles.Count -eq 1) 'Published Full fallback receipt is invalid.'
+            return
+        }
+        Test-FullPublicationReceipt -Root $Root -Receipt $receipt -AllFiles $allFiles
+        return
+    }
     Assert-True ($receipt.receiptKind -is [string] -and $receipt.receiptKind -cin @('primary', 'safe-fallback')) 'Published evidence receipt kind is invalid.'
     $expectedKeys = if ($receipt.receiptKind -ceq 'primary') { @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'outcome', 'failurePhase', 'failureCode', 'phases', 'evidenceManifest') } else { @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'outcome', 'failureCode', 'evidenceManifest') }
     Assert-ExactKeys -Object $receipt -Expected $expectedKeys -Name 'published evidence receipt'
@@ -128,8 +216,6 @@ function Test-PublicationReceipt([string]$Root) {
     Assert-True ($receipt.sourceSha -is [string] -and $receipt.sourceSha -ceq $ExpectedSourceSha) 'Published evidence sourceSha is invalid.'
     Assert-True ($receipt.runAttempt -is [long] -and $receipt.runAttempt -eq [long]$ExpectedRunAttempt) 'Published evidence runAttempt is invalid.'
     Assert-True ($receipt.lane -is [string] -and $receipt.lane -ceq $ExpectedLane) 'Published evidence lane is invalid.'
-    $allFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force)
-    foreach ($file in $allFiles) { Assert-True (-not $file.LinkType) 'Published evidence file cannot be a link.' }
     if ($receipt.receiptKind -ceq 'safe-fallback') {
         Assert-True ($receipt.outcome -ceq 'failure' -and $receipt.failureCode -ceq 'publication-integrity-failed' -and (@($receipt.evidenceManifest)).Count -eq 0 -and $allFiles.Count -eq 1) 'Published fallback receipt is invalid.'
         return
@@ -156,10 +242,15 @@ function Test-PublicationReceipt([string]$Root) {
     $evidence = [IO.File]::ReadAllText($evidencePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
     $expectedKind = if ($receipt.outcome -ceq 'success') { "$evidencePrefix-success" } else { "$evidencePrefix-failure" }
     Assert-True ($evidence.evidenceKind -ceq $expectedKind) 'Published lane evidence kind is inconsistent with receipt outcome.'
-    if ($ExpectedLane -ceq 'Regression') { Test-RegressionEvidence -Evidence $evidence -Receipt $receipt -Root $Root }
+    if ($ExpectedLane -ceq 'Regression') {
+        Test-RegressionEvidence -Evidence $evidence -Receipt $receipt -Root $Root
+    } else {
+        Assert-True ($evidence.runtime -is [hashtable]) 'Published Signature runtime is invalid.'
+        Test-EvidenceRuntime -Runtime $evidence.runtime -SignatureLane $true
+    }
 }
 
-Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression') 'ExpectedLane must be exactly Signature or Regression.'
+Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression' -or $ExpectedLane -ceq 'Full') 'ExpectedLane must be exactly Signature, Regression or Full.'
 Assert-True ($ExpectedSourceSha -cmatch '^[0-9a-f]{40}$') 'ExpectedSourceSha must be a lowercase 40-hex Git SHA.'
 Assert-True ($ExpectedRunAttempt -cmatch '^[1-9][0-9]{0,9}$') 'ExpectedRunAttempt must be a canonical positive decimal integer.'
 

@@ -79,7 +79,15 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("TerminationProven");
         await Assert.That(nugetSignatureScript).Contains("native-output-limit-exceeded");
         await Assert.That(nugetSignatureScript).Contains("SignatureVerify");
+        await Assert.That(nugetSignatureScript).Contains("Invoke-FullAttempt");
+        await Assert.That(nugetSignatureScript).Contains("Invoke-FullChildAttempt");
+        await Assert.That(nugetSignatureScript).Contains("Publish-FullPrimaryEvidence");
+        await Assert.That(nugetSignatureScript).Contains("full-primary");
+        await Assert.That(nugetSignatureScript).Contains("full-child");
         await Assert.That(nugetEvidenceValidator).Contains("Test-PublicationReceipt");
+        await Assert.That(nugetEvidenceValidator).Contains("Test-FullPublicationReceipt");
+        await Assert.That(nugetEvidenceValidator).Contains("childAttempts");
+        await Assert.That(nugetEvidenceValidator).Contains("ExpectedExecutionContext");
         await Assert.That(nugetEvidenceValidator).Contains("attempt-receipt.json");
         await Assert.That(nugetEvidenceValidator).Contains("safe-fallback");
         await Assert.That(nugetEvidenceValidator).Contains("Published lane evidence");

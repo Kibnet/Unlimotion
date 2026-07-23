@@ -15,7 +15,8 @@ param(
     [string]$ExpectedParentSha,
     [string]$OutputPath,
     [string]$BaselineAssetsRoot,
-    [string]$DotNetExecutable = 'dotnet'
+    [string]$DotNetExecutable = 'dotnet',
+    [switch]$FullChild
 )
 
 Set-StrictMode -Version Latest
@@ -89,6 +90,37 @@ function Get-EvidenceRoot([string]$Root, [string]$SourceSha, [int]$Attempt) {
     }
 
     return (Join-Path ([IO.Path]::GetTempPath()) ("unlimotion-nuget-evidence-{0}-attempt-{1}-{2}" -f $SourceSha, $Attempt, [Guid]::NewGuid().ToString('N')))
+}
+
+function Get-EvidenceExecutionContext {
+    if ($FullChild) {
+        return 'full-child'
+    }
+
+    if ([Environment]::GetEnvironmentVariable('GITHUB_ACTIONS', 'Process') -ceq 'true') {
+        return 'github-actions'
+    }
+
+    return 'local'
+}
+
+function Get-SanitizedRuntime([string]$EvidenceContext, [bool]$SignatureAuthoritative) {
+    Assert-True ($EvidenceContext -cin @('github-actions', 'local', 'full-child')) 'Evidence execution context is invalid.'
+    $os = if ($IsWindows) { 'windows' } elseif ($IsLinux) { 'linux' } else { throw 'Evidence runtime operating system is unsupported.' }
+    $architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+    Assert-True ($architecture -cin @('x64', 'arm64')) 'Evidence runtime architecture is unsupported.'
+    $sdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim()
+    Assert-True ($LASTEXITCODE -eq 0 -and $sdkVersion -cmatch '^10\.0\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') 'Could not determine an approved .NET SDK version.'
+    Assert-True ((-not $SignatureAuthoritative) -or $EvidenceContext -ceq 'github-actions') 'Signature authority is invalid outside GitHub Actions.'
+    return [ordered]@{
+        os = $os
+        architecture = $architecture
+        dotnetSdkVersion = $sdkVersion
+        executionContext = $EvidenceContext
+        signatureVerification = $true
+        revocationMode = $null
+        signatureAuthoritative = $SignatureAuthoritative
+    }
 }
 
 function Get-Sha256([string]$Path) {
@@ -284,6 +316,24 @@ function Get-ClosedSecretSeedSnapshot([System.Collections.IDictionary]$Environme
     return ,$ordered
 }
 
+function ConvertTo-SecretSeedElements([object[]]$SecretSeeds) {
+    $elements = [System.Collections.Generic.List[Text.Json.JsonElement]]::new()
+    foreach ($seed in $SecretSeeds) {
+        if ($seed -is [Text.Json.JsonElement]) {
+            $elements.Add($seed.Clone())
+            continue
+        }
+        $json = ConvertTo-Json -InputObject $seed -Depth 8 -Compress
+        $document = [Text.Json.JsonDocument]::Parse($json)
+        try {
+            $elements.Add($document.RootElement.Clone())
+        } finally {
+            $document.Dispose()
+        }
+    }
+    return ,$elements.ToArray()
+}
+
 function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
     $header = Read-ExactBytes -Stream $StandardInput -Count 4
     $length = 0
@@ -438,13 +488,14 @@ function Write-SanitizedCandidateFile([string]$Root, [string]$RelativePath, [byt
 }
 
 function Invoke-SignatureFailureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
-    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'failurePhase', 'completedProjects', 'attemptedPackages', 'diagnostics', 'phaseResults') -Name 'SignatureSanitize failure payload'
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'executionContext', 'failurePhase', 'completedProjects', 'attemptedPackages', 'diagnostics', 'phaseResults') -Name 'SignatureSanitize failure payload'
     $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
     Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) 'SignatureSanitize candidate root must be absent.'
     $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
     $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
+    $evidenceContext = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'executionContext'
     $failurePhase = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'failurePhase'
-    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $failurePhase -cmatch '^signature:') 'SignatureSanitize failure identity is invalid.'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $evidenceContext -cin @('github-actions', 'local', 'full-child') -and $failurePhase -cmatch '^signature:') 'SignatureSanitize failure identity is invalid.'
     $completedProjects = $Payload.GetProperty('completedProjects')
     $attemptedPackages = $Payload.GetProperty('attemptedPackages')
     $diagnostics = $Payload.GetProperty('diagnostics')
@@ -478,7 +529,7 @@ function Invoke-SignatureFailureSanitizeWorker([Text.Json.JsonElement]$Payload, 
             sourceSha = $sourceSha
             runAttempt = [int]$runAttempt
             lane = 'Signature'
-            runtime = [ordered]@{ os = [Environment]::OSVersion.Platform.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); dotnetSdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim(); executionContext = 'local'; signatureVerification = $true; revocationMode = $null; signatureAuthoritative = $true }
+            runtime = Get-SanitizedRuntime -EvidenceContext $evidenceContext -SignatureAuthoritative ($evidenceContext -ceq 'github-actions')
             failurePhase = $failurePhase
             completedProjects = @($completedProjects.EnumerateArray() | ForEach-Object { $_.Clone() })
             attemptedPackages = $normalizedPackages.ToArray()
@@ -503,12 +554,13 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
     if ($payloadPropertyNames -cnotcontains 'projects') {
         return Invoke-SignatureFailureSanitizeWorker -Payload $Payload -SecretSeeds $SecretSeeds
     }
-    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'projects', 'packages', 'phaseResults') -Name 'SignatureSanitize payload'
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'executionContext', 'projects', 'packages', 'phaseResults') -Name 'SignatureSanitize payload'
     $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
     Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) 'SignatureSanitize candidate root must be absent.'
     $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
     $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
-    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$') 'SignatureSanitize identity is invalid.'
+    $evidenceContext = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'executionContext'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $evidenceContext -cin @('github-actions', 'local', 'full-child')) 'SignatureSanitize identity is invalid.'
     $projects = $Payload.GetProperty('projects')
     $packages = $Payload.GetProperty('packages')
     $phases = $Payload.GetProperty('phaseResults')
@@ -538,7 +590,7 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
             sourceSha = $sourceSha
             runAttempt = [int]$runAttempt
             lane = 'Signature'
-            runtime = [ordered]@{ os = [Environment]::OSVersion.Platform.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); dotnetSdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim(); executionContext = 'local'; signatureVerification = $true; revocationMode = $null; signatureAuthoritative = $true }
+            runtime = Get-SanitizedRuntime -EvidenceContext $evidenceContext -SignatureAuthoritative ($evidenceContext -ceq 'github-actions')
             projects = $normalizedProjects
             packages = $normalizedPackages.ToArray()
             expectedAuthorFingerprint = Get-ExpectedAuthorFingerprint
@@ -628,12 +680,13 @@ function Read-RawTUnitTrxSummary([string]$TrxPath) {
 }
 
 function Invoke-RegressionSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
-    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'phaseResults', 'runs') -Name 'RegressionSanitize payload'
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'executionContext', 'phaseResults', 'runs') -Name 'RegressionSanitize payload'
     $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
     Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) 'RegressionSanitize candidate root must be absent.'
     $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
     $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
-    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$') 'RegressionSanitize identity is invalid.'
+    $evidenceContext = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'executionContext'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $evidenceContext -cin @('github-actions', 'local', 'full-child')) 'RegressionSanitize identity is invalid.'
     $phaseResults = $Payload.GetProperty('phaseResults')
     $runs = $Payload.GetProperty('runs')
     Assert-True ($phaseResults.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phaseResults.GetArrayLength() -ge 1) 'RegressionSanitize phase results are invalid.'
@@ -737,7 +790,7 @@ function Invoke-RegressionSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.
             sourceSha = $sourceSha
             runAttempt = [int]$runAttempt
             lane = 'Regression'
-            runtime = [ordered]@{ os = [Environment]::OSVersion.Platform.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); dotnetSdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim(); executionContext = 'local'; signatureVerification = $true; revocationMode = $null; signatureAuthoritative = $false }
+            runtime = Get-SanitizedRuntime -EvidenceContext $evidenceContext -SignatureAuthoritative $false
             runs = $normalizedRuns.ToArray()
         }
         Assert-True ($LASTEXITCODE -eq 0) 'RegressionSanitize could not determine the .NET SDK version.'
@@ -1473,6 +1526,7 @@ function Publish-SignatureFailureEvidence(
             candidateEvidenceRoot = $CandidateEvidencePath
             sourceSha = $SourceSha
             runAttempt = [string]$Attempt
+            executionContext = Get-EvidenceExecutionContext
             failurePhase = $failedPhases[0].name
             completedProjects = $CompletedProjects
             attemptedPackages = $AttemptedPackages
@@ -1581,6 +1635,7 @@ function Invoke-SignatureAttempt {
                 candidateEvidenceRoot = $candidateEvidencePath
                 sourceSha = $sourceSha
                 runAttempt = [string]$attempt
+                executionContext = Get-EvidenceExecutionContext
                 projects = $sanitizerProjects
                 packages = $packages.ToArray()
                 phaseResults = @($phases)
@@ -1721,6 +1776,7 @@ function Invoke-RegressionAttempt {
             candidateEvidenceRoot = $candidateEvidencePath
             sourceSha = $sourceSha
             runAttempt = [string]$attempt
+            executionContext = Get-EvidenceExecutionContext
             phaseResults = $phases.ToArray()
             runs = $runs.ToArray()
         }) -SecretSeeds $secretSeeds -TimeoutSeconds 300
@@ -1746,6 +1802,161 @@ function Invoke-RegressionAttempt {
     if (@($publicationPhases | Where-Object { $_.status -ceq 'failure' }).Count -gt 0) {
         throw 'NuGet regression attempt recorded failed phases.'
     }
+}
+
+function Read-ValidatedFullChildReceipt([string]$ChildRoot, [string]$ChildLane, [string]$SourceSha, [int]$Attempt) {
+    $root = [IO.Path]::GetFullPath($ChildRoot)
+    Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) "Full $ChildLane child evidence root is missing."
+    $validatorPath = Join-Path $PSScriptRoot 'Test-NuGetEvidencePublication.ps1'
+    & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $validatorPath -EvidenceRoot $root -ExpectedLane $ChildLane -ExpectedSourceSha $SourceSha -ExpectedRunAttempt ([string]$Attempt) -ExpectedExecutionContext 'full-child' 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "Full $ChildLane child evidence failed independent validation."
+    $receiptPath = Join-Path $root 'attempt-receipt.json'
+    $receipt = [IO.File]::ReadAllText($receiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+    Assert-True ($receipt.receiptKind -ceq 'primary' -and $receipt.lane -ceq $ChildLane -and $receipt.sourceSha -ceq $SourceSha -and $receipt.runAttempt -eq $Attempt -and $receipt.outcome -cin @('success', 'failure')) "Full $ChildLane child receipt is not a validated primary receipt."
+    return $receipt
+}
+
+function Publish-FullSafeFallback([string]$EvidencePath, [string]$SourceSha, [int]$Attempt, [object[]]$SecretSeeds) {
+    Assert-True (-not (Test-Path -LiteralPath $EvidencePath)) 'Full fallback root must be absent.'
+    $seedElements = ConvertTo-SecretSeedElements -SecretSeeds $SecretSeeds
+    $scratchRoot = $EvidencePath + '.scratch-' + [Guid]::NewGuid().ToString('N')
+    try {
+        New-Item -ItemType Directory -Path $scratchRoot -ErrorAction Stop | Out-Null
+        $receipt = [ordered]@{
+            schemaVersion = 1
+            receiptKind = 'safe-fallback'
+            sourceSha = $SourceSha
+            runAttempt = $Attempt
+            lane = 'Full'
+            outcome = 'failure'
+            failureCode = 'publication-integrity-failed'
+            evidenceManifest = @()
+        }
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $receipt -Depth 16 -Compress))
+        try {
+            Assert-SanitizedBytes -Bytes $bytes -SecretSeeds $seedElements
+            [IO.File]::WriteAllBytes((Join-Path $scratchRoot 'attempt-receipt.json'), $bytes)
+        } finally {
+            [Array]::Clear($bytes, 0, $bytes.Length)
+        }
+        Move-Item -LiteralPath $scratchRoot -Destination $EvidencePath -ErrorAction Stop
+    } catch {
+        if (Test-Path -LiteralPath $scratchRoot) { Remove-Item -LiteralPath $scratchRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
+
+function Publish-FullPrimaryEvidence(
+    [string]$CandidateRoot,
+    [string]$EvidencePath,
+    [string]$SourceSha,
+    [int]$Attempt,
+    [hashtable]$SignatureReceipt,
+    [hashtable]$RegressionReceipt,
+    [object[]]$SecretSeeds
+) {
+    Assert-True ((Test-Path -LiteralPath $CandidateRoot -PathType Container) -and -not (Test-Path -LiteralPath $EvidencePath)) 'Full publication roots are invalid.'
+    $seedElements = ConvertTo-SecretSeedElements -SecretSeeds $SecretSeeds
+    try {
+        $manifest = Get-CandidateEvidenceManifest -CandidateRoot $CandidateRoot -SecretSeeds $seedElements
+        foreach ($entry in $manifest) {
+            Assert-True ($entry.path -cmatch '^(signature|regression)/') 'Full candidate has an unexpected evidence path.'
+        }
+        $children = @(
+            [ordered]@{
+                lane = 'Signature'
+                relativeRoot = 'signature'
+                receiptSha256 = Get-Sha256 -Path (Join-Path $CandidateRoot 'signature\attempt-receipt.json')
+                outcome = $SignatureReceipt.outcome
+                failureCode = $SignatureReceipt.failureCode
+            },
+            [ordered]@{
+                lane = 'Regression'
+                relativeRoot = 'regression'
+                receiptSha256 = Get-Sha256 -Path (Join-Path $CandidateRoot 'regression\attempt-receipt.json')
+                outcome = $RegressionReceipt.outcome
+                failureCode = $RegressionReceipt.failureCode
+            }
+        )
+        $firstFailedChild = @($children | Where-Object { $_.outcome -ceq 'failure' } | Select-Object -First 1)
+        $receipt = [ordered]@{
+            schemaVersion = 1
+            receiptKind = 'full-primary'
+            sourceSha = $SourceSha
+            runAttempt = $Attempt
+            lane = 'Full'
+            runtime = Get-SanitizedRuntime -EvidenceContext 'local' -SignatureAuthoritative $false
+            outcome = if ($firstFailedChild.Count -eq 0) { 'success' } else { 'failure' }
+            failureCode = if ($firstFailedChild.Count -eq 0) { $null } else { $firstFailedChild[0].failureCode }
+            childAttempts = $children
+            evidenceManifest = $manifest
+        }
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $receipt -Depth 16 -Compress))
+        try {
+            Assert-SanitizedBytes -Bytes $bytes -SecretSeeds $seedElements
+            [IO.File]::WriteAllBytes((Join-Path $CandidateRoot 'attempt-receipt.json'), $bytes)
+            $receiptEntry = [ordered]@{ path = 'attempt-receipt.json'; sha256 = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant(); byteLength = [long]$bytes.Length }
+        } finally {
+            [Array]::Clear($bytes, 0, $bytes.Length)
+        }
+        $finalManifest = Get-CandidateEvidenceManifest -CandidateRoot $CandidateRoot -SecretSeeds $seedElements
+        $expectedManifest = @(@($manifest) + @($receiptEntry) | Sort-Object @{ Expression = { $_.path }; Ascending = $true })
+        Assert-EquivalentEvidenceManifest -Expected $expectedManifest -Actual $finalManifest -Name 'Full publication tree'
+        Move-Item -LiteralPath $CandidateRoot -Destination $EvidencePath -ErrorAction Stop
+    } catch {
+        if (Test-Path -LiteralPath $CandidateRoot) { Remove-Item -LiteralPath $CandidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        Publish-FullSafeFallback -EvidencePath $EvidencePath -SourceSha $SourceSha -Attempt $Attempt -SecretSeeds $SecretSeeds
+    }
+}
+
+function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildEvidenceRoot, [string]$ChildPackagesRoot) {
+    New-Item -ItemType Directory -Path $ChildPackagesRoot -ErrorAction Stop | Out-Null
+    & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $script:WorkerScriptPath `
+        -Mode RunAttempt -Lane $ChildLane -RepositoryRoot $Root -PackagesRoot $ChildPackagesRoot `
+        -ExpectedSourceSha $SourceSha -RunAttempt ([string]$Attempt) -EvidenceRoot $ChildEvidenceRoot -FullChild 2>$null | Out-Null
+    $childExitCode = [int]$LASTEXITCODE
+    $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
+    return [ordered]@{ exitCode = $childExitCode; receipt = $receipt }
+}
+
+function Invoke-FullAttempt {
+    Assert-True ($Lane -ceq 'Full' -and -not $FullChild) 'Full must be an outer local wrapper.'
+    Assert-True ($IsWindows -and $null -eq [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS', 'Process')) 'Full is allowed only as a local Windows diagnostic wrapper.'
+    Assert-True ($env:DOTNET_NUGET_SIGNATURE_VERIFICATION -ceq 'true') 'DOTNET_NUGET_SIGNATURE_VERIFICATION must be exactly true.'
+    Assert-True ([string]::IsNullOrEmpty($env:NUGET_CERT_REVOCATION_MODE) -or $env:NUGET_CERT_REVOCATION_MODE -ceq 'online') 'NUGET_CERT_REVOCATION_MODE must be absent or exactly online.'
+
+    $root = Get-CanonicalRepositoryRoot
+    $sourceSha = Resolve-SourceSha -Root $root
+    $attempt = Resolve-RunAttempt
+    $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
+    $candidateRoot = $evidencePath + '.candidate'
+    $workRoot = $evidencePath + '.work'
+    Assert-True (-not (Test-Path -LiteralPath $evidencePath) -and -not (Test-Path -LiteralPath $candidateRoot) -and -not (Test-Path -LiteralPath $workRoot)) 'Full evidence roots must be absent before the attempt.'
+    $secretSeeds = Get-ClosedSecretSeedSnapshot -Environment ([Environment]::GetEnvironmentVariables('Process'))
+    New-Item -ItemType Directory -Path $candidateRoot, $workRoot -ErrorAction Stop | Out-Null
+
+    $signatureReceipt = $null
+    $regressionReceipt = $null
+    try {
+        $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildEvidenceRoot (Join-Path $candidateRoot 'signature') -ChildPackagesRoot (Join-Path $workRoot 'signature-packages')
+        $signatureReceipt = $signature.receipt
+        $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildEvidenceRoot (Join-Path $candidateRoot 'regression') -ChildPackagesRoot (Join-Path $workRoot 'regression-packages')
+        $regressionReceipt = $regression.receipt
+        Publish-FullPrimaryEvidence -CandidateRoot $candidateRoot -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SignatureReceipt $signatureReceipt -RegressionReceipt $regressionReceipt -SecretSeeds $secretSeeds
+    } catch {
+        if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        if (-not (Test-Path -LiteralPath $evidencePath)) {
+            Publish-FullSafeFallback -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SecretSeeds $secretSeeds
+        }
+    } finally {
+        if (Test-Path -LiteralPath $workRoot) { Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
+    & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'Test-NuGetEvidencePublication.ps1') -EvidenceRoot $evidencePath -ExpectedLane Full -ExpectedSourceSha $sourceSha -ExpectedRunAttempt ([string]$attempt) 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) 'Full outer evidence failed independent validation.'
+    $receipt = [IO.File]::ReadAllText((Join-Path $evidencePath 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+    Write-Output "NuGet Full evidence: $evidencePath"
+    if ($receipt.outcome -cne 'success') { throw 'NuGet Full attempt recorded failed child evidence.' }
 }
 
 function Invoke-SelfTest {
@@ -1939,6 +2150,7 @@ function Invoke-SelfTest {
                     candidateEvidenceRoot = $sanitizerRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
+                    executionContext = 'local'
                     projects = $sanitizerProjects
                     packages = $sanitizerPackages
                     phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0; failureCode = $null })
@@ -1996,6 +2208,7 @@ function Invoke-SelfTest {
                     candidateEvidenceRoot = $failureSanitizerRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
+                    executionContext = 'full-child'
                     failurePhase = 'signature:verify:ReactiveUI.Avalonia'
                     completedProjects = @()
                     attemptedPackages = @([ordered]@{ id = 'ReactiveUI.Avalonia'; version = '12.0.2'; nupkgSha512 = ('a' * 128); verifyExitCode = 1 })
@@ -2021,8 +2234,6 @@ function Invoke-SelfTest {
             Assert-True ($failurePrimaryFiles.Count -eq 3 -and $failurePrimaryFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer signature failure tree has an invalid file set.'
             $failurePrimaryReceipt = [IO.File]::ReadAllText((Join-Path $failurePrimaryRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($failurePrimaryReceipt.outcome -ceq 'failure' -and $failurePrimaryReceipt.failurePhase -ceq 'signature:verify:ReactiveUI.Avalonia' -and $failurePrimaryReceipt.failureCode -ceq 'signature-verification-failed') 'Publication finalizer signature failure receipt is invalid.'
-            Remove-Item -LiteralPath $failurePrimaryRoot -Recurse -Force -ErrorAction Stop
-            Remove-Item -LiteralPath $failureSanitizerRoot -Recurse -Force -ErrorAction Stop
             $integratedFailureRoot = $sanitizerRoot + '-integrated-failure-final'
             $integratedFailureCandidate = $integratedFailureRoot + '.candidate'
             Publish-SignatureFailureEvidence -CandidateEvidencePath $integratedFailureCandidate -EvidencePath $integratedFailureRoot -SourceSha ('a' * 40) -Attempt 1 -Phases @([ordered]@{ name = 'signature:verify:worker'; status = 'failure'; exitCode = -2; failureCode = 'native-command-threw' }) -CompletedProjects @() -AttemptedPackages @() -SecretSeeds $syntheticSeeds -DefaultFailureCode 'attempt-failed'
@@ -2037,6 +2248,7 @@ function Invoke-SelfTest {
                     candidateEvidenceRoot = $regressionCandidateRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
+                    executionContext = 'full-child'
                     phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'success'; exitCode = 0; failureCode = $null })
                     runs = @(
                         [ordered]@{ runId = 'unit'; state = 'success'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = $null; discovered = 830; passed = 830; failed = 0; skipped = 0; durationMs = 1; skipReason = $null },
@@ -2057,15 +2269,30 @@ function Invoke-SelfTest {
             Assert-True ($regressionFinalizerResult.Success -eq $true -and $regressionFinalizerResult.ExitCode -eq 0) 'Publication finalizer did not publish Regression candidate evidence.'
             $regressionEvidence = [IO.File]::ReadAllText((Join-Path $regressionFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($regressionEvidence.evidenceKind -ceq 'regression-success' -and (@($regressionEvidence.runs)).Count -eq 3 -and $regressionEvidence.runs[0].trx.path -ceq 'regression/unit.trx' -and $regressionEvidence.runs[2].html.path -ceq 'regression/headless-2.html') 'Regression sanitizer evidence shape is invalid.'
-            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 -ExpectedExecutionContext full-child
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression candidate evidence.'
+            $fullCandidateRoot = $sanitizerRoot + '-full-candidate'
+            $fullEvidenceRoot = $sanitizerRoot + '-full-final'
+            New-Item -ItemType Directory -Path $fullCandidateRoot -ErrorAction Stop | Out-Null
+            Copy-Item -LiteralPath $failurePrimaryRoot -Destination (Join-Path $fullCandidateRoot 'signature') -Recurse -ErrorAction Stop
+            Copy-Item -LiteralPath $regressionFinalRoot -Destination (Join-Path $fullCandidateRoot 'regression') -Recurse -ErrorAction Stop
+            $fullRegressionReceipt = [IO.File]::ReadAllText((Join-Path $regressionFinalRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Publish-FullPrimaryEvidence -CandidateRoot $fullCandidateRoot -EvidencePath $fullEvidenceRoot -SourceSha ('a' * 40) -Attempt 1 -SignatureReceipt $failurePrimaryReceipt -RegressionReceipt $fullRegressionReceipt -SecretSeeds $syntheticSeeds
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $fullEvidenceRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected the recursive Full primary evidence.'
+            $fullReceipt = [IO.File]::ReadAllText((Join-Path $fullEvidenceRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($fullReceipt.receiptKind -ceq 'full-primary' -and $fullReceipt.outcome -ceq 'failure' -and $fullReceipt.failureCode -ceq 'signature-verification-failed' -and (@($fullReceipt.childAttempts)).Count -eq 2 -and $fullReceipt.childAttempts[0].relativeRoot -ceq 'signature' -and $fullReceipt.childAttempts[1].relativeRoot -ceq 'regression') 'Full primary publication did not preserve the ordered child receipts.'
+            Remove-Item -LiteralPath $fullEvidenceRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFinalRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionCandidateRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $failurePrimaryRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $failureSanitizerRoot -Recurse -Force -ErrorAction Stop
             $regressionFailureCandidateRoot = $sanitizerRoot + '-regression-failure-candidate'
             $regressionFailureSanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'RegressionSanitize' -Payload ([ordered]@{
                     candidateEvidenceRoot = $regressionFailureCandidateRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
+                    executionContext = 'local'
                     phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
                     runs = @(
                         [ordered]@{ runId = 'unit'; state = 'failure'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = 'test-evidence-failed'; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = $null },
@@ -2120,5 +2347,6 @@ if ($Mode -eq 'SelfTest') {
 switch -CaseSensitive ($Lane) {
     'Signature' { Invoke-SignatureAttempt; break }
     'Regression' { Invoke-RegressionAttempt; break }
-    default { throw 'RunAttempt lane must be exactly Signature or Regression.' }
+    'Full' { Invoke-FullAttempt; break }
+    default { throw 'RunAttempt lane must be exactly Signature, Regression or Full.' }
 }
