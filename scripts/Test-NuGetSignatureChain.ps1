@@ -492,6 +492,9 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
 function Get-CandidateEvidenceManifest([string]$CandidateRoot, [Text.Json.JsonElement[]]$SecretSeeds) {
     $root = [IO.Path]::GetFullPath($CandidateRoot)
     Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) 'Candidate evidence root is invalid.'
+    foreach ($directory in @(Get-ChildItem -LiteralPath $root -Recurse -Directory -Force)) {
+        Assert-True (-not $directory.LinkType) 'Candidate evidence directory cannot be a link.'
+    }
     $entries = [System.Collections.Generic.List[object]]::new()
     foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
         Assert-True (-not $file.LinkType) 'Candidate evidence file cannot be a link.'
@@ -524,9 +527,10 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
     $lane = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'lane'
     Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $lane -ceq 'Signature') 'PublicationFinalize identity is invalid.'
     Assert-True (-not (Test-Path -LiteralPath $finalRoot) -and (Split-Path -Parent $candidateRoot) -ceq (Split-Path -Parent $finalRoot)) 'PublicationFinalize final root is invalid.'
-    $manifest = Get-CandidateEvidenceManifest -CandidateRoot $candidateRoot -SecretSeeds $SecretSeeds
     $scratchRoot = $finalRoot + '.scratch-' + [Guid]::NewGuid().ToString('N')
+    $publicationFailureCode = $null
     try {
+        $manifest = Get-CandidateEvidenceManifest -CandidateRoot $candidateRoot -SecretSeeds $SecretSeeds
         Copy-Item -LiteralPath $candidateRoot -Destination $scratchRoot -Recurse -ErrorAction Stop
         $receipt = [ordered]@{
             schemaVersion = 1
@@ -548,7 +552,37 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
             [Array]::Clear($receiptBytes, 0, $receiptBytes.Length)
         }
         $finalManifest = Get-CandidateEvidenceManifest -CandidateRoot $scratchRoot -SecretSeeds $SecretSeeds
-        Assert-True ($finalManifest.Count -eq $manifest.Count + 1) 'PublicationFinalize final tree has an unexpected file count.'
+        $expectedPaths = @($manifest | ForEach-Object { $_.path }) + 'attempt-receipt.json' | Sort-Object
+        $actualPaths = @($finalManifest | ForEach-Object { $_.path })
+        Assert-True ($actualPaths.Count -eq $expectedPaths.Count -and [Linq.Enumerable]::SequenceEqual([string[]]$actualPaths, [string[]]$expectedPaths, [StringComparer]::Ordinal)) 'PublicationFinalize final tree has an unexpected file set.'
+        Move-Item -LiteralPath $scratchRoot -Destination $finalRoot -ErrorAction Stop
+        return [ordered]@{ success = $true; failureCode = $null; packages = @() }
+    } catch {
+        $publicationFailureCode = 'publication-integrity-failed'
+    }
+    if (Test-Path -LiteralPath $scratchRoot) { Remove-Item -LiteralPath $scratchRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    try {
+        Assert-True ($publicationFailureCode -ceq 'publication-integrity-failed') 'PublicationFinalize fallback state is invalid.'
+        New-Item -ItemType Directory -Path $scratchRoot -ErrorAction Stop | Out-Null
+        $fallbackReceipt = [ordered]@{
+            schemaVersion = 1
+            receiptKind = 'safe-fallback'
+            sourceSha = $sourceSha
+            runAttempt = [int]$runAttempt
+            lane = $lane
+            outcome = 'failure'
+            failureCode = $publicationFailureCode
+            evidenceManifest = @()
+        }
+        $fallbackBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $fallbackReceipt -Depth 16 -Compress))
+        try {
+            Assert-SanitizedBytes -Bytes $fallbackBytes -SecretSeeds $SecretSeeds
+            [IO.File]::WriteAllBytes((Join-Path $scratchRoot 'attempt-receipt.json'), $fallbackBytes)
+        } finally {
+            [Array]::Clear($fallbackBytes, 0, $fallbackBytes.Length)
+        }
+        $fallbackManifest = Get-CandidateEvidenceManifest -CandidateRoot $scratchRoot -SecretSeeds $SecretSeeds
+        Assert-True ($fallbackManifest.Count -eq 1 -and $fallbackManifest[0].path -ceq 'attempt-receipt.json') 'PublicationFinalize fallback tree has an unexpected file set.'
         Move-Item -LiteralPath $scratchRoot -Destination $finalRoot -ErrorAction Stop
         return [ordered]@{ success = $true; failureCode = $null; packages = @() }
     } catch {
@@ -1212,6 +1246,21 @@ function Invoke-SelfTest {
             $finalReceipt = [IO.File]::ReadAllText((Join-Path $finalizerRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ((@($finalReceipt.evidenceManifest)).Count -eq 7 -and (@($finalReceipt.evidenceManifest | Where-Object { $_.path -ceq 'attempt-receipt.json' })).Count -eq 0) 'Publication finalizer receipt self-hashed or lost candidate files.'
             Remove-Item -LiteralPath $finalizerRoot -Recurse -Force -ErrorAction Stop
+            $fallbackRoot = $sanitizerRoot + '-fallback'
+            $fallbackResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $sanitizerRoot + '-missing'
+                    finalEvidenceRoot = $fallbackRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    lane = 'Signature'
+                    phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'failure'; exitCode = 1 })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($fallbackResult.Success -eq $true -and $fallbackResult.ExitCode -eq 0 -and (Test-Path -LiteralPath $fallbackRoot)) 'Publication finalizer worker did not publish the fallback tree.'
+            $fallbackFiles = @(Get-ChildItem -LiteralPath $fallbackRoot -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath($fallbackRoot, $_.FullName) -replace '\\', '/' } | Sort-Object)
+            Assert-True ($fallbackFiles.Count -eq 1 -and $fallbackFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer fallback tree has an invalid file set.'
+            $fallbackReceipt = [IO.File]::ReadAllText((Join-Path $fallbackRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($fallbackReceipt.receiptKind -ceq 'safe-fallback' -and $fallbackReceipt.failureCode -ceq 'publication-integrity-failed' -and (@($fallbackReceipt.evidenceManifest)).Count -eq 0) 'Publication finalizer fallback receipt is invalid.'
+            Remove-Item -LiteralPath $fallbackRoot -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }
