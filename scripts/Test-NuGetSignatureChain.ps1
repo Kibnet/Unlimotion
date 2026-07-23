@@ -127,6 +127,87 @@ function Get-BaselineProjectPackageSet([string]$Root, [string]$ProjectPath, [str
     return [ordered]@{ projectPath = $ProjectPath; packageSet = $ordered; graphSha256 = Get-CanonicalGraphHash -Packages $ordered }
 }
 
+function Get-ExpectedGraphTransitions {
+    return @(
+        @{ id = 'ReactiveUI.Avalonia'; baselineVersion = '12.0.1'; candidateVersion = '12.0.2' },
+        @{ id = 'ReactiveUI'; baselineVersion = '23.2.27'; candidateVersion = '23.2.28' },
+        @{ id = 'Splat'; baselineVersion = '19.3.1'; candidateVersion = '19.4.1' },
+        @{ id = 'Splat.Builder'; baselineVersion = '19.3.1'; candidateVersion = '19.4.1' },
+        @{ id = 'Splat.Core'; baselineVersion = '19.3.1'; candidateVersion = '19.4.1' },
+        @{ id = 'Splat.Logging'; baselineVersion = '19.3.1'; candidateVersion = '19.4.1' }
+    )
+}
+
+function New-OrdinalPackageMap([object[]]$Packages, [string]$Description) {
+    $map = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+    foreach ($package in $Packages) {
+        Assert-True ($package.id -is [string] -and $package.id.Length -gt 0) "$Description contains a package without an id."
+        Assert-True ($package.version -is [string] -and $package.version.Length -gt 0) "$Description contains a package without a version."
+        Assert-True ($package.source -is [string] -and $package.source -ceq 'nuget.org') "$Description contains a package from an unexpected source."
+        Assert-True ($package.nupkgSha512 -is [string] -and $package.nupkgSha512 -cmatch '^[0-9a-f]{128}$') "$Description contains an invalid package SHA-512."
+        Assert-True (-not $map.ContainsKey($package.id)) "$Description contains a duplicate package id: $($package.id)."
+        $map.Add($package.id, $package)
+    }
+    return ,$map
+}
+
+function Assert-GraphDiffIsApproved(
+    [object[]]$BaselinePackages,
+    [object[]]$CandidatePackages,
+    [string]$ProjectPath
+) {
+    $baselineById = New-OrdinalPackageMap -Packages $BaselinePackages -Description "Baseline graph $ProjectPath"
+    $candidateById = New-OrdinalPackageMap -Packages $CandidatePackages -Description "Candidate graph $ProjectPath"
+    Assert-True ($baselineById.Count -eq $candidateById.Count) "Candidate graph $ProjectPath changed its package cardinality."
+
+    $transitions = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+    foreach ($transition in Get-ExpectedGraphTransitions) {
+        Assert-True (-not $transitions.ContainsKey($transition.id)) "Approved graph transition is duplicated: $($transition.id)."
+        $transitions.Add($transition.id, $transition)
+    }
+
+    foreach ($id in $baselineById.Keys) {
+        Assert-True ($candidateById.ContainsKey($id)) "Candidate graph $ProjectPath removed package $id."
+        $baselinePackage = $baselineById[$id]
+        $candidatePackage = $candidateById[$id]
+        if ($transitions.ContainsKey($id)) {
+            $transition = $transitions[$id]
+            Assert-True ($baselinePackage.version -ceq $transition.baselineVersion) "Baseline graph $ProjectPath has an unexpected version for $id."
+            Assert-True ($candidatePackage.version -ceq $transition.candidateVersion) "Candidate graph $ProjectPath has an unapproved version for $id."
+            continue
+        }
+
+        Assert-True ($candidatePackage.version -ceq $baselinePackage.version) "Candidate graph $ProjectPath changed an unapproved package version: $id."
+        Assert-True ($candidatePackage.nupkgSha512 -ceq $baselinePackage.nupkgSha512) "Candidate graph $ProjectPath changed an unapproved package payload: $id."
+    }
+
+    foreach ($id in $candidateById.Keys) {
+        Assert-True ($baselineById.ContainsKey($id)) "Candidate graph $ProjectPath added package $id."
+    }
+}
+
+function Assert-CandidateGraphsAgainstBaseline(
+    [string]$BaselinePath,
+    [string]$Root,
+    [string]$PackagesPath,
+    [hashtable[]]$Projects
+) {
+    Assert-True (Test-Path -LiteralPath $BaselinePath -PathType Leaf) 'Baseline fixture is missing.'
+    $fixture = Get-Content -Raw -LiteralPath $BaselinePath | ConvertFrom-Json -AsHashtable -Depth 64
+    Assert-True ($fixture.schemaVersion -is [long] -and $fixture.schemaVersion -eq 1) 'Baseline fixture schemaVersion is invalid.'
+    Assert-True ($fixture.sourceSha -is [string] -and $fixture.sourceSha -ceq 'e11cae9a086ddd4fd97105f00b67bedf05f92700') 'Baseline fixture source SHA is invalid.'
+    $baselineProjects = @($fixture.projects)
+    Assert-True ($baselineProjects.Count -eq 3) 'Baseline fixture must contain exactly three projects.'
+    Assert-True ($Projects.Count -eq 3) 'Candidate graph comparison requires exactly three projects.'
+
+    foreach ($project in $Projects) {
+        $matches = @($baselineProjects | Where-Object { $_.projectPath -ceq $project.path })
+        Assert-True ($matches.Count -eq 1) "Baseline fixture is missing or duplicating project $($project.path)."
+        $candidate = Get-BaselineProjectPackageSet -Root $Root -ProjectPath $project.path -PackagesPath $PackagesPath -AssetsPath $project.assetsPath
+        Assert-GraphDiffIsApproved -BaselinePackages @($matches[0].packageSet) -CandidatePackages @($candidate.packageSet) -ProjectPath $project.path
+    }
+}
+
 function Invoke-GenerateBaseline {
     $root = Get-CanonicalRepositoryRoot
     Assert-True ($ExpectedParentSha -cmatch '^[0-9a-f]{40}$') 'ExpectedParentSha must be a lowercase 40-hex Git SHA.'
@@ -255,14 +336,16 @@ function Invoke-SignatureAttempt {
     $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
     $phases = [System.Collections.Generic.List[object]]::new()
     $packages = [System.Collections.Generic.List[object]]::new()
+    $stagedAssetsRoot = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-nuget-assets-' + [Guid]::NewGuid().ToString('N'))
     $env:NUGET_PACKAGES = $packagesPath
 
     try {
         $projects = @(
-            @{ id = 'headless'; path = 'tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj' },
-            @{ id = 'desktop'; path = 'src\Unlimotion.Desktop\Unlimotion.Desktop.csproj' },
-            @{ id = 'debian'; path = 'src\Unlimotion.Desktop\Unlimotion.Desktop.ForDebianBuild.csproj' }
+            @{ id = 'headless'; path = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; assetsPath = (Join-Path $stagedAssetsRoot 'headless.project.assets.json') },
+            @{ id = 'desktop'; path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.csproj'; assetsPath = (Join-Path $stagedAssetsRoot 'desktop.project.assets.json') },
+            @{ id = 'debian'; path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj'; assetsPath = (Join-Path $stagedAssetsRoot 'debian.project.assets.json') }
         )
+        New-Item -ItemType Directory -Path $stagedAssetsRoot -ErrorAction Stop | Out-Null
 
         foreach ($project in $projects) {
             Invoke-DotNet -Phase "signature:restore:$($project.id)" -Arguments @(
@@ -273,14 +356,33 @@ function Invoke-SignatureAttempt {
                 '-p:DisableImplicitNuGetFallbackFolder=true',
                 '-p:RestoreFallbackFolders='
             ) -Phases $phases
+            try {
+                $projectDirectory = Split-Path -Parent (Join-Path $root $project.path)
+                Copy-Item -LiteralPath (Join-Path $projectDirectory 'obj\project.assets.json') -Destination $project.assetsPath -ErrorAction Stop
+                $phases.Add([ordered]@{ name = "signature:assets:$($project.id)"; status = 'success'; exitCode = 0 })
+            } catch {
+                $phases.Add([ordered]@{ name = "signature:assets:$($project.id)"; status = 'failure'; exitCode = 1 })
+                throw
+            }
         }
 
+        try {
+            Assert-CandidateGraphsAgainstBaseline -BaselinePath (Join-Path $root 'distribution/fixtures/reactiveui-signature-chain-baseline.json') -Root $root -PackagesPath $packagesPath -Projects $projects
+            $phases.Add([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0 })
+        } catch {
+            $phases.Add([ordered]@{ name = 'signature:verify:graph'; status = 'failure'; exitCode = 1 })
+            throw
+        }
         $packages = Get-PackageReceipt -PackagesPath $packagesPath -Phases $phases
         Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
         Write-Output "NuGet signature evidence: $evidencePath"
     } catch {
         Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
         throw
+    } finally {
+        if (Test-Path -LiteralPath $stagedAssetsRoot) {
+            Remove-Item -LiteralPath $stagedAssetsRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -367,6 +469,48 @@ function Invoke-SelfTest {
     )
     $roundTrip = ([ordered]@{ projects = $fixtureProjects } | ConvertTo-Json -Depth 8) | ConvertFrom-Json -AsHashtable -Depth 16
     Assert-True (@($roundTrip.projects).Count -eq 3) 'Baseline project serialization must preserve all projects.'
+
+    $baselinePackages = @(
+        foreach ($transition in Get-ExpectedGraphTransitions) {
+            [ordered]@{
+                id = $transition.id
+                version = $transition.baselineVersion
+                source = 'nuget.org'
+                nupkgSha512 = (('a' * 128) -join '')
+            }
+        }
+    )
+    $candidatePackages = @(
+        foreach ($transition in Get-ExpectedGraphTransitions) {
+            [ordered]@{
+                id = $transition.id
+                version = $transition.candidateVersion
+                source = 'nuget.org'
+                nupkgSha512 = (('b' * 128) -join '')
+            }
+        }
+    )
+    Assert-GraphDiffIsApproved -BaselinePackages $baselinePackages -CandidatePackages $candidatePackages -ProjectPath 'synthetic'
+
+    $unrelatedBaseline = @($baselinePackages + [ordered]@{
+            id = 'Unrelated.Package'
+            version = '1.0.0'
+            source = 'nuget.org'
+            nupkgSha512 = (('c' * 128) -join '')
+        })
+    $unrelatedCandidate = @($candidatePackages + [ordered]@{
+            id = 'Unrelated.Package'
+            version = '2.0.0'
+            source = 'nuget.org'
+            nupkgSha512 = (('c' * 128) -join '')
+        })
+    $unrelatedDriftRejected = $false
+    try {
+        Assert-GraphDiffIsApproved -BaselinePackages $unrelatedBaseline -CandidatePackages $unrelatedCandidate -ProjectPath 'synthetic'
+    } catch {
+        $unrelatedDriftRejected = $true
+    }
+    Assert-True $unrelatedDriftRejected 'Graph validation accepted unrelated version drift.'
 }
 
 if ($Mode -eq 'GenerateBaseline') {

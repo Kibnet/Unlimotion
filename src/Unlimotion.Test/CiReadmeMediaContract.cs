@@ -49,6 +49,8 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("GenerateBaseline");
         await Assert.That(nugetSignatureScript).Contains("ExpectedParentSha");
         await Assert.That(nugetSignatureScript).Contains("Get-CanonicalGraphHash");
+        await Assert.That(nugetSignatureScript).Contains("Assert-CandidateGraphsAgainstBaseline");
+        await Assert.That(nugetSignatureScript).Contains("Assert-GraphDiffIsApproved");
         await Assert.That(nugetSignatureScript).Contains("Worker mode is reserved");
         using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
         var nugetBaseline = nugetBaselineDocument.RootElement;

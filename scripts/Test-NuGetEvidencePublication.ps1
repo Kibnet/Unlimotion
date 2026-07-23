@@ -57,7 +57,7 @@ Assert-True ($phases.Count -ge 1) 'Receipt phases cannot be empty.'
 foreach ($phase in $phases) {
     Assert-True ($phase -is [hashtable]) 'Receipt phase must be an object.'
     Assert-ExactKeys -Object $phase -Expected @('name', 'status', 'exitCode') -Name 'receipt phase'
-    $phasePattern = if ($ExpectedLane -ceq 'Signature') { '^signature:(restore|verify):' } else { '^regression:(restore|build|test):' }
+    $phasePattern = if ($ExpectedLane -ceq 'Signature') { '^signature:(restore|assets|verify):' } else { '^regression:(restore|build|test):' }
     Assert-True ($phase.name -is [string] -and $phase.name -cmatch $phasePattern) 'Receipt phase name is invalid.'
     Assert-True ($phase.status -is [string] -and ($phase.status -ceq 'success' -or $phase.status -ceq 'failure')) 'Receipt phase status is invalid.'
     Assert-True ($phase.exitCode -is [long]) 'Receipt phase exitCode is invalid.'
