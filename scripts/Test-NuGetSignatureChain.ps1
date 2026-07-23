@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('RunAttempt', 'SelfTest')]
+    [ValidateSet('GenerateBaseline', 'RunAttempt', 'SelfTest', 'Worker')]
     [string]$Mode = 'RunAttempt',
     [AllowEmptyString()]
     [string]$Lane = 'Signature',
@@ -10,7 +10,11 @@ param(
     [string]$ExpectedSourceSha,
     [AllowEmptyString()]
     [string]$RunAttempt = '1',
-    [string]$EvidenceRoot
+    [string]$EvidenceRoot,
+    [AllowEmptyString()]
+    [string]$ExpectedParentSha,
+    [string]$OutputPath,
+    [string]$DotNetExecutable = 'dotnet'
 )
 
 Set-StrictMode -Version Latest
@@ -83,6 +87,84 @@ function Get-EvidenceRoot([string]$Root, [string]$SourceSha, [int]$Attempt) {
     }
 
     return (Join-Path ([IO.Path]::GetTempPath()) ("unlimotion-nuget-evidence-{0}-attempt-{1}-{2}" -f $SourceSha, $Attempt, [Guid]::NewGuid().ToString('N')))
+}
+
+function Get-Sha256([string]$Path) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-CanonicalGraphHash([object[]]$Packages) {
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($package in $Packages) {
+        $lines.Add(('{0}`t{1}`t{2}`t{3}`n' -f $package.id, $package.version, $package.source, $package.nupkgSha512))
+    }
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($lines -join [string]::Empty))
+    return ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant()
+}
+
+function Get-BaselineProjectPackageSet([string]$Root, [string]$ProjectPath, [string]$PackagesPath) {
+    $assetsPath = Join-Path $Root ((Split-Path -Parent $ProjectPath) + '\\obj\\project.assets.json')
+    Assert-True (Test-Path -LiteralPath $assetsPath -PathType Leaf) "Missing restored assets file: $ProjectPath."
+    $assets = Get-Content -Raw -LiteralPath $assetsPath | ConvertFrom-Json -AsHashtable -Depth 32
+    $packages = [System.Collections.Generic.List[object]]::new()
+    foreach ($libraryKey in @($assets.libraries.Keys | Sort-Object)) {
+        $separator = $libraryKey.LastIndexOf('/')
+        Assert-True ($separator -gt 0) "Invalid assets library key: $libraryKey."
+        $id = $libraryKey.Substring(0, $separator)
+        $version = $libraryKey.Substring($separator + 1)
+        $library = $assets.libraries[$libraryKey]
+        if ($library.type -cne 'package') { continue }
+        $nupkg = Join-Path $PackagesPath (("{0}\\{1}\\{0}.{1}.nupkg" -f $id.ToLowerInvariant(), $version))
+        Assert-True (Test-Path -LiteralPath $nupkg -PathType Leaf) "Missing package payload: $id $version."
+        $packages.Add([ordered]@{
+            id = $id
+            version = $version
+            source = 'nuget.org'
+            nupkgSha512 = (Get-FileHash -LiteralPath $nupkg -Algorithm SHA512).Hash.ToLowerInvariant()
+        })
+    }
+    $ordered = @($packages | Sort-Object @{ Expression = { $_.id }; Ascending = $true }, @{ Expression = { $_.version }; Ascending = $true })
+    return [ordered]@{ projectPath = $ProjectPath; packageSet = $ordered; graphSha256 = Get-CanonicalGraphHash -Packages $ordered }
+}
+
+function Invoke-GenerateBaseline {
+    $root = Get-CanonicalRepositoryRoot
+    Assert-True ($ExpectedParentSha -cmatch '^[0-9a-f]{40}$') 'ExpectedParentSha must be a lowercase 40-hex Git SHA.'
+    $head = (& git -C $root rev-parse HEAD).Trim()
+    Assert-True ($LASTEXITCODE -eq 0 -and $head -ceq $ExpectedParentSha) 'GenerateBaseline requires exact parent HEAD.'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($PackagesRoot)) 'GenerateBaseline requires PackagesRoot.'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($OutputPath)) 'GenerateBaseline requires OutputPath.'
+    $packagesPath = [IO.Path]::GetFullPath($PackagesRoot)
+    Assert-True (Test-Path -LiteralPath $packagesPath -PathType Container) 'GenerateBaseline PackagesRoot must exist.'
+    $output = [IO.Path]::GetFullPath($OutputPath)
+    Assert-True (-not (Test-Path -LiteralPath $output)) 'GenerateBaseline OutputPath must not exist.'
+
+    $projectPaths = @(
+        'tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj',
+        'src\\Unlimotion.Desktop\\Unlimotion.Desktop.csproj',
+        'src\\Unlimotion.Desktop\\Unlimotion.Desktop.ForDebianBuild.csproj'
+    )
+    $manifestPaths = @('src/Directory.Packages.props', 'src/nuget.config')
+    foreach ($projectPath in $projectPaths) {
+        $manifestPaths += $projectPath.Replace('\\', '/')
+    }
+    $inputManifest = [System.Collections.Generic.List[object]]::new()
+    foreach ($path in @($manifestPaths | Sort-Object -Unique)) {
+        $absolute = Join-Path $root $path
+        Assert-True (Test-Path -LiteralPath $absolute -PathType Leaf) "Baseline input is missing: $path."
+        $stage = (& git -C $root ls-files -s -- $path).Trim()
+        Assert-True ($LASTEXITCODE -eq 0 -and $stage -match '^(100644|100755) ([0-9a-f]{40}) 0\t') "Baseline input is not an exact regular Git blob: $path."
+        $inputManifest.Add([ordered]@{ path = $path; mode = $Matches[1]; gitObjectId = $Matches[2]; byteLength = [long](Get-Item -LiteralPath $absolute).Length; sha256 = Get-Sha256 -Path $absolute })
+    }
+    $projects = [System.Collections.Generic.List[object]]::new()
+    foreach ($projectPath in $projectPaths) { $projects.Add((Get-BaselineProjectPackageSet -Root $root -ProjectPath $projectPath -PackagesPath $packagesPath)) }
+    $sdk = (& $DotNetExecutable --version).Trim()
+    Assert-True ($LASTEXITCODE -eq 0 -and $sdk -cmatch '^10\.0\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') 'GenerateBaseline requires a .NET 10 SDK.'
+    $fixture = [ordered]@{ schemaVersion = 1; sourceSha = $head; gitObjectFormat = 'sha1'; dotnetSdkVersion = $sdk; inputManifest = @($inputManifest); projects = @($projects) }
+    $json = $fixture | ConvertTo-Json -Depth 16
+    New-Item -ItemType Directory -Path (Split-Path -Parent $output) -Force | Out-Null
+    [IO.File]::WriteAllText($output, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    Write-Output "NuGet baseline fixture: $output"
 }
 
 function Invoke-DotNet([string]$Phase, [string[]]$Arguments, [System.Collections.Generic.List[object]]$Phases) {
@@ -266,6 +348,15 @@ function Invoke-SelfTest {
         $script:RunAttempt = $originalRunAttempt
     }
     Assert-True $invalidAttemptRejected 'Non-canonical run attempt was accepted.'
+}
+
+if ($Mode -eq 'GenerateBaseline') {
+    Invoke-GenerateBaseline
+    return
+}
+
+if ($Mode -eq 'Worker') {
+    throw 'Worker mode is reserved for the closed stdin protocol and cannot accept command-line payloads.'
 }
 
 if ($Mode -eq 'SelfTest') {
