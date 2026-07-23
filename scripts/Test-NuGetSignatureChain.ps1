@@ -247,10 +247,15 @@ function Get-ClosedSeedNameHash([Text.Json.JsonElement]$Seeds) {
 
 function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
     $header = Read-ExactBytes -Stream $StandardInput -Count 4
-    $length = (($header[0] -shl 24) -bor ($header[1] -shl 16) -bor ($header[2] -shl 8) -bor $header[3])
+    $length = 0
+    $length = $length -bor (([int]$header[0]) -shl 24)
+    $length = $length -bor (([int]$header[1]) -shl 16)
+    $length = $length -bor (([int]$header[2]) -shl 8)
+    $length = $length -bor ([int]$header[3])
     Assert-True ($length -ge 2 -and $length -le 1048576) 'Closed worker frame length is invalid.'
     $body = Read-ExactBytes -Stream $StandardInput -Count $length
-    Assert-True ($StandardInput.ReadByte() -eq -1) 'Closed worker accepts exactly one input frame.'
+    $trailingByte = $StandardInput.ReadByte()
+    Assert-True ($trailingByte -eq -1) "Closed worker accepts exactly one input frame (declared length: $length; trailing byte: $trailingByte)."
     $options = [Text.Json.JsonDocumentOptions]::new()
     $options.AllowTrailingCommas = $false
     $options.CommentHandling = [Text.Json.JsonCommentHandling]::Disallow
@@ -720,6 +725,22 @@ function Invoke-SelfTest {
             Assert-True ($nestedWorkerRequest.Payload.GetProperty('assetsPaths').GetArrayLength() -eq 3) 'Closed worker frame lost nested payload values.'
         } finally {
             $nestedWorkerInput.Dispose()
+        }
+        $largeWorkerInput = [IO.MemoryStream]::new()
+        try {
+            $largePadding = 'x' * 512
+            Write-ClosedWorkerFrame -StandardOutput $largeWorkerInput -Result ([ordered]@{
+                    schemaVersion = 1
+                    workerKind = 'SignatureVerify'
+                    payload = [ordered]@{ padding = $largePadding }
+                    secretSeeds = @()
+                })
+            Assert-True ($largeWorkerInput.Length -gt 260) 'Closed worker self-test did not produce a multi-byte frame length.'
+            $largeWorkerInput.Position = 0
+            $largeWorkerRequest = Read-ClosedWorkerFrame -StandardInput $largeWorkerInput
+            Assert-True ($largeWorkerRequest.Payload.GetProperty('padding').GetString().Length -eq $largePadding.Length) 'Closed worker frame lost a multi-byte length prefix.'
+        } finally {
+            $largeWorkerInput.Dispose()
         }
     } finally {
         $workerInput.Dispose()
