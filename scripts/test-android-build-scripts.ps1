@@ -418,6 +418,18 @@ function Assert-EmulatorVersionProbeContract {
     Assert-Match $Content 'AAPT_VERSION="\$\(resolve_tool_version "aapt" "\$AAPT" version\)"' 'aapt version must use the diagnostic-preserving probe.'
 }
 
+function Assert-EmulatorAvdIsolationContract {
+    param([Parameter(Mandatory)] [string]$Content)
+
+    Assert-Match $Content '(?m)^EMULATOR_AVD_ROOT="\$\(mktemp -d "\$\{RUNNER_TEMP:-\$\{TMPDIR:-/tmp\}\}/unlimotion-android-avd\.XXXXXX"\)"\s*$' 'Android emulator validation must allocate a unique runner-temporary AVD root.'
+    Assert-Match $Content '(?m)^export ANDROID_AVD_HOME="\$EMULATOR_AVD_ROOT"\s*$' 'Android emulator validation must export its exact isolated AVD root to both avdmanager and emulator.'
+    Assert-NotMatch $Content '\$\{HOME\}/\.android/avd' 'Android emulator validation must not fall back to a shared HOME AVD root.'
+    Assert-Match $Content '(?m)^\[ -d "\$ANDROID_AVD_HOME" \] \|\| fail ' 'Android emulator validation must verify the isolated AVD root before creating an AVD.'
+    Assert-Match $Content '(?ms)^cleanup_emulator_avd_root\(\) \{.*?rm -rf -- "\$EMULATOR_AVD_ROOT".*?^\}' 'Android emulator validation must remove its isolated AVD root during exit cleanup.'
+    Assert-Match $Content "(?m)^trap 'cleanup_emulator; cleanup_emulator_avd_root' EXIT\s*$" 'Android emulator validation must combine per-AVD and isolated-root cleanup in its EXIT trap.'
+    Assert-Match $Content '(?ms)avdmanager create avd --force --name "\$AVD_NAME" --package "\$SYSTEM_IMAGE" --device pixel.*?\[ -f "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.ini" \] \|\| fail .*?\[ -d "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.avd" \] \|\| fail ' 'Android emulator validation must prove that avdmanager created the exact AVD descriptor and directory before emulator launch.'
+}
+
 $gitLink = (& git -C $rootDir ls-tree HEAD .native/libgit2-src) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $gitLink -notmatch '^160000\s+commit\s+[0-9a-f]{40}\s+\.native/libgit2-src$') {
     throw 'Expected .native/libgit2-src to be a committed gitlink; local static checks do not require an initialized submodule.'
@@ -547,6 +559,7 @@ Assert-SingleArtifactDownloadsAreFlat -Content $workflow -Label 'android-packagi
 Assert-SingleArtifactDownloadsAreFlat -Content $distributionValidationWorkflow -Label 'distribution-validation workflow'
 Assert-EmulatorToolPathContract -Content $distributionValidationWorkflow
 Assert-EmulatorVersionProbeContract -Content $distributionTestScript
+Assert-EmulatorAvdIsolationContract -Content $distributionTestScript
 
 $missingEmulatorPathFixture = [regex]::Replace(
     $distributionValidationWorkflow,
@@ -585,6 +598,14 @@ $opaqueEmulatorVersionFixture = $distributionTestScript.Replace(
 Assert-Throws {
     Assert-EmulatorVersionProbeContract -Content $opaqueEmulatorVersionFixture
 } 'Android validator accepted an emulator version probe that hides loader diagnostics behind command substitution.'
+
+$unisolatedAvdFixture = $distributionTestScript.Replace(
+    'export ANDROID_AVD_HOME="$EMULATOR_AVD_ROOT"',
+    'export ANDROID_SDK_HOME="$EMULATOR_AVD_ROOT"'
+)
+Assert-Throws {
+    Assert-EmulatorAvdIsolationContract -Content $unisolatedAvdFixture
+} 'Android validator accepted an AVD root that was not exported to emulator.'
 
 $nonFlatSingleArtifactFixture = [regex]::Replace(
     $distributionValidationWorkflow,
@@ -1508,6 +1529,14 @@ if [ "${1:-}" = "-version" ]; then
   echo "Android emulator version fixture"
   exit 0
 fi
+if [ "${1:-}" = "-avd" ]; then
+  avd_name="${2:-}"
+  if [ -z "${ANDROID_AVD_HOME:-}" ] || [ -z "$avd_name" ] || \
+     [ ! -f "$ANDROID_AVD_HOME/$avd_name.ini" ] || [ ! -d "$ANDROID_AVD_HOME/$avd_name.avd" ]; then
+    echo "fixture emulator could not resolve isolated AVD $avd_name" >&2
+    exit 23
+  fi
+fi
 echo "fixture emulator boot attempt: $*"
 exec sleep 60
 '@.Replace("`r`n", "`n"))
@@ -1519,6 +1548,15 @@ exit 0
 #!/bin/bash
 if [ "${1:-}" = "create" ]; then
   attempt=1
+  avd_name=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--name" ] && [ "$#" -ge 2 ]; then
+      avd_name="$2"
+      shift 2
+      continue
+    fi
+    shift
+  done
   if [ -n "${FAKE_AVDMANAGER_STATE_FILE:-}" ]; then
     if [ -f "$FAKE_AVDMANAGER_STATE_FILE" ]; then
       attempt=$(( $(cat "$FAKE_AVDMANAGER_STATE_FILE") + 1 ))
@@ -1529,6 +1567,13 @@ if [ "${1:-}" = "create" ]; then
   if [ -n "${FAKE_AVDMANAGER_FAIL_CREATE_ATTEMPT:-}" ] && [ "$attempt" = "$FAKE_AVDMANAGER_FAIL_CREATE_ATTEMPT" ]; then
     echo "fixture avdmanager setup failure on attempt $attempt" >&2
     exit 17
+  fi
+  if [ -n "${ANDROID_AVD_HOME:-}" ] && [ -n "$avd_name" ]; then
+    mkdir -p "$ANDROID_AVD_HOME/$avd_name.avd"
+    : > "$ANDROID_AVD_HOME/$avd_name.ini"
+    if [ -n "${FAKE_AVDMANAGER_ROOT_RECORD:-}" ]; then
+      printf '%s\n' "$ANDROID_AVD_HOME" > "$FAKE_AVDMANAGER_ROOT_RECORD"
+    fi
   fi
 fi
 exit 0
@@ -1551,6 +1596,7 @@ fi
     Invoke-BashChecked $chmodFixtureTools 'Unable to make fake Android fixture tools executable.' | Out-Null
 
     $emulatorFailureEvidencePath = Join-Path $emulatorFailureRoot 'evidence.json'
+    $avdRootRecordPath = Join-Path $emulatorFailureRoot 'avd-root.txt'
     $pythonDirectoryOutput = @(
         & $bashCommand --noprofile --norc -c 'command -v python3 >/dev/null 2>&1 && dirname -- "$(command -v python3)"' 2>&1
     )
@@ -1561,11 +1607,12 @@ fi
         throw "Unable to resolve the Python 3 directory from Bash '$bashCommand'.`n$($pythonDirectoryOutput -join [Environment]::NewLine)"
     }
     $fixturePosixPath = (Convert-ToBashPath $fakeBin) + ":${pythonDirectory}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    $emulatorFailureCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+    $emulatorFailureCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_AVDMANAGER_ROOT_RECORD={4} UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {5} --input-dir {6} --api-level 23 --evidence {7}' -f @(
         (Quote-Bash $rootBash),
         (Quote-Bash $fixturePosixPath),
         (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
         (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash (Convert-ToBashPath $avdRootRecordPath)),
         (Quote-Bash $identityBash),
         (Quote-Bash (Convert-ToBashPath $emulatorInput)),
         (Quote-Bash (Convert-ToBashPath $emulatorFailureEvidencePath))
@@ -1576,6 +1623,18 @@ fi
     }
     if (-not (Test-Path -LiteralPath $emulatorFailureEvidencePath -PathType Leaf)) {
         throw "Android emulator exhaustion did not write structured evidence.`n$($emulatorFailureOutput -join [Environment]::NewLine)"
+    }
+    if (-not (Test-Path -LiteralPath $avdRootRecordPath -PathType Leaf)) {
+        throw 'Fake Android emulator did not receive an isolated AVD root from avdmanager.'
+    }
+    $recordedAvdRoot = (Get-Content -Raw -LiteralPath $avdRootRecordPath).Trim()
+    if ([string]::IsNullOrWhiteSpace($recordedAvdRoot)) {
+        throw 'Fake Android emulator recorded an empty isolated AVD root.'
+    }
+    $avdRootCleanupCommand = 'test ! -e {0}' -f (Quote-Bash $recordedAvdRoot)
+    $avdRootCleanupOutput = & $bashCommand -lc $avdRootCleanupCommand 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Android emulator validation leaked its isolated AVD root after failure cleanup.`n$($avdRootCleanupOutput -join [Environment]::NewLine)"
     }
     $emulatorFailure = Get-Content -Raw -LiteralPath $emulatorFailureEvidencePath | ConvertFrom-Json
     foreach ($field in @('rawTag', 'normalizedVersion', 'sourceSha', 'workflowSha', 'tagBinding', 'manifestSha256', 'supportMatrixSha256', 'signatureProfile')) {

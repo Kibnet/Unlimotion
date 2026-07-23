@@ -799,6 +799,8 @@ BOOT_OUTCOMES=()
 EMULATOR_ATTEMPT_LOGS=()
 CURRENT_EMULATOR_LOG=""
 EMULATOR_LOG="$(dirname "$EVIDENCE_PATH")/android-api${API_LEVEL}-emulator.log"
+EMULATOR_AVD_ROOT="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/unlimotion-android-avd.XXXXXX")"
+export ANDROID_AVD_HOME="$EMULATOR_AVD_ROOT"
 cleanup_emulator() {
   if [ -n "$SERIAL" ]; then
     adb -s "$SERIAL" emu kill >/dev/null 2>&1 || true
@@ -809,6 +811,12 @@ cleanup_emulator() {
   fi
   if [ -n "$AVD_NAME" ]; then
     avdmanager delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
+  fi
+}
+
+cleanup_emulator_avd_root() {
+  if [ -n "${EMULATOR_AVD_ROOT:-}" ] && [ -d "$EMULATOR_AVD_ROOT" ]; then
+    rm -rf -- "$EMULATOR_AVD_ROOT"
   fi
 }
 
@@ -919,7 +927,8 @@ handle_emulator_error() {
   fail "Unexpected emulator validation command failure at line $line (exit $status)"
 }
 
-trap cleanup_emulator EXIT
+trap 'cleanup_emulator; cleanup_emulator_avd_root' EXIT
+[ -d "$ANDROID_AVD_HOME" ] || fail "Unable to create isolated Android AVD root"
 EMULATOR_FAILURE_EVIDENCE_ENABLED="true"
 trap 'handle_emulator_error "$?" "$LINENO"' ERR
 for port in 5554 5556; do
@@ -931,8 +940,10 @@ for port in 5554 5556; do
   CURRENT_EMULATOR_LOG="$(dirname "$EVIDENCE_PATH")/android-api${API_LEVEL}-emulator-attempt${BOOT_ATTEMPTS}.log"
   EMULATOR_ATTEMPT_LOGS+=("$CURRENT_EMULATOR_LOG")
   : > "$CURRENT_EMULATOR_LOG"
-  rm -rf -- "${ANDROID_AVD_HOME:-${HOME}/.android/avd}/${AVD_NAME}.avd" "${ANDROID_AVD_HOME:-${HOME}/.android/avd}/${AVD_NAME}.ini" >>"$CURRENT_EMULATOR_LOG" 2>&1
+  rm -rf -- "$ANDROID_AVD_HOME/${AVD_NAME}.avd" "$ANDROID_AVD_HOME/${AVD_NAME}.ini" >>"$CURRENT_EMULATOR_LOG" 2>&1
   printf 'no\n' | avdmanager create avd --force --name "$AVD_NAME" --package "$SYSTEM_IMAGE" --device pixel >>"$CURRENT_EMULATOR_LOG" 2>&1
+  [ -f "$ANDROID_AVD_HOME/${AVD_NAME}.ini" ] || fail "Android AVD descriptor was not created for $AVD_NAME"
+  [ -d "$ANDROID_AVD_HOME/${AVD_NAME}.avd" ] || fail "Android AVD directory was not created for $AVD_NAME"
   emulator \
     -avd "$AVD_NAME" \
     -port "$port" \
