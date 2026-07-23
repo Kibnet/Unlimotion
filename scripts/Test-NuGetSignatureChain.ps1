@@ -1917,11 +1917,13 @@ function Copy-FullChildEvidenceToCandidate([string]$ChildRoot, [string]$Candidat
 
 function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildWorkRoot) {
     $workRoot = [IO.Path]::GetFullPath($ChildWorkRoot)
-    $sourceRoot = Join-Path $workRoot 'source'
+    $sourceParentRoot = Join-Path ([IO.Path]::GetPathRoot($workRoot)) 'uf'
+    $sourceRoot = Join-Path $sourceParentRoot ([Guid]::NewGuid().ToString('N'))
     $childEvidenceRoot = Join-Path $workRoot 'final'
     $childPackagesRoot = Join-Path $workRoot 'packages'
     Assert-True (-not (Test-Path -LiteralPath $workRoot)) "Full $ChildLane child work root must be absent."
-    New-Item -ItemType Directory -Path $workRoot, $childPackagesRoot -Force -ErrorAction Stop | Out-Null
+    New-Item -ItemType Directory -Path $workRoot, $childPackagesRoot, $sourceParentRoot -Force -ErrorAction Stop | Out-Null
+    Assert-True (-not (Get-Item -LiteralPath $sourceParentRoot -Force).LinkType -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane source worktree root is invalid."
     try {
         & git -C $Root worktree add --detach --force $sourceRoot $SourceSha *> $null
         Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container)) "Full $ChildLane child source worktree could not be created."
