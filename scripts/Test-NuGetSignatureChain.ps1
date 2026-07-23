@@ -283,7 +283,7 @@ function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
 }
 
 function Write-ClosedWorkerFrame([IO.Stream]$StandardOutput, [System.Collections.IDictionary]$Result) {
-    $json = $Result | ConvertTo-Json -Depth 12 -Compress
+    $json = ConvertTo-Json -InputObject $Result -Depth 12 -Compress
     $body = [Text.UTF8Encoding]::new($false).GetBytes($json)
     Assert-True ($body.Length -ge 2 -and $body.Length -le 1048576) 'Closed worker result frame length is invalid.'
     $header = [byte[]]@(
@@ -707,6 +707,20 @@ function Invoke-SelfTest {
         $workerRequest = Read-ClosedWorkerFrame -StandardInput $workerInput
         Assert-True ($workerRequest.WorkerKind -ceq 'SignatureVerify') 'Closed worker did not retain its canonical kind.'
         Assert-True ($workerRequest.SeedNameSha256 -cmatch '^[0-9a-f]{64}$') 'Closed worker did not derive a seed-name hash.'
+        $nestedWorkerInput = [IO.MemoryStream]::new()
+        try {
+            Write-ClosedWorkerFrame -StandardOutput $nestedWorkerInput -Result ([ordered]@{
+                    schemaVersion = 1
+                    workerKind = 'SignatureVerify'
+                    payload = [ordered]@{ assetsPaths = @('one', 'two', 'three') }
+                    secretSeeds = @()
+                })
+            $nestedWorkerInput.Position = 0
+            $nestedWorkerRequest = Read-ClosedWorkerFrame -StandardInput $nestedWorkerInput
+            Assert-True ($nestedWorkerRequest.Payload.GetProperty('assetsPaths').GetArrayLength() -eq 3) 'Closed worker frame lost nested payload values.'
+        } finally {
+            $nestedWorkerInput.Dispose()
+        }
     } finally {
         $workerInput.Dispose()
         [Array]::Clear($workerHeader, 0, $workerHeader.Length)
