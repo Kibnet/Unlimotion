@@ -489,12 +489,81 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
     }
 }
 
+function Get-CandidateEvidenceManifest([string]$CandidateRoot, [Text.Json.JsonElement[]]$SecretSeeds) {
+    $root = [IO.Path]::GetFullPath($CandidateRoot)
+    Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) 'Candidate evidence root is invalid.'
+    $entries = [System.Collections.Generic.List[object]]::new()
+    foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
+        Assert-True (-not $file.LinkType) 'Candidate evidence file cannot be a link.'
+        $relativePath = [IO.Path]::GetRelativePath($root, $file.FullName) -replace '\\', '/'
+        Assert-RelativeEvidencePath -Path $relativePath
+        $bytes = [IO.File]::ReadAllBytes($file.FullName)
+        try {
+            Assert-SanitizedBytes -Bytes $bytes -SecretSeeds $SecretSeeds
+            $entries.Add([ordered]@{ path = $relativePath; sha256 = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant(); byteLength = [long]$bytes.Length })
+        } finally {
+            [Array]::Clear($bytes, 0, $bytes.Length)
+        }
+    }
+    $ordered = @($entries | Sort-Object @{ Expression = { $_.path }; Ascending = $true })
+    Assert-True ($ordered.Count -gt 0) 'Candidate evidence manifest cannot be empty.'
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $seenInsensitive = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $ordered) {
+        Assert-True ($seen.Add($entry.path) -and $seenInsensitive.Add($entry.path)) 'Candidate evidence manifest contains a duplicate path.'
+    }
+    return ,$ordered
+}
+
+function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'finalEvidenceRoot', 'sourceSha', 'runAttempt', 'lane', 'phaseResults') -Name 'PublicationFinalize payload'
+    $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
+    $finalRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'finalEvidenceRoot'))
+    $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
+    $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
+    $lane = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'lane'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $lane -ceq 'Signature') 'PublicationFinalize identity is invalid.'
+    Assert-True (-not (Test-Path -LiteralPath $finalRoot) -and (Split-Path -Parent $candidateRoot) -ceq (Split-Path -Parent $finalRoot)) 'PublicationFinalize final root is invalid.'
+    $manifest = Get-CandidateEvidenceManifest -CandidateRoot $candidateRoot -SecretSeeds $SecretSeeds
+    $scratchRoot = $finalRoot + '.scratch-' + [Guid]::NewGuid().ToString('N')
+    try {
+        Copy-Item -LiteralPath $candidateRoot -Destination $scratchRoot -Recurse -ErrorAction Stop
+        $receipt = [ordered]@{
+            schemaVersion = 1
+            receiptKind = 'primary'
+            sourceSha = $sourceSha
+            runAttempt = [int]$runAttempt
+            lane = $lane
+            outcome = 'success'
+            failurePhase = $null
+            failureCode = $null
+            phases = @($Payload.GetProperty('phaseResults').EnumerateArray() | ForEach-Object { $_.Clone() })
+            evidenceManifest = $manifest
+        }
+        $receiptBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $receipt -Depth 16 -Compress))
+        try {
+            Assert-SanitizedBytes -Bytes $receiptBytes -SecretSeeds $SecretSeeds
+            [IO.File]::WriteAllBytes((Join-Path $scratchRoot 'attempt-receipt.json'), $receiptBytes)
+        } finally {
+            [Array]::Clear($receiptBytes, 0, $receiptBytes.Length)
+        }
+        $finalManifest = Get-CandidateEvidenceManifest -CandidateRoot $scratchRoot -SecretSeeds $SecretSeeds
+        Assert-True ($finalManifest.Count -eq $manifest.Count + 1) 'PublicationFinalize final tree has an unexpected file count.'
+        Move-Item -LiteralPath $scratchRoot -Destination $finalRoot -ErrorAction Stop
+        return [ordered]@{ success = $true; failureCode = $null; packages = @() }
+    } catch {
+        if (Test-Path -LiteralPath $scratchRoot) { Remove-Item -LiteralPath $scratchRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
+
 function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$StandardOutput) {
     $request = Read-ClosedWorkerFrame -StandardInput $StandardInput
     try {
         $workerResult = switch -CaseSensitive ($request.WorkerKind) {
             'SignatureVerify' { Invoke-SignatureVerifyWorker -Payload $request.Payload; break }
             'SignatureSanitize' { Invoke-SignatureSanitizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
+            'PublicationFinalize' { Invoke-PublicationFinalizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
             default { [ordered]@{ success = $false; failureCode = 'worker-kind-not-implemented'; packages = @() } }
         }
     } catch {
@@ -1128,6 +1197,21 @@ function Invoke-SelfTest {
             Assert-True ($candidateFiles.Count -eq 7 -and $candidateFiles[0] -ceq 'signature/evidence.json') 'Signature sanitizer candidate file set is invalid.'
             $candidateText = [IO.File]::ReadAllText((Join-Path $sanitizerRoot 'signature\evidence.json'), [Text.UTF8Encoding]::new($false))
             Assert-True (-not $candidateText.Contains('one', [StringComparison]::Ordinal) -and -not $candidateText.Contains('two', [StringComparison]::Ordinal)) 'Signature sanitizer exposed a secret seed in candidate evidence.'
+            $finalizerRoot = $sanitizerRoot + '-final'
+            $finalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $sanitizerRoot
+                    finalEvidenceRoot = $finalizerRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    lane = 'Signature'
+                    phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0 })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($finalizerResult.Success -eq $true -and $finalizerResult.ExitCode -eq 0 -and (Test-Path -LiteralPath $finalizerRoot)) 'Publication finalizer worker did not publish the primary tree.'
+            $finalFiles = @(Get-ChildItem -LiteralPath $finalizerRoot -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath($finalizerRoot, $_.FullName) -replace '\\', '/' } | Sort-Object)
+            Assert-True ($finalFiles.Count -eq 8 -and $finalFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer tree has an invalid file set.'
+            $finalReceipt = [IO.File]::ReadAllText((Join-Path $finalizerRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ((@($finalReceipt.evidenceManifest)).Count -eq 7 -and (@($finalReceipt.evidenceManifest | Where-Object { $_.path -ceq 'attempt-receipt.json' })).Count -eq 0) 'Publication finalizer receipt self-hashed or lost candidate files.'
+            Remove-Item -LiteralPath $finalizerRoot -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }
