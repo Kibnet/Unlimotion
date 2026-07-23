@@ -246,6 +246,44 @@ function Get-ClosedSeedNameHash([Text.Json.JsonElement]$Seeds) {
     }
 }
 
+function Test-SecretEnvironmentName([string]$Name) {
+    Assert-True (-not [string]::IsNullOrEmpty($Name)) 'Secret environment name is invalid.'
+    if ($Name -cin @('PATH', 'PATHEXT', 'PSModulePath', 'HOMEPATH', '__COMPAT_LAYER')) {
+        return $false
+    }
+    $segmented = $Name -replace '([a-z0-9])([A-Z])', '$1 $2' -replace '[^A-Za-z0-9]+', ' '
+    $segments = @($segmented.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.ToUpperInvariant() })
+    $exactSegments = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($value in @('TOKEN', 'SECRET', 'PASSWORD', 'PASS', 'KEY', 'CREDENTIAL', 'CREDENTIALS', 'AUTH', 'PAT', 'SAS', 'COOKIE', 'CONNECTION')) {
+        [void]$exactSegments.Add($value)
+    }
+    foreach ($segment in $segments) {
+        if ($exactSegments.Contains($segment)) { return $true }
+    }
+    $upper = $Name.ToUpperInvariant()
+    foreach ($suffix in @('TOKEN', 'SECRET', 'PASSWORD', 'PASSWD', 'APIKEY', 'PRIVATEKEY', 'CREDENTIAL', 'CREDENTIALS', 'CONNECTIONSTRING', 'CONNECTIONSTRINGS')) {
+        if ($upper.EndsWith($suffix, [StringComparison]::Ordinal)) { return $true }
+    }
+    return $false
+}
+
+function Get-ClosedSecretSeedSnapshot([System.Collections.IDictionary]$Environment) {
+    $seeds = [System.Collections.Generic.List[object]]::new()
+    foreach ($nameObject in $Environment.Keys) {
+        $name = [string]$nameObject
+        $value = [string]$Environment[$nameObject]
+        if (-not (Test-SecretEnvironmentName -Name $name) -or [string]::IsNullOrEmpty($value)) { continue }
+        $valueLength = [Text.UTF8Encoding]::new($false).GetByteCount($value)
+        Assert-True ($valueLength -ge 1 -and $valueLength -le 8192) 'Secret environment value length is invalid.'
+        $seeds.Add([ordered]@{ name = $name; value = $value })
+    }
+    $ordered = @($seeds | Sort-Object @{ Expression = { $_.name }; Ascending = $true })
+    Assert-True ($ordered.Count -le 64) 'Secret environment seed count exceeds the closed limit.'
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($seed in $ordered) { Assert-True $seen.Add($seed.name) 'Secret environment snapshot contains a duplicate name.' }
+    return ,$ordered
+}
+
 function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
     $header = Read-ExactBytes -Stream $StandardInput -Count 4
     $length = 0
@@ -516,6 +554,10 @@ function Invoke-ClosedWorkerProcessAdapter(
         foreach ($name in @('GITHUB_OUTPUT', 'GITHUB_ENV', 'GITHUB_PATH', 'GITHUB_STATE', 'GITHUB_STEP_SUMMARY', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL')) {
             [void]$psi.Environment.Remove($name)
         }
+        foreach ($seed in $SecretSeeds) {
+            Assert-True ($seed -is [System.Collections.IDictionary] -and $seed['name'] -is [string]) 'Closed worker seed is invalid.'
+            [void]$psi.Environment.Remove($seed['name'])
+        }
         $process = [Diagnostics.Process]::new()
         $process.StartInfo = $psi
         Assert-True $process.Start() 'Closed worker process did not start.'
@@ -716,6 +758,7 @@ function Invoke-SignatureAttempt {
     $phases = [System.Collections.Generic.List[object]]::new()
     $packages = [System.Collections.Generic.List[object]]::new()
     $stagedAssetsRoot = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-nuget-assets-' + [Guid]::NewGuid().ToString('N'))
+    $secretSeeds = Get-ClosedSecretSeedSnapshot -Environment ([Environment]::GetEnvironmentVariables('Process'))
     $env:NUGET_PACKAGES = $packagesPath
 
     try {
@@ -751,7 +794,7 @@ function Invoke-SignatureAttempt {
                 packagesRoot = $packagesPath
                 baselineGraphPath = Join-Path $root 'distribution\fixtures\reactiveui-signature-chain-baseline.json'
                 assetsPaths = @($projects | ForEach-Object { $_.assetsPath })
-            }) -TimeoutSeconds 1200
+            }) -SecretSeeds $secretSeeds -TimeoutSeconds 1200
         Assert-True ($workerResult.TerminationProven -eq $true) 'Closed signature worker termination was not proven.'
         if (-not $workerResult.Success) {
             $phases.Add([ordered]@{ name = 'signature:verify:worker'; status = 'failure'; exitCode = [int]$workerResult.ExitCode })
@@ -960,6 +1003,8 @@ function Invoke-SelfTest {
         } finally {
             $largeWorkerInput.Dispose()
         }
+        $syntheticSeeds = Get-ClosedSecretSeedSnapshot -Environment ([ordered]@{ PATH = 'ordinary-path'; API_TOKEN = 'one'; ConnectionString = 'two' })
+        Assert-True ($syntheticSeeds.Count -eq 2 -and $syntheticSeeds[0].name -ceq 'API_TOKEN' -and $syntheticSeeds[1].name -ceq 'ConnectionString') 'Secret environment snapshot did not retain only closed seed names.'
         $adapterResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureVerify' -Payload ([ordered]@{
                 dotnetExecutable = (Get-Command dotnet -ErrorAction Stop).Source
                 repositoryRoot = Get-CanonicalRepositoryRoot
@@ -970,9 +1015,15 @@ function Invoke-SelfTest {
                     (Join-Path (Get-CanonicalRepositoryRoot) 'missing-worker-adapter-b.json'),
                     (Join-Path (Get-CanonicalRepositoryRoot) 'missing-worker-adapter-c.json')
                 )
-            }) -TimeoutSeconds 10
+            }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
         Assert-True ($adapterResult.Success -eq $false -and $adapterResult.FailureCode -ceq 'worker-failed' -and $adapterResult.ExitCode -eq 1 -and $adapterResult.TerminationProven -eq $true) 'Closed worker adapter did not preserve the expected negative result.'
-        Assert-True ($adapterResult.SeedNameSha256 -ceq 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') 'Closed worker adapter did not preserve the empty seed identity.'
+        $seedNameBytes = [Text.UTF8Encoding]::new($false).GetBytes('API_TOKEN' + [Environment]::NewLine + 'ConnectionString')
+        try {
+            $expectedSeedNameHash = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($seedNameBytes))).ToLowerInvariant()
+        } finally {
+            [Array]::Clear($seedNameBytes, 0, $seedNameBytes.Length)
+        }
+        Assert-True ($adapterResult.SeedNameSha256 -ceq $expectedSeedNameHash) 'Closed worker adapter did not preserve the seed identity without exposing values.'
     } finally {
         $workerInput.Dispose()
         [Array]::Clear($workerHeader, 0, $workerHeader.Length)
