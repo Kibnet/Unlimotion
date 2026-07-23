@@ -1195,19 +1195,21 @@ function New-RegressionRunRecord(
     [string]$SkipReason = $null
 ) {
     Assert-True ($RunId -cin @('unit', 'headless-1', 'headless-2') -and $ProjectPath -cin @('src/Unlimotion.Test/Unlimotion.Test.csproj', 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj') -and $State -cin @('success', 'failure', 'not-attempted')) 'Regression run record identity is invalid.'
+    $normalizedFailureCode = if ([string]::IsNullOrEmpty($FailureCode)) { $null } else { $FailureCode }
+    $normalizedSkipReason = if ([string]::IsNullOrEmpty($SkipReason)) { $null } else { $SkipReason }
     return [ordered]@{
         runId = $RunId
         state = $State
         projectPath = $ProjectPath
         configuration = 'Debug'
         nativeExitCode = if ($null -ne $NativeExitCode) { [int]$NativeExitCode } else { $null }
-        failureCode = $FailureCode
+        failureCode = $normalizedFailureCode
         discovered = if ($null -ne $Discovered) { [int]$Discovered } else { $null }
         passed = if ($null -ne $Passed) { [int]$Passed } else { $null }
         failed = if ($null -ne $Failed) { [int]$Failed } else { $null }
         skipped = if ($null -ne $Skipped) { [int]$Skipped } else { $null }
         durationMs = if ($null -ne $DurationMs) { [long]$DurationMs } else { $null }
-        skipReason = $SkipReason
+        skipReason = $normalizedSkipReason
     }
 }
 
@@ -1751,7 +1753,9 @@ function Invoke-SelfTest {
     Assert-True ('Signature' -ceq 'Signature') 'Case-sensitive lane comparison changed.'
     $zeroExitRun = New-RegressionRunRecord -RunId 'unit' -ProjectPath 'src/Unlimotion.Test/Unlimotion.Test.csproj' -State 'success' -NativeExitCode 0 -Discovered 830 -Passed 830 -Failed 0 -Skipped 0 -DurationMs 1
     $notAttemptedRun = New-RegressionRunRecord -RunId 'headless-1' -ProjectPath 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj' -State 'not-attempted' -NativeExitCode $null -SkipReason 'prerequisite-failed'
-    Assert-True ($zeroExitRun.nativeExitCode -eq 0 -and $zeroExitRun.discovered -eq 830 -and $notAttemptedRun.nativeExitCode -eq $null -and $notAttemptedRun.skipReason -ceq 'prerequisite-failed') 'Regression run record did not retain zero and null native exit values.'
+    $zeroExitPhases = [System.Collections.Generic.List[object]]::new()
+    Add-RegressionTestPhase -Phases $zeroExitPhases -Run $zeroExitRun
+    Assert-True ($zeroExitRun.nativeExitCode -eq 0 -and $zeroExitRun.failureCode -eq $null -and $zeroExitRun.skipReason -eq $null -and $zeroExitRun.discovered -eq 830 -and $zeroExitPhases.Count -eq 1 -and $zeroExitPhases[0].status -ceq 'success' -and $notAttemptedRun.nativeExitCode -eq $null -and $notAttemptedRun.skipReason -ceq 'prerequisite-failed') 'Regression run record did not retain zero and null native exit values.'
 
     $invalidAttemptRejected = $false
     $originalRunAttempt = $RunAttempt
