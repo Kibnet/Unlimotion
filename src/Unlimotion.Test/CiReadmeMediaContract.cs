@@ -33,6 +33,7 @@ internal static class CiReadmeMediaContract
         await Assert.That(workflow).Contains("Export-VerifiedGitBlob");
         await Assert.That(workflow).Contains("Test-NuGetEvidencePublication.ps1");
         await Assert.That(workflow).Contains("safe_upload_verified");
+        await Assert.That(workflow).Contains("${RepositoryPath}:");
         await Assert.That(workflow).Contains("Enforce Signature attempt verdict");
         await Assert.That(workflow).Contains("Run and validate Regression evidence");
         await Assert.That(workflow).Contains("EXPECTED_LANE: Regression");

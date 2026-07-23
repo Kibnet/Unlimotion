@@ -85,7 +85,7 @@ jobs:
           $process.WaitForExit()
           $standardError = $process.StandardError.ReadToEnd()
           if ($process.ExitCode -ne 0) {
-            throw "Could not extract the expected Git blob for $RepositoryPath: $standardError"
+            throw "Could not extract the expected Git blob for ${RepositoryPath}: $standardError"
           }
 
           $actualObjectId = (& git hash-object $DestinationPath).Trim()
@@ -240,7 +240,7 @@ jobs:
           $process.WaitForExit()
           $standardError = $process.StandardError.ReadToEnd()
           if ($process.ExitCode -ne 0) {
-            throw "Could not extract the expected Git blob for $RepositoryPath: $standardError"
+            throw "Could not extract the expected Git blob for ${RepositoryPath}: $standardError"
           }
 
           $actualObjectId = (& git hash-object $DestinationPath).Trim()
