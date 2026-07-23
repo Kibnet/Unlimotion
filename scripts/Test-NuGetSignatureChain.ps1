@@ -518,6 +518,15 @@ function Get-CandidateEvidenceManifest([string]$CandidateRoot, [Text.Json.JsonEl
     return ,$ordered
 }
 
+function Assert-EquivalentEvidenceManifest([object[]]$Expected, [object[]]$Actual, [string]$Name) {
+    Assert-True ($Expected.Count -eq $Actual.Count) "$Name has an unexpected entry count."
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        $expected = $Expected[$index]
+        $actual = $Actual[$index]
+        Assert-True ($actual.path -ceq $expected.path -and $actual.sha256 -ceq $expected.sha256 -and [long]$actual.byteLength -eq [long]$expected.byteLength) "$Name does not match its expected manifest entry."
+    }
+}
+
 function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
     Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'finalEvidenceRoot', 'sourceSha', 'runAttempt', 'lane', 'phaseResults') -Name 'PublicationFinalize payload'
     $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
@@ -559,13 +568,13 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
         try {
             Assert-SanitizedBytes -Bytes $receiptBytes -SecretSeeds $SecretSeeds
             [IO.File]::WriteAllBytes((Join-Path $scratchRoot 'attempt-receipt.json'), $receiptBytes)
+            $receiptManifestEntry = [ordered]@{ path = 'attempt-receipt.json'; sha256 = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($receiptBytes))).ToLowerInvariant(); byteLength = [long]$receiptBytes.Length }
         } finally {
             [Array]::Clear($receiptBytes, 0, $receiptBytes.Length)
         }
         $finalManifest = Get-CandidateEvidenceManifest -CandidateRoot $scratchRoot -SecretSeeds $SecretSeeds
-        $expectedPaths = @($manifest | ForEach-Object { $_.path }) + 'attempt-receipt.json' | Sort-Object
-        $actualPaths = @($finalManifest | ForEach-Object { $_.path })
-        Assert-True ($actualPaths.Count -eq $expectedPaths.Count -and [Linq.Enumerable]::SequenceEqual([string[]]$actualPaths, [string[]]$expectedPaths, [StringComparer]::Ordinal)) 'PublicationFinalize final tree has an unexpected file set.'
+        $expectedManifest = @(@($manifest) + @($receiptManifestEntry) | Sort-Object @{ Expression = { $_.path }; Ascending = $true })
+        Assert-EquivalentEvidenceManifest -Expected $expectedManifest -Actual $finalManifest -Name 'PublicationFinalize scratch tree'
         Move-Item -LiteralPath $scratchRoot -Destination $finalRoot -ErrorAction Stop
         return [ordered]@{ success = $true; failureCode = $null; packages = @() }
     } catch {
@@ -1151,6 +1160,14 @@ function Invoke-SelfTest {
         $unrelatedDriftRejected = $true
     }
     Assert-True $unrelatedDriftRejected 'Graph validation accepted unrelated version drift.'
+
+    $manifestMutationRejected = $false
+    try {
+        Assert-EquivalentEvidenceManifest -Expected @([ordered]@{ path = 'signature/evidence.json'; sha256 = ('a' * 64); byteLength = 1 }) -Actual @([ordered]@{ path = 'signature/evidence.json'; sha256 = ('b' * 64); byteLength = 1 }) -Name 'Synthetic manifest'
+    } catch {
+        $manifestMutationRejected = $true
+    }
+    Assert-True $manifestMutationRejected 'Publication manifest comparison accepted a byte mutation.'
 
     $workerJson = '{"schemaVersion":1,"workerKind":"SignatureVerify","payload":{},"secretSeeds":[{"name":"API_TOKEN","value":"example"}]}'
     $workerBody = [Text.UTF8Encoding]::new($false).GetBytes($workerJson)

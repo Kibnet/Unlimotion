@@ -64,6 +64,7 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("attempt-receipt.json");
         await Assert.That(nugetSignatureScript).Contains("safe-fallback");
         await Assert.That(nugetSignatureScript).Contains("cannot publish primary evidence after a failed phase");
+        await Assert.That(nugetSignatureScript).Contains("Assert-EquivalentEvidenceManifest");
         await Assert.That(nugetSignatureScript).Contains("signature-success");
         await Assert.That(nugetSignatureScript).Contains("TerminationProven");
         await Assert.That(nugetSignatureScript).Contains("native-output-limit-exceeded");
