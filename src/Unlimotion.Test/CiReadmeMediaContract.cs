@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Unlimotion.Test;
@@ -15,6 +16,8 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/deb_packaging.yml"));
         var nugetSignatureScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/Test-NuGetSignatureChain.ps1"));
+        var nugetBaselineFixture = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("distribution/fixtures/reactiveui-signature-chain-baseline.json"));
         var mediaScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/update-readme-media.ps1"));
         var mediaReadme = await File.ReadAllTextAsync(
@@ -47,6 +50,15 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("ExpectedParentSha");
         await Assert.That(nugetSignatureScript).Contains("Get-CanonicalGraphHash");
         await Assert.That(nugetSignatureScript).Contains("Worker mode is reserved");
+        using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
+        var nugetBaseline = nugetBaselineDocument.RootElement;
+        var baselineProjects = nugetBaseline.GetProperty("projects");
+        await Assert.That(nugetBaseline.GetProperty("sourceSha").GetString()).IsEqualTo("e11cae9a086ddd4fd97105f00b67bedf05f92700");
+        await Assert.That(nugetBaseline.GetProperty("inputManifest").GetArrayLength()).IsEqualTo(5);
+        await Assert.That(baselineProjects.GetArrayLength()).IsEqualTo(3);
+        await Assert.That(baselineProjects[0].GetProperty("projectPath").GetString()).IsEqualTo("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(baselineProjects[1].GetProperty("projectPath").GetString()).IsEqualTo("src/Unlimotion.Desktop/Unlimotion.Desktop.csproj");
+        await Assert.That(baselineProjects[2].GetProperty("projectPath").GetString()).IsEqualTo("src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj");
 
         await Assert.That(androidWorkflow).Contains("android-build:");
         await Assert.That(androidWorkflow).Contains("android-release:");

@@ -1,0 +1,1803 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "e11cae9a086ddd4fd97105f00b67bedf05f92700",
+  "gitObjectFormat": "sha1",
+  "dotnetSdkVersion": "10.0.400-preview.0.26322.102",
+  "inputManifest": [
+    {
+      "path": "src/Directory.Packages.props",
+      "mode": "100644",
+      "gitObjectId": "e171eb211c2276b0260389996c595d639f2c7a62",
+      "byteLength": 3555,
+      "sha256": "8ac4c9010bb1aae79e705a915b88e69cf614b654058fea8fb0679a3f41f81805"
+    },
+    {
+      "path": "src/nuget.config",
+      "mode": "100644",
+      "gitObjectId": "08da76eed721a2139a2c8880a436dfcd0b811bf3",
+      "byteLength": 388,
+      "sha256": "a87de471e0a79b16dc7108eb85b57f4480bb9133901137d0e327718595080091"
+    },
+    {
+      "path": "src/Unlimotion.Desktop/Unlimotion.Desktop.csproj",
+      "mode": "100644",
+      "gitObjectId": "1e13ddde406db2ae8850b22f7cb3ecad00e1374c",
+      "byteLength": 1198,
+      "sha256": "dd6739529e27aa777b571425fc1813b324cdd3de347e171f6f4dfa1c07e621f1"
+    },
+    {
+      "path": "src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj",
+      "mode": "100644",
+      "gitObjectId": "f052ed3774aded2dab3f46244b37e2d456c8531d",
+      "byteLength": 2388,
+      "sha256": "cb3918c939d09c1e0a07d9bc81a9d9814cd90afbbe5849cd89f2853b441b937a"
+    },
+    {
+      "path": "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj",
+      "mode": "100644",
+      "gitObjectId": "607df931267adf0f00fd4b70292152adc11214c0",
+      "byteLength": 864,
+      "sha256": "03c98dd034a2ad13894c58dbd35108e9faf14fd6ade98688740b73ae71ae0cf0"
+    }
+  ],
+  "projects": [
+    {
+      "projectPath": "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj",
+      "packageSet": [
+        {
+          "id": "AppAutomation.Abstractions",
+          "version": "1.5.7",
+          "source": "nuget.org",
+          "nupkgSha512": "dce571428e17155912116cab1950f3c996e530f641e3b4db2b8699e60cb16bae52462acf3c7359109c7f79fea84c220ad048c2582e4a3cf107859c9106315210"
+        },
+        {
+          "id": "AppAutomation.Authoring",
+          "version": "1.5.7",
+          "source": "nuget.org",
+          "nupkgSha512": "1876b3fa75cab1a1f05659f811905c513a96f59d09b92c5b4a33f7fbf892832bc2c3ebebd689794b628db7c763e814a3dfa4def6549bf706e569ad4b6f5004fc"
+        },
+        {
+          "id": "AppAutomation.Avalonia.Headless",
+          "version": "1.5.7",
+          "source": "nuget.org",
+          "nupkgSha512": "8f79fa45e98f9a8d7a8d1830dd59c10c6f04354db3dc117e3daac3cb8f0718ee7b3a50215e058d02194e34532e933e26581a03fb4ca8a4d4035bcc2e6e1677ca"
+        },
+        {
+          "id": "AppAutomation.Session.Contracts",
+          "version": "1.5.7",
+          "source": "nuget.org",
+          "nupkgSha512": "a9308cacb8558398cd80f222470b29efba9647c38d0c640150ea1232c300abd1d468f482bc38df586ff3b73a554a95889befd90ea2a9b40f1083ac4a4e33a0f1"
+        },
+        {
+          "id": "AppAutomation.TestHost.Avalonia",
+          "version": "1.5.7",
+          "source": "nuget.org",
+          "nupkgSha512": "e0c6fbfce065a0e80018c6246f3e9819bacbdaaf1dc29d533b683e18ef5911982b723236b1d8aad9fde947732fe4caeaf7c91b5ffe894010a54641e00fa344bc"
+        },
+        {
+          "id": "AutoMapper",
+          "version": "16.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "aefef2a02d2f277c5568713396b9fc2ae77d2a4bacf61ff91d1a4f66b4f47ef8fc848e392a5a356a4cccc60982bd901388dcbd379c4522a0fa7bea3559b41ae8"
+        },
+        {
+          "id": "Avalonia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "ed809a6e3deda956790004dc500087602d9e0672164bef1e2d4d1e3fe1f382998d64e917fba6bf06c547e4242df822aa45bd61ca7e6da06ff67e7a96b0e2558d"
+        },
+        {
+          "id": "Avalonia.Angle.Windows.Natives",
+          "version": "2.1.25547.20250602",
+          "source": "nuget.org",
+          "nupkgSha512": "5cf4ba739c4fe0bf9e36ad2b4d481338239ea98216e6188f8c2f7af5efbdcb8926ce7d6af2df951071f8d9294d4d25ce1e52835f2bf4ac08c3dceba5e503ae60"
+        },
+        {
+          "id": "Avalonia.BuildServices",
+          "version": "11.3.2",
+          "source": "nuget.org",
+          "nupkgSha512": "233f868e74ab91e56818004ad0aa7d0bb6e978044ddcf0061e373ada06a1846b17a82e94c777ab907ba484c1873d2212b47d3539d2694e89a415f1af047c3045"
+        },
+        {
+          "id": "Avalonia.Controls.DataGrid",
+          "version": "11.3.8",
+          "source": "nuget.org",
+          "nupkgSha512": "ae02dd5241ca01773e3de614debf8cb4cfd2d8f3e57177f8e0cd0f6d1f298e2a6179b1417f5706ab9766e2248f0443291429b0fe42e00a074aad0e76cc735f6e"
+        },
+        {
+          "id": "Avalonia.Desktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c9560dee67de90720d571c136d251c575e0d084cd3e99c86ab50bcdb20718ad2e34f7e5605132c8d01a6f668f30b536fdf5830d55adb84f47eca1f971a911074"
+        },
+        {
+          "id": "Avalonia.Fonts.Inter",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b901912c8b3272afcf44ff3127b87e48c4562e84f1fc132a7b16f93e8355e76af4cc36ae7d7c5e80c74181e68bbac683b6b0c6130313a4fa129d1613c022db80"
+        },
+        {
+          "id": "Avalonia.FreeDesktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "dd691338864c8fe3abde33186eb7dff37390f8638b23e10478d0cf26756480b87ee1b8b2e94f21c9f0626431cdd9b34383634f77588e2c1ad0e0d2259c918830"
+        },
+        {
+          "id": "Avalonia.FreeDesktop.AtSpi",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7cf6647fd4a07a14e7ac06eae67a5911215d8952166aeca8eb9c8d8af197e32e24ff95121e804e17a6d601186b77d1005a1c6153ae65bc4dbac880c358599a"
+        },
+        {
+          "id": "Avalonia.HarfBuzz",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b0ebfffa46383a31c17b06a13dd5701a14d5e17b279665672e543e040fbc619cdc85d731b13b75148e55abf53a87aaac4b2a21d2e7511ab0fc32be630a76a277"
+        },
+        {
+          "id": "Avalonia.Headless",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c4d59e9883ff045fec39cba1f16d5b352790db37a3c18473d68e9500ace0809deed92e9ffe08b6d50c4d31bc7d4d12d39ef6718d9563f91e5a852eef00b5ff28"
+        },
+        {
+          "id": "Avalonia.Native",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "fc77f946e89bc22dcb6919ed516677146f3e5eb8c7974d62dbffdae1eebb167b0ef70c09b8fa4bd2434f7942f1de8f4928339e0a20d3708e72458c4b26bd5ee2"
+        },
+        {
+          "id": "Avalonia.Remote.Protocol",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "136741e1713a82b4b987064b8242966c3985bd63f85728ab59698b5efbc53fedc47f3c21984f46901b147af0923c0231e29c02dbce29aea6a953208d9e443601"
+        },
+        {
+          "id": "Avalonia.Skia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "30bdb6985dd7c6d250fdf6271944708fdaa24b9b545f8e8784543cd61de98f1e7ad54d19873b566d84f9d34b75ddf0b0953f1e0344be7305fe228f088e36a01a"
+        },
+        {
+          "id": "Avalonia.Themes.Fluent",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "2df35467278a151bf820293b2c541988772d93a5843bb16a73a68e8b83434d03f26ac2f649abab742da94f81ab0bdf79a11a901fad5002b1139fed95f0b0e0f7"
+        },
+        {
+          "id": "Avalonia.Win32",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "73b5a4476956d66cc6eecfa6d7352793c548e8cdb24ab345b950800751a0c94518f5b2daf01b8bf7eb1f9790f23e05d8dfd82d5acc60aca3451bb7da17708250"
+        },
+        {
+          "id": "Avalonia.X11",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "66e6ebbd74b98a193a8380f8f3843a9513571847a160c150b3315da58c5ee80707872c8f5fb8b0cf87a66d34495da9800b0bcd3aa57d450a5f942adbfef9d295"
+        },
+        {
+          "id": "AvaloniaUI.DiagnosticsSupport",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "dbe6e32f773112de3f69f03bd053a47fa8b0cc7e65469b4ffdc4e5456bce1dc1292fac4c3852eb96934dc9f900578151a4b46d22926707cdb60df1a51b7b13c3"
+        },
+        {
+          "id": "CompareNETObjects",
+          "version": "4.84.0",
+          "source": "nuget.org",
+          "nupkgSha512": "934f6c501889c9a0fee8e1f58d0383d0c08ae48345b60b6ca8914bc4642ea1a6c39729d99c10dda7bc0f9d624c4689c95a3ac4b28cb6cb6ff57753085ac463c7"
+        },
+        {
+          "id": "DialogHost.Avalonia",
+          "version": "0.12.2",
+          "source": "nuget.org",
+          "nupkgSha512": "15ba9a861fe0ceb4c3f9e09e6d96718af7186d28f6d5d6d61844a583907cfeeb74e6cc6118faa12a39310b79801aead85a68909ead61cbf48d7814b18da0d5d7"
+        },
+        {
+          "id": "DynamicData",
+          "version": "9.4.31",
+          "source": "nuget.org",
+          "nupkgSha512": "3199b791fe68c1ab229dd57d6b524dda5fbb6ef63fb5fbe6bcc9475167dad7b921998d2edad613db32367f3d416d64aecb0d28b3b0bbe3e2fff8658f8ed50b48"
+        },
+        {
+          "id": "EnumerableAsyncProcessor",
+          "version": "3.8.4",
+          "source": "nuget.org",
+          "nupkgSha512": "fda2e2a0851c4491681776e4ea6886190a07b68eb146d5c4bb2c1f202cd911282f863a03a2d09ccd9621bf094b97dc6a0711248214187070025c0fd4d5076ce5"
+        },
+        {
+          "id": "HarfBuzzSharp",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "8493b36e88beedfc80e12f13e3b986fb1e5560c4c8df86e672c1cad24a623fa36adc9a1a82f566fda3784f7a2d58975d10273ea65b7bcb119afc126b11a452c8"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Linux",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c413a4244f1fcf0caddd8e039f7e96324cee45ec0970aae23fc324bf40a8808c5fcf9e2b386be5a920f95e37cc2ee03a68d3dd7092fb9091c155e52a729ac8d7"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.macOS",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "64222e104f945cc284c08fd98feaa4dbb355b92990eb77858d4179ab6ea112d1e6a127198075e9274745044fd41e99f691c4c68a138ddfd438c5ebdbb0571602"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.WebAssembly",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "a7991dc993e42ef2e10785d41193cdd731c03c135e8db4c09cb493a3d364a634a07f47ab035cb63ada41e643ff089cd461f1ab5844402f4cd30eecd3ad68b200"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Win32",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "156ab246a79aeb509672b10c109a1fa29e59b3ad1eb9713ac331e2f11b6bac4b7a96bcb765a8e2da4d3f59bb54d5b648e870aeae4d22543baca28b17cb046fcf"
+        },
+        {
+          "id": "LibGit2Sharp",
+          "version": "0.31.0",
+          "source": "nuget.org",
+          "nupkgSha512": "56aa3185eb2213d97bd6b56e2d1803aa76945bf732b77c7a4b40359d4809ee0bd2cca795fc81d762958f741ba12e3f58675eabd3d76d7930476f1190a7bc1816"
+        },
+        {
+          "id": "LibGit2Sharp.NativeBinaries",
+          "version": "2.0.323",
+          "source": "nuget.org",
+          "nupkgSha512": "aa06f25b9cc62619eed349ca50385c78bd0fcef2b7e510febcc5ae63e79c297b24370302f7e54862c238c30b7aab905445aca9426fbb05cf20f0f185cbe74110"
+        },
+        {
+          "id": "MicroCom.Runtime",
+          "version": "0.11.4",
+          "source": "nuget.org",
+          "nupkgSha512": "75dcb5b0761f8a5607dbe9a73407fafb3f4258424227286c1e6113cf3b24cd51ab6bb85abc7df58675c89634f2d01cbef1b262d67a762adc711212d48425ad02"
+        },
+        {
+          "id": "Microsoft.ApplicationInsights",
+          "version": "2.23.0",
+          "source": "nuget.org",
+          "nupkgSha512": "dd497bfad0c65e54a4f78d2a1644f3d0854d4cd01dd83ba506f8d5d53635e28152c7c13210dd5dd3985780aab146a7620de3ebaead8ef12c6f87088676c2157f"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Connections.Abstractions",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "eb570c0ad8657085ed012a23f19b574ce6a61d1261199b541efa8b027df224ed0153946da213a69ec70da9d50d13970a76987844b71dc4660dc4c11552a1331c"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "af50b2fcdc1d4f62b802276f8b849a2bb5a05f9179507636d76d5e2e46482edaa744e62f3e0966f8d7b1cf6cce9f4546c3529d07f8be65d38bf40bedbe37041f"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "ddc5d47673d3bf5c8eeb60bfcb1482e6cabff19123d54d82c17ffdb242829f20d9899ce8bdba5c4546f8d45be6a4ea4c74f797a2a5ccee56002dffadf7bc694e"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "d74a77b3f81ae3324eebe8bac5f0965762227007b2645d641c4843cd5df419d097e902a05e7c30ec0bdf1e742000bf20efbe42f0238d3765b8d9cb1811fb6f31"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client.Core",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "bcbdc78f31e68905ff70538ee47408fffb2877e64924adfb26e4b3c049875ab1674d58754d09812cd48de7e9846eaef6a68318256bf91ddcbfe7efc28af5d31a"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "fa7ba10aef5231c109871792c9e7486d22df0a46e11eb69120cab530b741071c5bc6f8d1357387d66504c7ed4230f5e7bdbe452308ffdbb4dbd4762bfd22b126"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Protocols.Json",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "50043ebb2eaa7c8ae9c206da73139b9d638e62e1bcc0f8b27a3af9ff8c9b256bfb5768ad8ac0c692e813e3b38edf247d5aa59d9d03f6b099b19d642999853a9d"
+        },
+        {
+          "id": "Microsoft.DiaSymReader",
+          "version": "2.2.5",
+          "source": "nuget.org",
+          "nupkgSha512": "65e3281a056a5bdd5f3043e51774d3915c2bacbba3c08b25d53d156aa83e187570912b02c7c339a865b191f98dc10f60cf61d0eb448aa7c4da7291da39d8f3ec"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7148bfe7a41903421db7c49ec8c12c8c79175f9e6c994a869d60ecb45a3606868aa0429b1d8e7f78e32a895193b1ce8e76c5eae49cbd7d22ce391861912e4b35"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "63c407e088d6927a64ecd84ddea7e87735c5164ea4f3a877435ba6de1f35e83a1f0d565a2179ca7c7eaadebcfccc50692aece10e0212a7c3d5803229446c6e16"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Binder",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7f803bf2a5afaf13239dd495f8f25663e36fae42d7840416619c13976cfd294de2c4b4728206194dd0b38ee831089a81f3f63e8ba536c60d1b7fd5b97691d0"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.FileExtensions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "451c7ec4e92db858327338e833c923aa10bbb34b9820c4f1d0e5b44123f4009fe02646aabaa58dfaac0a6d37727c38c516a0433e4452b301305eafb88459e5d7"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "008cd3427c2c80218aadd5a28c09a8dd08680fcd5428eb010fd51b44207ba7d2a84bf799bb192914c373b29d60c5fbd72c73cd0800e4d0f43922e2bc9f13deb2"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "8ca54e7dfcb35bbcaa9a292f0107faf6808a8cf94c8879a7aafe31ae841174d29009895421ce2bbc9bfafd86d0caabd402bbebcc84f1961774740dcc155229bb"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "475254983871f35cd70118fbff743049ec623bd94d1363c13d7c8ae3bb1b9521883a5e0977ad222d8f30b6627f3738695ed3c1892393327d8a158b9fed069123"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyModel",
+          "version": "8.0.2",
+          "source": "nuget.org",
+          "nupkgSha512": "42a9e54c51b5f99a1d26ae79ce21accb5218a600b2534632aa2c2a4cdcac5d2942d2976f2c915fe8523ec5e390043607ac6b0a530de9e7cbbad9e1841ecea37e"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fbfb14ccee28fa60e6a3a1c52084f358cb26e4bbbbcfafeb89f64bf7410d13ade10c06beccf51aeb903dcc1190453646a68b99b075039ea4dbbc2a42c11d45ae"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f1d913e7baab3def34ac48ed910a68f2673a678731d4b905d0b6c3174876b86520405262bd7aae684a495723181a90d99d6f4ba6b0cdec802a7fb335f1bc05e8"
+        },
+        {
+          "id": "Microsoft.Extensions.Features",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "630caf336834138b68ed111c707063b80baa1f5b302cbeca8f74cd251940dfbd25210396be7c6b3b2e74c7fe2d28ed8dc950bb3f4d259dc732e814d3d93480fa"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Abstractions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fe9aa18f2e819694f20e322c93e075e27bee2d57ddd5380624fc48a95669c526c270ab5c74f58c6a4721d18ecdb5b2febf0315f8794585ae65617831459e2a0b"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Physical",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7612261a35b76d0b3a337ab262de57c3b605e8a1e55bf4d47f15e374e5577ab2ce4ae370980ef2c1335c4e323e6adcfe3718eee86570ac6e4ff5cb100450331f"
+        },
+        {
+          "id": "Microsoft.Extensions.FileSystemGlobbing",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "23a5e50cf695ba18c7a77f7c050e40d6fb065957480db17f5e75e5cf269c8f50763c996c28d0dcfca09e2c1248540898ab53c474cadc705548f5fe491dd263fd"
+        },
+        {
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "02ac89d69f60a1bf5a729ee41c7a81b1160985db53787e982e20c4c6e064169069a3fc22ea0d83b01db68200ea47ef872729a12fc0e42805e1569232038b70ad"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "e14f295d608f7d8523ffae4b623593e1e89ce3e6d04d5d653b45fa3a6c3cec033c6e9e4521299745615347ff071c258ae898ad59d7274235e4a955fcb64da729"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "0849462f3ea2ee5a06d8ab8a8b13f05f3cf466de66ebbc6a0a9cac4befc91ceb180ae03c42089ab0ca7a26ca7fe5b4ed1a8f73e235e1308d9997c9529c369dd1"
+        },
+        {
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "a2582f2659912b3c4d580097b5b4533500528fd22f00743326d84f1596c74542d5551835c0af7c956a76d3351618278f3ed1c411190a8363b91ba4466750b363"
+        },
+        {
+          "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "136d8f07248e7185e5d68d6a30ce8c9cc2eef476fbe6c0957a61aecbfeeeb965456c1c99d1ddc51e66621f8d63f4fe48ce2df966ebec7d364f5242e1ae057a83"
+        },
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "abb05f3f99ab4df467b8cd2a04587e556a576ae13c2d3cd7b482f549983487f33239818b2a7b0f3db5eb451d28747718c40e4e9f721074a2dda9338c34093b6d"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Abstractions",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "175ef8bf78b63f3c327e680d5cf7721d74f29e96460e686b22b4e67c264fb036a7a9bea1473f4a5b487337ab7a560c861b51ed1aa744777f303362262b01a8b4"
+        },
+        {
+          "id": "Microsoft.IdentityModel.JsonWebTokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f24e615f802b291d61dd20cb7bca810b940b7289d3fd45ae02de85ec2f1f4b9428935e975216d98eaa95ed43038320bcfc120e7673828ec25089a5458219042b"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Logging",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "cae11816948710e1bf9406e980b826d68b35069944dbcb71d2e00f6b6073b3d6e9c970067b06f2a847830a11291eae012fc4aa04c476a9b34581450271bb128a"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Tokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "24b377c5758fd364a4f95016e213726946c4070191a818d39c56ea1e9f2d2a53bc5348650fbc140139bd68d6c80b3e9ed05f0f7018954c24159e0ad2c2b25615"
+        },
+        {
+          "id": "Microsoft.IO.RecyclableMemoryStream",
+          "version": "3.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "c5794ea27c908b5fb2442faa441e9f3f81ffa3dc29d41a313b542643923ae61070905b1c15c2ecad98092c6b9b2a3b423aca979e71ed979728bd572b69f20a46"
+        },
+        {
+          "id": "Microsoft.Testing.Extensions.CodeCoverage",
+          "version": "18.6.2",
+          "source": "nuget.org",
+          "nupkgSha512": "bccd3ec6949dc4f3a5a4b23995d8ec030e7f500dd4e933da5d04c47237fe4af6a18a1dd2d2946371f2af9935f65aedef21b6a900d1c6e89bc062d297230f9d75"
+        },
+        {
+          "id": "Microsoft.Testing.Extensions.Telemetry",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "0c34a99593a6db6b63ac64806620c5d0d009885830fd4f1b594af54d05ea17a01922df75926998bc5fc3eeef88bb0e63d0e266a8bb23584069227724fd002219"
+        },
+        {
+          "id": "Microsoft.Testing.Extensions.TrxReport",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "eba7a37d71d8b6e246261849d8fd716002a6a3eb4f7373582be3fdb199310e1eedbe80ef33cec461edd5c3f65087ab5660b7443ebfaadb155f4517f8ca7d5e14"
+        },
+        {
+          "id": "Microsoft.Testing.Extensions.TrxReport.Abstractions",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "7e9af586c3b3bee151843416c2442e465b8bff2ca6a00423d8ec5b62a0ebf3e0eceea96572fa58920fec151b31d8d0b40a567fadc7d6f530f7e3f466eee64ee3"
+        },
+        {
+          "id": "Microsoft.Testing.Platform",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "05e9daac93bdb0cab900d48797c8e8bc0e082933d74e48a226dda2f54e5ba64117462100a72c4891b806757b6ddd816ca86c4694859e6be44bca281ee7e1922b"
+        },
+        {
+          "id": "Microsoft.Testing.Platform.MSBuild",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "0975e0de22659fdf82400da6a3498bc1107c8eb42a21e1f16fab07969e079aad243674c12d027ce2b67ccae53f230435d8f03fe7bea9680f54b198c479e633e7"
+        },
+        {
+          "id": "Microsoft.Win32.SystemEvents",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "25016c508653fbf463c52d8fc3d2773b7c211c2402c4ea7b4aa987fb29c851d3f80c5e7abbcace2d4d5e061ae290524e8029afbc49a37d7e5186fe06aa4609b2"
+        },
+        {
+          "id": "Newtonsoft.Json",
+          "version": "13.0.4",
+          "source": "nuget.org",
+          "nupkgSha512": "6d1faff84ff227a83b195dae5f0d8ead44a36187e32e438b0bc243e24092db79ac2daa672ad7493c1240ef97f01c7fbe12b21f7de22acd82132f102eaf82805c"
+        },
+        {
+          "id": "NodifyAvalonia",
+          "version": "6.6.0-unlimotion.a12.1",
+          "source": "nuget.org",
+          "nupkgSha512": "16273535b8ab77ac577928641aeb26b85834471c6f4ce0f7292bda9bdb375b23d61c96c8707c28afdac0ec3c236f6d9fbd1a3e7391d3f98559e7f9890ad2fd85"
+        },
+        {
+          "id": "NuGet.Versioning",
+          "version": "6.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "4e5d3ec8a7b1563b76422a6f91c5b86c7969b9e7867f0ef958d115aa35995dd36ee86b94cd74f94043427ff68789ce9fcd597b9103e6cefb3ef228733172dad1"
+        },
+        {
+          "id": "Polly",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "447c81d0fe763d30f8d1eacdeb8af8cf547ead4ba98ea5e0462d1fde0233a476235d078bcaad09a96a9de5934e4b27fef0d32386802f2c734467f2250220ca24"
+        },
+        {
+          "id": "Polly.Core",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "37aaddfa78a4d02d3d611f7022d72c14d14df07487c50efec7efe553bcc8746f0a952a68dc81ecfe28c86e512eb3c98f709f7690bfd276dfd589ba188855f19b"
+        },
+        {
+          "id": "Quartz",
+          "version": "3.18.1",
+          "source": "nuget.org",
+          "nupkgSha512": "608998dfc11bc7b142b1d21f6b09d1d254418f2333eb7be71c6f6072bc4afb06c89bdb2066ec2bcb45693c6010bfa7b048814dd51ccdfec7b9dd13ac02eee3e9"
+        },
+        {
+          "id": "ReactiveUI",
+          "version": "23.2.27",
+          "source": "nuget.org",
+          "nupkgSha512": "c97488759d60858cae8c2b4043aa78424b020d9fc61a3ea3e72dda64770ed093a52f3d8cb6ae28257b4c97e702ce227773acd94f4677ffed287b550b85a2537c"
+        },
+        {
+          "id": "ReactiveUI.Avalonia",
+          "version": "12.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "835e3eff290ee0de54ea54f17d090a094ad901cbe7dc320ce1cb52741ad7c070a636dc0119f0364d400b782f61018f7e5a806e0e2f6fe52856fd89f3671c017c"
+        },
+        {
+          "id": "ServiceStack.Client",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "9ba9c43bb4f50c68fbae78975aa88837e915452b61d9f409263656084c61cdf51f7b3293acf8d2d9824504a2b5613516f245e444990b6cc12372f7ec573f29c4"
+        },
+        {
+          "id": "ServiceStack.Interfaces",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "0c5660bdc879eb06318b62b97b592d9448597f8fff74fcf5258445ea9a3abf6479205c8947400c684dcd1b07037a5a4fbfcd6a511f27a7d3d9c0d2ede7a8258d"
+        },
+        {
+          "id": "ServiceStack.Text",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "69468e2e9cac5ea2eb598812e4619fb1aef7ee2b30357c5b1d699f6514c87d45331cc44ececc11c16af041ab73b90b9375eb3d5416fd02d205bacf7ae7cc2df9"
+        },
+        {
+          "id": "SignalR.EasyUse.Client",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "ccb6f694efe10ff39c955f819d527fe55abd48b4c6fdd9c13fff229a733ed0c37c588d368fb1c4104468e2631af1c5e7a493e918483b192f810f644061c1e889"
+        },
+        {
+          "id": "SignalR.EasyUse.Interface",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "17b7cf99741e87a9b31b3f62124a76034df958f9eb27cb063fd69607991d9341360fdd7238bfc3ceee196ee09855b3e04459c4b26a391cf700e285897d959803"
+        },
+        {
+          "id": "SkiaSharp",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e912ec5c038a110d898e334ec1d22368cdc0c07ddc2f726c2bc3f6f6090aa9f0c0c442ea1a68211134182d9d689130cd28cb012a0b332710bb8344fe4de0df39"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Linux",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2f54f6a52e2261163ba7d45d6eaf53b9964c963630c4434ad69d6cd294444f13db56b3895c230788538805e1be8c40bde527c469f624e1e7352f38fd91ed6417"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.macOS",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "a0b26730eca06860ab201003598e88d857d095e9082150f0cdde02bba224daa65c83bda14f9fd369faf7c9de2010f21d3a3be9ca2ea7c053452adbb8bde20765"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.WebAssembly",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "752109ccff1266a659a7139a3690b33c11a80baf34d48d6bbc469d7f797c0d6f91f27cca2283c192aa7422bed068ef747d083ef2f261587d6d48373f91feb6f6"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Win32",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "9509f91644cd821ffa54b90896581a99e853f538f25c44d88df703cc253cfb8b961dcb6ed8e43e2b601e645c6afb01f6efd8cdfb81e9d8a8df51db2ec9c2b49e"
+        },
+        {
+          "id": "Splat",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2bf878a2ea0bf8f9af9d28fcb6c9881502f4954e10c26ef779842585b1f81c3a360ae3b14e9b331cc80ef429bca1552788053b6b694a62f2bbb9c138f5682b47"
+        },
+        {
+          "id": "Splat.Builder",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e025d0d7030a29980ecd7c015cca6cbec67e96e5cb63d3d83312e65ff5409024716623623e48adecdabc7ff2b07bfae5301a76cef8d9eb40b94d1553c160e6af"
+        },
+        {
+          "id": "Splat.Core",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "0f06a280f195ddf4b58f187ff4f28b2e66107e0a536f13104a056a79cc9c09f49e263c3a95e9ddfdab23114d054c09cf62ca18cdf0da67088cb97ebfdf38b654"
+        },
+        {
+          "id": "Splat.Logging",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "f1049725b5ed116bb5e201b34263bcc2e5d47b8bb8ad2512aa1155ee44b286fc99d84df6d9c80be81ae170da0bf46d1f05a3c2d34f077d1c476b024d4571ef99"
+        },
+        {
+          "id": "System.Configuration.ConfigurationManager",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "715685706dbbb885418ba8cae02519191230df7d2b14656fe68db2324f053e2a39b813c4bb85a77c77865adb12ef18b42b57c2a47b7b3f82abced3c57b10a5c2"
+        },
+        {
+          "id": "System.Diagnostics.EventLog",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "2a68c0668d9fa73a9b60243840b39adcf2618fc5f99d9ff3f4114826bf8f892979b751dce6812f6bb500efc28de711ad3b09aa939894c3e8dfa0a872d3a3902d"
+        },
+        {
+          "id": "System.Drawing.Common",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "40a16c9c5dd59148051bd55a2355339343186ec188bcb8e9ea5abe0dc6035106e7d745323cc4d492750e791c41397c53616b553d79b8d5e5fc56dff3345ed533"
+        },
+        {
+          "id": "System.Reactive",
+          "version": "6.1.0",
+          "source": "nuget.org",
+          "nupkgSha512": "2febd9b79175217eaee14a399ff5c4b4a3a1004ac592b0e2cef162a85993c907d376d5219b7c02697cdc5a1b30251b016b046a551c337dbf21115f2628f9bb78"
+        },
+        {
+          "id": "System.Runtime.Caching",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "a11519ec0f0836c18d193e9d1fab50f4293d3e0fb8614611a8e72017e5ddca2f17786692fbbf0a7ac26b4bd4e0bc214a10fd751b8d259ba001e60c3c5185cf5a"
+        },
+        {
+          "id": "System.Security.Cryptography.ProtectedData",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "8444cf03ff9cc3e0e700c3a086d99657bf672eed361a5f162bff865979522e243703acef2737062ef9bbfed6bf2bfcd5e770bb6a7c9ea135802e0fa8a27210ba"
+        },
+        {
+          "id": "Tmds.DBus.Protocol",
+          "version": "0.93.0",
+          "source": "nuget.org",
+          "nupkgSha512": "09ac50e12b0f98cc5c9f2e7fd254194e03f78d1def168355240e91f688c10d4b57cb8dfdd135c8afab3f1b0f69d6c1c648b1b792df108d32a1e25bfdaf35e0e2"
+        },
+        {
+          "id": "TUnit",
+          "version": "1.44.0",
+          "source": "nuget.org",
+          "nupkgSha512": "1a6840557c79248a0ce916c819a1bf1411e46c0e85c7b974792772b7c5e693158a8478bf17847a03a7f1d975aa37059e3148b97f8cc0db21e19005bed061d882"
+        },
+        {
+          "id": "TUnit.Assertions",
+          "version": "1.44.0",
+          "source": "nuget.org",
+          "nupkgSha512": "2332e99d21f642f94aa251ac82337bbeaae1243679338693fd4996949e0f80587abec14837ded907fa433fc920efb3dcac29e62612bdaf24b8bd921828cd0470"
+        },
+        {
+          "id": "TUnit.Core",
+          "version": "1.44.0",
+          "source": "nuget.org",
+          "nupkgSha512": "765c66009328d5f5be7d2f0007f4636dc2db0088b66ace7f138fa7b7b32ae9edfc0ea68c3c4d64414837fc3dadde6ae1cf92e5de89fd5962dd9403ef2ec6a708"
+        },
+        {
+          "id": "TUnit.Engine",
+          "version": "1.44.0",
+          "source": "nuget.org",
+          "nupkgSha512": "8a94bf1fcc6a07a70abc6ec8c02d372ae14bb03c56c44e25cf9301b4b52d765426513be31e5652aedee3b5574535aab4f1058193f973329ce76869b442bda27e"
+        },
+        {
+          "id": "Velopack",
+          "version": "0.0.1298",
+          "source": "nuget.org",
+          "nupkgSha512": "d3ab3c23e5da124379727a797ff9e816a079902ff2885eb9fe4ec69ac358ef7f6caee84a46affcc67c836452a21e01bf5240a2bae03f8b141b5319b78f85db14"
+        },
+        {
+          "id": "WritableJsonConfiguration",
+          "version": "8.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "63d27d99fabb31d3b96daad0d026c028c72d7eddb3fb6f4c252f55a3aafa052267f9d74ef0f298f1457c3d2844be870a984933936afa813da662730dd90eda5c"
+        }
+      ],
+      "graphSha256": "6157cbfcb4a1ed5a928720dd165193b7f0d45277704c335b9582c566545fa13e"
+    },
+    {
+      "projectPath": "src/Unlimotion.Desktop/Unlimotion.Desktop.csproj",
+      "packageSet": [
+        {
+          "id": "AutoMapper",
+          "version": "16.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "aefef2a02d2f277c5568713396b9fc2ae77d2a4bacf61ff91d1a4f66b4f47ef8fc848e392a5a356a4cccc60982bd901388dcbd379c4522a0fa7bea3559b41ae8"
+        },
+        {
+          "id": "Avalonia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "ed809a6e3deda956790004dc500087602d9e0672164bef1e2d4d1e3fe1f382998d64e917fba6bf06c547e4242df822aa45bd61ca7e6da06ff67e7a96b0e2558d"
+        },
+        {
+          "id": "Avalonia.Angle.Windows.Natives",
+          "version": "2.1.25547.20250602",
+          "source": "nuget.org",
+          "nupkgSha512": "5cf4ba739c4fe0bf9e36ad2b4d481338239ea98216e6188f8c2f7af5efbdcb8926ce7d6af2df951071f8d9294d4d25ce1e52835f2bf4ac08c3dceba5e503ae60"
+        },
+        {
+          "id": "Avalonia.BuildServices",
+          "version": "11.3.2",
+          "source": "nuget.org",
+          "nupkgSha512": "233f868e74ab91e56818004ad0aa7d0bb6e978044ddcf0061e373ada06a1846b17a82e94c777ab907ba484c1873d2212b47d3539d2694e89a415f1af047c3045"
+        },
+        {
+          "id": "Avalonia.Desktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c9560dee67de90720d571c136d251c575e0d084cd3e99c86ab50bcdb20718ad2e34f7e5605132c8d01a6f668f30b536fdf5830d55adb84f47eca1f971a911074"
+        },
+        {
+          "id": "Avalonia.Fonts.Inter",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b901912c8b3272afcf44ff3127b87e48c4562e84f1fc132a7b16f93e8355e76af4cc36ae7d7c5e80c74181e68bbac683b6b0c6130313a4fa129d1613c022db80"
+        },
+        {
+          "id": "Avalonia.FreeDesktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "dd691338864c8fe3abde33186eb7dff37390f8638b23e10478d0cf26756480b87ee1b8b2e94f21c9f0626431cdd9b34383634f77588e2c1ad0e0d2259c918830"
+        },
+        {
+          "id": "Avalonia.FreeDesktop.AtSpi",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7cf6647fd4a07a14e7ac06eae67a5911215d8952166aeca8eb9c8d8af197e32e24ff95121e804e17a6d601186b77d1005a1c6153ae65bc4dbac880c358599a"
+        },
+        {
+          "id": "Avalonia.HarfBuzz",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b0ebfffa46383a31c17b06a13dd5701a14d5e17b279665672e543e040fbc619cdc85d731b13b75148e55abf53a87aaac4b2a21d2e7511ab0fc32be630a76a277"
+        },
+        {
+          "id": "Avalonia.Native",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "fc77f946e89bc22dcb6919ed516677146f3e5eb8c7974d62dbffdae1eebb167b0ef70c09b8fa4bd2434f7942f1de8f4928339e0a20d3708e72458c4b26bd5ee2"
+        },
+        {
+          "id": "Avalonia.Remote.Protocol",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "136741e1713a82b4b987064b8242966c3985bd63f85728ab59698b5efbc53fedc47f3c21984f46901b147af0923c0231e29c02dbce29aea6a953208d9e443601"
+        },
+        {
+          "id": "Avalonia.Skia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "30bdb6985dd7c6d250fdf6271944708fdaa24b9b545f8e8784543cd61de98f1e7ad54d19873b566d84f9d34b75ddf0b0953f1e0344be7305fe228f088e36a01a"
+        },
+        {
+          "id": "Avalonia.Themes.Fluent",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "2df35467278a151bf820293b2c541988772d93a5843bb16a73a68e8b83434d03f26ac2f649abab742da94f81ab0bdf79a11a901fad5002b1139fed95f0b0e0f7"
+        },
+        {
+          "id": "Avalonia.Win32",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "73b5a4476956d66cc6eecfa6d7352793c548e8cdb24ab345b950800751a0c94518f5b2daf01b8bf7eb1f9790f23e05d8dfd82d5acc60aca3451bb7da17708250"
+        },
+        {
+          "id": "Avalonia.X11",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "66e6ebbd74b98a193a8380f8f3843a9513571847a160c150b3315da58c5ee80707872c8f5fb8b0cf87a66d34495da9800b0bcd3aa57d450a5f942adbfef9d295"
+        },
+        {
+          "id": "AvaloniaUI.DiagnosticsSupport",
+          "version": "2.2.2",
+          "source": "nuget.org",
+          "nupkgSha512": "dbe6e32f773112de3f69f03bd053a47fa8b0cc7e65469b4ffdc4e5456bce1dc1292fac4c3852eb96934dc9f900578151a4b46d22926707cdb60df1a51b7b13c3"
+        },
+        {
+          "id": "CompareNETObjects",
+          "version": "4.84.0",
+          "source": "nuget.org",
+          "nupkgSha512": "934f6c501889c9a0fee8e1f58d0383d0c08ae48345b60b6ca8914bc4642ea1a6c39729d99c10dda7bc0f9d624c4689c95a3ac4b28cb6cb6ff57753085ac463c7"
+        },
+        {
+          "id": "DialogHost.Avalonia",
+          "version": "0.12.2",
+          "source": "nuget.org",
+          "nupkgSha512": "15ba9a861fe0ceb4c3f9e09e6d96718af7186d28f6d5d6d61844a583907cfeeb74e6cc6118faa12a39310b79801aead85a68909ead61cbf48d7814b18da0d5d7"
+        },
+        {
+          "id": "DynamicData",
+          "version": "9.4.31",
+          "source": "nuget.org",
+          "nupkgSha512": "3199b791fe68c1ab229dd57d6b524dda5fbb6ef63fb5fbe6bcc9475167dad7b921998d2edad613db32367f3d416d64aecb0d28b3b0bbe3e2fff8658f8ed50b48"
+        },
+        {
+          "id": "HarfBuzzSharp",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "8493b36e88beedfc80e12f13e3b986fb1e5560c4c8df86e672c1cad24a623fa36adc9a1a82f566fda3784f7a2d58975d10273ea65b7bcb119afc126b11a452c8"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Linux",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c413a4244f1fcf0caddd8e039f7e96324cee45ec0970aae23fc324bf40a8808c5fcf9e2b386be5a920f95e37cc2ee03a68d3dd7092fb9091c155e52a729ac8d7"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.macOS",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "64222e104f945cc284c08fd98feaa4dbb355b92990eb77858d4179ab6ea112d1e6a127198075e9274745044fd41e99f691c4c68a138ddfd438c5ebdbb0571602"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.WebAssembly",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "a7991dc993e42ef2e10785d41193cdd731c03c135e8db4c09cb493a3d364a634a07f47ab035cb63ada41e643ff089cd461f1ab5844402f4cd30eecd3ad68b200"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Win32",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "156ab246a79aeb509672b10c109a1fa29e59b3ad1eb9713ac331e2f11b6bac4b7a96bcb765a8e2da4d3f59bb54d5b648e870aeae4d22543baca28b17cb046fcf"
+        },
+        {
+          "id": "LibGit2Sharp",
+          "version": "0.31.0",
+          "source": "nuget.org",
+          "nupkgSha512": "56aa3185eb2213d97bd6b56e2d1803aa76945bf732b77c7a4b40359d4809ee0bd2cca795fc81d762958f741ba12e3f58675eabd3d76d7930476f1190a7bc1816"
+        },
+        {
+          "id": "LibGit2Sharp.NativeBinaries",
+          "version": "2.0.323",
+          "source": "nuget.org",
+          "nupkgSha512": "aa06f25b9cc62619eed349ca50385c78bd0fcef2b7e510febcc5ae63e79c297b24370302f7e54862c238c30b7aab905445aca9426fbb05cf20f0f185cbe74110"
+        },
+        {
+          "id": "MicroCom.Runtime",
+          "version": "0.11.4",
+          "source": "nuget.org",
+          "nupkgSha512": "75dcb5b0761f8a5607dbe9a73407fafb3f4258424227286c1e6113cf3b24cd51ab6bb85abc7df58675c89634f2d01cbef1b262d67a762adc711212d48425ad02"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Connections.Abstractions",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "eb570c0ad8657085ed012a23f19b574ce6a61d1261199b541efa8b027df224ed0153946da213a69ec70da9d50d13970a76987844b71dc4660dc4c11552a1331c"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "af50b2fcdc1d4f62b802276f8b849a2bb5a05f9179507636d76d5e2e46482edaa744e62f3e0966f8d7b1cf6cce9f4546c3529d07f8be65d38bf40bedbe37041f"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "ddc5d47673d3bf5c8eeb60bfcb1482e6cabff19123d54d82c17ffdb242829f20d9899ce8bdba5c4546f8d45be6a4ea4c74f797a2a5ccee56002dffadf7bc694e"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "d74a77b3f81ae3324eebe8bac5f0965762227007b2645d641c4843cd5df419d097e902a05e7c30ec0bdf1e742000bf20efbe42f0238d3765b8d9cb1811fb6f31"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client.Core",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "bcbdc78f31e68905ff70538ee47408fffb2877e64924adfb26e4b3c049875ab1674d58754d09812cd48de7e9846eaef6a68318256bf91ddcbfe7efc28af5d31a"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "fa7ba10aef5231c109871792c9e7486d22df0a46e11eb69120cab530b741071c5bc6f8d1357387d66504c7ed4230f5e7bdbe452308ffdbb4dbd4762bfd22b126"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Protocols.Json",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "50043ebb2eaa7c8ae9c206da73139b9d638e62e1bcc0f8b27a3af9ff8c9b256bfb5768ad8ac0c692e813e3b38edf247d5aa59d9d03f6b099b19d642999853a9d"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7148bfe7a41903421db7c49ec8c12c8c79175f9e6c994a869d60ecb45a3606868aa0429b1d8e7f78e32a895193b1ce8e76c5eae49cbd7d22ce391861912e4b35"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "63c407e088d6927a64ecd84ddea7e87735c5164ea4f3a877435ba6de1f35e83a1f0d565a2179ca7c7eaadebcfccc50692aece10e0212a7c3d5803229446c6e16"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Binder",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7f803bf2a5afaf13239dd495f8f25663e36fae42d7840416619c13976cfd294de2c4b4728206194dd0b38ee831089a81f3f63e8ba536c60d1b7fd5b97691d0"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.FileExtensions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "451c7ec4e92db858327338e833c923aa10bbb34b9820c4f1d0e5b44123f4009fe02646aabaa58dfaac0a6d37727c38c516a0433e4452b301305eafb88459e5d7"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "008cd3427c2c80218aadd5a28c09a8dd08680fcd5428eb010fd51b44207ba7d2a84bf799bb192914c373b29d60c5fbd72c73cd0800e4d0f43922e2bc9f13deb2"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "8ca54e7dfcb35bbcaa9a292f0107faf6808a8cf94c8879a7aafe31ae841174d29009895421ce2bbc9bfafd86d0caabd402bbebcc84f1961774740dcc155229bb"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "475254983871f35cd70118fbff743049ec623bd94d1363c13d7c8ae3bb1b9521883a5e0977ad222d8f30b6627f3738695ed3c1892393327d8a158b9fed069123"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fbfb14ccee28fa60e6a3a1c52084f358cb26e4bbbbcfafeb89f64bf7410d13ade10c06beccf51aeb903dcc1190453646a68b99b075039ea4dbbc2a42c11d45ae"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f1d913e7baab3def34ac48ed910a68f2673a678731d4b905d0b6c3174876b86520405262bd7aae684a495723181a90d99d6f4ba6b0cdec802a7fb335f1bc05e8"
+        },
+        {
+          "id": "Microsoft.Extensions.Features",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "630caf336834138b68ed111c707063b80baa1f5b302cbeca8f74cd251940dfbd25210396be7c6b3b2e74c7fe2d28ed8dc950bb3f4d259dc732e814d3d93480fa"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Abstractions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fe9aa18f2e819694f20e322c93e075e27bee2d57ddd5380624fc48a95669c526c270ab5c74f58c6a4721d18ecdb5b2febf0315f8794585ae65617831459e2a0b"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Physical",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7612261a35b76d0b3a337ab262de57c3b605e8a1e55bf4d47f15e374e5577ab2ce4ae370980ef2c1335c4e323e6adcfe3718eee86570ac6e4ff5cb100450331f"
+        },
+        {
+          "id": "Microsoft.Extensions.FileSystemGlobbing",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "23a5e50cf695ba18c7a77f7c050e40d6fb065957480db17f5e75e5cf269c8f50763c996c28d0dcfca09e2c1248540898ab53c474cadc705548f5fe491dd263fd"
+        },
+        {
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "02ac89d69f60a1bf5a729ee41c7a81b1160985db53787e982e20c4c6e064169069a3fc22ea0d83b01db68200ea47ef872729a12fc0e42805e1569232038b70ad"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "e14f295d608f7d8523ffae4b623593e1e89ce3e6d04d5d653b45fa3a6c3cec033c6e9e4521299745615347ff071c258ae898ad59d7274235e4a955fcb64da729"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "0849462f3ea2ee5a06d8ab8a8b13f05f3cf466de66ebbc6a0a9cac4befc91ceb180ae03c42089ab0ca7a26ca7fe5b4ed1a8f73e235e1308d9997c9529c369dd1"
+        },
+        {
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "a2582f2659912b3c4d580097b5b4533500528fd22f00743326d84f1596c74542d5551835c0af7c956a76d3351618278f3ed1c411190a8363b91ba4466750b363"
+        },
+        {
+          "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "136d8f07248e7185e5d68d6a30ce8c9cc2eef476fbe6c0957a61aecbfeeeb965456c1c99d1ddc51e66621f8d63f4fe48ce2df966ebec7d364f5242e1ae057a83"
+        },
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "abb05f3f99ab4df467b8cd2a04587e556a576ae13c2d3cd7b482f549983487f33239818b2a7b0f3db5eb451d28747718c40e4e9f721074a2dda9338c34093b6d"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Abstractions",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "175ef8bf78b63f3c327e680d5cf7721d74f29e96460e686b22b4e67c264fb036a7a9bea1473f4a5b487337ab7a560c861b51ed1aa744777f303362262b01a8b4"
+        },
+        {
+          "id": "Microsoft.IdentityModel.JsonWebTokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f24e615f802b291d61dd20cb7bca810b940b7289d3fd45ae02de85ec2f1f4b9428935e975216d98eaa95ed43038320bcfc120e7673828ec25089a5458219042b"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Logging",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "cae11816948710e1bf9406e980b826d68b35069944dbcb71d2e00f6b6073b3d6e9c970067b06f2a847830a11291eae012fc4aa04c476a9b34581450271bb128a"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Tokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "24b377c5758fd364a4f95016e213726946c4070191a818d39c56ea1e9f2d2a53bc5348650fbc140139bd68d6c80b3e9ed05f0f7018954c24159e0ad2c2b25615"
+        },
+        {
+          "id": "Microsoft.IO.RecyclableMemoryStream",
+          "version": "3.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "c5794ea27c908b5fb2442faa441e9f3f81ffa3dc29d41a313b542643923ae61070905b1c15c2ecad98092c6b9b2a3b423aca979e71ed979728bd572b69f20a46"
+        },
+        {
+          "id": "Microsoft.Win32.SystemEvents",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "25016c508653fbf463c52d8fc3d2773b7c211c2402c4ea7b4aa987fb29c851d3f80c5e7abbcace2d4d5e061ae290524e8029afbc49a37d7e5186fe06aa4609b2"
+        },
+        {
+          "id": "Newtonsoft.Json",
+          "version": "13.0.4",
+          "source": "nuget.org",
+          "nupkgSha512": "6d1faff84ff227a83b195dae5f0d8ead44a36187e32e438b0bc243e24092db79ac2daa672ad7493c1240ef97f01c7fbe12b21f7de22acd82132f102eaf82805c"
+        },
+        {
+          "id": "NodifyAvalonia",
+          "version": "6.6.0-unlimotion.a12.1",
+          "source": "nuget.org",
+          "nupkgSha512": "16273535b8ab77ac577928641aeb26b85834471c6f4ce0f7292bda9bdb375b23d61c96c8707c28afdac0ec3c236f6d9fbd1a3e7391d3f98559e7f9890ad2fd85"
+        },
+        {
+          "id": "NuGet.Versioning",
+          "version": "6.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "4e5d3ec8a7b1563b76422a6f91c5b86c7969b9e7867f0ef958d115aa35995dd36ee86b94cd74f94043427ff68789ce9fcd597b9103e6cefb3ef228733172dad1"
+        },
+        {
+          "id": "Polly",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "447c81d0fe763d30f8d1eacdeb8af8cf547ead4ba98ea5e0462d1fde0233a476235d078bcaad09a96a9de5934e4b27fef0d32386802f2c734467f2250220ca24"
+        },
+        {
+          "id": "Polly.Core",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "37aaddfa78a4d02d3d611f7022d72c14d14df07487c50efec7efe553bcc8746f0a952a68dc81ecfe28c86e512eb3c98f709f7690bfd276dfd589ba188855f19b"
+        },
+        {
+          "id": "Quartz",
+          "version": "3.18.1",
+          "source": "nuget.org",
+          "nupkgSha512": "608998dfc11bc7b142b1d21f6b09d1d254418f2333eb7be71c6f6072bc4afb06c89bdb2066ec2bcb45693c6010bfa7b048814dd51ccdfec7b9dd13ac02eee3e9"
+        },
+        {
+          "id": "ReactiveUI",
+          "version": "23.2.27",
+          "source": "nuget.org",
+          "nupkgSha512": "c97488759d60858cae8c2b4043aa78424b020d9fc61a3ea3e72dda64770ed093a52f3d8cb6ae28257b4c97e702ce227773acd94f4677ffed287b550b85a2537c"
+        },
+        {
+          "id": "ReactiveUI.Avalonia",
+          "version": "12.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "835e3eff290ee0de54ea54f17d090a094ad901cbe7dc320ce1cb52741ad7c070a636dc0119f0364d400b782f61018f7e5a806e0e2f6fe52856fd89f3671c017c"
+        },
+        {
+          "id": "ServiceStack.Client",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "9ba9c43bb4f50c68fbae78975aa88837e915452b61d9f409263656084c61cdf51f7b3293acf8d2d9824504a2b5613516f245e444990b6cc12372f7ec573f29c4"
+        },
+        {
+          "id": "ServiceStack.Interfaces",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "0c5660bdc879eb06318b62b97b592d9448597f8fff74fcf5258445ea9a3abf6479205c8947400c684dcd1b07037a5a4fbfcd6a511f27a7d3d9c0d2ede7a8258d"
+        },
+        {
+          "id": "ServiceStack.Text",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "69468e2e9cac5ea2eb598812e4619fb1aef7ee2b30357c5b1d699f6514c87d45331cc44ececc11c16af041ab73b90b9375eb3d5416fd02d205bacf7ae7cc2df9"
+        },
+        {
+          "id": "SignalR.EasyUse.Client",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "ccb6f694efe10ff39c955f819d527fe55abd48b4c6fdd9c13fff229a733ed0c37c588d368fb1c4104468e2631af1c5e7a493e918483b192f810f644061c1e889"
+        },
+        {
+          "id": "SignalR.EasyUse.Interface",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "17b7cf99741e87a9b31b3f62124a76034df958f9eb27cb063fd69607991d9341360fdd7238bfc3ceee196ee09855b3e04459c4b26a391cf700e285897d959803"
+        },
+        {
+          "id": "SkiaSharp",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e912ec5c038a110d898e334ec1d22368cdc0c07ddc2f726c2bc3f6f6090aa9f0c0c442ea1a68211134182d9d689130cd28cb012a0b332710bb8344fe4de0df39"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Linux",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2f54f6a52e2261163ba7d45d6eaf53b9964c963630c4434ad69d6cd294444f13db56b3895c230788538805e1be8c40bde527c469f624e1e7352f38fd91ed6417"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.macOS",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "a0b26730eca06860ab201003598e88d857d095e9082150f0cdde02bba224daa65c83bda14f9fd369faf7c9de2010f21d3a3be9ca2ea7c053452adbb8bde20765"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.WebAssembly",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "752109ccff1266a659a7139a3690b33c11a80baf34d48d6bbc469d7f797c0d6f91f27cca2283c192aa7422bed068ef747d083ef2f261587d6d48373f91feb6f6"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Win32",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "9509f91644cd821ffa54b90896581a99e853f538f25c44d88df703cc253cfb8b961dcb6ed8e43e2b601e645c6afb01f6efd8cdfb81e9d8a8df51db2ec9c2b49e"
+        },
+        {
+          "id": "Splat",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2bf878a2ea0bf8f9af9d28fcb6c9881502f4954e10c26ef779842585b1f81c3a360ae3b14e9b331cc80ef429bca1552788053b6b694a62f2bbb9c138f5682b47"
+        },
+        {
+          "id": "Splat.Builder",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e025d0d7030a29980ecd7c015cca6cbec67e96e5cb63d3d83312e65ff5409024716623623e48adecdabc7ff2b07bfae5301a76cef8d9eb40b94d1553c160e6af"
+        },
+        {
+          "id": "Splat.Core",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "0f06a280f195ddf4b58f187ff4f28b2e66107e0a536f13104a056a79cc9c09f49e263c3a95e9ddfdab23114d054c09cf62ca18cdf0da67088cb97ebfdf38b654"
+        },
+        {
+          "id": "Splat.Logging",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "f1049725b5ed116bb5e201b34263bcc2e5d47b8bb8ad2512aa1155ee44b286fc99d84df6d9c80be81ae170da0bf46d1f05a3c2d34f077d1c476b024d4571ef99"
+        },
+        {
+          "id": "System.Configuration.ConfigurationManager",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "715685706dbbb885418ba8cae02519191230df7d2b14656fe68db2324f053e2a39b813c4bb85a77c77865adb12ef18b42b57c2a47b7b3f82abced3c57b10a5c2"
+        },
+        {
+          "id": "System.Diagnostics.EventLog",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "2a68c0668d9fa73a9b60243840b39adcf2618fc5f99d9ff3f4114826bf8f892979b751dce6812f6bb500efc28de711ad3b09aa939894c3e8dfa0a872d3a3902d"
+        },
+        {
+          "id": "System.Drawing.Common",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "40a16c9c5dd59148051bd55a2355339343186ec188bcb8e9ea5abe0dc6035106e7d745323cc4d492750e791c41397c53616b553d79b8d5e5fc56dff3345ed533"
+        },
+        {
+          "id": "System.Reactive",
+          "version": "6.1.0",
+          "source": "nuget.org",
+          "nupkgSha512": "2febd9b79175217eaee14a399ff5c4b4a3a1004ac592b0e2cef162a85993c907d376d5219b7c02697cdc5a1b30251b016b046a551c337dbf21115f2628f9bb78"
+        },
+        {
+          "id": "System.Runtime.Caching",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "a11519ec0f0836c18d193e9d1fab50f4293d3e0fb8614611a8e72017e5ddca2f17786692fbbf0a7ac26b4bd4e0bc214a10fd751b8d259ba001e60c3c5185cf5a"
+        },
+        {
+          "id": "System.Security.Cryptography.ProtectedData",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "8444cf03ff9cc3e0e700c3a086d99657bf672eed361a5f162bff865979522e243703acef2737062ef9bbfed6bf2bfcd5e770bb6a7c9ea135802e0fa8a27210ba"
+        },
+        {
+          "id": "Tmds.DBus.Protocol",
+          "version": "0.93.0",
+          "source": "nuget.org",
+          "nupkgSha512": "09ac50e12b0f98cc5c9f2e7fd254194e03f78d1def168355240e91f688c10d4b57cb8dfdd135c8afab3f1b0f69d6c1c648b1b792df108d32a1e25bfdaf35e0e2"
+        },
+        {
+          "id": "Velopack",
+          "version": "0.0.1298",
+          "source": "nuget.org",
+          "nupkgSha512": "d3ab3c23e5da124379727a797ff9e816a079902ff2885eb9fe4ec69ac358ef7f6caee84a46affcc67c836452a21e01bf5240a2bae03f8b141b5319b78f85db14"
+        },
+        {
+          "id": "WritableJsonConfiguration",
+          "version": "8.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "63d27d99fabb31d3b96daad0d026c028c72d7eddb3fb6f4c252f55a3aafa052267f9d74ef0f298f1457c3d2844be870a984933936afa813da662730dd90eda5c"
+        }
+      ],
+      "graphSha256": "265f3e40799b710b641f70accbd20cc7f7d58e283980cf05d2e1e738a8f80f9e"
+    },
+    {
+      "projectPath": "src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj",
+      "packageSet": [
+        {
+          "id": "AutoMapper",
+          "version": "16.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "aefef2a02d2f277c5568713396b9fc2ae77d2a4bacf61ff91d1a4f66b4f47ef8fc848e392a5a356a4cccc60982bd901388dcbd379c4522a0fa7bea3559b41ae8"
+        },
+        {
+          "id": "Avalonia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "ed809a6e3deda956790004dc500087602d9e0672164bef1e2d4d1e3fe1f382998d64e917fba6bf06c547e4242df822aa45bd61ca7e6da06ff67e7a96b0e2558d"
+        },
+        {
+          "id": "Avalonia.Angle.Windows.Natives",
+          "version": "2.1.25547.20250602",
+          "source": "nuget.org",
+          "nupkgSha512": "5cf4ba739c4fe0bf9e36ad2b4d481338239ea98216e6188f8c2f7af5efbdcb8926ce7d6af2df951071f8d9294d4d25ce1e52835f2bf4ac08c3dceba5e503ae60"
+        },
+        {
+          "id": "Avalonia.BuildServices",
+          "version": "11.3.2",
+          "source": "nuget.org",
+          "nupkgSha512": "233f868e74ab91e56818004ad0aa7d0bb6e978044ddcf0061e373ada06a1846b17a82e94c777ab907ba484c1873d2212b47d3539d2694e89a415f1af047c3045"
+        },
+        {
+          "id": "Avalonia.Desktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c9560dee67de90720d571c136d251c575e0d084cd3e99c86ab50bcdb20718ad2e34f7e5605132c8d01a6f668f30b536fdf5830d55adb84f47eca1f971a911074"
+        },
+        {
+          "id": "Avalonia.Fonts.Inter",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b901912c8b3272afcf44ff3127b87e48c4562e84f1fc132a7b16f93e8355e76af4cc36ae7d7c5e80c74181e68bbac683b6b0c6130313a4fa129d1613c022db80"
+        },
+        {
+          "id": "Avalonia.FreeDesktop",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "dd691338864c8fe3abde33186eb7dff37390f8638b23e10478d0cf26756480b87ee1b8b2e94f21c9f0626431cdd9b34383634f77588e2c1ad0e0d2259c918830"
+        },
+        {
+          "id": "Avalonia.FreeDesktop.AtSpi",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7cf6647fd4a07a14e7ac06eae67a5911215d8952166aeca8eb9c8d8af197e32e24ff95121e804e17a6d601186b77d1005a1c6153ae65bc4dbac880c358599a"
+        },
+        {
+          "id": "Avalonia.HarfBuzz",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "b0ebfffa46383a31c17b06a13dd5701a14d5e17b279665672e543e040fbc619cdc85d731b13b75148e55abf53a87aaac4b2a21d2e7511ab0fc32be630a76a277"
+        },
+        {
+          "id": "Avalonia.Native",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "fc77f946e89bc22dcb6919ed516677146f3e5eb8c7974d62dbffdae1eebb167b0ef70c09b8fa4bd2434f7942f1de8f4928339e0a20d3708e72458c4b26bd5ee2"
+        },
+        {
+          "id": "Avalonia.Remote.Protocol",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "136741e1713a82b4b987064b8242966c3985bd63f85728ab59698b5efbc53fedc47f3c21984f46901b147af0923c0231e29c02dbce29aea6a953208d9e443601"
+        },
+        {
+          "id": "Avalonia.Skia",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "30bdb6985dd7c6d250fdf6271944708fdaa24b9b545f8e8784543cd61de98f1e7ad54d19873b566d84f9d34b75ddf0b0953f1e0344be7305fe228f088e36a01a"
+        },
+        {
+          "id": "Avalonia.Themes.Fluent",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "2df35467278a151bf820293b2c541988772d93a5843bb16a73a68e8b83434d03f26ac2f649abab742da94f81ab0bdf79a11a901fad5002b1139fed95f0b0e0f7"
+        },
+        {
+          "id": "Avalonia.Win32",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "73b5a4476956d66cc6eecfa6d7352793c548e8cdb24ab345b950800751a0c94518f5b2daf01b8bf7eb1f9790f23e05d8dfd82d5acc60aca3451bb7da17708250"
+        },
+        {
+          "id": "Avalonia.X11",
+          "version": "12.0.3",
+          "source": "nuget.org",
+          "nupkgSha512": "66e6ebbd74b98a193a8380f8f3843a9513571847a160c150b3315da58c5ee80707872c8f5fb8b0cf87a66d34495da9800b0bcd3aa57d450a5f942adbfef9d295"
+        },
+        {
+          "id": "CompareNETObjects",
+          "version": "4.84.0",
+          "source": "nuget.org",
+          "nupkgSha512": "934f6c501889c9a0fee8e1f58d0383d0c08ae48345b60b6ca8914bc4642ea1a6c39729d99c10dda7bc0f9d624c4689c95a3ac4b28cb6cb6ff57753085ac463c7"
+        },
+        {
+          "id": "DialogHost.Avalonia",
+          "version": "0.12.2",
+          "source": "nuget.org",
+          "nupkgSha512": "15ba9a861fe0ceb4c3f9e09e6d96718af7186d28f6d5d6d61844a583907cfeeb74e6cc6118faa12a39310b79801aead85a68909ead61cbf48d7814b18da0d5d7"
+        },
+        {
+          "id": "DynamicData",
+          "version": "9.4.31",
+          "source": "nuget.org",
+          "nupkgSha512": "3199b791fe68c1ab229dd57d6b524dda5fbb6ef63fb5fbe6bcc9475167dad7b921998d2edad613db32367f3d416d64aecb0d28b3b0bbe3e2fff8658f8ed50b48"
+        },
+        {
+          "id": "HarfBuzzSharp",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "8493b36e88beedfc80e12f13e3b986fb1e5560c4c8df86e672c1cad24a623fa36adc9a1a82f566fda3784f7a2d58975d10273ea65b7bcb119afc126b11a452c8"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Linux",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "c413a4244f1fcf0caddd8e039f7e96324cee45ec0970aae23fc324bf40a8808c5fcf9e2b386be5a920f95e37cc2ee03a68d3dd7092fb9091c155e52a729ac8d7"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.macOS",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "64222e104f945cc284c08fd98feaa4dbb355b92990eb77858d4179ab6ea112d1e6a127198075e9274745044fd41e99f691c4c68a138ddfd438c5ebdbb0571602"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.WebAssembly",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "a7991dc993e42ef2e10785d41193cdd731c03c135e8db4c09cb493a3d364a634a07f47ab035cb63ada41e643ff089cd461f1ab5844402f4cd30eecd3ad68b200"
+        },
+        {
+          "id": "HarfBuzzSharp.NativeAssets.Win32",
+          "version": "8.3.1.3",
+          "source": "nuget.org",
+          "nupkgSha512": "156ab246a79aeb509672b10c109a1fa29e59b3ad1eb9713ac331e2f11b6bac4b7a96bcb765a8e2da4d3f59bb54d5b648e870aeae4d22543baca28b17cb046fcf"
+        },
+        {
+          "id": "LibGit2Sharp",
+          "version": "0.31.0",
+          "source": "nuget.org",
+          "nupkgSha512": "56aa3185eb2213d97bd6b56e2d1803aa76945bf732b77c7a4b40359d4809ee0bd2cca795fc81d762958f741ba12e3f58675eabd3d76d7930476f1190a7bc1816"
+        },
+        {
+          "id": "LibGit2Sharp.NativeBinaries",
+          "version": "2.0.323",
+          "source": "nuget.org",
+          "nupkgSha512": "aa06f25b9cc62619eed349ca50385c78bd0fcef2b7e510febcc5ae63e79c297b24370302f7e54862c238c30b7aab905445aca9426fbb05cf20f0f185cbe74110"
+        },
+        {
+          "id": "MicroCom.Runtime",
+          "version": "0.11.4",
+          "source": "nuget.org",
+          "nupkgSha512": "75dcb5b0761f8a5607dbe9a73407fafb3f4258424227286c1e6113cf3b24cd51ab6bb85abc7df58675c89634f2d01cbef1b262d67a762adc711212d48425ad02"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Connections.Abstractions",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "eb570c0ad8657085ed012a23f19b574ce6a61d1261199b541efa8b027df224ed0153946da213a69ec70da9d50d13970a76987844b71dc4660dc4c11552a1331c"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "af50b2fcdc1d4f62b802276f8b849a2bb5a05f9179507636d76d5e2e46482edaa744e62f3e0966f8d7b1cf6cce9f4546c3529d07f8be65d38bf40bedbe37041f"
+        },
+        {
+          "id": "Microsoft.AspNetCore.Http.Connections.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "ddc5d47673d3bf5c8eeb60bfcb1482e6cabff19123d54d82c17ffdb242829f20d9899ce8bdba5c4546f8d45be6a4ea4c74f797a2a5ccee56002dffadf7bc694e"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "d74a77b3f81ae3324eebe8bac5f0965762227007b2645d641c4843cd5df419d097e902a05e7c30ec0bdf1e742000bf20efbe42f0238d3765b8d9cb1811fb6f31"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Client.Core",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "bcbdc78f31e68905ff70538ee47408fffb2877e64924adfb26e4b3c049875ab1674d58754d09812cd48de7e9846eaef6a68318256bf91ddcbfe7efc28af5d31a"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Common",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "fa7ba10aef5231c109871792c9e7486d22df0a46e11eb69120cab530b741071c5bc6f8d1357387d66504c7ed4230f5e7bdbe452308ffdbb4dbd4762bfd22b126"
+        },
+        {
+          "id": "Microsoft.AspNetCore.SignalR.Protocols.Json",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "50043ebb2eaa7c8ae9c206da73139b9d638e62e1bcc0f8b27a3af9ff8c9b256bfb5768ad8ac0c692e813e3b38edf247d5aa59d9d03f6b099b19d642999853a9d"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7148bfe7a41903421db7c49ec8c12c8c79175f9e6c994a869d60ecb45a3606868aa0429b1d8e7f78e32a895193b1ce8e76c5eae49cbd7d22ce391861912e4b35"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "63c407e088d6927a64ecd84ddea7e87735c5164ea4f3a877435ba6de1f35e83a1f0d565a2179ca7c7eaadebcfccc50692aece10e0212a7c3d5803229446c6e16"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Binder",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "6c7f803bf2a5afaf13239dd495f8f25663e36fae42d7840416619c13976cfd294de2c4b4728206194dd0b38ee831089a81f3f63e8ba536c60d1b7fd5b97691d0"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.FileExtensions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "451c7ec4e92db858327338e833c923aa10bbb34b9820c4f1d0e5b44123f4009fe02646aabaa58dfaac0a6d37727c38c516a0433e4452b301305eafb88459e5d7"
+        },
+        {
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "008cd3427c2c80218aadd5a28c09a8dd08680fcd5428eb010fd51b44207ba7d2a84bf799bb192914c373b29d60c5fbd72c73cd0800e4d0f43922e2bc9f13deb2"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "8ca54e7dfcb35bbcaa9a292f0107faf6808a8cf94c8879a7aafe31ae841174d29009895421ce2bbc9bfafd86d0caabd402bbebcc84f1961774740dcc155229bb"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "475254983871f35cd70118fbff743049ec623bd94d1363c13d7c8ae3bb1b9521883a5e0977ad222d8f30b6627f3738695ed3c1892393327d8a158b9fed069123"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fbfb14ccee28fa60e6a3a1c52084f358cb26e4bbbbcfafeb89f64bf7410d13ade10c06beccf51aeb903dcc1190453646a68b99b075039ea4dbbc2a42c11d45ae"
+        },
+        {
+          "id": "Microsoft.Extensions.Diagnostics.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f1d913e7baab3def34ac48ed910a68f2673a678731d4b905d0b6c3174876b86520405262bd7aae684a495723181a90d99d6f4ba6b0cdec802a7fb335f1bc05e8"
+        },
+        {
+          "id": "Microsoft.Extensions.Features",
+          "version": "8.0.8",
+          "source": "nuget.org",
+          "nupkgSha512": "630caf336834138b68ed111c707063b80baa1f5b302cbeca8f74cd251940dfbd25210396be7c6b3b2e74c7fe2d28ed8dc950bb3f4d259dc732e814d3d93480fa"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Abstractions",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "fe9aa18f2e819694f20e322c93e075e27bee2d57ddd5380624fc48a95669c526c270ab5c74f58c6a4721d18ecdb5b2febf0315f8794585ae65617831459e2a0b"
+        },
+        {
+          "id": "Microsoft.Extensions.FileProviders.Physical",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "7612261a35b76d0b3a337ab262de57c3b605e8a1e55bf4d47f15e374e5577ab2ce4ae370980ef2c1335c4e323e6adcfe3718eee86570ac6e4ff5cb100450331f"
+        },
+        {
+          "id": "Microsoft.Extensions.FileSystemGlobbing",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "23a5e50cf695ba18c7a77f7c050e40d6fb065957480db17f5e75e5cf269c8f50763c996c28d0dcfca09e2c1248540898ab53c474cadc705548f5fe491dd263fd"
+        },
+        {
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "02ac89d69f60a1bf5a729ee41c7a81b1160985db53787e982e20c4c6e064169069a3fc22ea0d83b01db68200ea47ef872729a12fc0e42805e1569232038b70ad"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "e14f295d608f7d8523ffae4b623593e1e89ce3e6d04d5d653b45fa3a6c3cec033c6e9e4521299745615347ff071c258ae898ad59d7274235e4a955fcb64da729"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "0849462f3ea2ee5a06d8ab8a8b13f05f3cf466de66ebbc6a0a9cac4befc91ceb180ae03c42089ab0ca7a26ca7fe5b4ed1a8f73e235e1308d9997c9529c369dd1"
+        },
+        {
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "a2582f2659912b3c4d580097b5b4533500528fd22f00743326d84f1596c74542d5551835c0af7c956a76d3351618278f3ed1c411190a8363b91ba4466750b363"
+        },
+        {
+          "id": "Microsoft.Extensions.Options.ConfigurationExtensions",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "136d8f07248e7185e5d68d6a30ce8c9cc2eef476fbe6c0957a61aecbfeeeb965456c1c99d1ddc51e66621f8d63f4fe48ce2df966ebec7d364f5242e1ae057a83"
+        },
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "abb05f3f99ab4df467b8cd2a04587e556a576ae13c2d3cd7b482f549983487f33239818b2a7b0f3db5eb451d28747718c40e4e9f721074a2dda9338c34093b6d"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Abstractions",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "175ef8bf78b63f3c327e680d5cf7721d74f29e96460e686b22b4e67c264fb036a7a9bea1473f4a5b487337ab7a560c861b51ed1aa744777f303362262b01a8b4"
+        },
+        {
+          "id": "Microsoft.IdentityModel.JsonWebTokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "f24e615f802b291d61dd20cb7bca810b940b7289d3fd45ae02de85ec2f1f4b9428935e975216d98eaa95ed43038320bcfc120e7673828ec25089a5458219042b"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Logging",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "cae11816948710e1bf9406e980b826d68b35069944dbcb71d2e00f6b6073b3d6e9c970067b06f2a847830a11291eae012fc4aa04c476a9b34581450271bb128a"
+        },
+        {
+          "id": "Microsoft.IdentityModel.Tokens",
+          "version": "8.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "24b377c5758fd364a4f95016e213726946c4070191a818d39c56ea1e9f2d2a53bc5348650fbc140139bd68d6c80b3e9ed05f0f7018954c24159e0ad2c2b25615"
+        },
+        {
+          "id": "Microsoft.Win32.SystemEvents",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "25016c508653fbf463c52d8fc3d2773b7c211c2402c4ea7b4aa987fb29c851d3f80c5e7abbcace2d4d5e061ae290524e8029afbc49a37d7e5186fe06aa4609b2"
+        },
+        {
+          "id": "Newtonsoft.Json",
+          "version": "13.0.4",
+          "source": "nuget.org",
+          "nupkgSha512": "6d1faff84ff227a83b195dae5f0d8ead44a36187e32e438b0bc243e24092db79ac2daa672ad7493c1240ef97f01c7fbe12b21f7de22acd82132f102eaf82805c"
+        },
+        {
+          "id": "NodifyAvalonia",
+          "version": "6.6.0-unlimotion.a12.1",
+          "source": "nuget.org",
+          "nupkgSha512": "16273535b8ab77ac577928641aeb26b85834471c6f4ce0f7292bda9bdb375b23d61c96c8707c28afdac0ec3c236f6d9fbd1a3e7391d3f98559e7f9890ad2fd85"
+        },
+        {
+          "id": "NuGet.Versioning",
+          "version": "6.14.0",
+          "source": "nuget.org",
+          "nupkgSha512": "4e5d3ec8a7b1563b76422a6f91c5b86c7969b9e7867f0ef958d115aa35995dd36ee86b94cd74f94043427ff68789ce9fcd597b9103e6cefb3ef228733172dad1"
+        },
+        {
+          "id": "Packaging.Targets",
+          "version": "0.1.232",
+          "source": "nuget.org",
+          "nupkgSha512": "0ab58b17defacc64ab3e0d5848f41a1b25b9d054b023ff1e2d7a65731310c24657e4cd649a2e9a1282b36cd30877c46b733841ec05350bcf97cc02e6c679379e"
+        },
+        {
+          "id": "Polly",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "447c81d0fe763d30f8d1eacdeb8af8cf547ead4ba98ea5e0462d1fde0233a476235d078bcaad09a96a9de5934e4b27fef0d32386802f2c734467f2250220ca24"
+        },
+        {
+          "id": "Polly.Core",
+          "version": "8.6.6",
+          "source": "nuget.org",
+          "nupkgSha512": "37aaddfa78a4d02d3d611f7022d72c14d14df07487c50efec7efe553bcc8746f0a952a68dc81ecfe28c86e512eb3c98f709f7690bfd276dfd589ba188855f19b"
+        },
+        {
+          "id": "Quartz",
+          "version": "3.18.1",
+          "source": "nuget.org",
+          "nupkgSha512": "608998dfc11bc7b142b1d21f6b09d1d254418f2333eb7be71c6f6072bc4afb06c89bdb2066ec2bcb45693c6010bfa7b048814dd51ccdfec7b9dd13ac02eee3e9"
+        },
+        {
+          "id": "ReactiveUI",
+          "version": "23.2.27",
+          "source": "nuget.org",
+          "nupkgSha512": "c97488759d60858cae8c2b4043aa78424b020d9fc61a3ea3e72dda64770ed093a52f3d8cb6ae28257b4c97e702ce227773acd94f4677ffed287b550b85a2537c"
+        },
+        {
+          "id": "ReactiveUI.Avalonia",
+          "version": "12.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "835e3eff290ee0de54ea54f17d090a094ad901cbe7dc320ce1cb52741ad7c070a636dc0119f0364d400b782f61018f7e5a806e0e2f6fe52856fd89f3671c017c"
+        },
+        {
+          "id": "ServiceStack.Client",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "9ba9c43bb4f50c68fbae78975aa88837e915452b61d9f409263656084c61cdf51f7b3293acf8d2d9824504a2b5613516f245e444990b6cc12372f7ec573f29c4"
+        },
+        {
+          "id": "ServiceStack.Interfaces",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "0c5660bdc879eb06318b62b97b592d9448597f8fff74fcf5258445ea9a3abf6479205c8947400c684dcd1b07037a5a4fbfcd6a511f27a7d3d9c0d2ede7a8258d"
+        },
+        {
+          "id": "ServiceStack.Text",
+          "version": "10.0.6",
+          "source": "nuget.org",
+          "nupkgSha512": "69468e2e9cac5ea2eb598812e4619fb1aef7ee2b30357c5b1d699f6514c87d45331cc44ececc11c16af041ab73b90b9375eb3d5416fd02d205bacf7ae7cc2df9"
+        },
+        {
+          "id": "SignalR.EasyUse.Client",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "ccb6f694efe10ff39c955f819d527fe55abd48b4c6fdd9c13fff229a733ed0c37c588d368fb1c4104468e2631af1c5e7a493e918483b192f810f644061c1e889"
+        },
+        {
+          "id": "SignalR.EasyUse.Interface",
+          "version": "0.3.0",
+          "source": "nuget.org",
+          "nupkgSha512": "17b7cf99741e87a9b31b3f62124a76034df958f9eb27cb063fd69607991d9341360fdd7238bfc3ceee196ee09855b3e04459c4b26a391cf700e285897d959803"
+        },
+        {
+          "id": "SkiaSharp",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e912ec5c038a110d898e334ec1d22368cdc0c07ddc2f726c2bc3f6f6090aa9f0c0c442ea1a68211134182d9d689130cd28cb012a0b332710bb8344fe4de0df39"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Linux",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2f54f6a52e2261163ba7d45d6eaf53b9964c963630c4434ad69d6cd294444f13db56b3895c230788538805e1be8c40bde527c469f624e1e7352f38fd91ed6417"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.macOS",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "a0b26730eca06860ab201003598e88d857d095e9082150f0cdde02bba224daa65c83bda14f9fd369faf7c9de2010f21d3a3be9ca2ea7c053452adbb8bde20765"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.WebAssembly",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "752109ccff1266a659a7139a3690b33c11a80baf34d48d6bbc469d7f797c0d6f91f27cca2283c192aa7422bed068ef747d083ef2f261587d6d48373f91feb6f6"
+        },
+        {
+          "id": "SkiaSharp.NativeAssets.Win32",
+          "version": "3.119.4-preview.1.1",
+          "source": "nuget.org",
+          "nupkgSha512": "9509f91644cd821ffa54b90896581a99e853f538f25c44d88df703cc253cfb8b961dcb6ed8e43e2b601e645c6afb01f6efd8cdfb81e9d8a8df51db2ec9c2b49e"
+        },
+        {
+          "id": "Splat",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "2bf878a2ea0bf8f9af9d28fcb6c9881502f4954e10c26ef779842585b1f81c3a360ae3b14e9b331cc80ef429bca1552788053b6b694a62f2bbb9c138f5682b47"
+        },
+        {
+          "id": "Splat.Builder",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "e025d0d7030a29980ecd7c015cca6cbec67e96e5cb63d3d83312e65ff5409024716623623e48adecdabc7ff2b07bfae5301a76cef8d9eb40b94d1553c160e6af"
+        },
+        {
+          "id": "Splat.Core",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "0f06a280f195ddf4b58f187ff4f28b2e66107e0a536f13104a056a79cc9c09f49e263c3a95e9ddfdab23114d054c09cf62ca18cdf0da67088cb97ebfdf38b654"
+        },
+        {
+          "id": "Splat.Logging",
+          "version": "19.3.1",
+          "source": "nuget.org",
+          "nupkgSha512": "f1049725b5ed116bb5e201b34263bcc2e5d47b8bb8ad2512aa1155ee44b286fc99d84df6d9c80be81ae170da0bf46d1f05a3c2d34f077d1c476b024d4571ef99"
+        },
+        {
+          "id": "System.Configuration.ConfigurationManager",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "715685706dbbb885418ba8cae02519191230df7d2b14656fe68db2324f053e2a39b813c4bb85a77c77865adb12ef18b42b57c2a47b7b3f82abced3c57b10a5c2"
+        },
+        {
+          "id": "System.Diagnostics.EventLog",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "2a68c0668d9fa73a9b60243840b39adcf2618fc5f99d9ff3f4114826bf8f892979b751dce6812f6bb500efc28de711ad3b09aa939894c3e8dfa0a872d3a3902d"
+        },
+        {
+          "id": "System.Drawing.Common",
+          "version": "8.0.0",
+          "source": "nuget.org",
+          "nupkgSha512": "40a16c9c5dd59148051bd55a2355339343186ec188bcb8e9ea5abe0dc6035106e7d745323cc4d492750e791c41397c53616b553d79b8d5e5fc56dff3345ed533"
+        },
+        {
+          "id": "System.Reactive",
+          "version": "6.1.0",
+          "source": "nuget.org",
+          "nupkgSha512": "2febd9b79175217eaee14a399ff5c4b4a3a1004ac592b0e2cef162a85993c907d376d5219b7c02697cdc5a1b30251b016b046a551c337dbf21115f2628f9bb78"
+        },
+        {
+          "id": "System.Runtime.Caching",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "a11519ec0f0836c18d193e9d1fab50f4293d3e0fb8614611a8e72017e5ddca2f17786692fbbf0a7ac26b4bd4e0bc214a10fd751b8d259ba001e60c3c5185cf5a"
+        },
+        {
+          "id": "System.Security.Cryptography.ProtectedData",
+          "version": "10.0.7",
+          "source": "nuget.org",
+          "nupkgSha512": "8444cf03ff9cc3e0e700c3a086d99657bf672eed361a5f162bff865979522e243703acef2737062ef9bbfed6bf2bfcd5e770bb6a7c9ea135802e0fa8a27210ba"
+        },
+        {
+          "id": "Tmds.DBus.Protocol",
+          "version": "0.92.0",
+          "source": "nuget.org",
+          "nupkgSha512": "450d6c0efa7798327892e10e935cfc027dbd9a612249247ba89bd25620d151282a9e69ad8adc779fddaefe66134a3edc6c3a504b3d93d5b3c2eb87b61674bbaf"
+        },
+        {
+          "id": "Velopack",
+          "version": "0.0.1298",
+          "source": "nuget.org",
+          "nupkgSha512": "d3ab3c23e5da124379727a797ff9e816a079902ff2885eb9fe4ec69ac358ef7f6caee84a46affcc67c836452a21e01bf5240a2bae03f8b141b5319b78f85db14"
+        },
+        {
+          "id": "WritableJsonConfiguration",
+          "version": "8.0.1",
+          "source": "nuget.org",
+          "nupkgSha512": "63d27d99fabb31d3b96daad0d026c028c72d7eddb3fb6f4c252f55a3aafa052267f9d74ef0f298f1457c3d2844be870a984933936afa813da662730dd90eda5c"
+        }
+      ],
+      "graphSha256": "a19592c81df2e469b4f9aedc2ed365d72d28ace21e91eef1e72265a411762a3a"
+    }
+  ]
+}
