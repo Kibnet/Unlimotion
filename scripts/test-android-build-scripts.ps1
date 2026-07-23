@@ -908,12 +908,14 @@ Assert-NotMatch $distributionTestScript '--dyn-symbols' 'Distribution Android va
 Assert-Match $distributionTestScript '23\|36\)' 'Distribution Android emulator validator must allow only API 23 and API 36.'
 Assert-Match $distributionTestScript 'for port in 5554 5556' 'Distribution Android emulator validator must perform at most two clean boot attempts.'
 Assert-Match $distributionTestScript 'EMULATOR_COMMAND_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30\}"' 'Android emulator validator must configure a bounded timeout for device commands.'
+Assert-Match $distributionTestScript 'EMULATOR_INSTALL_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS:-120\}"' 'Android emulator validator must allow APK installation to use its separately bounded timeout.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "\$@"' 'Android emulator validator must bound every adb command.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" avdmanager "\$@"' 'Android emulator validator must bound AVD manager cleanup and setup commands.'
 Assert-Match $distributionTestScript "adb command result: exit=%s" 'Android emulator validator must retain the exit status of every bounded adb command in the attempt log.'
 Assert-Match $distributionTestScript 'readiness poll: serial=%q adb_state=%q sys\.boot_completed=%q init\.svc\.bootanim=%q' 'Android emulator validator must retain observed ADB readiness state in each attempt log.'
 Assert-Match $distributionTestScript 'if \[ "\$boot_completed" = "1" \]; then' 'Android emulator readiness must accept the documented sys.boot_completed signal.'
 Assert-NotMatch $distributionTestScript 'if \[ "\$boot_completed" = "1" \] && \[ "\$boot_animation" = "stopped" \]' 'Android emulator readiness must not require the optional boot-animation service state.'
+Assert-Match $distributionTestScript 'run_adb_install_command -s "\$SERIAL" install -r "\$APK_PATH"' 'Android emulator validator must apply the separate bounded timeout only to APK installation.'
 Assert-Match $distributionTestScript 'run_adb_command -s "\$SERIAL" shell am start -n "\$EXPECTED_APPLICATION_ID/\$LAUNCHABLE_ACTIVITY"' 'Android emulator validator must request activity launch without waiting indefinitely for activity completion.'
 Assert-NotMatch $distributionTestScript 'shell am start -W ' 'Android emulator validator must not use the blocking am start -W mode.'
 Assert-Match $distributionTestScript 'ro\.build\.fingerprint' 'Android emulator evidence must record the exact device build fingerprint.'
@@ -1539,6 +1541,10 @@ elif [[ "$*" == *"getprop ro.build.version.sdk"* ]]; then
   echo "${FAKE_ADB_DEVICE_SDK:-23}"
 elif [[ "$*" == *"get-state"* ]]; then
   echo "device"
+elif [[ "$*" == *"install -r"* ]]; then
+  if [ "${FAKE_ADB_INSTALL_DELAY_SECONDS:-0}" != "0" ]; then
+    sleep "$FAKE_ADB_INSTALL_DELAY_SECONDS"
+  fi
 elif [[ "$*" == *"shell pidof"* ]]; then
   echo "4242"
 elif [[ "$*" == *"logcat -d"* ]]; then
@@ -1762,6 +1768,27 @@ fi
     if (-not (Test-Path -LiteralPath $emulatorReadyLogPath -PathType Leaf) -or
         (Get-Content -Raw -LiteralPath $emulatorReadyLogPath) -cnotmatch 'readiness poll: .*sys\.boot_completed=1.*init\.svc\.bootanim=running') {
         throw 'Android emulator readiness fixture did not retain the observed ADB readiness state.'
+    }
+
+    $emulatorInstallDelayRoot = Join-Path $tempRoot 'emulator-install-delay'
+    New-Item -ItemType Directory -Path $emulatorInstallDelayRoot | Out-Null
+    $emulatorInstallDelayEvidencePath = Join-Path $emulatorInstallDelayRoot 'evidence.json'
+    $emulatorInstallDelayCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running FAKE_ADB_INSTALL_DELAY_SECONDS=2 UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS=3 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorInstallDelayEvidencePath))
+    )
+    $emulatorInstallDelayOutput = & $bashCommand -lc $emulatorInstallDelayCommand 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Android emulator delayed-install fixture did not use its separate bounded timeout.`n$($emulatorInstallDelayOutput -join [Environment]::NewLine)"
+    }
+    $emulatorInstallDelayEvidence = Get-Content -Raw -LiteralPath $emulatorInstallDelayEvidencePath | ConvertFrom-Json
+    if ($emulatorInstallDelayEvidence.outcome -cne 'passed' -or $emulatorInstallDelayEvidence.supportLevel -cne 'launchVerified') {
+        throw 'Android emulator delayed-install fixture did not produce launch evidence.'
     }
 
     $emulatorSetupFailureEvidencePath = Join-Path $emulatorSetupFailureRoot 'evidence.json'

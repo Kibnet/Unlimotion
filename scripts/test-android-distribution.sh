@@ -733,9 +733,11 @@ esac
 EMULATOR_BOOT_TIMEOUT_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS:-300}"
 EMULATOR_BOOT_POLL_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS:-5}"
 EMULATOR_COMMAND_TIMEOUT_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30}"
+EMULATOR_INSTALL_TIMEOUT_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS:-120}"
 [[ "$EMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "Emulator boot timeout must be a positive integer"
 [[ "$EMULATOR_BOOT_POLL_SECONDS" =~ ^(0\.[0-9]+|[1-9][0-9]*(\.[0-9]+)?)$ ]] || fail "Emulator boot poll interval must be positive"
 [[ "$EMULATOR_COMMAND_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "Emulator command timeout must be a positive integer"
+[[ "$EMULATOR_INSTALL_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "Emulator install timeout must be a positive integer"
 
 require_command adb
 require_command emulator
@@ -764,6 +766,10 @@ run_adb_command() {
     } >>"$CURRENT_EMULATOR_LOG"
   fi
   return "$status"
+}
+
+run_adb_install_command() {
+  EMULATOR_COMMAND_TIMEOUT_SECONDS="$EMULATOR_INSTALL_TIMEOUT_SECONDS" run_adb_command "$@"
 }
 
 run_avdmanager_command() {
@@ -1027,7 +1033,7 @@ DEVICE_SDK="$(run_adb_command -s "$SERIAL" shell getprop ro.build.version.sdk 2>
 [ "$DEVICE_SDK" = "$API_LEVEL" ] || fail "Android emulator SDK mismatch: expected $API_LEVEL, got $DEVICE_SDK"
 
 run_adb_command -s "$SERIAL" logcat -c
-run_adb_command -s "$SERIAL" install -r "$APK_PATH" >/dev/null
+run_adb_install_command -s "$SERIAL" install -r "$APK_PATH" >/dev/null
 run_adb_command -s "$SERIAL" shell am force-stop "$EXPECTED_APPLICATION_ID"
 run_adb_command -s "$SERIAL" shell am start -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
 sleep 15
