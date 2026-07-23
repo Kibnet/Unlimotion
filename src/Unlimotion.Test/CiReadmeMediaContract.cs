@@ -9,6 +9,10 @@ internal static class CiReadmeMediaContract
     {
         var workflow = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/tests.yml"));
+        var androidWorkflow = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/android-packaging.yml"));
+        var debWorkflow = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/deb_packaging.yml"));
         var mediaScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/update-readme-media.ps1"));
         var mediaReadme = await File.ReadAllTextAsync(
@@ -17,9 +21,30 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath("tests/Unlimotion.UiTests.Headless/Tests/ReadmeDemoHeadlessTests.cs"));
 
         await Assert.That(workflow).Contains("all-tests:");
+        await Assert.That(workflow).Contains("name: Regression");
+        await Assert.That(workflow).Contains("runs-on: windows-2022");
+        await Assert.That(workflow).Contains("timeout-minutes: 120");
+        await Assert.That(workflow).Contains("DOTNET_NUGET_SIGNATURE_VERIFICATION: \"true\"");
+        await Assert.That(workflow).Contains("persist-credentials: false");
+        await Assert.That(workflow).Contains("submodules: false");
         await Assert.That(workflow).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
         await Assert.That(workflow).Contains("Run Headless UI Tests");
+        await Assert.That(workflow).Contains("Run Headless UI Tests again");
         await Assert.That(workflow).Contains("--maximum-parallel-tests 1");
+
+        await Assert.That(androidWorkflow).Contains("android-build:");
+        await Assert.That(androidWorkflow).Contains("android-release:");
+        await Assert.That(androidWorkflow).Contains("apk_artifact_digest");
+        await Assert.That(androidWorkflow).Contains("actions: read");
+        await Assert.That(androidWorkflow).Contains("contents: write");
+        await Assert.That(androidWorkflow).Contains("APK artifact archive digest mismatch.");
+        await Assert.That(androidWorkflow).Contains("/actions/artifacts/$ARTIFACT_ID/zip");
+
+        await Assert.That(debWorkflow).Contains("deb-build:");
+        await Assert.That(debWorkflow).Contains("deb-release:");
+        await Assert.That(debWorkflow).Contains("release_artifact_digest");
+        await Assert.That(debWorkflow).Contains("Linux release artifact archive digest mismatch.");
+        await Assert.That(debWorkflow).Contains("/actions/artifacts/$ARTIFACT_ID/zip");
 
         await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
         await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj");
