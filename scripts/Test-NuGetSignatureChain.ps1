@@ -208,6 +208,185 @@ function Assert-CandidateGraphsAgainstBaseline(
     }
 }
 
+function Read-ExactBytes([IO.Stream]$Stream, [int]$Count) {
+    Assert-True ($Count -ge 0) 'Closed worker requested a negative byte count.'
+    $buffer = [byte[]]::new($Count)
+    $offset = 0
+    while ($offset -lt $Count) {
+        $read = $Stream.Read($buffer, $offset, $Count - $offset)
+        Assert-True ($read -gt 0) 'Closed worker input ended before its declared frame length.'
+        $offset += $read
+    }
+    return ,$buffer
+}
+
+function Get-ClosedSeedNameHash([Text.Json.JsonElement]$Seeds) {
+    Assert-True ($Seeds.ValueKind -eq [Text.Json.JsonValueKind]::Array) 'Closed worker secretSeeds must be an array.'
+    Assert-True ($Seeds.GetArrayLength() -le 64) 'Closed worker received too many secret seeds.'
+    $names = [System.Collections.Generic.List[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($seed in $Seeds.EnumerateArray()) {
+        Assert-True ($seed.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'Closed worker secret seed must be an object.'
+        $properties = @($seed.EnumerateObject() | ForEach-Object { $_.Name })
+        Assert-True ($properties.Count -eq 2 -and $properties -ccontains 'name' -and $properties -ccontains 'value') 'Closed worker secret seed schema is invalid.'
+        $name = $seed.GetProperty('name')
+        $value = $seed.GetProperty('value')
+        Assert-True ($name.ValueKind -eq [Text.Json.JsonValueKind]::String -and $name.GetString().Length -gt 0 -and $name.GetString().Length -le 256) 'Closed worker secret seed name is invalid.'
+        Assert-True ($value.ValueKind -eq [Text.Json.JsonValueKind]::String -and $value.GetString().Length -ge 1 -and $value.GetString().Length -le 8192) 'Closed worker secret seed value is invalid.'
+        Assert-True ($seen.Add($name.GetString())) 'Closed worker secret seed names must be unique.'
+        $names.Add($name.GetString())
+    }
+    $orderedNames = @($names | Sort-Object -CaseSensitive)
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($orderedNames -join [Environment]::NewLine))
+    try {
+        return ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant()
+    } finally {
+        [Array]::Clear($bytes, 0, $bytes.Length)
+    }
+}
+
+function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
+    $header = Read-ExactBytes -Stream $StandardInput -Count 4
+    $length = (($header[0] -shl 24) -bor ($header[1] -shl 16) -bor ($header[2] -shl 8) -bor $header[3])
+    Assert-True ($length -ge 2 -and $length -le 1048576) 'Closed worker frame length is invalid.'
+    $body = Read-ExactBytes -Stream $StandardInput -Count $length
+    Assert-True ($StandardInput.ReadByte() -eq -1) 'Closed worker accepts exactly one input frame.'
+    $options = [Text.Json.JsonDocumentOptions]::new()
+    $options.AllowTrailingCommas = $false
+    $options.CommentHandling = [Text.Json.JsonCommentHandling]::Disallow
+    $options.MaxDepth = 16
+    try {
+        $document = [Text.Json.JsonDocument]::Parse([System.ReadOnlyMemory[byte]]::new($body), $options)
+        try {
+            $root = $document.RootElement
+            Assert-True ($root.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'Closed worker frame root must be an object.'
+            $properties = @($root.EnumerateObject() | ForEach-Object { $_.Name })
+            Assert-True ($properties.Count -eq 4 -and $properties -ccontains 'schemaVersion' -and $properties -ccontains 'workerKind' -and $properties -ccontains 'payload' -and $properties -ccontains 'secretSeeds') 'Closed worker frame schema is invalid.'
+            $schemaVersion = $root.GetProperty('schemaVersion')
+            $workerKind = $root.GetProperty('workerKind')
+            $payload = $root.GetProperty('payload')
+            Assert-True ($schemaVersion.ValueKind -eq [Text.Json.JsonValueKind]::Number -and $schemaVersion.GetInt32() -eq 1) 'Closed worker schemaVersion is invalid.'
+            Assert-True ($workerKind.ValueKind -eq [Text.Json.JsonValueKind]::String -and $workerKind.GetString() -cin @('SignatureVerify', 'SignatureSanitize', 'RegressionSanitize', 'PublicationFinalize')) 'Closed worker kind is invalid.'
+            Assert-True ($payload.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'Closed worker payload must be an object.'
+            return [pscustomobject]@{
+                WorkerKind = $workerKind.GetString()
+                Payload = $payload.Clone()
+                SeedNameSha256 = Get-ClosedSeedNameHash -Seeds $root.GetProperty('secretSeeds')
+            }
+        } finally {
+            $document.Dispose()
+        }
+    } finally {
+        [Array]::Clear($header, 0, $header.Length)
+        [Array]::Clear($body, 0, $body.Length)
+    }
+}
+
+function Write-ClosedWorkerFrame([IO.Stream]$StandardOutput, [System.Collections.IDictionary]$Result) {
+    $json = $Result | ConvertTo-Json -Depth 12 -Compress
+    $body = [Text.UTF8Encoding]::new($false).GetBytes($json)
+    Assert-True ($body.Length -ge 2 -and $body.Length -le 1048576) 'Closed worker result frame length is invalid.'
+    $header = [byte[]]@(
+        (($body.Length -shr 24) -band 0xff),
+        (($body.Length -shr 16) -band 0xff),
+        (($body.Length -shr 8) -band 0xff),
+        ($body.Length -band 0xff)
+    )
+    try {
+        $StandardOutput.Write($header, 0, $header.Length)
+        $StandardOutput.Write($body, 0, $body.Length)
+        $StandardOutput.Flush()
+    } finally {
+        [Array]::Clear($header, 0, $header.Length)
+        [Array]::Clear($body, 0, $body.Length)
+    }
+}
+
+function Assert-ExactJsonObjectProperties([Text.Json.JsonElement]$Object, [string[]]$Expected, [string]$Name) {
+    Assert-True ($Object.ValueKind -eq [Text.Json.JsonValueKind]::Object) "$Name must be an object."
+    $actual = @($Object.EnumerateObject() | ForEach-Object { $_.Name } | Sort-Object -CaseSensitive)
+    $expectedSorted = @($Expected | Sort-Object -CaseSensitive)
+    Assert-True ($actual.Count -eq $expectedSorted.Count) "$Name has an unexpected property count."
+    for ($index = 0; $index -lt $expectedSorted.Count; $index++) {
+        Assert-True ($actual[$index] -ceq $expectedSorted[$index]) "$Name has an unexpected property."
+    }
+}
+
+function Get-RequiredWorkerPayloadString([Text.Json.JsonElement]$Payload, [string]$Name) {
+    $value = $Payload.GetProperty($Name)
+    Assert-True ($value.ValueKind -eq [Text.Json.JsonValueKind]::String -and -not [string]::IsNullOrWhiteSpace($value.GetString())) "Closed worker payload $Name is invalid."
+    return $value.GetString()
+}
+
+function Invoke-SignatureVerifyWorker([Text.Json.JsonElement]$Payload) {
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('dotnetExecutable', 'repositoryRoot', 'packagesRoot', 'baselineGraphPath', 'assetsPaths') -Name 'SignatureVerify payload'
+    $dotnetExecutable = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'dotnetExecutable'
+    $repositoryRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'repositoryRoot'))
+    $packagesRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'packagesRoot'))
+    $baselineGraphPath = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'baselineGraphPath'))
+    Assert-True ([IO.Path]::IsPathFullyQualified($dotnetExecutable) -and (Test-Path -LiteralPath $dotnetExecutable -PathType Leaf)) 'SignatureVerify dotnetExecutable must be an absolute existing file.'
+    Assert-True (Test-Path -LiteralPath $packagesRoot -PathType Container) 'SignatureVerify packagesRoot is missing.'
+    Assert-True ($baselineGraphPath -ceq [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'distribution/fixtures/reactiveui-signature-chain-baseline.json'))) 'SignatureVerify baseline path is invalid.'
+
+    $assetsPaths = $Payload.GetProperty('assetsPaths')
+    Assert-True ($assetsPaths.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $assetsPaths.GetArrayLength() -eq 3) 'SignatureVerify requires exactly three assets paths.'
+    $assetValues = @($assetsPaths.EnumerateArray() | ForEach-Object {
+            Assert-True ($_.ValueKind -eq [Text.Json.JsonValueKind]::String -and [IO.Path]::IsPathFullyQualified($_.GetString())) 'SignatureVerify assets path is invalid.'
+            [IO.Path]::GetFullPath($_.GetString())
+        })
+    Assert-True ((@($assetValues | Sort-Object -Unique)).Count -eq 3) 'SignatureVerify assets paths must be unique.'
+    foreach ($assetPath in $assetValues) {
+        Assert-True (Test-Path -LiteralPath $assetPath -PathType Leaf) 'SignatureVerify assets path is missing.'
+        Assert-True (-not (Get-Item -LiteralPath $assetPath -Force).LinkType) 'SignatureVerify assets path cannot be a link.'
+    }
+
+    $projects = @(
+        @{ path = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; assetsPath = $assetValues[0] },
+        @{ path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.csproj'; assetsPath = $assetValues[1] },
+        @{ path = 'src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj'; assetsPath = $assetValues[2] }
+    )
+    Assert-CandidateGraphsAgainstBaseline -BaselinePath $baselineGraphPath -Root $repositoryRoot -PackagesPath $packagesRoot -Projects $projects
+
+    $packages = [System.Collections.Generic.List[object]]::new()
+    foreach ($expectedPackage in Get-ExpectedPackages) {
+        $id = [string]$expectedPackage.Id
+        $version = [string]$expectedPackage.Version
+        $nupkg = Join-Path $packagesRoot ("{0}\{1}\{0}.{1}.nupkg" -f $id.ToLowerInvariant(), $version)
+        Assert-True (Test-Path -LiteralPath $nupkg -PathType Leaf) "SignatureVerify package is absent: $id $version."
+        & $dotnetExecutable nuget verify $nupkg --all --certificate-fingerprint (Get-ExpectedAuthorFingerprint) *> $null
+        Assert-True ($LASTEXITCODE -eq 0) "SignatureVerify failed for $id $version."
+        $packages.Add([ordered]@{
+                id = $id
+                version = $version
+                nupkgSha512 = (Get-FileHash -LiteralPath $nupkg -Algorithm SHA512).Hash.ToLowerInvariant()
+                authorCertificateSha256 = Get-ExpectedAuthorFingerprint
+            })
+    }
+    return [ordered]@{ success = $true; failureCode = $null; packages = $packages.ToArray() }
+}
+
+function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$StandardOutput) {
+    $request = Read-ClosedWorkerFrame -StandardInput $StandardInput
+    try {
+        $workerResult = switch -CaseSensitive ($request.WorkerKind) {
+            'SignatureVerify' { Invoke-SignatureVerifyWorker -Payload $request.Payload; break }
+            default { [ordered]@{ success = $false; failureCode = 'worker-kind-not-implemented'; packages = @() } }
+        }
+    } catch {
+        $workerResult = [ordered]@{ success = $false; failureCode = 'worker-failed'; packages = @() }
+    }
+    $result = [ordered]@{
+        schemaVersion = 1
+        workerKind = $request.WorkerKind
+        success = [bool]$workerResult.success
+        failureCode = $workerResult.failureCode
+        seedNameSha256 = $request.SeedNameSha256
+        packages = @($workerResult.packages)
+    }
+    Write-ClosedWorkerFrame -StandardOutput $StandardOutput -Result $result
+    return [bool]$workerResult.success
+}
+
 function Invoke-GenerateBaseline {
     $root = Get-CanonicalRepositoryRoot
     Assert-True ($ExpectedParentSha -cmatch '^[0-9a-f]{40}$') 'ExpectedParentSha must be a lowercase 40-hex Git SHA.'
@@ -511,6 +690,28 @@ function Invoke-SelfTest {
         $unrelatedDriftRejected = $true
     }
     Assert-True $unrelatedDriftRejected 'Graph validation accepted unrelated version drift.'
+
+    $workerJson = '{"schemaVersion":1,"workerKind":"SignatureVerify","payload":{},"secretSeeds":[{"name":"API_TOKEN","value":"example"}]}'
+    $workerBody = [Text.UTF8Encoding]::new($false).GetBytes($workerJson)
+    $workerInput = [IO.MemoryStream]::new()
+    $workerHeader = [byte[]]@(
+        (($workerBody.Length -shr 24) -band 0xff),
+        (($workerBody.Length -shr 16) -band 0xff),
+        (($workerBody.Length -shr 8) -band 0xff),
+        ($workerBody.Length -band 0xff)
+    )
+    try {
+        $workerInput.Write($workerHeader, 0, $workerHeader.Length)
+        $workerInput.Write($workerBody, 0, $workerBody.Length)
+        $workerInput.Position = 0
+        $workerRequest = Read-ClosedWorkerFrame -StandardInput $workerInput
+        Assert-True ($workerRequest.WorkerKind -ceq 'SignatureVerify') 'Closed worker did not retain its canonical kind.'
+        Assert-True ($workerRequest.SeedNameSha256 -cmatch '^[0-9a-f]{64}$') 'Closed worker did not derive a seed-name hash.'
+    } finally {
+        $workerInput.Dispose()
+        [Array]::Clear($workerHeader, 0, $workerHeader.Length)
+        [Array]::Clear($workerBody, 0, $workerBody.Length)
+    }
 }
 
 if ($Mode -eq 'GenerateBaseline') {
@@ -519,7 +720,9 @@ if ($Mode -eq 'GenerateBaseline') {
 }
 
 if ($Mode -eq 'Worker') {
-    throw 'Worker mode is reserved for the closed stdin protocol and cannot accept command-line payloads.'
+    $workerSucceeded = Invoke-ClosedWorkerCliMode -StandardInput ([Console]::OpenStandardInput()) -StandardOutput ([Console]::OpenStandardOutput())
+    if (-not $workerSucceeded) { exit 1 }
+    return
 }
 
 if ($Mode -eq 'SelfTest') {
