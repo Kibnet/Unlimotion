@@ -1185,13 +1185,13 @@ function New-RegressionRunRecord(
     [string]$RunId,
     [string]$ProjectPath,
     [string]$State,
-    [Nullable[int]]$NativeExitCode,
+    [object]$NativeExitCode,
     [string]$FailureCode = $null,
-    [Nullable[int]]$Discovered = $null,
-    [Nullable[int]]$Passed = $null,
-    [Nullable[int]]$Failed = $null,
-    [Nullable[int]]$Skipped = $null,
-    [Nullable[long]]$DurationMs = $null,
+    [object]$Discovered = $null,
+    [object]$Passed = $null,
+    [object]$Failed = $null,
+    [object]$Skipped = $null,
+    [object]$DurationMs = $null,
     [string]$SkipReason = $null
 ) {
     Assert-True ($RunId -cin @('unit', 'headless-1', 'headless-2') -and $ProjectPath -cin @('src/Unlimotion.Test/Unlimotion.Test.csproj', 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj') -and $State -cin @('success', 'failure', 'not-attempted')) 'Regression run record identity is invalid.'
@@ -1200,13 +1200,13 @@ function New-RegressionRunRecord(
         state = $State
         projectPath = $ProjectPath
         configuration = 'Debug'
-        nativeExitCode = if ($NativeExitCode.HasValue) { $NativeExitCode.Value } else { $null }
+        nativeExitCode = if ($null -ne $NativeExitCode) { [int]$NativeExitCode } else { $null }
         failureCode = $FailureCode
-        discovered = if ($Discovered.HasValue) { $Discovered.Value } else { $null }
-        passed = if ($Passed.HasValue) { $Passed.Value } else { $null }
-        failed = if ($Failed.HasValue) { $Failed.Value } else { $null }
-        skipped = if ($Skipped.HasValue) { $Skipped.Value } else { $null }
-        durationMs = if ($DurationMs.HasValue) { $DurationMs.Value } else { $null }
+        discovered = if ($null -ne $Discovered) { [int]$Discovered } else { $null }
+        passed = if ($null -ne $Passed) { [int]$Passed } else { $null }
+        failed = if ($null -ne $Failed) { [int]$Failed } else { $null }
+        skipped = if ($null -ne $Skipped) { [int]$Skipped } else { $null }
+        durationMs = if ($null -ne $DurationMs) { [long]$DurationMs } else { $null }
         skipReason = $SkipReason
     }
 }
@@ -1749,6 +1749,9 @@ function Invoke-RegressionAttempt {
 function Invoke-SelfTest {
     Assert-True ((Get-ExpectedPackages).Count -eq 6) 'Expected signed subset changed.'
     Assert-True ('Signature' -ceq 'Signature') 'Case-sensitive lane comparison changed.'
+    $zeroExitRun = New-RegressionRunRecord -RunId 'unit' -ProjectPath 'src/Unlimotion.Test/Unlimotion.Test.csproj' -State 'success' -NativeExitCode 0 -Discovered 830 -Passed 830 -Failed 0 -Skipped 0 -DurationMs 1
+    $notAttemptedRun = New-RegressionRunRecord -RunId 'headless-1' -ProjectPath 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj' -State 'not-attempted' -NativeExitCode $null -SkipReason 'prerequisite-failed'
+    Assert-True ($zeroExitRun.nativeExitCode -eq 0 -and $zeroExitRun.discovered -eq 830 -and $notAttemptedRun.nativeExitCode -eq $null -and $notAttemptedRun.skipReason -ceq 'prerequisite-failed') 'Regression run record did not retain zero and null native exit values.'
 
     $invalidAttemptRejected = $false
     $originalRunAttempt = $RunAttempt
@@ -2054,6 +2057,36 @@ function Invoke-SelfTest {
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression candidate evidence.'
             Remove-Item -LiteralPath $regressionFinalRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionCandidateRoot -Recurse -Force -ErrorAction Stop
+            $regressionFailureCandidateRoot = $sanitizerRoot + '-regression-failure-candidate'
+            $regressionFailureSanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'RegressionSanitize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $regressionFailureCandidateRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
+                    runs = @(
+                        [ordered]@{ runId = 'unit'; state = 'failure'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = 'test-evidence-failed'; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = $null },
+                        [ordered]@{ runId = 'headless-1'; state = 'not-attempted'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = $null; failureCode = $null; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = 'prerequisite-failed' },
+                        [ordered]@{ runId = 'headless-2'; state = 'not-attempted'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = $null; failureCode = $null; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = 'prerequisite-failed' }
+                    )
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($regressionFailureSanitizerResult.Success -eq $true -and $regressionFailureSanitizerResult.ExitCode -eq 0) 'Regression failure sanitizer worker did not return a closed success tuple.'
+            $regressionFailureFinalRoot = $regressionFailureCandidateRoot + '-final'
+            $regressionFailureFinalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $regressionFailureCandidateRoot
+                    finalEvidenceRoot = $regressionFailureFinalRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    lane = 'Regression'
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($regressionFailureFinalizerResult.Success -eq $true -and $regressionFailureFinalizerResult.ExitCode -eq 0) 'Publication finalizer did not publish Regression failure evidence.'
+            $regressionFailureEvidence = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            $regressionFailureReceipt = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($regressionFailureEvidence.evidenceKind -ceq 'regression-failure' -and $regressionFailureEvidence.runs[0].nativeExitCode -eq 0 -and $regressionFailureEvidence.runs[0].failureCode -ceq 'test-evidence-failed' -and $regressionFailureEvidence.runs[0].trx -eq $null -and $regressionFailureReceipt.outcome -ceq 'failure' -and $regressionFailureReceipt.failurePhase -ceq 'regression:test:unit' -and $regressionFailureReceipt.failureCode -ceq 'test-evidence-failed') 'Regression failure publication did not preserve the synthetic test-evidence failure tuple.'
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression failure evidence.'
+            Remove-Item -LiteralPath $regressionFailureFinalRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $regressionFailureCandidateRoot -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }
