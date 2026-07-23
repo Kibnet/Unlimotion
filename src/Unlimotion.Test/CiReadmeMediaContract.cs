@@ -16,6 +16,8 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/deb_packaging.yml"));
         var nugetSignatureScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/Test-NuGetSignatureChain.ps1"));
+        var nugetEvidenceValidator = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("scripts/Test-NuGetEvidencePublication.ps1"));
         var nugetBaselineFixture = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("distribution/fixtures/reactiveui-signature-chain-baseline.json"));
         var mediaScript = await File.ReadAllTextAsync(
@@ -71,6 +73,9 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("TerminationProven");
         await Assert.That(nugetSignatureScript).Contains("native-output-limit-exceeded");
         await Assert.That(nugetSignatureScript).Contains("SignatureVerify");
+        await Assert.That(nugetEvidenceValidator).Contains("Test-PublicationReceipt");
+        await Assert.That(nugetEvidenceValidator).Contains("attempt-receipt.json");
+        await Assert.That(nugetEvidenceValidator).Contains("safe-fallback");
         using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
         var nugetBaseline = nugetBaselineDocument.RootElement;
         var baselineProjects = nugetBaseline.GetProperty("projects");

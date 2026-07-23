@@ -28,6 +28,50 @@ function Assert-ExactKeys([hashtable]$Object, [string[]]$Expected, [string]$Name
     }
 }
 
+function Test-PublicationReceipt([string]$Root) {
+    $receiptPath = Join-Path $Root 'attempt-receipt.json'
+    Assert-True (Test-Path -LiteralPath $receiptPath -PathType Leaf) 'Published evidence receipt is missing.'
+    foreach ($directory in @(Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force)) {
+        Assert-True (-not $directory.LinkType) 'Published evidence directory cannot be a link.'
+    }
+    $receiptFile = Get-Item -LiteralPath $receiptPath -Force
+    Assert-True (-not $receiptFile.LinkType -and $receiptFile.Length -gt 0 -and $receiptFile.Length -le 1MB) 'Published evidence receipt is invalid.'
+    $receipt = [IO.File]::ReadAllText($receiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+    Assert-True ($receipt.receiptKind -is [string] -and $receipt.receiptKind -cin @('primary', 'safe-fallback')) 'Published evidence receipt kind is invalid.'
+    $expectedKeys = if ($receipt.receiptKind -ceq 'primary') { @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'outcome', 'failurePhase', 'failureCode', 'phases', 'evidenceManifest') } else { @('schemaVersion', 'receiptKind', 'sourceSha', 'runAttempt', 'lane', 'outcome', 'failureCode', 'evidenceManifest') }
+    Assert-ExactKeys -Object $receipt -Expected $expectedKeys -Name 'published evidence receipt'
+    Assert-True ($receipt.schemaVersion -is [long] -and $receipt.schemaVersion -eq 1) 'Published evidence schemaVersion is invalid.'
+    Assert-True ($receipt.sourceSha -is [string] -and $receipt.sourceSha -ceq $ExpectedSourceSha) 'Published evidence sourceSha is invalid.'
+    Assert-True ($receipt.runAttempt -is [long] -and $receipt.runAttempt -eq [long]$ExpectedRunAttempt) 'Published evidence runAttempt is invalid.'
+    Assert-True ($receipt.lane -is [string] -and $receipt.lane -ceq $ExpectedLane) 'Published evidence lane is invalid.'
+    $allFiles = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force)
+    foreach ($file in $allFiles) { Assert-True (-not $file.LinkType) 'Published evidence file cannot be a link.' }
+    if ($receipt.receiptKind -ceq 'safe-fallback') {
+        Assert-True ($receipt.outcome -ceq 'failure' -and $receipt.failureCode -ceq 'publication-integrity-failed' -and (@($receipt.evidenceManifest)).Count -eq 0 -and $allFiles.Count -eq 1) 'Published fallback receipt is invalid.'
+        return
+    }
+    Assert-True ($receipt.outcome -is [string] -and $receipt.outcome -cin @('success', 'failure')) 'Published primary outcome is invalid.'
+    Assert-True (($receipt.outcome -ceq 'success' -and $receipt.failurePhase -eq $null -and $receipt.failureCode -eq $null) -or ($receipt.outcome -ceq 'failure' -and $receipt.failurePhase -is [string] -and $receipt.failureCode -is [string])) 'Published primary failure tuple is invalid.'
+    $manifest = @($receipt.evidenceManifest)
+    Assert-True ($manifest.Count -eq $allFiles.Count - 1) 'Published primary manifest cardinality is invalid.'
+    $manifestPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $manifest) {
+        Assert-True ($entry -is [hashtable]) 'Published manifest entry is invalid.'
+        Assert-ExactKeys -Object $entry -Expected @('path', 'sha256', 'byteLength') -Name 'published manifest entry'
+        Assert-True ($entry.path -is [string] -and $entry.path -cmatch '^[A-Za-z0-9][A-Za-z0-9./_-]*$' -and $entry.path -cne 'attempt-receipt.json' -and $manifestPaths.Add($entry.path)) 'Published manifest path is invalid.'
+        Assert-True ($entry.sha256 -is [string] -and $entry.sha256 -cmatch '^[0-9a-f]{64}$' -and $entry.byteLength -is [long] -and $entry.byteLength -ge 0) 'Published manifest hash tuple is invalid.'
+        $path = [IO.Path]::GetFullPath((Join-Path $Root ($entry.path -replace '/', [IO.Path]::DirectorySeparatorChar)))
+        Assert-True ([IO.Path]::GetRelativePath($Root, $path).Replace('\', '/') -ceq $entry.path -and (Test-Path -LiteralPath $path -PathType Leaf)) 'Published manifest path escaped its root.'
+        $file = Get-Item -LiteralPath $path -Force
+        Assert-True ($file.Length -eq $entry.byteLength -and (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $entry.sha256) 'Published manifest file hash is invalid.'
+    }
+    $evidencePath = Join-Path $Root 'signature\evidence.json'
+    Assert-True ($ExpectedLane -ceq 'Signature' -and (Test-Path -LiteralPath $evidencePath -PathType Leaf)) 'Published signature evidence is missing.'
+    $evidence = [IO.File]::ReadAllText($evidencePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
+    $expectedKind = if ($receipt.outcome -ceq 'success') { 'signature-success' } else { 'signature-failure' }
+    Assert-True ($evidence.evidenceKind -ceq $expectedKind) 'Published signature evidence kind is inconsistent with receipt outcome.'
+}
+
 Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression') 'ExpectedLane must be exactly Signature or Regression.'
 Assert-True ($ExpectedSourceSha -cmatch '^[0-9a-f]{40}$') 'ExpectedSourceSha must be a lowercase 40-hex Git SHA.'
 Assert-True ($ExpectedRunAttempt -cmatch '^[1-9][0-9]{0,9}$') 'ExpectedRunAttempt must be a canonical positive decimal integer.'
@@ -35,6 +79,12 @@ Assert-True ($ExpectedRunAttempt -cmatch '^[1-9][0-9]{0,9}$') 'ExpectedRunAttemp
 $root = [IO.Path]::GetFullPath($EvidenceRoot)
 Assert-True (Test-Path -LiteralPath $root -PathType Container) 'EvidenceRoot does not exist.'
 Assert-True (-not (Get-Item -LiteralPath $root -Force).LinkType) 'EvidenceRoot cannot be a link.'
+
+if (Test-Path -LiteralPath (Join-Path $root 'attempt-receipt.json') -PathType Leaf) {
+    Test-PublicationReceipt -Root $root
+    Write-Output 'NuGet evidence receipt: valid'
+    return
+}
 
 $files = @(Get-ChildItem -LiteralPath $root -Force -File)
 Assert-True ($files.Count -eq 1 -and $files[0].Name -ceq 'attempt.json') 'EvidenceRoot must contain exactly attempt.json.'

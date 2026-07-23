@@ -650,7 +650,7 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
             outcome = if ($isSuccess) { 'success' } else { 'failure' }
             failurePhase = if ($isSuccess) { $null } else { $failedPhases[0].GetProperty('name').GetString() }
             failureCode = if ($isSuccess) { $null } else { $failedPhases[0].GetProperty('failureCode').GetString() }
-            phases = @($phaseResults.EnumerateArray() | ForEach-Object { $_.Clone() })
+            phases = @($phaseResults.EnumerateArray() | ForEach-Object { $_.GetRawText() | ConvertFrom-Json -AsHashtable -Depth 16 })
             evidenceManifest = $manifest
         }
         $receiptBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $receipt -Depth 16 -Compress))
@@ -1012,6 +1012,26 @@ function Get-PackageReceipt([string]$PackagesPath, [System.Collections.Generic.L
     return ,$receipt
 }
 
+function Get-SignatureSanitizerProjects([string]$Root, [string]$PackagesPath, [hashtable[]]$Projects) {
+    $baselinePath = Join-Path $Root 'distribution\fixtures\reactiveui-signature-chain-baseline.json'
+    $fixture = Get-Content -Raw -LiteralPath $baselinePath | ConvertFrom-Json -AsHashtable -Depth 64
+    $result = [System.Collections.Generic.List[object]]::new()
+    foreach ($project in $Projects) {
+        $baselineProject = @($fixture.projects | Where-Object { $_.projectPath -ceq $project.path })
+        Assert-True ($baselineProject.Count -eq 1) "Signature sanitizer baseline project is invalid: $($project.path)."
+        $candidateProject = Get-BaselineProjectPackageSet -Root $Root -ProjectPath $project.path -PackagesPath $PackagesPath -AssetsPath $project.assetsPath
+        $result.Add([ordered]@{
+                id = $project.id
+                projectPath = $project.path
+                assetsCopyId = $project.id
+                assetsSha256 = Get-Sha256 -Path $project.assetsPath
+                baselineGraphSha256 = $baselineProject[0].graphSha256
+                targetGraphSha256 = $candidateProject.graphSha256
+            })
+    }
+    return ,$result.ToArray()
+}
+
 function Write-AttemptReceipt(
     [string]$Root,
     [string]$AttemptLane,
@@ -1112,7 +1132,28 @@ function Invoke-SignatureAttempt {
                 })
             $phases.Add([ordered]@{ name = "signature:verify:$($expectedPackage.Id)"; status = 'success'; exitCode = 0 })
         }
-        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
+        $sanitizerProjects = Get-SignatureSanitizerProjects -Root $root -PackagesPath $packagesPath -Projects $projects
+        $candidateEvidencePath = $evidencePath + '.candidate'
+        $sanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureSanitize' -Payload ([ordered]@{
+                candidateEvidenceRoot = $candidateEvidencePath
+                sourceSha = $sourceSha
+                runAttempt = [string]$attempt
+                projects = $sanitizerProjects
+                packages = $packages.ToArray()
+                phaseResults = @($phases)
+            }) -SecretSeeds $secretSeeds -TimeoutSeconds 300
+        Assert-True ($sanitizerResult.Success -eq $true -and $sanitizerResult.ExitCode -eq 0 -and $sanitizerResult.TerminationProven -eq $true) 'Closed signature sanitizer failed.'
+        $phases.Add([ordered]@{ name = 'signature:sanitize'; status = 'success'; exitCode = 0 })
+        $finalizerPhases = @($phases | ForEach-Object { [ordered]@{ name = $_.name; status = $_.status; exitCode = [int]$_.exitCode; failureCode = $null } })
+        $finalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                candidateEvidenceRoot = $candidateEvidencePath
+                finalEvidenceRoot = $evidencePath
+                sourceSha = $sourceSha
+                runAttempt = [string]$attempt
+                lane = 'Signature'
+                phaseResults = $finalizerPhases
+            }) -SecretSeeds $secretSeeds -TimeoutSeconds 300
+        Assert-True ($finalizerResult.Success -eq $true -and $finalizerResult.ExitCode -eq 0 -and $finalizerResult.TerminationProven -eq $true -and (Test-Path -LiteralPath $evidencePath -PathType Container)) 'Closed publication finalizer failed.'
         Write-Output "NuGet signature evidence: $evidencePath"
     } catch {
         Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
@@ -1120,6 +1161,9 @@ function Invoke-SignatureAttempt {
     } finally {
         if (Test-Path -LiteralPath $stagedAssetsRoot) {
             Remove-Item -LiteralPath $stagedAssetsRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath ($evidencePath + '.candidate')) {
+            Remove-Item -LiteralPath ($evidencePath + '.candidate') -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
