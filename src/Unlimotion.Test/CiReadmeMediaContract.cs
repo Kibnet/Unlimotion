@@ -52,6 +52,8 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("Assert-CandidateGraphsAgainstBaseline");
         await Assert.That(nugetSignatureScript).Contains("Assert-GraphDiffIsApproved");
         await Assert.That(nugetSignatureScript).Contains("Read-ClosedWorkerFrame");
+        await Assert.That(nugetSignatureScript).Contains("([int]$header[2]) -shl 8");
+        await Assert.That(nugetSignatureScript).Contains("multi-byte length prefix");
         await Assert.That(nugetSignatureScript).Contains("Invoke-ClosedWorkerCliMode");
         await Assert.That(nugetSignatureScript).Contains("SignatureVerify");
         using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
