@@ -20,6 +20,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:WorkerScriptPath = $PSCommandPath
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) {
@@ -392,6 +393,200 @@ function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$Stand
     return [bool]$workerResult.success
 }
 
+function Get-AbsolutePowerShellExecutable {
+    $windowsAppsRoot = if ([string]::IsNullOrEmpty($env:LOCALAPPDATA)) { $null } else { Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps' }
+    $candidates = @(
+        Get-Command pwsh -All -ErrorAction Stop |
+            ForEach-Object { $_.Source } |
+            Where-Object {
+                $_ -is [string] -and
+                [IO.Path]::IsPathFullyQualified($_) -and
+                ($null -eq $windowsAppsRoot -or -not $_.StartsWith($windowsAppsRoot, [StringComparison]::OrdinalIgnoreCase)) -and
+                (Test-Path -LiteralPath $_ -PathType Leaf)
+            } |
+            Sort-Object -Unique
+    )
+    Assert-True ($candidates.Count -eq 1) 'Closed worker requires exactly one absolute pwsh executable.'
+    return [IO.Path]::GetFullPath($candidates[0])
+}
+
+function Get-AbsoluteDotNetExecutable {
+    $candidates = @(
+        Get-Command dotnet -All -ErrorAction Stop |
+            ForEach-Object { $_.Source } |
+            Where-Object { $_ -is [string] -and [IO.Path]::IsPathFullyQualified($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+            Sort-Object -Unique
+    )
+    Assert-True ($candidates.Count -eq 1) 'Closed worker requires exactly one absolute dotnet executable.'
+    return [IO.Path]::GetFullPath($candidates[0])
+}
+
+function New-ClosedWorkerInput(
+    [string]$WorkerKind,
+    [System.Collections.IDictionary]$Payload,
+    [object[]]$SecretSeeds = @()
+) {
+    Assert-True ($WorkerKind -cin @('SignatureVerify', 'SignatureSanitize', 'RegressionSanitize', 'PublicationFinalize')) 'Closed worker kind is invalid.'
+    $stream = [IO.MemoryStream]::new()
+    try {
+        Write-ClosedWorkerFrame -StandardOutput $stream -Result ([ordered]@{
+                schemaVersion = 1
+                workerKind = $WorkerKind
+                payload = $Payload
+                secretSeeds = @($SecretSeeds)
+            })
+        return ,$stream.ToArray()
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+function Read-ClosedWorkerResult([byte[]]$Bytes, [string]$ExpectedWorkerKind) {
+    Assert-True ($Bytes.Length -ge 6 -and $Bytes.Length -le 1048580) 'Closed worker output frame is invalid.'
+    $length = 0
+    $length = $length -bor (([int]$Bytes[0]) -shl 24)
+    $length = $length -bor (([int]$Bytes[1]) -shl 16)
+    $length = $length -bor (([int]$Bytes[2]) -shl 8)
+    $length = $length -bor ([int]$Bytes[3])
+    Assert-True ($length -ge 2 -and $length -le 1048576 -and $Bytes.Length -eq $length + 4) 'Closed worker output frame length is invalid.'
+    $options = [Text.Json.JsonDocumentOptions]::new()
+    $options.AllowTrailingCommas = $false
+    $options.CommentHandling = [Text.Json.JsonCommentHandling]::Disallow
+    $options.MaxDepth = 16
+    $document = [Text.Json.JsonDocument]::Parse([System.ReadOnlyMemory[byte]]::new($Bytes, 4, $length), $options)
+    try {
+        $root = $document.RootElement
+        Assert-ExactJsonObjectProperties -Object $root -Expected @('schemaVersion', 'workerKind', 'success', 'failureCode', 'seedNameSha256', 'packages') -Name 'Closed worker result'
+        Assert-True ($root.GetProperty('schemaVersion').ValueKind -eq [Text.Json.JsonValueKind]::Number -and $root.GetProperty('schemaVersion').GetInt32() -eq 1) 'Closed worker result schemaVersion is invalid.'
+        Assert-True ($root.GetProperty('workerKind').ValueKind -eq [Text.Json.JsonValueKind]::String -and $root.GetProperty('workerKind').GetString() -ceq $ExpectedWorkerKind) 'Closed worker result kind is invalid.'
+        Assert-True ($root.GetProperty('success').ValueKind -in @([Text.Json.JsonValueKind]::True, [Text.Json.JsonValueKind]::False)) 'Closed worker result success is invalid.'
+        $failureCode = $root.GetProperty('failureCode')
+        Assert-True ($failureCode.ValueKind -eq [Text.Json.JsonValueKind]::Null -or ($failureCode.ValueKind -eq [Text.Json.JsonValueKind]::String -and $failureCode.GetString() -cin @('worker-failed', 'worker-kind-not-implemented'))) 'Closed worker result failureCode is invalid.'
+        $seedHash = $root.GetProperty('seedNameSha256')
+        Assert-True ($seedHash.ValueKind -eq [Text.Json.JsonValueKind]::String -and $seedHash.GetString() -cmatch '^[0-9a-f]{64}$') 'Closed worker result seedNameSha256 is invalid.'
+        $packages = $root.GetProperty('packages')
+        Assert-True ($packages.ValueKind -eq [Text.Json.JsonValueKind]::Array) 'Closed worker result packages is invalid.'
+        $success = $root.GetProperty('success').GetBoolean()
+        Assert-True (($success -and $failureCode.ValueKind -eq [Text.Json.JsonValueKind]::Null) -or ((-not $success) -and $failureCode.ValueKind -eq [Text.Json.JsonValueKind]::String)) 'Closed worker result success tuple is invalid.'
+        return [pscustomobject]@{
+            Success = $success
+            FailureCode = if ($failureCode.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $failureCode.GetString() }
+            SeedNameSha256 = $seedHash.GetString()
+            Packages = @($packages.EnumerateArray() | ForEach-Object { $_.Clone() })
+        }
+    } finally {
+        $document.Dispose()
+    }
+}
+
+function Stop-ClosedWorkerProcess([Diagnostics.Process]$Process) {
+    if ($Process.HasExited) { return $true }
+    try {
+        $Process.Kill($true)
+    } catch {
+        return $false
+    }
+    return $Process.WaitForExit(10000)
+}
+
+function Invoke-ClosedWorkerProcessAdapter(
+    [string]$WorkerKind,
+    [System.Collections.IDictionary]$Payload,
+    [object[]]$SecretSeeds = @(),
+    [int]$TimeoutSeconds = 120
+) {
+    Assert-True ($TimeoutSeconds -ge 1 -and $TimeoutSeconds -le 1200) 'Closed worker timeout is invalid.'
+    $inputBytes = $null
+    $process = $null
+    $stdout = [IO.MemoryStream]::new()
+    $stderr = [IO.MemoryStream]::new()
+    try {
+        $inputBytes = New-ClosedWorkerInput -WorkerKind $WorkerKind -Payload $Payload -SecretSeeds $SecretSeeds
+        $psi = [Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = Get-AbsolutePowerShellExecutable
+        $psi.WorkingDirectory = [IO.Path]::GetFullPath($RepositoryRoot)
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
+        foreach ($argument in @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $script:WorkerScriptPath, '-Mode', 'Worker')) {
+            [void]$psi.ArgumentList.Add($argument)
+        }
+        foreach ($name in @('GITHUB_OUTPUT', 'GITHUB_ENV', 'GITHUB_PATH', 'GITHUB_STATE', 'GITHUB_STEP_SUMMARY', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL')) {
+            [void]$psi.Environment.Remove($name)
+        }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $psi
+        Assert-True $process.Start() 'Closed worker process did not start.'
+        $input = $process.StandardInput.BaseStream
+        $input.Write($inputBytes, 0, $inputBytes.Length)
+        $input.Flush()
+        $input.Dispose()
+
+        $stdoutBuffer = [byte[]]::new(8192)
+        $stderrBuffer = [byte[]]::new(8192)
+        $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync($stdoutBuffer, 0, $stdoutBuffer.Length)
+        $stderrTask = $process.StandardError.BaseStream.ReadAsync($stderrBuffer, 0, $stderrBuffer.Length)
+        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        $timedOut = $false
+        $overflowed = $false
+        while ($null -ne $stdoutTask -or $null -ne $stderrTask) {
+            $tasks = [System.Collections.Generic.List[Threading.Tasks.Task]]::new()
+            if ($null -ne $stdoutTask) { $tasks.Add($stdoutTask) }
+            if ($null -ne $stderrTask) { $tasks.Add($stderrTask) }
+            [void][Threading.Tasks.Task]::WaitAny($tasks.ToArray(), 100)
+            foreach ($streamState in @(@{ task = $stdoutTask; buffer = $stdoutBuffer; target = $stdout; maximum = 1048576; kind = 'stdout' }, @{ task = $stderrTask; buffer = $stderrBuffer; target = $stderr; maximum = 16384; kind = 'stderr' })) {
+                if ($null -eq $streamState.task -or -not $streamState.task.IsCompleted) { continue }
+                $read = $streamState.task.GetAwaiter().GetResult()
+                if ($streamState.kind -ceq 'stdout') { $stdoutTask = $null } else { $stderrTask = $null }
+                if ($read -le 0) { continue }
+                if ($streamState.target.Length + $read -gt $streamState.maximum) {
+                    $overflowed = $true
+                    continue
+                }
+                $streamState.target.Write($streamState.buffer, 0, $read)
+                if ($streamState.kind -ceq 'stdout') {
+                    $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync($stdoutBuffer, 0, $stdoutBuffer.Length)
+                } else {
+                    $stderrTask = $process.StandardError.BaseStream.ReadAsync($stderrBuffer, 0, $stderrBuffer.Length)
+                }
+            }
+            if (($overflowed -or [DateTime]::UtcNow -ge $deadline) -and -not $process.HasExited) {
+                $timedOut = -not $overflowed
+                $terminationProven = Stop-ClosedWorkerProcess -Process $process
+                if (-not $terminationProven) {
+                    return [pscustomobject]@{ Success = $false; FailureCode = 'worker-termination-unproven'; ExitCode = -1; TerminationProven = $false; Packages = @(); SeedNameSha256 = $null }
+                }
+            }
+        }
+        if (-not $process.HasExited -and -not $process.WaitForExit(10000)) {
+            $terminationProven = Stop-ClosedWorkerProcess -Process $process
+            return [pscustomobject]@{ Success = $false; FailureCode = 'worker-termination-unproven'; ExitCode = -1; TerminationProven = $terminationProven; Packages = @(); SeedNameSha256 = $null }
+        }
+        if ($overflowed) { return [pscustomobject]@{ Success = $false; FailureCode = 'native-output-limit-exceeded'; ExitCode = -3; TerminationProven = $true; Packages = @(); SeedNameSha256 = $null } }
+        if ($timedOut) { return [pscustomobject]@{ Success = $false; FailureCode = 'native-command-timeout'; ExitCode = -1; TerminationProven = $true; Packages = @(); SeedNameSha256 = $null } }
+        $nativeExitCode = [int]$process.ExitCode
+        if ($stderr.Length -ne 0) { return [pscustomobject]@{ Success = $false; FailureCode = 'worker-failed'; ExitCode = $nativeExitCode; TerminationProven = $true; Packages = @(); SeedNameSha256 = $null } }
+        $workerResult = Read-ClosedWorkerResult -Bytes $stdout.ToArray() -ExpectedWorkerKind $WorkerKind
+        if ($workerResult.Success) {
+            Assert-True ($nativeExitCode -eq 0) 'Closed worker returned success with a non-zero exit code.'
+            return [pscustomobject]@{ Success = $true; FailureCode = $null; ExitCode = 0; TerminationProven = $true; Packages = $workerResult.Packages; SeedNameSha256 = $workerResult.SeedNameSha256 }
+        }
+        Assert-True ($nativeExitCode -ne 0) 'Closed worker returned failure with a zero exit code.'
+        return [pscustomobject]@{ Success = $false; FailureCode = $workerResult.FailureCode; ExitCode = $nativeExitCode; TerminationProven = $true; Packages = @(); SeedNameSha256 = $workerResult.SeedNameSha256 }
+    } catch {
+        $terminationProven = $true
+        if ($null -ne $process) { $terminationProven = Stop-ClosedWorkerProcess -Process $process }
+        return [pscustomobject]@{ Success = $false; FailureCode = 'native-command-threw'; ExitCode = -2; TerminationProven = $terminationProven; Packages = @(); SeedNameSha256 = $null }
+    } finally {
+        if ($null -ne $inputBytes) { [Array]::Clear($inputBytes, 0, $inputBytes.Length) }
+        $stdout.Dispose()
+        $stderr.Dispose()
+        if ($null -ne $process) { $process.Dispose() }
+    }
+}
+
 function Invoke-GenerateBaseline {
     $root = Get-CanonicalRepositoryRoot
     Assert-True ($ExpectedParentSha -cmatch '^[0-9a-f]{40}$') 'ExpectedParentSha must be a lowercase 40-hex Git SHA.'
@@ -550,14 +745,37 @@ function Invoke-SignatureAttempt {
             }
         }
 
-        try {
-            Assert-CandidateGraphsAgainstBaseline -BaselinePath (Join-Path $root 'distribution/fixtures/reactiveui-signature-chain-baseline.json') -Root $root -PackagesPath $packagesPath -Projects $projects
-            $phases.Add([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0 })
-        } catch {
-            $phases.Add([ordered]@{ name = 'signature:verify:graph'; status = 'failure'; exitCode = 1 })
-            throw
+        $workerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureVerify' -Payload ([ordered]@{
+                dotnetExecutable = Get-AbsoluteDotNetExecutable
+                repositoryRoot = $root
+                packagesRoot = $packagesPath
+                baselineGraphPath = Join-Path $root 'distribution\fixtures\reactiveui-signature-chain-baseline.json'
+                assetsPaths = @($projects | ForEach-Object { $_.assetsPath })
+            }) -TimeoutSeconds 1200
+        Assert-True ($workerResult.TerminationProven -eq $true) 'Closed signature worker termination was not proven.'
+        if (-not $workerResult.Success) {
+            $phases.Add([ordered]@{ name = 'signature:verify:worker'; status = 'failure'; exitCode = [int]$workerResult.ExitCode })
+            throw "Closed signature worker failed: $($workerResult.FailureCode)."
         }
-        $packages = Get-PackageReceipt -PackagesPath $packagesPath -Phases $phases
+        Assert-True ($workerResult.ExitCode -eq 0 -and $workerResult.Packages.Count -eq 6) 'Closed signature worker result is invalid.'
+        $phases.Add([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0 })
+        $packages = [System.Collections.Generic.List[object]]::new()
+        $expectedPackages = Get-ExpectedPackages
+        for ($packageIndex = 0; $packageIndex -lt $expectedPackages.Count; $packageIndex++) {
+            $workerPackage = $workerResult.Packages[$packageIndex]
+            Assert-ExactJsonObjectProperties -Object $workerPackage -Expected @('id', 'version', 'nupkgSha512', 'authorCertificateSha256') -Name 'Closed signature worker package'
+            $expectedPackage = $expectedPackages[$packageIndex]
+            Assert-True ($workerPackage.GetProperty('id').GetString() -ceq $expectedPackage.Id -and $workerPackage.GetProperty('version').GetString() -ceq $expectedPackage.Version) 'Closed signature worker package identity is invalid.'
+            Assert-True ($workerPackage.GetProperty('nupkgSha512').GetString() -cmatch '^[0-9a-f]{128}$') 'Closed signature worker package hash is invalid.'
+            Assert-True ($workerPackage.GetProperty('authorCertificateSha256').GetString() -ceq (Get-ExpectedAuthorFingerprint)) 'Closed signature worker author fingerprint is invalid.'
+            $packages.Add([ordered]@{
+                    id = $workerPackage.GetProperty('id').GetString()
+                    version = $workerPackage.GetProperty('version').GetString()
+                    nupkgSha512 = $workerPackage.GetProperty('nupkgSha512').GetString()
+                    authorCertificateSha256 = $workerPackage.GetProperty('authorCertificateSha256').GetString()
+                })
+            $phases.Add([ordered]@{ name = "signature:verify:$($expectedPackage.Id)"; status = 'success'; exitCode = 0 })
+        }
         Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
         Write-Output "NuGet signature evidence: $evidencePath"
     } catch {
@@ -742,6 +960,19 @@ function Invoke-SelfTest {
         } finally {
             $largeWorkerInput.Dispose()
         }
+        $adapterResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureVerify' -Payload ([ordered]@{
+                dotnetExecutable = (Get-Command dotnet -ErrorAction Stop).Source
+                repositoryRoot = Get-CanonicalRepositoryRoot
+                packagesRoot = [IO.Path]::GetTempPath()
+                baselineGraphPath = Join-Path (Get-CanonicalRepositoryRoot) 'distribution\fixtures\reactiveui-signature-chain-baseline.json'
+                assetsPaths = @(
+                    (Join-Path (Get-CanonicalRepositoryRoot) 'missing-worker-adapter-a.json'),
+                    (Join-Path (Get-CanonicalRepositoryRoot) 'missing-worker-adapter-b.json'),
+                    (Join-Path (Get-CanonicalRepositoryRoot) 'missing-worker-adapter-c.json')
+                )
+            }) -TimeoutSeconds 10
+        Assert-True ($adapterResult.Success -eq $false -and $adapterResult.FailureCode -ceq 'worker-failed' -and $adapterResult.ExitCode -eq 1 -and $adapterResult.TerminationProven -eq $true) 'Closed worker adapter did not preserve the expected negative result.'
+        Assert-True ($adapterResult.SeedNameSha256 -ceq 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') 'Closed worker adapter did not preserve the empty seed identity.'
     } finally {
         $workerInput.Dispose()
         [Array]::Clear($workerHeader, 0, $workerHeader.Length)

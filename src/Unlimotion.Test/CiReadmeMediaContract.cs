@@ -55,6 +55,9 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("([int]$header[2]) -shl 8");
         await Assert.That(nugetSignatureScript).Contains("multi-byte length prefix");
         await Assert.That(nugetSignatureScript).Contains("Invoke-ClosedWorkerCliMode");
+        await Assert.That(nugetSignatureScript).Contains("Invoke-ClosedWorkerProcessAdapter");
+        await Assert.That(nugetSignatureScript).Contains("TerminationProven");
+        await Assert.That(nugetSignatureScript).Contains("native-output-limit-exceeded");
         await Assert.That(nugetSignatureScript).Contains("SignatureVerify");
         using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
         var nugetBaseline = nugetBaselineDocument.RootElement;
