@@ -910,6 +910,7 @@ Assert-Match $distributionTestScript 'for port in 5554 5556' 'Distribution Andro
 Assert-Match $distributionTestScript 'EMULATOR_COMMAND_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30\}"' 'Android emulator validator must configure a bounded timeout for device commands.'
 Assert-Match $distributionTestScript 'EMULATOR_INSTALL_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS:-120\}"' 'Android emulator validator must allow APK installation to use its separately bounded timeout.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "\$@"' 'Android emulator validator must bound every adb command.'
+Assert-Match $distributionTestScript 'local status\s*\r?\n\s*if EMULATOR_COMMAND_TIMEOUT_SECONDS="\$EMULATOR_INSTALL_TIMEOUT_SECONDS" run_adb_command "\$@"; then[\s\S]*?status=\$\?\s*\r?\n\s*handle_emulator_error "\$status" "\$LINENO"' 'Android emulator validator must scope the extended timeout to the install call only and preserve generic-timeout failure evidence.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" avdmanager "\$@"' 'Android emulator validator must bound AVD manager cleanup and setup commands.'
 Assert-Match $distributionTestScript "adb command result: exit=%s" 'Android emulator validator must retain the exit status of every bounded adb command in the attempt log.'
 Assert-Match $distributionTestScript 'readiness poll: serial=%q adb_state=%q sys\.boot_completed=%q init\.svc\.bootanim=%q' 'Android emulator validator must retain observed ADB readiness state in each attempt log.'
@@ -1545,6 +1546,14 @@ elif [[ "$*" == *"install -r"* ]]; then
   if [ "${FAKE_ADB_INSTALL_DELAY_SECONDS:-0}" != "0" ]; then
     sleep "$FAKE_ADB_INSTALL_DELAY_SECONDS"
   fi
+elif [[ "$*" == *"shell am force-stop"* ]]; then
+  if [ "${FAKE_ADB_FORCE_STOP_DELAY_SECONDS:-0}" != "0" ]; then
+    sleep "$FAKE_ADB_FORCE_STOP_DELAY_SECONDS"
+  fi
+elif [[ "$*" == *"emu kill"* ]]; then
+  if [ "${FAKE_ADB_EMU_KILL_DELAY_SECONDS:-0}" != "0" ]; then
+    sleep "$FAKE_ADB_EMU_KILL_DELAY_SECONDS"
+  fi
 elif [[ "$*" == *"shell pidof"* ]]; then
   echo "4242"
 elif [[ "$*" == *"logcat -d"* ]]; then
@@ -1789,6 +1798,69 @@ fi
     $emulatorInstallDelayEvidence = Get-Content -Raw -LiteralPath $emulatorInstallDelayEvidencePath | ConvertFrom-Json
     if ($emulatorInstallDelayEvidence.outcome -cne 'passed' -or $emulatorInstallDelayEvidence.supportLevel -cne 'launchVerified') {
         throw 'Android emulator delayed-install fixture did not produce launch evidence.'
+    }
+
+    $emulatorInstallTimeoutRoot = Join-Path $tempRoot 'emulator-install-timeout'
+    New-Item -ItemType Directory -Path $emulatorInstallTimeoutRoot | Out-Null
+    $emulatorInstallTimeoutEvidencePath = Join-Path $emulatorInstallTimeoutRoot 'evidence.json'
+    $emulatorInstallTimeoutCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running FAKE_ADB_INSTALL_DELAY_SECONDS=4 FAKE_ADB_EMU_KILL_DELAY_SECONDS=2 UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS=3 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorInstallTimeoutEvidencePath))
+    )
+    $emulatorInstallTimeoutStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $emulatorInstallTimeoutOutput = & $bashCommand -lc $emulatorInstallTimeoutCommand 2>&1
+    $emulatorInstallTimeoutStopwatch.Stop()
+    if ($LASTEXITCODE -eq 0) {
+        throw 'Android emulator over-limit install fixture unexpectedly succeeded.'
+    }
+    if ($emulatorInstallTimeoutStopwatch.Elapsed.TotalSeconds -lt 2.5 -or $emulatorInstallTimeoutStopwatch.Elapsed.TotalSeconds -gt 12) {
+        throw "Android emulator over-limit install fixture did not use the bounded install timeout: $([math]::Round($emulatorInstallTimeoutStopwatch.Elapsed.TotalSeconds, 2)) seconds."
+    }
+    $emulatorInstallTimeoutLogPath = Join-Path $emulatorInstallTimeoutRoot 'android-api23-emulator-attempt1.log'
+    $emulatorInstallTimeoutEvidenceExists = Test-Path -LiteralPath $emulatorInstallTimeoutEvidencePath -PathType Leaf
+    $emulatorInstallTimeoutLogExists = Test-Path -LiteralPath $emulatorInstallTimeoutLogPath -PathType Leaf
+    $emulatorInstallTimeoutLog = if ($emulatorInstallTimeoutLogExists) {
+        Get-Content -Raw -LiteralPath $emulatorInstallTimeoutLogPath
+    } else {
+        ''
+    }
+    if (-not $emulatorInstallTimeoutEvidenceExists -or
+        -not $emulatorInstallTimeoutLogExists -or
+        $emulatorInstallTimeoutLog -cnotmatch 'adb command result: exit=124 .*install -r' -or
+        $emulatorInstallTimeoutLog -cnotmatch 'adb command result: exit=124 .*emu kill') {
+        throw "Android emulator over-limit install fixture did not preserve bounded failure evidence (evidence=$emulatorInstallTimeoutEvidenceExists, log=$emulatorInstallTimeoutLogExists).`n$emulatorInstallTimeoutLog`n$($emulatorInstallTimeoutOutput -join [Environment]::NewLine)"
+    }
+
+    $emulatorPostInstallCommandRoot = Join-Path $tempRoot 'emulator-post-install-command-timeout'
+    New-Item -ItemType Directory -Path $emulatorPostInstallCommandRoot | Out-Null
+    $emulatorPostInstallCommandEvidencePath = Join-Path $emulatorPostInstallCommandRoot 'evidence.json'
+    $emulatorPostInstallCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running FAKE_ADB_INSTALL_DELAY_SECONDS=2 FAKE_ADB_FORCE_STOP_DELAY_SECONDS=2 UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_INSTALL_TIMEOUT_SECONDS=3 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorPostInstallCommandEvidencePath))
+    )
+    $emulatorPostInstallCommandOutput = & $bashCommand -lc $emulatorPostInstallCommand 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        throw 'Android emulator post-install generic-command fixture unexpectedly succeeded.'
+    }
+    $emulatorPostInstallCommandLogPath = Join-Path $emulatorPostInstallCommandRoot 'android-api23-emulator-attempt1.log'
+    if (-not (Test-Path -LiteralPath $emulatorPostInstallCommandEvidencePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $emulatorPostInstallCommandLogPath -PathType Leaf)) {
+        throw "Android emulator post-install generic-command fixture did not write failure evidence.`n$($emulatorPostInstallCommandOutput -join [Environment]::NewLine)"
+    }
+    $emulatorPostInstallCommandLog = Get-Content -Raw -LiteralPath $emulatorPostInstallCommandLogPath
+    if ($emulatorPostInstallCommandLog -cnotmatch 'adb command result: exit=0 .*install -r' -or
+        $emulatorPostInstallCommandLog -cnotmatch 'adb command result: exit=124 .*shell am force-stop') {
+        throw 'Android emulator post-install generic-command fixture did not restore the general bounded timeout.'
     }
 
     $emulatorSetupFailureEvidencePath = Join-Path $emulatorSetupFailureRoot 'evidence.json'

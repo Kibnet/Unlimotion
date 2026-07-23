@@ -769,7 +769,12 @@ run_adb_command() {
 }
 
 run_adb_install_command() {
-  EMULATOR_COMMAND_TIMEOUT_SECONDS="$EMULATOR_INSTALL_TIMEOUT_SECONDS" run_adb_command "$@"
+  local status
+  if EMULATOR_COMMAND_TIMEOUT_SECONDS="$EMULATOR_INSTALL_TIMEOUT_SECONDS" run_adb_command "$@"; then
+    return 0
+  fi
+  status=$?
+  handle_emulator_error "$status" "$LINENO"
 }
 
 run_avdmanager_command() {
