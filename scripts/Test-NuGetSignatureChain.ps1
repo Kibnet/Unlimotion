@@ -726,19 +726,14 @@ function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$Stand
 
 function Get-AbsolutePowerShellExecutable {
     $windowsAppsRoot = if ([string]::IsNullOrEmpty($env:LOCALAPPDATA)) { $null } else { Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps' }
-    $candidates = @(
-        Get-Command pwsh -All -ErrorAction Stop |
-            ForEach-Object { $_.Source } |
-            Where-Object {
-                $_ -is [string] -and
-                [IO.Path]::IsPathFullyQualified($_) -and
-                ($null -eq $windowsAppsRoot -or -not $_.StartsWith($windowsAppsRoot, [StringComparison]::OrdinalIgnoreCase)) -and
-                (Test-Path -LiteralPath $_ -PathType Leaf)
-            } |
-            Sort-Object -Unique
-    )
-    Assert-True ($candidates.Count -eq 1) 'Closed worker requires exactly one absolute pwsh executable.'
-    return [IO.Path]::GetFullPath($candidates[0])
+    $command = Get-Command pwsh -ErrorAction Stop | Select-Object -First 1
+    $source = [string]$command.Source
+    Assert-True (
+        [IO.Path]::IsPathFullyQualified($source) -and
+        ($null -eq $windowsAppsRoot -or -not $source.StartsWith($windowsAppsRoot, [StringComparison]::OrdinalIgnoreCase)) -and
+        (Test-Path -LiteralPath $source -PathType Leaf)
+    ) 'Closed worker requires an absolute pwsh executable.'
+    return [IO.Path]::GetFullPath($source)
 }
 
 function Get-AbsoluteDotNetExecutable {

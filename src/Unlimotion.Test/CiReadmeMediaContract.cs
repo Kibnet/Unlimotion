@@ -58,6 +58,8 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("multi-byte length prefix");
         await Assert.That(nugetSignatureScript).Contains("Invoke-ClosedWorkerCliMode");
         await Assert.That(nugetSignatureScript).Contains("Invoke-ClosedWorkerProcessAdapter");
+        await Assert.That(nugetSignatureScript).Contains("Get-Command pwsh -ErrorAction Stop");
+        await Assert.That(nugetSignatureScript).Contains("Get-Command dotnet -ErrorAction Stop");
         await Assert.That(nugetSignatureScript).Contains("Get-ClosedSecretSeedSnapshot");
         await Assert.That(nugetSignatureScript).Contains("Test-SecretEnvironmentName");
         await Assert.That(nugetSignatureScript).Contains("Invoke-SignatureSanitizeWorker");
