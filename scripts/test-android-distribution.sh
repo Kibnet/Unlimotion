@@ -743,7 +743,27 @@ require_command sdkmanager
 require_command avdmanager
 require_command timeout
 run_adb_command() {
-  timeout --foreground "$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "$@"
+  local status
+  if [ -n "${CURRENT_EMULATOR_LOG:-}" ] && [ "$EMULATOR_EVIDENCE_FINALIZED" != "true" ]; then
+    {
+      printf 'adb command:'
+      printf ' %q' "$@"
+      printf '\n'
+    } >>"$CURRENT_EMULATOR_LOG"
+  fi
+  if timeout --foreground "$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "$@"; then
+    status=0
+  else
+    status=$?
+  fi
+  if [ -n "${CURRENT_EMULATOR_LOG:-}" ] && [ "$EMULATOR_EVIDENCE_FINALIZED" != "true" ]; then
+    {
+      printf 'adb command result: exit=%s' "$status"
+      printf ' %q' "$@"
+      printf '\n'
+    } >>"$CURRENT_EMULATOR_LOG"
+  fi
+  return "$status"
 }
 
 run_avdmanager_command() {
@@ -938,6 +958,7 @@ evidence_path.write_text(
     encoding="utf-8",
 )
 PY
+  EMULATOR_EVIDENCE_FINALIZED="true"
 }
 
 handle_emulator_error() {

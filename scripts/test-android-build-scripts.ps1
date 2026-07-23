@@ -910,6 +910,7 @@ Assert-Match $distributionTestScript 'for port in 5554 5556' 'Distribution Andro
 Assert-Match $distributionTestScript 'EMULATOR_COMMAND_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30\}"' 'Android emulator validator must configure a bounded timeout for device commands.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "\$@"' 'Android emulator validator must bound every adb command.'
 Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" avdmanager "\$@"' 'Android emulator validator must bound AVD manager cleanup and setup commands.'
+Assert-Match $distributionTestScript "adb command result: exit=%s" 'Android emulator validator must retain the exit status of every bounded adb command in the attempt log.'
 Assert-Match $distributionTestScript 'readiness poll: serial=%q adb_state=%q sys\.boot_completed=%q init\.svc\.bootanim=%q' 'Android emulator validator must retain observed ADB readiness state in each attempt log.'
 Assert-Match $distributionTestScript 'if \[ "\$boot_completed" = "1" \]; then' 'Android emulator readiness must accept the documented sys.boot_completed signal.'
 Assert-NotMatch $distributionTestScript 'if \[ "\$boot_completed" = "1" \] && \[ "\$boot_animation" = "stopped" \]' 'Android emulator readiness must not require the optional boot-animation service state.'
@@ -1721,6 +1722,11 @@ fi
         $emulatorBoundedEvidence.bootRetry.attempts -ne 2 -or
         (@($emulatorBoundedEvidence.bootRetry.outcomes) -join '|') -cne 'failure|failure') {
         throw 'Hanging fake adb boot probe produced incomplete bounded failure evidence.'
+    }
+    $emulatorBoundedLogPath = Join-Path $emulatorBoundedRoot 'android-api23-emulator-attempt1.log'
+    if (-not (Test-Path -LiteralPath $emulatorBoundedLogPath -PathType Leaf) -or
+        (Get-Content -Raw -LiteralPath $emulatorBoundedLogPath) -cnotmatch 'adb command result: exit=124 .*getprop sys\.boot_completed') {
+        throw 'Hanging fake adb boot probe did not preserve the bounded command identity and exit status.'
     }
 
     $emulatorReadyRoot = Join-Path $tempRoot 'emulator-ready'
