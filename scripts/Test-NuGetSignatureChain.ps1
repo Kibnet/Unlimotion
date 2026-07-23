@@ -742,14 +742,10 @@ function Get-AbsolutePowerShellExecutable {
 }
 
 function Get-AbsoluteDotNetExecutable {
-    $candidates = @(
-        Get-Command dotnet -All -ErrorAction Stop |
-            ForEach-Object { $_.Source } |
-            Where-Object { $_ -is [string] -and [IO.Path]::IsPathFullyQualified($_) -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
-            Sort-Object -Unique
-    )
-    Assert-True ($candidates.Count -eq 1) 'Closed worker requires exactly one absolute dotnet executable.'
-    return [IO.Path]::GetFullPath($candidates[0])
+    $command = Get-Command dotnet -ErrorAction Stop | Select-Object -First 1
+    $source = [string]$command.Source
+    Assert-True ([IO.Path]::IsPathFullyQualified($source) -and (Test-Path -LiteralPath $source -PathType Leaf)) 'Closed worker requires an absolute dotnet executable.'
+    return [IO.Path]::GetFullPath($source)
 }
 
 function New-ClosedWorkerInput(
