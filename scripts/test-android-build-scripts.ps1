@@ -913,6 +913,8 @@ Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_T
 Assert-Match $distributionTestScript 'readiness poll: serial=%q adb_state=%q sys\.boot_completed=%q init\.svc\.bootanim=%q' 'Android emulator validator must retain observed ADB readiness state in each attempt log.'
 Assert-Match $distributionTestScript 'if \[ "\$boot_completed" = "1" \]; then' 'Android emulator readiness must accept the documented sys.boot_completed signal.'
 Assert-NotMatch $distributionTestScript 'if \[ "\$boot_completed" = "1" \] && \[ "\$boot_animation" = "stopped" \]' 'Android emulator readiness must not require the optional boot-animation service state.'
+Assert-Match $distributionTestScript 'run_adb_command -s "\$SERIAL" shell am start -n "\$EXPECTED_APPLICATION_ID/\$LAUNCHABLE_ACTIVITY"' 'Android emulator validator must request activity launch without waiting indefinitely for activity completion.'
+Assert-NotMatch $distributionTestScript 'shell am start -W ' 'Android emulator validator must not use the blocking am start -W mode.'
 Assert-Match $distributionTestScript 'ro\.build\.fingerprint' 'Android emulator evidence must record the exact device build fingerprint.'
 Assert-Match $distributionTestScript 'systemImageRevision' 'Android emulator evidence must record the installed system-image revision.'
 Assert-Match $distributionTestScript '"classification": "none" if int\(boot_attempts\) == 1 else "transient-emulator-boot"' 'Android emulator evidence must classify first-boot and retried-boot success precisely.'
@@ -1540,6 +1542,10 @@ elif [[ "$*" == *"shell pidof"* ]]; then
   echo "4242"
 elif [[ "$*" == *"logcat -d"* ]]; then
   echo "fixture logcat: application started"
+elif [[ "$*" == *"shell am start -W"* ]]; then
+  if [ "${FAKE_ADB_HANG_ON_ACTIVITY_WAIT:-false}" = "true" ]; then
+    exec sleep 60
+  fi
 fi
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBin 'emulator') (@'
@@ -1720,7 +1726,7 @@ fi
     $emulatorReadyRoot = Join-Path $tempRoot 'emulator-ready'
     New-Item -ItemType Directory -Path $emulatorReadyRoot | Out-Null
     $emulatorReadyEvidencePath = Join-Path $emulatorReadyRoot 'evidence.json'
-    $emulatorReadyCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+    $emulatorReadyCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running FAKE_ADB_HANG_ON_ACTIVITY_WAIT=true UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
         (Quote-Bash $rootBash),
         (Quote-Bash $fixturePosixPath),
         (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),

@@ -1008,7 +1008,7 @@ DEVICE_SDK="$(run_adb_command -s "$SERIAL" shell getprop ro.build.version.sdk 2>
 run_adb_command -s "$SERIAL" logcat -c
 run_adb_command -s "$SERIAL" install -r "$APK_PATH" >/dev/null
 run_adb_command -s "$SERIAL" shell am force-stop "$EXPECTED_APPLICATION_ID"
-run_adb_command -s "$SERIAL" shell am start -W -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
+run_adb_command -s "$SERIAL" shell am start -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
 sleep 15
 
 PROCESS_ID="$(run_adb_command -s "$SERIAL" shell pidof "$EXPECTED_APPLICATION_ID" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
